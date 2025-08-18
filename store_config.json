@@ -1,0 +1,42 @@
+{
+  "stores": [
+    {
+      "id": "1881",
+      "name": "Canley Vale"
+    }
+  ],
+  "screens": {
+    "1881": {
+      "screen1": {
+        "file": "bd10fb67-cee6-44db-8fbd-2b093206ab6c.jpg",
+        "vertical": false,
+        "horizontal": false
+      },
+      "screen2": {
+        "file": null,
+        "vertical": true,
+        "horizontal": true
+      },
+      "screen3": {
+        "file": "4eda74b0-9dca-45c8-9e43-34b31a4a5191.jpg",
+        "vertical": false,
+        "horizontal": false
+      },
+      "promo1": {
+        "file": null,
+        "vertical": true,
+        "horizontal": false
+      },
+      "promo2": {
+        "file": null,
+        "vertical": true,
+        "horizontal": false
+      },
+      "promo3": {
+        "file": null,
+        "vertical": true,
+        "horizontal": false
+      }
+    }
+  }
+}
