@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TV Menu Display</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background-color: #000;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+        
+        .tv-display {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+        
+        .menu-image {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+        
+        .controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 10px;
+            padding: 10px;
+            display: flex;
+            gap: 10px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .controls:hover,
+        .controls.show {
+            opacity: 1;
+        }
+        
+        .control-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background-color 0.3s ease;
+        }
+        
+        .control-btn:hover {
+            background: #c82333;
+        }
+        
+        .loading {
+            color: white;
+            font-size: 24px;
+            text-align: center;
+        }
+        
+        .error {
+            color: #dc3545;
+            font-size: 18px;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        /* Hide controls initially, show on mouse move */
+        body.hide-cursor {
+            cursor: none;
+        }
+        
+        .info-overlay {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 5px;
+            font-size: 14px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .info-overlay.show {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="tv-display">
+        <img src="{{ url_for('static', filename='uploads/' + filename) }}" 
+             alt="Menu Display" 
+             class="menu-image"
+             onerror="showError()">
+    </div>
+    
+    <div class="controls" id="controls">
+        <button class="control-btn" onclick="toggleFullscreen()">⛶ Fullscreen</button>
+        <button class="control-btn" onclick="refreshImage()">🔄 Refresh</button>
+        <button class="control-btn" onclick="goBack()">← Back</button>
+    </div>
+    
+    <div class="info-overlay" id="infoOverlay">
+        Press F11 for fullscreen • Move mouse to show controls
+    </div>
+
+    <script>
+        let hideControlsTimer;
+        let hideCursorTimer;
+        
+        function showControls() {
+            const controls = document.getElementById('controls');
+            const infoOverlay = document.getElementById('infoOverlay');
+            controls.classList.add('show');
+            infoOverlay.classList.add('show');
+            document.body.classList.remove('hide-cursor');
+            
+            clearTimeout(hideControlsTimer);
+            clearTimeout(hideCursorTimer);
+            
+            hideControlsTimer = setTimeout(() => {
+                controls.classList.remove('show');
+                infoOverlay.classList.remove('show');
+            }, 3000);
+            
+            hideCursorTimer = setTimeout(() => {
+                document.body.classList.add('hide-cursor');
+            }, 5000);
+        }
+        
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        }
+        
+        function refreshImage() {
+            const img = document.querySelector('.menu-image');
+            const src = img.src;
+            img.src = '';
+            img.src = src + '?t=' + new Date().getTime();
+        }
+        
+        function goBack() {
+            window.history.back();
+        }
+        
+        function showError() {
+            document.querySelector('.tv-display').innerHTML = 
+                '<div class="error">❌ Error loading image<br><small>Please check the file and try again</small></div>';
+        }
+        
+        // Show controls on mouse move
+        document.addEventListener('mousemove', showControls);
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            switch(e.key) {
+                case 'F11':
+                    e.preventDefault();
+                    toggleFullscreen();
+                    break;
+                case 'Escape':
+                    if (document.fullscreenElement) {
+                        document.exitFullscreen();
+                    }
+                    break;
+                case 'r':
+                case 'R':
+                    refreshImage();
+                    break;
+                case 'Backspace':
+                    goBack();
+                    break;
+            }
+        });
+        
+        // Show controls initially for 3 seconds
+        showControls();
+        
+        // Auto-refresh every 30 seconds to get latest image
+        setInterval(refreshImage, 30000);
+    </script>
+</body>
+</html>
