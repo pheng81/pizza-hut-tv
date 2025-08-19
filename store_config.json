@@ -1,41 +1,115 @@
 {
+  "master_store_id": "0000",
   "stores": [
     {
-      "id": "1881",
-      "name": "Canley Vale"
+      "id": "0000",
+      "name": "MasterStore",
+      "is_master": true
+    },
+    {
+      "id": "3333",
+      "name": "ggg"
+    },
+    {
+      "id": "1112",
+      "name": "liverpool"
     }
   ],
   "screens": {
-    "1881": {
-      "screen1": {
-        "file": "bd10fb67-cee6-44db-8fbd-2b093206ab6c.jpg",
+    "0000": {
+      "0000_screen1": {
+        "file": "2785cc2c-0fd9-4a73-94a5-67dc6c249316.png",
         "vertical": false,
-        "horizontal": false
+        "horizontal": false,
+        "rotation": 0,
+        "protected": false
       },
-      "screen2": {
-        "file": null,
-        "vertical": true,
-        "horizontal": true
-      },
-      "screen3": {
-        "file": "4eda74b0-9dca-45c8-9e43-34b31a4a5191.jpg",
+      "0000_screen2": {
+        "file": "6d3c5c43-f8e0-4ce8-9e9f-84a164c55f4b.png",
         "vertical": false,
-        "horizontal": false
+        "horizontal": false,
+        "rotation": 0
       },
-      "promo1": {
+      "0000_promo1": {
         "file": null,
         "vertical": true,
-        "horizontal": false
+        "horizontal": false,
+        "rotation": 0
       },
-      "promo2": {
+      "0000_promo2": {
         "file": null,
         "vertical": true,
-        "horizontal": false
+        "horizontal": false,
+        "rotation": 0,
+        "protected": false
       },
-      "promo3": {
+      "0000_screen3": {
+        "file": "241e8a18-975d-4c16-826b-12b3a7c0d3a1.png",
+        "vertical": false,
+        "horizontal": false,
+        "rotation": 0,
+        "protected": false
+      }
+    },
+    "3333": {
+      "3333_screen1": {
+        "file": "2785cc2c-0fd9-4a73-94a5-67dc6c249316.png",
+        "vertical": false,
+        "horizontal": false,
+        "rotation": 0
+      },
+      "3333_screen2": {
+        "file": "6d3c5c43-f8e0-4ce8-9e9f-84a164c55f4b.png",
+        "vertical": false,
+        "horizontal": false,
+        "rotation": 0
+      },
+      "3333_promo1": {
         "file": null,
         "vertical": true,
-        "horizontal": false
+        "horizontal": false,
+        "rotation": 0
+      },
+      "3333_screen3": {
+        "file": "241e8a18-975d-4c16-826b-12b3a7c0d3a1.png",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false
+      }
+    },
+    "1112": {
+      "1112_screen1": {
+        "file": "2785cc2c-0fd9-4a73-94a5-67dc6c249316.png",
+        "vertical": false,
+        "horizontal": false,
+        "rotation": 0
+      },
+      "1112_screen2": {
+        "file": "6d3c5c43-f8e0-4ce8-9e9f-84a164c55f4b.png",
+        "vertical": false,
+        "horizontal": false,
+        "rotation": 0
+      },
+      "1112_promo1": {
+        "file": null,
+        "vertical": true,
+        "horizontal": false,
+        "rotation": 0
+      },
+      "1112_promo2": {
+        "file": null,
+        "vertical": true,
+        "horizontal": false,
+        "rotation": 0,
+        "protected": false
+      },
+      "1112_screen3": {
+        "file": "f807feb5-4c1b-4d97-afaa-ae17244029fd.png",
+        "vertical": false,
+        "horizontal": false,
+        "rotation": 0,
+        "protected": true
       }
     }
   }
