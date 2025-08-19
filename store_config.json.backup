@@ -8,34 +8,40 @@
   "screens": {
     "1881": {
       "screen1": {
-        "file": "6ae9bbd1-b0b1-4c65-8f8e-d43b9fa1d2d7.jpg",
+        "file": "b157baed-94e9-4069-944a-1cff0ea9338f.jpg",
         "vertical": false,
-        "horizontal": false
+        "horizontal": true,
+        "rotation": 0
       },
       "screen2": {
-        "file": "3f968236-ce4c-4e4d-9d07-25d8c9469eda.png",
-        "vertical": false,
-        "horizontal": true
+        "file": "e99bb0bf-1285-4b1b-b72d-d3027479b970.png",
+        "vertical": true,
+        "horizontal": true,
+        "rotation": 0
       },
       "screen3": {
         "file": null,
         "vertical": true,
-        "horizontal": false
+        "horizontal": true,
+        "rotation": 0
       },
       "promo1": {
         "file": null,
         "vertical": true,
-        "horizontal": false
+        "horizontal": true,
+        "rotation": 0
       },
       "promo2": {
         "file": null,
         "vertical": true,
-        "horizontal": true
+        "horizontal": false,
+        "rotation": 0
       },
       "promo3": {
         "file": null,
         "vertical": true,
-        "horizontal": false
+        "horizontal": false,
+        "rotation": 0
       }
     }
   }

@@ -315,6 +315,36 @@
             margin: 0;
             flex-shrink: 0;
         }
+
+        /* iOS-style switch */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 22px;
+        }
+        .switch input { opacity:0; width:0; height:0; }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #ccc;
+            transition: .3s;
+            border-radius: 22px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px; width: 18px;
+            left: 2px; top: 2px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        .switch input:checked + .slider { background-color: #28a745; }
+        .switch input:checked + .slider:before { transform: translateX(18px); }
+        .switch input:not(:checked) + .slider { background-color: #aaa; }
         
         .status-indicator {
             min-width: 35px;
@@ -336,6 +366,45 @@
         .status-red {
             background-color: #dc3545;
         }
+
+        /* Playlist styles */
+        .playlist-section {
+            background: #f5f7fa;
+            border: 1px solid #d5d9de;
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 10px;
+        }
+        .playlist-header {
+            font-weight: 600;
+            font-size: 13px;
+            margin-bottom: 6px;
+            color: #ffd54f;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .playlist-items { max-height: 160px; overflow-y: auto; }
+        .playlist-item {
+            display: grid;
+            grid-template-columns: 20px 22px 34px 1fr 140px 140px 60px;
+            gap: 4px;
+            align-items: center;
+            font-size: 11px;
+            padding: 4px 6px;
+            border-radius: 4px;
+            background: #ffffff;
+            border: 1px solid #e2e6ea;
+            margin-bottom: 4px;
+        }
+        .playlist-item input[type="datetime-local"] { width: 100%; font-size: 10px; padding:2px; }
+        .playlist-item input[type="number"] { width: 55px; font-size: 11px; }
+        .playlist-item .pi-file { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .playlist-item .remove-btn { background:#f5e5e5; color:#c0392b; border:1px solid #e3b4b1; cursor:pointer; padding:0 4px; border-radius:3px; font-size:14px; line-height:18px; height:18px; display:flex; align-items:center; justify-content:center; }
+    .playlist-item .remove-btn:hover { background:#f2d4d2; }
+        .playlist-empty { font-size:11px; color:#888; padding:4px 0; }
+    .playlist-item .pi-thumb { width:32px; height:24px; display:flex; align-items:center; justify-content:center; overflow:hidden; border:1px solid #cfd6dd; border-radius:3px; background:#fafbfc; font-size:14px; }
+        .playlist-item .pi-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
         
         /* Rotation Styles */
         .rotate-btn {
@@ -723,7 +792,6 @@
                     <button class="add-screen-btn" onclick="addNewScreen('screen')">
                         ➕ Add Screen
                     </button>
-                    </button>
                 </div>
                 <div class="screens-grid" id="screens-grid">
                     <!-- Regular screens will be loaded here -->
@@ -744,71 +812,8 @@
             </div>
             
             <div style="display: none;">
-                <!-- Old static screens will be hidden -->
-                {% for screen_id, screen_data in config.screens[config.stores[0].id].items() %}
-                <div class="screen-card 
-                    {% if screen_data.vertical and not screen_data.horizontal %}vertical-mode
-                    {% elif screen_data.horizontal and not screen_data.vertical %}horizontal-mode
-                    {% else %}default-mode{% endif %}" id="card-{{ screen_id }}">
-                    <div class="screen-title">
-                        <a href="/tv_view/{{ config.stores[0].id }}/{{ screen_id }}" target="_blank" style="text-decoration: none; color: inherit;">
-                            {% if screen_id.startswith('screen') %}
-                                Screen {{ screen_id[-1] }}
-                            {% else %}
-                                Promo {{ screen_id[-1] }}
-                            {% endif %}
-                        </a>
-                    </div>
-                    
-                    <div class="screen-preview 
-                        {% if screen_data.vertical and not screen_data.horizontal %}vertical-preview
-                        {% elif screen_data.horizontal and not screen_data.vertical %}horizontal-preview
-                        {% else %}default-preview{% endif %}" id="preview-{{ screen_id }}">
-                        {% if screen_data.file %}
-                            <img src="{{ url_for('static', filename='uploads/' + screen_data.file) }}" alt="Screen content">
-                        {% else %}
-                            <div class="upload-area">
-                                <div style="margin-top: 20px;">No content uploaded</div>
-                            </div>
-                        {% endif %}
-                    </div>
-                    
-                    <div style="text-align: center;">
-                        <button class="upload-btn" onclick="triggerUpload('{{ screen_id }}')">
-                            Upload : File
-                        </button>
-                        {% if screen_data.file %}
-                        <button class="delete-btn" onclick="deleteFile('{{ screen_id }}')" title="Delete current file">
-                            🗑️ Delete
-                        </button>
-                        {% endif %}
-                        <input type="file" class="file-input" id="file-{{ screen_id }}" 
-                               accept="image/*" onchange="uploadFile('{{ screen_id }}', this)">
-                    </div>
-                    
-                    <div class="orientation-controls">
-                        <div class="orientation-item">
-                            <span>Vertical :</span>
-                            <input type="checkbox" id="vertical-{{ screen_id }}" 
-                                   {% if screen_data.vertical and not screen_data.horizontal %}checked{% endif %}
-                                   onchange="updateOrientation('{{ screen_id }}', 'vertical', this.checked)">
-                            <span class="status-indicator {% if screen_data.vertical and not screen_data.horizontal %}status-green{% else %}status-red{% endif %}" 
-                                  id="vertical-status-{{ screen_id }}"></span>
-                        </div>
-                        <div class="orientation-item">
-                            <span>Horizontal :</span>
-                            <input type="checkbox" id="horizontal-{{ screen_id }}" 
-                                   {% if screen_data.horizontal and not screen_data.vertical %}checked{% endif %}
-                                   onchange="updateOrientation('{{ screen_id }}', 'horizontal', this.checked)">
-                            <span class="status-indicator {% if screen_data.horizontal and not screen_data.vertical %}status-green{% else %}status-red{% endif %}" 
-                                  id="horizontal-status-{{ screen_id }}"></span>
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
+                <!-- Legacy static screen loop removed to avoid Jinja errors -->
             </div>
-        </div>
-        
         <div class="apply-section">
             <p style="margin-bottom: 15px; color: #666;">Apply to all Stores</p>
             <button class="apply-btn" onclick="applyToAllStores()">Submit</button>
@@ -885,21 +890,17 @@
             .then(response => {
                 console.log('Response status:', response.status);
                 console.log('Response ok:', response.ok);
-                return response.text().then(text => {
-                    console.log('Raw response:', text);
-                    try {
-                        return JSON.parse(text);
-                    } catch (e) {
-                        console.error('JSON parse error:', e);
-                        throw new Error('Invalid JSON response: ' + text);
-                    }
-                });
+                return response.json();
             })
             .then(data => {
-                console.log('Parsed response data:', data);
                 if (data.success) {
-                    alert('✅ File deleted successfully!');
-                    window.location.reload();
+                    showMessage('🗑️ File deleted');
+                    // Update local state
+                    if (allStoresData.screens[currentStoreId] && allStoresData.screens[currentStoreId][screenId]) {
+                        allStoresData.screens[currentStoreId][screenId].file = null;
+                    }
+                    // Refresh screen card UI
+                    loadScreensForStore(currentStoreId);
                 } else {
                     alert('❌ Delete failed: ' + (data.error || 'Unknown error'));
                 }
@@ -1049,80 +1050,68 @@
             });
         }
         
-        function updateOrientation(screenId, orientation, value) {
-            // Auto-untick opposite orientation
-            if (value) {
-                const oppositeOrientation = orientation === 'vertical' ? 'horizontal' : 'vertical';
-                const oppositeCheckbox = document.getElementById(oppositeOrientation + '-' + screenId);
-                const oppositeStatus = document.getElementById(oppositeOrientation + '-status-' + screenId);
-                
-                if (oppositeCheckbox.checked) {
-                    oppositeCheckbox.checked = false;
-                    oppositeStatus.className = 'status-indicator status-red';
-                    
-                    // Update the opposite orientation in backend
-                    fetch('/update_orientation', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            store_id: currentStoreId,
-                            screen_id: screenId,
-                            orientation: oppositeOrientation,
-                            value: false
-                        })
-                    });
+        // New toggle handler for iOS-style switches
+        function toggleOrientationSwitch(screenId, type) {
+            const v = document.getElementById('vertical-' + screenId);
+            const h = document.getElementById('horizontal-' + screenId);
+            if (type === 'vertical' && v.checked) {
+                if (h.checked) h.checked = false;
+                setOrientationMode(screenId, 'vertical');
+            } else if (type === 'horizontal' && h.checked) {
+                if (v.checked) v.checked = false;
+                setOrientationMode(screenId, 'horizontal');
+            } else {
+                // Switched off; decide resulting mode
+                if (!v.checked && !h.checked) {
+                    setOrientationMode(screenId, 'default');
+                } else {
+                    setOrientationMode(screenId, v.checked ? 'vertical' : 'horizontal');
                 }
             }
-            
-            fetch('/update_orientation', {
+        }
+
+        function setOrientationMode(screenId, mode) {
+            const valid = ['vertical','horizontal','default'];
+            if(!valid.includes(mode)) return;
+            fetch('/set_orientation_mode', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    store_id: currentStoreId,
-                    screen_id: screenId,
-                    orientation: orientation,
-                    value: value
-                })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ store_id: currentStoreId, screen_id: screenId, mode })
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Update status indicator
-                    const statusElement = document.getElementById(orientation + '-status-' + screenId);
-                    statusElement.className = 'status-indicator ' + (value ? 'status-green' : 'status-red');
-                    
-                    // Update card appearance
-                    const card = document.getElementById('card-' + screenId);
-                    const preview = document.getElementById('preview-' + screenId);
-                    const verticalChecked = document.getElementById('vertical-' + screenId).checked;
-                    const horizontalChecked = document.getElementById('horizontal-' + screenId).checked;
-                    
-                    // Remove existing classes
-                    card.classList.remove('vertical-mode', 'horizontal-mode', 'default-mode');
-                    preview.classList.remove('vertical-preview', 'horizontal-preview', 'default-preview');
-                    
-                    // Add appropriate classes
-                    if (verticalChecked && !horizontalChecked) {
+            .then(r=>r.json())
+            .then(data=>{
+                if(!data.success){
+                    showMessage('❌ Failed: ' + (data.error||'Unknown'),'#e74c3c');
+                    return;
+                }
+                // Update in-memory flags
+                const sd = allStoresData.screens[currentStoreId][screenId];
+                sd.vertical = (mode==='vertical');
+                sd.horizontal = (mode==='horizontal');
+                // Adjust classes
+                const card = document.getElementById('card-'+screenId);
+                const preview = document.getElementById('preview-'+screenId);
+                if(card&&preview){
+                    card.classList.remove('vertical-mode','horizontal-mode','default-mode');
+                    preview.classList.remove('vertical-preview','horizontal-preview','default-preview');
+                    if(mode==='vertical'){
                         card.classList.add('vertical-mode');
                         preview.classList.add('vertical-preview');
-                        showMessage('📱 VERTICAL mode activated for ' + screenId.toUpperCase() + '! Preview shows portrait layout');
-                    } else if (horizontalChecked && !verticalChecked) {
+                        showMessage('📱 Set VERTICAL for '+screenId);
+                    } else if(mode==='horizontal') {
                         card.classList.add('horizontal-mode');
                         preview.classList.add('horizontal-preview');
-                        showMessage('🖥️ HORIZONTAL mode activated for ' + screenId.toUpperCase() + '! Preview shows landscape layout');
+                        showMessage('🖥️ Set HORIZONTAL for '+screenId);
                     } else {
                         card.classList.add('default-mode');
                         preview.classList.add('default-preview');
-                        showMessage('⚖️ DEFAULT mode for ' + screenId.toUpperCase() + '! Preview shows standard layout');
+                        showMessage('⚖️ Set DEFAULT for '+screenId);
                     }
                 }
             })
-            .catch(error => {
-                console.error('Error:', error);
+            .catch(err=>{
+                console.error(err);
+                showMessage('❌ Error setting orientation',' #e74c3c');
             });
         }
         
@@ -1294,6 +1283,15 @@
                            accept="image/*,video/*" onchange="uploadFile('${screenId}', this)">
                 </div>
                 
+                ${isMasterStore(currentStoreId) ? `
+                <div class="playlist-section" id="playlist-${screenId}">
+                    <div class="playlist-header">📺 Playlist</div>
+                    <div class="playlist-items" id="playlist-items-${screenId}">
+                        <!-- Filled dynamically -->
+                    </div>
+                    <div class="help-text">Order auto-rotates every 10s when no schedule set. Set start/end for timed display.</div>
+                </div>` : ''}
+
                 <div class="apply-all-section" ${!isMasterStore(currentStoreId) ? 'style="display: none;"' : ''}>
                     <label>
                         <input type="checkbox" id="apply-all-${screenId}" data-logical-type="${logicalType}" ${savedApplyAll ? 'checked' : ''}>
@@ -1304,6 +1302,7 @@
                     </div>
                 </div>
                 
+                ${!isMasterStore(currentStoreId) ? `
                 <div class="protect-section">
                     <label>
                         <input type="checkbox" id="protect-${screenId}" ${screenData.protected ? 'checked' : ''} 
@@ -1311,31 +1310,24 @@
                         <span>🔒 Protect from Apply All</span>
                     </label>
                     <div class="help-text">
-                        When checked, this screen won't be overwritten by "Apply to All" uploads
+                        When checked, this screen won't be overwritten by \"Apply to All\" uploads
                     </div>
-                </div>
-                
+                </div>` : ''}
+
                 <div class="orientation-controls">
                     <div class="orientation-item">
-                        <span>Vertical :</span>
-                        <input type="checkbox" id="vertical-${screenId}" 
-                               ${screenData.vertical && !screenData.horizontal ? 'checked' : ''}
-                               onchange="updateOrientation('${screenId}', 'vertical', this.checked)">
-                        <span class="status-indicator ${screenData.vertical && !screenData.horizontal ? 'status-green' : 'status-red'}" 
-                              id="vertical-status-${screenId}">
-                            ${screenData.vertical && !screenData.horizontal ? 'ON' : 'OFF'}
-                        </span>
+                        <span>Vertical:</span>
+                        <label class="switch" title="Toggle vertical (portrait) mode">
+                            <input type="checkbox" id="vertical-${screenId}" ${screenData.vertical && !screenData.horizontal ? 'checked' : ''} onchange="toggleOrientationSwitch('${screenId}','vertical')">
+                            <span class="slider"></span>
+                        </label>
                     </div>
-                    
                     <div class="orientation-item">
-                        <span>Horizontal :</span>
-                        <input type="checkbox" id="horizontal-${screenId}" 
-                               ${screenData.horizontal && !screenData.vertical ? 'checked' : ''}
-                               onchange="updateOrientation('${screenId}', 'horizontal', this.checked)">
-                        <span class="status-indicator ${screenData.horizontal && !screenData.vertical ? 'status-green' : 'status-red'}" 
-                              id="horizontal-status-${screenId}">
-                            ${screenData.horizontal && !screenData.vertical ? 'ON' : 'OFF'}
-                        </span>
+                        <span>Horizontal:</span>
+                        <label class="switch" title="Toggle horizontal (landscape) mode">
+                            <input type="checkbox" id="horizontal-${screenId}" ${screenData.horizontal && !screenData.vertical ? 'checked' : ''} onchange="toggleOrientationSwitch('${screenId}','horizontal')">
+                            <span class="slider"></span>
+                        </label>
                     </div>
                 </div>
             `;
@@ -1343,8 +1335,57 @@
             return card;
         }
 
+        function loadPlaylist(screenId){
+            if(!isMasterStore(currentStoreId)) return;
+            fetch(`/playlist/${currentStoreId}/${screenId}`)
+              .then(r=>r.json())
+              .then(data=>{
+                  const wrap = document.getElementById(`playlist-items-${screenId}`);
+                  if(!wrap) return;
+                  wrap.innerHTML='';
+                  if(!data.success || !data.playlist || !data.playlist.length){
+                      wrap.innerHTML = '<div class="playlist-empty">No items yet</div>';
+                      return;
+                  }
+                                    data.playlist.forEach(item=>{
+                                                                        const row = document.createElement('div');
+                                                                        row.className='playlist-item';
+                                                                        const ext = (item.file||'').split('.').pop().toLowerCase();
+                                                                        const isVideo = ['mp4','webm','ogg','mov','avi'].includes(ext);
+                                                                        const thumb = isVideo ? `<div class=\"pi-thumb\">🎬</div>` : `<div class=\"pi-thumb\"><img src=\"/static/uploads/${item.file}\" alt=\"thumb\"></div>`;
+                                                                        row.innerHTML = `
+                                                                            <input type=\"checkbox\" ${item.enabled? 'checked':''} onchange=\"updatePlaylistItem('${screenId}','${item.id}',{enabled:this.checked})\">
+                                                                            <button class=\"remove-btn\" title=\"Remove item\" onclick=\"deletePlaylistItem('${screenId}','${item.id}')\">✕</button>
+                                                                            ${thumb}
+                                                                            <div class=\"pi-file\" title=\"${item.file}\">${item.file}</div>
+                                                                            <input type=\"datetime-local\" value=\"${item.start? item.start.replace('Z',''):''}\" onchange=\"updatePlaylistItem('${screenId}','${item.id}',{start:this.value?this.value: null})\">
+                                                                            <input type=\"datetime-local\" value=\"${item.end? item.end.replace('Z',''):''}\" onchange=\"updatePlaylistItem('${screenId}','${item.id}',{end:this.value?this.value: null})\">
+                                                                            <input type=\"number\" min=\"3\" max=\"3600\" value=\"${item.duration||10}\" onchange=\"updatePlaylistItem('${screenId}','${item.id}',{duration:parseInt(this.value)||10})\" title=\"Rotation duration (seconds)\">`;
+                                                                        wrap.appendChild(row);
+                                            wrap.appendChild(row);
+                                    });
+              })
+              .catch(e=>console.error('Playlist load error',e));
+        }
+
+        function updatePlaylistItem(screenId,itemId,payload){
+            fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}`,{
+                method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+            }).then(r=>r.json())
+              .then(d=>{ if(!d.success){ showMessage('Playlist update failed','red'); } })
+              .catch(e=>console.error(e));
+        }
+
+        function deletePlaylistItem(screenId,itemId){
+            if(!confirm('Remove this playlist item?')) return;
+            fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}`,{method:'DELETE'})
+              .then(r=>r.json())
+              .then(d=>{ if(d.success){ loadPlaylist(screenId); } else { showMessage('Delete failed','red'); } })
+              .catch(e=>console.error(e));
+        }
+
         // Persist Apply-to-All checkbox changes
-        document.addEventListener('change', (e) => {
+    document.addEventListener('change', (e) => {
             if (e.target && e.target.id && e.target.id.startsWith('apply-all-')) {
                 const logicalType = e.target.getAttribute('data-logical-type');
                 if (!logicalType) return;
@@ -1353,6 +1394,58 @@
                 applyAllState[logicalType] = e.target.checked;
                 localStorage.setItem('applyAllState', JSON.stringify(applyAllState));
                 console.log('Apply-All state updated:', applyAllState);
+                // If checked after upload, replicate existing file immediately
+                if (e.target.checked) {
+                    const screenId = e.target.id.replace('apply-all-', '');
+                    if (!isMasterStore(currentStoreId)) {
+                        showMessage('⚠️ Apply-All only from MASTER store', '#e67e22');
+                        e.target.checked = false;
+                        applyAllState[logicalType] = false;
+                        localStorage.setItem('applyAllState', JSON.stringify(applyAllState));
+                        return;
+                    }
+                    const screensData = allStoresData.screens[currentStoreId] || {};
+                    const existing = screensData[screenId];
+                    if (!existing || !existing.file) {
+                        showMessage('ℹ️ No file yet. Upload and it will propagate.', '#3498db');
+                        return;
+                    }
+                    fetch('/replicate_screen', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ store_id: currentStoreId, screen_id: screenId })
+                    })
+                    .then(r=>r.json())
+                    .then(data => {
+                        if (data.success) {
+                            const filename = data.filename;
+                            const screenType = data.screen_type;
+                            (data.updated_stores || []).forEach(storeId => {
+                                if (!allStoresData.screens[storeId]) allStoresData.screens[storeId] = {};
+                                const targetId = `${storeId}_${screenType}`;
+                                if (!allStoresData.screens[storeId][targetId]) allStoresData.screens[storeId][targetId] = {};
+                                allStoresData.screens[storeId][targetId].file = filename;
+                            });
+                            (data.created_screens || []).forEach(entry => {
+                                const parts = entry.split(':');
+                                if (parts.length === 2) {
+                                    const sId = parts[0];
+                                    const scrId = parts[1];
+                                    if (!allStoresData.screens[sId]) allStoresData.screens[sId] = {};
+                                    if (!allStoresData.screens[sId][scrId]) allStoresData.screens[sId][scrId] = {};
+                                    allStoresData.screens[sId][scrId].file = filename;
+                                }
+                            });
+                            showMessage(`📡 ${data.message}`);
+                        } else {
+                            showMessage('❌ Replication failed: ' + (data.error || 'Unknown'), '#e74c3c');
+                        }
+                    })
+                    .catch(err => {
+                        console.error('Replicate error', err);
+                        showMessage('❌ Replication error: ' + err.message, '#e74c3c');
+                    });
+                }
             }
         });
         
@@ -1667,7 +1760,9 @@
                 })
                 .forEach(screenId => {
                     const screenData = screens[screenId];
-                    screensGrid.appendChild(createScreenCard(screenId, screenData, storeId));
+                    const card = createScreenCard(screenId, screenData, storeId);
+                    screensGrid.appendChild(card);
+                    if(isMasterStore(storeId)) { loadPlaylist(screenId); }
                 });
             
             // Load promo screens - handle store-specific IDs in sorting
@@ -1691,7 +1786,9 @@
                 })
                 .forEach(screenId => {
                     const screenData = promos[screenId];
-                    promosGrid.appendChild(createScreenCard(screenId, screenData, storeId));
+                    const card = createScreenCard(screenId, screenData, storeId);
+                    promosGrid.appendChild(card);
+                    if(isMasterStore(storeId)) { loadPlaylist(screenId); }
                 });
         }
         
