@@ -59,3 +59,7 @@ Thumbs.db
 
 # Vercel
 .vercel
+
+# Uploaded media (keep folder, ignore files)
+static/uploads/*
+!static/uploads/.gitkeep
