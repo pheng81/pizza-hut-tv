@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pizza Hut TV - Store Management Dashboard</title>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+    
+    <!-- Configuration data for JavaScript -->
+    <script type="application/json" id="config-data">{{ config | tojson | safe }}</script>
+    
     <style>
         * {
             margin: 0;
@@ -122,6 +127,55 @@
             background-color: #f8f9fa;
         }
         
+        .apply-all-section {
+            margin: 10px 0;
+            padding: 8px;
+            background: linear-gradient(135deg, #f0f8ff 0%, #e8f4f8 100%);
+            border-radius: 6px;
+            border-left: 3px solid #007cba;
+            border: 1px solid #d1ecf1;
+        }
+        
+        .protect-section {
+            margin: 10px 0;
+            padding: 8px;
+            background: linear-gradient(135deg, #fff5f5 0%, #ffe8e8 100%);
+            border-radius: 6px;
+            border-left: 3px solid #dc3545;
+            border: 1px solid #f1d1d1;
+        }
+        
+        .apply-all-section label,
+        .protect-section label {
+            display: flex;
+            align-items: center;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        
+        .apply-all-section label {
+            color: #0c5460;
+        }
+        
+        .protect-section label {
+            color: #721c24;
+        }
+        
+        .apply-all-section input[type="checkbox"],
+        .protect-section input[type="checkbox"] {
+            margin-right: 6px;
+            transform: scale(1.1);
+        }
+        
+        .apply-all-section .help-text,
+        .protect-section .help-text {
+            font-size: 10px;
+            color: #6c757d;
+            margin-top: 3px;
+            font-style: italic;
+        }
+        
         .screen-title {
             font-size: 16px;
             font-weight: bold;
@@ -197,40 +251,6 @@
             max-height: 100%;
         }
         
-        /* Orientation labels for empty previews */
-        .screen-preview.vertical-preview .upload-area::after {
-            content: "📱 VERTICAL (Portrait Mode)";
-            position: absolute;
-            top: 5px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 12px;
-            color: #e74c3c;
-            font-weight: bold;
-        }
-        
-        .screen-preview.horizontal-preview .upload-area::after {
-            content: "🖥️ HORIZONTAL (Landscape Mode)";
-            position: absolute;
-            top: 5px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 12px;
-            color: #3498db;
-            font-weight: bold;
-        }
-        
-        .screen-preview.default-preview .upload-area::after {
-            content: "⚖️ DEFAULT (Standard Mode)";
-            position: absolute;
-            top: 5px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 12px;
-            color: #95a5a6;
-            font-weight: bold;
-        }
-        
         .upload-area {
             text-align: center;
             color: #666;
@@ -270,27 +290,43 @@
         
         .orientation-controls {
             display: flex;
+            justify-content: space-between;
             align-items: center;
-            gap: 15px;
+            gap: 10px;
             margin-top: 10px;
+            padding: 5px;
         }
         
         .orientation-item {
             display: flex;
             align-items: center;
-            gap: 5px;
+            gap: 8px;
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .orientation-item span:first-child {
+            min-width: 70px;
+            font-size: 12px;
+            font-weight: 500;
         }
         
         .orientation-item input[type="checkbox"] {
             margin: 0;
+            flex-shrink: 0;
         }
         
         .status-indicator {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            display: inline-block;
-            margin-left: 5px;
+            min-width: 35px;
+            height: 20px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: bold;
+            color: white;
+            text-align: center;
         }
         
         .status-green {
@@ -299,6 +335,61 @@
         
         .status-red {
             background-color: #dc3545;
+        }
+        
+        /* Rotation Styles */
+        .rotate-btn {
+            background-color: #6f42c1;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 5px;
+        }
+        
+        .rotate-btn:hover {
+            background-color: #5a2d91;
+        }
+        
+        .rotation-indicator {
+            display: inline-block;
+            margin-left: 5px;
+            font-size: 14px;
+            transition: transform 0.3s ease;
+        }
+        
+        .screen-preview img,
+        .screen-preview video {
+            transition: transform 0.3s ease;
+            max-width: 100%;
+            max-height: 100%;
+        }
+        
+        /* Rotation classes with higher specificity */
+        .screen-preview img.rotate-0,
+        .screen-preview video.rotate-0,
+        .rotation-indicator.rotate-0 { 
+            transform: rotate(0deg) !important; 
+        }
+        
+        .screen-preview img.rotate-90,
+        .screen-preview video.rotate-90,
+        .rotation-indicator.rotate-90 { 
+            transform: rotate(90deg) !important; 
+        }
+        
+        .screen-preview img.rotate-180,
+        .screen-preview video.rotate-180,
+        .rotation-indicator.rotate-180 { 
+            transform: rotate(180deg) !important; 
+        }
+        
+        .screen-preview img.rotate-270,
+        .screen-preview video.rotate-270,
+        .rotation-indicator.rotate-270 { 
+            transform: rotate(270deg) !important; 
         }
         
         .apply-section {
@@ -362,6 +453,231 @@
             pointer-events: none;
             opacity: 0.6;
         }
+        
+        /* Screen Management Styles */
+        .screen-management {
+            background: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .management-header h3 {
+            margin: 0 0 15px 0;
+            color: #333;
+            font-size: 18px;
+        }
+        
+        .management-controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .add-screen-btn {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        
+        .add-screen-btn:hover {
+            background-color: #218838;
+        }
+        
+        .remove-screen-btn {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            position: absolute;
+            top: 5px;
+            right: 5px;
+        }
+        
+        .remove-screen-btn:hover {
+            background-color: #c82333;
+        }
+        
+        .screen-card {
+            position: relative;
+        }
+        
+        /* Section Layout Styles */
+        .screens-section, .promos-section {
+            background: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .section-header h3 {
+            margin: 0;
+            color: #333;
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        /* Store Management Styles */
+        .add-store-btn {
+            background-color: #17a2b8;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        
+        .add-store-btn:hover {
+            background-color: #138496;
+        }
+        
+        .delete-store-btn {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+        
+        .delete-store-btn:hover {
+            background-color: #c82333;
+        }
+        
+        .store-management {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .store-management label {
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .store-management select {
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            background: white;
+            min-width: 200px;
+        }
+        
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border-radius: 8px;
+            width: 400px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .modal-header h3 {
+            margin: 0;
+            color: #333;
+        }
+        
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        .close:hover {
+            color: #000;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .modal-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .btn-primary {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -374,16 +690,61 @@
         <div class="stores-section">
             <div class="stores-header">
                 <div class="stores-title">Stores</div>
-                <input type="text" class="search-box" placeholder="Search" id="storeSearch">
+                <button class="add-store-btn" onclick="showAddStoreDialog()">➕ Add Store</button>
             </div>
             
-            <div class="store-info">
-                <div class="store-number">{{ config.stores[0].id }}</div>
-                <div class="store-name">{{ config.stores[0].name }}</div>
+            <!-- Store Management -->
+            <div class="store-management">
+                <label for="storeSelect">Select Store:</label>
+                <select id="storeSelect" onchange="switchStore(this.value)">
+                    {% for store in config.stores %}
+                    <option value="{{ store.id }}" {% if loop.first %}selected{% endif %}>
+                        {{ store.id }} - {{ store.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <button class="delete-store-btn" id="delete-store-btn" onclick="deleteCurrentStore()" title="Delete selected store">
+                    🗑️ Delete Store
+                </button>
             </div>
             
-            <div class="screens-grid">
-                <!-- Screen Cards -->
+            <div class="store-info" id="current-store-info">
+                <div class="store-number" id="current-store-id">{{ config.stores[0].id }}</div>
+                <div class="store-name" id="current-store-name">{{ config.stores[0].name }}</div>
+                <div class="master-indicator" id="master-indicator" style="display: none; color: #f39c12; font-weight: bold; margin-top: 5px;">
+                    👑 MASTER STORE
+                </div>
+            </div>
+            
+            <!-- Regular Screens Section -->
+            <div class="screens-section">
+                <div class="section-header">
+                    <h3>📺 Regular Screens</h3>
+                    <button class="add-screen-btn" onclick="addNewScreen('screen')">
+                        ➕ Add Screen
+                    </button>
+                    </button>
+                </div>
+                <div class="screens-grid" id="screens-grid">
+                    <!-- Regular screens will be loaded here -->
+                </div>
+            </div>
+            
+            <!-- Promo Screens Section -->
+            <div class="promos-section">
+                <div class="section-header">
+                    <h3>🎯 Promo Screens</h3>
+                    <button class="add-screen-btn" onclick="addNewScreen('promo')">
+                        ➕ Add Promo
+                    </button>
+                </div>
+                <div class="screens-grid" id="promos-grid">
+                    <!-- Promo screens will be loaded here -->
+                </div>
+            </div>
+            
+            <div style="display: none;">
+                <!-- Old static screens will be hidden -->
                 {% for screen_id, screen_data in config.screens[config.stores[0].id].items() %}
                 <div class="screen-card 
                     {% if screen_data.vertical and not screen_data.horizontal %}vertical-mode
@@ -417,7 +778,7 @@
                             Upload : File
                         </button>
                         {% if screen_data.file %}
-                        <button class="delete-btn" onclick="console.log('Delete button clicked for {{ screen_id }}'); deleteFile('{{ screen_id }}')" title="Delete current file">
+                        <button class="delete-btn" onclick="deleteFile('{{ screen_id }}')" title="Delete current file">
                             🗑️ Delete
                         </button>
                         {% endif %}
@@ -464,74 +825,94 @@
         </div>
     </div>
 
-    <script>
+    <script>        
+        // Global Variables - Must be declared first
+        let currentStoreId = null; // Will be set after config loads
+        
+        // Configuration data passed from Flask
+        const allStoresData = JSON.parse(document.getElementById('config-data').textContent);
+        
+        // Set currentStoreId from config data
+        currentStoreId = allStoresData.stores[0].id;
+        
+        // Debug: Check if data loaded correctly
+        console.log('Configuration loaded successfully');
+        console.log('Current store ID:', currentStoreId);
+        console.log('Master store ID:', allStoresData.master_store_id);
+        console.log('Available stores:', allStoresData.stores.map(s => s.id + ' - ' + s.name));
+        
+        // Helper function to check if current store is master
+        function isMasterStore(storeId) {
+            return allStoresData.master_store_id === storeId;
+        }
+        
         function triggerUpload(screenId) {
             document.getElementById('file-' + screenId).click();
         }
         
         function deleteFile(screenId) {
-            console.log('Delete function called for screen:', screenId);
-            alert('Delete function called for screen: ' + screenId);
+            console.log('Delete button clicked for screen:', screenId);
             
-            if (!confirm('Are you sure you want to delete this file? This action cannot be undone.')) {
+            // Simple confirmation
+            if (!confirm('Are you sure you want to delete this file?')) {
                 return;
             }
             
+            console.log('User confirmed deletion for screen:', screenId);
+            
+            // Show loading state
             const card = document.getElementById('card-' + screenId);
-            if (!card) {
-                console.error('Card not found for screen:', screenId);
-                alert('Error: Card not found for screen ' + screenId);
-                return;
+            if (card) {
+                card.style.opacity = '0.5';
             }
             
-            card.classList.add('loading');
-            
+            // Prepare request data
             const requestData = {
-                store_id: '{{ config.stores[0].id }}',
+                store_id: currentStoreId,
                 screen_id: screenId
             };
+            
             console.log('Sending delete request:', requestData);
             
+            // Send delete request
             fetch('/delete_from_screen', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
                 },
                 body: JSON.stringify(requestData)
             })
             .then(response => {
-                console.log('Delete response status:', response.status);
-                return response.json();
+                console.log('Response status:', response.status);
+                console.log('Response ok:', response.ok);
+                return response.text().then(text => {
+                    console.log('Raw response:', text);
+                    try {
+                        return JSON.parse(text);
+                    } catch (e) {
+                        console.error('JSON parse error:', e);
+                        throw new Error('Invalid JSON response: ' + text);
+                    }
+                });
             })
             .then(data => {
-                console.log('Delete response data:', data);
+                console.log('Parsed response data:', data);
                 if (data.success) {
-                    // Update preview to show no content
-                    const preview = document.getElementById('preview-' + screenId);
-                    const uploadArea = preview.querySelector('.upload-area');
-                    if (uploadArea) {
-                        uploadArea.innerHTML = '<div style="margin-top: 20px;">No content uploaded</div>';
-                    } else {
-                        preview.innerHTML = '<div class="upload-area"><div style="margin-top: 20px;">No content uploaded</div></div>';
-                    }
-                    
-                    // Remove delete button
-                    const deleteBtn = card.querySelector('.delete-btn');
-                    if (deleteBtn) {
-                        deleteBtn.remove();
-                    }
-                    
-                    showMessage('🗑️ File deleted successfully from ' + screenId.toUpperCase());
+                    alert('✅ File deleted successfully!');
+                    window.location.reload();
                 } else {
-                    alert('Delete failed: ' + data.error);
+                    alert('❌ Delete failed: ' + (data.error || 'Unknown error'));
                 }
             })
             .catch(error => {
-                console.error('Delete error:', error);
-                alert('Delete failed: ' + error.message);
+                console.error('Request failed:', error);
+                alert('❌ Request failed: ' + error.message);
             })
             .finally(() => {
-                card.classList.remove('loading');
+                // Remove loading state
+                if (card) {
+                    card.style.opacity = '1';
+                }
             });
         }
         
@@ -539,14 +920,27 @@
             const file = input.files[0];
             if (!file) return;
             
+            // Check if "Apply to All Stores" is checked
+            const applyToAllCheckbox = document.getElementById(`apply-all-${screenId}`);
+            const applyToAll = applyToAllCheckbox && applyToAllCheckbox.checked;
+            
             const formData = new FormData();
             formData.append('file', file);
-            formData.append('store_id', '{{ config.stores[0].id }}');
+            formData.append('store_id', currentStoreId);
             formData.append('screen_id', screenId);
+            formData.append('apply_to_all', applyToAll);
             
             // Show loading state
             const card = input.closest('.screen-card');
             card.classList.add('loading');
+            
+            if (applyToAll) {
+                // Show confirmation dialog
+                if (!confirm(`🚨 This will replace ${getScreenDisplayName(screenId)} in ALL stores with this file. Are you sure?`)) {
+                    card.classList.remove('loading');
+                    return;
+                }
+            }
             
             fetch('/upload_to_screen', {
                 method: 'POST',
@@ -555,27 +949,92 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // Update preview
-                    const preview = document.getElementById('preview-' + screenId);
-                    preview.innerHTML = `<img src="/static/uploads/${data.filename}" alt="Screen content">`;
-                    
-                    // Add delete button if it doesn't exist
-                    const buttonContainer = input.parentElement;
-                    let deleteBtn = buttonContainer.querySelector('.delete-btn');
-                    if (!deleteBtn) {
-                        deleteBtn = document.createElement('button');
-                        deleteBtn.className = 'delete-btn';
-                        deleteBtn.innerHTML = '🗑️ Delete';
-                        deleteBtn.title = 'Delete current file';
-                        deleteBtn.onclick = () => deleteFile(screenId);
+                    // Update the allStoresData object in memory
+                    if (data.applied_to_all) {
+                        // Determine the logical screen type (strip store prefix if present)
+                        // Correctly extract portion after first underscore (store-specific -> type)
+                        const screenType = screenId.includes('_') ? screenId.substring(screenId.indexOf('_') + 1) : screenId;
+                        // If applied to all stores, update only non-protected stores in memory
+                        if (data.updated_stores) {
+                            data.updated_stores.forEach(storeId => {
+                                // Compute that store's screen id
+                                const targetScreenId = `${storeId}_${screenType}`;
+                                if (!allStoresData.screens[storeId]) {
+                                    allStoresData.screens[storeId] = {};
+                                }
+                                if (!allStoresData.screens[storeId][targetScreenId]) {
+                                    allStoresData.screens[storeId][targetScreenId] = {};
+                                }
+                                allStoresData.screens[storeId][targetScreenId].file = data.filename;
+                            });
+                        }
+                        // Also reflect any newly created screens explicitly returned (format store:screen)
+                        if (data.created_screens) {
+                            data.created_screens.forEach(entry => {
+                                const parts = entry.split(':');
+                                if (parts.length === 2) {
+                                    const cStore = parts[0];
+                                    const cScreen = parts[1];
+                                    if (!allStoresData.screens[cStore]) allStoresData.screens[cStore] = {};
+                                    if (!allStoresData.screens[cStore][cScreen]) allStoresData.screens[cStore][cScreen] = {};
+                                    allStoresData.screens[cStore][cScreen].file = data.filename;
+                                }
+                            });
+                        }
                         
-                        // Insert after upload button
-                        const uploadBtn = buttonContainer.querySelector('.upload-btn');
-                        uploadBtn.insertAdjacentElement('afterend', deleteBtn);
+                        // Show detailed success message from server
+                        showMessage(`📡 ${data.message}`);
+                        
+                        // Show additional info if screens were created
+                        if (data.created_screens && data.created_screens.length > 0) {
+                            setTimeout(() => {
+                                showMessage(`✨ Created ${data.created_screens.length} missing screens across stores`, '#27ae60');
+                            }, 2000);
+                        }
+                        
+                        // Show additional info if stores were skipped
+                        if (data.skipped_stores && data.skipped_stores.length > 0) {
+                            setTimeout(() => {
+                                showMessage(`🔒 ${data.skipped_stores.length} protected stores were skipped`, '#f39c12');
+                            }, 4000);
+                        }
+                        
+                        // Refresh the current view to show the update
+                        loadScreensForStore(currentStoreId);
+                    } else {
+                        // Normal single-store upload
+                        if (!allStoresData.screens[currentStoreId]) {
+                            allStoresData.screens[currentStoreId] = {};
+                        }
+                        if (!allStoresData.screens[currentStoreId][screenId]) {
+                            allStoresData.screens[currentStoreId][screenId] = {};
+                        }
+                        allStoresData.screens[currentStoreId][screenId].file = data.filename;
+                        
+                        // Update preview
+                        const preview = document.getElementById('preview-' + screenId);
+                        preview.innerHTML = `<img src="/static/uploads/${data.filename}" alt="Screen content">`;
+                        
+                        // Show success message
+                        showMessage('📁 File uploaded successfully to ' + getScreenDisplayName(screenId) + '!');
                     }
                     
-                    // Show success message
-                    showMessage('📁 File uploaded successfully to ' + screenId.toUpperCase() + '!');
+                    // Add delete button if it doesn't exist (only for single-store uploads)
+                    if (!data.applied_to_all) {
+                        const buttonContainer = input.parentElement;
+                        let deleteBtn = buttonContainer.querySelector('.delete-btn');
+                        if (!deleteBtn) {
+                            deleteBtn = document.createElement('button');
+                            deleteBtn.className = 'delete-btn';
+                            deleteBtn.innerHTML = '🗑️ Delete';
+                            deleteBtn.title = 'Delete current file';
+                            deleteBtn.onclick = () => deleteFile(screenId);
+                            
+                            // Insert after upload button
+                            const uploadBtn = buttonContainer.querySelector('.upload-btn');
+                            uploadBtn.insertAdjacentElement('afterend', deleteBtn);
+                        }
+                    }
                 } else {
                     alert('Upload failed: ' + data.error);
                 }
@@ -608,7 +1067,7 @@
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
-                            store_id: '{{ config.stores[0].id }}',
+                            store_id: currentStoreId,
                             screen_id: screenId,
                             orientation: oppositeOrientation,
                             value: false
@@ -623,7 +1082,7 @@
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    store_id: '{{ config.stores[0].id }}',
+                    store_id: currentStoreId,
                     screen_id: screenId,
                     orientation: orientation,
                     value: value
@@ -667,13 +1126,53 @@
             });
         }
         
-        function showMessage(text) {
+        function updateProtectionStatus(screenId, isProtected) {
+            fetch('/update_protection', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    store_id: currentStoreId,
+                    screen_id: screenId,
+                    protected: isProtected
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update the in-memory data
+                    if (!allStoresData.screens[currentStoreId][screenId]) {
+                        allStoresData.screens[currentStoreId][screenId] = {};
+                    }
+                    allStoresData.screens[currentStoreId][screenId].protected = isProtected;
+                    
+                    // Show feedback
+                    const message = isProtected ? 
+                        `🔒 ${getScreenDisplayName(screenId)} is now protected from Apply All` :
+                        `🔓 ${getScreenDisplayName(screenId)} protection removed`;
+                    showMessage(message);
+                } else {
+                    alert('Failed to update protection status: ' + data.error);
+                    // Reset checkbox on failure
+                    document.getElementById(`protect-${screenId}`).checked = !isProtected;
+                }
+            })
+            .catch(error => {
+                console.error('Error updating protection:', error);
+                alert('Failed to update protection status');
+                // Reset checkbox on failure
+                document.getElementById(`protect-${screenId}`).checked = !isProtected;
+            });
+        }
+        
+        function showMessage(text, backgroundColor = '#2ecc71') {
             const message = document.createElement('div');
             message.style.cssText = `
                 position: fixed;
                 top: 20px;
                 right: 20px;
-                background: #2ecc71;
+                background: ${backgroundColor};
                 color: white;
                 padding: 15px 20px;
                 border-radius: 5px;
@@ -739,14 +1238,658 @@
         }
         
         function showQuickTips() {
-            alert('Quick Tips:\n\n1. Upload images for each screen\n2. Set orientation preferences\n3. Use "Apply to all Stores" to sync settings\n4. Click on screen names to view on TV display');
+            alert('Quick Tips:\n\n1. Upload images for each screen\n2. Set orientation preferences\n3. Use "Apply to all Stores" to sync settings\n4. Click on screen names to view on TV display\n5. Add/Remove screens as needed');
         }
         
-        // Store search functionality
-        document.getElementById('storeSearch').addEventListener('input', function(e) {
-            // This would filter stores in a real implementation
-            console.log('Searching for:', e.target.value);
+        // Dynamic Screen Management Functions
+        function loadScreens() {
+            loadScreensForStore(currentStoreId);
+        }
+        
+        function createScreenCard(screenId, screenData, storeId) {
+            console.log('Creating card for:', screenId, 'with data:', screenData, 'for store:', storeId);
+            const card = document.createElement('div');
+            const orientationClass = getOrientationClass(screenData);
+            const previewClass = getPreviewClass(screenData);
+            const rotation = screenData.rotation || 0;
+            // Compute logical screen type for persistence (after first underscore)
+            const logicalType = screenId.includes('_') ? screenId.substring(screenId.indexOf('_') + 1) : screenId;
+            let applyAllState = {};
+            try { applyAllState = JSON.parse(localStorage.getItem('applyAllState') || '{}'); } catch {}
+            const savedApplyAll = !!applyAllState[logicalType];
+            
+            card.className = `screen-card ${orientationClass}`;
+            card.id = `card-${screenId}`;
+            
+            card.innerHTML = `
+                <button class="remove-screen-btn" onclick="removeScreen('${screenId}')" title="Remove this screen">
+                    ✕
+                </button>
+                <div class="screen-title">
+                    <a href="/tv_view/${storeId}/${screenId}" target="_blank" style="text-decoration: none; color: inherit;">
+                        ${getScreenDisplayName(screenId)}
+                    </a>
+                    <span class="rotation-indicator rotate-${rotation}" id="rotation-indicator-${screenId}">🔄</span>
+                </div>
+                
+                <div class="screen-preview ${previewClass}" id="preview-${screenId}">
+                    ${screenData.file ? 
+                        `<img src="/static/uploads/${screenData.file}" alt="Screen content" class="rotate-${rotation}">` :
+                        '<div class="upload-area"><div style="margin-top: 20px;">No content uploaded</div></div>'
+                    }
+                </div>
+                
+                <div style="text-align: center;">
+                    <button class="upload-btn" onclick="triggerUpload('${screenId}')">
+                        Upload : File
+                    </button>
+                    ${screenData.file ? 
+                        `<button class="delete-btn" onclick="deleteFile('${screenId}')" title="Delete current file">🗑️ Delete</button>` : 
+                        ''
+                    }
+                    <button class="rotate-btn" onclick="rotateScreen('${screenId}')" title="Rotate image 90°">
+                        🔄 Rotate
+                    </button>
+                    <input type="file" class="file-input" id="file-${screenId}" 
+                           accept="image/*,video/*" onchange="uploadFile('${screenId}', this)">
+                </div>
+                
+                <div class="apply-all-section" ${!isMasterStore(currentStoreId) ? 'style="display: none;"' : ''}>
+                    <label>
+                        <input type="checkbox" id="apply-all-${screenId}" data-logical-type="${logicalType}" ${savedApplyAll ? 'checked' : ''}>
+                        <span>📡 Apply to ALL stores</span>
+                    </label>
+                    <div class="help-text">
+                        When checked, uploads will replace this screen in all stores
+                    </div>
+                </div>
+                
+                <div class="protect-section">
+                    <label>
+                        <input type="checkbox" id="protect-${screenId}" ${screenData.protected ? 'checked' : ''} 
+                               onchange="updateProtectionStatus('${screenId}', this.checked)">
+                        <span>🔒 Protect from Apply All</span>
+                    </label>
+                    <div class="help-text">
+                        When checked, this screen won't be overwritten by "Apply to All" uploads
+                    </div>
+                </div>
+                
+                <div class="orientation-controls">
+                    <div class="orientation-item">
+                        <span>Vertical :</span>
+                        <input type="checkbox" id="vertical-${screenId}" 
+                               ${screenData.vertical && !screenData.horizontal ? 'checked' : ''}
+                               onchange="updateOrientation('${screenId}', 'vertical', this.checked)">
+                        <span class="status-indicator ${screenData.vertical && !screenData.horizontal ? 'status-green' : 'status-red'}" 
+                              id="vertical-status-${screenId}">
+                            ${screenData.vertical && !screenData.horizontal ? 'ON' : 'OFF'}
+                        </span>
+                    </div>
+                    
+                    <div class="orientation-item">
+                        <span>Horizontal :</span>
+                        <input type="checkbox" id="horizontal-${screenId}" 
+                               ${screenData.horizontal && !screenData.vertical ? 'checked' : ''}
+                               onchange="updateOrientation('${screenId}', 'horizontal', this.checked)">
+                        <span class="status-indicator ${screenData.horizontal && !screenData.vertical ? 'status-green' : 'status-red'}" 
+                              id="horizontal-status-${screenId}">
+                            ${screenData.horizontal && !screenData.vertical ? 'ON' : 'OFF'}
+                        </span>
+                    </div>
+                </div>
+            `;
+            
+            return card;
+        }
+
+        // Persist Apply-to-All checkbox changes
+        document.addEventListener('change', (e) => {
+            if (e.target && e.target.id && e.target.id.startsWith('apply-all-')) {
+                const logicalType = e.target.getAttribute('data-logical-type');
+                if (!logicalType) return;
+                let applyAllState = {};
+                try { applyAllState = JSON.parse(localStorage.getItem('applyAllState') || '{}'); } catch {}
+                applyAllState[logicalType] = e.target.checked;
+                localStorage.setItem('applyAllState', JSON.stringify(applyAllState));
+                console.log('Apply-All state updated:', applyAllState);
+            }
+        });
+        
+        function getOrientationClass(screenData) {
+            if (screenData.vertical && !screenData.horizontal) return 'vertical-mode';
+            if (screenData.horizontal && !screenData.vertical) return 'horizontal-mode';
+            return 'default-mode';
+        }
+        
+        function getPreviewClass(screenData) {
+            if (screenData.vertical && !screenData.horizontal) return 'vertical-preview';
+            if (screenData.horizontal && !screenData.vertical) return 'horizontal-preview';
+            return 'default-preview';
+        }
+        
+        function getScreenDisplayName(screenId) {
+            // Handle store-specific IDs (e.g., "1931_screen1" -> "Screen 1")
+            if (screenId.includes('_')) {
+                const parts = screenId.split('_');
+                const storeId = parts[0];
+                const screenType = parts[1];
+                
+                if (screenType.startsWith('screen')) {
+                    const num = screenType.replace('screen', '');
+                    return `Screen ${num} (Store ${storeId})`;
+                } else if (screenType.startsWith('promo')) {
+                    const num = screenType.replace('promo', '');
+                    return `Promo ${num} (Store ${storeId})`;
+                }
+                return `${screenType} (Store ${storeId})`;
+            }
+            
+            // Handle legacy IDs for backward compatibility
+            if (screenId.startsWith('screen')) {
+                const num = screenId.replace('screen', '');
+                return `Screen ${num}`;
+            } else if (screenId.startsWith('promo')) {
+                const num = screenId.replace('promo', '');
+                return `Promo ${num}`;
+            }
+            return screenId;
+        }
+        
+        function addNewScreen(screenType) {
+            console.log('Adding new screen:', screenType, 'for store:', currentStoreId);
+            fetch('/add_screen', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    store_id: currentStoreId,
+                    screen_type: screenType
+                })
+            })
+            .then(response => {
+                console.log('Response status:', response.status);
+                return response.json();
+            })
+            .then(data => {
+                console.log('Response data:', data);
+                if (data.success) {
+                    alert(`✅ ${data.message}`);
+                    // Reload the page to show the new screen
+                    window.location.reload();
+                } else {
+                    alert(`❌ Error: ${data.error}`);
+                }
+            })
+            .catch(error => {
+                console.error('Error adding screen:', error);
+                alert('❌ Failed to add screen');
+            });
+        }
+        
+        function removeScreen(screenId) {
+            console.log('=== REMOVE SCREEN DEBUG START ===');
+            console.log('removeScreen called with screenId:', screenId);
+            console.log('currentStoreId:', currentStoreId);
+            
+            console.log('Remove screen function called for: ' + screenId);
+            
+            // Direct execution without confirmation (user disabled prompts)
+            console.log('Executing delete directly (confirmation bypassed)...');
+            executeScreenDeletion(screenId);
+        }
+        
+        function executeScreenDeletion(screenId) {
+            console.log('User confirmed deletion, preparing request...');
+            
+            // Execute the delete request
+            console.log('Testing basic fetch...');
+            
+            try {
+                fetch('/delete_screen', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        store_id: currentStoreId,
+                        screen_id: screenId
+                    })
+                })
+                .then(response => {
+                    console.log('Response received:', response);
+                    console.log('Response status:', response.status);
+                    console.log('Response ok:', response.ok);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Response data:', data);
+                    alert('Server response: ' + JSON.stringify(data));
+                    
+                    if (data.success) {
+                        console.log('Delete successful, reloading...');
+                        window.location.reload();
+                    } else {
+                        console.log('Delete failed:', data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Fetch error:', error);
+                    alert('Fetch error: ' + error.message);
+                });
+            } catch (e) {
+                console.error('Try-catch error:', e);
+                alert('JavaScript error: ' + e.message);
+            }
+            
+            console.log('=== REMOVE SCREEN DEBUG END ===');
+        }
+        
+        function rotateScreen(screenId) {
+            // Get current screen data to find current rotation
+            const screensData = allStoresData.screens[currentStoreId] || {};
+            const currentData = screensData[screenId];
+            
+            if (!currentData || !currentData.file) {
+                alert('Please upload an image or video first before rotating');
+                return;
+            }
+            
+            // Get current rotation from configuration
+            const currentRotation = currentData.rotation || 0;
+            console.log(`Current rotation for ${screenId}: ${currentRotation}°`);
+            
+            // Calculate next rotation (0 -> 90 -> 180 -> 270 -> 0)
+            const nextRotation = (currentRotation + 90) % 360;
+            console.log(`Next rotation for ${screenId}: ${nextRotation}°`);
+            
+            // Update backend
+            fetch('/update_rotation', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    store_id: currentStoreId,
+                    screen_id: screenId,
+                    rotation: nextRotation
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Rotation response:', data);
+                if (data.success) {
+                    // Update visual rotation immediately
+                    const indicator = document.getElementById(`rotation-indicator-${screenId}`);
+                    const preview = document.getElementById(`preview-${screenId}`);
+                    const img = preview.querySelector('img, video');
+                    
+                    if (indicator) {
+                        // Remove all rotation classes and add new one
+                        indicator.className = 'rotation-indicator';
+                        indicator.classList.add(`rotate-${nextRotation}`);
+                    }
+                    
+                    if (img) {
+                        // Remove all rotation classes and add new one
+                        img.className = img.className.replace(/rotate-\d+/g, '');
+                        img.classList.add(`rotate-${nextRotation}`);
+                    }
+                    
+                    console.log(`✅ Successfully rotated ${screenId} to ${nextRotation}°`);
+                    
+                    // Reload page after short delay to ensure consistency
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 500);
+                } else {
+                    alert(`❌ Error: ${data.error}`);
+                }
+            })
+            .catch(error => {
+                console.error('Error rotating screen:', error);
+                alert('❌ Failed to rotate screen: ' + error.message);
+            });
+        }
+        
+        // Load screens dynamically when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeDashboard();
+        });
+        
+        function initializeDashboard() {
+            // Initialize the store dropdown to match currentStoreId
+            const storeSelect = document.getElementById('storeSelect');
+            storeSelect.value = currentStoreId;
+            
+            // Update store display
+            const storeData = allStoresData.stores.find(store => store.id === currentStoreId);
+            if (storeData) {
+                document.getElementById('current-store-id').textContent = storeData.id;
+                document.getElementById('current-store-name').textContent = storeData.name;
+            }
+            
+            // Load screens for current store
+            loadScreens();
+        }
+        
+        // Store Management Functions
+        
+        function switchStore(storeId) {
+            console.log('Switching to store:', storeId);
+            console.log('All stores data:', allStoresData);
+            currentStoreId = storeId;
+            
+            // Update store info display
+            const storeData = allStoresData.stores.find(store => store.id === storeId);
+            console.log('Found store data:', storeData);
+            if (storeData) {
+                document.getElementById('current-store-id').textContent = storeData.id;
+                document.getElementById('current-store-name').textContent = storeData.name;
+                
+                // Show/hide master store indicator and update delete button
+                const masterIndicator = document.getElementById('master-indicator');
+                const deleteButton = document.getElementById('delete-store-btn');
+                if (isMasterStore(storeId)) {
+                    masterIndicator.style.display = 'block';
+                    deleteButton.disabled = true;
+                    deleteButton.style.opacity = '0.5';
+                    deleteButton.title = 'Master Store cannot be deleted';
+                } else {
+                    masterIndicator.style.display = 'none';
+                    deleteButton.disabled = false;
+                    deleteButton.style.opacity = '1';
+                    deleteButton.title = 'Delete selected store';
+                }
+                
+                console.log('Updated store display to:', storeData.id, storeData.name);
+            }
+            
+            // Reload screens for the selected store
+            loadScreensForStore(storeId);
+        }
+        
+        function loadScreensForStore(storeId) {
+            console.log('Loading screens for store:', storeId);
+            const screensData = allStoresData.screens[storeId] || {};
+            console.log('Screens data for store', storeId, ':', screensData);
+            
+            const screensGrid = document.getElementById('screens-grid');
+            const promosGrid = document.getElementById('promos-grid');
+            
+            // Clear existing content
+            screensGrid.innerHTML = '';
+            promosGrid.innerHTML = '';
+            
+            // Separate screens and promos - handle store-specific IDs
+            const screens = {};
+            const promos = {};
+            
+            Object.keys(screensData).forEach(screenId => {
+                // Handle store-specific screen IDs (e.g., "1931_screen1")
+                if (screenId.includes('_screen')) {
+                    screens[screenId] = screensData[screenId];
+                } else if (screenId.includes('_promo')) {
+                    promos[screenId] = screensData[screenId];
+                } else if (screenId.startsWith('screen')) {
+                    // Handle legacy screen IDs for backward compatibility
+                    screens[screenId] = screensData[screenId];
+                } else if (screenId.startsWith('promo')) {
+                    // Handle legacy promo IDs for backward compatibility
+                    promos[screenId] = screensData[screenId];
+                }
+            });
+            
+            // Load regular screens - handle store-specific IDs in sorting
+            Object.keys(screens)
+                .sort((a, b) => {
+                    // Extract number from store-specific IDs (e.g., "1931_screen1" -> 1)
+                    const getScreenNumber = (screenId) => {
+                        if (screenId.includes('_screen')) {
+                            const screenPart = screenId.split('_screen')[1];
+                            return parseInt(screenPart) || 0;
+                        } else if (screenId.startsWith('screen')) {
+                            // Legacy format
+                            return parseInt(screenId.replace('screen', '')) || 0;
+                        }
+                        return 0;
+                    };
+                    
+                    const numA = getScreenNumber(a);
+                    const numB = getScreenNumber(b);
+                    return numA - numB;
+                })
+                .forEach(screenId => {
+                    const screenData = screens[screenId];
+                    screensGrid.appendChild(createScreenCard(screenId, screenData, storeId));
+                });
+            
+            // Load promo screens - handle store-specific IDs in sorting
+            Object.keys(promos)
+                .sort((a, b) => {
+                    // Extract number from store-specific IDs (e.g., "1931_promo1" -> 1)
+                    const getPromoNumber = (screenId) => {
+                        if (screenId.includes('_promo')) {
+                            const promoPart = screenId.split('_promo')[1];
+                            return parseInt(promoPart) || 0;
+                        } else if (screenId.startsWith('promo')) {
+                            // Legacy format
+                            return parseInt(screenId.replace('promo', '')) || 0;
+                        }
+                        return 0;
+                    };
+                    
+                    const numA = getPromoNumber(a);
+                    const numB = getPromoNumber(b);
+                    return numA - numB;
+                })
+                .forEach(screenId => {
+                    const screenData = promos[screenId];
+                    promosGrid.appendChild(createScreenCard(screenId, screenData, storeId));
+                });
+        }
+        
+        function showAddStoreDialog() {
+            document.getElementById('addStoreModal').style.display = 'block';
+        }
+        
+        function closeAddStoreDialog() {
+            document.getElementById('addStoreModal').style.display = 'none';
+            document.getElementById('addStoreForm').reset();
+        }
+        
+        function addNewStore() {
+            const storeId = document.getElementById('newStoreId').value.trim();
+            const storeName = document.getElementById('newStoreName').value.trim();
+            
+            if (!storeId || !storeName) {
+                alert('Please enter both Store ID and Store Name');
+                return;
+            }
+            
+            fetch('/add_store', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    store_id: storeId,
+                    store_name: storeName
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Server response:', data);
+                if (data.success) {
+                    alert(`✅ ${data.message}`);
+                    
+                    try {
+                        // Clear form inputs
+                        document.getElementById('newStoreId').value = '';
+                        document.getElementById('newStoreName').value = '';
+                        
+                        closeAddStoreDialog();
+                        
+                        // Add the new store to the dropdown dynamically
+                        addStoreToDropdown(storeId, storeName);
+                        
+                        // Add empty screens config for new store
+                        if (!allStoresData.screens) {
+                            allStoresData.screens = {};
+                        }
+                        allStoresData.screens[storeId] = {
+                            'screen1': { file: null, vertical: false, horizontal: false, rotation: 0 },
+                            'screen2': { file: null, vertical: false, horizontal: false, rotation: 0 },
+                            'promo1': { file: null, vertical: false, horizontal: false, rotation: 0 }
+                        };
+                        
+                        // Switch to the new store
+                        switchStore(storeId);
+                        
+                    } catch (error) {
+                        console.error('Error in post-success operations:', error);
+                        alert('Store added successfully, but there was an error switching to it. Please refresh the page.');
+                    }
+                } else {
+                    alert(`❌ Error: ${data.error}`);
+                }
+            })
+            .catch(error => {
+                console.error('Network or parsing error:', error);
+                alert('❌ Network error or server issue: ' + error.message);
+            });
+        }
+        
+        function addStoreToDropdown(storeId, storeName) {
+            // Add to the stores array in memory
+            if (!allStoresData.stores) {
+                allStoresData.stores = [];
+            }
+            allStoresData.stores.push({ id: storeId, name: storeName });
+            
+            // Add option to dropdown
+            const storeSelect = document.getElementById('storeSelect');
+            if (!storeSelect) {
+                throw new Error('Store select element not found');
+            }
+            
+            const option = document.createElement('option');
+            option.value = storeId;
+            option.textContent = `${storeId} - ${storeName}`;
+            storeSelect.appendChild(option);
+        }
+        
+        function deleteCurrentStore() {
+            console.log('=== DELETE STORE DEBUG START ===');
+            const storeSelect = document.getElementById('storeSelect');
+            const storeId = storeSelect.value;
+            const storeText = storeSelect.options[storeSelect.selectedIndex].text;
+            
+            console.log('Attempting to delete store:', storeId, storeText);
+            console.log('Is master store?', isMasterStore(storeId));
+            console.log('Total stores:', allStoresData.stores.length);
+            
+            // Protect master store from deletion
+            if (isMasterStore(storeId)) {
+                console.log('Blocked: Master Store cannot be deleted');
+                alert('❌ Master Store cannot be deleted!');
+                return;
+            }
+            
+            if (allStoresData.stores.length <= 1) {
+                console.log('Blocked: Cannot delete last store');
+                alert('Cannot delete the last store. At least one store must exist.');
+                return;
+            }
+            
+            // Direct execution without confirmation (user disabled prompts)
+            console.log('Executing store deletion directly (confirmation bypassed)...');
+            executeStoreDeletion(storeId, storeText);
+        }
+        
+        function executeStoreDeletion(storeId, storeText) {
+            console.log('User confirmed store deletion, sending request...');
+            
+            fetch('/delete_store', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    store_id: storeId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(`✅ ${data.message}`);
+                    // Reload the page to reflect changes
+                    window.location.reload();
+                } else {
+                    alert(`❌ Error: ${data.error}`);
+                }
+            })
+            .catch(error => {
+                console.error('Error deleting store:', error);
+                alert('❌ Failed to delete store');
+            });
+        }
+        
+        // Close modal when clicking outside of it
+        window.onclick = function(event) {
+            const modal = document.getElementById('addStoreModal');
+            if (event.target == modal) {
+                closeAddStoreDialog();
+            }
+        }
+        
+        // Initialize master store indicator on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const masterIndicator = document.getElementById('master-indicator');
+            const deleteButton = document.getElementById('delete-store-btn');
+            
+            if (isMasterStore(currentStoreId)) {
+                masterIndicator.style.display = 'block';
+                deleteButton.disabled = true;
+                deleteButton.style.opacity = '0.5';
+                deleteButton.title = 'Master Store cannot be deleted';
+            } else {
+                masterIndicator.style.display = 'none';
+                deleteButton.disabled = false;
+                deleteButton.style.opacity = '1';
+                deleteButton.title = 'Delete selected store';
+            }
         });
     </script>
+    
+    <!-- Add Store Modal -->
+    <div id="addStoreModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New Store</h3>
+                <span class="close" onclick="closeAddStoreDialog()">&times;</span>
+            </div>
+            <form id="addStoreForm">
+                <div class="form-group">
+                    <label for="newStoreId">Store ID (Number):</label>
+                    <input type="text" id="newStoreId" placeholder="e.g., 1882" required>
+                </div>
+                <div class="form-group">
+                    <label for="newStoreName">Store Name:</label>
+                    <input type="text" id="newStoreName" placeholder="e.g., Liverpool Branch" required>
+                </div>
+                <div class="modal-buttons">
+                    <button type="button" class="btn-secondary" onclick="closeAddStoreDialog()">Cancel</button>
+                    <button type="button" class="btn-primary" onclick="addNewStore()">Add Store</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </body>
 </html>

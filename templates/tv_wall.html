@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}TV Wall{% endblock %}
+{% block content %}
+<div class="card">
+	<h2 style="margin-top:0; font-size:1.1rem;">TV Wall (All Screens)</h2>
+	<div style="display:grid; gap:1rem; grid-template-columns:repeat(auto-fill,minmax(260px,1fr));">
+		{% for store in stores %}
+			{% set sset = screens.get(store.id, {}) %}
+			{% for sk, meta in sset.items() %}
+				<div style="background:#111b22; padding:.75rem .85rem 1rem; border-radius:10px; display:flex; flex-direction:column; gap:.55rem;">
+					<div style="display:flex; justify-content:space-between; align-items:center;">
+						<strong style="font-size:.7rem; letter-spacing:.5px;">{{ store.id }} / {{ sk }}</strong>
+						{% if meta.file %}<a style="font-size:.55rem; color:#888; text-decoration:none;" target="_blank" href="{{ url_for('tv_screen', store_id=store.id, screen_key=sk) }}">open</a>{% endif %}
+					</div>
+					{% if meta.file %}
+						<img src="{{ url_for('static', filename='uploads/' + meta.file) }}" alt="{{ sk }}" style="width:100%; aspect-ratio:4/3; object-fit:cover; border-radius:6px;" />
+					{% else %}
+						<div style="width:100%; aspect-ratio:4/3; background:#1e2a32; border:1px dashed #2e3e49; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:.6rem; opacity:.5;">empty</div>
+					{% endif %}
+				</div>
+			{% endfor %}
+		{% endfor %}
+	</div>
+	<p style="font-size:.6rem; opacity:.45; margin-top:1.25rem;">Auto refresh every 90s.</p>
+</div>
+{% endblock %}

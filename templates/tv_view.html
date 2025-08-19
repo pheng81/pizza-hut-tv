@@ -35,7 +35,14 @@
             max-width: 100%;
             max-height: 100%;
             object-fit: contain;
+            transition: transform 0.3s ease;
         }
+        
+        /* Rotation classes for TV display */
+        .rotate-0 { transform: rotate(0deg); }
+        .rotate-90 { transform: rotate(90deg); }
+        .rotate-180 { transform: rotate(180deg); }
+        .rotate-270 { transform: rotate(270deg); }
         
         .no-content {
             text-align: center;
@@ -170,9 +177,17 @@
         </div>
         
         {% if screen_config.file %}
-            <img src="{{ url_for('static', filename='uploads/' + screen_config.file) }}" 
-                 alt="TV Content" 
-                 class="content-display">
+            {% set file_ext = screen_config.file.split('.')[-1].lower() %}
+            {% if file_ext in ['mp4', 'webm', 'ogg', 'mov', 'avi'] %}
+                <video src="{{ url_for('static', filename='uploads/' + screen_config.file) }}" 
+                       controls autoplay loop muted
+                       class="content-display rotate-{{ screen_config.rotation|default(0) }}">
+                </video>
+            {% else %}
+                <img src="{{ url_for('static', filename='uploads/' + screen_config.file) }}" 
+                     alt="TV Content" 
+                     class="content-display rotate-{{ screen_config.rotation|default(0) }}">
+            {% endif %}
         {% else %}
             <div class="no-content">
                 <h1>🍕 Pizza Hut</h1>
