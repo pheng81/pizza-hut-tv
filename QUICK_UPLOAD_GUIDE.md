@@ -32,3 +32,10 @@
    - Root Directory: ./
    - Build/Output Commands: (empty)
 4. Get your live URL: pizza-hut-tv.vercel.app
+
+## Making Repository Private:
+For business applications, it's recommended to make your repository private:
+1. Go to repository Settings → Scroll to "Danger Zone"
+2. Click "Change repository visibility" → "Make private"
+3. Confirm by typing the repository name
+4. Vercel will continue to work with private repositories
