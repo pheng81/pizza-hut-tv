@@ -397,6 +397,24 @@
             font-size: 14px;
             transition: transform 0.3s ease;
         }
+
+    /* Replace modal */
+    .rp-overlay { position: fixed; inset:0; background: rgba(0,0,0,0.5); display:none; align-items:center; justify-content:center; z-index: 1000; }
+    .rp-modal { background:#fff; width: 680px; max-width: 95vw; max-height: 85vh; border-radius:8px; overflow:hidden; display:flex; flex-direction:column; }
+    .rp-header { padding:12px 14px; background:#f6f7f9; border-bottom:1px solid #e2e5e9; display:flex; align-items:center; justify-content:space-between; }
+    .rp-title { font-size:14px; font-weight:600; }
+    .rp-close { background:none; border:none; font-size:18px; cursor:pointer; padding:4px; }
+    .rp-tabs { display:flex; gap:8px; padding:8px 12px; border-bottom:1px solid #eef1f4; }
+    .rp-tab { padding:6px 10px; font-size:12px; border-radius:6px; cursor:pointer; border:1px solid #dcdfe3; background:#fff; }
+    .rp-tab.active { background:#0d6efd; color:#fff; border-color:#0d6efd; }
+    .rp-body { padding:10px 12px; overflow:auto; }
+    .rp-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap:10px; }
+    .rp-item { border:1px solid #dcdfe3; border-radius:6px; padding:6px; cursor:pointer; display:flex; align-items:center; justify-content:center; height:90px; background:#fafbfc; }
+    .rp-item img, .rp-item video { max-width:100%; max-height:100%; object-fit:cover; }
+    .rp-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; padding:10px 12px; border-top:1px solid #eef1f4; }
+    .btn { padding:6px 10px; border-radius:6px; border:1px solid #dcdfe3; background:#fff; cursor:pointer; font-size:12px; }
+    .btn.primary { background:#0d6efd; color:#fff; border-color:#0d6efd; }
+    .btn.danger { background:#dc3545; color:#fff; border-color:#dc3545; }
         
         .screen-preview img,
         .screen-preview video {
@@ -1070,7 +1088,8 @@
             
             // Check if "Apply to All Stores" is checked
             const applyToAllCheckbox = document.getElementById(`apply-all-${screenId}`);
-            const applyToAll = applyToAllCheckbox && applyToAllCheckbox.checked;
+            // Only master store is allowed to use Apply-To-All; force false otherwise
+            const applyToAll = isMasterStore(currentStoreId) && applyToAllCheckbox && applyToAllCheckbox.checked;
             
             const formData = new FormData();
             formData.append('file', file);
@@ -1496,7 +1515,8 @@
                     ${!isMasterStore(storeId)?'<div style=\"font-size:10px;color:#777;margin-top:6px;\">Local changes here do NOT propagate. Master Apply-To-All uploads can still replace files (unless protected).</div>':''}
                 </div>
 
-                <div class="apply-all-section" ${!isMasterStore(currentStoreId) ? 'style="display: none;"' : ''}>
+                ${isMasterStore(currentStoreId) ? `
+                <div class="apply-all-section">
                     <label>
                         <input type="checkbox" id="apply-all-${screenId}" data-logical-type="${logicalType}" ${savedApplyAll ? 'checked' : ''}>
                         <span>📡 Apply to ALL stores</span>
@@ -1505,6 +1525,7 @@
                         When checked, uploads will replace this screen in all stores
                     </div>
                 </div>
+                ` : ''}
                 
                 ${!isMasterStore(currentStoreId) ? `
                 <div class="protect-section">
@@ -1901,7 +1922,10 @@
                                                                 row.title = inWindow? 'Active now' : 'Outside scheduled window';
                                                                 row.innerHTML = `
                                                                     <div class=\"pl-top\">
-                                                                        <div class=\"pl-col pl-thumb\">${thumbForFile(item.file)}</div>
+                                                                                                        <div class=\"pl-col pl-thumb\"><div class=\"pl-thumb-click\" data-screen="${screenId}" data-item="${item.id}" style="position:relative;">
+                                                                                                            ${thumbForFile(item.file)}
+                                                                                                            <div style=\"position:absolute;inset:auto 4px 4px auto;background:rgba(0,0,0,.6);color:#fff;font-size:10px;padding:2px 4px;border-radius:3px;\">Change</div>
+                                                                                                        </div></div>
                                                                         <div style=\"flex:1;display:flex;flex-direction:column;gap:4px;\">
                                                                             <div class=\"schedule-section\">
                                                                                 <div class=\"schedule-header\">
@@ -1958,6 +1982,8 @@
                                                                         ${!inWindow && item.enabled? '<div class=\\"time-off-badge\\">TIME OFF</div>':''}
                                                                     </div>`;
                                 container.appendChild(row);
+                                const t = row.querySelector('.pl-thumb-click');
+                                if(t){ t.addEventListener('click', ()=> openReplaceModal(screenId, item.id)); }
                           });
                     // Update rotating preview after DOM build
                     updatePreviewPlaylist(screenId, items);
@@ -2403,6 +2429,51 @@
             // Load screens for current store
             loadScreens();
         }
+
+                // ---- Replace modal logic ----
+                function ensureReplaceModal(){
+                        if(document.getElementById('rp-overlay')) return;
+                        const ov = document.createElement('div'); ov.id='rp-overlay'; ov.className='rp-overlay';
+                        ov.innerHTML = `
+                            <div class="rp-modal">
+                                <div class="rp-header">
+                                    <div class="rp-title">Replace Playlist Item</div>
+                                    <button class="rp-close" onclick="closeReplaceModal()">×</button>
+                                </div>
+                                <div class="rp-tabs">
+                                    <div class="rp-tab active" id="rp-tab-lib" onclick="switchRpTab('lib')">Choose Existing</div>
+                                    <div class="rp-tab" id="rp-tab-upload" onclick="switchRpTab('upload')">Upload New</div>
+                                </div>
+                                <div class="rp-body">
+                                    <div id="rp-view-lib">
+                                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                                            <div style="font-size:12px;color:#555;">Click a file to replace this item.</div>
+                                            <button class="btn" onclick="refreshLibrary()">Refresh</button>
+                                        </div>
+                                        <div class="rp-grid" id="rp-grid"></div>
+                                    </div>
+                                    <div id="rp-view-upload" style="display:none;">
+                                        <input type="file" id="rp-file" accept="image/*,video/*" />
+                                        <div style="margin-top:8px;">
+                                            <button class="btn primary" onclick="doRpUpload()">Upload</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="rp-actions">
+                                    <button class="btn" onclick="closeReplaceModal()">Close</button>
+                                </div>
+                            </div>`;
+                        document.body.appendChild(ov);
+                }
+                let rpCtx = null; // {screenId,itemId}
+                function openReplaceModal(screenId,itemId){ ensureReplaceModal(); rpCtx={screenId,itemId}; document.getElementById('rp-overlay').style.display='flex'; refreshLibrary(); }
+                function closeReplaceModal(){ const ov=document.getElementById('rp-overlay'); if(ov) ov.style.display='none'; rpCtx=null; }
+                function switchRpTab(which){ const lib=document.getElementById('rp-view-lib'); const up=document.getElementById('rp-view-upload'); const t1=document.getElementById('rp-tab-lib'); const t2=document.getElementById('rp-tab-upload'); const isLib=which==='lib'; lib.style.display=isLib?'block':'none'; up.style.display=isLib?'none':'block'; t1.classList.toggle('active',isLib); t2.classList.toggle('active',!isLib); }
+                function refreshLibrary(){ fetch('/library').then(r=>r.json()).then(d=>{ const grid=document.getElementById('rp-grid'); if(!grid) return; if(!d.success){ grid.innerHTML='<div style="font-size:12px;color:#c00;">Failed to load library</div>'; return;} const files=d.files||[]; if(!files.length){ grid.innerHTML='<div style="font-size:12px;color:#666;">No files</div>'; return;} grid.innerHTML=''; files.forEach(f=>{ const card=document.createElement('div'); card.className='rp-item'; card.title=f.name; card.innerHTML = (f.media_type==='video'? `<video src="/static/uploads/${f.name}"></video>` : `<img src="/static/uploads/${f.name}"/>`); card.addEventListener('click',()=> chooseLibraryFile(f.name)); grid.appendChild(card); }); }); }
+                function chooseLibraryFile(name){ if(!rpCtx) return; fetch(`/playlist/item/${currentStoreId}/${rpCtx.screenId}/${rpCtx.itemId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({file:name})}).then(r=>r.json()).then(d=>{ if(d.success){ closeReplaceModal(); refreshPlaylist(rpCtx.screenId); } else { alert('Replace failed: '+(d.error||'unknown')); } }); }
+                function doRpUpload(){ const inp=document.getElementById('rp-file'); if(!inp||!inp.files||!inp.files[0]){ alert('Pick a file'); return; } const fd=new FormData(); fd.append('file', inp.files[0]); fetch('/upload_media',{method:'POST',body:fd}).then(r=>r.json()).then(d=>{ if(!d.success){ alert('Upload failed: '+(d.error||'unknown')); return;} // Assign uploaded file to the item
+                                if(!rpCtx){ alert('No item context'); return; }
+                                fetch(`/playlist/item/${currentStoreId}/${rpCtx.screenId}/${rpCtx.itemId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({file:d.filename})}).then(r=>r.json()).then(x=>{ if(x.success){ closeReplaceModal(); refreshPlaylist(rpCtx.screenId); } else { alert('Replace failed: '+(x.error||'unknown')); } }); }); }
         
         // Store Management Functions
         
