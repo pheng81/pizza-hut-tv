@@ -173,20 +173,39 @@ class TvDisplayActivity : AppCompatActivity() {
 
         fun intervalActive(s: String?, e: String?, days: List<String>?): Boolean {
             if ((s.isNullOrBlank()) && (e.isNullOrBlank())) return false
-            if (!days.isNullOrEmpty()) {
+            fun isTimeOnly(v: String?): Boolean = v != null && v.length <= 8 && ":" in v && !v.contains("-")
+            fun isDateOnly(v: String?): Boolean = v != null && v.length == 10 && v[4] == '-' && v[7] == '-'
+            fun isAbsolute(v: String?): Boolean = v != null && (v.contains('T') || isDateOnly(v))
+            val hasAbsolute = isAbsolute(s) || isAbsolute(e)
+            // If using absolute dates, ignore weekday gating as it's a one-off interval
+            if (!hasAbsolute && !days.isNullOrEmpty()) {
                 val norm = days.map { it.lowercase(Locale.US).take(3) }
                 if (!norm.contains(wd)) return false
             }
             val ws = parseTimeString(s)
             var we = parseTimeString(e)
-            if (!e.isNullOrBlank() && e.length == 10 && e[4] == '-' && e[7] == '-') {
-                if (we != null) {
-                    val c = Calendar.getInstance().apply { time = we }
-                    c.set(Calendar.HOUR_OF_DAY, 23); c.set(Calendar.MINUTE, 59); c.set(Calendar.SECOND, 59); c.set(Calendar.MILLISECOND, 999)
-                    we = c.time
-                }
+            // Normalize date-only single-sided windows to same-day boundaries
+            if (!e.isNullOrBlank() && isDateOnly(e) && we != null) {
+                val c = Calendar.getInstance().apply { time = we }
+                c.set(Calendar.HOUR_OF_DAY, 23); c.set(Calendar.MINUTE, 59); c.set(Calendar.SECOND, 59); c.set(Calendar.MILLISECOND, 999)
+                we = c.time
             }
-            val timeOnly = ((s != null && s.length <= 8 && ":" in s && !s.contains("-")) || (e != null && e.length <= 8 && ":" in e && !e.contains("-")))
+            if (!s.isNullOrBlank() && isDateOnly(s) && e.isNullOrBlank() && ws != null) {
+                // start is date-only with no end -> end of same day
+                val c = Calendar.getInstance().apply { time = ws }
+                c.set(Calendar.HOUR_OF_DAY, 23); c.set(Calendar.MINUTE, 59); c.set(Calendar.SECOND, 59); c.set(Calendar.MILLISECOND, 999)
+                we = c.time
+            }
+            if (!e.isNullOrBlank() && isDateOnly(e) && s.isNullOrBlank() && we != null) {
+                // end is date-only with no start -> start of same day
+                val c = Calendar.getInstance().apply { time = we }
+                c.set(Calendar.HOUR_OF_DAY, 0); c.set(Calendar.MINUTE, 0); c.set(Calendar.SECOND, 0); c.set(Calendar.MILLISECOND, 0)
+                // reuse ws var
+                @Suppress("NAME_SHADOWING")
+                val wsLocal = c.time
+                return if (now.after(wsLocal) && now.before(we) || now == wsLocal || now == we) true else false
+            }
+            val timeOnly = (isTimeOnly(s) || isTimeOnly(e))
             if (ws != null && we != null) {
                 if (we.before(ws)) {
                     if (!timeOnly) {

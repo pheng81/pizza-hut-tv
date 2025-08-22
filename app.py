@@ -287,23 +287,45 @@ def pick_active_playlist_item(screen, parent_config=None, store_id=None, screen_
         Accepts:
           - time-only 'HH:MM[:SS]'
           - ISO 'YYYY-MM-DDTHH:MM:SS'
-          - date-only 'YYYY-MM-DD' (start => 00:00:00, end => 23:59:59)
-        Overnight rules:
-          - time-only: end < start wraps midnight (now >= start or now <= end)
-          - same-date datetime where end < start: treat as end + 1 day continuous
+          - date-only 'YYYY-MM-DD'
+        Rules:
+          - If either side contains a date (absolute), weekday gating is ignored.
+          - Date-only normalization:
+              * start=date with no end -> active for that calendar day (00:00..23:59:59)
+              * end=date with no start -> active for that calendar day (00:00..23:59:59)
+          - Overnight:
+              * time-only end < start wraps midnight
+              * same-date absolute end < start -> treat as end + 1 day continuous
         """
-        if days:
-            # days is list like ['mon','tue'] ; compare current weekday
-            wd = ['mon','tue','wed','thu','fri','sat','sun'][now.weekday()]
-            if wd not in days:
-                return False
+        def is_time_only(v):
+            return bool(v) and (len(v) <= 8) and (':' in v) and ('-' not in v)
+        def is_date_only(v):
+            return bool(v) and (len(v) == 10) and (v[4] == '-' and v[7] == '-')
+        def is_absolute(v):
+            return bool(v) and (('T' in v) or is_date_only(v))
+
+        # If either boundary is absolute (has a date), ignore weekday gating
+        if not (is_absolute(raw_s) or is_absolute(raw_e)):
+            if days:
+                wd = ['mon','tue','wed','thu','fri','sat','sun'][now.weekday()]
+                if wd not in days:
+                    return False
+
         if not (raw_s or raw_e):
             return False
         ws = parse_time_string(raw_s, now) if raw_s else None
         we = parse_time_string(raw_e, now) if raw_e else None
-        if raw_e and len(raw_e) == 10 and we:  # date-only end
+        # Normalize date-only single-sided inputs to same-day window
+        if raw_e and is_date_only(raw_e) and we:
             we = we.replace(hour=23, minute=59, second=59, microsecond=999999)
-        time_only = (raw_s and len(raw_s) <= 8 and ':' in raw_s and not '-' in raw_s) or (raw_e and len(raw_e) <= 8 and ':' in raw_e and not '-' in raw_e)
+        if (raw_s and is_date_only(raw_s)) and not raw_e and ws:
+            # start is date-only, no end -> clamp end to end-of-day
+            we = ws.replace(hour=23, minute=59, second=59, microsecond=999999)
+        if (raw_e and is_date_only(raw_e)) and not raw_s and we:
+            # end is date-only, no start -> clamp start to start-of-day
+            ws = we.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        time_only = (is_time_only(raw_s) or is_time_only(raw_e))
         if ws and we:
             if we < ws:
                 if not time_only and ws.date() == we.date():
