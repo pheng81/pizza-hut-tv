@@ -1,43 +1,691 @@
 {
+  "master_store_id": "0000",
   "stores": [
     {
-      "id": "1881",
-      "name": "Canley Vale"
+      "id": "0000",
+      "name": "MasterStore",
+      "is_master": true
+    },
+    {
+      "id": "1112",
+      "name": "liverpool"
+    },
+    {
+      "id": "1765",
+      "name": "canley vale"
+    },
+    {
+      "id": "1212",
+      "name": "Guildford"
     }
   ],
   "screens": {
-    "1881": {
-      "screen1": {
-        "file": "6ae9bbd1-b0b1-4c65-8f8e-d43b9fa1d2d7.jpg",
+    "0000": {
+      "0000_screen1": {
+        "file": "6b16de37-b6ca-4e8d-85fd-6fe535222124.jpg",
         "vertical": false,
-        "horizontal": false
+        "horizontal": false,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "id": "4f96dcfc-d1b3-4303-9564-e56ca67190d1",
+            "file": "25bf3663-bcf6-4bfe-8231-1e7e2ac198ec.mp4",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "duration": 8,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "video",
+            "schedule": [],
+            "days": [
+              "thu",
+              "fri"
+            ]
+          },
+          {
+            "id": "3ee22825-0d72-4c0e-83de-956c37b125d4",
+            "file": "6b16de37-b6ca-4e8d-85fd-6fe535222124.jpg",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image"
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 1,
+          "last_ts": 1755574961
+        },
+        "refresh_seq": 0
       },
-      "screen2": {
-        "file": "3f968236-ce4c-4e4d-9d07-25d8c9469eda.png",
+      "0000_screen2": {
+        "file": "150040e0-21ad-4d98-84da-e9fea360d5b7.png",
         "vertical": false,
-        "horizontal": true
+        "horizontal": false,
+        "rotation": 0,
+        "playlist": [
+          {
+            "id": "ff47fb8c-8159-46aa-8c09-a46cf29c871a",
+            "file": "28de5c63-57bc-4115-9d8a-2e36fb8d2d8d.jpg",
+            "enabled": true,
+            "start": "07:00:00",
+            "end": "15:00:00",
+            "duration": 3,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "schedule": [],
+            "days": [
+              "thu"
+            ]
+          },
+          {
+            "id": "c3924f06-4687-4d4f-81b9-61294f71b8a8",
+            "file": "150040e0-21ad-4d98-84da-e9fea360d5b7.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "duration": 7,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "schedule": []
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "refresh_seq": 0
       },
-      "screen3": {
+      "0000_promo1": {
+        "file": "8fd4845d-eaa5-4c66-9fe2-6b3e3edbfc86.jpg",
+        "vertical": true,
+        "horizontal": false,
+        "rotation": 0,
+        "playlist": [
+          {
+            "id": "fa49ed8a-3795-46c3-8920-89a3ab29ee86",
+            "file": "8fd4845d-eaa5-4c66-9fe2-6b3e3edbfc86.jpg",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "schedule": [
+              {
+                "start": "2025-08-06T00:00:00",
+                "end": null
+              }
+            ],
+            "days": []
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "refresh_seq": 0
+      },
+      "0000_promo2": {
         "file": null,
         "vertical": true,
-        "horizontal": false
+        "horizontal": false,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "refresh_seq": 0
       },
-      "promo1": {
+      "0000_screen3": {
+        "file": "7b0b631f-9bfc-452f-987a-5922afdd1bbf.png",
+        "vertical": false,
+        "horizontal": false,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "id": "19307aeb-19a0-44f2-b64c-9c3234b747a9",
+            "file": "81f22b53-8918-4c6b-b096-95a4fddea983.jpg",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "schedule": [],
+            "days": []
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 1755574957
+        },
+        "refresh_seq": 0
+      }
+    },
+    "1112": {
+      "1112_screen1": {
+        "file": "6b16de37-b6ca-4e8d-85fd-6fe535222124.jpg",
+        "vertical": false,
+        "horizontal": false,
+        "rotation": 0,
+        "playlist": [
+          {
+            "id": "6f4789a6-11f3-475f-8649-de16a22dd039",
+            "file": "25bf3663-bcf6-4bfe-8231-1e7e2ac198ec.mp4",
+            "enabled": true,
+            "start": "00:00:00",
+            "end": null,
+            "duration": 4,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "video",
+            "schedule": [],
+            "days": [
+              "fri"
+            ]
+          },
+          {
+            "id": "fb77e66b-1247-4b4f-9de4-d7a52b43d662",
+            "file": "6b16de37-b6ca-4e8d-85fd-6fe535222124.jpg",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image"
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 1,
+          "last_ts": 1755574969
+        },
+        "protected": true,
+        "refresh_seq": 6
+      },
+      "1112_screen2": {
+        "file": "bd54b9d9-7e5a-4692-a422-ae7c406ec9f5.png",
+        "vertical": false,
+        "horizontal": false,
+        "rotation": 0,
+        "playlist": [
+          {
+            "id": "cca7e383-7566-4c3f-82d1-914ca2c80aea",
+            "file": "d723e391-c391-4f70-a3ec-ecabef2cabc7.mp4",
+            "enabled": true,
+            "start": "09:00:00",
+            "end": "23:00:00",
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "video",
+            "schedule": [],
+            "days": [
+              "thu",
+              "fri"
+            ]
+          },
+          {
+            "id": "7fa894ca-7837-472a-bed5-8b37cabb71ee",
+            "file": "bd54b9d9-7e5a-4692-a422-ae7c406ec9f5.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 5,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "days": [
+              "fri"
+            ]
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 1755574949
+        },
+        "protected": true,
+        "refresh_seq": 22
+      },
+      "1112_promo1": {
+        "file": "93c6b50a-e75f-4986-bed6-fa6d049f9d60.png",
+        "vertical": true,
+        "horizontal": false,
+        "rotation": 90,
+        "playlist": [
+          {
+            "id": "f239b52d-9517-4f57-8388-03c25ad72278",
+            "file": "93c6b50a-e75f-4986-bed6-fa6d049f9d60.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "schedule": []
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "refresh_seq": 0
+      },
+      "1112_promo2": {
         "file": null,
         "vertical": true,
-        "horizontal": false
+        "horizontal": false,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "refresh_seq": 0
       },
-      "promo2": {
-        "file": null,
-        "vertical": true,
-        "horizontal": true
+      "1112_screen3": {
+        "file": "f807feb5-4c1b-4d97-afaa-ae17244029fd.png",
+        "vertical": false,
+        "horizontal": false,
+        "rotation": 0,
+        "protected": true,
+        "playlist": [
+          {
+            "id": "1795cb64-526e-44ae-92ca-88b79cdc724d",
+            "file": "f807feb5-4c1b-4d97-afaa-ae17244029fd.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "duration": 8,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "schedule": []
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "refresh_seq": 0
       },
-      "promo3": {
-        "file": null,
+      "1112_screen4": {
+        "file": "de0dda9f-aa8d-49de-8226-322f2231c00f.png",
+        "vertical": false,
+        "horizontal": false,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "id": "9d002ab9-6d0f-4c51-99ef-3ddba60d27ee",
+            "file": "de0dda9f-aa8d-49de-8226-322f2231c00f.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "schedule": []
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "refresh_seq": 0
+      }
+    },
+    "1765": {
+      "1765_screen1": {
+        "file": "6b16de37-b6ca-4e8d-85fd-6fe535222124.jpg",
+        "vertical": false,
+        "horizontal": false,
+        "rotation": 0,
+        "protected": true,
+        "playlist": [
+          {
+            "id": "1a855b9e-85a4-41de-8a1a-6743c33bd8a8",
+            "file": "56861b3b-7cbc-42c0-9236-6ec32e76ffe2.jpg",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "schedule": []
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "refresh_seq": 0
+      },
+      "1765_screen2": {
+        "file": "150040e0-21ad-4d98-84da-e9fea360d5b7.png",
+        "vertical": false,
+        "horizontal": false,
+        "rotation": 0,
+        "playlist": [
+          {
+            "id": "fec447b8-496c-441e-ab77-a1325ae36d9e",
+            "file": "28de5c63-57bc-4115-9d8a-2e36fb8d2d8d.jpg",
+            "enabled": false,
+            "start": "07:06:00",
+            "end": null,
+            "duration": 3,
+            "repeat": false,
+            "link_next": false,
+            "media_type": "image",
+            "schedule": []
+          },
+          {
+            "id": "01a1daa2-a657-43c1-bd19-c046005fc3d4",
+            "file": "150040e0-21ad-4d98-84da-e9fea360d5b7.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "duration": 4,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "schedule": []
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "refresh_seq": 0
+      },
+      "1765_promo1": {
+        "file": "17f85b2d-977b-42b5-907a-995cb43d3b07.jpg",
         "vertical": true,
-        "horizontal": false
+        "horizontal": false,
+        "rotation": 0,
+        "playlist": [
+          {
+            "id": "b48d0d12-1a07-4f7e-8d2f-6f825557669e",
+            "file": "17f85b2d-977b-42b5-907a-995cb43d3b07.jpg",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "schedule": []
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "protected": true,
+        "refresh_seq": 0
+      },
+      "1765_promo2": {
+        "file": "9dd2e078-a566-4ad5-b4c3-590e72351a47.png",
+        "vertical": true,
+        "horizontal": false,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "id": "999ecce6-5e48-4644-ab0f-8ebead6e27c6",
+            "file": "23abdb36-c6ab-4d33-b7eb-560ddea0c48d.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "schedule": []
+          },
+          {
+            "id": "79b131fe-2c6e-411a-a767-d22e4de6a219",
+            "file": "9dd2e078-a566-4ad5-b4c3-590e72351a47.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "schedule": []
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "refresh_seq": 0
+      },
+      "1765_screen3": {
+        "file": "7b0b631f-9bfc-452f-987a-5922afdd1bbf.png",
+        "vertical": false,
+        "horizontal": false,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "id": "a4e01e35-212f-4f7a-8993-11cdc8478c2f",
+            "file": "0ad1c430-c9bd-4219-9ec6-f5512bc9664f.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "schedule": []
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "refresh_seq": 0
+      },
+      "1765_screen4": {
+        "file": "cfb7f4eb-a867-4366-b085-3942a7c1a57c.png",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "id": "69433616-1d02-4bcf-ab45-e1b4fc17e4b4",
+            "file": "cfb7f4eb-a867-4366-b085-3942a7c1a57c.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image"
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      }
+    },
+    "1212": {
+      "1212_screen1": {
+        "file": "6b16de37-b6ca-4e8d-85fd-6fe535222124.jpg",
+        "vertical": false,
+        "horizontal": false,
+        "rotation": 0,
+        "playlist": [
+          {
+            "id": "f665db89-1f56-4bb9-970b-dac3a9d98c3d",
+            "file": "eb142e3f-2233-49be-b5c6-7506b06025f9.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "schedule": []
+          },
+          {
+            "id": "355f65ed-b45e-456f-be8d-29ee1f1732e0",
+            "file": "25bf3663-bcf6-4bfe-8231-1e7e2ac198ec.mp4",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "video",
+            "schedule": []
+          },
+          {
+            "id": "65f43518-3ee1-4084-b9ef-46949a07813a",
+            "file": "6b16de37-b6ca-4e8d-85fd-6fe535222124.jpg",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image"
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "protected": false,
+        "refresh_seq": 0
+      },
+      "1212_screen2": {
+        "file": "7a95134c-fa9b-430f-9500-78fa1502ee44.jpg",
+        "vertical": false,
+        "horizontal": false,
+        "rotation": 0,
+        "playlist": [
+          {
+            "id": "b7c1b3c2-6f25-412c-88d8-a8c3859e491e",
+            "file": "092a7b67-b5ea-4628-a316-0305b13c8e9c.jpg",
+            "enabled": false,
+            "start": "02:35:00",
+            "end": "19:37:00",
+            "duration": 3,
+            "repeat": false,
+            "link_next": false,
+            "media_type": "image",
+            "schedule": []
+          },
+          {
+            "id": "3859ed02-c7ae-40d5-9c07-b600967dbb02",
+            "file": "7a95134c-fa9b-430f-9500-78fa1502ee44.jpg",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "duration": 3,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "schedule": []
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "protected": true,
+        "refresh_seq": 0
+      },
+      "1212_promo1": {
+        "file": "c08498f9-5a7f-4827-ba68-e83a48aeaa63.jpg",
+        "vertical": true,
+        "horizontal": false,
+        "rotation": 0,
+        "playlist": [
+          {
+            "id": "81cb29e9-30f2-418b-a996-85c312542b80",
+            "file": "c08498f9-5a7f-4827-ba68-e83a48aeaa63.jpg",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "schedule": []
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "protected": true,
+        "refresh_seq": 0
+      },
+      "1212_screen3": {
+        "file": "0d7e7c32-16fd-4737-ab43-35357a2546b6.png",
+        "vertical": false,
+        "horizontal": false,
+        "rotation": 0,
+        "protected": true,
+        "playlist": [
+          {
+            "id": "c3bd5014-515c-4a8c-95ec-9a28e1f9e8aa",
+            "file": "0ad1c430-c9bd-4219-9ec6-f5512bc9664f.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "schedule": []
+          },
+          {
+            "id": "012b40de-b6ec-45ac-a0e9-175bab5d5530",
+            "file": "0d7e7c32-16fd-4737-ab43-35357a2546b6.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "schedule": []
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "refresh_seq": 0
       }
     }
   }
-}
 }
