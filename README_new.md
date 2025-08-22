@@ -159,6 +159,13 @@ gunicorn -w 4 -b 0.0.0.0:5000 app:app
 - JavaScript required for full functionality
 - HTML5 file upload support
 
+## Security & Privacy
+For business use, ensure your repository and deployments follow security best practices:
+- Keep the GitHub repository **private** to protect business logic and configurations
+- Use environment variables for sensitive settings (API keys, database connections)
+- Review the `PRIVACY_SETUP.md` guide for making your repository private
+- Consider using a private Docker registry for production deployments
+
 ## Contributing
 This is a demonstration project for Pizza Hut TV display management. Extend functionality as needed for your specific requirements.
 
