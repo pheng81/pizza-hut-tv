@@ -1,0 +1,137 @@
+# General
+.DS_Store
+.idea/
+.vscode/
+*.log
+*.tmp
+*.swp
+*.swo
+
+# Python
+__pycache__/
+.pytest_cache/
+*.pyc
+.env
+.venv/
+
+# Node/Frontend (if any)
+node_modules/
+dist/
+build/
+
+# Android/Gradle local artifacts
+android_tv_app/.gradle/
+android_tv_app/**/build/
+android_tv_app/build/
+android_tv_app/local.properties
+android_tv_app/**/captures/
+android_tv_app/**/caches/
+android_tv_app/daemon/
+android_tv_app/jdks/
+android_tv_app/kotlin-profile/
+android_tv_app/native/
+android_tv_app/wrapper/dists/
+android_tv_app/android/
+
+# Build logs and local run logs
+build_output.txt
+android_tv_app/build_output.txt
+android_tv_app/build_full.txt
+startup_log.txt
+build_error_log.txt
+
+# Keep Gradle wrapper scripts and config
+!android_tv_app/gradle/wrapper/gradle-wrapper.jar
+!android_tv_app/gradle/wrapper/gradle-wrapper.properties
+!android_tv_app/gradlew
+!android_tv_app/gradlew.bat
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.DS_Store
+env/
+venv/
+.venv/
+build/
+dist/
+*.egg-info/
+*.log
+/.pytest_cache/
+.idea/
+.vscode/
+/.coverage
+coverage.xml
+*.sqlite3
+
+# Ignore uploaded media (comment out if you want to version them)
+static/uploads/*
+!static/uploads/.gitkeep
+
+# Cache / temp
+*.tmp
+~$*# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Flask
+instance/
+.webassets-cache
+
+# Environment variables
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+
+# Backup files
+*.backup
+*.bak
+
+# Vercel
+.vercel
+
+# Uploaded media (keep folder, ignore files)
+static/uploads/*
+!static/uploads/.gitkeep
