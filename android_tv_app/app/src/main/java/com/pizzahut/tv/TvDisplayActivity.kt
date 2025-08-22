@@ -24,6 +24,10 @@ import androidx.activity.OnBackPressedCallback
 import android.widget.TextView
 import android.content.Intent
 import java.io.File
+import java.util.Date
+import java.util.Calendar
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class TvDisplayActivity : AppCompatActivity() {
     // Made public so extension functions can access
@@ -123,6 +127,101 @@ class TvDisplayActivity : AppCompatActivity() {
         legacyVideoView?.let { try { it.stopPlayback() } catch (_: Exception) {}; it.visibility = ImageView.GONE }
         super.onDestroy()
     }
+
+    // Mirror server-side scheduling rules so device respects dashboard schedule windows/days
+    fun filterBySchedule(items: List<com.pizzahut.tv.api.PlaylistItem>): List<com.pizzahut.tv.api.PlaylistItem> {
+        if (items.isEmpty()) return emptyList()
+    val now = Date()
+    val cal = Calendar.getInstance().apply { time = now }
+    val wd = when (cal.get(Calendar.DAY_OF_WEEK)) {
+            Calendar.MONDAY -> "mon"
+            Calendar.TUESDAY -> "tue"
+            Calendar.WEDNESDAY -> "wed"
+            Calendar.THURSDAY -> "thu"
+            Calendar.FRIDAY -> "fri"
+            Calendar.SATURDAY -> "sat"
+            else -> "sun"
+        }
+
+        fun parseTimeString(v: String?): Date? {
+            if (v.isNullOrBlank()) return null
+            return try {
+                val isTimeOnly = v.length <= 8 && ":" in v && !v.contains("-")
+                if (isTimeOnly) {
+                    val parts = v.split(":").map { it.toIntOrNull() ?: 0 }
+                    val c = Calendar.getInstance().apply { time = now }
+                    c.set(Calendar.HOUR_OF_DAY, parts.getOrNull(0) ?: 0)
+                    c.set(Calendar.MINUTE, parts.getOrNull(1) ?: 0)
+                    c.set(Calendar.SECOND, parts.getOrNull(2) ?: 0)
+                    c.set(Calendar.MILLISECOND, 0)
+                    return c.time
+                }
+                if (v.length == 10 && v[4] == '-' && v[7] == '-') {
+                    val d = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(v)
+                    val c = Calendar.getInstance().apply { time = d!! }
+                    c.set(Calendar.HOUR_OF_DAY, 0); c.set(Calendar.MINUTE, 0); c.set(Calendar.SECOND, 0); c.set(Calendar.MILLISECOND, 0)
+                    return c.time
+                }
+                val fmts = arrayOf("yyyy-MM-dd'T'HH:mm:ss","yyyy-MM-dd HH:mm:ss","yyyy-MM-dd'T'HH:mm","yyyy-MM-dd HH:mm")
+                var out: Date? = null
+                for (f in fmts) {
+                    try { out = SimpleDateFormat(f, Locale.US).parse(v); if (out != null) break } catch (_: Exception) {}
+                }
+                out
+            } catch (_: Exception) { null }
+        }
+
+        fun intervalActive(s: String?, e: String?, days: List<String>?): Boolean {
+            if ((s.isNullOrBlank()) && (e.isNullOrBlank())) return false
+            if (!days.isNullOrEmpty()) {
+                val norm = days.map { it.lowercase(Locale.US).take(3) }
+                if (!norm.contains(wd)) return false
+            }
+            val ws = parseTimeString(s)
+            var we = parseTimeString(e)
+            if (!e.isNullOrBlank() && e.length == 10 && e[4] == '-' && e[7] == '-') {
+                if (we != null) {
+                    val c = Calendar.getInstance().apply { time = we }
+                    c.set(Calendar.HOUR_OF_DAY, 23); c.set(Calendar.MINUTE, 59); c.set(Calendar.SECOND, 59); c.set(Calendar.MILLISECOND, 999)
+                    we = c.time
+                }
+            }
+            val timeOnly = ((s != null && s.length <= 8 && ":" in s && !s.contains("-")) || (e != null && e.length <= 8 && ":" in e && !e.contains("-")))
+            if (ws != null && we != null) {
+                if (we.before(ws)) {
+                    if (!timeOnly) {
+                        val c = Calendar.getInstance().apply { time = we }
+                        c.add(Calendar.DATE, 1)
+                        val wePlus = c.time
+                        return (now.after(ws) || now == ws) && (now.before(wePlus) || now == wePlus)
+                    }
+                    return now.after(ws) || now.before(we)
+                }
+                return (now.after(ws) || now == ws) && (now.before(we) || now == we)
+            }
+            if (ws != null && now.before(ws)) return false
+            if (we != null && now.after(we)) return false
+            return true
+        }
+
+        val enabled = items.filter { it.enabled != false }
+        val scheduled = mutableListOf<com.pizzahut.tv.api.PlaylistItem>()
+        val fallback = mutableListOf<com.pizzahut.tv.api.PlaylistItem>()
+        for (it in enabled) {
+            val windows = it.schedule ?: emptyList()
+            var inWin = false
+            if (windows.isNotEmpty()) {
+                for (w in windows) { if (intervalActive(w.start, w.end, w.days)) { inWin = true; break } }
+            }
+            if (inWin) { scheduled.add(it); continue }
+            if (!it.start.isNullOrBlank() || !it.end.isNullOrBlank()) {
+                if (intervalActive(it.start, it.end, it.days ?: emptyList())) scheduled.add(it) else fallback.add(it)
+            } else fallback.add(it)
+        }
+        val activeSet = if (scheduled.isNotEmpty()) scheduled else fallback.filter { it.repeat != false }
+        if (activeSet.isEmpty()) return emptyList()
+        return if (scheduled.isNotEmpty()) scheduled else activeSet
+    }
 }
 
 object ApiClientImageHelper {
@@ -179,7 +278,8 @@ private data class ActivePlaylist(var items: List<com.pizzahut.tv.api.PlaylistIt
 
 private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: String, imageView: ImageView, playerView: com.google.android.exoplayer2.ui.StyledPlayerView) {
     val state = ActivePlaylist(emptyList())
-    val refreshIntervalMs = 60_000L // refresh playlist every 60s
+    var originalItems: List<com.pizzahut.tv.api.PlaylistItem> = emptyList()
+    val refreshIntervalMs = 10_000L // refresh playlist every 10s for quicker backend responses
     fun pickNext(): com.pizzahut.tv.api.PlaylistItem? {
         if (state.items.isEmpty()) return null
         if (state.index >= state.items.size) state.index = 0
@@ -303,6 +403,9 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
 
     var scheduledRotation: Runnable? = null
     var videoStallWatch: Runnable? = null
+    var scheduleTick: Runnable? = null
+    var showNext: (() -> Unit)? = null
+    var currentItemFile: String? = null
     fun cancelScheduled() {
         scheduledRotation?.let {
             imageView.removeCallbacks(it)
@@ -314,16 +417,62 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
             playerView.removeCallbacks(it)
         }
         videoStallWatch = null
+        scheduleTick?.let {
+            imageView.removeCallbacks(it)
+            playerView.removeCallbacks(it)
+        }
+        scheduleTick = null
     }
+    // Define schedule tick before showAndSchedule; use a function reference to avoid forward declaration issues
+    fun ensureScheduleTick() {
+        if (scheduleTick != null) return
+        scheduleTick = Runnable {
+            try {
+                if (originalItems.isNotEmpty()) {
+                    val newFiltered = filterBySchedule(originalItems)
+                    val cur = currentItemFile
+                    val containsCurrent = cur != null && newFiltered.any { it.file == cur }
+                    if (state.items.isEmpty() && newFiltered.isNotEmpty()) {
+                        state.items = newFiltered; state.index = 0
+                    } else if (!containsCurrent) {
+                        // Current item no longer active -> interrupt and reschedule next
+                        cancelScheduled()
+                        state.items = newFiltered; state.index = 0
+                        showNext?.invoke(); return@Runnable
+                    }
+                }
+            } catch (_: Exception) { }
+            imageView.postDelayed(scheduleTick!!, 10_000L)
+        }
+        imageView.postDelayed(scheduleTick!!, 10_000L)
+    }
+
     fun showAndSchedule() {
+        // Re-filter on each step for near real-time schedule flips
+        if (originalItems.isNotEmpty()) {
+            val newFiltered = filterBySchedule(originalItems)
+            val currentFiles = state.items.mapNotNull { it.file }
+            val newFiles = newFiltered.mapNotNull { it.file }
+            if (newFiles != currentFiles) {
+                val currentIndexFile = state.items.getOrNull((state.index - 1).coerceAtLeast(0))?.file
+                state.items = newFiltered
+                state.index = if (currentIndexFile != null) {
+                    val idx = newFiltered.indexOfFirst { it.file == currentIndexFile }
+                    if (idx >= 0) (idx + 1) % (newFiltered.size.coerceAtLeast(1)) else 0
+                } else 0
+            } else if (state.items.isEmpty() && newFiltered.isNotEmpty()) {
+                state.items = newFiltered; state.index = 0
+            }
+        }
+    ensureScheduleTick()
         val next = pickNext()
         if (next?.file == null) {
-            binding.message.text = "No items"
-            // Try again after default 10s
-            imageView.postDelayed({ showAndSchedule() }, 10_000L)
+            binding.message.text = "No items currently scheduled"
+            imageView.postDelayed({ showAndSchedule() }, 5_000L)
             return
         }
         val file = next.file
+        currentItemFile = file
         if (isVideo(file)) {
             imageView.visibility = ImageView.GONE
             playerView.visibility = ImageView.VISIBLE
@@ -499,9 +648,11 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
             }
         }
     }
+    // assign function reference to break forward-declaration cycle
+    showNext = { showAndSchedule() }
 
     fun applyNewList(all: List<com.pizzahut.tv.api.PlaylistItem>?) {
-        val filtered = all?.filter { it.enabled != false } ?: emptyList()
+        val filtered = filterBySchedule(all ?: emptyList())
         state.items = if (filtered.isEmpty()) emptyList() else filtered
         state.index = 0
     }
@@ -511,7 +662,9 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
     lifecycleScope.launch {
             try {
                 val resp = ApiClient.service.getPlaylist(storeId, screenId)
-                applyNewList(resp.playlist)
+                val original = resp.playlist ?: emptyList()
+                originalItems = original
+                applyNewList(original)
                 val cnt = state.items.size
                 if (cnt > 0) {
                     binding.message.text = "${cnt} items loaded"
@@ -519,7 +672,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                         showAndSchedule()
                     }
                 } else {
-                    binding.message.text = "No items in playlist"
+                    binding.message.text = if (original.isNotEmpty()) "No items currently scheduled" else "No items in playlist"
                 }
             } catch (e: Exception) {
         binding.message.text = "Network error: ${e.message}".take(60)
