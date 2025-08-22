@@ -431,11 +431,19 @@ def upload_to_screen():
 
         # Update configuration
         config = ensure_playlists_structure(load_store_config())
+    else:
+        print(f"[upload_to_screen] Invalid file type: {file.filename}")
+        return jsonify({'error': 'Invalid file type'}), 400
 
     if apply_to_all:
         master_store_id = config.get('master_store_id')
+        # If not master, downgrade to single-store behavior instead of blocking
         if store_id != master_store_id:
-            return jsonify({'error': 'Only the Master Store can use "Apply to All Stores" functionality'}), 403
+            print(f"[upload_to_screen] apply_to_all requested by non-master store {store_id}. Downgrading to single-store upload.")
+            apply_to_all = False
+        
+    if apply_to_all:
+        master_store_id = config.get('master_store_id')
 
         original_screen_id = screen_id
         screen_type = screen_id.split('_', 1)[1] if '_' in screen_id else screen_id
@@ -507,8 +515,6 @@ def upload_to_screen():
             'store_id': store_id,
             'screen_id': screen_id,
             'applied_to_all': False})
-    return jsonify({'error': 'Store or screen not found'}), 404
-    return jsonify({'error': 'Invalid file type'}), 400
 
 @app.route('/update_rotation', methods=['POST'])
 def update_rotation():
@@ -1162,6 +1168,52 @@ def get_playlist(store_id, screen_id):
     print(f"DEBUG: Returning playlist items: {len(pl)}")
     return jsonify({'success': True, 'playlist': pl})
 
+# ---- Media library listing (for choosing existing uploads) ----
+@app.route('/library')
+def list_library():
+    try:
+        files = []
+        folder = app.config['UPLOAD_FOLDER']
+        for name in os.listdir(folder):
+            path = os.path.join(folder, name)
+            if not os.path.isfile(path):
+                continue
+            if not allowed_file(name):
+                continue
+            stat = os.stat(path)
+            files.append({
+                'name': name,
+                'media_type': classify_media(name),
+                'size': stat.st_size,
+                'mtime': int(stat.st_mtime)
+            })
+        # Sort by most recent first
+        files.sort(key=lambda x: x['mtime'], reverse=True)
+        return jsonify({'success': True, 'files': files})
+    except Exception as e:
+        print(f"Error listing library: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ---- Upload media only (no playlist/config modification) ----
+@app.route('/upload_media', methods=['POST'])
+def upload_media():
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'No file provided'}), 400
+    f = request.files['file']
+    if f.filename == '':
+        return jsonify({'success': False, 'error': 'No file selected'}), 400
+    if not allowed_file(f.filename):
+        return jsonify({'success': False, 'error': 'Invalid file type'}), 400
+    try:
+        ext = f.filename.rsplit('.', 1)[1].lower()
+        filename = f"{uuid.uuid4()}.{ext}"
+        dest = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        f.save(dest)
+        return jsonify({'success': True, 'filename': filename, 'media_type': classify_media(filename)})
+    except Exception as e:
+        print(f"upload_media error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # -------- Store & Screen discovery API (for device first-run setup) --------
 @app.route('/stores')
 def list_stores():
@@ -1187,6 +1239,18 @@ def update_playlist_item(store_id, screen_id, item_id):
     for item in screen.get('playlist', []):
         if item['id'] == item_id:
             payload = request.get_json() or {}
+            # Allow replacing the media file by referencing an existing upload
+            if 'file' in payload:
+                new_file = payload.get('file')
+                if new_file:
+                    path = os.path.join(app.config['UPLOAD_FOLDER'], new_file)
+                    if not os.path.exists(path):
+                        return jsonify({'success': False, 'error': 'file not found in uploads'}), 400
+                    if not allowed_file(new_file):
+                        return jsonify({'success': False, 'error': 'invalid file type'}), 400
+                    item['file'] = new_file
+                    item['media_type'] = classify_media(new_file)
+                    updated = True
             # Basic fields
             for k in ['enabled','start','end','duration','repeat','link_next']:
                 if k in payload:
