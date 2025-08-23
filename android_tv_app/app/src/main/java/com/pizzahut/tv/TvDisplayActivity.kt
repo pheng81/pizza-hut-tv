@@ -396,6 +396,11 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
         if (ImageMemoryCache.get(nurl) == null) {
             lifecycleScope.launch(Dispatchers.IO) { fetchBitmap(nurl) }
         }
+        // Warm-up for upcoming video by issuing a quick HEAD to the /media URL
+        if (isVideo(nf)) {
+            val vurl = ApiClientImageHelper.buildVideoUrl(nf)
+            lifecycleScope.launch(Dispatchers.IO) { try { headOk(vurl, 3000) } catch (_: Exception) {} }
+        }
     }
 
     // Keep extension sets in sync with Flask backend /supported_extensions endpoint
@@ -459,7 +464,13 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
         val existing = exoPlayer
         if (existing != null) return existing
     val simpleCache = AppMediaCacheHolder.get(this)
-        val okClient = okhttp3.OkHttpClient.Builder().build()
+        // Build a tuned OkHttpClient for faster and more reliable fetches
+        val okClient = okhttp3.OkHttpClient.Builder()
+            .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
+            .connectionPool(okhttp3.ConnectionPool(8, 5, java.util.concurrent.TimeUnit.MINUTES))
+            .build()
         val okFactory = com.google.android.exoplayer2.ext.okhttp.OkHttpDataSource.Factory(okClient)
         val upstream = com.google.android.exoplayer2.upstream.DefaultDataSource.Factory(this, okFactory)
         cacheDataSourceFactory = com.google.android.exoplayer2.upstream.cache.CacheDataSource.Factory()
@@ -469,10 +480,20 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
         val renderersFactory = com.google.android.exoplayer2.DefaultRenderersFactory(this)
             .setEnableDecoderFallback(true)
             .setExtensionRendererMode(com.google.android.exoplayer2.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
+        // Use a slightly larger buffer to avoid short stalls, but keep fast start-up
+        val loadControl = com.google.android.exoplayer2.DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                /* minBufferMs */ 3_000,
+                /* maxBufferMs */ 20_000,
+                /* bufferForPlaybackMs */ 500,
+                /* bufferForPlaybackAfterRebufferMs */ 1_000
+            )
+            .build()
     val built = com.google.android.exoplayer2.ExoPlayer.Builder(this)
             .setRenderersFactory(renderersFactory)
             .setSeekForwardIncrementMs(5_000)
             .setSeekBackIncrementMs(5_000)
+            .setLoadControl(loadControl)
             .build().also { playerView.player = it }
     // Repeat handled by playlist timing, not ExoPlayer internal repeat
     built.repeatMode = com.google.android.exoplayer2.Player.REPEAT_MODE_OFF
