@@ -216,7 +216,7 @@
         "playlist": [
           {
             "id": "6f4789a6-11f3-475f-8649-de16a22dd039",
-            "file": "25bf3663-bcf6-4bfe-8231-1e7e2ac198ec.mp4",
+            "file": "d716a97d-65e3-42cc-a149-7f3e739138f6.mp4",
             "enabled": true,
             "start": null,
             "end": null,
@@ -224,7 +224,12 @@
             "repeat": true,
             "link_next": false,
             "media_type": "video",
-            "schedule": [],
+            "schedule": [
+              {
+                "start": null,
+                "end": null
+              }
+            ],
             "days": []
           },
           {
@@ -300,7 +305,7 @@
       "1112_screen2": {
         "file": "8f49e862-48f1-4d9e-81a6-fe93553ebe08.png",
         "vertical": false,
-        "horizontal": true,
+        "horizontal": false,
         "rotation": 0,
         "protected": false,
         "playlist": [
@@ -322,12 +327,12 @@
           },
           {
             "id": "5cb39311-0c65-4250-8a20-11964e7092c5",
-            "file": "2eab20e0-d839-469f-b99c-3a1e8ba07ab2.jpg",
+            "file": "b3ae725b-d920-4659-bfe7-9ed540147e04.jpg",
             "enabled": true,
             "start": null,
             "end": null,
             "schedule": [],
-            "duration": 5,
+            "duration": 4,
             "repeat": true,
             "link_next": false,
             "media_type": "image"
@@ -352,6 +357,31 @@
             "end": null,
             "schedule": [],
             "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image"
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1112_screen3": {
+        "file": "ffca9718-d763-4232-8640-5389a7c55c64.png",
+        "vertical": false,
+        "horizontal": false,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "id": "178c87cd-9a16-4375-9f49-7d0fdcc3051f",
+            "file": "ffca9718-d763-4232-8640-5389a7c55c64.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 17,
             "repeat": true,
             "link_next": false,
             "media_type": "image"
