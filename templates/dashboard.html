@@ -2159,22 +2159,23 @@
                                     return true;
                                 };
                                 // Evaluate extra windows first with their own days and per-window enabled flag
-                                let inWindow = false;
+                                let extraActive = false;
                                 if(Array.isArray(item.schedule) && item.schedule.length){
                                     for(const w of item.schedule){
                                         const wEnabled = (typeof w.enabled === 'boolean') ? w.enabled : true;
                                         if(!wEnabled) continue;
-                                        if(dayAllowed(w.days) && intervalActiveRow(w.start, w.end)) { inWindow = true; break; }
+                                        if(dayAllowed(w.days) && intervalActiveRow(w.start, w.end)) { extraActive = true; break; }
                                     }
                                 }
-                                // If no window matched, apply primary interval gated by item.days
-                                if(!inWindow){
-                                    inWindow = dayAllowed(item.days) && intervalActiveRow(item.start, item.end);
-                                }
-                                const effectiveOn = item.enabled && inWindow;
+                                // Primary interval gated by item.days and the item (primary) toggle
+                                const primaryWindowActive = dayAllowed(item.days) && intervalActiveRow(item.start, item.end);
+                                const primaryActive = !!item.enabled && primaryWindowActive;
+                                // Also allow always-on items: no windows, enabled=true, no start/end
+                                const alwaysOn = !!item.enabled && (!item.start && !item.end) && (!item.schedule || !item.schedule.length);
+                                const effectiveOn = extraActive || primaryActive || alwaysOn;
                                                                 const row = document.createElement('div');
-                                                                row.className = 'playlist-row apple'+(effectiveOn?'':' dimmed');
-                                                                row.title = inWindow? 'Active now' : 'Outside scheduled window';
+                                row.className = 'playlist-row apple'+(effectiveOn?'':' dimmed');
+                                row.title = effectiveOn? 'Active now' : 'Outside scheduled window';
                                                                 row.innerHTML = `
                                                                     <div class=\"pl-top\">
                                                                                                         <div class=\"pl-col pl-thumb\"><div class=\"pl-thumb-click\" data-screen="${screenId}" data-item="${item.id}" style="position:relative;">
@@ -2198,7 +2199,7 @@
                                                                                                                                                                     </div>
                                                                                                                                                                 </div>
                                                                                 <div class="schedule-primary one-row">
-                                                                                    <div class="slot-box dual ${inWindow && item.enabled? 'highlight-active':''}">
+                                                                                    <div class="slot-box dual ${effectiveOn && item.enabled? 'highlight-active':''}">
                                                                                         <div class="dual-col">
                                                                                             <span class="slot-label">Start</span>
                                                                                             <div class="slot-inline">
@@ -2217,7 +2218,7 @@
                                                                                 </div>
                                                                                 <div class="pl-actions inline-actions primary-actions">\
                                                                                         <div class="group left">\
-                                                                                            <button class="pl-switch ${effectiveOn?'on':'off'}" aria-label="Toggle item" data-realstate="${item.enabled?'on':'off'}" title="Enable / Disable (auto reflects schedule)" onclick="toggleEnableSwitch(this,'${screenId}','${item.id}')"><span>${effectiveOn?'On':'Off'}</span></button>\
+                                                                                            <button class="pl-switch ${item.enabled?'on':'off'}" aria-label="Toggle item" data-realstate="${item.enabled?'on':'off'}" title="Enable / Disable primary schedule" onclick="toggleEnableSwitch(this,'${screenId}','${item.id}')"><span>${item.enabled?'On':'Off'}</span></button>\
                                                                                         </div>\
                                                                                         <div class="group center combo-dur-del">\
                                                                                             <div class="dur-box small">
@@ -2234,7 +2235,7 @@
                                                                                 <div class="schedule-windows" id="sched-${screenId}-${item.id}">${renderScheduleWindows(item, screenId)}</div>
                                                                             </div>
                                                                         </div>
-                                                                        ${!inWindow && item.enabled? '<div class=\\"time-off-badge\\">TIME OFF</div>':''}
+                                                                        ${!effectiveOn && item.enabled? '<div class=\\"time-off-badge\\">TIME OFF</div>':''}
                                                                     </div>`;
                                 container.appendChild(row);
                                 const t = row.querySelector('.pl-thumb-click');
@@ -2646,47 +2647,51 @@
 
             // --- Live Preview Rotation (Dashboard) ---
             (()=>{ // IIFE to avoid globals clashing if script reloaded
-             const previewTimers = {}; // screenId -> {timer,index,items,nextAt}
+             const previewTimers = {}; // screenId -> {timer,index,items,nextAt,source,lastId}
              function safeIsMaster(){ try { return typeof isMasterStore==='function' && isMasterStore(currentStoreId); } catch { return false; } }
-                 function updatePreviewPlaylist(screenId, items){
-                     if(!Array.isArray(items)) return;
-                const preview = document.getElementById(`preview-${screenId}`);
-                if(!preview) return;
-                // Compute schedule window filtering with day-of-week gating
-                const now = new Date();
-                const nowSec = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
-                const parseHMS = t=>{ if(!t) return null; if(t.includes('T')){ try { const d=new Date(t); return d.getHours()*3600+d.getMinutes()*60+d.getSeconds(); } catch{ return null; } } const parts=t.split(':').map(p=>parseInt(p,10)); if(parts.some(isNaN)) return null; while(parts.length<3) parts.push(0); return parts[0]*3600+parts[1]*60+parts[2]; };
-                const dayCodes = ['sun','mon','tue','wed','thu','fri','sat'];
-                const dayCode = dayCodes[now.getDay()];
-                function intervalActive(startVal,endVal){
-                    const s = parseHMS(startVal);
-                    const e = parseHMS(endVal);
-                    if(s!==null && e!==null){
-                        if(e < s){ return (nowSec >= s) || (nowSec <= e); }
-                        return nowSec >= s && nowSec <= e;
-                    } else if(s!==null){ return nowSec >= s; }
-                    else if(e!==null){ return nowSec <= e; }
-                    return true;
-                }
-                function daysAllowed(days){
-                    if(!Array.isArray(days) || days.length===0) return true; // empty means all days
-                    return days.includes(dayCode);
-                }
-                function inWindow(item){
-                    // Evaluate extra schedule windows first respecting each window's own days
-                    if(Array.isArray(item.schedule) && item.schedule.length){
-                        for(const w of item.schedule){ if(daysAllowed(w.days) && intervalActive(w.start,w.end)) return true; }
-                        // if windows exist but none active, fall back to primary
-                    }
-                    // Primary interval requires item.days (if provided) and start/end interval
-                    return daysAllowed(item.days) && intervalActive(item.start,item.end);
-                }
-                const enabled = items.filter(i=> i.enabled && inWindow(i));
-                if(!enabled.length){ stopPreview(screenId); preview.innerHTML='<div style="font-size:11px;color:#666;">(No scheduled content now)</div>'; return; }
-                const state = previewTimers[screenId] || {timer:null,index:0,items:enabled,nextAt:0};
-                state.items = enabled; // replace with filtered list
-                previewTimers[screenId] = state;
-                if(!state.timer){ runPreview(screenId); }
+             // Helpers hoisted so both updater and ticker share exact logic (seconds precision)
+             const dayCodes = ['sun','mon','tue','wed','thu','fri','sat'];
+             const parseHMS = t=>{ if(!t) return null; if(typeof t==='string' && t.includes('T')){ const d=new Date(t); if(isNaN(d.getTime())) return null; return d.getHours()*3600+d.getMinutes()*60+d.getSeconds(); } const parts=String(t).split(':').map(p=>parseInt(p,10)); if(parts.some(isNaN)) return null; while(parts.length<3) parts.push(0); return parts[0]*3600+parts[1]*60+parts[2]; };
+             function intervalActive(startVal,endVal, now){
+                 const nowSec = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
+                 const s = parseHMS(startVal);
+                 const e = parseHMS(endVal);
+                 if(s!==null && e!==null){
+                     if(e < s){ return (nowSec >= s) || (nowSec <= e); }
+                     return nowSec >= s && nowSec <= e;
+                 } else if(s!==null){ return nowSec >= s; }
+                 else if(e!==null){ return nowSec <= e; }
+                 return true;
+             }
+             function daysAllowed(days, now){ if(!Array.isArray(days) || days.length===0) return true; const dayCode = dayCodes[now.getDay()]; return days.includes(dayCode); }
+             function inWindow(item, now){
+                 // Extra windows first: can activate independently (respect window.enabled + days)
+                 if(Array.isArray(item.schedule) && item.schedule.length){
+                     for(const w of item.schedule){
+                         const wEnabled = (typeof w.enabled === 'boolean') ? w.enabled : true;
+                         if(!wEnabled) continue;
+                         if(daysAllowed(w.days, now) && intervalActive(w.start, w.end, now)) return true;
+                     }
+                     // If extra windows exist but none active, fall back to primary
+                 }
+                 // Primary uses item.enabled + days
+                 const primaryOk = daysAllowed(item.days, now) && intervalActive(item.start, item.end, now);
+                 const alwaysOn = (!!item.enabled) && (!item.start && !item.end) && (!item.schedule || !item.schedule.length);
+                 return (primaryOk && !!item.enabled) || alwaysOn;
+             }
+             function filterEnabled(items){ const now = new Date(); return (items||[]).filter(i=> inWindow(i, now)); }
+
+             function updatePreviewPlaylist(screenId, items){
+                 if(!Array.isArray(items)) return;
+                 const preview = document.getElementById(`preview-${screenId}`);
+                 if(!preview) return;
+                 const enabled = filterEnabled(items);
+                 if(!enabled.length){ stopPreview(screenId); preview.innerHTML='<div style="font-size:11px;color:#666;">(No scheduled content now)</div>'; return; }
+                 const state = previewTimers[screenId] || {timer:null,index:0,items:enabled,nextAt:0,source:items,lastId:null};
+                 state.items = enabled; // filtered list
+                 state.source = items;  // keep original order for next-window selection
+                 previewTimers[screenId] = state;
+                 if(!state.timer){ runPreview(screenId); }
              }
              function stopPreview(screenId){ const st=previewTimers[screenId]; if(st&&st.timer){ clearTimeout(st.timer); st.timer=null; } }
              function runPreview(screenId){
@@ -2695,6 +2700,7 @@
                 if(!st.items.length){ stopPreview(screenId); return; }
                 if(st.index >= st.items.length) st.index=0;
                 const item = st.items[st.index];
+                st.lastId = item && item.id ? item.id : (item && item.file ? item.file : null);
                 const ext = (item.file||'').split('.').pop().toLowerCase();
                 const isVideo = ['mp4','webm','ogg','mov','avi','mkv','m4v'].includes(ext);
                 // Determine current rotation from in-memory data so it persists across item changes
@@ -2716,9 +2722,10 @@
              window.updatePreviewPlaylist = updatePreviewPlaylist;
              setInterval(()=>{
                 Object.entries(previewTimers).forEach(([sid,st])=>{
-                    if(!st.nextAt) return;
                     const preview = document.getElementById(`preview-${sid}`); if(!preview) return;
-                    const leftMs = st.nextAt - Date.now(); if(leftMs < 0) return;
+                    // Always recompute enabled set with seconds precision
+                    const newEnabled = filterEnabled(st.source||st.items||[]);
+                    // Prepare badge
                     let badge = preview.querySelector('.preview-badge');
                     if(!badge){
                         badge = document.createElement('div');
@@ -2727,29 +2734,51 @@
                         preview.style.position='relative';
                         preview.appendChild(badge);
                     }
-                    const secLeft = Math.ceil(leftMs/1000);
-                    const total = st.items.length || 1;
-                    badge.textContent = `${(st.index%total)+1}/${total} next ${secLeft}s`;
-                    // If current displayed item has moved outside schedule window, force immediate advance
-                    const currentIdx = (st.index-1+total)%total;
-                    const currentItem = st.items[currentIdx];
-                    if(currentItem){
-                        const now = new Date();
-                        const nowSec = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
-                        const parseHMS = t=>{ if(!t) return null; if(t.includes('T')){ try { const d=new Date(t); return d.getHours()*3600+d.getMinutes()*60+d.getSeconds(); } catch{ return null; } } const parts=t.split(':').map(p=>parseInt(p,10)); if(parts.some(isNaN)) return null; while(parts.length<3) parts.push(0); return parts[0]*3600+parts[1]*60+parts[2]; };
-                        const startSec = parseHMS(currentItem.start);
-                        const endSec = parseHMS(currentItem.end);
-                        let stillIn = true;
-                        if(startSec!==null && endSec!==null){
-                            if(endSec < startSec){ stillIn = (nowSec >= startSec) || (nowSec <= endSec); }
-                            else stillIn = nowSec >= startSec && nowSec <= endSec;
-                        } else if(startSec!==null){ stillIn = nowSec >= startSec; }
-                        else if(endSec!==null){ stillIn = nowSec <= endSec; }
-                        if(!stillIn){
-                            // Re-filter playlist immediately by invoking updatePreviewPlaylist with original items list
-                            fetch(`/playlist/${currentStoreId}/${sid}`).then(r=>r.json()).then(d=>{ if(d.success) updatePreviewPlaylist(sid, d.playlist||[]); });
+                    // If nothing is scheduled now, stop and show message
+                    if(newEnabled.length===0){
+                        stopPreview(sid);
+                        st.items = [];
+                        preview.innerHTML = '<div style="font-size:11px;color:#666;">(No scheduled content now)</div>';
+                        badge.textContent = `0/0`;
+                        return;
+                    }
+                    // If current displayed item is no longer allowed, jump immediately to the next available
+                    const totalOld = st.items.length || 0;
+                    const currentIdx = totalOld ? (st.index-1+totalOld)%totalOld : -1;
+                    const currentItem = (currentIdx>=0) ? st.items[currentIdx] : null;
+                    const now = Date.now();
+                    const leftMs = st.nextAt ? (st.nextAt - now) : 0;
+                    const secLeft = leftMs>0 ? Math.ceil(leftMs/1000) : 0;
+                    // Update state items to newEnabled (preserve original order)
+                    st.items = newEnabled;
+                    // Map helper to original order index
+                    const origIndex = (itm)=>{
+                        const key = itm && itm.id ? itm.id : (itm && itm.file ? itm.file : '__x');
+                        return (st.source||[]).findIndex(e => (e && (e.id?e.id:e.file)) === key);
+                    };
+                    if(currentItem && st.lastId){
+                        const stillAllowed = newEnabled.some(it=> (it.id?it.id:it.file) === st.lastId);
+                        if(!stillAllowed){
+                            // Choose the next item after the current one in original order
+                            const curPos = (st.source||[]).findIndex(e => (e && (e.id?e.id:e.file)) === st.lastId);
+                            let nextChoice = 0;
+                            for(let i=0;i<newEnabled.length;i++){
+                                if(origIndex(newEnabled[i]) > curPos){ nextChoice = i; break; }
+                                if(i===newEnabled.length-1) nextChoice = 0;
+                            }
+                            // Cancel pending timer and jump now
+                            stopPreview(sid);
+                            st.index = nextChoice; // runPreview will render and then increment
+                            runPreview(sid);
+                            // Update badge after jump
+                            const total = st.items.length || 1;
+                            badge.textContent = `${(st.index%total)+1}/${total} next ${Math.max(0, Math.ceil((st.nextAt-Date.now())/1000))}s`;
+                            return;
                         }
                     }
+                    // Otherwise update badge only
+                    const total = st.items.length || 1;
+                    badge.textContent = `${(st.index%total)+1}/${total} next ${Math.max(0, secLeft)}s`;
                 });
              },500);
             })();

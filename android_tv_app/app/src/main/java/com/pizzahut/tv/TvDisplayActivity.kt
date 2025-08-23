@@ -290,41 +290,39 @@ class TvDisplayActivity : AppCompatActivity() {
         }
 
         val enabled = items.filter { it.enabled != false }
-        // Screen-level gating: if any item defines a real schedule, we use that to turn the whole screen on/off.
-        var hasAnySchedule = false
-        var anyScheduleActiveNow = false
+        // Item-level evaluation: an item is active if ANY of its Extra Windows (enabled) match now,
+        // otherwise evaluated against its primary start/end + days. This mirrors server logic.
         fun isTimeOnly(v: String?): Boolean = v != null && v.length <= 8 && ":" in v && !v.contains("-")
+        val active = mutableListOf<com.pizzahut.tv.api.PlaylistItem>()
+        val fallback = mutableListOf<com.pizzahut.tv.api.PlaylistItem>()
         for (it in enabled) {
-            // Extra windows
+            var inAnyWindow = false
             val windows = it.schedule ?: emptyList()
             if (windows.isNotEmpty()) {
-                hasAnySchedule = true
                 for (w in windows) {
-                    if (intervalActive(w.start, w.end, w.days)) { anyScheduleActiveNow = true; break }
+                    val wEnabled = w.enabled ?: true
+                    if (!wEnabled) continue
+                    if (intervalActive(w.start, w.end, w.days)) { inAnyWindow = true; break }
                 }
-                if (anyScheduleActiveNow) break
             }
-            // Primary start/end
-            val s = it.start?.trim()
-            val e = it.end?.trim()
+            if (inAnyWindow) { active.add(it); continue }
+            val s = it.start?.trim(); val e = it.end?.trim(); val days = it.days ?: emptyList()
             if (!s.isNullOrBlank() || !e.isNullOrBlank()) {
-                // Non-restrictive patterns should not count as scheduling the screen
-                val days = it.days ?: emptyList()
-                val zeroStartNoEnd = (s != null && isTimeOnly(s) && (s == "0:0:0" || s == "00:00" || s == "00:00:00") && (e.isNullOrBlank())) && days.isEmpty()
-                val endAtDayMaxNoStart = (e != null && isTimeOnly(e) && (e == "23:59" || e == "23:59:59") && (s.isNullOrBlank())) && days.isEmpty()
+                // Treat neutral ranges like 00:00.. or ..23:59 without days as non-restrictive -> fallback
+                val zeroStartNoEnd = (s != null && isTimeOnly(s) && (s == "0:0:0" || s == "00:00" || s == "00:00:00") && e.isNullOrBlank()) && days.isEmpty()
+                val endAtDayMaxNoStart = (e != null && isTimeOnly(e) && (e == "23:59" || e == "23:59:59") && s.isNullOrBlank()) && days.isEmpty()
                 val nonRestrictive = zeroStartNoEnd || endAtDayMaxNoStart
                 if (!nonRestrictive) {
-                    hasAnySchedule = true
-                    if (intervalActive(s, e, days)) { anyScheduleActiveNow = true; break }
+                    if (intervalActive(s, e, days)) active.add(it) else fallback.add(it)
+                } else {
+                    fallback.add(it)
                 }
+            } else {
+                fallback.add(it)
             }
         }
-        if (hasAnySchedule) {
-            // When within any scheduled window, rotate all enabled items by duration; otherwise, show nothing
-            return if (anyScheduleActiveNow) enabled.filter { it.repeat != false } else emptyList()
-        }
-        // No schedules anywhere: default to rotating all enabled items respecting repeat flag
-        return enabled.filter { it.repeat != false }
+        val out = if (active.isNotEmpty()) active else fallback
+        return out.filter { it.repeat != false }
     }
 }
 
@@ -392,14 +390,27 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
 
     fun prefetchNext(nextItem: com.pizzahut.tv.api.PlaylistItem?) {
         val nf = nextItem?.file ?: return
-    val nurl = ApiClientImageHelper.buildImageUrl(nf)
+        val nurl = ApiClientImageHelper.buildImageUrl(nf)
         if (ImageMemoryCache.get(nurl) == null) {
             lifecycleScope.launch(Dispatchers.IO) { fetchBitmap(nurl) }
         }
-        // Warm-up for upcoming video by issuing a quick HEAD to the /media URL
-        if (isVideo(nf)) {
-            val vurl = ApiClientImageHelper.buildVideoUrl(nf)
-            lifecycleScope.launch(Dispatchers.IO) { try { headOk(vurl, 3000) } catch (_: Exception) {} }
+        // Warm-up for upcoming video by issuing a quick HEAD to the /media URL (inline to avoid forward refs)
+        run {
+            val videoExts = arrayOf("mp4","webm","ogg","mov","avi","mkv","m4v")
+            val isVid = videoExts.any { nf.endsWith(".$it", true) }
+            if (isVid) {
+                val vurl = ApiClientImageHelper.buildVideoUrl(nf)
+                lifecycleScope.launch(Dispatchers.IO) {
+                    try {
+                        val u = URL(vurl)
+                        val c = (u.openConnection() as HttpURLConnection).apply {
+                            requestMethod = "HEAD"; connectTimeout = 3000; readTimeout = 3000
+                        }
+                        // Touch response to complete request
+                        val code = c.responseCode
+                    } catch (_: Exception) { /* ignore warm-up failures */ }
+                }
+            }
         }
     }
 

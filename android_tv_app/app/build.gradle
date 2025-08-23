@@ -14,7 +14,7 @@ android {
 		versionCode 1
 		versionName "1.0"
 
-		// Provide configurable base URL accessible via BuildConfig.PHTV_BASE_URL
+		// Default will be overridden per buildType below
 		buildConfigField 'String', 'PHTV_BASE_URL', '"http://192.168.1.109:5002/"'
 	}
 
@@ -22,6 +22,12 @@ android {
 		release {
 			minifyEnabled false
 			proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+			// Keep LAN IP for release (physical devices on same network)
+			buildConfigField 'String', 'PHTV_BASE_URL', '"http://192.168.1.109:5002/"'
+		}
+		debug {
+			// Use emulator host alias so the AVD can reach your Flask server
+			buildConfigField 'String', 'PHTV_BASE_URL', '"http://10.0.2.2:5002/"'
 		}
 	}
 

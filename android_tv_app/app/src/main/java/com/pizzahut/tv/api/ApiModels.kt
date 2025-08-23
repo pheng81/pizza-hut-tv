@@ -24,7 +24,8 @@ data class PlaylistItem(
 data class ScheduleWindow(
 	@SerializedName("start") val start: String?,
 	@SerializedName("end") val end: String?,
-	@SerializedName("days") val days: List<String>? = null
+	@SerializedName("days") val days: List<String>? = null,
+	@SerializedName("enabled") val enabled: Boolean? = true
 )
 
 // Device setup discovery

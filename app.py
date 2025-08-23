@@ -345,10 +345,10 @@ def pick_active_playlist_item(screen, parent_config=None, store_id=None, screen_
         return screen.get('file')
     # Use local server time (was UTC) so user-entered wall-clock times align with expectations
     now = datetime.now()
-    # Base enabled list (user toggle). Windows will not force-on disabled items.
-    enabled = [i for i in pl if i.get('enabled', True)]
-    scheduled = []
-    fallback = []
+    # Evaluate all items; primary schedule respects item.enabled,
+    # but Extra Windows can activate the item independently (per-window enabled flag).
+    scheduled = []  # items currently in any active window (primary or extra)
+    fallback = []   # items available as fallback rotation when no windows active
     def interval_active(raw_s, raw_e, now, days=None):
         """Return True if now is inside the interval defined by raw_s/raw_e.
         Accepts:
@@ -414,30 +414,35 @@ def pick_active_playlist_item(screen, parent_config=None, store_id=None, screen_
             return False
         return True
 
-    for item in enabled:
+    for item in pl:
         st_raw = item.get('start')
         en_raw = item.get('end')
         schedule_windows = item.get('schedule') or []  # list of {'start':..., 'end':...}
         in_any_window = False
-        # Evaluate multi windows first; if any valid, treat as scheduled
+        # Extra windows: if any enabled window is active now (by its own days), the item is scheduled
         if schedule_windows:
             for win in schedule_windows:
+                if not win.get('enabled', True):
+                    continue
                 if interval_active(win.get('start'), win.get('end'), now, win.get('days')):
                     in_any_window = True
                     break
-        if in_any_window:
-            scheduled.append(item)
-            continue
+        # Primary schedule: only when the item itself is enabled
+        primary_enabled = item.get('enabled', True)
+        primary_active = False
         if st_raw or en_raw:
-            if interval_active(st_raw, en_raw, now, item.get('days')):
-                scheduled.append(item)
-            else:
-                fallback.append(item)
-        elif item.get('enabled', True):
-            fallback.append(item)
+            primary_active = primary_enabled and interval_active(st_raw, en_raw, now, item.get('days'))
         else:
+            # Always-on primary (no start/end): treat as fallback when enabled
+            if primary_enabled:
+                fallback.append(item)
+        # Decide current status
+        if in_any_window or primary_active:
+            scheduled.append(item)
+        elif (st_raw or en_raw):
+            # Primary interval exists but not currently active -> fallback pool
             fallback.append(item)
-    # If no explicit scheduled windows right now, use enabled fallback respecting repeat
+    # If no explicit scheduled windows right now, use fallback respecting repeat
     active_set = scheduled if scheduled else [i for i in fallback if i.get('repeat', True)]
     if not active_set:
         return None
