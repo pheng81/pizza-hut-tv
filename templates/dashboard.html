@@ -2124,10 +2124,12 @@
                                     }
                                     return true;
                                 };
-                                // Evaluate extra windows first with their own days
+                                // Evaluate extra windows first with their own days and per-window enabled flag
                                 let inWindow = false;
                                 if(Array.isArray(item.schedule) && item.schedule.length){
                                     for(const w of item.schedule){
+                                        const wEnabled = (typeof w.enabled === 'boolean') ? w.enabled : true;
+                                        if(!wEnabled) continue;
                                         if(dayAllowed(w.days) && intervalActiveRow(w.start, w.end)) { inWindow = true; break; }
                                     }
                                 }
@@ -2283,6 +2285,7 @@
                         const ws = parseISOorTime(win.start); const we = parseISOorTime(win.end);
                         const activeCls = activeWindow(ws,we)? 'highlight-active':'';
                         const daysArr = Array.isArray(win.days)? win.days : [];
+                        const wEnabled = (typeof win.enabled === 'boolean') ? win.enabled : true;
                         const weekdayBtns = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((d,i)=>{
                             const code=d.toLowerCase().slice(0,3);
                             const active=daysArr.includes(code)?'active':'';
@@ -2314,7 +2317,7 @@
                             <div class="pl-actions inline-actions window-actions">\
                                 <div class="group">\
                                     <span class="ia-label">Active</span>\
-                                    <button class="pl-switch ${item.enabled?'on':'off'}" data-realstate="${item.enabled?'on':'off'}" onclick="toggleEnableSwitch(this,'${screenId}','${item.id}')"><span>${item.enabled?'On':'Off'}</span></button>\
+                                    <button class="pl-switch ${wEnabled?'on':'off'}" data-realstate="${wEnabled?'on':'off'}" onclick="toggleWindowEnable(this,'${screenId}','${item.id}',${idx})"><span>${wEnabled?'On':'Off'}</span></button>\
                                 </div>\
                                 <div class="group combo-dur-del">\
                                     <span class="ia-label">Duration</span>
@@ -2373,6 +2376,33 @@
                     fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}/schedule/${index}`,{method:'DELETE'})
                       .then(r=>r.json()).then(d=>{ if(d.success){ setTimeout(()=>refreshPlaylist(screenId),100);} else { alert('Delete failed'); } });
                 }
+        // Toggle per-window enable/disable
+        function toggleWindowEnable(btn, screenId, itemId, index){
+            const isOn = btn.classList.contains('on');
+            const next = !isOn;
+            // Optimistic UI update
+            btn.classList.toggle('on', next);
+            btn.classList.toggle('off', !next);
+            btn.querySelector('span').textContent = next ? 'On' : 'Off';
+            fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}/schedule/${index}`,{
+                method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({enabled: next})
+            }).then(r=>r.json()).then(d=>{
+                if(!d.success){
+                    // revert
+                    btn.classList.toggle('on', isOn);
+                    btn.classList.toggle('off', !isOn);
+                    btn.querySelector('span').textContent = isOn ? 'On' : 'Off';
+                    alert('Failed to update window state');
+                } else {
+                    setTimeout(()=>refreshPlaylist(screenId), 100);
+                }
+            }).catch(()=>{
+                btn.classList.toggle('on', isOn);
+                btn.classList.toggle('off', !isOn);
+                btn.querySelector('span').textContent = isOn ? 'On' : 'Off';
+                alert('Network error updating state');
+            });
+        }
         function toggleItemWeekday(screenId,itemId,code,el){
             const parent = document.getElementById(`wd-primary-${screenId}-${itemId}`);
             if(!parent) return;
