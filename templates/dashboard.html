@@ -95,10 +95,9 @@
             display: inline-flex;
             align-items: center;
         }
-        .stores-title .tv-icons { display:inline-flex; align-items:center; gap:6px; margin-left:8px; }
-        .stores-title .tv-icon { width:22px; height:22px; color:#1d1d1f; opacity:.8; }
-        .stores-title .tv-icon rect,
-        .stores-title .tv-icon path { stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+    .stores-title .tv-icons { display:inline-flex; align-items:center; gap:6px; margin-left:8px; }
+    .stores-title .tv-icon { width:22px; height:22px; color:#1d1d1f; opacity:.9; display:inline-block; }
+    .stores-title .tv-img { width:24px; height:24px; display:inline-block; vertical-align:middle; border-radius:4px; }
         /* Apple-like primary button */
         .stores-header .add-store-btn {
             appearance: none;
@@ -994,16 +993,7 @@
             <div class="stores-header">
                 <div class="stores-title">Store Face
                     <span class="tv-icons" aria-hidden="true">
-                        <svg class="tv-icon" viewBox="0 0 24 24" role="img" focusable="false">
-                            <rect x="3" y="6" width="18" height="11" rx="2" ry="2"></rect>
-                            <path d="M8 4l4 3 4-3"></path>
-                            <path d="M8 19h8"></path>
-                        </svg>
-                        <svg class="tv-icon" viewBox="0 0 24 24" role="img" focusable="false">
-                            <rect x="3" y="6" width="18" height="11" rx="2" ry="2"></rect>
-                            <path d="M12 10h4M8 14h8"></path>
-                            <path d="M8 19h8"></path>
-                        </svg>
+                        <img class="tv-img" src="/static/icons/tv-smile.svg" alt="TV" />
                     </span>
                 </div>
                 <div class="stores-actions">
