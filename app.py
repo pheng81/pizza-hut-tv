@@ -1268,7 +1268,12 @@ def get_playlist(store_id, screen_id):
         print(f"DEBUG: Auto-removed {removed} missing file playlist items")
     pl = screen.get('playlist', [])
     print(f"DEBUG: Returning playlist items: {len(pl)}")
-    return jsonify({'success': True, 'playlist': pl})
+    # Include server time so devices can evaluate schedule windows with server clock
+    try:
+        now_ms = int(time.time() * 1000)
+    except Exception:
+        now_ms = int(datetime.now().timestamp() * 1000)
+    return jsonify({'success': True, 'playlist': pl, 'server_now_ms': now_ms})
 
 # ---- Media library listing (for choosing existing uploads) ----
 @app.route('/library')

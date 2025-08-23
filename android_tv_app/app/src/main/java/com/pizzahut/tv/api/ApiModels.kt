@@ -4,7 +4,8 @@ import com.google.gson.annotations.SerializedName
 
 data class PlaylistResponse(
 	@SerializedName("success") val success: Boolean,
-	@SerializedName("playlist") val playlist: List<PlaylistItem>?
+	@SerializedName("playlist") val playlist: List<PlaylistItem>?,
+	@SerializedName("server_now_ms") val serverNowMs: Long? = null
 )
 
 data class PlaylistItem(
