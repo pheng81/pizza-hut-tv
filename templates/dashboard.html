@@ -596,36 +596,40 @@
     .pl-actions.inline-actions .group { flex:0 0 auto; }
     .pl-actions.inline-actions .dur-box { display:flex; align-items:center; gap:3px; background:#fff; padding:1px 5px; border:1px solid #c4ccd3; border-radius:12px; box-shadow:0 1px 2px rgba(0,0,0,0.04); }
     .pl-actions.inline-actions .dur-box .dur-display { min-width:20px; text-align:center; font-weight:500; font-size:10px; color:#222; }
-    .pl-actions.inline-actions .pl-icon-btn.dur-btn { background:#0d6efd; border-color:#0a58ca; color:#fff; width:18px; height:18px; font-weight:600; font-size:11px; }
-    .pl-actions.inline-actions .pl-icon-btn.dur-btn:hover { background:#0b5ed7; }
-    .pl-actions.inline-actions .pl-icon-btn.dur-btn:active { background:#0a58ca; }
+    /* Flat duration +/- buttons */
+    .pl-actions.inline-actions .pl-icon-btn.dur-btn { background:#fff; border-color:#cfd3d7; color:#222; width:18px; height:18px; font-weight:700; font-size:12px; border-radius:4px; }
+    .pl-actions.inline-actions .pl-icon-btn.dur-btn:hover { background:#f2f4f7; border-color:#c2c7cc; }
+    .pl-actions.inline-actions .pl-icon-btn.dur-btn:active { background:#e8eaee; }
     .pl-actions.inline-actions .delete-pill { height:20px; padding:0 8px; border:1px solid #e2b6b2; background:#fff; color:#b42016; border-radius:12px; font-weight:500; letter-spacing:.1px; font-size:10px; box-shadow:0 1px 2px rgba(0,0,0,0.05); display:flex; align-items:center; }
     .pl-actions.inline-actions .delete-pill:hover { background:#ffeceb; border-color:#dc9d98; }
     .pl-actions.inline-actions .delete-pill:active { background:#f9d8d5; }
     .pl-actions.inline-actions .group + .group { margin-left:4px; }
     .pl-actions.inline-actions .combo-dur-del { flex-wrap:nowrap; gap:8px; align-items:center; }
-    .pl-actions.inline-actions.window-actions { margin-top:4px; padding:2px 6px 3px; border-radius:6px; flex-wrap:wrap; align-items:center; gap:6px; max-width:100%; box-sizing:border-box; }
+    .pl-actions.inline-actions.window-actions { margin-top:4px; padding:2px 6px 3px; border-radius:6px; max-width:100%; box-sizing:border-box; display:grid; grid-template-columns: 1fr auto 1fr; align-items:center; column-gap:8px; }
     /* Primary actions row */
-    .pl-actions.inline-actions.primary-actions { flex-wrap:wrap; align-items:center; gap:6px; max-width:100%; box-sizing:border-box; }
+    .pl-actions.inline-actions.primary-actions { max-width:100%; box-sizing:border-box; display:grid; grid-template-columns: 1fr auto 1fr; align-items:center; column-gap:8px; }
     /* Action-row visual polish */
     .pl-actions.inline-actions { background:#f9fafb; border:1px solid #e5e7eb; border-radius:10px; padding:4px 8px; max-width:100%; box-sizing:border-box; }
-    .pl-actions.inline-actions .group { display:flex; align-items:center; gap:5px; flex:0 0 auto; }
+    .pl-actions.inline-actions .group { display:flex; align-items:center; gap:5px; }
+    .pl-actions.inline-actions .group.left { justify-self:start; }
+    .pl-actions.inline-actions .group.center { justify-self:center; }
+    .pl-actions.inline-actions .group.right { justify-self:end; }
     /* Smaller iOS-like switch and hide its text */
     .playlist-row.apple .pl-actions.inline-actions .pl-switch { width:32px; height:16px; font-size:0; position:relative; }
     .playlist-row.apple .pl-actions.inline-actions .pl-switch span { font-size:0; line-height:0; color:transparent; }
     .playlist-row.apple .pl-actions.inline-actions .pl-switch:before { width:12px; height:12px; top:2px; left:2px; }
     .playlist-row.apple .pl-actions.inline-actions .pl-switch.on:before { transform:translateX(16px); }
     /* Duration pill */
-    .pl-actions.inline-actions .dur-box.small { height:20px; padding:0 5px; border-radius:9999px; background:#fff; border:1px solid #cfd3d7; gap:4px; display:flex; align-items:center; }
-    .pl-actions.inline-actions .pl-icon-btn.dur-btn { width:16px; height:16px; border-radius:50%; font-size:10px; line-height:1; }
-    .pl-actions.inline-actions .dur-box .dur-display { min-width:18px; font-weight:600; color:#222; font-size:9px; }
+    /* Plain container without pill look */
+    .pl-actions.inline-actions .dur-box.small { height:20px; padding:0; background:transparent; border:none; gap:4px; display:flex; align-items:center; }
+    .pl-actions.inline-actions .pl-icon-btn.dur-btn { width:16px; height:16px; border-radius:4px; font-size:11px; line-height:1; }
+    .pl-actions.inline-actions .dur-box .dur-display { min-width:18px; font-weight:600; color:#111; font-size:10px; letter-spacing:.1px; }
     /* Delete pill alignment */
     .pl-actions.inline-actions .delete-pill.tiny { height:20px; padding:0 6px; display:inline-flex; align-items:center; }
     /* On very narrow screens, allow items to wrap tightly */
     @media (max-width: 560px){
         .pl-actions.inline-actions.window-actions,
-        .pl-actions.inline-actions.primary-actions { gap:4px; }
-        .pl-actions.inline-actions .delete-pill.tiny { order: 3; }
+        .pl-actions.inline-actions.primary-actions { grid-template-columns: auto auto auto; column-gap:6px; }
     }
     .pl-actions.inline-actions .dur-box.small { padding:0 3px; gap:2px; white-space:nowrap; }
     .pl-actions.inline-actions .dur-box.small .pl-icon-btn.dur-btn { width:14px; height:14px; font-size:9px; }
@@ -2205,16 +2209,18 @@
                                                                                     </div>
                                                                                 </div>
                                                                                 <div class="pl-actions inline-actions primary-actions">\
-                                                                                        <div class="group">\
+                                                                                        <div class="group left">\
                                                                                             <button class="pl-switch ${effectiveOn?'on':'off'}" aria-label="Toggle item" data-realstate="${item.enabled?'on':'off'}" title="Enable / Disable (auto reflects schedule)" onclick="toggleEnableSwitch(this,'${screenId}','${item.id}')"><span>${effectiveOn?'On':'Off'}</span></button>\
                                                                                         </div>\
-                                                                                        <div class="group combo-dur-del">\
+                                                                                        <div class="group center combo-dur-del">\
                                                                                             <div class="dur-box small">
                                                                                                 <button class="pl-icon-btn dur-btn" onclick="adjustDuration('${screenId}','${item.id}',-1)" aria-label="Decrease duration">−</button>
                                                                                                 <div class="dur-display" id="durdisp-${screenId}-${item.id}">${(item.duration||5)}s</div>
                                                                                                 <button class="pl-icon-btn dur-btn" onclick="adjustDuration('${screenId}','${item.id}',1)" aria-label="Increase duration">+</button>
                                                                                             </div>
                                                                                             <input id="dur-${screenId}-${item.id}" type="hidden" value="${item.duration || 5}">
+                                                                                        </div>\
+                                                                                        <div class="group right">\
                                                                                             <button class="delete-pill tiny" onclick="deletePlaylistItem('${screenId}','${item.id}')">Delete</button>
                                                                                         </div>
                                                                                 </div>
@@ -2337,16 +2343,18 @@
                                 <div class="weekday-row" id="wd-window-${screenId}-${item.id}-${idx}">${weekdayBtns}</div>
                             </div>
                             <div class="pl-actions inline-actions window-actions">\
-                                <div class="group">\
+                                <div class="group left">\
                                     <button class="pl-switch ${wEnabled?'on':'off'}" aria-label="Toggle window" data-realstate="${wEnabled?'on':'off'}" onclick="toggleWindowEnable(this,'${screenId}','${item.id}',${idx})"><span>${wEnabled?'On':'Off'}</span></button>\
                                 </div>\
-                                <div class="group combo-dur-del">\
+                                <div class="group center combo-dur-del">\
                                     <div class="dur-box small">
                                         <button class="pl-icon-btn dur-btn" onclick="adjustDuration('${screenId}','${item.id}',-1)" aria-label="Decrease duration">−</button>
                                         <div class="dur-display" id="durdisp-${screenId}-${item.id}">${(item.duration||5)}s</div>
                                         <button class="pl-icon-btn dur-btn" onclick="adjustDuration('${screenId}','${item.id}',1)" aria-label="Increase duration">+</button>
                                     </div>
                                     <input id="dur-${screenId}-${item.id}" type="hidden" value="${item.duration || 5}">
+                                </div>\
+                                <div class="group right">\
                                     <button class="delete-pill tiny" onclick="deleteScheduleWindow('${screenId}','${item.id}',${idx})">Delete</button>
                                 </div>
                             </div>
