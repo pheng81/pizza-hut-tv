@@ -392,8 +392,16 @@ def pick_active_playlist_item(screen, parent_config=None, store_id=None, screen_
             # end is date-only, no start -> clamp start to start-of-day
             ws = we.replace(hour=0, minute=0, second=0, microsecond=0)
 
+        # Normalize time-only single-sided inputs to same-day window
+        # start-only HH:MM[:SS] -> active until 23:59:59 of the same day
+        if (raw_s and is_time_only(raw_s)) and not raw_e and ws:
+            we = ws.replace(hour=23, minute=59, second=59, microsecond=999999)
+        # end-only HH:MM[:SS] -> active from 00:00:00 of the same day
+        if (raw_e and is_time_only(raw_e)) and not raw_s and we:
+            ws = we.replace(hour=0, minute=0, second=0, microsecond=0)
+
         time_only = (is_time_only(raw_s) or is_time_only(raw_e))
-        if ws and we:
+    if ws and we:
             if we < ws:
                 if not time_only and ws.date() == we.date():
                     we_plus = we + timedelta(days=1)

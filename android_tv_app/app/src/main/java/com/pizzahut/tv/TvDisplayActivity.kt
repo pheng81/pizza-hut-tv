@@ -46,6 +46,7 @@ class TvDisplayActivity : AppCompatActivity() {
     var manualNext: (() -> Unit)? = null
     var manualPrev: (() -> Unit)? = null
     private var heartbeatJob: Job? = null
+    private var hbIndicator: TextView? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -92,6 +93,18 @@ class TvDisplayActivity : AppCompatActivity() {
         }
         val dbgParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         binding.root.addView(debugOverlay, dbgParams)
+
+        // Small heartbeat indicator (top-right)
+        hbIndicator = TextView(this).apply {
+            text = "HB..."
+            setTextColor(Color.YELLOW)
+            textSize = 12f
+            setBackgroundColor(0x33000000)
+            setPadding(12, 6, 12, 6)
+        }
+        val hbParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        (hbParams as? ViewGroup.MarginLayoutParams)?.let { it.rightMargin = 16; it.topMargin = 8 }
+        binding.root.addView(hbIndicator, hbParams)
 
     val prefs = getSharedPreferences("phtv", MODE_PRIVATE)
     val storeId = intent.getStringExtra("storeId") ?: prefs.getString("storeId", null) ?: "0000"
@@ -166,8 +179,15 @@ class TvDisplayActivity : AppCompatActivity() {
             while (isActive) {
                 try {
                     ApiClient.service.sendHeartbeat(HeartbeatReq(storeId = storeId, screenId = screenId))
+                    withContext(Dispatchers.Main) {
+                        hbIndicator?.text = "HB ok"
+                        hbIndicator?.setTextColor(0xFF00FF00.toInt())
+                    }
                 } catch (_: Exception) {
-                    // ignore failures; next tick will retry
+                    withContext(Dispatchers.Main) {
+                        hbIndicator?.text = "HB fail"
+                        hbIndicator?.setTextColor(0xFFFFFF00.toInt())
+                    }
                 }
                 try { delay(30_000) } catch (_: Exception) { break }
             }
@@ -270,34 +290,41 @@ class TvDisplayActivity : AppCompatActivity() {
         }
 
         val enabled = items.filter { it.enabled != false }
-        val scheduled = mutableListOf<com.pizzahut.tv.api.PlaylistItem>()
-        val fallback = mutableListOf<com.pizzahut.tv.api.PlaylistItem>()
+        // Screen-level gating: if any item defines a real schedule, we use that to turn the whole screen on/off.
+        var hasAnySchedule = false
+        var anyScheduleActiveNow = false
+        fun isTimeOnly(v: String?): Boolean = v != null && v.length <= 8 && ":" in v && !v.contains("-")
         for (it in enabled) {
+            // Extra windows
             val windows = it.schedule ?: emptyList()
-            var inWin = false
             if (windows.isNotEmpty()) {
-                for (w in windows) { if (intervalActive(w.start, w.end, w.days)) { inWin = true; break } }
+                hasAnySchedule = true
+                for (w in windows) {
+                    if (intervalActive(w.start, w.end, w.days)) { anyScheduleActiveNow = true; break }
+                }
+                if (anyScheduleActiveNow) break
             }
-            if (inWin) { scheduled.add(it); continue }
-            if (!it.start.isNullOrBlank() || !it.end.isNullOrBlank()) {
-                // Treat non-restrictive time gating as "no schedule" so it doesn't suppress others.
-                fun isTimeOnly(v: String?): Boolean = v != null && v.length <= 8 && ":" in v && !v.contains("-")
-                val s = it.start?.trim()
-                val e = it.end?.trim()
+            // Primary start/end
+            val s = it.start?.trim()
+            val e = it.end?.trim()
+            if (!s.isNullOrBlank() || !e.isNullOrBlank()) {
+                // Non-restrictive patterns should not count as scheduling the screen
                 val days = it.days ?: emptyList()
                 val zeroStartNoEnd = (s != null && isTimeOnly(s) && (s == "0:0:0" || s == "00:00" || s == "00:00:00") && (e.isNullOrBlank())) && days.isEmpty()
                 val endAtDayMaxNoStart = (e != null && isTimeOnly(e) && (e == "23:59" || e == "23:59:59") && (s.isNullOrBlank())) && days.isEmpty()
-                if (zeroStartNoEnd || endAtDayMaxNoStart) {
-                    // Consider as fallback (i.e., always-on, non-restrictive)
-                    fallback.add(it)
-                } else {
-                    if (intervalActive(s, e, days)) scheduled.add(it) else fallback.add(it)
+                val nonRestrictive = zeroStartNoEnd || endAtDayMaxNoStart
+                if (!nonRestrictive) {
+                    hasAnySchedule = true
+                    if (intervalActive(s, e, days)) { anyScheduleActiveNow = true; break }
                 }
-            } else fallback.add(it)
+            }
         }
-        val activeSet = if (scheduled.isNotEmpty()) scheduled else fallback.filter { it.repeat != false }
-        if (activeSet.isEmpty()) return emptyList()
-        return if (scheduled.isNotEmpty()) scheduled else activeSet
+        if (hasAnySchedule) {
+            // When within any scheduled window, rotate all enabled items by duration; otherwise, show nothing
+            return if (anyScheduleActiveNow) enabled.filter { it.repeat != false } else emptyList()
+        }
+        // No schedules anywhere: default to rotating all enabled items respecting repeat flag
+        return enabled.filter { it.repeat != false }
     }
 }
 
