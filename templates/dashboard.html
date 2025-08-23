@@ -702,8 +702,8 @@
         }
     .section-header .section-left { display:flex; align-items:center; gap:12px; }
     .section-header .store-info { margin-bottom: 0; }
-    .section-header .store-number { padding:4px 8px; border-radius:6px; font-size:12px; }
-    .section-header .store-name { font-size:14px; font-weight:600; }
+    .section-header .store-number { padding:4px 8px; border-radius:6px; font-size:18px; }
+    .section-header .store-name { font: size 18px; font-weight:600; }
         
         .section-header h3 {
             margin: 0;
@@ -765,6 +765,21 @@
             background: white;
             min-width: 200px;
         }
+        .store-management .add-store-btn {
+            background: #0a84ff;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            height: 36px;
+            padding: 0 12px;
+            display:inline-flex; align-items:center; gap:8px;
+            font-weight:600; font-size:14px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+            transition: background .2s, transform .05s;
+        }
+        .store-management .add-store-btn:hover { background:#0a7aff; }
+        .store-management .add-store-btn:active { transform: translateY(1px); }
+        .store-management .add-store-btn .icon { width:16px; height:16px; }
         
         /* Modal Styles */
         .modal {
@@ -967,12 +982,6 @@
                             <circle cx="12" cy="17" r="1" fill="currentColor"></circle>
                         </svg>
                     </button>
-                    <button class="add-store-btn" onclick="showAddStoreDialog()">
-                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="M12 5v14M5 12h14" fill="none"></path>
-                        </svg>
-                        Add Store
-                    </button>
                 </div>
             </div>
             
@@ -986,6 +995,12 @@
                     </option>
                     {% endfor %}
                 </select>
+                <button class="add-store-btn" onclick="showAddStoreDialog()" title="Add Store">
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 5v14M5 12h14" fill="none"></path>
+                    </svg>
+                    Add Store
+                </button>
                 <button class="delete-store-btn" id="delete-store-btn" onclick="deleteCurrentStore()" title="Delete selected store">
                     🗑️ Delete Store
                 </button>
