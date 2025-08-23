@@ -36,6 +36,11 @@ class TvDisplayActivity : AppCompatActivity() {
     var exoPlayer: com.google.android.exoplayer2.ExoPlayer? = null
     // Keep a reference to legacy VideoView so we can hide/stop it properly
     var legacyVideoView: VideoView? = null
+    // Small persistent debug overlay
+    var debugOverlay: TextView? = null
+    // Manual controls hooks
+    var manualNext: (() -> Unit)? = null
+    var manualPrev: (() -> Unit)? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -73,6 +78,16 @@ class TvDisplayActivity : AppCompatActivity() {
     binding.root.addView(overlay, overlayParams)
         overlay.postDelayed({ overlay.animate().alpha(0f).setDuration(600).withEndAction { binding.root.removeView(overlay) } }, 8000)
 
+        // Persistent top-left debug overlay
+        debugOverlay = TextView(this).apply {
+            setTextColor(Color.GREEN)
+            textSize = 12f
+            setBackgroundColor(0x33000000)
+            setPadding(16, 8, 16, 8)
+        }
+        val dbgParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        binding.root.addView(debugOverlay, dbgParams)
+
     val prefs = getSharedPreferences("phtv", MODE_PRIVATE)
     val storeId = intent.getStringExtra("storeId") ?: prefs.getString("storeId", null) ?: "0000"
     val screenId = intent.getStringExtra("screenId") ?: prefs.getString("screenId", null) ?: "screen1"
@@ -103,6 +118,15 @@ class TvDisplayActivity : AppCompatActivity() {
             KeyEvent.KEYCODE_MENU -> { launchSetupAndReset(); return true }
             KeyEvent.KEYCODE_BACK -> { startActivity(Intent(this, ChangeScreenActivity::class.java)); finish(); return true }
             KeyEvent.KEYCODE_ESCAPE -> { startActivity(Intent(this, ChangeScreenActivity::class.java)); finish(); return true }
+            // Manual controls for debugging rotation
+            KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                try { manualNext?.invoke() } catch (_: Exception) {}
+                return true
+            }
+            KeyEvent.KEYCODE_DPAD_LEFT -> {
+                try { manualPrev?.invoke() } catch (_: Exception) {}
+                return true
+            }
         }
         return super.onKeyDown(keyCode, event)
     }
@@ -171,7 +195,7 @@ class TvDisplayActivity : AppCompatActivity() {
             } catch (_: Exception) { null }
         }
 
-        fun intervalActive(s: String?, e: String?, days: List<String>?): Boolean {
+    fun intervalActive(s: String?, e: String?, days: List<String>?): Boolean {
             if ((s.isNullOrBlank()) && (e.isNullOrBlank())) return false
             fun isTimeOnly(v: String?): Boolean = v != null && v.length <= 8 && ":" in v && !v.contains("-")
             fun isDateOnly(v: String?): Boolean = v != null && v.length == 10 && v[4] == '-' && v[7] == '-'
@@ -234,7 +258,19 @@ class TvDisplayActivity : AppCompatActivity() {
             }
             if (inWin) { scheduled.add(it); continue }
             if (!it.start.isNullOrBlank() || !it.end.isNullOrBlank()) {
-                if (intervalActive(it.start, it.end, it.days ?: emptyList())) scheduled.add(it) else fallback.add(it)
+                // Treat non-restrictive time gating as "no schedule" so it doesn't suppress others.
+                fun isTimeOnly(v: String?): Boolean = v != null && v.length <= 8 && ":" in v && !v.contains("-")
+                val s = it.start?.trim()
+                val e = it.end?.trim()
+                val days = it.days ?: emptyList()
+                val zeroStartNoEnd = (s != null && isTimeOnly(s) && (s == "0:0:0" || s == "00:00" || s == "00:00:00") && (e.isNullOrBlank())) && days.isEmpty()
+                val endAtDayMaxNoStart = (e != null && isTimeOnly(e) && (e == "23:59" || e == "23:59:59") && (s.isNullOrBlank())) && days.isEmpty()
+                if (zeroStartNoEnd || endAtDayMaxNoStart) {
+                    // Consider as fallback (i.e., always-on, non-restrictive)
+                    fallback.add(it)
+                } else {
+                    if (intervalActive(s, e, days)) scheduled.add(it) else fallback.add(it)
+                }
             } else fallback.add(it)
         }
         val activeSet = if (scheduled.isNotEmpty()) scheduled else fallback.filter { it.repeat != false }
@@ -298,7 +334,7 @@ private data class ActivePlaylist(var items: List<com.pizzahut.tv.api.PlaylistIt
 private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: String, imageView: ImageView, playerView: com.google.android.exoplayer2.ui.StyledPlayerView) {
     val state = ActivePlaylist(emptyList())
     var originalItems: List<com.pizzahut.tv.api.PlaylistItem> = emptyList()
-    val refreshIntervalMs = 10_000L // refresh playlist every 10s for quicker backend responses
+    val refreshIntervalMs = 5_000L // refresh playlist every 5s for quicker backend responses
     fun pickNext(): com.pizzahut.tv.api.PlaylistItem? {
         if (state.items.isEmpty()) return null
         if (state.index >= state.items.size) state.index = 0
@@ -390,6 +426,8 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
             .setSeekBackIncrementMs(5_000)
             .build().also { playerView.player = it }
     // Repeat handled by playlist timing, not ExoPlayer internal repeat
+    built.repeatMode = com.google.android.exoplayer2.Player.REPEAT_MODE_OFF
+    built.shuffleModeEnabled = false
         exoPlayer = built
         return built
     }
@@ -461,9 +499,13 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                     }
                 }
             } catch (_: Exception) { }
-            imageView.postDelayed(scheduleTick!!, 10_000L)
+            // Watchdog: if rotation task was lost but we have items, kick it
+            if (scheduledRotation == null && state.items.isNotEmpty()) {
+                showNext?.invoke(); return@Runnable
+            }
+        imageView.postDelayed(scheduleTick!!, 1_000L)
         }
-        imageView.postDelayed(scheduleTick!!, 10_000L)
+        imageView.postDelayed(scheduleTick!!, 1_000L)
     }
 
     fun showAndSchedule() {
@@ -484,13 +526,18 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
             }
         }
     ensureScheduleTick()
-        val next = pickNext()
+        var next = pickNext()
+        // Avoid selecting the same item twice in a row when multiple items exist
+        if (next != null && next.file != null && next.file == currentItemFile && state.items.size > 1) {
+            next = pickNext()
+        }
+    debugOverlay?.text = "idx=${state.index}/${state.items.size} cur=${currentItemFile ?: "-"}"
         if (next?.file == null) {
             binding.message.text = "No items currently scheduled"
             imageView.postDelayed({ showAndSchedule() }, 5_000L)
             return
         }
-        val file = next.file
+    val file = next.file!!
         currentItemFile = file
         if (isVideo(file)) {
             imageView.visibility = ImageView.GONE
@@ -521,13 +568,24 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                     playerView.visibility = ImageView.GONE
                     vv.setVideoURI(Uri.parse(videoUrlFallback))
                     vv.setOnPreparedListener { mp ->
-                        mp.isLooping = true
+                        // Do not loop automatically; we'll advance based on playlist duration
+                        mp.isLooping = false
                         vv.visibility = ImageView.VISIBLE
                         vv.start()
                         binding.message.text = "Legacy PLAY ${file.take(14)}"
+                        // Schedule rotation according to playlist duration
+                        val durMs = (next.duration ?: 10).coerceAtLeast(1) * 1000L
+                        cancelScheduled()
+                        scheduledRotation = Runnable {
+                            try { vv.stopPlayback() } catch (_: Exception) {}
+                            vv.visibility = ImageView.GONE
+                            showAndSchedule()
+                        }
+                        vv.postDelayed(scheduledRotation!!, durMs)
                     }
                     vv.setOnErrorListener { _, what, extra ->
                         binding.message.text = "LegacyErr w=$what e=$extra"
+                        cancelScheduled()
                         try { vv.stopPlayback() } catch (_: Exception) {}
                         vv.visibility = ImageView.GONE
                         showAndSchedule()
@@ -536,6 +594,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                     // If legacy never prepares within 6s, skip to next
                     vv.postDelayed({
                         if (vv.visibility != ImageView.VISIBLE) {
+                            cancelScheduled()
                             try { vv.stopPlayback() } catch (_: Exception) {}
                             vv.visibility = ImageView.GONE
                             binding.message.text = "Legacy timeout"
@@ -575,6 +634,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                             }
                             if (stateCode == com.google.android.exoplayer2.Player.STATE_ENDED) {
                                 // Advance if natural end happens early
+                                try { player.playWhenReady = false; player.stop(); player.clearMediaItems() } catch (_: Exception) {}
                                 cancelScheduled()
                                 showAndSchedule()
                             }
@@ -631,7 +691,11 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                 cancelScheduled()
                 scheduledRotation = Runnable {
                     // Move to next item after configured duration
-                    try { player.stop() } catch (_: Exception) {}
+                    try {
+                        player.playWhenReady = false
+                        player.stop()
+                        player.clearMediaItems()
+                    } catch (_: Exception) {}
             legacyVideoView?.let { try { it.stopPlayback() } catch (_: Exception) {}; it.visibility = ImageView.GONE }
                     showAndSchedule()
                 }
@@ -669,32 +733,60 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
     }
     // assign function reference to break forward-declaration cycle
     showNext = { showAndSchedule() }
+    manualNext = { cancelScheduled(); showAndSchedule() }
+    manualPrev = {
+        cancelScheduled()
+        if (state.items.isNotEmpty()) {
+            state.index = if (state.index - 2 >= 0) state.index - 2 else (state.items.size + state.index - 2) % state.items.size
+        }
+        showAndSchedule()
+    }
 
     fun applyNewList(all: List<com.pizzahut.tv.api.PlaylistItem>?) {
         val filtered = filterBySchedule(all ?: emptyList())
-        state.items = if (filtered.isEmpty()) emptyList() else filtered
-        state.index = 0
+        val prevItems = state.items
+        val prevFiles = prevItems.mapNotNull { it.file }
+        val newFiles = filtered.mapNotNull { it.file }
+        // If first assignment or previously empty, initialize
+        if (prevItems.isEmpty()) {
+            state.items = if (filtered.isEmpty()) emptyList() else filtered
+            state.index = 0
+            return
+        }
+        // If list content changed, replace but preserve current position relative to current file
+        if (newFiles != prevFiles) {
+            val cur = currentItemFile
+            state.items = filtered
+            state.index = if (cur != null) {
+                val idx = filtered.indexOfFirst { it.file == cur }
+                if (idx >= 0) (idx + 1) % (filtered.size.coerceAtLeast(1)) else 0
+            } else 0
+            return
+        }
+        // No change: keep current list and index
     }
 
     fun fetchPlaylist() {
-    binding.message.text = "Fetching playlist..."
-    lifecycleScope.launch {
+        binding.message.text = "Fetching playlist..."
+        lifecycleScope.launch {
             try {
                 val resp = ApiClient.service.getPlaylist(storeId, screenId)
                 val original = resp.playlist ?: emptyList()
                 originalItems = original
+                // Apply without resetting index if files are the same
                 applyNewList(original)
                 val cnt = state.items.size
                 if (cnt > 0) {
                     binding.message.text = "${cnt} items loaded"
-                    if (imageView.drawable == null) {
+                    // If rotation hasn’t started or was cancelled, kick it off
+                    if (scheduledRotation == null || currentItemFile == null || (imageView.drawable == null && playerView.visibility != ImageView.VISIBLE)) {
                         showAndSchedule()
                     }
                 } else {
                     binding.message.text = if (original.isNotEmpty()) "No items currently scheduled" else "No items in playlist"
                 }
             } catch (e: Exception) {
-        binding.message.text = "Network error: ${e.message}".take(60)
+                binding.message.text = "Network error: ${e.message}".take(60)
             } finally {
                 imageView.postDelayed({ fetchPlaylist() }, refreshIntervalMs)
             }
