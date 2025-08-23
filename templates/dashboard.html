@@ -700,6 +700,10 @@
             padding-bottom: 10px;
             border-bottom: 1px solid #eee;
         }
+    .section-header .section-left { display:flex; align-items:center; gap:12px; }
+    .section-header .store-info { margin-bottom: 0; }
+    .section-header .store-number { padding:4px 8px; border-radius:6px; font-size:12px; }
+    .section-header .store-name { font-size:14px; font-weight:600; }
         
         .section-header h3 {
             margin: 0;
@@ -987,18 +991,21 @@
                 </button>
             </div>
             
-            <div class="store-info" id="current-store-info">
-                <div class="store-number" id="current-store-id">{{ config.stores[0].id }}</div>
-                <div class="store-name" id="current-store-name">{{ config.stores[0].name }}</div>
-                <div class="master-indicator" id="master-indicator" style="display: none; color: #f39c12; font-weight: bold; margin-top: 5px;">
-                    👑 MASTER STORE
-                </div>
-            </div>
+            
             
             <!-- Regular Screens Section -->
             <div class="screens-section">
                 <div class="section-header">
-                    <h3>📺 Regular Screens</h3>
+                    <div class="section-left">
+                        <h3>📺 Regular Screens</h3>
+                        <div class="store-info" id="current-store-info">
+                            <div class="store-number" id="current-store-id">{{ config.stores[0].id }}</div>
+                            <div class="store-name" id="current-store-name">{{ config.stores[0].name }}</div>
+                            <div class="master-indicator" id="master-indicator" style="display: none; color: #f39c12; font-weight: bold;">
+                                👑 MASTER STORE
+                            </div>
+                        </div>
+                    </div>
                     <button class="add-screen-btn" onclick="addNewScreen('screen')">
                         ➕ Add Screen
                     </button>
