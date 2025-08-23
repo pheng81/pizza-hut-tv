@@ -2429,17 +2429,6 @@
             const days=btns.filter(b=>b.classList.contains('active')).map(b=>b.getAttribute('data-day'));
             fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({days:days})}).then(r=>r.json()).then(d=>{ if(!d.success){ alert('Failed to update days'); }});
         }
-        function toggleWindowWeekday(screenId,itemId,index,code,el){
-            const wrap = document.getElementById(`wd-win-${screenId}-${itemId}-${index}`);
-            if(!wrap) return;
-            if(el){ el.classList.toggle('active'); }
-            const days=[...wrap.querySelectorAll('.weekday-btn.active')].map(b=>b.getAttribute('data-day'));
-            // Need to PATCH entire schedule array (simpler) with updated days for this index
-            // Pull existing item from global playlist data cache if available or refetch after set
-            fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}`).catch(()=>{}); // placeholder if a GET exists
-            // Fallback: build minimal single-window update via existing endpoint
-            fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}/schedule/${index}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({days:days})}).then(r=>r.json()).then(d=>{ if(!d.success){ alert('Failed to update window days'); }});
-        }
         function toggleRepeat(screenId,itemId,val){ fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({repeat:val})}).then(r=>r.json()).then(d=>{ if(d.success) refreshPlaylist(screenId); }); }
         // toggleLink removed (feature deprecated)
     function updatePlaylistDuration(screenId,itemId,val){ const dur=parseInt(val)||10; fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({duration:dur})}).then(r=>r.json()).then(d=>{ if(!d.success) alert('Duration update failed'); else refreshPlaylist(screenId); }); }
