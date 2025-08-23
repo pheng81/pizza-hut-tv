@@ -982,6 +982,7 @@
     .tp-input { cursor:pointer; background:#fff; }
     /* Weekday selector */
     .weekday-row { display:flex; gap:3px; flex-wrap:nowrap; margin-bottom:4px; }
+    .weekday-row, .weekday-btn { pointer-events:auto; }
     .weekday-btn { width:18px; height:18px; padding:0; font-size:9px; font-weight:600; border:1px solid #b5bcc3; border-radius:50%; cursor:pointer; background:#f3f4f6; color:#374151; display:flex; align-items:center; justify-content:center; line-height:1; user-select:none; transition:.18s background,.18s border,.18s color; }
     .weekday-btn.active { background:#2563eb; border-color:#1d4ed8; color:#fff; box-shadow:0 0 0 2px rgba(37,99,235,0.25); }
     .weekday-btn:hover { background:#e0e7ef; }
@@ -2289,7 +2290,8 @@
                         const weekdayBtns = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((d,i)=>{
                             const code=d.toLowerCase().slice(0,3);
                             const active=daysArr.includes(code)?'active':'';
-                            return `<div class=\"weekday-btn ${active}\" data-day=\"${code}\" onclick=\"toggleWindowWeekday('${screenId}','${item.id}',${idx},'${code}',this)\">${d[0]}</div>`;
+                            const pressed = active? 'true':'false';
+                            return `<div class=\"weekday-btn ${active}\" role=\"button\" aria-pressed=\"${pressed}\" data-bind=\"wd-window\" data-screen=\"${screenId}\" data-item=\"${item.id}\" data-win-index=\"${idx}\" data-day=\"${code}\">${d[0]}</div>`;
                         }).join('');
                         return `<div class="sched-win">
                             <div class="schedule-extra-row one-row">
@@ -2340,16 +2342,19 @@
                     if(!parent) return;
                     const current = Array.from(parent.querySelectorAll('.weekday-btn.active')).map(x=>x.getAttribute('data-day'));
                     let days = new Set(current);
-                    if(days.has(code)) days.delete(code); else days.add(code);
+                    if(el && el.classList.contains('active')) { days.delete(code); } else { days.add(code); }
                     // Update UI immediately
-                    if(el) el.classList.toggle('active');
+                    if(el) {
+                        el.classList.toggle('active');
+                        el.setAttribute('aria-pressed', el.classList.contains('active') ? 'true' : 'false');
+                    }
                     fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}/schedule/${index}`,{
                         method:'PATCH',
                         headers:{'Content-Type':'application/json'},
                         body: JSON.stringify({ days: Array.from(days) })
                     }).then(r=>r.json()).then(d=>{
-                        if(!d.success){ alert('Failed to update repeat days'); if(el) el.classList.toggle('active'); }
-                    }).catch(()=>{ if(el) el.classList.toggle('active'); alert('Network error updating days'); });
+                        if(!d.success){ alert('Failed to update repeat days'); if(el){ el.classList.toggle('active'); el.setAttribute('aria-pressed', el.classList.contains('active') ? 'true' : 'false'); } }
+                    }).catch(()=>{ if(el){ el.classList.toggle('active'); el.setAttribute('aria-pressed', el.classList.contains('active') ? 'true' : 'false'); } alert('Network error updating days'); });
                 }
                 function addScheduleWindow(screenId,itemId){
                     fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}/schedule`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({start:null,end:null})})
@@ -2376,6 +2381,19 @@
                     fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}/schedule/${index}`,{method:'DELETE'})
                       .then(r=>r.json()).then(d=>{ if(d.success){ setTimeout(()=>refreshPlaylist(screenId),100);} else { alert('Delete failed'); } });
                 }
+        // Delegated click for extra window weekday pills
+        document.addEventListener('click', function(ev){
+            const el = ev.target.closest('.weekday-btn[data-bind="wd-window"]');
+            if(!el) return;
+            ev.preventDefault();
+            ev.stopPropagation();
+            const screenId = el.getAttribute('data-screen');
+            const itemId = el.getAttribute('data-item');
+            const index = parseInt(el.getAttribute('data-win-index'),10);
+            const code = el.getAttribute('data-day');
+            if(!screenId || !itemId || isNaN(index) || !code) return;
+            toggleWindowWeekday(screenId, itemId, index, code, el);
+        }, { passive: false });
         // Toggle per-window enable/disable
         function toggleWindowEnable(btn, screenId, itemId, index){
             const isOn = btn.classList.contains('on');
