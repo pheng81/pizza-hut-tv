@@ -98,7 +98,7 @@
     .stores-title .tv-icons { display:inline-flex; align-items:center; gap:6px; margin-left:8px; }
     .stores-title .tv-icon { width:22px; height:22px; color:#1d1d1f; opacity:.9; display:inline-block; }
     .stores-title .tv-img { width:24px; height:24px; display:inline-block; vertical-align:middle; border-radius:4px; }
-    .stores-title .tv-svg { width:36px; height:36px; display:inline-block; vertical-align:middle; }
+    .stores-title .tv-svg { width:44px; height:44px; display:inline-block; vertical-align:middle; }
         /* Apple-like primary button */
         .stores-header .add-store-btn {
             appearance: none;
@@ -994,83 +994,126 @@
             <div class="stores-header">
                                                 <div class="stores-title">Store Face
                                                         <span class="tv-icons" aria-hidden="true">
-                                                                <!-- Inline stylish CSS-animated hanging display icon -->
-                                                                <svg class="tv-svg" width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-                                                                    <defs>
-                                                                        <linearGradient id="screenGrad" x1="0" y1="0" x2="1" y2="1">
-                                                                            <stop offset="0%" stop-color="#ffffff" stop-opacity="0.85"/>
-                                                                            <stop offset="100%" stop-color="#f2f2f2"/>
-                                                                        </linearGradient>
-                                                                        <clipPath id="screenClip">
-                                                                            <rect x="44" y="56" width="168" height="120" rx="14" ry="14"/>
-                                                                        </clipPath>
-                                                                    </defs>
+                                                                                        <!-- Inline wave-animated CSS-only icon with occasional waving arms -->
+                                                                                        <svg class="tv-svg" width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+                                                                                            <defs>
+                                                                                                <linearGradient id="screenGrad" x1="0" y1="0" x2="1" y2="1">
+                                                                                                    <stop offset="0%" stop-color="#ffffff" stop-opacity="0.85"/>
+                                                                                                    <stop offset="100%" stop-color="#f2f2f2"/>
+                                                                                                </linearGradient>
+                                                                                                <clipPath id="screenClip">
+                                                                                                    <rect x="44" y="56" width="168" height="120" rx="14" ry="14"/>
+                                                                                                </clipPath>
+                                                                                            </defs>
 
-                                                                    <!-- Hanging mount -->
-                                                                    <circle cx="128" cy="22" r="7" fill="#333"/>
-                                                                    <line x1="128" y1="22" x2="128" y2="56" stroke="#333" stroke-width="5"/>
+                                                                                            <!-- Hanging mount -->
+                                                                                            <circle cx="128" cy="22" r="7" fill="#333"/>
+                                                                                            <line x1="128" y1="22" x2="128" y2="56" stroke="#333" stroke-width="5"/>
 
-                                                                    <!-- Whole TV group -->
-                                                                    <g id="tv" style="transform-origin:128px 22px;">
-                                                                        <!-- Screen -->
-                                                                        <rect x="44" y="56" width="168" height="120" rx="14" ry="14" fill="url(#screenGrad)" stroke="#333" stroke-width="6"/>
+                                                                                            <!-- TV group -->
+                                                                                            <g id="tv" style="transform-origin:128px 22px;">
+                                                                                                <!-- Screen -->
+                                                                                                <rect x="44" y="56" width="168" height="120" rx="14" ry="14" fill="url(#screenGrad)" stroke="#333" stroke-width="6"/>
 
-                                                                        <!-- Shine -->
-                                                                        <g clip-path="url(#screenClip)">
-                                                                            <rect id="shine" x="-120" y="56" width="80" height="120" fill="#ffffff" opacity="0.18" transform="skewX(-20)"/>
-                                                                        </g>
+                                                                                                <!-- Shine -->
+                                                                                                <g clip-path="url(#screenClip)">
+                                                                                                    <rect id="shine" x="-120" y="56" width="80" height="120" fill="#ffffff" opacity="0.18" transform="skewX(-20)"/>
+                                                                                                </g>
 
-                                                                        <!-- Face -->
-                                                                        <g id="face">
-                                                                            <!-- Eyes (scaleY for blink) -->
-                                                                            <g class="eye" style="transform-origin:92px 110px;">
-                                                                                <ellipse cx="92" cy="110" rx="10" ry="10" fill="#333"/>
-                                                                                <circle class="pupil" cx="92" cy="110" r="4" fill="#fefefe"/>
-                                                                            </g>
-                                                                            <g class="eye" style="transform-origin:164px 110px;">
-                                                                                <ellipse cx="164" cy="110" rx="10" ry="10" fill="#333"/>
-                                                                                <circle class="pupil" cx="164" cy="110" r="4" fill="#fefefe"/>
-                                                                            </g>
+                                                                                                <!-- Face -->
+                                                                                                <g id="face">
+                                                                                                    <!-- Eyes -->
+                                                                                                    <g class="eye" style="transform-origin:92px 110px;">
+                                                                                                        <ellipse cx="92" cy="110" rx="10" ry="10" fill="#333"/>
+                                                                                                        <circle class="pupil" cx="92" cy="110" r="4" fill="#fefefe"/>
+                                                                                                    </g>
+                                                                                                    <g class="eye" style="transform-origin:164px 110px;">
+                                                                                                        <ellipse cx="164" cy="110" rx="10" ry="10" fill="#333"/>
+                                                                                                        <circle class="pupil" cx="164" cy="110" r="4" fill="#fefefe"/>
+                                                                                                    </g>
 
-                                                                            <!-- Mouth (crossfade between two paths) -->
-                                                                            <path class="mouth mouth-a" d="M92 142 Q128 160 164 142" fill="none" stroke="#333" stroke-width="6" stroke-linecap="round"/>
-                                                                            <path class="mouth mouth-b" d="M92 146 Q128 172 164 146" fill="none" stroke="#333" stroke-width="6" stroke-linecap="round" opacity="0"/>
-                                                                        </g>
-                                                                    </g>
+                                                                                                    <!-- Mouth (crossfade between two paths) -->
+                                                                                                    <path class="mouth mouth-a" d="M92 142 Q128 160 164 142" fill="none" stroke="#333" stroke-width="6" stroke-linecap="round"/>
+                                                                                                    <path class="mouth mouth-b" d="M92 146 Q128 172 164 146" fill="none" stroke="#333" stroke-width="6" stroke-linecap="round" opacity="0"/>
+                                                                                                </g>
 
-                                                                    <style>
-                                                                        /* Sway the TV */
-                                                                        @keyframes sway { 0%, 100% { transform: rotate(-2deg) translateY(0); } 50% { transform: rotate(2deg) translateY(2px); } }
-                                                                        #tv { animation: sway 5s ease-in-out infinite; }
+                                                                                                <!-- Arms / Hands -->
+                                                                                                <g id="arm-left" class="arm" style="transform-origin:48px 116px; opacity:0;">
+                                                                                                    <rect x="44" y="106" width="12" height="34" rx="6" fill="#333"/>
+                                                                                                    <g class="fore" style="transform-origin:50px 140px;">
+                                                                                                        <rect x="46" y="138" width="12" height="26" rx="6" fill="#333"/>
+                                                                                                        <circle cx="52" cy="166" r="7" fill="#333"/>
+                                                                                                    </g>
+                                                                                                </g>
+                                                                                                <g id="arm-right" class="arm" style="transform-origin:208px 116px; opacity:0;">
+                                                                                                    <rect x="200" y="106" width="12" height="34" rx="6" fill="#333"/>
+                                                                                                    <g class="fore" style="transform-origin:206px 140px;">
+                                                                                                        <rect x="198" y="138" width="12" height="26" rx="6" fill="#333"/>
+                                                                                                        <circle cx="204" cy="166" r="7" fill="#333"/>
+                                                                                                    </g>
+                                                                                                </g>
+                                                                                            </g>
 
-                                                                        /* Subtle bob on the face */
-                                                                        @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(2px); } }
-                                                                        #face { animation: bob 3.8s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+                                                                                            <style>
+                                                                                                @keyframes sway { 0%, 100% { transform: rotate(-2deg) translateY(0); } 50% { transform: rotate(2deg) translateY(2px); } }
+                                                                                                #tv { animation: sway 5s ease-in-out infinite; }
 
-                                                                        /* Blink by scaling eyes vertically */
-                                                                        @keyframes blink { 0%, 88%, 100% { transform: scaleY(1); } 90%, 96% { transform: scaleY(0.1); } }
-                                                                        .eye { animation: blink 3.6s infinite; }
-                                                                        .eye:nth-of-type(2) { animation-delay: 0.15s; }
+                                                                                                @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(2px); } }
+                                                                                                #face { animation: bob 3.8s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
 
-                                                                        /* Pupils glance left-right */
-                                                                        @keyframes glance { 0%, 100% { transform: translateX(0); } 40% { transform: translateX(3px); } 70% { transform: translateX(-2px); } }
-                                                                        .pupil { animation: glance 4.2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
-                                                                        .eye:nth-of-type(2) .pupil { animation-delay: 0.1s; }
+                                                                                                @keyframes blink { 0%, 88%, 100% { transform: scaleY(1); } 90%, 96% { transform: scaleY(0.1); } }
+                                                                                                .eye { animation: blink 3.6s infinite; transform-box: fill-box; }
+                                                                                                .eye:nth-of-type(2) { animation-delay: 0.15s; }
 
-                                                                        /* Mouth crossfade smiling */
-                                                                        @keyframes mouthA { 0%, 45%, 100% { opacity: 1; } 55%, 90% { opacity: 0; } }
-                                                                        @keyframes mouthB { 0%, 45%, 100% { opacity: 0; } 55%, 90% { opacity: 1; } }
-                                                                        .mouth-a { animation: mouthA 5s ease-in-out infinite; }
-                                                                        .mouth-b { animation: mouthB 5s ease-in-out infinite; }
+                                                                                                @keyframes glance { 0%, 100% { transform: translateX(0); } 40% { transform: translateX(3px); } 70% { transform: translateX(-2px); } }
+                                                                                                .pupil { animation: glance 4.2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+                                                                                                .eye:nth-of-type(2) .pupil { animation-delay: 0.1s; }
 
-                                                                        /* Shine sweep across the screen */
-                                                                        @keyframes sweep { 0% { transform: translateX(0) skewX(-20deg); } 100% { transform: translateX(320px) skewX(-20deg); } }
-                                                                        #shine { animation: sweep 6s linear infinite; }
+                                                                                                @keyframes mouthA { 0%, 45%, 100% { opacity: 1; } 55%, 90% { opacity: 0; } }
+                                                                                                @keyframes mouthB { 0%, 45%, 100% { opacity: 0; } 55%, 90% { opacity: 1; } }
+                                                                                                .mouth-a { animation: mouthA 5s ease-in-out infinite; }
+                                                                                                .mouth-b { animation: mouthB 5s ease-in-out infinite; }
 
-                                                                        /* Ensure transforms reference object boxes properly */
-                                                                        #tv, #face, .eye, .pupil, #shine { transform-box: fill-box; }
-                                                                    </style>
-                                                                </svg>
+                                                                                                @keyframes sweep { 0% { transform: translateX(0) skewX(-20deg); } 100% { transform: translateX(320px) skewX(-20deg); } }
+                                                                                                #shine { animation: sweep 6s linear infinite; transform-box: fill-box; }
+
+                                                                                                @keyframes armCycleL {
+                                                                                                    0%, 68% { opacity: 0; transform: rotate(0deg); }
+                                                                                                    70%     { opacity: 1; transform: rotate(-18deg); }
+                                                                                                    75%, 82%, 89% { opacity: 1; }
+                                                                                                    95%, 100% { opacity: 0; transform: rotate(0deg); }
+                                                                                                }
+                                                                                                @keyframes armCycleR {
+                                                                                                    0%, 48% { opacity: 0; transform: rotate(0deg); }
+                                                                                                    50%     { opacity: 1; transform: rotate(18deg); }
+                                                                                                    55%, 62%, 69% { opacity: 1; }
+                                                                                                    75%, 100% { opacity: 0; transform: rotate(0deg); }
+                                                                                                }
+
+                                                                                                @keyframes waveL {
+                                                                                                    0%, 100% { transform: rotate(0deg); }
+                                                                                                    72%      { transform: rotate(12deg); }
+                                                                                                    78%      { transform: rotate(-8deg); }
+                                                                                                    84%      { transform: rotate(10deg); }
+                                                                                                    90%      { transform: rotate(-6deg); }
+                                                                                                }
+                                                                                                @keyframes waveR {
+                                                                                                    0%, 100% { transform: rotate(0deg); }
+                                                                                                    52%      { transform: rotate(-12deg); }
+                                                                                                    58%      { transform: rotate(8deg); }
+                                                                                                    64%      { transform: rotate(-10deg); }
+                                                                                                    70%      { transform: rotate(6deg); }
+                                                                                                }
+
+                                                                                                .arm#arm-left  { animation: armCycleL 12s ease-in-out infinite; }
+                                                                                                .arm#arm-right { animation: armCycleR 12s ease-in-out infinite; }
+
+                                                                                                #arm-left .fore  { animation: waveL 12s ease-in-out infinite; transform-box: fill-box; }
+                                                                                                #arm-right .fore { animation: waveR 12s ease-in-out infinite; transform-box: fill-box; }
+
+                                                                                                #tv, #face, .eye, .pupil, #shine, .arm, .fore { transform-box: fill-box; }
+                                                                                            </style>
+                                                                                        </svg>
                                                         </span>
                                                 </div>
                 <div class="stores-actions">
