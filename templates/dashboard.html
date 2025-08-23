@@ -2245,6 +2245,7 @@
                                         <div style="margin-top:6px; font-size:10px; color:#666;">24h format</div>
                                         <div class="tp-actions">
                                             <button onclick="closeTimePicker()">Cancel</button>
+                                            <button class="btn-secondary" onclick="clearTimePicker('${scr}','${item}','${field}',${isWindow?winIndex:'null'})">Clear</button>
                                             <button class="apply" onclick="applyTimePicker('${scr}','${item}','${field}',${isWindow?winIndex:'null'})">Apply</button>
                                         </div>
                                     </div>`;
@@ -2253,6 +2254,17 @@
                                 overlay.addEventListener('click', e=>{ if(e.target===overlay) closeTimePicker(); });
                         }
                         function closeTimePicker(){ if(tpCurrent){ if(tpCurrent.overlay&&tpCurrent.overlay.parentNode){ tpCurrent.overlay.parentNode.removeChild(tpCurrent.overlay);} tpCurrent=null; } }
+                        function clearTimePicker(screenId,itemId,field,winIndex){
+                                if(!tpCurrent) return;
+                                // Reset the input to default (unset)
+                                tpCurrent.input.value = '';
+                                if(tpCurrent.isWindow && winIndex !== null && !isNaN(winIndex)){
+                                    updateScheduleWinDateTime(screenId,itemId,winIndex);
+                                } else {
+                                    playlistDateTimeChanged(screenId,itemId);
+                                }
+                                closeTimePicker();
+                        }
                         function applyTimePicker(screenId,itemId,field,winIndex){
                                 if(!tpCurrent) return; const h=document.getElementById('tp-h').value; const m=document.getElementById('tp-m').value; const s=document.getElementById('tp-s').value; const val = `${h}:${m}:${s}`;
                                 tpCurrent.input.value = val;
