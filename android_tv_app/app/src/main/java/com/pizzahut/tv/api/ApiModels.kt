@@ -48,3 +48,14 @@ data class ScreenInfo(
 	@SerializedName("id") val id: String
 )
 
+// Heartbeat
+data class HeartbeatReq(
+	@SerializedName("store_id") val storeId: String,
+	@SerializedName("screen_id") val screenId: String
+)
+
+data class HeartbeatResp(
+	@SerializedName("success") val success: Boolean,
+	@SerializedName("error") val error: String? = null
+)
+

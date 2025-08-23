@@ -10,6 +10,9 @@ import androidx.lifecycle.lifecycleScope
 import com.pizzahut.tv.api.ApiClient
 import com.pizzahut.tv.databinding.ActivityTvDisplayBinding
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
@@ -28,6 +31,7 @@ import java.util.Date
 import java.util.Calendar
 import java.text.SimpleDateFormat
 import java.util.Locale
+import com.pizzahut.tv.api.HeartbeatReq
 
 class TvDisplayActivity : AppCompatActivity() {
     // Made public so extension functions can access
@@ -41,6 +45,7 @@ class TvDisplayActivity : AppCompatActivity() {
     // Manual controls hooks
     var manualNext: (() -> Unit)? = null
     var manualPrev: (() -> Unit)? = null
+    private var heartbeatJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -104,6 +109,7 @@ class TvDisplayActivity : AppCompatActivity() {
 
         // Kick off initial and periodic refresh & rotation
     startPlaylistLoop(storeId, screenId, imageView, playerView)
+    startHeartbeatLoop(storeId, screenId)
     }
 
     private fun launchSetupAndReset() {
@@ -142,6 +148,8 @@ class TvDisplayActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+    try { heartbeatJob?.cancel() } catch (_: Exception) {}
+    heartbeatJob = null
         try {
             exoPlayer?.stop()
             exoPlayer?.clearMediaItems()
@@ -150,6 +158,20 @@ class TvDisplayActivity : AppCompatActivity() {
         exoPlayer = null
         legacyVideoView?.let { try { it.stopPlayback() } catch (_: Exception) {}; it.visibility = ImageView.GONE }
         super.onDestroy()
+    }
+
+    private fun startHeartbeatLoop(storeId: String, screenId: String) {
+        heartbeatJob?.cancel()
+        heartbeatJob = lifecycleScope.launch(Dispatchers.IO) {
+            while (isActive) {
+                try {
+                    ApiClient.service.sendHeartbeat(HeartbeatReq(storeId = storeId, screenId = screenId))
+                } catch (_: Exception) {
+                    // ignore failures; next tick will retry
+                }
+                try { delay(30_000) } catch (_: Exception) { break }
+            }
+        }
     }
 
     // Mirror server-side scheduling rules so device respects dashboard schedule windows/days

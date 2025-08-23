@@ -6,6 +6,7 @@ import json
 import shutil
 from datetime import datetime, time as dtime, timedelta
 import logging
+import time
 
 # -------- Early logging to file for startup diagnostics (captures silent exits) --------
 LOG_FILE = 'startup_log.txt'
@@ -27,6 +28,72 @@ app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-this'
 print('DEBUG: app.py initialization start', flush=True)
 logging.debug('App module import start')
+
+# --- Screen heartbeat + status (placed after app initialization) ---
+HEARTBEAT_TIMEOUT = 60  # seconds
+
+@app.route('/api/screen_heartbeat', methods=['POST', 'GET'])
+def screen_heartbeat():
+    """Android TV app should POST here every ~30s with store_id and screen_id.
+    Also accepts GET with query params for quick manual testing: ?store_id=...&screen_id=...
+    """
+    if request.method == 'GET':
+        data = {'store_id': request.args.get('store_id'), 'screen_id': request.args.get('screen_id')}
+    else:
+        try:
+            data = request.get_json(force=True) or {}
+        except Exception:
+            data = {}
+    store_id = data.get('store_id')
+    screen_id = data.get('screen_id')
+    logging.debug('HB recv store_id=%s screen_id=%s raw_body=%s', store_id, screen_id, data)
+    if not store_id or not screen_id:
+        return jsonify({'success': False, 'error': 'Missing store_id or screen_id'}), 400
+    cfg = load_store_config()
+    store_screens = cfg.get('screens', {}).get(store_id)
+    if not isinstance(store_screens, dict):
+        logging.debug('HB store not found: %s', store_id)
+        return jsonify({'success': False, 'error': 'Store not found'}), 404
+    # Accept either full key (e.g., "1112_screen1") or plain ("screen1")
+    if screen_id not in store_screens:
+        candidate = f"{store_id}_{screen_id}" if '_' not in screen_id else None
+        if candidate and candidate in store_screens:
+            screen_id = candidate
+        else:
+            logging.debug('HB screen not found: store=%s screen=%s candidate=%s keys=%s', store_id, screen_id, candidate, list(store_screens.keys()))
+            return jsonify({'success': False, 'error': 'Screen not found'}), 404
+    # record last_seen epoch seconds
+    store_screens[screen_id]['last_seen'] = int(time.time())
+    logging.debug('HB set last_seen for %s/%s', store_id, screen_id)
+    save_store_config(cfg)
+    return jsonify({'success': True})
+
+@app.route('/api/screen_status', methods=['GET'])
+def screen_status():
+    """Return online/offline status for all screens across all stores."""
+    cfg = load_store_config()
+    now = int(time.time())
+    result = {}
+    for store_id, screens in cfg.get('screens', {}).items():
+        for sid, sdata in (screens or {}).items():
+            last_seen = int(sdata.get('last_seen', 0) or 0)
+            online = (now - last_seen) < HEARTBEAT_TIMEOUT
+            result.setdefault(store_id, {})[sid] = 'online' if online else 'offline'
+    return jsonify({'success': True, 'status': result})
+
+@app.route('/api/screen_status/<store_id>', methods=['GET'])
+def screen_status_by_store(store_id):
+    """Return status mapping for a specific store (lighter payload for dashboard)."""
+    cfg = load_store_config()
+    now = int(time.time())
+    screens = cfg.get('screens', {}).get(store_id, {}) or {}
+    result = {}
+    for sid, sdata in screens.items():
+        last_seen = int(sdata.get('last_seen', 0) or 0)
+        online = (now - last_seen) < HEARTBEAT_TIMEOUT
+        result[sid] = 'online' if online else 'offline'
+    logging.debug('STATUS store=%s result=%s', store_id, result)
+    return jsonify({'success': True, 'status': result})
 
 # -------------------- Core Configuration & Media Type Definitions --------------------
 CONFIG_FILE = 'store_config.json'
