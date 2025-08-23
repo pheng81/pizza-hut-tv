@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="TV">
+  <!-- Rounded square background -->
+  <rect x="8" y="8" width="112" height="112" rx="18" ry="18" fill="#1E7B7A"/>
+  <!-- TV body (white) -->
+  <rect x="26" y="34" width="76" height="56" rx="8" ry="8" fill="#FFFFFF"/>
+  <!-- TV screen inner border -->
+  <rect x="36" y="44" width="56" height="36" rx="5" ry="5" fill="none" stroke="#1E7B7A" stroke-width="4"/>
+  <!-- Legs -->
+  <rect x="38" y="92" width="12" height="12" rx="3" fill="#FFFFFF"/>
+  <rect x="78" y="92" width="12" height="12" rx="3" fill="#FFFFFF"/>
+  <!-- Side knobs -->
+  <circle cx="98" cy="58" r="6" fill="#1E7B7A"/>
+  <circle cx="98" cy="74" r="6" fill="#1E7B7A"/>
+  <!-- Antennas -->
+  <path d="M46 28 L62 40" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round"/>
+  <path d="M82 28 L66 40" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round"/>
+  <!-- Face (eyes + smile) on screen -->
+  <ellipse cx="52" cy="58" rx="5" ry="7" fill="#1E7B7A"/>
+  <ellipse cx="76" cy="58" rx="5" ry="7" fill="#1E7B7A"/>
+  <path d="M50 70 C58 80, 70 80, 78 70" fill="none" stroke="#1E7B7A" stroke-width="5" stroke-linecap="round"/>
+</svg>
