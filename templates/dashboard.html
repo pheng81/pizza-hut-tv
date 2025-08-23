@@ -74,7 +74,7 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         
-        .stores-header {
+    .stores-header {
             display: flex;
             align-items: center;
             gap: 12px;
@@ -107,9 +107,11 @@
         .stores-header .add-store-btn:active { transform: translateY(1px); }
         .stores-header .add-store-btn:focus-visible { outline: 3px solid rgba(10,132,255,0.35); outline-offset: 2px; }
 
-        /* Right-aligned subtle (ghost) button */
-        .stores-header .quick-tips {
-            margin-left: auto;
+    /* Right actions container */
+    .stores-header .stores-actions { margin-left: auto; display:flex; align-items:center; gap:8px; }
+
+    /* Right-aligned subtle (ghost) button */
+    .stores-header .stores-actions .quick-tips {
             appearance: none;
             border: 1px solid #d2d2d7;
             background: #f2f2f7;
@@ -124,9 +126,13 @@
             cursor: pointer;
             transition: background .2s, border-color .2s, transform .05s;
         }
-        .stores-header .quick-tips:hover { background: #e9e9ef; border-color: #c7c7cc; }
-        .stores-header .quick-tips:active { transform: translateY(1px); }
-        .stores-header .quick-tips:focus-visible { outline: 3px solid rgba(10,132,255,0.35); outline-offset: 2px; }
+    .stores-header .stores-actions .quick-tips:hover { background: #e9e9ef; border-color: #c7c7cc; }
+    .stores-header .stores-actions .quick-tips:active { transform: translateY(1px); }
+    .stores-header .stores-actions .quick-tips:focus-visible { outline: 3px solid rgba(10,132,255,0.35); outline-offset: 2px; }
+
+    /* Icon inside Add Store */
+    .stores-header .add-store-btn .icon { width:16px; height:16px; display:inline-block; }
+    .stores-header .add-store-btn .icon path { stroke:#fff; stroke-width:2; stroke-linecap:round; }
         
         .stores-title {
             font-size: 18px;
@@ -944,8 +950,15 @@
         <div class="stores-section">
             <div class="stores-header">
                 <div class="stores-title">Stores</div>
-                <button class="add-store-btn" onclick="showAddStoreDialog()">➕ Add Store</button>
-                <button class="quick-tips" onclick="showQuickTips()">Quick tips</button>
+                <div class="stores-actions">
+                    <button class="quick-tips" onclick="showQuickTips()">Quick tips</button>
+                    <button class="add-store-btn" onclick="showAddStoreDialog()">
+                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 5v14M5 12h14" fill="none"></path>
+                        </svg>
+                        Add Store
+                    </button>
+                </div>
             </div>
             
             <!-- Store Management -->
