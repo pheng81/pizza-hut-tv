@@ -133,6 +133,10 @@
     /* Icon inside Add Store */
     .stores-header .add-store-btn .icon { width:16px; height:16px; display:inline-block; }
     .stores-header .add-store-btn .icon path { stroke:#fff; stroke-width:2; stroke-linecap:round; }
+    /* Icon inside Quick tips */
+    .stores-header .stores-actions .quick-tips .icon { width:16px; height:16px; display:inline-block; }
+    .stores-header .stores-actions .quick-tips .icon circle,
+    .stores-header .stores-actions .quick-tips .icon path { stroke: currentColor; stroke-width: 1.8; stroke-linecap:round; stroke-linejoin:round; }
         
         .stores-title {
             font-size: 18px;
@@ -951,7 +955,13 @@
             <div class="stores-header">
                 <div class="stores-title">Stores</div>
                 <div class="stores-actions">
-                    <button class="quick-tips" onclick="showQuickTips()">Quick tips</button>
+                    <button class="quick-tips" onclick="showQuickTips()" aria-label="Quick tips" title="Quick tips">
+                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <circle cx="12" cy="12" r="9" fill="none"></circle>
+                            <path d="M9.75 9a2.25 2.25 0 1 1 3.9 1.5c-.85.9-1.65 1.06-1.65 2.25v.5" fill="none"></path>
+                            <circle cx="12" cy="17" r="1" fill="currentColor"></circle>
+                        </svg>
+                    </button>
                     <button class="add-store-btn" onclick="showAddStoreDialog()">
                         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
                             <path d="M12 5v14M5 12h14" fill="none"></path>
