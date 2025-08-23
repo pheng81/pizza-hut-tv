@@ -195,9 +195,9 @@ class TvDisplayActivity : AppCompatActivity() {
     }
 
     // Mirror server-side scheduling rules so device respects dashboard schedule windows/days
-    fun filterBySchedule(items: List<com.pizzahut.tv.api.PlaylistItem>): List<com.pizzahut.tv.api.PlaylistItem> {
+    fun filterBySchedule(items: List<com.pizzahut.tv.api.PlaylistItem>, nowOverrideMs: Long? = null): List<com.pizzahut.tv.api.PlaylistItem> {
         if (items.isEmpty()) return emptyList()
-    val now = Date()
+    val now = if (nowOverrideMs != null) Date(nowOverrideMs) else Date()
     val cal = Calendar.getInstance().apply { time = now }
     val wd = when (cal.get(Calendar.DAY_OF_WEEK)) {
             Calendar.MONDAY -> "mon"
@@ -289,13 +289,13 @@ class TvDisplayActivity : AppCompatActivity() {
             return true
         }
 
-        val enabled = items.filter { it.enabled != false }
-        // Item-level evaluation: an item is active if ANY of its Extra Windows (enabled) match now,
-        // otherwise evaluated against its primary start/end + days. This mirrors server logic.
+        // Item-level evaluation: an item is active if ANY of its Extra Windows (enabled) match now
+        // regardless of item.enabled. If no extra window is active, then the primary schedule is
+        // evaluated and gated by item.enabled. This matches server pick_active_playlist_item.
         fun isTimeOnly(v: String?): Boolean = v != null && v.length <= 8 && ":" in v && !v.contains("-")
         val active = mutableListOf<com.pizzahut.tv.api.PlaylistItem>()
         val fallback = mutableListOf<com.pizzahut.tv.api.PlaylistItem>()
-        for (it in enabled) {
+        for (it in items) {
             var inAnyWindow = false
             val windows = it.schedule ?: emptyList()
             if (windows.isNotEmpty()) {
@@ -312,17 +312,19 @@ class TvDisplayActivity : AppCompatActivity() {
                 val zeroStartNoEnd = (s != null && isTimeOnly(s) && (s == "0:0:0" || s == "00:00" || s == "00:00:00") && e.isNullOrBlank()) && days.isEmpty()
                 val endAtDayMaxNoStart = (e != null && isTimeOnly(e) && (e == "23:59" || e == "23:59:59") && s.isNullOrBlank()) && days.isEmpty()
                 val nonRestrictive = zeroStartNoEnd || endAtDayMaxNoStart
+                val primaryEnabled = it.enabled != false
                 if (!nonRestrictive) {
-                    if (intervalActive(s, e, days)) active.add(it) else fallback.add(it)
+                    if (primaryEnabled && intervalActive(s, e, days)) active.add(it) else if (primaryEnabled) fallback.add(it)
                 } else {
-                    fallback.add(it)
+                    if (primaryEnabled) fallback.add(it)
                 }
             } else {
-                fallback.add(it)
+                // Always-on primary (no start/end): include only if item is enabled
+                if (it.enabled != false) fallback.add(it)
             }
         }
-        val out = if (active.isNotEmpty()) active else fallback
-        return out.filter { it.repeat != false }
+    if (active.isNotEmpty()) return active
+    return fallback.filter { it.repeat != false }
     }
 }
 
@@ -544,6 +546,8 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
     var scheduleTick: Runnable? = null
     var showNext: (() -> Unit)? = null
     var currentItemFile: String? = null
+    var serverNowMs: Long? = null
+    var serverTimeDeltaMs: Long? = null
     fun cancelScheduled() {
         scheduledRotation?.let {
             imageView.removeCallbacks(it)
@@ -567,7 +571,8 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
         scheduleTick = Runnable {
             try {
                 if (originalItems.isNotEmpty()) {
-                    val newFiltered = filterBySchedule(originalItems)
+                    val nowMs = serverTimeDeltaMs?.let { System.currentTimeMillis() + it }
+                    val newFiltered = filterBySchedule(originalItems, nowMs)
                     val cur = currentItemFile
                     val containsCurrent = cur != null && newFiltered.any { it.file == cur }
                     if (state.items.isEmpty() && newFiltered.isNotEmpty()) {
@@ -592,7 +597,8 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
     fun showAndSchedule() {
         // Re-filter on each step for near real-time schedule flips
         if (originalItems.isNotEmpty()) {
-            val newFiltered = filterBySchedule(originalItems)
+            val nowMs = serverTimeDeltaMs?.let { System.currentTimeMillis() + it }
+            val newFiltered = filterBySchedule(originalItems, nowMs)
             val currentFiles = state.items.mapNotNull { it.file }
             val newFiles = newFiltered.mapNotNull { it.file }
             if (newFiles != currentFiles) {
@@ -823,8 +829,8 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
         showAndSchedule()
     }
 
-    fun applyNewList(all: List<com.pizzahut.tv.api.PlaylistItem>?) {
-        val filtered = filterBySchedule(all ?: emptyList())
+    fun applyNewList(all: List<com.pizzahut.tv.api.PlaylistItem>?, nowOverrideMs: Long?) {
+        val filtered = filterBySchedule(all ?: emptyList(), nowOverrideMs)
         val prevItems = state.items
         val prevFiles = prevItems.mapNotNull { it.file }
         val newFiles = filtered.mapNotNull { it.file }
@@ -854,8 +860,11 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                 val resp = ApiClient.service.getPlaylist(storeId, screenId)
                 val original = resp.playlist ?: emptyList()
                 originalItems = original
+                serverNowMs = resp.serverNowMs
+                serverTimeDeltaMs = resp.serverNowMs?.let { it - System.currentTimeMillis() }
                 // Apply without resetting index if files are the same
-                applyNewList(original)
+                val nowMs = serverTimeDeltaMs?.let { System.currentTimeMillis() + it }
+                applyNewList(original, nowMs)
                 val cnt = state.items.size
                 if (cnt > 0) {
                     binding.message.text = "${cnt} items loaded"
