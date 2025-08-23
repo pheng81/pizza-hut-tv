@@ -284,7 +284,12 @@
             font-weight: bold;
             margin-bottom: 15px;
             text-align: center;
+            display:flex; align-items:center; justify-content:center; gap:8px;
         }
+    .status-dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
+        .status-dot.offline { background:#bbb; box-shadow:0 0 0 0 rgba(0,0,0,0.1); }
+        .status-dot.online { background:#1bcf5a; box-shadow:0 0 8px rgba(27,207,90,0.6); }
+    .status-label { font-size:11px; color:#666; min-width:48px; text-align:left; }
         
         .screen-preview {
             width: 100%;
@@ -1725,6 +1730,8 @@
                     ✕
                 </button>
                 <div class="screen-title">
+                    <span class="status-dot offline" id="status-dot-${screenId}" data-screen-id="${screenId}" title="Offline"></span>
+                    <span class="status-label" id="status-label-${screenId}">Offline</span>
                     <a href="/tv_view/${storeId}/${screenId}" target="_blank" style="text-decoration: none; color: inherit;">
                         ${getScreenDisplayName(screenId)}
                     </a>
@@ -2914,6 +2921,8 @@
                 });
             // After DOM build, ensure auto-refresh timer knows about any new playlist sections
             setupAutoPlaylistRefresh();
+            // Start/restart status polling for this store
+            startStatusPolling(storeId);
         }
         
         function showAddStoreDialog() {
@@ -3088,7 +3097,48 @@
             }
             // Start periodic playlist refresh (master only)
             setupAutoPlaylistRefresh();
+            // Begin status polling for initial store
+            startStatusPolling(currentStoreId);
         });
+
+        // ---- Online/Offline status polling ----
+        let statusPollHandle = null;
+        function startStatusPolling(storeId){
+            if(statusPollHandle){ clearInterval(statusPollHandle); statusPollHandle=null; }
+            if(!storeId) return;
+            // Immediate poll, then every 10s
+            pollScreenStatus(storeId);
+            statusPollHandle = setInterval(()=>pollScreenStatus(storeId), 10000);
+        }
+        function pollScreenStatus(storeId){
+            const url = `/api/screen_status/${storeId}`;
+            fetch(url, { headers: { 'Cache-Control': 'no-cache' } })
+              .then(r=>r.json())
+              .then(data=>{
+                if(!data || data.success===false) return;
+                // Accept either: {status:{sid:'online'}} or {status:{store:{sid:'online'}}}
+                let map = data.status || {};
+                if(map && typeof map === 'object' && map[storeId] && typeof map[storeId] === 'object'){
+                    map = map[storeId];
+                }
+                applyScreenStatus(map || {});
+              })
+              .catch(()=>{/* ignore */});
+        }
+        function applyScreenStatus(statusMap){
+            Object.entries(statusMap).forEach(([sid,state])=>{
+                const dot = document.getElementById(`status-dot-${sid}`);
+                const lbl = document.getElementById(`status-label-${sid}`);
+                if(!dot && !lbl) return;
+                const online = String(state).toLowerCase()==='online';
+                if(dot){
+                    dot.classList.toggle('online', online);
+                    dot.classList.toggle('offline', !online);
+                    dot.title = online? 'Online' : 'Offline';
+                }
+                if(lbl){ lbl.textContent = online? 'Online' : 'Offline'; }
+            });
+        }
 
         // ---- Periodic Auto Refresh of Master Store Playlists ----
         let playlistAutoRefreshHandle = null;
@@ -3131,3 +3181,68 @@
     </div>
 </body>
 </html>
+
+                    fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}/schedule/${index}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({start:sVal,end:eVal})})
+              .then(r=>r.json()).then(d=>{ if(!d.success){ console.warn('Schedule window update failed',d); alert('Failed to update window time'); } else { setTimeout(()=>refreshPlaylist(screenId),150); } })
+              .catch(err=>{ console.error('Window time error',err); alert('Window time error'); });
+                }
+                function deleteScheduleWindow(screenId,itemId,index){
+                    if(!confirm('Delete this window?')) return;
+                    fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}/schedule/${index}`,{method:'DELETE'})
+                      .then(r=>r.json()).then(d=>{ if(d.success){ setTimeout(()=>refreshPlaylist(screenId),100);} else { alert('Delete failed'); } });
+                }
+        // Delegated click for extra window weekday pills
+        document.addEventListener('click', function(ev){
+            const el = ev.target.closest('.weekday-btn[data-bind="wd-window"]');
+            if(!el) return;
+            ev.preventDefault();
+            ev.stopPropagation();
+            const screenId = el.getAttribute('data-screen');
+            const itemId = el.getAttribute('data-item');
+            const index = parseInt(el.getAttribute('data-win-index'),10);
+            const code = el.getAttribute('data-day');
+            if(!screenId || !itemId || isNaN(index) || !code) return;
+            toggleWindowWeekday(screenId, itemId, index, code, el);
+        }, { passive: false });
+        // Toggle per-window enable/disable
+        function toggleWindowEnable(btn, screenId, itemId, index){
+            const isOn = btn.classList.contains('on');
+            const next = !isOn;
+            // Optimistic UI update
+            btn.classList.toggle('on', next);
+            btn.classList.toggle('off', !next);
+            btn.querySelector('span').textContent = next ? 'On' : 'Off';
+            fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}/schedule/${index}`,{
+                method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({enabled: next})
+            }).then(r=>r.json()).then(d=>{
+                if(!d.success){
+                    // revert
+                    btn.classList.toggle('on', isOn);
+                    btn.classList.toggle('off', !isOn);
+                    btn.querySelector('span').textContent = isOn ? 'On' : 'Off';
+                    alert('Failed to update window state');
+                } else {
+                    setTimeout(()=>refreshPlaylist(screenId), 100);
+                }
+            }).catch(()=>{
+                btn.classList.toggle('on', isOn);
+                btn.classList.toggle('off', !isOn);
+                btn.querySelector('span').textContent = isOn ? 'On' : 'Off';
+                alert('Network error updating state');
+            });
+        }
+        function toggleItemWeekday(screenId,itemId,code,el){
+            const parent = document.getElementById(`wd-primary-${screenId}-${itemId}`);
+            if(!parent) return;
+            const btns=[...parent.querySelectorAll('.weekday-btn')];
+            if(el){ el.classList.toggle('active'); }
+            const days=btns.filter(b=>b.classList.contains('active')).map(b=>b.getAttribute('data-day'));
+            fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({days:days})}).then(r=>r.json()).then(d=>{ if(!d.success){ alert('Failed to update days'); } });
+        }
+        function addScheduleWindow(screenId,itemId){
+                    fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}/schedule`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({start:null,end:null})})
+                      .then(r=>r.json()).then(d=>{ if(d.success){ setTimeout(()=>refreshPlaylist(screenId),120);} else { alert('Failed add window'); }});
+                }
+          function updateScheduleWinDateTime(screenId,itemId,index){
+                    const sd=document.getElementById(`sw-${screenId}-${itemId}-${index}-sd`);
+                    const st=document.getElementById(`sw-${screenId}-${itemId}-${index}-st`);

@@ -1,6 +1,8 @@
 package com.pizzahut.tv.api
 
+import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.POST
 import retrofit2.http.Path
 
 interface ApiService {
@@ -17,5 +19,8 @@ interface ApiService {
 	suspend fun getScreens(
 		@Path("storeId") storeId: String
 	): ScreensResponse
+
+	@POST("api/screen_heartbeat")
+	suspend fun sendHeartbeat(@Body body: HeartbeatReq): HeartbeatResp
 }
 

@@ -224,13 +224,10 @@
             "repeat": true,
             "link_next": false,
             "media_type": "video",
-            "schedule": [
-              {
-                "start": null,
-                "end": null
-              }
-            ],
-            "days": []
+            "schedule": [],
+            "days": [
+              "wed"
+            ]
           },
           {
             "id": "fb77e66b-1247-4b4f-9de4-d7a52b43d662",
@@ -238,16 +235,29 @@
             "enabled": true,
             "start": null,
             "end": null,
-            "schedule": [],
+            "schedule": [
+              {
+                "start": null,
+                "end": null,
+                "days": [
+                  "fri"
+                ],
+                "enabled": true
+              }
+            ],
             "duration": 5,
             "repeat": true,
             "link_next": false,
-            "media_type": "image"
+            "media_type": "image",
+            "days": [
+              "fri",
+              "sat"
+            ]
           },
           {
             "id": "049a8902-5b39-4395-9805-2976a555b20a",
             "file": "7428d2a9-5bfd-458b-b82c-52f71f170968.jpg",
-            "enabled": true,
+            "enabled": false,
             "start": null,
             "end": null,
             "schedule": [],
@@ -262,7 +272,8 @@
           "last_ts": 1755574969
         },
         "protected": true,
-        "refresh_seq": 6
+        "refresh_seq": 6,
+        "last_seen": 1755926695
       },
       "1112_promo1": {
         "file": "93c6b50a-e75f-4986-bed6-fa6d049f9d60.png",
@@ -280,7 +291,10 @@
             "repeat": true,
             "link_next": false,
             "media_type": "image",
-            "schedule": []
+            "schedule": [],
+            "days": [
+              "wed"
+            ]
           }
         ],
         "rotation_meta": {
@@ -316,7 +330,7 @@
             "start": null,
             "end": null,
             "schedule": [],
-            "duration": 4,
+            "duration": 2,
             "repeat": true,
             "link_next": false,
             "media_type": "image",
@@ -331,7 +345,14 @@
             "enabled": true,
             "start": null,
             "end": null,
-            "schedule": [],
+            "schedule": [
+              {
+                "start": null,
+                "end": null,
+                "days": [],
+                "enabled": true
+              }
+            ],
             "duration": 4,
             "repeat": true,
             "link_next": false,
@@ -368,25 +389,44 @@
         }
       },
       "1112_screen3": {
-        "file": "ffca9718-d763-4232-8640-5389a7c55c64.png",
+        "file": "747994a8-9471-4f0a-ba9b-0c815576409c.png",
         "vertical": false,
         "horizontal": false,
         "rotation": 0,
         "protected": false,
         "playlist": [
           {
-            "id": "178c87cd-9a16-4375-9f49-7d0fdcc3051f",
-            "file": "ffca9718-d763-4232-8640-5389a7c55c64.png",
+            "id": "cf0fca03-82a5-46f7-866a-8857514be2ca",
+            "file": "747994a8-9471-4f0a-ba9b-0c815576409c.png",
             "enabled": true,
             "start": null,
             "end": null,
-            "schedule": [],
-            "duration": 17,
+            "schedule": [
+              {
+                "start": null,
+                "end": null,
+                "days": [],
+                "enabled": true
+              }
+            ],
+            "duration": 7,
             "repeat": true,
             "link_next": false,
             "media_type": "image"
           }
         ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1112_screen4": {
+        "file": null,
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [],
         "rotation_meta": {
           "last_index": 0,
           "last_ts": 0
