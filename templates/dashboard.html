@@ -895,6 +895,8 @@
     .timepicker .tp-actions { display:flex; justify-content:flex-end; gap:6px; margin-top:10px; }
     .timepicker button { border:1px solid #c3c7cb; background:#fff; border-radius:6px; padding:4px 10px; font-size:12px; cursor:pointer; }
     .timepicker button.apply { background:#2684ff; border-color:#2684ff; color:#fff; }
+    /* Ensure secondary button inside timepicker shows text clearly (override generic button bg) */
+    .timepicker .tp-actions .btn-secondary { background:#6c757d; border-color:#6c757d; color:#fff; }
     .tp-input { cursor:pointer; background:#fff; }
     /* Weekday selector */
     .weekday-row { display:flex; gap:3px; flex-wrap:nowrap; margin-bottom:4px; }
