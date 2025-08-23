@@ -92,7 +92,13 @@
             font-variant-ligatures: common-ligatures contextual;
             -webkit-font-smoothing: antialiased;
             text-rendering: optimizeLegibility;
+            display: inline-flex;
+            align-items: center;
         }
+        .stores-title .tv-icons { display:inline-flex; align-items:center; gap:6px; margin-left:8px; }
+        .stores-title .tv-icon { width:22px; height:22px; color:#1d1d1f; opacity:.8; }
+        .stores-title .tv-icon rect,
+        .stores-title .tv-icon path { stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; fill: none; }
         /* Apple-like primary button */
         .stores-header .add-store-btn {
             appearance: none;
@@ -153,6 +159,8 @@
             line-height: 1.1;
             letter-spacing: 0;
             font-variant-ligatures: common-ligatures contextual;
+            display: inline-flex;
+            align-items: center;
         }
         
         .search-box {
@@ -984,7 +992,20 @@
     <div class="container">
         <div class="stores-section">
             <div class="stores-header">
-                <div class="stores-title">Store Face</div>
+                <div class="stores-title">Store Face
+                    <span class="tv-icons" aria-hidden="true">
+                        <svg class="tv-icon" viewBox="0 0 24 24" role="img" focusable="false">
+                            <rect x="3" y="6" width="18" height="11" rx="2" ry="2"></rect>
+                            <path d="M8 4l4 3 4-3"></path>
+                            <path d="M8 19h8"></path>
+                        </svg>
+                        <svg class="tv-icon" viewBox="0 0 24 24" role="img" focusable="false">
+                            <rect x="3" y="6" width="18" height="11" rx="2" ry="2"></rect>
+                            <path d="M12 10h4M8 14h8"></path>
+                            <path d="M8 19h8"></path>
+                        </svg>
+                    </span>
+                </div>
                 <div class="stores-actions">
                     <button class="quick-tips" onclick="showQuickTips()" aria-label="Quick tips" title="Quick tips">
                         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
