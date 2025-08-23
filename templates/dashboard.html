@@ -94,6 +94,8 @@
             gap: 20px;
             margin-bottom: 20px;
         }
+    /* Push Quick tips to the right side inside the Stores header */
+    .stores-header .quick-tips { margin-left: auto; }
         
         .stores-title {
             font-size: 18px;
@@ -915,8 +917,8 @@
         <div class="stores-section">
             <div class="stores-header">
                 <div class="stores-title">Stores</div>
-                <div class="quick-tips" onclick="showQuickTips()">Quick tips</div>
                 <button class="add-store-btn" onclick="showAddStoreDialog()">➕ Add Store</button>
+                <div class="quick-tips" onclick="showQuickTips()">Quick tips</div>
             </div>
             
             <!-- Store Management -->
