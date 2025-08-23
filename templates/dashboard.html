@@ -82,10 +82,16 @@
             padding-left: 15px; /* align with .store-management inner padding */
         }
         .stores-title {
-            font-size: 20px;
-            font-weight: 700;
+            /* Larger, script-like “running word” style */
+            font-family: 'Brush Script MT', 'Segoe Script', 'Lucida Handwriting', 'Comic Sans MS', cursive;
+            font-size: 36px;
+            font-weight: 500;
             color: #1d1d1f;
-            letter-spacing: -0.01em;
+            line-height: 1.1;
+            letter-spacing: 0;
+            font-variant-ligatures: common-ligatures contextual;
+            -webkit-font-smoothing: antialiased;
+            text-rendering: optimizeLegibility;
         }
         /* Apple-like primary button */
         .stores-header .add-store-btn {
@@ -140,8 +146,13 @@
     .stores-header .stores-actions .quick-tips .icon path { stroke: currentColor; stroke-width: 1.8; stroke-linecap:round; stroke-linejoin:round; }
         
         .stores-title {
-            font-size: 18px;
-            font-weight: bold;
+            /* Reinforce the script style in case of cascading overrides */
+            font-family: 'Brush Script MT', 'Segoe Script', 'Lucida Handwriting', 'Comic Sans MS', cursive;
+            font-size: 36px;
+            font-weight: 500;
+            line-height: 1.1;
+            letter-spacing: 0;
+            font-variant-ligatures: common-ligatures contextual;
         }
         
         .search-box {
