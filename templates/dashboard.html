@@ -98,6 +98,7 @@
     .stores-title .tv-icons { display:inline-flex; align-items:center; gap:6px; margin-left:8px; }
     .stores-title .tv-icon { width:22px; height:22px; color:#1d1d1f; opacity:.9; display:inline-block; }
     .stores-title .tv-img { width:24px; height:24px; display:inline-block; vertical-align:middle; border-radius:4px; }
+    .stores-title .tv-svg { width:36px; height:36px; display:inline-block; vertical-align:middle; }
         /* Apple-like primary button */
         .stores-header .add-store-btn {
             appearance: none;
@@ -991,11 +992,23 @@
     <div class="container">
         <div class="stores-section">
             <div class="stores-header">
-                <div class="stores-title">Store Face
-                    <span class="tv-icons" aria-hidden="true">
-                        <img class="tv-img" src="/static/icons/display-hanging.svg" alt="Display" />
-                    </span>
-                </div>
+                                <div class="stores-title">Store Face
+                                        <span class="tv-icons" aria-hidden="true">
+                                                <!-- Inline animated SVG so the blink animation runs in all browsers -->
+                                                <svg class="tv-svg" width="24" height="24" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+                                                    <rect x="30" y="40" width="140" height="100" rx="12" ry="12" fill="#f5f5f5" stroke="#333" stroke-width="4"/>
+                                                    <line x1="100" y1="10" x2="100" y2="40" stroke="#333" stroke-width="4"/>
+                                                    <circle cx="100" cy="10" r="6" fill="#333"/>
+                                                    <circle id="eye-left" cx="70" cy="80" r="8" fill="#333"/>
+                                                    <circle id="eye-right" cx="130" cy="80" r="8" fill="#333"/>
+                                                    <path d="M70 110 Q100 140 130 110" stroke="#333" stroke-width="5" fill="transparent"/>
+                                                    <style>
+                                                        @keyframes blink { 0%, 90%, 100% { r: 8; } 92%, 98% { r: 1; } }
+                                                        #eye-left, #eye-right { animation: blink 4s infinite; }
+                                                    </style>
+                                                </svg>
+                                        </span>
+                                </div>
                 <div class="stores-actions">
                     <button class="quick-tips" onclick="showQuickTips()" aria-label="Quick tips" title="Quick tips">
                         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
