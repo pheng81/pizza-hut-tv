@@ -401,7 +401,7 @@ def pick_active_playlist_item(screen, parent_config=None, store_id=None, screen_
             ws = we.replace(hour=0, minute=0, second=0, microsecond=0)
 
         time_only = (is_time_only(raw_s) or is_time_only(raw_e))
-    if ws and we:
+        if ws and we:
             if we < ws:
                 if not time_only and ws.date() == we.date():
                     we_plus = we + timedelta(days=1)
