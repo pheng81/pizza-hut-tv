@@ -1336,7 +1336,14 @@ def add_schedule_window(store_id, screen_id, item_id):
     if not screen:
         return jsonify({'success': False, 'error': 'screen not found'}), 404
     payload = request.get_json() or {}
-    win = {'start': payload.get('start'), 'end': payload.get('end')}
+    # Accept optional days array; default to [] (meaning all days)
+    valid_days = {'mon','tue','wed','thu','fri','sat','sun'}
+    days = payload.get('days') or []
+    if isinstance(days, list):
+        days = [d for d in days if isinstance(d, str) and d.lower() in valid_days]
+    else:
+        days = []
+    win = {'start': payload.get('start'), 'end': payload.get('end'), 'days': days}
     for it in screen.get('playlist', []):
         if it.get('id') == item_id:
             sched = it.setdefault('schedule', [])
@@ -1358,6 +1365,13 @@ def update_schedule_window(store_id, screen_id, item_id, index):
             if 0 <= index < len(sched):
                 if 'start' in payload: sched[index]['start'] = payload.get('start')
                 if 'end' in payload: sched[index]['end'] = payload.get('end')
+                if 'days' in payload:
+                    valid_days = {'mon','tue','wed','thu','fri','sat','sun'}
+                    days = payload.get('days') or []
+                    if isinstance(days, list):
+                        sched[index]['days'] = [d for d in days if isinstance(d, str) and d.lower() in valid_days]
+                    else:
+                        sched[index]['days'] = []
                 save_store_config(cfg)
                 return jsonify({'success': True})
             return jsonify({'success': False, 'error': 'index out of range'}), 400

@@ -2282,6 +2282,12 @@
                         st = normTime(st); et = normTime(et);
                         const ws = parseISOorTime(win.start); const we = parseISOorTime(win.end);
                         const activeCls = activeWindow(ws,we)? 'highlight-active':'';
+                        const daysArr = Array.isArray(win.days)? win.days : [];
+                        const weekdayBtns = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((d,i)=>{
+                            const code=d.toLowerCase().slice(0,3);
+                            const active=daysArr.includes(code)?'active':'';
+                            return `<div class=\"weekday-btn ${active}\" data-day=\"${code}\" onclick=\"toggleWindowWeekday('${screenId}','${item.id}',${idx},'${code}',this)\">${d[0]}</div>`;
+                        }).join('');
                         return `<div class="sched-win">
                             <div class="schedule-extra-row one-row">
                                 <div class="slot-box dual ${activeCls}">
@@ -2300,6 +2306,10 @@
                                         </div>
                                     </div>
                                 </div>
+                            </div>
+                            <div style="margin:6px 2px 2px;font-size:11px;font-weight:600;color:#555;display:flex;align-items:center;gap:6px;">
+                                <span style="letter-spacing:.3px;">Repeat:</span>
+                                <div class="weekday-row" id="wd-window-${screenId}-${item.id}-${idx}">${weekdayBtns}</div>
                             </div>
                             <div class="pl-actions inline-actions window-actions">\
                                 <div class="group">\
@@ -2320,6 +2330,23 @@
                         </div>`;
                     };
                         return `<div class=\"sched-extra-label\">Extra Windows</div>` + item.schedule.map((w,i)=>makeRow(w,i)).join('');
+                }
+                // Toggle a weekday for a specific extra window
+                function toggleWindowWeekday(screenId,itemId,index,code,el){
+                    const parent = document.getElementById(`wd-window-${screenId}-${itemId}-${index}`);
+                    if(!parent) return;
+                    const current = Array.from(parent.querySelectorAll('.weekday-btn.active')).map(x=>x.getAttribute('data-day'));
+                    let days = new Set(current);
+                    if(days.has(code)) days.delete(code); else days.add(code);
+                    // Update UI immediately
+                    if(el) el.classList.toggle('active');
+                    fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}/schedule/${index}`,{
+                        method:'PATCH',
+                        headers:{'Content-Type':'application/json'},
+                        body: JSON.stringify({ days: Array.from(days) })
+                    }).then(r=>r.json()).then(d=>{
+                        if(!d.success){ alert('Failed to update repeat days'); if(el) el.classList.toggle('active'); }
+                    }).catch(()=>{ if(el) el.classList.toggle('active'); alert('Network error updating days'); });
                 }
                 function addScheduleWindow(screenId,itemId){
                     fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}/schedule`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({start:null,end:null})})
