@@ -7,6 +7,17 @@ import shutil
 from datetime import datetime, time as dtime, timedelta
 import logging
 import time
+from typing import Optional
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# Optional boto3 for R2 (S3-compatible)
+try:
+    import boto3
+    from botocore.config import Config as BotoConfig
+except Exception:
+    boto3 = None
 
 # -------- Early logging to file for startup diagnostics (captures silent exits) --------
 LOG_FILE = 'startup_log.txt'
@@ -28,6 +39,86 @@ app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-this'
 print('DEBUG: app.py initialization start', flush=True)
 logging.debug('App module import start')
+
+# --- Media base URL (for external/CDN like Cloudflare R2) ---
+def get_media_base_url():
+    """Return the base URL for serving media files.
+    - If R2 is not configured, force local '/static/uploads/'.
+    - If R2 is configured, use MEDIA_BASE_URL when provided; otherwise fallback to local.
+    Ensures trailing slash.
+    """
+    if not r2_enabled():
+        base = '/static/uploads/'
+    else:
+        base = os.environ.get('MEDIA_BASE_URL') or '/static/uploads/'
+    if not base.endswith('/'):
+        base += '/'
+    return base
+
+def _is_abs(u: str) -> bool:
+    try:
+        return isinstance(u, str) and (u.startswith('http://') or u.startswith('https://'))
+    except Exception:
+        return False
+
+def build_public_url(filename: str) -> str | None:
+    if not filename:
+        return None
+    if _is_abs(filename):
+        return filename
+    # Already rooted path coming from our app? return as-is
+    try:
+        if isinstance(filename, str) and (filename.startswith('/static/') or filename.startswith('/media/')):
+            return filename
+    except Exception:
+        pass
+    return get_media_base_url() + filename
+
+# --- R2 (S3-compatible) integration ---
+def r2_enabled() -> bool:
+    return bool(
+        os.environ.get('R2_BUCKET_NAME') and os.environ.get('R2_ENDPOINT_URL') and os.environ.get('R2_ACCESS_KEY_ID') and os.environ.get('R2_SECRET_ACCESS_KEY') and boto3 is not None
+    )
+
+_s3_client = None
+def get_s3_client():
+    global _s3_client
+    if _s3_client is not None:
+        return _s3_client
+    if not r2_enabled():
+        return None
+    _s3_client = boto3.client(
+        's3',
+        aws_access_key_id=os.environ['R2_ACCESS_KEY_ID'],
+        aws_secret_access_key=os.environ['R2_SECRET_ACCESS_KEY'],
+        endpoint_url=os.environ['R2_ENDPOINT_URL'],
+        config=BotoConfig(signature_version='s3v4')
+    )
+    return _s3_client
+
+def r2_put_bytes(key: str, data: bytes, content_type: Optional[str] = None):
+    s3 = get_s3_client()
+    if not s3:
+        raise RuntimeError('R2 not configured')
+    extra = {}
+    if content_type:
+        extra['ContentType'] = content_type
+    s3.put_object(Bucket=os.environ['R2_BUCKET_NAME'], Key=key, Body=data, **extra)
+
+def r2_delete_object(key: str):
+    s3 = get_s3_client()
+    if not s3:
+        raise RuntimeError('R2 not configured')
+    s3.delete_object(Bucket=os.environ['R2_BUCKET_NAME'], Key=key)
+
+def r2_list_objects(prefix: str = ''):
+    s3 = get_s3_client()
+    if not s3:
+        raise RuntimeError('R2 not configured')
+    paginator = s3.get_paginator('list_objects_v2')
+    for page in paginator.paginate(Bucket=os.environ['R2_BUCKET_NAME'], Prefix=prefix):
+        for obj in page.get('Contents', []) or []:
+            yield obj
 
 # --- Screen heartbeat + status (placed after app initialization) ---
 HEARTBEAT_TIMEOUT = 60  # seconds
@@ -345,10 +436,10 @@ def pick_active_playlist_item(screen, parent_config=None, store_id=None, screen_
         return screen.get('file')
     # Use local server time (was UTC) so user-entered wall-clock times align with expectations
     now = datetime.now()
-    # Evaluate all items; primary schedule respects item.enabled,
-    # but Extra Windows can activate the item independently (per-window enabled flag).
-    scheduled = []  # items currently in any active window (primary or extra)
-    fallback = []   # items available as fallback rotation when no windows active
+    # Base enabled list (user toggle). Windows will not force-on disabled items.
+    enabled = [i for i in pl if i.get('enabled', True)]
+    scheduled = []
+    fallback = []
     def interval_active(raw_s, raw_e, now, days=None):
         """Return True if now is inside the interval defined by raw_s/raw_e.
         Accepts:
@@ -392,14 +483,6 @@ def pick_active_playlist_item(screen, parent_config=None, store_id=None, screen_
             # end is date-only, no start -> clamp start to start-of-day
             ws = we.replace(hour=0, minute=0, second=0, microsecond=0)
 
-        # Normalize time-only single-sided inputs to same-day window
-        # start-only HH:MM[:SS] -> active until 23:59:59 of the same day
-        if (raw_s and is_time_only(raw_s)) and not raw_e and ws:
-            we = ws.replace(hour=23, minute=59, second=59, microsecond=999999)
-        # end-only HH:MM[:SS] -> active from 00:00:00 of the same day
-        if (raw_e and is_time_only(raw_e)) and not raw_s and we:
-            ws = we.replace(hour=0, minute=0, second=0, microsecond=0)
-
         time_only = (is_time_only(raw_s) or is_time_only(raw_e))
         if ws and we:
             if we < ws:
@@ -414,35 +497,30 @@ def pick_active_playlist_item(screen, parent_config=None, store_id=None, screen_
             return False
         return True
 
-    for item in pl:
+    for item in enabled:
         st_raw = item.get('start')
         en_raw = item.get('end')
         schedule_windows = item.get('schedule') or []  # list of {'start':..., 'end':...}
         in_any_window = False
-        # Extra windows: if any enabled window is active now (by its own days), the item is scheduled
+        # Evaluate multi windows first; if any valid, treat as scheduled
         if schedule_windows:
             for win in schedule_windows:
-                if not win.get('enabled', True):
-                    continue
                 if interval_active(win.get('start'), win.get('end'), now, win.get('days')):
                     in_any_window = True
                     break
-        # Primary schedule: only when the item itself is enabled
-        primary_enabled = item.get('enabled', True)
-        primary_active = False
-        if st_raw or en_raw:
-            primary_active = primary_enabled and interval_active(st_raw, en_raw, now, item.get('days'))
-        else:
-            # Always-on primary (no start/end): treat as fallback when enabled
-            if primary_enabled:
-                fallback.append(item)
-        # Decide current status
-        if in_any_window or primary_active:
+        if in_any_window:
             scheduled.append(item)
-        elif (st_raw or en_raw):
-            # Primary interval exists but not currently active -> fallback pool
+            continue
+        if st_raw or en_raw:
+            if interval_active(st_raw, en_raw, now, item.get('days')):
+                scheduled.append(item)
+            else:
+                fallback.append(item)
+        elif item.get('enabled', True):
             fallback.append(item)
-    # If no explicit scheduled windows right now, use fallback respecting repeat
+        else:
+            fallback.append(item)
+    # If no explicit scheduled windows right now, use enabled fallback respecting repeat
     active_set = scheduled if scheduled else [i for i in fallback if i.get('repeat', True)]
     if not active_set:
         return None
@@ -488,7 +566,7 @@ def dashboard():
         print("DEBUG: Config loaded successfully")
         print(f"DEBUG: Config has {len(config.get('stores', []))} stores")
         print("DEBUG: Rendering template...")
-        return render_template('dashboard.html', config=config)
+        return render_template('dashboard.html', config=config, media_base_url=get_media_base_url())
     except Exception as e:
         print(f"DEBUG: Error in dashboard route: {e}")
         import traceback
@@ -527,9 +605,16 @@ def upload_to_screen():
     if file and allowed_file(file.filename):
         # Generate unique filename
         filename = str(uuid.uuid4()) + '.' + file.filename.rsplit('.', 1)[1].lower()
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
-        print(f"[upload_to_screen] Saved as {filename} -> {filepath}")
+        # Detect content-type
+        content_type = file.mimetype or 'application/octet-stream'
+        if r2_enabled():
+            data = file.read()
+            r2_put_bytes(filename, data, content_type)
+            print(f"[upload_to_screen] Uploaded to R2 as {filename}")
+        else:
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(filepath)
+            print(f"[upload_to_screen] Saved as {filename} -> {filepath}")
 
         # Update configuration
         config = ensure_playlists_structure(load_store_config())
@@ -592,16 +677,17 @@ def upload_to_screen():
             message += f'. Created {len(created_screens)} missing screens'
         if skipped_stores:
             message += f'. Skipped {len(skipped_stores)} protected stores'
-        return jsonify({'success': True,
-                         'filename': filename,
-                         'media_type': classify_media(filename),
-                         'store_id': store_id,
-                         'screen_id': screen_id,
-                         'applied_to_all': True,
-                         'updated_stores': updated_stores,
-                         'skipped_stores': skipped_stores,
-                         'created_screens': created_screens,
-                         'message': message})
+    return jsonify({'success': True,
+             'filename': filename,
+             'url': build_public_url(filename),
+             'media_type': classify_media(filename),
+             'store_id': store_id,
+             'screen_id': screen_id,
+             'applied_to_all': True,
+             'updated_stores': updated_stores,
+             'skipped_stores': skipped_stores,
+             'created_screens': created_screens,
+             'message': message})
     # Single-store path
     if store_id in config['screens'] and screen_id in config['screens'][store_id]:
         screen_obj = config['screens'][store_id][screen_id]
@@ -613,6 +699,7 @@ def upload_to_screen():
         print(f"[upload_to_screen] Single-store success store={store_id} screen={screen_id} file={filename} playlist_len={len(pl)}")
     return jsonify({'success': True,
             'filename': filename,
+            'url': build_public_url(filename),
             'media_type': classify_media(filename),
             'store_id': store_id,
             'screen_id': screen_id,
@@ -757,11 +844,21 @@ def delete_from_screen():
         if force_delete and filename:
             print(f"Processing force delete for filename: {filename}")
             try:
-                # Remove file from filesystem
-                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                if os.path.exists(filepath):
-                    os.remove(filepath)
-                    print(f"Force deleted file: {filepath}")
+                # Remove file from storage
+                removed_physical = False
+                if r2_enabled():
+                    try:
+                        r2_delete_object(filename)
+                        removed_physical = True
+                        print(f"Force deleted R2 object: {filename}")
+                    except Exception as e:
+                        print(f"R2 force delete failed (continuing): {e}")
+                else:
+                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    if os.path.exists(filepath):
+                        os.remove(filepath)
+                        removed_physical = True
+                        print(f"Force deleted file: {filepath}")
                 
                 # Remove file from all screens that use it
                 for sid, screens in config['screens'].items():
@@ -802,12 +899,19 @@ def delete_from_screen():
 
                 # Only remove the physical file if no other screen uses it
                 if not still_in_use:
-                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], current_filename)
-                    if os.path.exists(filepath):
-                        os.remove(filepath)
-                        print(f"Deleted physical file: {filepath}")
+                    if r2_enabled():
+                        try:
+                            r2_delete_object(current_filename)
+                            print(f"Deleted R2 object: {current_filename}")
+                        except Exception as de:
+                            print(f"R2 delete failed: {de}")
                     else:
-                        print(f"Physical file already missing: {filepath}")
+                        filepath = os.path.join(app.config['UPLOAD_FOLDER'], current_filename)
+                        if os.path.exists(filepath):
+                            os.remove(filepath)
+                            print(f"Deleted physical file: {filepath}")
+                        else:
+                            print(f"Physical file already missing: {filepath}")
                 else:
                     print(f"Skipping physical delete; file shared by other screens")
 
@@ -1246,54 +1350,107 @@ def delete_store():
 def get_playlist(store_id, screen_id):
     print(f"DEBUG: GET /playlist {store_id} {screen_id}")
     cfg = ensure_playlists_structure(load_store_config())
-    screen = cfg.get('screens', {}).get(store_id, {}).get(screen_id)
+    screens = cfg.get('screens', {}).get(store_id, {})
+    screen = screens.get(screen_id)
     if not screen:
-        print("DEBUG: Screen not found for playlist")
-        return jsonify({'success': False, 'error': 'screen not found'}), 404
-    # Auto-clean missing-file items
-    original = screen.get('playlist', [])
-    cleaned = []
-    removed = 0
-    for item in original:
-        f = item.get('file')
-        if f:
-            path = os.path.join(app.config['UPLOAD_FOLDER'], f)
-            if not os.path.exists(path):
-                removed += 1
-                continue
-        cleaned.append(item)
-    if removed:
-        screen['playlist'] = cleaned
-        save_store_config(cfg)
-        print(f"DEBUG: Auto-removed {removed} missing file playlist items")
+        # Try mapping between legacy short and store-prefixed IDs
+        alt = None
+        if '_' in screen_id:
+            short = screen_id.split('_', 1)[1]
+            alt = screens.get(short)
+            if alt is not None:
+                screen_id = short
+        else:
+            prefixed = f"{store_id}_{screen_id}"
+            alt = screens.get(prefixed)
+            if alt is not None:
+                screen_id = prefixed
+        screen = alt
+    if not screen:
+        # If store exists, create the screen with defaults to avoid frontend errors
+        if store_id in cfg.get('screens', {}):
+            target_id = screen_id if '_' in screen_id else f"{store_id}_{screen_id}"
+            print(f"DEBUG: Auto-creating missing screen {target_id} in store {store_id}")
+            is_promo = target_id.split('_',1)[-1].startswith('promo') if '_' in target_id else target_id.startswith('promo')
+            screens[target_id] = {
+                'file': None,
+                'vertical': True if is_promo else False,
+                'horizontal': False if is_promo else False,
+                'rotation': 0,
+                'protected': False,
+                'playlist': []
+            }
+            save_store_config(cfg)
+            screen_id = target_id
+            screen = screens[target_id]
+        else:
+            print("DEBUG: Screen not found for playlist (after mapping)")
+            return jsonify({'success': False, 'error': 'screen not found'}), 404
+    # Auto-clean missing-file items (local disk only)
+    if not r2_enabled():
+        original = screen.get('playlist', [])
+        cleaned = []
+        removed = 0
+        for item in original:
+            f = item.get('file')
+            if f:
+                path = os.path.join(app.config['UPLOAD_FOLDER'], f)
+                if not os.path.exists(path):
+                    removed += 1
+                    continue
+            cleaned.append(item)
+        if removed:
+            screen['playlist'] = cleaned
+            save_store_config(cfg)
+            print(f"DEBUG: Auto-removed {removed} missing file playlist items")
     pl = screen.get('playlist', [])
-    print(f"DEBUG: Returning playlist items: {len(pl)}")
-    # Include server time so devices can evaluate schedule windows with server clock
-    try:
-        now_ms = int(time.time() * 1000)
-    except Exception:
-        now_ms = int(datetime.now().timestamp() * 1000)
-    return jsonify({'success': True, 'playlist': pl, 'server_now_ms': now_ms})
+    # Decorate with public URL for clients that support absolute URLs
+    out = []
+    for item in pl:
+        try:
+            it = dict(item)
+            it['url'] = build_public_url(it.get('file'))
+            out.append(it)
+        except Exception:
+            out.append(item)
+    print(f"DEBUG: Returning playlist items: {len(out)}")
+    return jsonify({'success': True, 'playlist': out})
 
 # ---- Media library listing (for choosing existing uploads) ----
 @app.route('/library')
 def list_library():
     try:
         files = []
-        folder = app.config['UPLOAD_FOLDER']
-        for name in os.listdir(folder):
-            path = os.path.join(folder, name)
-            if not os.path.isfile(path):
-                continue
-            if not allowed_file(name):
-                continue
-            stat = os.stat(path)
-            files.append({
-                'name': name,
-                'media_type': classify_media(name),
-                'size': stat.st_size,
-                'mtime': int(stat.st_mtime)
-            })
+        if r2_enabled():
+            for obj in r2_list_objects():
+                name = obj.get('Key')
+                if not name or not allowed_file(name):
+                    continue
+                size = int(obj.get('Size') or 0)
+                mtime = int(obj.get('LastModified').timestamp()) if obj.get('LastModified') else 0
+                files.append({
+                    'name': name,
+                    'media_type': classify_media(name),
+                    'size': size,
+                    'mtime': mtime,
+                    'url': build_public_url(name)
+                })
+        else:
+            folder = app.config['UPLOAD_FOLDER']
+            for name in os.listdir(folder):
+                path = os.path.join(folder, name)
+                if not os.path.isfile(path):
+                    continue
+                if not allowed_file(name):
+                    continue
+                stat = os.stat(path)
+                files.append({
+                    'name': name,
+                    'media_type': classify_media(name),
+                    'size': stat.st_size,
+                    'mtime': int(stat.st_mtime),
+                    'url': build_public_url(name)
+                })
         # Sort by most recent first
         files.sort(key=lambda x: x['mtime'], reverse=True)
         return jsonify({'success': True, 'files': files})

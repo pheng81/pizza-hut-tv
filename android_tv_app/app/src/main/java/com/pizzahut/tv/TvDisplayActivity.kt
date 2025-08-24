@@ -195,9 +195,9 @@ class TvDisplayActivity : AppCompatActivity() {
     }
 
     // Mirror server-side scheduling rules so device respects dashboard schedule windows/days
-    fun filterBySchedule(items: List<com.pizzahut.tv.api.PlaylistItem>, nowOverrideMs: Long? = null): List<com.pizzahut.tv.api.PlaylistItem> {
+    fun filterBySchedule(items: List<com.pizzahut.tv.api.PlaylistItem>): List<com.pizzahut.tv.api.PlaylistItem> {
         if (items.isEmpty()) return emptyList()
-    val now = if (nowOverrideMs != null) Date(nowOverrideMs) else Date()
+    val now = Date()
     val cal = Calendar.getInstance().apply { time = now }
     val wd = when (cal.get(Calendar.DAY_OF_WEEK)) {
             Calendar.MONDAY -> "mon"
@@ -289,50 +289,44 @@ class TvDisplayActivity : AppCompatActivity() {
             return true
         }
 
-        // Item-level evaluation: an item is active if ANY of its Extra Windows (enabled) match now
-        // regardless of item.enabled. If no extra window is active, then the primary schedule is
-        // evaluated and gated by item.enabled. This matches server pick_active_playlist_item.
-        fun isTimeOnly(v: String?): Boolean = v != null && v.length <= 8 && ":" in v && !v.contains("-")
-        val active = mutableListOf<com.pizzahut.tv.api.PlaylistItem>()
+        val enabled = items.filter { it.enabled != false }
+        val scheduled = mutableListOf<com.pizzahut.tv.api.PlaylistItem>()
         val fallback = mutableListOf<com.pizzahut.tv.api.PlaylistItem>()
-        for (it in items) {
-            var inAnyWindow = false
+        for (it in enabled) {
             val windows = it.schedule ?: emptyList()
+            var inWin = false
             if (windows.isNotEmpty()) {
-                for (w in windows) {
-                    val wEnabled = w.enabled ?: true
-                    if (!wEnabled) continue
-                    if (intervalActive(w.start, w.end, w.days)) { inAnyWindow = true; break }
-                }
+                for (w in windows) { if (intervalActive(w.start, w.end, w.days)) { inWin = true; break } }
             }
-            if (inAnyWindow) { active.add(it); continue }
-            val s = it.start?.trim(); val e = it.end?.trim(); val days = it.days ?: emptyList()
-            if (!s.isNullOrBlank() || !e.isNullOrBlank()) {
-                // Treat neutral ranges like 00:00.. or ..23:59 without days as non-restrictive -> fallback
-                val zeroStartNoEnd = (s != null && isTimeOnly(s) && (s == "0:0:0" || s == "00:00" || s == "00:00:00") && e.isNullOrBlank()) && days.isEmpty()
-                val endAtDayMaxNoStart = (e != null && isTimeOnly(e) && (e == "23:59" || e == "23:59:59") && s.isNullOrBlank()) && days.isEmpty()
-                val nonRestrictive = zeroStartNoEnd || endAtDayMaxNoStart
-                val primaryEnabled = it.enabled != false
-                if (!nonRestrictive) {
-                    if (primaryEnabled && intervalActive(s, e, days)) active.add(it) else if (primaryEnabled) fallback.add(it)
+            if (inWin) { scheduled.add(it); continue }
+            if (!it.start.isNullOrBlank() || !it.end.isNullOrBlank()) {
+                // Treat non-restrictive time gating as "no schedule" so it doesn't suppress others.
+                fun isTimeOnly(v: String?): Boolean = v != null && v.length <= 8 && ":" in v && !v.contains("-")
+                val s = it.start?.trim()
+                val e = it.end?.trim()
+                val days = it.days ?: emptyList()
+                val zeroStartNoEnd = (s != null && isTimeOnly(s) && (s == "0:0:0" || s == "00:00" || s == "00:00:00") && (e.isNullOrBlank())) && days.isEmpty()
+                val endAtDayMaxNoStart = (e != null && isTimeOnly(e) && (e == "23:59" || e == "23:59:59") && (s.isNullOrBlank())) && days.isEmpty()
+                if (zeroStartNoEnd || endAtDayMaxNoStart) {
+                    // Consider as fallback (i.e., always-on, non-restrictive)
+                    fallback.add(it)
                 } else {
-                    if (primaryEnabled) fallback.add(it)
+                    if (intervalActive(s, e, days)) scheduled.add(it) else fallback.add(it)
                 }
-            } else {
-                // Always-on primary (no start/end): include only if item is enabled
-                if (it.enabled != false) fallback.add(it)
-            }
+            } else fallback.add(it)
         }
-    if (active.isNotEmpty()) return active
-    return fallback.filter { it.repeat != false }
+        val activeSet = if (scheduled.isNotEmpty()) scheduled else fallback.filter { it.repeat != false }
+        if (activeSet.isEmpty()) return emptyList()
+        return if (scheduled.isNotEmpty()) scheduled else activeSet
     }
 }
 
 object ApiClientImageHelper {
-    fun buildImageUrl(filename: String): String = ApiClient.baseUrl + "static/uploads/" + filename
-    fun buildVideoUrl(filename: String): String = ApiClient.baseUrl + "media/" + filename // new ranged streaming endpoint
+    private fun isAbsolute(u: String?): Boolean = u != null && (u.startsWith("http://", ignoreCase = true) || u.startsWith("https://", ignoreCase = true))
+    fun buildImageUrl(filename: String): String = if (isAbsolute(filename)) filename else ApiClient.baseUrl + "static/uploads/" + filename
+    fun buildVideoUrl(filename: String): String = if (isAbsolute(filename)) filename else ApiClient.baseUrl + "media/" + filename // new ranged streaming endpoint
     // Unified builder used by loadAnimatedOrStatic (images & animated assets live in static/uploads)
-    fun buildFileUrl(filename: String): String = buildImageUrl(filename)
+    fun buildFileUrl(filename: String): String = if (isAbsolute(filename)) filename else buildImageUrl(filename)
 }
 
 // Simple in-memory bitmap cache (approx ~8MB default)
@@ -392,27 +386,9 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
 
     fun prefetchNext(nextItem: com.pizzahut.tv.api.PlaylistItem?) {
         val nf = nextItem?.file ?: return
-        val nurl = ApiClientImageHelper.buildImageUrl(nf)
+    val nurl = ApiClientImageHelper.buildImageUrl(nf)
         if (ImageMemoryCache.get(nurl) == null) {
             lifecycleScope.launch(Dispatchers.IO) { fetchBitmap(nurl) }
-        }
-        // Warm-up for upcoming video by issuing a quick HEAD to the /media URL (inline to avoid forward refs)
-        run {
-            val videoExts = arrayOf("mp4","webm","ogg","mov","avi","mkv","m4v")
-            val isVid = videoExts.any { nf.endsWith(".$it", true) }
-            if (isVid) {
-                val vurl = ApiClientImageHelper.buildVideoUrl(nf)
-                lifecycleScope.launch(Dispatchers.IO) {
-                    try {
-                        val u = URL(vurl)
-                        val c = (u.openConnection() as HttpURLConnection).apply {
-                            requestMethod = "HEAD"; connectTimeout = 3000; readTimeout = 3000
-                        }
-                        // Touch response to complete request
-                        val code = c.responseCode
-                    } catch (_: Exception) { /* ignore warm-up failures */ }
-                }
-            }
         }
     }
 
@@ -477,13 +453,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
         val existing = exoPlayer
         if (existing != null) return existing
     val simpleCache = AppMediaCacheHolder.get(this)
-        // Build a tuned OkHttpClient for faster and more reliable fetches
-        val okClient = okhttp3.OkHttpClient.Builder()
-            .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
-            .readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
-            .retryOnConnectionFailure(true)
-            .connectionPool(okhttp3.ConnectionPool(8, 5, java.util.concurrent.TimeUnit.MINUTES))
-            .build()
+        val okClient = okhttp3.OkHttpClient.Builder().build()
         val okFactory = com.google.android.exoplayer2.ext.okhttp.OkHttpDataSource.Factory(okClient)
         val upstream = com.google.android.exoplayer2.upstream.DefaultDataSource.Factory(this, okFactory)
         cacheDataSourceFactory = com.google.android.exoplayer2.upstream.cache.CacheDataSource.Factory()
@@ -493,20 +463,10 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
         val renderersFactory = com.google.android.exoplayer2.DefaultRenderersFactory(this)
             .setEnableDecoderFallback(true)
             .setExtensionRendererMode(com.google.android.exoplayer2.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
-        // Use a slightly larger buffer to avoid short stalls, but keep fast start-up
-        val loadControl = com.google.android.exoplayer2.DefaultLoadControl.Builder()
-            .setBufferDurationsMs(
-                /* minBufferMs */ 3_000,
-                /* maxBufferMs */ 20_000,
-                /* bufferForPlaybackMs */ 500,
-                /* bufferForPlaybackAfterRebufferMs */ 1_000
-            )
-            .build()
     val built = com.google.android.exoplayer2.ExoPlayer.Builder(this)
             .setRenderersFactory(renderersFactory)
             .setSeekForwardIncrementMs(5_000)
             .setSeekBackIncrementMs(5_000)
-            .setLoadControl(loadControl)
             .build().also { playerView.player = it }
     // Repeat handled by playlist timing, not ExoPlayer internal repeat
     built.repeatMode = com.google.android.exoplayer2.Player.REPEAT_MODE_OFF
@@ -546,8 +506,6 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
     var scheduleTick: Runnable? = null
     var showNext: (() -> Unit)? = null
     var currentItemFile: String? = null
-    var serverNowMs: Long? = null
-    var serverTimeDeltaMs: Long? = null
     fun cancelScheduled() {
         scheduledRotation?.let {
             imageView.removeCallbacks(it)
@@ -571,8 +529,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
         scheduleTick = Runnable {
             try {
                 if (originalItems.isNotEmpty()) {
-                    val nowMs = serverTimeDeltaMs?.let { System.currentTimeMillis() + it }
-                    val newFiltered = filterBySchedule(originalItems, nowMs)
+                    val newFiltered = filterBySchedule(originalItems)
                     val cur = currentItemFile
                     val containsCurrent = cur != null && newFiltered.any { it.file == cur }
                     if (state.items.isEmpty() && newFiltered.isNotEmpty()) {
@@ -597,8 +554,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
     fun showAndSchedule() {
         // Re-filter on each step for near real-time schedule flips
         if (originalItems.isNotEmpty()) {
-            val nowMs = serverTimeDeltaMs?.let { System.currentTimeMillis() + it }
-            val newFiltered = filterBySchedule(originalItems, nowMs)
+            val newFiltered = filterBySchedule(originalItems)
             val currentFiles = state.items.mapNotNull { it.file }
             val newFiles = newFiltered.mapNotNull { it.file }
             if (newFiles != currentFiles) {
@@ -829,8 +785,8 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
         showAndSchedule()
     }
 
-    fun applyNewList(all: List<com.pizzahut.tv.api.PlaylistItem>?, nowOverrideMs: Long?) {
-        val filtered = filterBySchedule(all ?: emptyList(), nowOverrideMs)
+    fun applyNewList(all: List<com.pizzahut.tv.api.PlaylistItem>?) {
+        val filtered = filterBySchedule(all ?: emptyList())
         val prevItems = state.items
         val prevFiles = prevItems.mapNotNull { it.file }
         val newFiles = filtered.mapNotNull { it.file }
@@ -860,11 +816,8 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                 val resp = ApiClient.service.getPlaylist(storeId, screenId)
                 val original = resp.playlist ?: emptyList()
                 originalItems = original
-                serverNowMs = resp.serverNowMs
-                serverTimeDeltaMs = resp.serverNowMs?.let { it - System.currentTimeMillis() }
                 // Apply without resetting index if files are the same
-                val nowMs = serverTimeDeltaMs?.let { System.currentTimeMillis() + it }
-                applyNewList(original, nowMs)
+                applyNewList(original)
                 val cnt = state.items.size
                 if (cnt > 0) {
                     binding.message.text = "${cnt} items loaded"

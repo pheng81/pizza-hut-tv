@@ -22,7 +22,7 @@
   "screens": {
     "0000": {
       "0000_screen1": {
-        "file": "713def33-79c3-44ff-aa59-00dd40f34fe4.mp4",
+        "file": "f9d47c14-3444-4e6e-8de8-21a7472efabd.jpg",
         "vertical": false,
         "horizontal": false,
         "rotation": 0,
@@ -127,7 +127,8 @@
           "last_index": 0,
           "last_ts": 0
         },
-        "refresh_seq": 0
+        "refresh_seq": 0,
+        "last_seen": 1755942913
       },
       "0000_promo1": {
         "file": "8fd4845d-eaa5-4c66-9fe2-6b3e3edbfc86.jpg",
@@ -218,11 +219,36 @@
           "last_ts": 1755574957
         },
         "refresh_seq": 0
+      },
+      "0000_screen4": {
+        "file": "56c687f1-4c32-4e62-a031-efc7a644a0ab.png",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "id": "d42d2a72-d083-4f89-9f79-09a4491faa78",
+            "file": "56c687f1-4c32-4e62-a031-efc7a644a0ab.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image"
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
       }
     },
     "1112": {
       "1112_screen1": {
-        "file": "981fd512-a12f-4f0c-9a34-a7c8a69ac2f2.mp4",
+        "file": "https://pub-everydayadvertise.e0e697ba93f5fde654340ebc4206b59c.r2.dev/8050a115-35ba-4506-bcd9-4877156324a5.png",
         "vertical": false,
         "horizontal": false,
         "rotation": 0,
@@ -238,9 +264,7 @@
             "link_next": false,
             "media_type": "video",
             "schedule": [],
-            "days": [
-              "wed"
-            ]
+            "days": []
           },
           {
             "id": "fb77e66b-1247-4b4f-9de4-d7a52b43d662",
@@ -252,9 +276,7 @@
               {
                 "start": null,
                 "end": null,
-                "days": [
-                  "fri"
-                ],
+                "days": [],
                 "enabled": true
               }
             ],
@@ -270,7 +292,7 @@
           {
             "id": "049a8902-5b39-4395-9805-2976a555b20a",
             "file": "7428d2a9-5bfd-458b-b82c-52f71f170968.jpg",
-            "enabled": false,
+            "enabled": true,
             "start": null,
             "end": null,
             "schedule": [],
@@ -286,7 +308,7 @@
         },
         "protected": true,
         "refresh_seq": 6,
-        "last_seen": 1755928379
+        "last_seen": 1756024448
       },
       "1112_promo1": {
         "file": "93c6b50a-e75f-4986-bed6-fa6d049f9d60.png",
@@ -298,7 +320,7 @@
             "id": "f239b52d-9517-4f57-8388-03c25ad72278",
             "file": "93c6b50a-e75f-4986-bed6-fa6d049f9d60.png",
             "enabled": true,
-            "start": null,
+            "start": "15:00:00",
             "end": null,
             "duration": 10,
             "repeat": true,
@@ -315,7 +337,7 @@
           "last_ts": 0
         },
         "refresh_seq": 0,
-        "last_seen": 1755940570
+        "last_seen": 1755944087
       },
       "1112_promo2": {
         "file": null,
@@ -331,7 +353,7 @@
         "refresh_seq": 0
       },
       "1112_screen2": {
-        "file": "8f49e862-48f1-4d9e-81a6-fe93553ebe08.png",
+        "file": "d9a775aa-1bb3-4957-a3b5-ab512cb80966.png",
         "vertical": false,
         "horizontal": false,
         "rotation": 0,
@@ -340,33 +362,9 @@
           {
             "id": "4bf2a041-39d0-4f7d-802d-b181b0dfcb22",
             "file": "7428d2a9-5bfd-458b-b82c-52f71f170968.jpg",
-            "enabled": false,
-            "start": null,
-            "end": null,
-            "schedule": [
-              {
-                "start": null,
-                "end": null,
-                "days": [],
-                "enabled": true
-              }
-            ],
-            "duration": 2,
-            "repeat": true,
-            "link_next": false,
-            "media_type": "image",
-            "days": [
-              "thu",
-              "fri",
-              "sat"
-            ]
-          },
-          {
-            "id": "5cb39311-0c65-4250-8a20-11964e7092c5",
-            "file": "b3ae725b-d920-4659-bfe7-9ed540147e04.jpg",
             "enabled": true,
-            "start": null,
-            "end": null,
+            "start": "2025-08-23T02:00:00",
+            "end": "2025-08-23T23:00:00",
             "schedule": [
               {
                 "start": null,
@@ -375,7 +373,20 @@
                 "enabled": false
               }
             ],
-            "duration": 4,
+            "duration": 2,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "days": []
+          },
+          {
+            "id": "3f99c2ed-460a-408d-9467-077fe2d4095f",
+            "file": "da2b593f-07e6-437c-b688-3e86d4326492.jpg",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
             "repeat": true,
             "link_next": false,
             "media_type": "image"
@@ -385,7 +396,7 @@
           "last_index": 0,
           "last_ts": 0
         },
-        "last_seen": 1755941409
+        "last_seen": 1755942458
       },
       "1112_screen3": {
         "file": "27b857e5-4a77-4f80-bdb3-68e6b82c73dd.png",
@@ -411,7 +422,11 @@
             "duration": 7,
             "repeat": true,
             "link_next": false,
-            "media_type": "image"
+            "media_type": "image",
+            "days": [
+              "fri",
+              "sun"
+            ]
           },
           {
             "id": "fcf10802-ed11-4b23-9176-e69c8fb74845",
@@ -433,8 +448,8 @@
       },
       "1112_screen4": {
         "file": null,
-        "vertical": false,
-        "horizontal": true,
+        "vertical": true,
+        "horizontal": false,
         "rotation": 0,
         "protected": false,
         "playlist": [],
@@ -446,7 +461,7 @@
     },
     "1765": {
       "1765_screen1": {
-        "file": "6b16de37-b6ca-4e8d-85fd-6fe535222124.jpg",
+        "file": "5f0baa94-af25-4724-a0d7-7424c5f69d84.jpg",
         "vertical": false,
         "horizontal": false,
         "rotation": 0,
@@ -463,13 +478,38 @@
             "link_next": false,
             "media_type": "image",
             "schedule": []
+          },
+          {
+            "id": "d5eea685-091f-4212-b96b-a0de25743c6d",
+            "file": "f51ac2a3-cb82-48b5-9d57-0838f9494aee.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image"
+          },
+          {
+            "id": "cf5b6bda-94f5-44eb-b56f-a87f746f06ab",
+            "file": "5f0baa94-af25-4724-a0d7-7424c5f69d84.jpg",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image"
           }
         ],
         "rotation_meta": {
           "last_index": 0,
           "last_ts": 0
         },
-        "refresh_seq": 0
+        "refresh_seq": 0,
+        "last_seen": 1756002206
       },
       "1765_screen2": {
         "file": "20b2b067-c5c4-4786-a139-ae12306583dc.jpg",
@@ -480,8 +520,8 @@
           {
             "id": "fec447b8-496c-441e-ab77-a1325ae36d9e",
             "file": "28de5c63-57bc-4115-9d8a-2e36fb8d2d8d.jpg",
-            "enabled": false,
-            "start": "07:06:00",
+            "enabled": true,
+            "start": null,
             "end": null,
             "duration": 3,
             "repeat": false,
@@ -519,7 +559,7 @@
           "last_ts": 0
         },
         "refresh_seq": 0,
-        "last_seen": 1755939695
+        "last_seen": 1756022129
       },
       "1765_promo1": {
         "file": "17f85b2d-977b-42b5-907a-995cb43d3b07.jpg",

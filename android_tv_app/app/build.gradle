@@ -13,21 +13,29 @@ android {
 	targetSdk 34
 		versionCode 1
 		versionName "1.0"
-
-		// Default will be overridden per buildType below
-		buildConfigField 'String', 'PHTV_BASE_URL', '"http://192.168.1.109:5002/"'
+		// Allow overriding BASE URL at build time (e.g. -PPHTV_BASE_URL="https://tv.yourdomain.com/")
+		def suppliedBase = project.findProperty('PHTV_BASE_URL') as String
+		def defaultLan = 'http://192.168.1.109:5002/'
+		def defaultEmu = 'http://10.0.2.2:5002/'
+		// Set a sane default; buildTypes below can refine per flavor
+		def baseForDefault = suppliedBase ?: defaultLan
+		buildConfigField 'String', 'PHTV_BASE_URL', '"' + baseForDefault + '"'
 	}
 
 	buildTypes {
 		release {
 			minifyEnabled false
 			proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-			// Keep LAN IP for release (physical devices on same network)
-			buildConfigField 'String', 'PHTV_BASE_URL', '"http://192.168.1.109:5002/"'
+			// Prefer supplied domain if provided; fallback to LAN IP
+			def suppliedBase = project.findProperty('PHTV_BASE_URL') as String
+			def defaultLan = 'http://192.168.1.109:5002/'
+			buildConfigField 'String', 'PHTV_BASE_URL', '"' + (suppliedBase ?: defaultLan) + '"'
 		}
 		debug {
-			// Use emulator host alias so the AVD can reach your Flask server
-			buildConfigField 'String', 'PHTV_BASE_URL', '"http://10.0.2.2:5002/"'
+			// Prefer supplied domain if provided; otherwise emulator alias
+			def suppliedBase = project.findProperty('PHTV_BASE_URL') as String
+			def defaultEmu = 'http://10.0.2.2:5002/'
+			buildConfigField 'String', 'PHTV_BASE_URL', '"' + (suppliedBase ?: defaultEmu) + '"'
 		}
 	}
 
