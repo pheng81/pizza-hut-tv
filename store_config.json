@@ -191,14 +191,7 @@
             "repeat": true,
             "link_next": false,
             "media_type": "image",
-            "schedule": [
-              {
-                "start": "2025-08-23T18:11:00",
-                "end": "2025-08-23T00:00:00",
-                "days": [],
-                "enabled": false
-              }
-            ],
+            "schedule": [],
             "days": []
           },
           {
@@ -223,7 +216,7 @@
       "0000_screen4": {
         "file": "56c687f1-4c32-4e62-a031-efc7a644a0ab.png",
         "vertical": false,
-        "horizontal": true,
+        "horizontal": false,
         "rotation": 0,
         "protected": false,
         "playlist": [
@@ -351,52 +344,6 @@
           "last_ts": 0
         },
         "refresh_seq": 0
-      },
-      "1112_screen2": {
-        "file": "d9a775aa-1bb3-4957-a3b5-ab512cb80966.png",
-        "vertical": false,
-        "horizontal": false,
-        "rotation": 0,
-        "protected": false,
-        "playlist": [
-          {
-            "id": "4bf2a041-39d0-4f7d-802d-b181b0dfcb22",
-            "file": "7428d2a9-5bfd-458b-b82c-52f71f170968.jpg",
-            "enabled": true,
-            "start": "2025-08-23T02:00:00",
-            "end": "2025-08-23T23:00:00",
-            "schedule": [
-              {
-                "start": null,
-                "end": null,
-                "days": [],
-                "enabled": false
-              }
-            ],
-            "duration": 2,
-            "repeat": true,
-            "link_next": false,
-            "media_type": "image",
-            "days": []
-          },
-          {
-            "id": "3f99c2ed-460a-408d-9467-077fe2d4095f",
-            "file": "da2b593f-07e6-437c-b688-3e86d4326492.jpg",
-            "enabled": true,
-            "start": null,
-            "end": null,
-            "schedule": [],
-            "duration": 10,
-            "repeat": true,
-            "link_next": false,
-            "media_type": "image"
-          }
-        ],
-        "rotation_meta": {
-          "last_index": 0,
-          "last_ts": 0
-        },
-        "last_seen": 1755942458
       },
       "1112_screen3": {
         "file": "27b857e5-4a77-4f80-bdb3-68e6b82c73dd.png",

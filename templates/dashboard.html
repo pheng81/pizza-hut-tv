@@ -9,7 +9,15 @@
         <!-- Configuration data for JavaScript -->
         <script type="application/json" id="config-data">{{ config | tojson | safe }}</script>
         <script>
-            window.MEDIA_BASE_URL = {{ (media_base_url or '/static/uploads/') | tojson | safe }};
+            window.MEDIA_BASE_URL = (function(){
+                try {
+                    const cfgText = document.getElementById('config-data')?.textContent || '{}';
+                    const cfg = JSON.parse(cfgText);
+                    return (cfg.media_base_url || (cfg.settings && cfg.settings.media_base_url) || '/static/uploads/');
+                } catch(e) {
+                    return '/static/uploads/';
+                }
+            })();
             if (window.MEDIA_BASE_URL && !window.MEDIA_BASE_URL.endsWith('/')) {
                 window.MEDIA_BASE_URL += '/';
             }
