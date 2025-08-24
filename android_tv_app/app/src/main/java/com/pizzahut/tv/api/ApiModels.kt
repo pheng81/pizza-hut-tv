@@ -4,8 +4,7 @@ import com.google.gson.annotations.SerializedName
 
 data class PlaylistResponse(
 	@SerializedName("success") val success: Boolean,
-	@SerializedName("playlist") val playlist: List<PlaylistItem>?,
-	@SerializedName("server_now_ms") val serverNowMs: Long? = null
+	@SerializedName("playlist") val playlist: List<PlaylistItem>?
 )
 
 data class PlaylistItem(
@@ -25,8 +24,7 @@ data class PlaylistItem(
 data class ScheduleWindow(
 	@SerializedName("start") val start: String?,
 	@SerializedName("end") val end: String?,
-	@SerializedName("days") val days: List<String>? = null,
-	@SerializedName("enabled") val enabled: Boolean? = true
+	@SerializedName("days") val days: List<String>? = null
 )
 
 // Device setup discovery
