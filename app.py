@@ -191,6 +191,10 @@ CONFIG_FILE = 'store_config.json'
 UPLOAD_FOLDER = os.path.join('static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+# Cache folder for generated thumbnails
+THUMB_FOLDER = os.path.join('static', 'thumbs')
+os.makedirs(THUMB_FOLDER, exist_ok=True)
+
 # Categorized extension sets (keep lowercase)
 IMAGE_EXTENSIONS = {
     'png', 'jpg', 'jpeg', 'bmp', 'webp', 'svg', 'avif', 'heic', 'heif', 'tif', 'tiff'
@@ -249,13 +253,18 @@ def load_store_config():
 @app.route('/supported_extensions')
 def supported_extensions():
     """Expose supported extensions categorized for front-end dynamic usage."""
-    return jsonify({
+    resp = jsonify({
         'success': True,
         'images': sorted(list(IMAGE_EXTENSIONS - ANIMATED_EXTENSIONS)),  # pure still images
         'animated': sorted(list(ANIMATED_EXTENSIONS)),
         'videos': sorted(list(VIDEO_EXTENSIONS)),
         'all': sorted(list(ALLOWED_EXTENSIONS))
     })
+    try:
+        resp.headers['Cache-Control'] = 'public, max-age=3600'
+    except Exception:
+        pass
+    return resp
 
 # -------------------- Video Streaming with HTTP Range Support --------------------
 @app.route('/media/<path:filename>', methods=['GET','HEAD'])
@@ -416,6 +425,91 @@ def save_store_config(config):
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# ---- Thumbnail helpers and endpoint ----
+def _image_ext(filename: str) -> str:
+    return (filename.rsplit('.', 1)[-1].lower() if '.' in filename else '')
+
+def _is_image(filename: str) -> bool:
+    return _image_ext(filename) in IMAGE_EXTENSIONS
+
+def _safe_upload_path(name: str) -> str:
+    """Resolve to an absolute path under UPLOAD_FOLDER; prevent path traversal."""
+    abs_upload = os.path.abspath(UPLOAD_FOLDER)
+    target = os.path.abspath(os.path.join(UPLOAD_FOLDER, name))
+    if not (target == abs_upload or target.startswith(abs_upload + os.sep)):
+        raise ValueError('invalid filename')
+    return target
+
+try:
+    from PIL import Image  # type: ignore
+except Exception:
+    Image = None  # Pillow optional; we'll fallback to original
+
+@app.route('/thumb/<int:width>/<path:filename>')
+def thumbnail(width: int, filename: str):
+    """Return a cached thumbnail for an uploaded image under static/uploads.
+    - width: target max width; height preserved by aspect ratio
+    - caches to static/thumbs/{width}_{basename}[.jpg]
+    - if not an image or Pillow missing, redirect to original
+    """
+    try:
+        basename = os.path.basename(filename)
+        if not _is_image(basename):
+            return redirect(url_for('static', filename=f'uploads/{basename}'))
+        src_path = _safe_upload_path(basename)
+        if not os.path.exists(src_path):
+            return jsonify({'error': 'not found'}), 404
+
+        cached_name = f"{width}_{basename}"
+        cached_path = os.path.abspath(os.path.join(THUMB_FOLDER, cached_name))
+
+        # Decide if we need to rebuild
+        rebuild = True
+        if os.path.exists(cached_path):
+            try:
+                rebuild = os.path.getmtime(cached_path) < os.path.getmtime(src_path)
+            except Exception:
+                rebuild = True
+
+        if rebuild:
+            if Image is None:
+                return redirect(url_for('static', filename=f'uploads/{basename}'))
+            try:
+                os.makedirs(THUMB_FOLDER, exist_ok=True)
+                with Image.open(src_path) as im:
+                    # Convert paletted/alpha to RGB for JPEG when needed
+                    if im.mode in ('P', 'RGBA', 'LA'):
+                        im = im.convert('RGB')
+                    im_copy = im.copy()
+                    # Preserve aspect ratio using thumbnail(); very tall max height to avoid constraining height
+                    im_copy.thumbnail((int(width) if width>0 else 300, 10000), Image.LANCZOS)
+                    ext = _image_ext(basename)
+                    fmt = 'JPEG' if ext in ('jpg','jpeg') else ('PNG' if ext == 'png' else None)
+                    save_kwargs = {'optimize': True}
+                    if fmt == 'JPEG':
+                        save_kwargs['quality'] = 85
+                    if fmt:
+                        im_copy.save(cached_path, fmt, **save_kwargs)
+                    else:
+                        # Default to JPEG to shrink size if uncommon format
+                        if not cached_path.lower().endswith('.jpg'):
+                            cached_path = cached_path + '.jpg'
+                        im_copy.save(cached_path, 'JPEG', quality=85, optimize=True)
+                        cached_name = os.path.basename(cached_path)
+            except Exception as e:
+                logging.error('Thumbnail build failed for %s: %s', basename, e)
+                return redirect(url_for('static', filename=f'uploads/{basename}'))
+
+        resp = send_file(cached_path)
+        try:
+            resp.headers['Cache-Control'] = 'public, max-age=2592000'  # 30 days
+        except Exception:
+            pass
+        return resp
+    except Exception as e:
+        logging.error('Thumbnail error: %s', e)
+        return jsonify({'error': 'bad request'}), 400
 
 def parse_time_string(val, now):
     if not val:
@@ -1453,7 +1547,12 @@ def list_library():
                 })
         # Sort by most recent first
         files.sort(key=lambda x: x['mtime'], reverse=True)
-        return jsonify({'success': True, 'files': files})
+        resp = jsonify({'success': True, 'files': files})
+        try:
+            resp.headers['Cache-Control'] = 'public, max-age=60'
+        except Exception:
+            pass
+        return resp
     except Exception as e:
         print(f"Error listing library: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
