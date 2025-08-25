@@ -816,22 +816,19 @@ def upload_to_screen():
         print(f"[upload_to_screen] Invalid file type: {file.filename}")
         return jsonify({'error': 'Invalid file type'}), 400
 
+    # If apply_to_all was requested but this isn't the master store, downgrade to single-store
     if apply_to_all:
         master_store_id = config.get('master_store_id')
-        # If not master, downgrade to single-store behavior instead of blocking
         if store_id != master_store_id:
             print(f"[upload_to_screen] apply_to_all requested by non-master store {store_id}. Downgrading to single-store upload.")
             apply_to_all = False
-        
+
     if apply_to_all:
-        master_store_id = config.get('master_store_id')
-
-        original_screen_id = screen_id
+        # Apply the file to the same screen type across all stores
         screen_type = screen_id.split('_', 1)[1] if '_' in screen_id else screen_id
-
-        updated_stores = []
-        skipped_stores = []
-        created_screens = []
+        updated_stores: list[str] = []
+        skipped_stores: list[str] = []
+        created_screens: list[str] = []
 
         for current_store_id in config['screens']:
             target_screen_id = f"{current_store_id}_{screen_type}"
@@ -866,24 +863,28 @@ def upload_to_screen():
 
         save_store_config(config)
         print(f"[upload_to_screen] Apply-to-all updated stores={updated_stores} skipped={skipped_stores} created={created_screens}")
-        message = f'File applied to {screen_type} in {len(updated_stores)} stores'
+        message = f"File applied to {screen_type} in {len(updated_stores)} stores"
         if created_screens:
-            message += f'. Created {len(created_screens)} missing screens'
+            message += f". Created {len(created_screens)} missing screens"
         if skipped_stores:
-            message += f'. Skipped {len(skipped_stores)} protected stores'
-    return jsonify({'success': True,
-             'filename': filename,
-             'url': build_public_url(filename),
-             'media_type': classify_media(filename),
-             'store_id': store_id,
-             'screen_id': screen_id,
-             'applied_to_all': True,
-             'updated_stores': updated_stores,
-             'skipped_stores': skipped_stores,
-             'created_screens': created_screens,
-             'message': message})
+            message += f". Skipped {len(skipped_stores)} protected stores"
+
+        return jsonify({
+            'success': True,
+            'filename': filename,
+            'url': build_public_url(filename),
+            'media_type': classify_media(filename),
+            'store_id': store_id,
+            'screen_id': screen_id,
+            'applied_to_all': True,
+            'updated_stores': updated_stores,
+            'skipped_stores': skipped_stores,
+            'created_screens': created_screens,
+            'message': message
+        })
+
     # Single-store path
-    if store_id in config['screens'] and screen_id in config['screens'][store_id]:
+    if store_id in config.get('screens', {}) and screen_id in config['screens'].get(store_id, {}):
         screen_obj = config['screens'][store_id][screen_id]
         screen_obj['file'] = filename
         pl = screen_obj.setdefault('playlist', [])
@@ -891,13 +892,18 @@ def upload_to_screen():
             pl.append({'id': str(uuid.uuid4()), 'file': filename, 'enabled': True, 'start': None, 'end': None, 'schedule': [], 'duration': 10, 'repeat': True, 'link_next': False, 'media_type': classify_media(filename)})
         save_store_config(config)
         print(f"[upload_to_screen] Single-store success store={store_id} screen={screen_id} file={filename} playlist_len={len(pl)}")
-    return jsonify({'success': True,
+        return jsonify({
+            'success': True,
             'filename': filename,
             'url': build_public_url(filename),
             'media_type': classify_media(filename),
             'store_id': store_id,
             'screen_id': screen_id,
-            'applied_to_all': False})
+            'applied_to_all': False
+        })
+
+    # If we reach here, the target screen does not exist
+    return jsonify({'success': False, 'error': 'screen not found'}), 404
 
 @app.route('/update_rotation', methods=['POST'])
 def update_rotation():
