@@ -577,13 +577,13 @@ def vthumbnail(width: int, filename: str):
             except Exception:
                 rebuild = True
         if rebuild:
-        ffmpeg = _ffmpeg_bin()
-        if not ffmpeg:
+            ffmpeg = _ffmpeg_bin()
+            if not ffmpeg:
                 return jsonify({'error': 'ffmpeg not available'}), 404
             os.makedirs(VTHUMB_FOLDER, exist_ok=True)
             try:
                 cmd = [
-            ffmpeg, '-y', '-ss', '0.2', '-i', src_path,
+                    ffmpeg, '-y', '-ss', '0.2', '-i', src_path,
                     '-vframes', '1', '-vf', f'scale={int(width) if width>0 else 300}:-1',
                     cached_path
                 ]
