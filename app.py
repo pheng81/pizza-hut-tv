@@ -41,6 +41,17 @@ app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-this'
 print('DEBUG: app.py initialization start', flush=True)
 logging.debug('App module import start')
+@app.after_request
+def _add_cache_headers(resp):
+    try:
+        p = request.path or ''
+        if p.startswith('/static/uploads/') or p.startswith('/thumb/') or p.startswith('/vthumb/'):
+            # Encourage client reuse; actual busting handled by unique filenames/URLs
+            resp.headers.setdefault('Cache-Control', 'public, max-age=3600, immutable')
+    except Exception:
+        pass
+    return resp
+
 
 # Enable gzip compression if available
 try:
@@ -460,9 +471,10 @@ def _safe_upload_path(name: str) -> str:
     return target
 
 try:
-    from PIL import Image  # type: ignore
+    from PIL import Image, ImageOps  # type: ignore
 except Exception:
     Image = None  # Pillow optional; we'll fallback to original
+    ImageOps = None
 
 @app.route('/thumb/<int:width>/<path:filename>')
 def thumbnail(width: int, filename: str):
@@ -807,7 +819,26 @@ def upload_to_screen():
             print(f"[upload_to_screen] Uploaded to R2 as {filename}")
         else:
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(filepath)
+            # Normalize EXIF orientation for images to avoid client-side rotation surprises
+            try:
+                ext = filename.rsplit('.',1)[-1].lower()
+            except Exception:
+                ext = ''
+            if ext in IMAGE_EXTENSIONS and Image is not None and ImageOps is not None:
+                try:
+                    img = Image.open(file.stream)
+                    img = ImageOps.exif_transpose(img)
+                    save_kwargs = {}
+                    if ext in ('jpg','jpeg'): save_kwargs = {'quality': 90, 'optimize': True}
+                    img.save(filepath, **save_kwargs)
+                except Exception:
+                    try:
+                        file.stream.seek(0)
+                    except Exception:
+                        pass
+                    file.save(filepath)
+            else:
+                file.save(filepath)
             print(f"[upload_to_screen] Saved as {filename} -> {filepath}")
 
         # Update configuration
@@ -1677,7 +1708,21 @@ def upload_media():
         ext = f.filename.rsplit('.', 1)[1].lower()
         filename = f"{uuid.uuid4()}.{ext}"
         dest = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        f.save(dest)
+        # Normalize EXIF orientation for images to avoid client-side rotation surprises
+        if ext in IMAGE_EXTENSIONS and Image is not None and ImageOps is not None:
+            try:
+                img = Image.open(f.stream)
+                img = ImageOps.exif_transpose(img)
+                # Save with a reasonable quality and strip metadata by default
+                save_kwargs = {}
+                if ext in ('jpg','jpeg'): save_kwargs = {'quality': 90, 'optimize': True}
+                img.save(dest, **save_kwargs)
+            except Exception:
+                # Fallback to raw save
+                f.stream.seek(0)
+                f.save(dest)
+        else:
+            f.save(dest)
         return jsonify({'success': True, 'filename': filename, 'media_type': classify_media(filename)})
     except Exception as e:
         print(f"upload_media error: {e}")

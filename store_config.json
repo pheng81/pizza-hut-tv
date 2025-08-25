@@ -214,7 +214,7 @@
         "refresh_seq": 0
       },
       "0000_screen4": {
-        "file": "56c687f1-4c32-4e62-a031-efc7a644a0ab.png",
+        "file": "fe61b4eb-ae57-4203-a739-036f879cfbcd.jpg",
         "vertical": false,
         "horizontal": false,
         "rotation": 0,
@@ -223,6 +223,18 @@
           {
             "id": "d42d2a72-d083-4f89-9f79-09a4491faa78",
             "file": "56c687f1-4c32-4e62-a031-efc7a644a0ab.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image"
+          },
+          {
+            "id": "a1a68e9e-f4a3-438b-9504-3ccb391d241e",
+            "file": "fe61b4eb-ae57-4203-a739-036f879cfbcd.jpg",
             "enabled": true,
             "start": null,
             "end": null,
@@ -301,7 +313,7 @@
         },
         "protected": true,
         "refresh_seq": 6,
-        "last_seen": 1756024448
+        "last_seen": 1756124753
       },
       "1112_promo1": {
         "file": "93c6b50a-e75f-4986-bed6-fa6d049f9d60.png",
