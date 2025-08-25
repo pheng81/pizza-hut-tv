@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>TV View</title>
+	<style>
+		html, body { height:100%; margin:0; background:#000; color:#fff; }
+		#stage { position:relative; width:100vw; height:100vh; overflow:hidden; background:#000; }
+		.layer { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#000; }
+		.hidden { display:none; }
+		.media { max-width:100%; max-height:100%; object-fit:contain; }
+		.fade { opacity:0; transition: opacity .25s ease; }
+		.visible { opacity:1; }
+	</style>
+</head>
+<body>
+	<div id="stage">
+		<div class="layer" id="layerA"></div>
+		<div class="layer" id="layerB"></div>
+	</div>
+
+	<script>
+		const storeId = {{ store_id|tojson }};
+		const screenId = {{ screen_id|tojson }};
+		const initialFile = {{ active_file|tojson }};
+
+		const videoExt = ['mp4','webm','ogg','mov','avi','mkv','m4v'];
+		function isVideoByName(name){ if(!name) return false; const ext=(name.split('.').pop()||'').toLowerCase(); return videoExt.includes(ext); }
+		function mediaUrl(item){
+			if(!item) return '';
+			if(typeof item === 'string') return /^https?:\/\//i.test(item) || item.startsWith('/') ? item : `/static/uploads/${item}`;
+			const u = item.url || item.file || '';
+			return /^https?:\/\//i.test(u) || u.startsWith('/') ? u : `/static/uploads/${u}`;
+		}
+
+		const stage = document.getElementById('stage');
+		const layerA = document.getElementById('layerA');
+		const layerB = document.getElementById('layerB');
+		let front = layerA, back = layerB;
+
+		let playlist = [];
+		let idx = 0;
+		let timer = null;
+		let lastFetchTs = 0;
+
+		async function fetchPlaylist(){
+			try{
+				const r = await fetch(`/playlist/${storeId}/${screenId}`);
+				const j = await r.json();
+				if(j && j.success && Array.isArray(j.playlist)){
+					playlist = j.playlist;
+					if(idx >= playlist.length) idx = 0;
+				}
+			}catch(e){ /* keep current on error */ }
+			lastFetchTs = Date.now();
+		}
+
+		function preloadImage(url){
+			return new Promise((resolve,reject)=>{ const img = new Image(); img.onload=()=>resolve(img); img.onerror=reject; img.src=url; });
+		}
+		function preloadVideo(url){
+			return new Promise((resolve,reject)=>{
+				const v = document.createElement('video');
+				v.autoplay = false; v.muted = true; v.playsInline = true; v.preload = 'auto';
+				const onReady = ()=>{ cleanup(); resolve(v); };
+				const onErr = (e)=>{ cleanup(); reject(e); };
+				function cleanup(){ v.removeEventListener('canplay', onReady); v.removeEventListener('error', onErr); }
+				v.addEventListener('canplay', onReady);
+				v.addEventListener('error', onErr);
+				v.src = url; v.load();
+			});
+		}
+
+		function clearNode(node){ while(node.firstChild) node.removeChild(node.firstChild); }
+
+		function swapLayers(){ const t = front; front = back; back = t; }
+
+		async function showItem(item){
+			const url = mediaUrl(item);
+			if(!url){ return; }
+			const type = (item.media_type || '').toLowerCase();
+			const isVid = type === 'video' || isVideoByName(url);
+			try{
+				const node = isVid ? await preloadVideo(url) : await preloadImage(url);
+				node.className = 'media';
+				if(isVid){ node.loop = true; node.autoplay = true; node.muted = true; node.playsInline = true; }
+				// prepare back layer
+				clearNode(back); back.appendChild(node);
+				back.classList.add('fade'); back.classList.remove('hidden');
+				// start video after in DOM (for some platforms)
+				if(isVid){ setTimeout(()=>{ try{ node.play().catch(()=>{});}catch{} }, 0); }
+				// crossfade
+				requestAnimationFrame(()=>{
+					back.classList.add('visible'); back.classList.remove('fade');
+					front.classList.add('fade'); front.classList.remove('visible');
+					setTimeout(()=>{ front.classList.add('hidden'); front.classList.remove('fade'); swapLayers(); }, 260);
+				});
+			}catch(e){ /* skip on error */ }
+		}
+
+		function nextIndex(){ if(!playlist.length) return 0; return (idx + 1) % playlist.length; }
+
+		async function tick(){
+			if(!playlist.length){ await fetchPlaylist(); }
+			if(!playlist.length){ timer = setTimeout(tick, 1500); return; }
+			const item = playlist[idx];
+			const dur = Math.max(1, parseInt(item.duration||10));
+			// Preload the next item a bit early
+			const next = playlist[nextIndex()];
+			if(next){ const u = mediaUrl(next); if(u){ const pre = isVideoByName(u) ? preloadVideo(u) : preloadImage(u); pre.catch(()=>{}); } }
+			await showItem(item);
+			idx = nextIndex();
+			// periodic refresh of playlist
+			if(Date.now() - lastFetchTs > 20000){ fetchPlaylist(); }
+			timer = setTimeout(tick, dur*1000);
+		}
+
+		// Initial paint (use initialFile if given)
+		(async function init(){
+			if(initialFile){ try{ await showItem({file: initialFile}); }catch{} }
+			tick();
+			document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ if(timer){ clearTimeout(timer); timer=null; } } else { if(!timer) tick(); } });
+		})();
+	</script>
+</body>
+</html>

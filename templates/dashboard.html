@@ -877,26 +877,29 @@
             top: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0,0,0,0.5);
-        }
-        
-        .modal-content {
-            background-color: #fefefe;
-            margin: 15% auto;
-            padding: 20px;
-            border-radius: 8px;
-            width: 400px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-        
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-        
-        .modal-header h3 {
+            /* Vertical preview - image should look portrait (rotate container image 90deg for a tall box) */
+            .screen-preview.vertical-preview img {
+                transform: rotate(90deg);
+                max-width: 80%;
+                max-height: 80%;
+            }
+            /* Horizontal preview - image should look landscape */
+            .screen-preview.horizontal-preview img {
+                transform: none;
+                max-width: 100%;
+                max-height: 100%;
+            }
+            /* Default preview */
+            .screen-preview.default-preview img {
+                transform: none;
+                max-width: 100%;
+                max-height: 100%;
+            }
+
+            /* Crossfade swap: layer new media on top and fade in to avoid blank flashes */
+            .screen-preview { position: relative; }
+            .screen-preview .preview-item { position: absolute; inset: 0; display:flex; align-items:center; justify-content:center; opacity:1; transition: opacity .2s ease; }
+            .screen-preview .preview-item.fading-in { opacity: 0; }
             margin: 0;
             color: #333;
         }
@@ -1479,14 +1482,12 @@
                         // Update preview
                         const preview = document.getElementById('preview-' + screenId);
                         if(!preview){ console.warn('[UPLOAD] Preview element missing for', screenId); }
-                                                // Render preview depending on media type
-                                                const mt = data.media_type || (data.filename.split('.').pop().toLowerCase());
-                                                const videoExts = ['mp4','webm','ogg','mov','avi','mkv','m4v'];
-                                                const isVideo = mt === 'video' || videoExts.includes(mt);
-                                                const uploadedUrl = data.url || mediaUrl(data.filename);
-                                                preview.innerHTML = isVideo
-                                                    ? `<video autoplay muted playsinline style="max-width:100%;max-height:100%;object-fit:contain" src="${uploadedUrl}"></video>`
-                                                    : `<img src="${uploadedUrl}" alt="Screen content" style="max-width:100%;max-height:100%;object-fit:contain"/>`;
+                        // Render preview depending on media type with preloading + crossfade
+                        const mt = data.media_type || (data.filename.split('.').pop().toLowerCase());
+                        const videoExts = ['mp4','webm','ogg','mov','avi','mkv','m4v'];
+                        const isVideo = mt === 'video' || videoExts.includes(mt);
+                        const uploadedUrl = data.url || mediaUrl(data.filename);
+                        safeSwapPreview(preview, uploadedUrl, isVideo, (allStoresData.screens[currentStoreId][screenId]||{}).rotation || 0);
                         
                         // Show success message
                         showMessage('📁 File uploaded successfully to ' + getScreenDisplayName(screenId) + '!');
@@ -1776,9 +1777,9 @@
                 </div>
                 
                 <div class="screen-preview ${previewClass}" id="preview-${screenId}">
-                    ${screenData.file ? (()=>{ const ext=(screenData.file.split('.').pop()||'').toLowerCase(); const videoExt=['mp4','webm','ogg','mov','avi','mkv','m4v']; return videoExt.includes(ext)
-                        ? `<video autoplay muted loop playsinline class="rotate-${rotation}" style="max-width:100%;max-height:100%;object-fit:contain" src="${mediaUrl(screenData.file)}"></video>`
-                        : `<img src="${mediaUrl(screenData.file)}" alt="Screen content" class="rotate-${rotation}" style="max-width:100%;max-height:100%;object-fit:contain">`; })() :
+                    ${screenData.file ? (()=>{ const ext=(screenData.file.split('.').pop()||'').toLowerCase(); const videoExt=['mp4','webm','ogg','mov','avi','mkv','m4v']; const url=mediaUrl(screenData.file); return videoExt.includes(ext)
+                        ? `<div class='preview-item'><video autoplay muted loop playsinline class="rotate-${rotation}" style="max-width:100%;max-height:100%;object-fit:contain" src="${url}"></video></div>`
+                        : `<div class='preview-item'><img src="${url}" alt="Screen content" class="rotate-${rotation}" style="max-width:100%;max-height:100%;object-fit:contain"></div>`; })() :
                         '<div class="upload-area"><div style="margin-top: 20px;">No content uploaded</div></div>'
                     }
                 </div>
@@ -3268,6 +3269,50 @@
                 });
             },20000);
         }
+    </script>
+    <script>
+    // ---- Preview stability helpers ----
+    function preloadImage(url){
+        return new Promise((resolve,reject)=>{
+            const img = new Image();
+            img.onload = ()=>resolve(img);
+            img.onerror = reject;
+            img.src = url;
+        });
+    }
+    function preloadVideo(url){
+        return new Promise((resolve,reject)=>{
+            const v = document.createElement('video');
+            v.muted = true; v.playsInline = true; v.preload = 'auto';
+            const onReady = ()=>{ cleanup(); resolve(v); };
+            const onErr = (e)=>{ cleanup(); reject(e); };
+            function cleanup(){ v.removeEventListener('canplay', onReady); v.removeEventListener('error', onErr); }
+            v.addEventListener('canplay', onReady);
+            v.addEventListener('error', onErr);
+            v.src = url; v.load();
+        });
+    }
+    function safeSwapPreview(previewEl, url, isVideo, rotation){
+        const current = previewEl.querySelector('.preview-item');
+        const build = (node)=>{
+            const wrap = document.createElement('div');
+            wrap.className = 'preview-item fading-in';
+            wrap.appendChild(node);
+            return wrap;
+        };
+        const show = (wrap)=>{
+            previewEl.appendChild(wrap);
+            requestAnimationFrame(()=>{
+                wrap.classList.remove('fading-in');
+                if(current){ current.style.opacity = '0'; setTimeout(()=> current.remove(), 220); }
+            });
+        };
+        if(isVideo){
+            preloadVideo(url).then(v=>{ v.autoplay=true; v.loop=true; v.muted=true; v.playsInline=true; v.style.maxWidth='100%'; v.style.maxHeight='100%'; v.style.objectFit='contain'; if(rotation){ v.classList.add('rotate-'+rotation); } show(build(v)); }).catch(()=>{ const img=new Image(); img.src=url; img.style.maxWidth='100%'; img.style.maxHeight='100%'; img.style.objectFit='contain'; if(rotation){ img.className='rotate-'+rotation; } show(build(img)); });
+        } else {
+            preloadImage(url).then(img=>{ img.style.maxWidth='100%'; img.style.maxHeight='100%'; img.style.objectFit='contain'; if(rotation){ img.className='rotate-'+rotation; } show(build(img)); }).catch(()=>{ const img=document.createElement('img'); img.src=url; if(rotation){ img.className='rotate-'+rotation; } show(build(img)); });
+        }
+    }
     </script>
     
     <!-- Add Store Modal -->
