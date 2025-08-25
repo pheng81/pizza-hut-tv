@@ -1051,6 +1051,20 @@
     /* Ensure secondary button inside timepicker shows text clearly (override generic button bg) */
     .timepicker .tp-actions .btn-secondary { background:#6c757d; border-color:#6c757d; color:#fff; }
     .tp-input { cursor:pointer; background:#fff; }
+    /* Playlist loading indicator (keep content visible; add subtle badge) */
+    .playlist-section.loading .playlist-items { position: relative; }
+    .playlist-section.loading .playlist-items::after {
+        content: 'Refreshing…';
+        position: absolute;
+        top: 4px;
+        right: 6px;
+        font-size: 10px;
+        color: #666;
+        background: rgba(255,255,255,0.85);
+        padding: 2px 6px;
+        border-radius: 10px;
+        border: 1px solid #e5e7eb;
+    }
     /* Weekday selector */
     .weekday-row { display:flex; gap:3px; flex-wrap:nowrap; margin-bottom:4px; }
     .weekday-row, .weekday-btn { pointer-events:auto; }
@@ -2144,22 +2158,41 @@
 
     function refreshPlaylist(screenId) {
             const container = document.getElementById(`playlist-items-${screenId}`);
+            const section = document.getElementById(`playlist-${screenId}`);
             if (!container) return;
-            container.innerHTML = '<div style="font-size:11px; color:#666;">Loading...</div>';
+            // Keep current DOM to avoid the temporary blank area; just mark as loading
+            if (section) section.classList.add('loading');
+            const requestStartedAt = Date.now();
             safeFetchJson(`/playlist/${currentStoreId}/${screenId}`)
                 .then(res=>{
                     const data = res.json || {};
+                    // Ignore very slow/stale responses if another refresh started later
+                    if (Date.now() - requestStartedAt > 15000) return;
                     if (!res.ok) {
                         console.error('[Playlist] HTTP error', {screenId, store: currentStoreId, status: res.status, raw: res.raw});
-                        container.innerHTML = `<div style="color:#c00;font-size:11px;">Load error${res.status?` (HTTP ${res.status})`:''}</div>`; return;
+                        // Keep last-known UI; show a small inline error badge instead of wiping content
+                        if (container) {
+                            const badge = document.createElement('div');
+                            badge.style.cssText = 'font-size:10px;color:#c00;margin-top:4px;';
+                            badge.textContent = `Load error${res.status?` (HTTP ${res.status})`:''}`;
+                            container.appendChild(badge);
+                        }
+                        return;
                     }
                     if (!data.success) {
                         console.warn('[Playlist] API failure', {screenId, store: currentStoreId, status: res.status, body: data});
-                        container.innerHTML = '<div style="color:#c00;font-size:11px;">Failed to load playlist</div>'; return;
+                        const badge = document.createElement('div');
+                        badge.style.cssText = 'font-size:10px;color:#c00;margin-top:4px;';
+                        badge.textContent = 'Failed to load playlist';
+                        container.appendChild(badge);
+                        return;
                     }
                     const items = data.playlist || [];
-                    if (!items.length) { container.innerHTML = '<div style="font-size:11px; color:#666;">(No playlist items yet)</div>'; return; }
                     container.innerHTML = '';
+                    if (!items.length) {
+                        container.innerHTML = '<div style="font-size:11px; color:#666;">(No playlist items yet)</div>';
+                        return;
+                    }
                           const now = new Date();
                           const nowSec = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
                   const parseHMS = t=>{ 
@@ -2298,7 +2331,15 @@
                     // Update rotating preview after DOM build
                     updatePreviewPlaylist(screenId, items);
                 })
-                .catch((e)=>{ console.error('[Playlist] exception', e); container.innerHTML = '<div style="color:#c00;font-size:11px;">Load error</div>'; });
+                .catch((e)=>{
+                    console.error('[Playlist] exception', e);
+                    // Keep last UI; append a transient error note
+                    const badge = document.createElement('div');
+                    badge.style.cssText = 'font-size:10px;color:#c00;margin-top:4px;';
+                    badge.textContent = 'Load error';
+                    container.appendChild(badge);
+                })
+                .finally(()=>{ if (section) section.classList.remove('loading'); });
         }
 
         function toLocalTimeHMSS(val){
@@ -2791,9 +2832,26 @@
                 } catch {}
                 const rotationClass = `rotate-${currentRotation}`;
                 const srcUrl = (item.url || mediaUrl(item.file)) + `?v=${Date.now()}`;
-                preview.innerHTML = isVideo
-                    ? `<video class=\"${rotationClass}\" autoplay muted playsinline style=\"max-width:100%;max-height:100%;object-fit:contain\" src=\"${srcUrl}\"></video>`
-                    : `<img class=\"${rotationClass}\" style=\"max-width:100%;max-height:100%;object-fit:contain\" src=\"${srcUrl}\" alt=\"Preview\">`;
+                // Crossfade to avoid blank: preload next, then swap
+                const doSwap = (node)=>{
+                    node.style.maxWidth='100%'; node.style.maxHeight='100%'; node.style.objectFit='contain';
+                    if(rotationClass) node.classList.add(rotationClass);
+                    const wrap = document.createElement('div'); wrap.className='preview-item fading-in'; wrap.appendChild(node);
+                    const current = preview.querySelector('.preview-item');
+                    preview.appendChild(wrap);
+                    requestAnimationFrame(()=>{
+                        wrap.classList.remove('fading-in');
+                        if(current){ current.style.opacity='0'; setTimeout(()=> current.remove(), 220); }
+                    });
+                };
+                const swapFallback = ()=>{
+                    const img=document.createElement('img'); img.src=srcUrl; img.alt='Preview'; doSwap(img);
+                };
+                if(isVideo){
+                    preloadVideo(srcUrl).then(v=>{ v.autoplay=true; v.loop=true; v.muted=true; v.playsInline=true; doSwap(v); }).catch(swapFallback);
+                } else {
+                    preloadImage(srcUrl).then(img=>{ doSwap(img); }).catch(swapFallback);
+                }
                 let dur = parseInt(item.duration,10); if(isNaN(dur)||dur<1) dur=10; if(dur>30) dur=30;
                 st.nextAt = Date.now() + dur*1000;
                 st.index++;
