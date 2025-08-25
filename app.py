@@ -479,8 +479,8 @@ def thumbnail(width: int, filename: str):
         if not os.path.exists(src_path):
             return jsonify({'error': 'not found'}), 404
 
-    cached_name = f"{width}_{os.path.splitext(basename)[0]}.webp"
-    cached_path = os.path.abspath(os.path.join(THUMB_FOLDER, cached_name))
+        cached_name = f"{width}_{os.path.splitext(basename)[0]}.webp"
+        cached_path = os.path.abspath(os.path.join(THUMB_FOLDER, cached_name))
 
         # Decide if we need to rebuild
         rebuild = True
@@ -488,7 +488,8 @@ def thumbnail(width: int, filename: str):
             try:
                 rebuild = os.path.getmtime(cached_path) < os.path.getmtime(src_path)
             except Exception:
-                rebuild = True
+                # If we cannot stat reliably, keep existing thumbnail
+                rebuild = False
 
         if rebuild:
             if Image is None:
