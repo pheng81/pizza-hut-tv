@@ -35,6 +35,18 @@
                 const rel = String(name).replace(/^\/+/, '');
                 return base + rel;
             }
+            // Build thumbnail URL for images. If input is an absolute URL (e.g. R2/CDN),
+            // fall back to using it directly (no server-side thumb available for remote files).
+            function thumbUrl(name, width){
+                if(!name) return '';
+                try{
+                    if(/^https?:\/\//i.test(name)){
+                        return mediaUrl(name);
+                    }
+                }catch(e){}
+                const safe = encodeURIComponent(String(name));
+                return `/thumb/${width}/${safe}`;
+            }
         </script>
         <style>
     .enable-switch.on::after, .enable-switch.off::after { content: ''; position: absolute; top: 1px; left: 1px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: all .25s; }
@@ -2574,10 +2586,13 @@
 
         function thumbForFile(file) {
             if (!file) return '<div style="font-size:10px; color:#888;">N/A</div>';
-            const ext = file.split('.').pop().toLowerCase();
+            const isAbs = /^https?:\/\//i.test(String(file));
+            const clean = String(file).split('?')[0];
+            const ext = (clean.includes('.') ? clean.split('.').pop() : '').toLowerCase();
             if (['mp4','webm','ogg','mov','avi','mkv','m4v'].includes(ext)) {
-                const poster = `/vthumb/300/${encodeURIComponent(file)}`;
-                return `<video preload="metadata" muted playsinline poster="${poster}" src="${mediaUrl(file)}" style="max-width:100%; max-height:100%;"></video>`;
+                const poster = isAbs ? '' : `/vthumb/300/${encodeURIComponent(file)}`;
+                const posterAttr = poster ? ` poster="${poster}"` : '';
+                return `<video preload="metadata" muted playsinline${posterAttr} src="${mediaUrl(file)}" style="max-width:100%; max-height:100%;"></video>`;
             }
             return `<img loading="lazy" src="${thumbUrl(file, 300)}" style="max-width:100%; max-height:100%;" />`;
         }
@@ -2868,7 +2883,35 @@
                 function openReplaceModal(screenId,itemId){ ensureReplaceModal(); rpCtx={screenId,itemId}; document.getElementById('rp-overlay').style.display='flex'; refreshLibrary(); }
                 function closeReplaceModal(){ const ov=document.getElementById('rp-overlay'); if(ov) ov.style.display='none'; rpCtx=null; }
                 function switchRpTab(which){ const lib=document.getElementById('rp-view-lib'); const up=document.getElementById('rp-view-upload'); const t1=document.getElementById('rp-tab-lib'); const t2=document.getElementById('rp-tab-upload'); const isLib=which==='lib'; lib.style.display=isLib?'block':'none'; up.style.display=isLib?'none':'block'; t1.classList.toggle('active',isLib); t2.classList.toggle('active',!isLib); }
-                function refreshLibrary(){ fetch('/library').then(r=>r.json()).then(d=>{ const grid=document.getElementById('rp-grid'); if(!grid) return; if(!d.success){ grid.innerHTML='<div style="font-size:12px;color:#c00;">Failed to load library</div>'; return;} const files=d.files||[]; if(!files.length){ grid.innerHTML='<div style="font-size:12px;color:#666;">No files</div>'; return;} grid.innerHTML=''; files.forEach(f=>{ const card=document.createElement('div'); card.className='rp-item'; card.title=f.name; const isVid = (f.media_type==='video'); const poster = isVid ? `/vthumb/300/${encodeURIComponent(f.name)}` : null; card.innerHTML = isVid ? `<video preload="metadata" poster="${poster}"></video>` : `<img loading="lazy" src="${thumbUrl(f.name,300)}"/>`; card.addEventListener('click',()=> chooseLibraryFile(f.name)); grid.appendChild(card); }); }); }
+                function refreshLibrary(){
+                    fetch('/library').then(r=>r.json()).then(d=>{
+                        const grid=document.getElementById('rp-grid');
+                        if(!grid) return;
+                        if(!d.success){ grid.innerHTML='<div style="font-size:12px;color:#c00;">Failed to load library</div>'; return; }
+                        const files=d.files||[];
+                        if(!files.length){ grid.innerHTML='<div style="font-size:12px;color:#666;">No files</div>'; return; }
+                        grid.innerHTML='';
+                        files.forEach(f=>{
+                            const card=document.createElement('div');
+                            card.className='rp-item';
+                            card.title=f.name;
+                            const isVid = (f.media_type==='video');
+                            const abs = f && f.url && /^https?:\/\//i.test(String(f.url));
+                            if(isVid){
+                                const poster = abs ? '' : `/vthumb/300/${encodeURIComponent(f.name)}`;
+                                const posterAttr = poster ? ` poster="${poster}"` : '';
+                                const src = f.url ? f.url : mediaUrl(f.name);
+                                card.innerHTML = `<video preload="metadata" muted playsinline${posterAttr} src="${src}"></video>`;
+                            } else {
+                                const isAbs = f && f.url && /^https?:\/\//i.test(String(f.url));
+                                const src = isAbs ? f.url : thumbUrl(f.name,300);
+                                card.innerHTML = `<img loading="lazy" src="${src}"/>`;
+                            }
+                            card.addEventListener('click',()=> chooseLibraryFile(f.name));
+                            grid.appendChild(card);
+                        });
+                    });
+                }
             function chooseLibraryFile(name){ if(!rpCtx) return; const sid = rpCtx.screenId; const iid = rpCtx.itemId; fetch(`/playlist/item/${currentStoreId}/${sid}/${iid}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({file:name})}).then(r=>r.json()).then(d=>{ if(d.success){ closeReplaceModal(); refreshPlaylist(sid); } else { alert('Replace failed: '+(d.error||'unknown')); } }); }
             function doRpUpload(){ const inp=document.getElementById('rp-file'); if(!inp||!inp.files||!inp.files[0]){ alert('Pick a file'); return; } const fd=new FormData(); fd.append('file', inp.files[0]); const sid = rpCtx && rpCtx.screenId; const iid = rpCtx && rpCtx.itemId; if(!sid||!iid){ alert('No item context'); return; } fetch('/upload_media',{method:'POST',body:fd}).then(r=>r.json()).then(d=>{ if(!d.success){ alert('Upload failed: '+(d.error||'unknown')); return;} fetch(`/playlist/item/${currentStoreId}/${sid}/${iid}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({file:d.filename})}).then(r=>r.json()).then(x=>{ if(x.success){ closeReplaceModal(); refreshPlaylist(sid); } else { alert('Replace failed: '+(x.error||'unknown')); } }); }); }
         
