@@ -747,6 +747,16 @@ def dashboard():
     try:
         print("DEBUG: Loading store config...")
         config = ensure_playlists_structure(load_store_config())
+        # Expose media_base_url in config for front-end JS helpers
+        try:
+            mbu = get_media_base_url()
+            config['media_base_url'] = mbu
+            # Also provide under settings for backward compatibility
+            settings = config.get('settings') or {}
+            settings['media_base_url'] = mbu
+            config['settings'] = settings
+        except Exception as _e:
+            print(f"DEBUG: Failed to set media_base_url in config: {_e}")
         print("DEBUG: Config loaded successfully")
         print(f"DEBUG: Config has {len(config.get('stores', []))} stores")
         print("DEBUG: Rendering template...")
