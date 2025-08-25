@@ -18,12 +18,15 @@
 	<div id="stage">
 		<div class="layer" id="layerA"></div>
 		<div class="layer" id="layerB"></div>
-	</div>
+		</div>
 
-	<script>
-		const storeId = {{ store_id|tojson }};
-		const screenId = {{ screen_id|tojson }};
-		const initialFile = {{ active_file|tojson }};
+		<!-- Provide template vars as JSON so JS linter doesn't choke on Jinja syntax -->
+		<script id="tv-data" type="application/json">{"store_id": {{ store_id|tojson }}, "screen_id": {{ screen_id|tojson }}, "initial_file": {{ active_file|tojson }}}</script>
+		<script>
+			const __tvCfg = JSON.parse(document.getElementById('tv-data')?.textContent || '{}');
+			const storeId = __tvCfg.store_id;
+			const screenId = __tvCfg.screen_id;
+			const initialFile = __tvCfg.initial_file;
 
 		const videoExt = ['mp4','webm','ogg','mov','avi','mkv','m4v'];
 		function isVideoByName(name){ if(!name) return false; const ext=(name.split('.').pop()||'').toLowerCase(); return videoExt.includes(ext); }
