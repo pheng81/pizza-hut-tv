@@ -1,5 +1,7 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response, send_file
 import os
+import shutil as _shutil
+import subprocess
 from werkzeug.utils import secure_filename  # may be unused but kept for backward compat
 import uuid
 import json
@@ -39,6 +41,20 @@ app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-this'
 print('DEBUG: app.py initialization start', flush=True)
 logging.debug('App module import start')
+
+# Enable gzip compression if available
+try:
+    from flask_compress import Compress
+    # Configure a conservative set of MIME types to compress
+    app.config.setdefault('COMPRESS_MIMETYPES', [
+        'text/html', 'text/css', 'application/json', 'application/javascript', 'text/javascript'
+    ])
+    app.config.setdefault('COMPRESS_LEVEL', 6)
+    app.config.setdefault('COMPRESS_MIN_SIZE', 1024)
+    Compress(app)
+    logging.debug('Flask-Compress enabled')
+except Exception as _compress_e:
+    logging.warning('Flask-Compress not enabled: %s', _compress_e)
 
 # --- Media base URL (for external/CDN like Cloudflare R2) ---
 def get_media_base_url():
@@ -193,7 +209,9 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Cache folder for generated thumbnails
 THUMB_FOLDER = os.path.join('static', 'thumbs')
+VTHUMB_FOLDER = os.path.join('static', 'vthumbs')
 os.makedirs(THUMB_FOLDER, exist_ok=True)
+os.makedirs(VTHUMB_FOLDER, exist_ok=True)
 
 # Categorized extension sets (keep lowercase)
 IMAGE_EXTENSIONS = {
@@ -450,7 +468,7 @@ except Exception:
 def thumbnail(width: int, filename: str):
     """Return a cached thumbnail for an uploaded image under static/uploads.
     - width: target max width; height preserved by aspect ratio
-    - caches to static/thumbs/{width}_{basename}[.jpg]
+    - caches to static/thumbs/{width}_{basename}.webp
     - if not an image or Pillow missing, redirect to original
     """
     try:
@@ -461,8 +479,8 @@ def thumbnail(width: int, filename: str):
         if not os.path.exists(src_path):
             return jsonify({'error': 'not found'}), 404
 
-        cached_name = f"{width}_{basename}"
-        cached_path = os.path.abspath(os.path.join(THUMB_FOLDER, cached_name))
+    cached_name = f"{width}_{os.path.splitext(basename)[0]}.webp"
+    cached_path = os.path.abspath(os.path.join(THUMB_FOLDER, cached_name))
 
         # Decide if we need to rebuild
         rebuild = True
@@ -484,18 +502,13 @@ def thumbnail(width: int, filename: str):
                     im_copy = im.copy()
                     # Preserve aspect ratio using thumbnail(); very tall max height to avoid constraining height
                     im_copy.thumbnail((int(width) if width>0 else 300, 10000), Image.LANCZOS)
-                    ext = _image_ext(basename)
-                    fmt = 'JPEG' if ext in ('jpg','jpeg') else ('PNG' if ext == 'png' else None)
-                    save_kwargs = {'optimize': True}
-                    if fmt == 'JPEG':
-                        save_kwargs['quality'] = 85
-                    if fmt:
-                        im_copy.save(cached_path, fmt, **save_kwargs)
-                    else:
-                        # Default to JPEG to shrink size if uncommon format
-                        if not cached_path.lower().endswith('.jpg'):
-                            cached_path = cached_path + '.jpg'
-                        im_copy.save(cached_path, 'JPEG', quality=85, optimize=True)
+                    try:
+                        im_copy.save(cached_path, 'WEBP', quality=80, method=6)
+                    except Exception:
+                        # Fallback to JPEG
+                        fallback_path = cached_path[:-5] + '.jpg'
+                        im_copy.save(fallback_path, 'JPEG', quality=85, optimize=True)
+                        cached_path = fallback_path
                         cached_name = os.path.basename(cached_path)
             except Exception as e:
                 logging.error('Thumbnail build failed for %s: %s', basename, e)
@@ -509,6 +522,60 @@ def thumbnail(width: int, filename: str):
         return resp
     except Exception as e:
         logging.error('Thumbnail error: %s', e)
+        return jsonify({'error': 'bad request'}), 400
+
+# ---- Video thumbnail endpoint using ffmpeg (if available) ----
+def _has_ffmpeg() -> bool:
+    try:
+        return bool(_shutil.which('ffmpeg'))
+    except Exception:
+        return False
+
+def _safe_video_path(name: str) -> str:
+    abs_upload = os.path.abspath(UPLOAD_FOLDER)
+    target = os.path.abspath(os.path.join(UPLOAD_FOLDER, name))
+    if not (target == abs_upload or target.startswith(abs_upload + os.sep)):
+        raise ValueError('invalid filename')
+    ext = (name.rsplit('.', 1)[-1].lower() if '.' in name else '')
+    if ext not in VIDEO_EXTENSIONS:
+        raise ValueError('not a video')
+    return target
+
+@app.route('/vthumb/<int:width>/<path:filename>')
+def vthumbnail(width: int, filename: str):
+    try:
+        basename = os.path.basename(filename)
+        src_path = _safe_video_path(basename)
+        cached_name = f"{width}_{os.path.splitext(basename)[0]}.jpg"
+        cached_path = os.path.abspath(os.path.join(VTHUMB_FOLDER, cached_name))
+        rebuild = True
+        if os.path.exists(cached_path):
+            try:
+                rebuild = os.path.getmtime(cached_path) < os.path.getmtime(src_path)
+            except Exception:
+                rebuild = True
+        if rebuild:
+            if not _has_ffmpeg():
+                return jsonify({'error': 'ffmpeg not available'}), 404
+            os.makedirs(VTHUMB_FOLDER, exist_ok=True)
+            try:
+                cmd = [
+                    'ffmpeg', '-y', '-ss', '0.2', '-i', src_path,
+                    '-vframes', '1', '-vf', f'scale={int(width) if width>0 else 300}:-1',
+                    cached_path
+                ]
+                subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception as e:
+                logging.error('ffmpeg thumbnail failed for %s: %s', basename, e)
+                return jsonify({'error': 'thumb failed'}), 500
+        resp = send_file(cached_path)
+        try:
+            resp.headers['Cache-Control'] = 'public, max-age=2592000'
+        except Exception:
+            pass
+        return resp
+    except Exception as e:
+        logging.error('vthumbnail error: %s', e)
         return jsonify({'error': 'bad request'}), 400
 
 def parse_time_string(val, now):
