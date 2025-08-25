@@ -526,9 +526,30 @@ def thumbnail(width: int, filename: str):
         return jsonify({'error': 'bad request'}), 400
 
 # ---- Video thumbnail endpoint using ffmpeg (if available) ----
+def _ffmpeg_bin() -> Optional[str]:
+    """Resolve ffmpeg executable path.
+    Order: FFMPEG_BIN env -> shutil.which -> common absolute paths.
+    """
+    try:
+        # 1) Explicit env override
+        env_bin = os.environ.get('FFMPEG_BIN')
+        if env_bin and os.path.exists(env_bin) and os.access(env_bin, os.X_OK):
+            return env_bin
+        # 2) PATH search
+        found = _shutil.which('ffmpeg')
+        if found:
+            return found
+        # 3) Common system locations (systemd may have a reduced PATH)
+        for p in ('/usr/bin/ffmpeg', '/usr/local/bin/ffmpeg', '/bin/ffmpeg'):
+            if os.path.exists(p) and os.access(p, os.X_OK):
+                return p
+    except Exception:
+        pass
+    return None
+
 def _has_ffmpeg() -> bool:
     try:
-        return bool(_shutil.which('ffmpeg'))
+        return _ffmpeg_bin() is not None
     except Exception:
         return False
 
@@ -556,12 +577,13 @@ def vthumbnail(width: int, filename: str):
             except Exception:
                 rebuild = True
         if rebuild:
-            if not _has_ffmpeg():
+        ffmpeg = _ffmpeg_bin()
+        if not ffmpeg:
                 return jsonify({'error': 'ffmpeg not available'}), 404
             os.makedirs(VTHUMB_FOLDER, exist_ok=True)
             try:
                 cmd = [
-                    'ffmpeg', '-y', '-ss', '0.2', '-i', src_path,
+            ffmpeg, '-y', '-ss', '0.2', '-i', src_path,
                     '-vframes', '1', '-vf', f'scale={int(width) if width>0 else 300}:-1',
                     cached_path
                 ]
