@@ -1,66 +1,62 @@
 # Production deploy (Ubuntu + Cloudflare Tunnel)
 
-Follow these steps once per VM. Replace values only if your paths differ.
+Two ways to deploy updates:
+- One-time bootstrap + one-command updates via Windows PowerShell script.
+- Manual steps on the server (if you prefer).
 
-## 1) Clone the repo to the VM via SSH deploy key
+## Option A — One-command deploy from Windows
 
-- On the VM, generate a key and add it as a Deploy key in GitHub (Allow write not required):
-  
-  ssh-keygen -t ed25519 -f ~/.ssh/github -N ""
-  
-  cat ~/.ssh/github.pub
-  
-  # Copy the printed public key to GitHub > repo > Settings > Deploy keys > Add deploy key
+1) First-time on a new VM (installs deps, clones repo, sets up service):
 
-- Make GitHub use this key:
-  
-  echo "Host github.com`n  HostName github.com`n  IdentityFile ~/.ssh/github`n  User git" >> ~/.ssh/config
-  
-- Clone:
-  
-  git clone git@github.com:pheng81/pizza-hut-tv.git
+  In PowerShell from the repo root:
 
-## 2) Python venv and dependencies
+  powershell -ExecutionPolicy Bypass -File deploy/deploy.ps1 -Server <SERVER_IP_OR_DOMAIN> -Bootstrap
 
-cd ~/pizza-hut-tv
-python3 -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip wheel
-pip install -r requirements.txt
-pip install gunicorn
+  This will:
+  - Install git, python3-venv, ffmpeg
+  - Clone to /home/ubuntu/pizza-hut-tv
+  - Create .venv and install requirements
+  - Install systemd service everydayadvertise.service and start it
 
-Quick smoke test:
+2) Subsequent updates (pull + restart):
 
-MEDIA_BASE_URL=https://api.everydayadvertise.com \
-  .venv/bin/gunicorn -c deploy/gunicorn.conf.py app:app --pid /tmp/gunicorn-test.pid \
-  --access-logfile - --error-logfile - --daemon
+  powershell -ExecutionPolicy Bypass -File deploy/deploy.ps1 -Server <SERVER_IP_OR_DOMAIN>
 
-curl -I http://127.0.0.1:5002/
-# If 200 OK, stop the test:
-kill "$(cat /tmp/gunicorn-test.pid)"
+  Optional parameters: -RepoPath '/opt/pizza-hut-tv' -ServiceNames 'tv-api' -KeyPath 'C:\path\to\key.pem'
 
-## 3) Install systemd service
+## Option B — Manual steps on the server
 
-sudo cp deploy/everydayadvertise.service /etc/systemd/system/everydayadvertise.service
-sudo systemctl daemon-reload
-sudo systemctl enable --now everydayadvertise
+1) Clone the repo (HTTPS or SSH) and create venv:
 
-Check logs:
+  cd ~
+  sudo apt-get update -y
+  sudo apt-get install -y git python3-venv ffmpeg
+  git clone https://github.com/pheng81/pizza-hut-tv.git
+  cd pizza-hut-tv
+  python3 -m venv .venv
+  . .venv/bin/activate
+  pip install --upgrade pip wheel
+  pip install -r requirements.txt
+  pip install gunicorn
 
-sudo journalctl -u everydayadvertise -f
+2) Install systemd service and start:
 
-## 4) Cloudflare Tunnel (already configured)
+  sudo cp deploy/everydayadvertise.service /etc/systemd/system/everydayadvertise.service
+  sudo systemctl daemon-reload
+  sudo systemctl enable --now everydayadvertise
+  sudo systemctl status everydayadvertise --no-pager -l
 
-Your tunnel maps api.everydayadvertise.com -> http://127.0.0.1:5002.
-If you changed ports/path, update /etc/cloudflared/config.yml accordingly, then:
+3) Cloudflare Tunnel (already configured):
 
-sudo systemctl restart cloudflared
+  Your tunnel maps api.everydayadvertise.com -> http://127.0.0.1:5002.
+  If you changed ports/path, update /etc/cloudflared/config.yml accordingly, then:
 
-Validate public endpoint:
-
-curl -I https://api.everydayadvertise.com/
+  sudo systemctl restart cloudflared
+  curl -I https://api.everydayadvertise.com/
 
 ## Notes
-- The app binds to 127.0.0.1:5002; do not expose port 5002 publicly.
-- MEDIA_BASE_URL must be https://api.everydayadvertise.com so clients get absolute URLs.
-- For updates: `cd ~/pizza-hut-tv && git pull && source .venv/bin/activate && pip install -r requirements.txt && sudo systemctl restart everydayadvertise`.
+- Service name: repo includes everydayadvertise.service (preferred). If you used tv-api.service before, you can keep it, but pick one to avoid confusion.
+- App binds to 127.0.0.1:5002; don’t expose 5002 publicly.
+- Set MEDIA_BASE_URL=https://api.everydayadvertise.com for absolute media URLs.
+- For updates by hand:
+  cd ~/pizza-hut-tv && git pull && . .venv/bin/activate && pip install -r requirements.txt && sudo systemctl restart everydayadvertise
