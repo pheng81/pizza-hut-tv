@@ -1480,8 +1480,37 @@
             .then(data => {
                 console.log('Parsed response data:', data);
                 if (data.success) {
+                    // Optimistic UI update: clear preview, update in-memory, refresh playlist
+                    try {
+                        if (allStoresData.screens[currentStoreId] && allStoresData.screens[currentStoreId][screenId]) {
+                            allStoresData.screens[currentStoreId][screenId].file = null;
+                            if (Array.isArray(allStoresData.screens[currentStoreId][screenId].playlist)) {
+                                // Remove any items referencing the deleted file
+                                const fname = data.removed_filename || null;
+                                if (fname) {
+                                    allStoresData.screens[currentStoreId][screenId].playlist = allStoresData.screens[currentStoreId][screenId].playlist.filter(it => it.file !== fname);
+                                }
+                            }
+                        }
+                    } catch {}
+
+                    // Clear the preview box immediately
+                    const preview = document.getElementById('preview-' + screenId);
+                    if (preview) {
+                        preview.innerHTML = '<div class="upload-area"><div style="margin-top: 20px;">No content uploaded</div></div>';
+                    }
+                    // Also remove the Delete button from the UI (no file now)
+                    try {
+                        const card = document.getElementById('card-' + screenId);
+                        const btn = card ? card.querySelector('.delete-btn') : null;
+                        if (btn) btn.remove();
+                    } catch {}
+
+                    // Soft refresh playlist for this screen
+                    if (typeof refreshPlaylist === 'function') {
+                        try { refreshPlaylist(screenId); } catch (e) { console.warn('refresh after delete failed', e); }
+                    }
                     alert('✅ File deleted successfully!');
-                    window.location.reload();
                 } else {
                     alert('❌ Delete failed: ' + (data.error || 'Unknown error'));
                 }
@@ -2275,7 +2304,9 @@
             // Keep current DOM to avoid the temporary blank area; just mark as loading
             if (section) section.classList.add('loading');
             const requestStartedAt = Date.now();
-            safeFetchJson(`/playlist/${currentStoreId}/${screenId}`)
+            // Add cache-busting query to avoid any intermediary/proxy caching
+            const bust = Date.now();
+            safeFetchJson(`/playlist/${currentStoreId}/${screenId}?_=${bust}`)
                 .then(res=>{
                     const data = res.json || {};
                     // Ignore very slow/stale responses if another refresh started later
