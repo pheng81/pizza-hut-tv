@@ -637,7 +637,7 @@ def thumbnail(width: int, filename: str):
                 # If we cannot stat reliably, keep existing thumbnail
                 rebuild = False
 
-    if rebuild:
+        if rebuild:
             if Image is None:
                 return redirect(url_for('static', filename=f'uploads/{basename}'))
             try:
