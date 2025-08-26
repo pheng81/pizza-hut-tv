@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response, send_file, g
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response, send_file
 import os
 import shutil as _shutil
 import subprocess
@@ -11,7 +11,6 @@ import logging
 import time
 from typing import Optional
 from dotenv import load_dotenv
-from werkzeug.http import http_date
 
 load_dotenv()
 
@@ -42,14 +41,6 @@ app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-this'
 print('DEBUG: app.py initialization start', flush=True)
 logging.debug('App module import start')
-
-# --- Basic slow request logging ---
-@app.before_request
-def _start_timer():
-    try:
-        g._t0 = time.time()
-    except Exception:
-        pass
 @app.after_request
 def _add_cache_headers(resp):
     try:
@@ -57,15 +48,6 @@ def _add_cache_headers(resp):
         if p.startswith('/static/uploads/') or p.startswith('/thumb/') or p.startswith('/vthumb/'):
             # Encourage client reuse; actual busting handled by unique filenames/URLs
             resp.headers.setdefault('Cache-Control', 'public, max-age=3600, immutable')
-        # Slow request tracer (server-side only)
-        try:
-            t0 = getattr(g, '_t0', None)
-            if t0 is not None:
-                dt = (time.time() - t0) * 1000.0
-                if dt >= 500:  # > 0.5s
-                    logging.warning('SLOW %.0fms %s %s -> %s', dt, request.method, p, resp.status_code)
-        except Exception:
-            pass
     except Exception:
         pass
     return resp
@@ -186,13 +168,30 @@ def screen_heartbeat():
     if not store_id or not screen_id:
         return jsonify({'success': False, 'error': 'Missing store_id or screen_id'}), 400
     cfg = load_store_config()
+    # Legacy mapping: if store_id changed (e.g., old '1881' -> current master), alias automatically
+    try:
+        master = cfg.get('master_store_id')
+        if master and store_id not in (cfg.get('screens') or {}) and str(store_id) == '1881':
+            logging.debug('HB legacy store_id %s mapped to master %s', store_id, master)
+            store_id = master
+    except Exception:
+        pass
     store_screens = cfg.get('screens', {}).get(store_id)
     if not isinstance(store_screens, dict):
         logging.debug('HB store not found: %s', store_id)
         return jsonify({'success': False, 'error': 'Store not found'}), 404
     # Accept either full key (e.g., "1112_screen1") or plain ("screen1")
     if screen_id not in store_screens:
-        candidate = f"{store_id}_{screen_id}" if '_' not in screen_id else None
+        candidate = None
+        if '_' not in screen_id:
+            candidate = f"{store_id}_{screen_id}"
+        else:
+            # Handle cross-store prefixed IDs like "1881_screen1" -> map suffix to current store
+            try:
+                suffix = screen_id.split('_', 1)[1]
+                candidate = f"{store_id}_{suffix}"
+            except Exception:
+                candidate = None
         if candidate and candidate in store_screens:
             screen_id = candidate
         else:
@@ -545,15 +544,9 @@ def thumbnail(width: int, filename: str):
                 logging.error('Thumbnail build failed for %s: %s', basename, e)
                 return redirect(url_for('static', filename=f'uploads/{basename}'))
 
-        # Add conditional handling (304 when client cache is fresh)
-        resp = send_file(cached_path, conditional=True)
-        # Strong cache for thumbnails
+        resp = send_file(cached_path)
         try:
             resp.headers['Cache-Control'] = 'public, max-age=2592000'  # 30 days
-            st = os.stat(cached_path)
-            etag = f'W/"{int(st.st_mtime)}-{st.st_size}"'
-            resp.headers['ETag'] = etag
-            resp.headers['Last-Modified'] = http_date(st.st_mtime)
         except Exception:
             pass
         return resp
@@ -603,11 +596,7 @@ def _safe_video_path(name: str) -> str:
 def vthumbnail(width: int, filename: str):
     try:
         basename = os.path.basename(filename)
-        # Validate video; if not a video, fall back to placeholder
-        try:
-            src_path = _safe_video_path(basename)
-        except Exception:
-            return redirect(url_for('static', filename='video_placeholder.svg'))
+        src_path = _safe_video_path(basename)
         cached_name = f"{width}_{os.path.splitext(basename)[0]}.jpg"
         cached_path = os.path.abspath(os.path.join(VTHUMB_FOLDER, cached_name))
         rebuild = True
@@ -619,8 +608,7 @@ def vthumbnail(width: int, filename: str):
         if rebuild:
             ffmpeg = _ffmpeg_bin()
             if not ffmpeg:
-                # Graceful fallback to a static placeholder instead of 404
-                return redirect(url_for('static', filename='video_placeholder.svg'))
+                return jsonify({'error': 'ffmpeg not available'}), 404
             os.makedirs(VTHUMB_FOLDER, exist_ok=True)
             try:
                 cmd = [
@@ -631,14 +619,10 @@ def vthumbnail(width: int, filename: str):
                 subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except Exception as e:
                 logging.error('ffmpeg thumbnail failed for %s: %s', basename, e)
-                return redirect(url_for('static', filename='video_placeholder.svg'))
-        resp = send_file(cached_path, conditional=True)
+                return jsonify({'error': 'thumb failed'}), 500
+        resp = send_file(cached_path)
         try:
             resp.headers['Cache-Control'] = 'public, max-age=2592000'
-            st = os.stat(cached_path)
-            etag = f'W/"{int(st.st_mtime)}-{st.st_size}"'
-            resp.headers['ETag'] = etag
-            resp.headers['Last-Modified'] = http_date(st.st_mtime)
         except Exception:
             pass
         return resp
@@ -1614,16 +1598,28 @@ def delete_store():
 def get_playlist(store_id, screen_id):
     print(f"DEBUG: GET /playlist {store_id} {screen_id}")
     cfg = ensure_playlists_structure(load_store_config())
+    # Legacy mapping: if old store_id like '1881' no longer exists, map to current master store
+    try:
+        if store_id not in (cfg.get('screens') or {}) and str(store_id) == '1881':
+            m = cfg.get('master_store_id')
+            if m and m in (cfg.get('screens') or {}):
+                print(f"DEBUG: Legacy store_id {store_id} -> master {m}")
+                store_id = m
+    except Exception:
+        pass
     screens = cfg.get('screens', {}).get(store_id, {})
     screen = screens.get(screen_id)
     if not screen:
         # Try mapping between legacy short and store-prefixed IDs
         alt = None
         if '_' in screen_id:
+            # If screen_id includes a store prefix, normalize to current store
             short = screen_id.split('_', 1)[1]
-            alt = screens.get(short)
+            # Prefer current-store-prefixed id first
+            prefixed_current = f"{store_id}_{short}"
+            alt = screens.get(prefixed_current) or screens.get(short)
             if alt is not None:
-                screen_id = short
+                screen_id = prefixed_current if prefixed_current in screens else short
         else:
             prefixed = f"{store_id}_{screen_id}"
             alt = screens.get(prefixed)
@@ -1926,6 +1922,16 @@ def delete_schedule_window(store_id, screen_id, item_id, index):
                 return jsonify({'success': True, 'removed': removed})
             return jsonify({'success': False, 'error': 'index out of range'}), 400
     return jsonify({'success': False, 'error': 'item not found'}), 404
+
+# ---- Legacy fixed-path alias: redirect /playlist/1881/... to current master store id ----
+@app.route('/playlist/1881/<screen_id>')
+def get_playlist_legacy_1881(screen_id):
+    cfg = ensure_playlists_structure(load_store_config())
+    master = cfg.get('master_store_id')
+    if master:
+        # Call into the primary handler logic by passing mapped ids
+        return get_playlist(master, screen_id)
+    return jsonify({'success': False, 'error': 'legacy mapping unavailable'}), 404
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5002))  # Use 5002 since 5000 seems blocked
