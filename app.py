@@ -637,7 +637,7 @@ def thumbnail(width: int, filename: str):
                 # If we cannot stat reliably, keep existing thumbnail
                 rebuild = False
 
-        if rebuild:
+    if rebuild:
             if Image is None:
                 return redirect(url_for('static', filename=f'uploads/{basename}'))
             try:
@@ -648,13 +648,17 @@ def thumbnail(width: int, filename: str):
                         im = im.convert('RGB')
                     im_copy = im.copy()
                     # Preserve aspect ratio using thumbnail(); very tall max height to avoid constraining height
-                    im_copy.thumbnail((int(width) if width>0 else 300, 10000), Image.LANCZOS)
+                    target_w = int(width) if width>0 else 300
+                    im_copy.thumbnail((target_w, 10000), Image.LANCZOS)
+                    # Adaptive quality: smaller thumbs get lower quality to cut bytes
+                    q = 60 if target_w <= 220 else 78
                     try:
-                        im_copy.save(cached_path, 'WEBP', quality=80, method=6)
+                        im_copy.save(cached_path, 'WEBP', quality=q, method=6)
                     except Exception:
                         # Fallback to JPEG
                         fallback_path = cached_path[:-5] + '.jpg'
-                        im_copy.save(fallback_path, 'JPEG', quality=85, optimize=True)
+                        jq = 75 if target_w <= 220 else 85
+                        im_copy.save(fallback_path, 'JPEG', quality=jq, optimize=True)
                         cached_path = fallback_path
                         cached_name = os.path.basename(cached_path)
             except Exception as e:
