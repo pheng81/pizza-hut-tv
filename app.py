@@ -1365,7 +1365,8 @@ def delete_from_screen():
                     'success': True,
                     'message': 'File removed from screen',
                     'file_was_shared': still_in_use,
-                    'file_deleted': not still_in_use
+                    'file_deleted': not still_in_use,
+                    'removed_filename': current_filename
                 })
             except Exception as e:
                 print(f"Error during delete operation: {e}")
@@ -1869,7 +1870,12 @@ def get_playlist(store_id, screen_id):
         except Exception:
             out.append(item)
     print(f"DEBUG: Returning playlist items: {len(out)}")
-    return {'success': True, 'playlist': out}
+    # Dashboard needs immediate consistency after changes; disable caching here.
+    return (
+        {'success': True, 'playlist': out},
+        200,
+        {'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'}
+    )
 
 # ---- Media library listing (for choosing existing uploads) ----
 @app.route('/library')
