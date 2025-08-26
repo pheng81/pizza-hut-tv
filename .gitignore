@@ -6,6 +6,7 @@
 *.tmp
 *.swp
 *.swo
+*.zip
 
 # Python
 __pycache__/
@@ -67,6 +68,9 @@ coverage.xml
 # Ignore uploaded media (comment out if you want to version them)
 static/uploads/*
 !static/uploads/.gitkeep
+
+# Compressed bundles
+*.zip
 
 # Cache / temp
 *.tmp
