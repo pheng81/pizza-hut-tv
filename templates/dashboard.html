@@ -199,6 +199,38 @@
             display: inline-flex;
             align-items: center;
         }
+        /* Quick tips button inside title row */
+        .stores-title .quick-tips {
+            appearance: none;
+            border: 1px solid #d2d2d7;
+            background: #f2f2f7;
+            color: #1d1d1f;
+            border-radius: 10px;
+            padding: 6px 12px;
+            height: 32px;
+            display: inline-flex;
+            align-items: center;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            transition: background .2s, border-color .2s, transform .05s;
+            margin-left: 10px;
+        }
+        .stores-title .quick-tips:hover { background: #e9e9ef; border-color: #c7c7cc; }
+        .stores-title .quick-tips:active { transform: translateY(1px); }
+        .stores-title .quick-tips:focus-visible { outline: 3px solid rgba(10,132,255,0.35); outline-offset: 2px; }
+    .stores-title .quick-tips .icon { width:18px; height:18px; }
+        /* Ensure strokes are visible for the inline SVG icon placed in the title */
+        .stores-title .quick-tips .icon circle,
+        .stores-title .quick-tips .icon path {
+            stroke: currentColor;
+            stroke-width: 1.8;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+        @media (max-width:768px){
+            .stores-title .quick-tips { margin-left: 8px; height:28px; padding:4px 10px; }
+        }
         
         .search-box {
             padding: 8px 12px;
@@ -343,6 +375,10 @@
             transition: all 0.3s ease;
             backdrop-filter: blur(2px);
         }
+    /* Layering: media below, indicator above */
+    .screen-preview .preview-item { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; opacity:1; transition:opacity .2s ease; z-index:1; }
+    .screen-preview .preview-item.fading-in { opacity:0; }
+    .screen-preview .preview-badge { position:absolute; top:4px; left:4px; z-index:3; pointer-events:none; }
         
         /* Vertical orientation preview - tall and narrow */
         .screen-preview.vertical-preview {
@@ -1065,6 +1101,8 @@
         border-radius: 10px;
         border: 1px solid #e5e7eb;
     }
+    /* Preview countdown badge */
+    .preview-badge { background: rgba(0,0,0,.55); color:#fff; font: 10px monospace; padding:2px 5px; border-radius:4px; z-index:3; }
     /* Weekday selector */
     .weekday-row { display:flex; gap:3px; flex-wrap:nowrap; margin-bottom:4px; }
     .weekday-row, .weekday-btn { pointer-events:auto; }
@@ -1072,6 +1110,75 @@
     .weekday-btn.active { background:#2563eb; border-color:#1d4ed8; color:#fff; box-shadow:0 0 0 2px rgba(37,99,235,0.25); }
     .weekday-btn:hover { background:#e0e7ef; }
     .weekday-btn:active { transform:scale(.92); }
+
+        /* ===== Responsive layout: make dashboard mobile-friendly ===== */
+        /* Overall page container (this template uses .container, not .app-wrapper) */
+        .container { width:100%; max-width:1180px; margin:0 auto; padding:12px 20px 40px; box-sizing:border-box; }
+
+        @media (max-width: 1024px){
+            .container { padding:10px 16px 32px; }
+            .stores-title { font-size: 30px; }
+            .stores-title .tv-svg { width:38px; height:38px; }
+        }
+
+        @media (max-width: 768px){
+            /* Stack the header */
+            .stores-header { flex-direction: column; align-items: flex-start; gap: 10px; padding-left: 0; }
+            .stores-actions { width: 100%; display: flex; justify-content: flex-end; }
+            .stores-title { font-size: 26px; }
+            .stores-title .tv-svg { width:32px; height:32px; }
+
+            /* Store selector area */
+            .store-management { flex-direction: column; align-items: stretch; gap: 10px; }
+            .store-management select { width: 100%; min-width: 0; }
+            /* Hide large desktop buttons; we show compact ones in the mobile action row */
+            .store-management .add-store-btn, .store-management .delete-store-btn { display:none; }
+
+            /* Sections */
+            .section-header { flex-direction: column; align-items: stretch; gap: 10px; }
+            .section-header .section-left { justify-content: space-between; }
+            /* Hide per-section Add Screen on mobile; replaced by top action row */
+            .section-header .add-screen-btn { display:none; }
+
+            /* Grid to single column */
+            .screens-grid, .promos-grid { grid-template-columns: 1fr; gap: 14px; }
+
+            /* Screen cards tighten */
+            .screen-card { padding: 14px; }
+
+            /* Preview boxes use aspect-ratio for better fit */
+            .screen-preview { width:100%; height:auto; aspect-ratio: 16/9; }
+            .screen-preview.horizontal-preview { aspect-ratio: 16/9; }
+            .screen-preview.vertical-preview { aspect-ratio: 9/16; width: 70%; margin-left: auto; margin-right: auto; }
+            .screen-preview.default-preview { aspect-ratio: 4/3; }
+
+            /* Action buttons wrap */
+            .button-row { flex-wrap: wrap; gap: 8px; }
+            .upload-btn, .delete-btn, .rotate-btn { flex: 1 1 calc(50% - 8px); }
+
+            /* Store info wraps nicely */
+            .store-info { flex-wrap: wrap; gap: 6px; }
+            .store-number { font-size: 16px; }
+            #master-indicator { display: inline-block; }
+        }
+
+        @media (max-width: 480px){
+            .stores-title { font-size: 22px; }
+            .stores-title .tv-svg { width:28px; height:28px; }
+            .search-box { width: 100%; }
+            .screen-preview.vertical-preview { width: 80%; }
+            .playlist-row.apple .pl-top { gap: 8px; }
+            .pl-actions.inline-actions { padding: 3px 6px; }
+        }
+
+        /* Mobile action row with 3 compact buttons in one line */
+        .mobile-actions { display:none; }
+        @media (max-width: 768px){
+            .mobile-actions { display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; margin: 8px 0 12px; }
+            .mobile-actions .add-store-btn,
+            .mobile-actions .delete-store-btn,
+            .mobile-actions .add-screen-btn { height:34px; padding:0 8px; font-size:12px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; gap:6px; }
+        }
     </style>
 </head>
 <body>
@@ -1201,16 +1308,14 @@
                                                                                             </style>
                                                                                         </svg>
                                                         </span>
+                                                        <button class="quick-tips" onclick="showQuickTips()" aria-label="Quick tips" title="Quick tips">
+                                                            <svg class="icon" viewBox="0 0 24 24" role="img" aria-label="Help">
+                                                                <circle cx="12" cy="12" r="9" fill="none"></circle>
+                                                                <path d="M9.6 9.2a2.4 2.4 0 1 1 4 1.7c-1.05.95-2.2 1.22-2.2 2.25v.7" fill="none"></path>
+                                                                <circle cx="12" cy="17.2" r="1.2" fill="currentColor"></circle>
+                                                            </svg>
+                                                        </button>
                                                 </div>
-                <div class="stores-actions">
-                    <button class="quick-tips" onclick="showQuickTips()" aria-label="Quick tips" title="Quick tips">
-                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-                            <circle cx="12" cy="12" r="9" fill="none"></circle>
-                            <path d="M9.75 9a2.25 2.25 0 1 1 3.9 1.5c-.85.9-1.65 1.06-1.65 2.25v.5" fill="none"></path>
-                            <circle cx="12" cy="17" r="1" fill="currentColor"></circle>
-                        </svg>
-                    </button>
-                </div>
             </div>
             
             <!-- Store Management -->
@@ -1232,6 +1337,13 @@
                 <button class="delete-store-btn" id="delete-store-btn" onclick="deleteCurrentStore()" title="Delete selected store">
                     🗑️ Delete Store
                 </button>
+            </div>
+
+            <!-- Mobile compact action row: Add Store | Delete Store | Add Screen -->
+            <div class="mobile-actions" aria-label="Quick actions">
+                <button class="add-store-btn" onclick="showAddStoreDialog()" title="Add Store">➕ Add Store</button>
+                <button class="delete-store-btn" id="delete-store-btn-mobile" onclick="deleteCurrentStore()" title="Delete selected store">🗑️ Delete</button>
+                <button class="add-screen-btn" onclick="addNewScreen('screen')" title="Add Screen">📺 Add Screen</button>
             </div>
             
             
@@ -2309,9 +2421,9 @@
                                                                                         </div>\
                                                                                         <div class="group center combo-dur-del">\
                                                                                             <div class="dur-box small">
-                                                                                                <button class="pl-icon-btn dur-btn" onclick="adjustDuration('${screenId}','${item.id}',-1)" aria-label="Decrease duration">−</button>
+                                                                                                <button class="pl-icon-btn dur-btn" onclick="adjustDuration('${screenId}','${item.id}',-1, event)" aria-label="Decrease duration">−</button>
                                                                                                 <div class="dur-display" id="durdisp-${screenId}-${item.id}">${(item.duration||5)}s</div>
-                                                                                                <button class="pl-icon-btn dur-btn" onclick="adjustDuration('${screenId}','${item.id}',1)" aria-label="Increase duration">+</button>
+                                                                                                <button class="pl-icon-btn dur-btn" onclick="adjustDuration('${screenId}','${item.id}',1, event)" aria-label="Increase duration">+</button>
                                                                                             </div>
                                                                                             <input id="dur-${screenId}-${item.id}" type="hidden" value="${item.duration || 5}">
                                                                                         </div>\
@@ -2451,9 +2563,9 @@
                                 </div>\
                                 <div class="group center combo-dur-del">\
                                     <div class="dur-box small">
-                                        <button class="pl-icon-btn dur-btn" onclick="adjustDuration('${screenId}','${item.id}',-1)" aria-label="Decrease duration">−</button>
+                                        <button class="pl-icon-btn dur-btn" onclick="adjustDuration('${screenId}','${item.id}',-1, event)" aria-label="Decrease duration">−</button>
                                         <div class="dur-display" id="durdisp-${screenId}-${item.id}">${(item.duration||5)}s</div>
-                                        <button class="pl-icon-btn dur-btn" onclick="adjustDuration('${screenId}','${item.id}',1)" aria-label="Increase duration">+</button>
+                                        <button class="pl-icon-btn dur-btn" onclick="adjustDuration('${screenId}','${item.id}',1, event)" aria-label="Increase duration">+</button>
                                     </div>
                                     <input id="dur-${screenId}-${item.id}" type="hidden" value="${item.duration || 5}">
                                 </div>\
@@ -2732,6 +2844,31 @@
             }).then(r=>r.json()).then(data=>{ if(!data.success) alert('Schedule update failed'); });
         }
 
+        // --- Duration controls (+/−) ---
+    function adjustDuration(screenId, itemId, delta, ev){
+            try{
+        // Prefer scoping to the clicked action row to avoid collisions in extra windows
+        let root = null;
+        if(ev && ev.target){ root = ev.target.closest('.pl-actions.inline-actions'); }
+        const input = root ? root.querySelector(`#dur-${CSS.escape(screenId)}-${CSS.escape(itemId)}`) : document.getElementById(`dur-${screenId}-${itemId}`);
+        const disp  = root ? root.querySelector(`#durdisp-${CSS.escape(screenId)}-${CSS.escape(itemId)}`) : document.getElementById(`durdisp-${screenId}-${itemId}`);
+                let cur = 0;
+                if(input){ const v = parseInt(input.value,10); cur = isNaN(v)? 0 : v; }
+                let next = cur + (parseInt(delta,10)||0);
+                if(next < 1) next = 1; // min 1s
+                if(next > 120) next = 120; // cap at 120s for safety
+                if(input) input.value = String(next);
+                if(disp)  disp.textContent = `${next}s`;
+                fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}`,{
+                    method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ duration: next })
+                }).then(r=>r.json()).then(d=>{
+                    if(!d.success){ alert('Failed to update duration'); if(input){ input.value=String(cur); } if(disp){ disp.textContent=`${cur}s`; } }
+                }).catch(()=>{
+                    alert('Network error updating duration'); if(input){ input.value=String(cur); } if(disp){ disp.textContent=`${cur}s`; }
+                });
+            }catch(e){ console.error('adjustDuration error', e); }
+        }
+
         function deletePlaylistItem(screenId, itemId) {
             if(!confirm('Delete this playlist item?')) return;
             fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}`, { method:'DELETE' })
@@ -2868,7 +3005,7 @@
                     if(!badge){
                         badge = document.createElement('div');
                         badge.className='preview-badge';
-                        badge.style.cssText='position:absolute;top:4px;left:4px;background:rgba(0,0,0,.55);color:#fff;font:10px monospace;padding:2px 5px;border-radius:4px;';
+                        // Styling is now in CSS; ensure container is relative for absolute child
                         preview.style.position='relative';
                         preview.appendChild(badge);
                     }
@@ -2998,11 +3135,15 @@
                     deleteButton.disabled = true;
                     deleteButton.style.opacity = '0.5';
                     deleteButton.title = 'Master Store cannot be deleted';
+                    const mobDel = document.getElementById('delete-store-btn-mobile');
+                    if(mobDel){ mobDel.disabled = true; mobDel.style.opacity = '0.5'; mobDel.title = 'Master Store cannot be deleted'; }
                 } else {
                     masterIndicator.style.display = 'none';
                     deleteButton.disabled = false;
                     deleteButton.style.opacity = '1';
                     deleteButton.title = 'Delete selected store';
+                    const mobDel = document.getElementById('delete-store-btn-mobile');
+                    if(mobDel){ mobDel.disabled = false; mobDel.style.opacity = '1'; mobDel.title = 'Delete selected store'; }
                 }
                 
                 console.log('Updated store display to:', storeData.id, storeData.name);
@@ -3262,11 +3403,15 @@
                 deleteButton.disabled = true;
                 deleteButton.style.opacity = '0.5';
                 deleteButton.title = 'Master Store cannot be deleted';
+                const mobDel = document.getElementById('delete-store-btn-mobile');
+                if(mobDel){ mobDel.disabled = true; mobDel.style.opacity = '0.5'; mobDel.title = 'Master Store cannot be deleted'; }
             } else {
                 masterIndicator.style.display = 'none';
                 deleteButton.disabled = false;
                 deleteButton.style.opacity = '1';
                 deleteButton.title = 'Delete selected store';
+                const mobDel = document.getElementById('delete-store-btn-mobile');
+                if(mobDel){ mobDel.disabled = false; mobDel.style.opacity = '1'; mobDel.title = 'Delete selected store'; }
             }
             // Start periodic playlist refresh (master only)
             setupAutoPlaylistRefresh();
