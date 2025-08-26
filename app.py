@@ -119,7 +119,7 @@ def _add_cache_headers(resp):
         p = request.path or ''
         if p.startswith('/static/uploads/') or p.startswith('/thumb/') or p.startswith('/vthumb/'):
             # Encourage client reuse; actual busting handled by unique filenames/URLs
-            resp.headers.setdefault('Cache-Control', 'public, max-age=86400, immutable')
+            resp.headers.setdefault('Cache-Control', 'public, max-age=2592000, immutable')
         elif p.startswith('/api/'):
             # small API responses get short caching to smooth bursts
             resp.headers.setdefault('Cache-Control', 'public, max-age=15')
@@ -1808,7 +1808,9 @@ def list_library():
             if isinstance(_LIB_CACHE, dict):
                 entry = _LIB_CACHE.get('data')
                 if entry and (now_ts - entry.get('ts', 0) < 10):
-                    return jsonify({'success': True, 'files': entry['files']})
+                    payload = {'success': True, 'files': entry['files']}
+                    # Preserve stronger cache header and allow ETag via decorator
+                    return payload, 200, {'Cache-Control': 'public, max-age=60'}
         except Exception:
             _LIB_CACHE = {}
         files = []
