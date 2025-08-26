@@ -1260,13 +1260,24 @@ def delete_from_screen():
         if not force_delete and (not store_id or not screen_id):
             return jsonify({'error': 'store_id and screen_id are required'}), 400
         
-        # Fallback: allow legacy (un-prefixed) screen IDs by auto-expanding
-        if (not force_delete and store_id in config.get('screens', {}) and
-            screen_id not in config['screens'][store_id]):
-            legacy_candidate = f"{store_id}_{screen_id}"  # try store-specific form
-            if legacy_candidate in config['screens'][store_id]:
-                print(f"Mapped legacy screen_id '{screen_id}' -> '{legacy_candidate}'")
-                screen_id = legacy_candidate
+        # Normalize screen_id to match what's stored in config for this store.
+        # Accept both prefixed (e.g., 1112_screen1) and unprefixed (screen1) forms.
+        if not force_delete and store_id in config.get('screens', {}):
+            store_screens = config['screens'][store_id]
+            if screen_id not in store_screens:
+                # Try adding prefix
+                candidate_add = f"{store_id}_{screen_id}"
+                if candidate_add in store_screens:
+                    print(f"Mapped screen_id '{screen_id}' -> '{candidate_add}' (added prefix)")
+                    screen_id = candidate_add
+                else:
+                    # Try removing prefix if already present
+                    pref = f"{store_id}_"
+                    if screen_id.startswith(pref):
+                        candidate_strip = screen_id[len(pref):]
+                        if candidate_strip in store_screens:
+                            print(f"Mapped screen_id '{screen_id}' -> '{candidate_strip}' (stripped prefix)")
+                            screen_id = candidate_strip
         
         # Handle force delete from gallery (delete file completely)
         if force_delete and filename:
@@ -1361,11 +1372,13 @@ def delete_from_screen():
                 return jsonify({'error': f'Failed to delete file: {str(e)}'}), 500
         
         print(f"Invalid parameters - store_id: {store_id}, screen_id: {screen_id}")
-        print(f"Available stores: {list(config['screens'].keys())}")
-        if store_id in config['screens']:
-            print(f"Available screens for {store_id}: {list(config['screens'][store_id].keys())}")
-        
-        return jsonify({'error': 'Invalid parameters or screen not found'}), 400
+        try:
+            print(f"Available stores: {list(config.get('screens', {}).keys())}")
+            if store_id in config.get('screens', {}):
+                print(f"Available screens for {store_id}: {list(config['screens'][store_id].keys())}")
+        except Exception:
+            pass
+        return jsonify({'error': 'Invalid parameters or screen not found', 'store_id': store_id, 'screen_id': screen_id}), 400
         
     except Exception as e:
         print(f"Unexpected error in delete_from_screen: {e}")
