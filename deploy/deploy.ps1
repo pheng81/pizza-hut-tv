@@ -4,7 +4,8 @@ param(
   [string]$RepoPath = '/home/ubuntu/pizza-hut-tv',
   [string[]]$ServiceNames = @('everydayadvertise','tv-api'),
   [string]$KeyPath = '',
-  [switch]$Bootstrap
+  [switch]$Bootstrap,
+  [switch]$PreserveConfig
 )
 
 # Simple, repeatable deploy script to update your Lightsail VM.
@@ -62,7 +63,28 @@ if [ ! -d "$RepoPath/.git" ]; then
   exit 1
 fi
 cd "$RepoPath"
-git pull --ff-only
+PRESERVE=$([bool]::Parse('$(if($PreserveConfig){"True"}else{"False"})'))
+if [ "$PRESERVE" = "True" ]; then
+  # Safely preserve local store_config.json if present to avoid git conflicts
+  if [ -f store_config.json ]; then cp store_config.json /tmp/store_config.json.local.bak; fi
+  # If tracked, allow index to change and remove working copy to prevent conflict
+  if git ls-files --error-unmatch store_config.json >/dev/null 2>&1; then
+    git update-index --no-skip-worktree store_config.json || true
+  fi
+  rm -f store_config.json || true
+fi
+
+# Update code: prefer fast-forward pull, fallback to fetch/reset to origin/main
+git pull --ff-only || { git fetch origin main && git checkout -f main && git reset --hard origin/main; }
+
+# Restore preserved config if we saved it
+if [ "$PRESERVE" = "True" ]; then
+  if [ -f /tmp/store_config.json.local.bak ]; then cp /tmp/store_config.json.local.bak store_config.json; fi
+  # If the file is tracked in git, mark skip-worktree so future pulls ignore local edits
+  if git ls-files --error-unmatch store_config.json >/dev/null 2>&1; then
+    git update-index --skip-worktree store_config.json || true
+  fi
+fi
 "$RepoPath/.venv/bin/pip" install -r requirements.txt
 
 # Prefer everydayadvertise, fallback to tv-api
