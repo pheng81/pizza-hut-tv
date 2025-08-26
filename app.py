@@ -393,6 +393,20 @@ def supported_extensions():
     # Return tuple to preserve stronger cache header via decorator
     return payload, 200, {'Cache-Control': 'public, max-age=3600'}
 
+# -------------------- Lightweight health endpoint --------------------
+@app.route('/healthz')
+def healthz():
+    """Simple readiness/liveness probe. Returns 200 JSON and disables caching."""
+    try:
+        payload = {
+            'status': 'ok'
+        }
+        resp = jsonify(payload)
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        return resp
+    except Exception:
+        return jsonify({'status': 'error'}), 500
+
 # -------------------- Video Streaming with HTTP Range Support --------------------
 @app.route('/media/<path:filename>', methods=['GET','HEAD'])
 def stream_media(filename):
