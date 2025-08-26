@@ -71,6 +71,10 @@ static/uploads/*
 
 # Compressed bundles
 *.zip
+*.tgz
+*.tar.gz
+local_data_sync.tgz
+code_sync.tgz
 
 # Cache / temp
 *.tmp
