@@ -41,13 +41,61 @@ app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-this'
 print('DEBUG: app.py initialization start', flush=True)
 logging.debug('App module import start')
+
+# ---- Simple slow-request logging and ETag helpers ----
+from functools import wraps
+import hashlib
+
+def slowlog(threshold_ms=500):
+    def deco(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            t0 = time.time()
+            resp = fn(*args, **kwargs)
+            dt = (time.time() - t0) * 1000.0
+            if dt >= threshold_ms:
+                logging.warning('SLOW %s %.1fms %s', request.path, dt, request.args or request.get_json(silent=True))
+            return resp
+        return wrapper
+    return deco
+
+def with_etag_json(fn):
+    @wraps(fn)
+    def w(*args, **kwargs):
+        r = fn(*args, **kwargs)
+        if isinstance(r, tuple):
+            body, *rest = r
+            if isinstance(body, (dict, list)):
+                payload = json.dumps(body, separators=(',', ':'), ensure_ascii=False)
+                et = hashlib.md5(payload.encode('utf-8')).hexdigest()
+                inm = request.headers.get('If-None-Match')
+                if inm == et:
+                    return Response(status=304)
+                resp = jsonify(json.loads(payload))
+                resp.headers['ETag'] = et
+                resp.headers.setdefault('Cache-Control', 'public, max-age=30')
+                return (resp, *rest)
+        elif isinstance(r, dict):
+            payload = json.dumps(r, separators=(',', ':'), ensure_ascii=False)
+            et = hashlib.md5(payload.encode('utf-8')).hexdigest()
+            if request.headers.get('If-None-Match') == et:
+                return Response(status=304)
+            resp = jsonify(json.loads(payload))
+            resp.headers['ETag'] = et
+            resp.headers.setdefault('Cache-Control', 'public, max-age=30')
+            return resp
+        return r
+    return w
 @app.after_request
 def _add_cache_headers(resp):
     try:
         p = request.path or ''
         if p.startswith('/static/uploads/') or p.startswith('/thumb/') or p.startswith('/vthumb/'):
             # Encourage client reuse; actual busting handled by unique filenames/URLs
-            resp.headers.setdefault('Cache-Control', 'public, max-age=3600, immutable')
+            resp.headers.setdefault('Cache-Control', 'public, max-age=86400, immutable')
+        elif p.startswith('/api/'):
+            # small API responses get short caching to smooth bursts
+            resp.headers.setdefault('Cache-Control', 'public, max-age=15')
     except Exception:
         pass
     return resp
@@ -204,6 +252,8 @@ def screen_heartbeat():
     return jsonify({'success': True})
 
 @app.route('/api/screen_status', methods=['GET'])
+@slowlog(300)
+@with_etag_json
 def screen_status():
     """Return online/offline status for all screens across all stores."""
     cfg = load_store_config()
@@ -217,6 +267,8 @@ def screen_status():
     return jsonify({'success': True, 'status': result})
 
 @app.route('/api/screen_status/<store_id>', methods=['GET'])
+@slowlog(300)
+@with_etag_json
 def screen_status_by_store(store_id):
     """Return status mapping for a specific store (lighter payload for dashboard)."""
     cfg = load_store_config()
@@ -297,6 +349,7 @@ def load_store_config():
     return cfg
 
 @app.route('/supported_extensions')
+@with_etag_json
 def supported_extensions():
     """Expose supported extensions categorized for front-end dynamic usage."""
     resp = jsonify({
@@ -1678,8 +1731,19 @@ def get_playlist(store_id, screen_id):
 
 # ---- Media library listing (for choosing existing uploads) ----
 @app.route('/library')
+@slowlog(500)
 def list_library():
     try:
+        # Small TTL cache to avoid re-statting many files for rapid refreshes
+        global _LIB_CACHE
+        now_ts = time.time()
+        try:
+            if isinstance(_LIB_CACHE, dict):
+                entry = _LIB_CACHE.get('data')
+                if entry and (now_ts - entry.get('ts', 0) < 10):
+                    return jsonify({'success': True, 'files': entry['files']})
+        except Exception:
+            _LIB_CACHE = {}
         files = []
         if r2_enabled():
             for obj in r2_list_objects():
@@ -1716,6 +1780,10 @@ def list_library():
         resp = jsonify({'success': True, 'files': files})
         try:
             resp.headers['Cache-Control'] = 'public, max-age=60'
+        except Exception:
+            pass
+        try:
+            _LIB_CACHE = {'data': {'ts': now_ts, 'files': files}}
         except Exception:
             pass
         return resp
@@ -1759,11 +1827,13 @@ def upload_media():
 
 # -------- Store & Screen discovery API (for device first-run setup) --------
 @app.route('/stores')
+@with_etag_json
 def list_stores():
     cfg = ensure_playlists_structure(load_store_config())
     return jsonify({'success': True, 'stores': cfg.get('stores', [])})
 
 @app.route('/screens/<store_id>')
+@with_etag_json
 def list_screens(store_id):
     cfg = ensure_playlists_structure(load_store_config())
     screens = cfg.get('screens', {}).get(store_id, {})
