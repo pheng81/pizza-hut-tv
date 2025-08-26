@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response, send_file
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response, send_file, g
 import os
 import shutil as _shutil
 import subprocess
@@ -11,6 +11,7 @@ import logging
 import time
 from typing import Optional
 from dotenv import load_dotenv
+from werkzeug.http import http_date
 
 load_dotenv()
 
@@ -41,6 +42,14 @@ app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-this'
 print('DEBUG: app.py initialization start', flush=True)
 logging.debug('App module import start')
+
+# --- Basic slow request logging ---
+@app.before_request
+def _start_timer():
+    try:
+        g._t0 = time.time()
+    except Exception:
+        pass
 @app.after_request
 def _add_cache_headers(resp):
     try:
@@ -48,6 +57,15 @@ def _add_cache_headers(resp):
         if p.startswith('/static/uploads/') or p.startswith('/thumb/') or p.startswith('/vthumb/'):
             # Encourage client reuse; actual busting handled by unique filenames/URLs
             resp.headers.setdefault('Cache-Control', 'public, max-age=3600, immutable')
+        # Slow request tracer (server-side only)
+        try:
+            t0 = getattr(g, '_t0', None)
+            if t0 is not None:
+                dt = (time.time() - t0) * 1000.0
+                if dt >= 500:  # > 0.5s
+                    logging.warning('SLOW %.0fms %s %s -> %s', dt, request.method, p, resp.status_code)
+        except Exception:
+            pass
     except Exception:
         pass
     return resp
@@ -527,9 +545,15 @@ def thumbnail(width: int, filename: str):
                 logging.error('Thumbnail build failed for %s: %s', basename, e)
                 return redirect(url_for('static', filename=f'uploads/{basename}'))
 
-        resp = send_file(cached_path)
+        # Add conditional handling (304 when client cache is fresh)
+        resp = send_file(cached_path, conditional=True)
+        # Strong cache for thumbnails
         try:
             resp.headers['Cache-Control'] = 'public, max-age=2592000'  # 30 days
+            st = os.stat(cached_path)
+            etag = f'W/"{int(st.st_mtime)}-{st.st_size}"'
+            resp.headers['ETag'] = etag
+            resp.headers['Last-Modified'] = http_date(st.st_mtime)
         except Exception:
             pass
         return resp
@@ -579,7 +603,11 @@ def _safe_video_path(name: str) -> str:
 def vthumbnail(width: int, filename: str):
     try:
         basename = os.path.basename(filename)
-        src_path = _safe_video_path(basename)
+        # Validate video; if not a video, fall back to placeholder
+        try:
+            src_path = _safe_video_path(basename)
+        except Exception:
+            return redirect(url_for('static', filename='video_placeholder.svg'))
         cached_name = f"{width}_{os.path.splitext(basename)[0]}.jpg"
         cached_path = os.path.abspath(os.path.join(VTHUMB_FOLDER, cached_name))
         rebuild = True
@@ -591,7 +619,8 @@ def vthumbnail(width: int, filename: str):
         if rebuild:
             ffmpeg = _ffmpeg_bin()
             if not ffmpeg:
-                return jsonify({'error': 'ffmpeg not available'}), 404
+                # Graceful fallback to a static placeholder instead of 404
+                return redirect(url_for('static', filename='video_placeholder.svg'))
             os.makedirs(VTHUMB_FOLDER, exist_ok=True)
             try:
                 cmd = [
@@ -602,10 +631,14 @@ def vthumbnail(width: int, filename: str):
                 subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except Exception as e:
                 logging.error('ffmpeg thumbnail failed for %s: %s', basename, e)
-                return jsonify({'error': 'thumb failed'}), 500
-        resp = send_file(cached_path)
+                return redirect(url_for('static', filename='video_placeholder.svg'))
+        resp = send_file(cached_path, conditional=True)
         try:
             resp.headers['Cache-Control'] = 'public, max-age=2592000'
+            st = os.stat(cached_path)
+            etag = f'W/"{int(st.st_mtime)}-{st.st_size}"'
+            resp.headers['ETag'] = etag
+            resp.headers['Last-Modified'] = http_date(st.st_mtime)
         except Exception:
             pass
         return resp

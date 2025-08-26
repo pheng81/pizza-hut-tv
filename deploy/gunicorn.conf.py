@@ -24,8 +24,8 @@ import os
 bind = os.getenv("BIND", "127.0.0.1:5002")
 
 # Concurrency model: threads are good for Flask + I/O
-workers = int(os.getenv("GUNICORN_WORKERS", "2"))
-threads = int(os.getenv("GUNICORN_THREADS", "2"))
+workers = int(os.getenv("GUNICORN_WORKERS", "3"))
+threads = int(os.getenv("GUNICORN_THREADS", "3"))
 worker_class = "gthread"
 preload_app = False
 

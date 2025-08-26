@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="120" viewBox="0 0 200 120" role="img" aria-label="Video">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ececec"/>
+      <stop offset="100%" stop-color="#d8d8d8"/>
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="198" height="118" rx="8" ry="8" fill="url(#g)" stroke="#c0c0c0"/>
+  <polygon points="80,60 80,40 110,60 80,80" fill="#9b9b9b"/>
+  <rect x="140" y="45" width="12" height="30" rx="2" fill="#bdbdbd"/>
+  <rect x="156" y="45" width="12" height="30" rx="2" fill="#bdbdbd"/>
+</svg>
