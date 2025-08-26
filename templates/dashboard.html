@@ -2738,17 +2738,20 @@
                 }
         
 
-        function thumbForFile(file) {
+    function thumbForFile(file) {
             if (!file) return '<div style="font-size:10px; color:#888;">N/A</div>';
             const isAbs = /^https?:\/\//i.test(String(file));
             const clean = String(file).split('?')[0];
             const ext = (clean.includes('.') ? clean.split('.').pop() : '').toLowerCase();
             if (['mp4','webm','ogg','mov','avi','mkv','m4v'].includes(ext)) {
-                const poster = isAbs ? '' : `/vthumb/300/${encodeURIComponent(file)}`;
+        const poster = isAbs ? '' : `/vthumb/220/${encodeURIComponent(file)}`;
                 const posterAttr = poster ? ` poster="${poster}"` : '';
-                return `<video preload="metadata" muted playsinline${posterAttr} src="${mediaUrl(file)}" style="max-width:100%; max-height:100%;"></video>`;
+        return `<video preload="metadata" muted playsinline autoplay loop${posterAttr} src="${mediaUrl(file)}" style="max-width:100%; max-height:100%; object-fit:cover"></video>`;
             }
-            return `<img loading="lazy" src="${thumbUrl(file, 300)}" style="max-width:100%; max-height:100%;" />`;
+        const src220 = thumbUrl(file,220);
+        const src300 = thumbUrl(file,300);
+        const src600 = thumbUrl(file,600);
+        return `<img loading="lazy" decoding="async" src="${src220}" srcset="${src220} 220w, ${src300} 300w, ${src600} 600w" sizes="(max-width: 480px) 45vw, (max-width: 1024px) 200px, 220px" style="max-width:100%; max-height:100%; object-fit:cover;" />`;
         }
 
         function togglePlaylistItem(screenId, itemId, enabled) {
