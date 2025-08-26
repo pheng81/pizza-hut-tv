@@ -45,6 +45,7 @@ logging.debug('App module import start')
 # ---- Simple slow-request logging and ETag helpers ----
 from functools import wraps
 import hashlib
+from werkzeug.http import http_date
 
 def slowlog(threshold_ms=500):
     def deco(fn):
@@ -407,6 +408,23 @@ def stream_media(filename):
         return jsonify({'error': 'not found'}), 404
 
     file_size = os.path.getsize(file_path)
+    mtime = os.path.getmtime(file_path)
+    lm_http = http_date(mtime)
+    # Simple, fast ETag derived from mtime and size (no content hashing)
+    etag = f'{int(mtime):x}-{file_size:x}'
+
+    def _parse_inm(raw: str | None) -> set[str]:
+        if not raw:
+            return set()
+        tokens = []
+        for part in raw.split(','):
+            p = part.strip()
+            if p.startswith('W/'):
+                p = p[2:].strip()
+            if p.startswith('"') and p.endswith('"') and len(p) >= 2:
+                p = p[1:-1]
+            tokens.append(p)
+        return set(t for t in tokens if t)
     range_header = request.headers.get('Range')
     logging.debug(f"/media request filename=%s method=%s range=%s", filename, request.method, range_header)
     if request.method == 'HEAD':
@@ -414,7 +432,17 @@ def stream_media(filename):
         resp = Response(status=200, mimetype=f'video/{"mp4" if ext=="m4v" else ext}')
         resp.headers.add('Accept-Ranges', 'bytes')
         resp.headers.add('Content-Length', str(file_size))
+        resp.headers.add('Last-Modified', lm_http)
+        try:
+            resp.set_etag(etag)
+        except Exception:
+            resp.headers['ETag'] = f'"{etag}"'
+        resp.headers.setdefault('Cache-Control', 'public, max-age=3600')
         return resp
+    # Conditional GET for full representation
+    inm = _parse_inm(request.headers.get('If-None-Match'))
+    if not range_header and etag in inm:
+        return Response(status=304)
     if range_header:
         # Example: Range: bytes=START-END
         try:
@@ -451,8 +479,13 @@ def stream_media(filename):
             resp.headers.add('Accept-Ranges', 'bytes')
             resp.headers.add('Content-Range', f'bytes {start}-{end}/{file_size}')
             resp.headers.add('Content-Length', str(length))
-            # Encourage client to keep-alive & not cache excessively during development
-            resp.headers.add('Cache-Control', 'public, max-age=60')
+            resp.headers.add('Last-Modified', lm_http)
+            try:
+                resp.set_etag(etag)
+            except Exception:
+                resp.headers['ETag'] = f'"{etag}"'
+            # Encourage client reuse; range responses can be cached by many clients
+            resp.headers.add('Cache-Control', 'public, max-age=3600')
             return resp
         except Exception as e:
             print(f"Range parse error: {e}")
@@ -469,6 +502,12 @@ def stream_media(filename):
     resp = Response(generate(), 200, mimetype=f'video/{"mp4" if ext=="m4v" else ext}')
     resp.headers.add('Accept-Ranges', 'bytes')
     resp.headers.add('Content-Length', str(file_size))
+    resp.headers.add('Last-Modified', lm_http)
+    try:
+        resp.set_etag(etag)
+    except Exception:
+        resp.headers['ETag'] = f'"{etag}"'
+    resp.headers.setdefault('Cache-Control', 'public, max-age=3600')
     return resp
 
 def ensure_playlists_structure(config):
