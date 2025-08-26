@@ -63,27 +63,53 @@ def with_etag_json(fn):
     @wraps(fn)
     def w(*args, **kwargs):
         r = fn(*args, **kwargs)
+
+        def _parse_inm(raw: str | None) -> set[str]:
+            if not raw:
+                return set()
+            # Accept formats: W/"abc", "def", abc
+            tokens = []
+            for part in raw.split(','):
+                p = part.strip()
+                if p.startswith('W/'):  # weak tag prefix
+                    p = p[2:].strip()
+                if p.startswith('"') and p.endswith('"') and len(p) >= 2:
+                    p = p[1:-1]
+                tokens.append(p)
+            return set(t for t in tokens if t)
+
+        def _make_resp_from_payload(payload: str, rest: list):
+            # Build a Response and attach a properly quoted ETag
+            resp = jsonify(json.loads(payload))
+            et = hashlib.md5(payload.encode('utf-8')).hexdigest()
+            # Conditional GET handling
+            inm = _parse_inm(request.headers.get('If-None-Match'))
+            if et in inm:
+                return Response(status=304)
+            try:
+                resp.set_etag(et, weak=False)
+            except Exception:
+                resp.headers['ETag'] = f'"{et}"'
+            resp.headers.setdefault('Cache-Control', 'public, max-age=30')
+            # Preserve status/headers tuple parts if provided
+            if rest:
+                return (resp, *rest)
+            return resp
+
+        # Tuple: (dict/list, [status], [headers])
         if isinstance(r, tuple):
             body, *rest = r
             if isinstance(body, (dict, list)):
-                payload = json.dumps(body, separators=(',', ':'), ensure_ascii=False)
-                et = hashlib.md5(payload.encode('utf-8')).hexdigest()
-                inm = request.headers.get('If-None-Match')
-                if inm == et:
-                    return Response(status=304)
-                resp = jsonify(json.loads(payload))
-                resp.headers['ETag'] = et
-                resp.headers.setdefault('Cache-Control', 'public, max-age=30')
-                return (resp, *rest)
-        elif isinstance(r, dict):
-            payload = json.dumps(r, separators=(',', ':'), ensure_ascii=False)
-            et = hashlib.md5(payload.encode('utf-8')).hexdigest()
-            if request.headers.get('If-None-Match') == et:
-                return Response(status=304)
-            resp = jsonify(json.loads(payload))
-            resp.headers['ETag'] = et
-            resp.headers.setdefault('Cache-Control', 'public, max-age=30')
-            return resp
+                payload = json.dumps(body, separators=(',', ':'), ensure_ascii=False, sort_keys=True)
+                return _make_resp_from_payload(payload, rest)
+            return r
+
+        # Dict/list: convert and attach ETag
+        if isinstance(r, (dict, list)):
+            payload = json.dumps(r, separators=(',', ':'), ensure_ascii=False, sort_keys=True)
+            return _make_resp_from_payload(payload, [])
+
+        # Already a Response or other type
         return r
     return w
 @app.after_request
@@ -264,7 +290,8 @@ def screen_status():
             last_seen = int(sdata.get('last_seen', 0) or 0)
             online = (now - last_seen) < HEARTBEAT_TIMEOUT
             result.setdefault(store_id, {})[sid] = 'online' if online else 'offline'
-    return jsonify({'success': True, 'status': result})
+    # Return plain dict to allow decorator to attach ETag
+    return {'success': True, 'status': result}
 
 @app.route('/api/screen_status/<store_id>', methods=['GET'])
 @slowlog(300)
@@ -280,7 +307,8 @@ def screen_status_by_store(store_id):
         online = (now - last_seen) < HEARTBEAT_TIMEOUT
         result[sid] = 'online' if online else 'offline'
     logging.debug('STATUS store=%s result=%s', store_id, result)
-    return jsonify({'success': True, 'status': result})
+    # Return plain dict to allow decorator to attach ETag
+    return {'success': True, 'status': result}
 
 # -------------------- Core Configuration & Media Type Definitions --------------------
 CONFIG_FILE = 'store_config.json'
@@ -352,18 +380,15 @@ def load_store_config():
 @with_etag_json
 def supported_extensions():
     """Expose supported extensions categorized for front-end dynamic usage."""
-    resp = jsonify({
+    payload = {
         'success': True,
         'images': sorted(list(IMAGE_EXTENSIONS - ANIMATED_EXTENSIONS)),  # pure still images
         'animated': sorted(list(ANIMATED_EXTENSIONS)),
         'videos': sorted(list(VIDEO_EXTENSIONS)),
         'all': sorted(list(ALLOWED_EXTENSIONS))
-    })
-    try:
-        resp.headers['Cache-Control'] = 'public, max-age=3600'
-    except Exception:
-        pass
-    return resp
+    }
+    # Return tuple to preserve stronger cache header via decorator
+    return payload, 200, {'Cache-Control': 'public, max-age=3600'}
 
 # -------------------- Video Streaming with HTTP Range Support --------------------
 @app.route('/media/<path:filename>', methods=['GET','HEAD'])
@@ -1648,6 +1673,8 @@ def delete_store():
 
 # ---------------- Playlist API Endpoints (moved above app.run) ----------------
 @app.route('/playlist/<store_id>/<screen_id>')
+@slowlog(300)
+@with_etag_json
 def get_playlist(store_id, screen_id):
     print(f"DEBUG: GET /playlist {store_id} {screen_id}")
     cfg = ensure_playlists_structure(load_store_config())
@@ -1727,11 +1754,12 @@ def get_playlist(store_id, screen_id):
         except Exception:
             out.append(item)
     print(f"DEBUG: Returning playlist items: {len(out)}")
-    return jsonify({'success': True, 'playlist': out})
+    return {'success': True, 'playlist': out}
 
 # ---- Media library listing (for choosing existing uploads) ----
 @app.route('/library')
 @slowlog(500)
+@with_etag_json
 def list_library():
     try:
         # Small TTL cache to avoid re-statting many files for rapid refreshes
@@ -1777,16 +1805,13 @@ def list_library():
                 })
         # Sort by most recent first
         files.sort(key=lambda x: x['mtime'], reverse=True)
-        resp = jsonify({'success': True, 'files': files})
-        try:
-            resp.headers['Cache-Control'] = 'public, max-age=60'
-        except Exception:
-            pass
+        payload = {'success': True, 'files': files}
         try:
             _LIB_CACHE = {'data': {'ts': now_ts, 'files': files}}
         except Exception:
             pass
-        return resp
+        # Keep explicit cache header at 60s via tuple
+        return payload, 200, {'Cache-Control': 'public, max-age=60'}
     except Exception as e:
         print(f"Error listing library: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -1830,7 +1855,7 @@ def upload_media():
 @with_etag_json
 def list_stores():
     cfg = ensure_playlists_structure(load_store_config())
-    return jsonify({'success': True, 'stores': cfg.get('stores', [])})
+    return {'success': True, 'stores': cfg.get('stores', [])}
 
 @app.route('/screens/<store_id>')
 @with_etag_json
@@ -1839,7 +1864,7 @@ def list_screens(store_id):
     screens = cfg.get('screens', {}).get(store_id, {})
     # Return as array of {id: screen_id}
     arr = [{'id': sid} for sid in screens.keys()]
-    return jsonify({'success': True, 'screens': arr})
+    return {'success': True, 'screens': arr}
 
 @app.route('/playlist/item/<store_id>/<screen_id>/<item_id>', methods=['PATCH'])
 def update_playlist_item(store_id, screen_id, item_id):
