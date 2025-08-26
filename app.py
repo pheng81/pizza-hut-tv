@@ -319,8 +319,10 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 # Cache folder for generated thumbnails
 THUMB_FOLDER = os.path.join('static', 'thumbs')
 VTHUMB_FOLDER = os.path.join('static', 'vthumbs')
+VPREVIEW_FOLDER = os.path.join('static', 'vpreviews')
 os.makedirs(THUMB_FOLDER, exist_ok=True)
 os.makedirs(VTHUMB_FOLDER, exist_ok=True)
+os.makedirs(VPREVIEW_FOLDER, exist_ok=True)
 
 # Categorized extension sets (keep lowercase)
 IMAGE_EXTENSIONS = {
@@ -749,6 +751,49 @@ def vthumbnail(width: int, filename: str):
         return resp
     except Exception as e:
         logging.error('vthumbnail error: %s', e)
+        return jsonify({'error': 'bad request'}), 400
+
+# ---- Low-res video preview clip (first few seconds) ----
+@app.route('/vpreview/<int:width>/<path:filename>')
+def vpreview(width: int, filename: str):
+    try:
+        basename = os.path.basename(filename)
+        src_path = _safe_video_path(basename)
+        # Store mp4 previews for broad compatibility
+        cached_name = f"{width}_{os.path.splitext(basename)[0]}.mp4"
+        cached_path = os.path.abspath(os.path.join(VPREVIEW_FOLDER, cached_name))
+        rebuild = True
+        if os.path.exists(cached_path):
+            try:
+                rebuild = os.path.getmtime(cached_path) < os.path.getmtime(src_path)
+            except Exception:
+                rebuild = True
+        if rebuild:
+            ffmpeg = _ffmpeg_bin()
+            if not ffmpeg:
+                return jsonify({'error': 'ffmpeg not available'}), 404
+            os.makedirs(VPREVIEW_FOLDER, exist_ok=True)
+            try:
+                # 6s low-bitrate H.264 baseline clip, scaled to width, no audio, faststart
+                target_w = int(width) if width>0 else 360
+                cmd = [
+                    ffmpeg, '-y', '-ss', '0', '-t', '6', '-i', src_path,
+                    '-an', '-vf', f'scale={target_w}:-2',
+                    '-c:v', 'libx264', '-profile:v', 'baseline', '-preset', 'veryfast', '-b:v', '600k',
+                    '-movflags', '+faststart', cached_path
+                ]
+                subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception as e:
+                logging.error('ffmpeg vpreview failed for %s: %s', basename, e)
+                return jsonify({'error': 'preview failed'}), 500
+        resp = send_file(cached_path, mimetype='video/mp4')
+        try:
+            resp.headers['Cache-Control'] = 'public, max-age=2592000'
+        except Exception:
+            pass
+        return resp
+    except Exception as e:
+        logging.error('vpreview error: %s', e)
         return jsonify({'error': 'bad request'}), 400
 
 def parse_time_string(val, now):
