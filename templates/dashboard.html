@@ -137,7 +137,8 @@
     .stores-title .tv-img { width:24px; height:24px; display:inline-block; vertical-align:middle; border-radius:4px; }
     .stores-title .tv-svg { width:44px; height:44px; display:inline-block; vertical-align:middle; }
     /* Brand logo in title */
-    .stores-title .brand-logo { height: 44px; width: auto; display: inline-block; vertical-align: middle; margin-right: 8px; }
+    .stores-title .brand-logo { max-height: 44px; height: auto; width: auto; display: inline-block; vertical-align: middle; margin-right: 8px; object-fit: contain; }
+    .stores-title { overflow: visible; }
     .stores-title .title-fallback { display: none; }
         /* Apple-like primary button */
         .stores-header .add-store-btn {
@@ -553,9 +554,19 @@
     .rp-tab.active { background:#0d6efd; color:#fff; border-color:#0d6efd; }
     .rp-body { padding:10px 12px; overflow:auto; }
     .rp-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap:10px; }
-    .rp-item { border:1px solid #dcdfe3; border-radius:6px; padding:6px; cursor:pointer; display:flex; align-items:center; justify-content:center; height:90px; background:#fafbfc; }
+    .rp-item { border:1px solid #dcdfe3; border-radius:6px; padding:6px; cursor:pointer; display:flex; align-items:center; justify-content:center; height:90px; background:#fafbfc; position:relative; }
     .rp-item img, .rp-item video { max-width:100%; max-height:100%; object-fit:cover; }
     .rp-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; padding:10px 12px; border-top:1px solid #eef1f4; }
+    .rp-help { font-size:12px; color:#6b7280; padding: 2px 2px 10px; }
+    .rp-subtitle { font-size:12px; font-weight:700; color:#374151; margin: 8px 2px 6px; text-transform:uppercase; letter-spacing:.04em; }
+    .rp-empty { font-size:12px; color:#9ca3af; padding:8px 2px; }
+    .rp-bar { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; flex-wrap:wrap; }
+    .rp-filters { display:inline-flex; align-items:center; gap:2px; background:#fff; border:1px solid #dcdfe3; border-radius:9999px; padding:2px; }
+    .rp-filter-btn { appearance:none; border:none; background:transparent; padding:6px 12px; border-radius:9999px; font-size:12px; font-weight:600; color:#374151; cursor:pointer; }
+    .rp-filter-btn.active { background:#0d6efd; color:#fff; }
+    .rp-del { position:absolute; top:4px; right:4px; width:24px; height:24px; border-radius:50%; background:rgba(255,255,255,0.95); border:1px solid #dcdfe3; box-shadow:0 1px 2px rgba(0,0,0,0.08); display:flex; align-items:center; justify-content:center; color:#7a7a7a; opacity:0; transition:opacity .15s, background .15s; }
+    .rp-item:hover .rp-del { opacity:1; }
+    .rp-del:hover { background:#fff; color:#000; }
     .btn { padding:6px 10px; border-radius:6px; border:1px solid #dcdfe3; background:#fff; cursor:pointer; font-size:12px; }
     .btn.primary { background:#0d6efd; color:#fff; border-color:#0d6efd; }
     .btn.danger { background:#dc3545; color:#fff; border-color:#dc3545; }
@@ -907,8 +918,8 @@
         .store-management .add-store-btn:active { transform: translateY(1px); }
         .store-management .add-store-btn .icon { width:16px; height:16px; }
         
-        /* Modal Styles */
-        .modal {
+    /* Modal Styles */
+    .modal {
             display: none;
             position: fixed;
             z-index: 1000;
@@ -942,6 +953,31 @@
             margin: 0;
             color: #333;
         }
+
+        /* Cupertino-styled Add Store modal overrides */
+        #addStoreModal.modal { background: rgba(0,0,0,0.34); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); padding: 24px; display:none; align-items:center; justify-content:center; }
+        #addStoreModal.modal.visible { display:flex; animation: cupertinoOverlayFade .2s ease; }
+        #addStoreModal .modal-content { background: rgba(255,255,255,0.92); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); border: 1px solid rgba(60,60,67,0.29); border-radius: 14px; width: 420px; max-width: 95vw; color:#1d1d1f; box-shadow: 0 30px 60px rgba(0,0,0,0.25); transform: scale(0.98) translateY(6px); opacity: 0; animation: cupertinoSheetIn .18s ease forwards; }
+        #addStoreModal .modal-header { padding: 16px 18px 0; display:flex; align-items:center; justify-content:center; position:relative; }
+        #addStoreModal .modal-header h3 { margin: 0; font-weight: 700; font-size: 17px; letter-spacing: -0.02em; }
+        #addStoreModal .close { position:absolute; right:10px; top:10px; width:28px; height:28px; border-radius: 50%; background: rgba(0,0,0,0.06); display:flex; align-items:center; justify-content:center; color:#555; line-height:1; font-size:18px; }
+        #addStoreModal .close:hover { background: rgba(0,0,0,0.12); color:#000; }
+        #addStoreModal #addStoreForm { padding: 12px 18px 18px; }
+        #addStoreModal .form-group { margin: 12px 0; }
+        #addStoreModal .form-group label { font-size: 12px; font-weight: 600; color: #3a3a3c; margin-bottom: 6px; display:block; }
+    #addStoreModal .form-group input { width: 100%; box-sizing: border-box; display:block; border-radius: 12px; border: 1px solid rgba(60,60,67,0.29); padding: 12px 14px; font-size: 16px; background: rgba(255,255,255,0.9); color:#1d1d1f; outline: none; transition: border-color .2s, box-shadow .2s, background-color .2s; appearance: none; -webkit-appearance: none; }
+    #addStoreModal .form-group input::placeholder { color:#9c9ca1; opacity:1; }
+    #addStoreModal .modal-content { overflow: hidden; }
+        #addStoreModal .form-group input:focus { border-color: #0a84ff; box-shadow: 0 0 0 3px rgba(10,132,255,0.25); background: #fff; }
+        #addStoreModal .helper { font-size: 12px; color: #6e6e73; margin-top: 4px; }
+        #addStoreModal .modal-buttons { display:flex; gap: 10px; justify-content:flex-end; padding: 4px 18px 18px; }
+        #addStoreModal .btn-primary { background: #0a84ff; color: #fff; border: none; border-radius: 10px; padding: 10px 16px; font-weight: 600; box-shadow: 0 2px 6px rgba(10,132,255,0.35); cursor: pointer; }
+        #addStoreModal .btn-primary:hover { background: #0a7aff; }
+        #addStoreModal .btn-primary:active { transform: translateY(1px); }
+        #addStoreModal .btn-secondary { background: rgba(60,60,67,0.12); color:#1d1d1f; border: 1px solid rgba(60,60,67,0.2); border-radius: 10px; padding: 10px 16px; cursor: pointer; }
+        #addStoreModal .btn-secondary:hover { background: rgba(60,60,67,0.18); }
+        @keyframes cupertinoSheetIn { to { transform: scale(1) translateY(0); opacity: 1; } }
+        @keyframes cupertinoOverlayFade { from { opacity: 0; } to { opacity: 1; } }
         
         .close {
             color: #aaa;
@@ -1122,7 +1158,7 @@
             .container { padding:10px 16px 32px; }
             .stores-title { font-size: 30px; }
             .stores-title .tv-svg { width:38px; height:38px; }
-            .stores-title .brand-logo { height: 38px; }
+            .stores-title .brand-logo { max-height: 38px; height: auto; }
         }
 
         @media (max-width: 768px){
@@ -1131,7 +1167,7 @@
             .stores-actions { width: 100%; display: flex; justify-content: flex-end; }
             .stores-title { font-size: 26px; }
             .stores-title .tv-svg { width:32px; height:32px; }
-            .stores-title .brand-logo { height: 32px; }
+            .stores-title .brand-logo { max-height: 32px; height: auto; }
 
             /* Store selector area */
             .store-management { flex-direction: column; align-items: stretch; gap: 10px; }
@@ -1170,7 +1206,7 @@
         @media (max-width: 480px){
             .stores-title { font-size: 22px; }
             .stores-title .tv-svg { width:28px; height:28px; }
-            .stores-title .brand-logo { height: 28px; }
+            .stores-title .brand-logo { max-height: 28px; height: auto; }
             .search-box { width: 100%; }
             .screen-preview.vertical-preview { width: 80%; }
             .playlist-row.apple .pl-top { gap: 8px; }
@@ -3100,11 +3136,19 @@
                                 </div>
                                 <div class="rp-body">
                                     <div id="rp-view-lib">
-                                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                                            <div style="font-size:12px;color:#555;">Click a file to replace this item.</div>
+                                        <div class="rp-bar">
+                                            <div class="rp-help">Click a file to replace this item.</div>
+                                            <div class="rp-filters" role="tablist" aria-label="Media filter">
+                                                <button id="rp-filter-all" class="rp-filter-btn active" onclick="setRpFilter('all')" role="tab" aria-selected="true">All</button>
+                                                <button id="rp-filter-images" class="rp-filter-btn" onclick="setRpFilter('images')" role="tab" aria-selected="false">Images</button>
+                                                <button id="rp-filter-videos" class="rp-filter-btn" onclick="setRpFilter('videos')" role="tab" aria-selected="false">Videos</button>
+                                            </div>
                                             <button class="btn" onclick="refreshLibrary()">Refresh</button>
                                         </div>
-                                        <div class="rp-grid" id="rp-grid"></div>
+                                        <div class="rp-subtitle">Images</div>
+                                        <div class="rp-grid" id="rp-grid-images"></div>
+                                        <div class="rp-subtitle" style="margin-top:14px;">Videos</div>
+                                        <div class="rp-grid" id="rp-grid-videos"></div>
                                     </div>
                                     <div id="rp-view-upload" style="display:none;">
                                         <input type="file" id="rp-file" accept="image/*,video/*" />
@@ -3123,32 +3167,54 @@
                 function openReplaceModal(screenId,itemId){ ensureReplaceModal(); rpCtx={screenId,itemId}; document.getElementById('rp-overlay').style.display='flex'; refreshLibrary(); }
                 function closeReplaceModal(){ const ov=document.getElementById('rp-overlay'); if(ov) ov.style.display='none'; rpCtx=null; }
                 function switchRpTab(which){ const lib=document.getElementById('rp-view-lib'); const up=document.getElementById('rp-view-upload'); const t1=document.getElementById('rp-tab-lib'); const t2=document.getElementById('rp-tab-upload'); const isLib=which==='lib'; lib.style.display=isLib?'block':'none'; up.style.display=isLib?'none':'block'; t1.classList.toggle('active',isLib); t2.classList.toggle('active',!isLib); }
+                function setRpFilter(which){
+                    const gImgs = document.getElementById('rp-grid-images');
+                    const gVids = document.getElementById('rp-grid-videos');
+                    if(!gImgs || !gVids) return;
+                    const btnAll = document.getElementById('rp-filter-all');
+                    const btnImg = document.getElementById('rp-filter-images');
+                    const btnVid = document.getElementById('rp-filter-videos');
+                    const setActive = (btn, on)=>{ btn.classList.toggle('active',on); btn.setAttribute('aria-selected', on? 'true':'false'); };
+                    if(which==='images'){ gImgs.style.display='grid'; gVids.style.display='none'; setActive(btnAll,false); setActive(btnImg,true); setActive(btnVid,false); }
+                    else if(which==='videos'){ gImgs.style.display='none'; gVids.style.display='grid'; setActive(btnAll,false); setActive(btnImg,false); setActive(btnVid,true); }
+                    else { gImgs.style.display='grid'; gVids.style.display='grid'; setActive(btnAll,true); setActive(btnImg,false); setActive(btnVid,false); }
+                }
                 function refreshLibrary(){
                     fetch('/library').then(r=>r.json()).then(d=>{
-                        const grid=document.getElementById('rp-grid');
-                        if(!grid) return;
-                        if(!d.success){ grid.innerHTML='<div style="font-size:12px;color:#c00;">Failed to load library</div>'; return; }
+                        const gImgs=document.getElementById('rp-grid-images');
+                        const gVids=document.getElementById('rp-grid-videos');
+                        if(!gImgs || !gVids) return;
+                        if(!d.success){
+                            gImgs.innerHTML = '<div class="rp-empty">Failed to load library</div>';
+                            gVids.innerHTML = '';
+                            return;
+                        }
                         const files=d.files||[];
-                        if(!files.length){ grid.innerHTML='<div style="font-size:12px;color:#666;">No files</div>'; return; }
-                        grid.innerHTML='';
-                        files.forEach(f=>{
+                        const imgs = files.filter(f=> (f.media_type!=='video'));
+                        const vids = files.filter(f=> (f.media_type==='video'));
+                        gImgs.innerHTML = imgs.length? '' : '<div class="rp-empty">No images</div>';
+                        gVids.innerHTML = vids.length? '' : '<div class="rp-empty">No videos</div>';
+                        imgs.forEach(f=>{
                             const card=document.createElement('div');
                             card.className='rp-item';
                             card.title=f.name;
-                            const isVid = (f.media_type==='video');
-                            const abs = f && f.url && /^https?:\/\//i.test(String(f.url));
-                            if(isVid){
-                                const poster = abs ? '' : `/vthumb/300/${encodeURIComponent(f.name)}`;
-                                const posterAttr = poster ? ` poster="${poster}"` : '';
-                                const src = f.url ? f.url : mediaUrl(f.name);
-                                card.innerHTML = `<video preload="metadata" muted playsinline${posterAttr} src="${src}"></video>`;
-                            } else {
-                                const isAbs = f && f.url && /^https?:\/\//i.test(String(f.url));
-                                const src = isAbs ? f.url : thumbUrl(f.name,300);
-                                card.innerHTML = `<img loading="lazy" src="${src}"/>`;
-                            }
+                            const isAbs = f && f.url && /^https?:\/\//i.test(String(f.url));
+                            const src = isAbs ? f.url : thumbUrl(f.name,300);
+                            card.innerHTML = `<img loading=\"lazy\" src=\"${src}\"/><button class=\"rp-del\" title=\"Delete\" aria-label=\"Delete\" onclick=\"event.stopPropagation(); deleteLibraryFile('${f.name}')\">✕</button>`;
                             card.addEventListener('click',()=> chooseLibraryFile(f.name));
-                            grid.appendChild(card);
+                            gImgs.appendChild(card);
+                        });
+                        vids.forEach(f=>{
+                            const card=document.createElement('div');
+                            card.className='rp-item';
+                            card.title=f.name;
+                            const abs = f && f.url && /^https?:\/\//i.test(String(f.url));
+                            const poster = abs ? '' : `/vthumb/300/${encodeURIComponent(f.name)}`;
+                            const posterAttr = poster ? ` poster="${poster}"` : '';
+                            const src = f.url ? f.url : mediaUrl(f.name);
+                            card.innerHTML = `<video preload=\"metadata\" muted playsinline${posterAttr} src=\"${src}\"></video><button class=\"rp-del\" title=\"Delete\" aria-label=\"Delete\" onclick=\"event.stopPropagation(); deleteLibraryFile('${f.name}')\">✕</button>`;
+                            card.addEventListener('click',()=> chooseLibraryFile(f.name));
+                            gVids.appendChild(card);
                         });
                     });
                 }
@@ -3177,6 +3243,34 @@
                         fetch(`/playlist/item/${currentStoreId}/${sid}/${iid}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({file:d.filename})})
                         .then(r=>r.json()).then(x=>{ if(x.success){ closeReplaceModal(); refreshPlaylist(sid); } else { alert('Replace failed: '+(x.error||'unknown')); } });
                     }
+                });
+            }
+
+            function deleteLibraryFile(name){
+                if(!name) return;
+                const ok = confirm(`Delete this file from the library?\n\n${name}\n\nThis removes it from storage and any screens that use it.`);
+                if(!ok) return;
+                // Optimistic UI removal
+                const cards = Array.from(document.querySelectorAll('.rp-item'));
+                const match = cards.find(c => (c.title === name));
+                if(match){ match.style.opacity = '0.4'; }
+                fetch('/delete_from_screen', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ force_delete: true, filename: name })
+                }).then(r=>r.json()).then(d=>{
+                    if(d && d.success){
+                        // Remove the card immediately and refresh in background
+                        if(match && match.parentElement){ match.parentElement.removeChild(match); }
+                        try { setTimeout(refreshLibrary, 50); } catch(e){}
+                        // if a screen is open in context, refresh its playlist too
+                        const sid = rpCtx && rpCtx.screenId;
+                        if(sid){ try { refreshPlaylist(sid); } catch(e){} }
+                    } else {
+                        alert(`Delete failed: ${d && d.error ? d.error : 'unknown error'}`);
+                    }
+                }).catch(err=>{
+                    alert('Delete failed: ' + err.message);
                 });
             }
         
@@ -3309,11 +3403,18 @@
         }
         
         function showAddStoreDialog() {
-            document.getElementById('addStoreModal').style.display = 'block';
+            const modal = document.getElementById('addStoreModal');
+            modal.classList.add('visible');
+            // focus first field after animation frame
+            requestAnimationFrame(() => {
+                const first = document.getElementById('newStoreId');
+                if (first) first.focus();
+            });
         }
-        
+
         function closeAddStoreDialog() {
-            document.getElementById('addStoreModal').style.display = 'none';
+            const modal = document.getElementById('addStoreModal');
+            modal.classList.remove('visible');
             document.getElementById('addStoreForm').reset();
         }
         
@@ -3455,12 +3556,18 @@
         }
         
         // Close modal when clicking outside of it
-        window.onclick = function(event) {
+        window.addEventListener('click', function(event) {
             const modal = document.getElementById('addStoreModal');
-            if (event.target == modal) {
+            if (event.target === modal) {
                 closeAddStoreDialog();
             }
-        }
+        });
+        window.addEventListener('keydown', function(event){
+            const modal = document.getElementById('addStoreModal');
+            if (event.key === 'Escape' && modal.classList.contains('visible')) {
+                closeAddStoreDialog();
+            }
+        });
         
         // Initialize master store indicator on page load
         document.addEventListener('DOMContentLoaded', function() {
@@ -3594,24 +3701,25 @@
     </script>
     
     <!-- Add Store Modal -->
-    <div id="addStoreModal" class="modal">
-        <div class="modal-content">
+    <div id="addStoreModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="addStoreTitle" aria-describedby="addStoreDesc">
+        <div class="modal-content" role="document">
             <div class="modal-header">
-                <h3>Add New Store</h3>
-                <span class="close" onclick="closeAddStoreDialog()">&times;</span>
+                <h3 id="addStoreTitle">Add New Store</h3>
+                <button type="button" class="close" aria-label="Close" onclick="closeAddStoreDialog()" title="Close">&times;</button>
             </div>
-            <form id="addStoreForm">
+            <form id="addStoreForm" onsubmit="event.preventDefault(); addNewStore();">
+                <p id="addStoreDesc" class="helper">Create a new store entry with a numeric ID and a friendly name.</p>
                 <div class="form-group">
-                    <label for="newStoreId">Store ID (Number):</label>
-                    <input type="text" id="newStoreId" placeholder="e.g., 1882" required>
+                    <label for="newStoreId">Store ID</label>
+                    <input type="text" inputmode="numeric" pattern="[0-9]*" id="newStoreId" placeholder="e.g., 1882" required autofocus>
                 </div>
                 <div class="form-group">
-                    <label for="newStoreName">Store Name:</label>
+                    <label for="newStoreName">Store Name</label>
                     <input type="text" id="newStoreName" placeholder="e.g., Liverpool Branch" required>
                 </div>
                 <div class="modal-buttons">
                     <button type="button" class="btn-secondary" onclick="closeAddStoreDialog()">Cancel</button>
-                    <button type="button" class="btn-primary" onclick="addNewStore()">Add Store</button>
+                    <button type="submit" class="btn-primary">Add Store</button>
                 </div>
             </form>
         </div>

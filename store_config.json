@@ -17,6 +17,10 @@
     {
       "id": "1212",
       "name": "Guildford"
+    },
+    {
+      "id": "1200",
+      "name": "kippax"
     }
   ],
   "screens": {
@@ -232,7 +236,7 @@
     },
     "1112": {
       "1112_screen1": {
-        "file": "https://pub-everydayadvertise.e0e697ba93f5fde654340ebc4206b59c.r2.dev/8050a115-35ba-4506-bcd9-4877156324a5.png",
+        "file": "test1x1.png",
         "vertical": false,
         "horizontal": false,
         "rotation": 0,
@@ -272,6 +276,30 @@
               "fri",
               "sat"
             ]
+          },
+          {
+            "id": "64d3f3b0-a54e-4c03-865f-6f24e244eeae",
+            "file": "test1x1.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image"
+          },
+          {
+            "id": "9f9297b0-c683-4c1c-8f65-a4de8397b06c",
+            "file": "6d2a5b5c-82df-425f-9006-b236161803e0.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image"
           }
         ],
         "rotation_meta": {
@@ -373,12 +401,25 @@
         }
       },
       "1112_screen4": {
-        "file": null,
+        "file": "e5c5e631-d3a2-47ba-b179-30a08ace9779.png",
         "vertical": true,
         "horizontal": false,
         "rotation": 0,
         "protected": false,
-        "playlist": [],
+        "playlist": [
+          {
+            "id": "d84c89e4-f3b2-4f14-8b9a-98bf9ef42dbf",
+            "file": "e5c5e631-d3a2-47ba-b179-30a08ace9779.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image"
+          }
+        ],
         "rotation_meta": {
           "last_index": 0,
           "last_ts": 0
@@ -387,7 +428,7 @@
     },
     "1765": {
       "1765_screen1": {
-        "file": "5f0baa94-af25-4724-a0d7-7424c5f69d84.jpg",
+        "file": null,
         "vertical": false,
         "horizontal": false,
         "rotation": 0,
@@ -741,6 +782,41 @@
           "last_ts": 0
         },
         "refresh_seq": 0
+      }
+    },
+    "1200": {
+      "1200_screen1": {
+        "file": null,
+        "vertical": false,
+        "horizontal": false,
+        "rotation": 0,
+        "playlist": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1200_screen2": {
+        "file": null,
+        "vertical": false,
+        "horizontal": false,
+        "rotation": 0,
+        "playlist": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1200_promo1": {
+        "file": null,
+        "vertical": true,
+        "horizontal": false,
+        "rotation": 0,
+        "playlist": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
       }
     }
   }
