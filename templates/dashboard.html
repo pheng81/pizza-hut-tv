@@ -136,6 +136,9 @@
     .stores-title .tv-icon { width:22px; height:22px; color:#1d1d1f; opacity:.9; display:inline-block; }
     .stores-title .tv-img { width:24px; height:24px; display:inline-block; vertical-align:middle; border-radius:4px; }
     .stores-title .tv-svg { width:44px; height:44px; display:inline-block; vertical-align:middle; }
+    /* Brand logo in title */
+    .stores-title .brand-logo { height: 44px; width: auto; display: inline-block; vertical-align: middle; margin-right: 8px; }
+    .stores-title .title-fallback { display: none; }
         /* Apple-like primary button */
         .stores-header .add-store-btn {
             appearance: none;
@@ -188,7 +191,7 @@
     .stores-header .stores-actions .quick-tips .icon circle,
     .stores-header .stores-actions .quick-tips .icon path { stroke: currentColor; stroke-width: 1.8; stroke-linecap:round; stroke-linejoin:round; }
         
-        .stores-title {
+    .stores-title {
             /* Reinforce the script style in case of cascading overrides */
             font-family: 'Brush Script MT', 'Segoe Script', 'Lucida Handwriting', 'Comic Sans MS', cursive;
             font-size: 36px;
@@ -228,7 +231,7 @@
             stroke-linecap: round;
             stroke-linejoin: round;
         }
-        @media (max-width:768px){
+    @media (max-width:768px){
             .stores-title .quick-tips { margin-left: 8px; height:28px; padding:4px 10px; }
         }
         
@@ -1119,6 +1122,7 @@
             .container { padding:10px 16px 32px; }
             .stores-title { font-size: 30px; }
             .stores-title .tv-svg { width:38px; height:38px; }
+            .stores-title .brand-logo { height: 38px; }
         }
 
         @media (max-width: 768px){
@@ -1127,6 +1131,7 @@
             .stores-actions { width: 100%; display: flex; justify-content: flex-end; }
             .stores-title { font-size: 26px; }
             .stores-title .tv-svg { width:32px; height:32px; }
+            .stores-title .brand-logo { height: 32px; }
 
             /* Store selector area */
             .store-management { flex-direction: column; align-items: stretch; gap: 10px; }
@@ -1165,6 +1170,7 @@
         @media (max-width: 480px){
             .stores-title { font-size: 22px; }
             .stores-title .tv-svg { width:28px; height:28px; }
+            .stores-title .brand-logo { height: 28px; }
             .search-box { width: 100%; }
             .screen-preview.vertical-preview { width: 80%; }
             .playlist-row.apple .pl-top { gap: 8px; }
@@ -1184,8 +1190,10 @@
 <body>
     <div class="container">
         <div class="stores-section">
-            <div class="stores-header">
-                                                <div class="stores-title">Everyday Advertise
+        <div class="stores-header">
+                        <div class="stores-title">
+                                                        <img class="brand-logo" src="{{ url_for('static', filename='ea-logo.svg') }}" alt="Everyday Advertise" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';" />
+                            <span class="title-fallback">Everyday Advertise</span>
                                                         <span class="tv-icons" aria-hidden="true">
                                                                                         <!-- Inline wave-animated CSS-only icon with occasional waving arms -->
                                                                                         <svg class="tv-svg" width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
