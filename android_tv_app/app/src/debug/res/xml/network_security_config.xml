@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-	<!-- Release default: disallow cleartext; HTTPS only -->
-	<base-config cleartextTrafficPermitted="false">
+	<!-- Debug: allow cleartext HTTP to emulator/local server -->
+	<base-config cleartextTrafficPermitted="true">
 		<trust-anchors>
 			<certificates src="system" />
 			<certificates src="user" />

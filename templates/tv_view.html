@@ -24,6 +24,20 @@
 		<script id="tv-data" type="application/json">{"store_id": {{ store_id|tojson }}, "screen_id": {{ screen_id|tojson }}, "initial_file": {{ active_file|tojson }}}</script>
 		<script>
 			const __tvCfg = JSON.parse(document.getElementById('tv-data')?.textContent || '{}');
+			// Ensure we always talk to HTTPS origin. If we don't have one (e.g., file://),
+			// fall back to the public domain.
+			const DEFAULT_ORIGIN = 'https://api.everydayadvertise.com';
+			const ORIGIN = (window.location && window.location.origin)
+				? (window.location.origin.startsWith('http:')
+					? window.location.origin.replace(/^http:/, 'https:')
+					: window.location.origin)
+				: DEFAULT_ORIGIN;
+			// If we're on our domain but over http, enforce https.
+			try {
+				if (location.protocol === 'http:' && /(^|\.)everydayadvertise\.com$/i.test(location.hostname)) {
+					location.replace('https:' + location.href.slice(5));
+				}
+			} catch {}
 			const storeId = __tvCfg.store_id;
 			const screenId = __tvCfg.screen_id;
 			const initialFile = __tvCfg.initial_file;
@@ -32,9 +46,40 @@
 		function isVideoByName(name){ if(!name) return false; const ext=(name.split('.').pop()||'').toLowerCase(); return videoExt.includes(ext); }
 		function mediaUrl(item){
 			if(!item) return '';
-			if(typeof item === 'string') return /^https?:\/\//i.test(item) || item.startsWith('/') ? item : `/static/uploads/${item}`;
+			if(typeof item === 'string') {
+				if (/^https?:\/\//i.test(item)) {
+					const abs = item.replace(/^http:/, 'https:');
+					// If same-origin absolute like https://api.../FILENAME, rewrite to proper path
+					try{
+						const u = new URL(abs);
+						const same = u.host === (new URL(ORIGIN)).host;
+						if(same && /^\/[A-Za-z0-9._-]+$/.test(u.pathname)){
+							const fname = u.pathname.slice(1);
+							const isVid = isVideoByName(fname);
+							return `${ORIGIN}${isVid?'/media/':'/static/uploads/'}${fname}`;
+						}
+					}catch{}
+					return abs;
+				}
+				const rel = item.startsWith('/') ? item : `/static/uploads/${item}`;
+				return `${ORIGIN}${rel}`;
+			}
 			const u = item.url || item.file || '';
-			return /^https?:\/\//i.test(u) || u.startsWith('/') ? u : `/static/uploads/${u}`;
+			if (/^https?:\/\//i.test(u)) {
+				const abs = u.replace(/^http:/, 'https:');
+				try{
+					const uu = new URL(abs);
+					const same = uu.host === (new URL(ORIGIN)).host;
+					if(same && /^\/[A-Za-z0-9._-]+$/.test(uu.pathname)){
+						const fname = uu.pathname.slice(1);
+						const isVid = isVideoByName(fname);
+						return `${ORIGIN}${isVid?'/media/':'/static/uploads/'}${fname}`;
+					}
+				}catch{}
+				return abs;
+			}
+			const rel = u.startsWith('/') ? u : `/static/uploads/${u}`;
+			return `${ORIGIN}${rel}`;
 		}
 
 		const stage = document.getElementById('stage');
@@ -49,7 +94,7 @@
 
 		async function fetchPlaylist(){
 			try{
-				const r = await fetch(`/playlist/${storeId}/${screenId}`);
+				const r = await fetch(`${ORIGIN}/playlist/${storeId}/${screenId}`);
 				const j = await r.json();
 				if(j && j.success && Array.isArray(j.playlist)){
 					playlist = j.playlist;
@@ -75,6 +120,18 @@
 			});
 		}
 
+		function hostOf(u){ try { return (new URL(u)).host; } catch { return ''; } }
+		function fileNameFrom(item){
+			if(!item) return '';
+			if(typeof item === 'string'){
+				try{ const u = new URL(item); return (u.pathname.split('/').pop()||''); }catch{ return (item.split('/').pop()||''); }
+			}
+			const f = item.file || '';
+			if(f) return String(f).split('/').pop()||'';
+			const u = item.url || '';
+			try{ const p = new URL(u).pathname; return (p.split('/').pop()||''); }catch{ return (String(u).split('/').pop()||''); }
+		}
+
 		function clearNode(node){ while(node.firstChild) node.removeChild(node.firstChild); }
 
 		function swapLayers(){ const t = front; front = back; back = t; }
@@ -84,6 +141,17 @@
 			if(!url){ return; }
 			const type = (item.media_type || '').toLowerCase();
 			const isVid = type === 'video' || isVideoByName(url);
+			const thisHost = hostOf(url);
+			const ourHost = hostOf(ORIGIN);
+			// Build a local fallback if primary URL is external and fails
+			let fallbackUrl = '';
+			if(thisHost && ourHost && thisHost !== ourHost){
+				const fname = fileNameFrom(item);
+				if(fname){
+					fallbackUrl = isVid ? `${ORIGIN}/media/${encodeURIComponent(fname)}`
+										 : `${ORIGIN}/static/uploads/${encodeURIComponent(fname)}`;
+				}
+			}
 			try{
 				const node = isVid ? await preloadVideo(url) : await preloadImage(url);
 				node.className = 'media';
@@ -99,7 +167,26 @@
 					front.classList.add('fade'); front.classList.remove('visible');
 					setTimeout(()=>{ front.classList.add('hidden'); front.classList.remove('fade'); swapLayers(); }, 260);
 				});
-			}catch(e){ /* skip on error */ }
+			}catch(e){
+				// Try fallback via our origin if available
+				if(fallbackUrl){
+					try{
+						const node = isVid ? await preloadVideo(fallbackUrl) : await preloadImage(fallbackUrl);
+						node.className = 'media';
+						if(isVid){ node.loop = true; node.autoplay = true; node.muted = true; node.playsInline = true; }
+						clearNode(back); back.appendChild(node);
+						back.classList.add('fade'); back.classList.remove('hidden');
+						if(isVid){ setTimeout(()=>{ try{ node.play().catch(()=>{});}catch{} }, 0); }
+						requestAnimationFrame(()=>{
+							back.classList.add('visible'); back.classList.remove('fade');
+							front.classList.add('fade'); front.classList.remove('visible');
+							setTimeout(()=>{ front.classList.add('hidden'); front.classList.remove('fade'); swapLayers(); }, 260);
+						});
+						return;
+					}catch(_f){ /* swallow */ }
+				}
+				/* skip on error */
+			}
 		}
 
 		function nextIndex(){ if(!playlist.length) return 0; return (idx + 1) % playlist.length; }

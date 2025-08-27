@@ -93,6 +93,11 @@ class TvDisplayActivity : AppCompatActivity() {
         }
         val dbgParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         binding.root.addView(debugOverlay, dbgParams)
+        // Show current base URL briefly to verify connection target
+        try {
+            debugOverlay?.text = ("Base: " + ApiClient.baseUrl).take(60)
+            debugOverlay?.postDelayed({ debugOverlay?.text = "" }, 6000)
+        } catch (_: Exception) {}
 
         // Small heartbeat indicator (top-right)
         hbIndicator = TextView(this).apply {
