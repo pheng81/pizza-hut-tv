@@ -1443,7 +1443,9 @@
         }
         
         function triggerUpload(screenId) {
-            document.getElementById('file-' + screenId).click();
+            const el = document.getElementById('file-' + screenId);
+            if(el) { el.click(); return; }
+            openReplaceModal(screenId,'SINGLE');
         }
         
         function deleteFile(screenId) {
@@ -1940,7 +1942,7 @@
                 </div>
                 
                 <div class="button-row" style="justify-content:center;">
-                    <button class="upload-btn" onclick="triggerUpload('${screenId}')">Upload : File</button>
+                    <button class="upload-btn" onclick="openReplaceModal('${screenId}','SINGLE')">Upload / Pick</button>
                     ${screenData.file ? 
                         `<button class=\"delete-btn\" onclick=\"deleteFile('${screenId}')\" title=\"Delete current file\">🗑️ Delete</button>` : 
                         ''
@@ -2448,7 +2450,7 @@
                                                                                 </div>
                                                                                 <div class="pl-actions inline-actions primary-actions">\
                                                                                         <div class="group left">\
-                                                                                            <button class="pl-switch ${effectiveOn?'on':'off'}" aria-label="Toggle item" data-realstate="${item.enabled?'on':'off'}" title="Enable / Disable (auto reflects schedule)" onclick="toggleEnableSwitch(this,'${screenId}','${item.id}')"><span>${effectiveOn?'On':'Off'}</span></button>\
+                                                                                            <button class="pl-switch ${item.enabled?'on':'off'}" aria-label="Toggle item" data-realstate="${item.enabled?'on':'off'}" title="Enable / Disable (independent of schedule)" onclick="toggleEnableSwitch(this,'${screenId}','${item.id}')"><span>${item.enabled?'On':'Off'}</span></button>\
                                                                                         </div>\
                                                                                         <div class="group center combo-dur-del">\
                                                                                             <div class="dur-box small">
@@ -2694,7 +2696,7 @@
             });
         }
 
-        // Toggle primary item enable/disable (auto-refresh to reflect schedule/effective state)
+    // Toggle primary item enable/disable (persists item.enabled only; schedule windows still gate playback)
         function toggleEnableSwitch(btn, screenId, itemId){
             try{
                 const span = btn.querySelector('span');
@@ -3142,8 +3144,33 @@
                         });
                     });
                 }
-            function chooseLibraryFile(name){ if(!rpCtx) return; const sid = rpCtx.screenId; const iid = rpCtx.itemId; fetch(`/playlist/item/${currentStoreId}/${sid}/${iid}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({file:name})}).then(r=>r.json()).then(d=>{ if(d.success){ closeReplaceModal(); refreshPlaylist(sid); } else { alert('Replace failed: '+(d.error||'unknown')); } }); }
-            function doRpUpload(){ const inp=document.getElementById('rp-file'); if(!inp||!inp.files||!inp.files[0]){ alert('Pick a file'); return; } const fd=new FormData(); fd.append('file', inp.files[0]); const sid = rpCtx && rpCtx.screenId; const iid = rpCtx && rpCtx.itemId; if(!sid||!iid){ alert('No item context'); return; } fetch('/upload_media',{method:'POST',body:fd}).then(r=>r.json()).then(d=>{ if(!d.success){ alert('Upload failed: '+(d.error||'unknown')); return;} fetch(`/playlist/item/${currentStoreId}/${sid}/${iid}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({file:d.filename})}).then(r=>r.json()).then(x=>{ if(x.success){ closeReplaceModal(); refreshPlaylist(sid); } else { alert('Replace failed: '+(x.error||'unknown')); } }); }); }
+            function chooseLibraryFile(name){
+                if(!rpCtx) return;
+                const sid = rpCtx.screenId; const iid = rpCtx.itemId;
+                if(iid === 'SINGLE'){
+                    fetch('/assign_to_screen', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({store_id: currentStoreId, screen_id: sid, filename: name})})
+                    .then(r=>r.json()).then(d=>{ if(d.success){ closeReplaceModal(); refreshPlaylist(sid); } else { alert('Assign failed: '+(d.error||'unknown')); } });
+                } else {
+                    fetch(`/playlist/item/${currentStoreId}/${sid}/${iid}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({file:name})})
+                    .then(r=>r.json()).then(d=>{ if(d.success){ closeReplaceModal(); refreshPlaylist(sid); } else { alert('Replace failed: '+(d.error||'unknown')); } });
+                }
+            }
+            function doRpUpload(){
+                const inp=document.getElementById('rp-file');
+                if(!inp||!inp.files||!inp.files[0]){ alert('Pick a file'); return; }
+                const fd=new FormData(); fd.append('file', inp.files[0]);
+                const sid = rpCtx && rpCtx.screenId; const iid = rpCtx && rpCtx.itemId; if(!sid||!iid){ alert('No item context'); return; }
+                fetch('/upload_media',{method:'POST',body:fd}).then(r=>r.json()).then(d=>{
+                    if(!d.success){ alert('Upload failed: '+(d.error||'unknown')); return; }
+                    if(iid === 'SINGLE'){
+                        fetch('/assign_to_screen',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({store_id: currentStoreId, screen_id: sid, filename: d.filename})})
+                        .then(r=>r.json()).then(z=>{ if(z.success){ closeReplaceModal(); refreshPlaylist(sid);} else { alert('Assign failed: '+(z.error||'unknown')); } });
+                    } else {
+                        fetch(`/playlist/item/${currentStoreId}/${sid}/${iid}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({file:d.filename})})
+                        .then(r=>r.json()).then(x=>{ if(x.success){ closeReplaceModal(); refreshPlaylist(sid); } else { alert('Replace failed: '+(x.error||'unknown')); } });
+                    }
+                });
+            }
         
         // Store Management Functions
         
