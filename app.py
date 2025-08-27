@@ -1330,6 +1330,12 @@ def delete_from_screen():
                             print(f"Removed {filename} from store {sid}, screen {scr_id}")
 
                 save_store_config(config)
+                try:
+                    # Bust media library cache so UI refresh sees removal immediately
+                    global _LIB_CACHE
+                    _LIB_CACHE = {}
+                except Exception:
+                    pass
                 return jsonify({'success': True, 'message': 'File deleted successfully from all screens'})
 
             except Exception as e:
@@ -1399,6 +1405,13 @@ def delete_from_screen():
                 config['screens'][store_id][screen_id]['playlist'] = [i for i in pl if _key_of(i.get('file')) != key_current]
                 save_store_config(config)
 
+                try:
+                    # Bust media library cache if the physical file was deleted
+                    if not still_in_use:
+                        global _LIB_CACHE
+                        _LIB_CACHE = {}
+                except Exception:
+                    pass
                 resp = jsonify({
                     'success': True,
                     'message': 'File removed from screen',

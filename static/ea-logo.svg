@@ -23,12 +23,12 @@
 
   <rect width="100%" height="100%" fill="none"/>
 
-  <g transform="translate(32, 220)" style="filter:url(#softShadow)">
+  <g transform="translate(32, 160)" style="filter:url(#softShadow)">
     <text x="0" y="0" fill="url(#eaGrad)"
           font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
           font-weight="800" font-size="160" letter-spacing="1">
       <tspan>Everyday</tspan>
-      <tspan x="0" dy="140">Advertise</tspan>
+      <tspan x="0" dy="120">Advertise</tspan>
     </text>
   </g>
 </svg>
