@@ -917,6 +917,48 @@
         .store-management .add-store-btn:hover { background:#0a7aff; }
         .store-management .add-store-btn:active { transform: translateY(1px); }
         .store-management .add-store-btn .icon { width:16px; height:16px; }
+        /* Move Add/Delete to a frosted bottom bar instead of top strip */
+        .store-management .add-store-btn, .store-management .delete-store-btn { display: none; }
+
+        /* Frosted bottom bar */
+        .bottom-blur-bar {
+            position: fixed;
+            left: 0; right: 0; bottom: 0;
+            height: 54px; /* ~15% lower than 64px */
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 16px;
+            background: rgba(255,255,255,0.6);
+            backdrop-filter: blur(14px) saturate(140%);
+            -webkit-backdrop-filter: blur(14px) saturate(140%);
+            border-top: 1px solid rgba(255,255,255,0.35);
+            box-shadow: 0 -10px 24px rgba(0,0,0,0.08);
+            z-index: 999;
+        }
+    .bottom-blur-bar .bar-right { display: flex; align-items: center; gap: 4px; }
+        .bottom-blur-bar .bar-left { font-weight: 600; color: rgba(0,0,0,0.55); }
+        /* Ensure page content isn't hidden behind the bar */
+    body { padding-bottom: 68px; } /* reduced to match shorter bar */
+
+        /* Uniform, smaller action buttons in bottom bar (about 60% smaller) */
+        .bottom-blur-bar .add-store-btn,
+        .bottom-blur-bar .delete-store-btn {
+            width: 80px;            /* ~half width */
+            height: 24px;           /* uniform height */
+            padding: 0 6px;         /* tighter padding */
+            font-size: 10px;        /* slightly smaller text */
+            border-radius: 6px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            line-height: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .bottom-blur-bar .add-store-btn .icon { width: 12px; height: 12px; }
         
     /* Modal Styles */
     .modal {
@@ -3728,5 +3770,18 @@
             </form>
         </div>
     </div>
-</body>
+        <!-- Bottom Frosted Action Bar -->
+        <div class="bottom-blur-bar" role="toolbar" aria-label="Global actions">
+            <div class="bar-left">Everyday Advertise</div>
+            <div class="bar-right">
+                <button class="add-store-btn" onclick="showAddStoreDialog()" title="Add Store">
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 5v14M5 12h14" fill="none"></path>
+                    </svg>
+                    Add Store
+                </button>
+                <button class="delete-store-btn" id="delete-store-btn-footer" onclick="deleteCurrentStore()" title="Delete selected store">🗑️ Delete Store</button>
+            </div>
+        </div>
+    </body>
 </html>
