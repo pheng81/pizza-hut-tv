@@ -979,7 +979,14 @@ def dashboard():
         print("DEBUG: Config loaded successfully")
         print(f"DEBUG: Config has {len(config.get('stores', []))} stores")
         print("DEBUG: Rendering template...")
-        resp = make_response(render_template('dashboard.html', config=config, media_base_url=get_media_base_url()))
+        # Provide a cache-busting token for static assets (logo)
+        try:
+            import os, time
+            logo_path = os.path.join(os.path.dirname(__file__), 'static', 'ea-logo.svg')
+            asset_bust = int(os.path.getmtime(logo_path)) if os.path.exists(logo_path) else int(time.time())
+        except Exception:
+            asset_bust = 0
+        resp = make_response(render_template('dashboard.html', config=config, media_base_url=get_media_base_url(), asset_bust=asset_bust))
         # Avoid CDN/browser caching the admin dashboard HTML
         try:
             resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
