@@ -2000,6 +2000,133 @@ def upload_media():
         print(f"upload_media error: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+# ---- Assign existing media to a screen (no file upload) ----
+@app.route('/assign_to_screen', methods=['POST'])
+def assign_to_screen():
+    try:
+        data = request.get_json() or {}
+        store_id = data.get('store_id')
+        screen_id = data.get('screen_id')
+        apply_to_all = bool(data.get('apply_to_all', False))
+        incoming = data.get('filename') or data.get('file') or ''
+
+        if not store_id or not screen_id or not incoming:
+            return jsonify({'success': False, 'error': 'store_id, screen_id, and filename are required'}), 400
+
+        # Normalize screen_id like in upload_to_screen (allow legacy short id)
+        try:
+            cfg_probe = load_store_config()
+            if store_id in cfg_probe.get('screens', {}) and screen_id not in cfg_probe['screens'][store_id]:
+                candidate = f"{store_id}_{screen_id}"
+                if candidate in cfg_probe['screens'][store_id]:
+                    screen_id = candidate
+        except Exception:
+            pass
+
+        # Map absolute public URL to object key when needed (R2/public URLs)
+        def _key_of(val: str) -> str:
+            v = str(val or '')
+            try:
+                if v.startswith('http://') or v.startswith('https://'):
+                    return v.rstrip('/').split('/')[-1]
+            except Exception:
+                pass
+            return v
+
+        key = _key_of(incoming)
+        if not allowed_file(key):
+            return jsonify({'success': False, 'error': 'Invalid or unsupported file type'}), 400
+
+        config = ensure_playlists_structure(load_store_config())
+
+        # If apply_to_all requested from non-master, downgrade to single-store
+        if apply_to_all:
+            master_store_id = config.get('master_store_id')
+            if store_id != master_store_id:
+                apply_to_all = False
+
+        def _assign_to(store: str, scr_id: str):
+            scr = config['screens'][store][scr_id]
+            scr['file'] = key
+            pl = scr.setdefault('playlist', [])
+            if not any((i.get('file') == key) for i in pl):
+                pl.append({
+                    'id': str(uuid.uuid4()),
+                    'file': key,
+                    'enabled': True,
+                    'start': None,
+                    'end': None,
+                    'schedule': [],
+                    'duration': 10,
+                    'repeat': True,
+                    'link_next': False,
+                    'media_type': classify_media(key)
+                })
+
+        if apply_to_all:
+            screen_type = screen_id.split('_', 1)[1] if '_' in screen_id else screen_id
+            updated_stores = []
+            skipped_stores = []
+            created_screens = []
+            for sid in config.get('screens', {}).keys():
+                target = f"{sid}_{screen_type}"
+                legacy = screen_type
+                if target in config['screens'][sid]:
+                    actual = target
+                elif legacy in config['screens'][sid]:
+                    actual = legacy
+                else:
+                    is_promo = screen_type.startswith('promo')
+                    config['screens'][sid][target] = {
+                        'file': None,
+                        'vertical': is_promo,
+                        'horizontal': not is_promo,
+                        'rotation': 0,
+                        'protected': False,
+                        'playlist': []
+                    }
+                    created_screens.append(f"{sid}:{target}")
+                    actual = target
+
+                if config['screens'][sid][actual].get('protected'):
+                    skipped_stores.append(sid)
+                else:
+                    _assign_to(sid, actual)
+                    updated_stores.append(sid)
+
+            save_store_config(config)
+            return jsonify({
+                'success': True,
+                'filename': key,
+                'url': build_public_url(key),
+                'media_type': classify_media(key),
+                'store_id': store_id,
+                'screen_id': screen_id,
+                'applied_to_all': True,
+                'updated_stores': updated_stores,
+                'skipped_stores': skipped_stores,
+                'created_screens': created_screens
+            })
+
+        # Single-store path
+        if store_id in config.get('screens', {}) and screen_id in config['screens'].get(store_id, {}):
+            _assign_to(store_id, screen_id)
+            save_store_config(config)
+            return jsonify({
+                'success': True,
+                'filename': key,
+                'url': build_public_url(key),
+                'media_type': classify_media(key),
+                'store_id': store_id,
+                'screen_id': screen_id,
+                'applied_to_all': False
+            })
+
+        return jsonify({'success': False, 'error': 'screen not found'}), 404
+    except Exception as e:
+        print(f"assign_to_screen error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # -------- Store & Screen discovery API (for device first-run setup) --------
 @app.route('/stores')
 @with_etag_json

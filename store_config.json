@@ -22,7 +22,7 @@
   "screens": {
     "0000": {
       "0000_screen1": {
-        "file": "2f392a14-7059-484d-901e-591e5376d008.jpg",
+        "file": "32ef591f-b7d7-4003-8e42-567ddb618c92.mp4",
         "vertical": false,
         "horizontal": false,
         "rotation": 0,
@@ -55,6 +55,18 @@
             "repeat": true,
             "link_next": false,
             "media_type": "image"
+          },
+          {
+            "id": "cc770978-88ff-4bf4-88cc-68d22ad6f758",
+            "file": "32ef591f-b7d7-4003-8e42-567ddb618c92.mp4",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "video"
           }
         ],
         "rotation_meta": {
