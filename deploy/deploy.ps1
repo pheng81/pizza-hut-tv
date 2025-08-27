@@ -23,6 +23,15 @@ function Invoke-Remote($command) {
   if ($LASTEXITCODE -ne 0) { throw "Remote command failed with exit code $LASTEXITCODE" }
 }
 
+function Copy-ToRemote($localPath, $remotePath) {
+  $scpExe = 'scp'
+  $scpArgs = @()
+  if ($KeyPath -and (Test-Path $KeyPath)) { $scpArgs += @('-i', $KeyPath) }
+  $scpArgs += @('-o','StrictHostKeyChecking=no', $localPath, "${User}@${Server}:${remotePath}")
+  & $scpExe @scpArgs
+  if ($LASTEXITCODE -ne 0) { throw "File copy failed with exit code $LASTEXITCODE" }
+}
+
 Write-Host "Deploying to $User@$Server (Repo: $RepoPath)" -ForegroundColor Cyan
 
 if ($Bootstrap) {
@@ -55,51 +64,10 @@ sudo systemctl status everydayadvertise --no-pager -l || true
 Write-Host "Pulling latest code and restarting service..." -ForegroundColor Yellow
 
 $services = ($ServiceNames | ForEach-Object { $_.Trim() }) -join ' '
+$preserveStr = if ($PreserveConfig.IsPresent) { 'True' } else { 'False' }
 
-$updateCmd = @"
-set -e
-if [ ! -d "$RepoPath/.git" ]; then
-  echo "ERROR: Repo not found at $RepoPath (.git missing). Run with -Bootstrap first or fix RepoPath." >&2
-  exit 1
-fi
-cd "$RepoPath"
-PRESERVE=$([bool]::Parse('$(if($PreserveConfig){"True"}else{"False"})'))
-if [ "$PRESERVE" = "True" ]; then
-  # Safely preserve local store_config.json if present to avoid git conflicts
-  if [ -f store_config.json ]; then cp store_config.json /tmp/store_config.json.local.bak; fi
-  # If tracked, allow index to change and remove working copy to prevent conflict
-  if git ls-files --error-unmatch store_config.json >/dev/null 2>&1; then
-    git update-index --no-skip-worktree store_config.json || true
-  fi
-  rm -f store_config.json || true
-fi
-
-# Update code: prefer fast-forward pull, fallback to fetch/reset to origin/main
-git pull --ff-only || { git fetch origin main && git checkout -f main && git reset --hard origin/main; }
-
-# Restore preserved config if we saved it
-if [ "$PRESERVE" = "True" ]; then
-  if [ -f /tmp/store_config.json.local.bak ]; then cp /tmp/store_config.json.local.bak store_config.json; fi
-  # If the file is tracked in git, mark skip-worktree so future pulls ignore local edits
-  if git ls-files --error-unmatch store_config.json >/dev/null 2>&1; then
-    git update-index --skip-worktree store_config.json || true
-  fi
-fi
-"$RepoPath/.venv/bin/pip" install -r requirements.txt
-
-# Prefer everydayadvertise, fallback to tv-api
-for svc in $services; do
-  if systemctl list-unit-files | grep -q "^${svc}\.service"; then
-    sudo systemctl restart "$svc"
-    sudo systemctl status "$svc" --no-pager -l || true
-    exit 0
-  fi
-done
-
-echo "WARNING: No known service found to restart: $services" >&2
-exit 2
-"@
-
-Invoke-Remote "bash -lc '$updateCmd'"
+# Upload and run the robust server-side updater to avoid inline quoting issues
+Copy-ToRemote -localPath (Join-Path $PSScriptRoot 'update_server.sh') -remotePath '/tmp/update_server.sh'
+Invoke-Remote "bash -lc 'chmod +x /tmp/update_server.sh; REPO_PATH="$RepoPath" PRESERVE="$preserveStr" SERVICES="$services" /tmp/update_server.sh'"
 
 Write-Host "Done." -ForegroundColor Green

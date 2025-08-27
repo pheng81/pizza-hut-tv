@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response, send_file
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response, send_file, make_response
 import os
 import shutil as _shutil
 import subprocess
@@ -969,7 +969,13 @@ def dashboard():
         print("DEBUG: Config loaded successfully")
         print(f"DEBUG: Config has {len(config.get('stores', []))} stores")
         print("DEBUG: Rendering template...")
-        return render_template('dashboard.html', config=config, media_base_url=get_media_base_url())
+        resp = make_response(render_template('dashboard.html', config=config, media_base_url=get_media_base_url()))
+        # Avoid CDN/browser caching the admin dashboard HTML
+        try:
+            resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        except Exception:
+            pass
+        return resp
     except Exception as e:
         print(f"DEBUG: Error in dashboard route: {e}")
         import traceback
@@ -1247,19 +1253,19 @@ def delete_from_screen():
     try:
         data = request.get_json()
         print(f"Delete request received: {data}")
-        
+
         store_id = data.get('store_id')
         screen_id = data.get('screen_id')
         filename = data.get('filename')
         force_delete = data.get('force_delete', False)
-        
+
         config = load_store_config()
         print(f"Current config loaded successfully")
 
         # Basic validation
         if not force_delete and (not store_id or not screen_id):
             return jsonify({'error': 'store_id and screen_id are required'}), 400
-        
+
         # Normalize screen_id to match what's stored in config for this store.
         # Accept both prefixed (e.g., 1112_screen1) and unprefixed (screen1) forms.
         if not force_delete and store_id in config.get('screens', {}):
@@ -1278,7 +1284,7 @@ def delete_from_screen():
                         if candidate_strip in store_screens:
                             print(f"Mapped screen_id '{screen_id}' -> '{candidate_strip}' (stripped prefix)")
                             screen_id = candidate_strip
-        
+
         # Handle force delete from gallery (delete file completely)
         if force_delete and filename:
             print(f"Processing force delete for filename: {filename}")
@@ -1298,21 +1304,21 @@ def delete_from_screen():
                         os.remove(filepath)
                         removed_physical = True
                         print(f"Force deleted file: {filepath}")
-                
+
                 # Remove file from all screens that use it
                 for sid, screens in config['screens'].items():
                     for scr_id, screen_data in screens.items():
                         if screen_data.get('file') == filename:
                             config['screens'][sid][scr_id]['file'] = None
                             print(f"Removed {filename} from store {sid}, screen {scr_id}")
-                
+
                 save_store_config(config)
                 return jsonify({'success': True, 'message': 'File deleted successfully from all screens'})
-                
+
             except Exception as e:
                 print(f"Error force deleting file: {e}")
                 return jsonify({'error': f'Failed to delete file: {str(e)}'}), 500
-        
+
         # Handle regular delete from specific screen
         print(f"Processing screen delete for store_id: {store_id}, screen_id: {screen_id}")
         if (not force_delete and store_id in config.get('screens', {}) and
@@ -1325,11 +1331,25 @@ def delete_from_screen():
                 return jsonify({'error': 'No file to delete', 'screen_id': screen_id}), 400
 
             try:
+                # Helper to map absolute URLs (e.g., R2 public URLs) to their object key
+                def _key_of(val: Optional[str]) -> Optional[str]:
+                    if not val:
+                        return val
+                    v = str(val)
+                    try:
+                        if v.startswith('http://') or v.startswith('https://'):
+                            return v.rstrip('/').split('/')[-1]
+                    except Exception:
+                        pass
+                    return v
+
+                key_current = _key_of(current_filename)
                 # Determine if other screens still reference this file
                 still_in_use = False
                 for other_store_id, screens in config.get('screens', {}).items():
                     for other_screen_id, sdata in screens.items():
-                        if (other_store_id, other_screen_id) != (store_id, screen_id) and sdata.get('file') == current_filename:
+                        other_file = sdata.get('file')
+                        if (other_store_id, other_screen_id) != (store_id, screen_id) and _key_of(other_file) == key_current:
                             still_in_use = True
                             break
                     if still_in_use:
@@ -1340,12 +1360,13 @@ def delete_from_screen():
                 if not still_in_use:
                     if r2_enabled():
                         try:
-                            r2_delete_object(current_filename)
+                            if key_current:
+                                r2_delete_object(key_current)
                             print(f"Deleted R2 object: {current_filename}")
                         except Exception as de:
                             print(f"R2 delete failed: {de}")
                     else:
-                        filepath = os.path.join(app.config['UPLOAD_FOLDER'], current_filename)
+                        filepath = os.path.join(app.config['UPLOAD_FOLDER'], key_current or current_filename)
                         if os.path.exists(filepath):
                             os.remove(filepath)
                             print(f"Deleted physical file: {filepath}")
@@ -1358,20 +1379,26 @@ def delete_from_screen():
                 config['screens'][store_id][screen_id]['file'] = None
                 # remove from playlist entries referencing file
                 pl = config['screens'][store_id][screen_id].get('playlist', [])
-                config['screens'][store_id][screen_id]['playlist'] = [i for i in pl if i.get('file') != current_filename]
+                config['screens'][store_id][screen_id]['playlist'] = [i for i in pl if _key_of(i.get('file')) != key_current]
                 save_store_config(config)
 
-                return jsonify({
+                resp = jsonify({
                     'success': True,
                     'message': 'File removed from screen',
                     'file_was_shared': still_in_use,
                     'file_deleted': not still_in_use,
-                    'removed_filename': current_filename
+                    'removed_filename': current_filename,
+                    'removed_key': key_current
                 })
+                try:
+                    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+                except Exception:
+                    pass
+                return resp
             except Exception as e:
                 print(f"Error during delete operation: {e}")
                 return jsonify({'error': f'Failed to delete file: {str(e)}'}), 500
-        
+
         print(f"Invalid parameters - store_id: {store_id}, screen_id: {screen_id}")
         try:
             print(f"Available stores: {list(config.get('screens', {}).keys())}")
@@ -1380,7 +1407,7 @@ def delete_from_screen():
         except Exception:
             pass
         return jsonify({'error': 'Invalid parameters or screen not found', 'store_id': store_id, 'screen_id': screen_id}), 400
-        
+
     except Exception as e:
         print(f"Unexpected error in delete_from_screen: {e}")
         return jsonify({'error': f'Server error: {str(e)}'}), 500

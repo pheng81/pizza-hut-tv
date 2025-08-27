@@ -22,7 +22,7 @@
   "screens": {
     "0000": {
       "0000_screen1": {
-        "file": "f9d47c14-3444-4e6e-8de8-21a7472efabd.jpg",
+        "file": "2f392a14-7059-484d-901e-591e5376d008.jpg",
         "vertical": false,
         "horizontal": false,
         "rotation": 0,
@@ -31,28 +31,22 @@
           {
             "id": "4f96dcfc-d1b3-4303-9564-e56ca67190d1",
             "file": "25bf3663-bcf6-4bfe-8231-1e7e2ac198ec.mp4",
-            "enabled": true,
+            "enabled": false,
             "start": null,
             "end": null,
             "duration": 7,
             "repeat": true,
             "link_next": false,
             "media_type": "video",
-            "schedule": [
-              {
-                "start": null,
-                "end": null,
-                "enabled": true
-              }
-            ],
+            "schedule": [],
             "days": [
               "thu",
               "fri"
             ]
           },
           {
-            "id": "3ee22825-0d72-4c0e-83de-956c37b125d4",
-            "file": "6b16de37-b6ca-4e8d-85fd-6fe535222124.jpg",
+            "id": "373d39e0-5ba7-4556-800d-610fecd5f9ff",
+            "file": "2f392a14-7059-484d-901e-591e5376d008.jpg",
             "enabled": true,
             "start": null,
             "end": null,
@@ -61,21 +55,6 @@
             "repeat": true,
             "link_next": false,
             "media_type": "image"
-          },
-          {
-            "id": "55bfdf6c-3a15-4c93-85e0-12393e0dffae",
-            "file": "713def33-79c3-44ff-aa59-00dd40f34fe4.mp4",
-            "enabled": true,
-            "start": null,
-            "end": null,
-            "schedule": [],
-            "duration": 10,
-            "repeat": true,
-            "link_next": false,
-            "media_type": "video",
-            "days": [
-              "sat"
-            ]
           }
         ],
         "rotation_meta": {
@@ -109,18 +88,6 @@
               }
             ],
             "days": []
-          },
-          {
-            "id": "55951b57-654d-40f4-9b01-e6ad253825f7",
-            "file": "20b2b067-c5c4-4786-a139-ae12306583dc.jpg",
-            "enabled": true,
-            "start": null,
-            "end": null,
-            "schedule": [],
-            "duration": 6,
-            "repeat": true,
-            "link_next": false,
-            "media_type": "image"
           }
         ],
         "rotation_meta": {
@@ -293,18 +260,6 @@
               "fri",
               "sat"
             ]
-          },
-          {
-            "id": "049a8902-5b39-4395-9805-2976a555b20a",
-            "file": "7428d2a9-5bfd-458b-b82c-52f71f170968.jpg",
-            "enabled": true,
-            "start": null,
-            "end": null,
-            "schedule": [],
-            "duration": 5,
-            "repeat": true,
-            "link_next": false,
-            "media_type": "image"
           }
         ],
         "rotation_meta": {
@@ -625,7 +580,7 @@
     },
     "1212": {
       "1212_screen1": {
-        "file": "713def33-79c3-44ff-aa59-00dd40f34fe4.mp4",
+        "file": "2f392a14-7059-484d-901e-591e5376d008.jpg",
         "vertical": false,
         "horizontal": false,
         "rotation": 0,
@@ -634,13 +589,20 @@
             "id": "f665db89-1f56-4bb9-970b-dac3a9d98c3d",
             "file": "eb142e3f-2233-49be-b5c6-7506b06025f9.png",
             "enabled": true,
-            "start": null,
+            "start": "2025-08-27T03:00:00",
             "end": null,
             "duration": 10,
             "repeat": true,
             "link_next": false,
             "media_type": "image",
-            "schedule": []
+            "schedule": [
+              {
+                "start": null,
+                "end": null,
+                "days": [],
+                "enabled": true
+              }
+            ]
           },
           {
             "id": "355f65ed-b45e-456f-be8d-29ee1f1732e0",
@@ -653,54 +615,6 @@
             "link_next": false,
             "media_type": "video",
             "schedule": []
-          },
-          {
-            "id": "65f43518-3ee1-4084-b9ef-46949a07813a",
-            "file": "6b16de37-b6ca-4e8d-85fd-6fe535222124.jpg",
-            "enabled": true,
-            "start": null,
-            "end": null,
-            "schedule": [],
-            "duration": 10,
-            "repeat": true,
-            "link_next": false,
-            "media_type": "image"
-          },
-          {
-            "id": "224fefc7-d6bb-4bbf-8bc6-57f48972dd10",
-            "file": "981fd512-a12f-4f0c-9a34-a7c8a69ac2f2.mp4",
-            "enabled": true,
-            "start": null,
-            "end": null,
-            "schedule": [],
-            "duration": 10,
-            "repeat": true,
-            "link_next": false,
-            "media_type": "video"
-          },
-          {
-            "id": "4ec514d6-e8df-4635-9fc4-2c9cc3c65b65",
-            "file": "fdefa649-e707-480f-9a21-cf7bdc99680f.mp4",
-            "enabled": true,
-            "start": null,
-            "end": null,
-            "schedule": [],
-            "duration": 10,
-            "repeat": true,
-            "link_next": false,
-            "media_type": "video"
-          },
-          {
-            "id": "4e2a9bd2-ba9f-4b9c-afd0-dec0bf389c17",
-            "file": "713def33-79c3-44ff-aa59-00dd40f34fe4.mp4",
-            "enabled": true,
-            "start": null,
-            "end": null,
-            "schedule": [],
-            "duration": 10,
-            "repeat": true,
-            "link_next": false,
-            "media_type": "video"
           }
         ],
         "rotation_meta": {
