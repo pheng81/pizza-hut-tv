@@ -1267,6 +1267,8 @@ def tv_view(store_id, screen_id):
 @app.route('/delete_from_screen', methods=['POST'])
 def delete_from_screen():
     """Delete file from specific screen or force delete from gallery"""
+    # Declare once at function start to avoid SyntaxError
+    global _LIB_CACHE
     try:
         data = request.get_json()
         print(f"Delete request received: {data}")
@@ -1332,7 +1334,6 @@ def delete_from_screen():
                 save_store_config(config)
                 try:
                     # Bust media library cache so UI refresh sees removal immediately
-                    global _LIB_CACHE
                     _LIB_CACHE = {}
                 except Exception:
                     pass
@@ -1408,7 +1409,6 @@ def delete_from_screen():
                 try:
                     # Bust media library cache if the physical file was deleted
                     if not still_in_use:
-                        global _LIB_CACHE
                         _LIB_CACHE = {}
                 except Exception:
                     pass
