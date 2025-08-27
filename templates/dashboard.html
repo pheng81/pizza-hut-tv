@@ -1192,7 +1192,7 @@
         <div class="stores-section">
         <div class="stores-header">
                         <div class="stores-title">
-                                                        <img class="brand-logo" src="{{ url_for('static', filename='ea-logo.svg') }}" alt="Everyday Advertise" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';" />
+                                                        <img class="brand-logo" src="{{ url_for('static', filename='ea-logo.svg') }}?v={{ asset_bust|default(0) }}" alt="Everyday Advertise" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';" />
                             <span class="title-fallback">Everyday Advertise</span>
                                                         <span class="tv-icons" aria-hidden="true">
                                                                                         <!-- Inline wave-animated CSS-only icon with occasional waving arms -->
