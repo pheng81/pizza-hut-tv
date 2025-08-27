@@ -3180,7 +3180,9 @@
                     else { gImgs.style.display='grid'; gVids.style.display='grid'; setActive(btnAll,true); setActive(btnImg,false); setActive(btnVid,false); }
                 }
                 function refreshLibrary(){
-                    fetch('/library').then(r=>r.json()).then(d=>{
+                    // Bypass any browser/CDN cache so deletions reflect immediately
+                    const url = '/library?ts=' + Date.now();
+                    fetch(url, { cache: 'no-store' }).then(r=>r.json()).then(d=>{
                         const gImgs=document.getElementById('rp-grid-images');
                         const gVids=document.getElementById('rp-grid-videos');
                         if(!gImgs || !gVids) return;
@@ -3199,7 +3201,8 @@
                             card.className='rp-item';
                             card.title=f.name;
                             const isAbs = f && f.url && /^https?:\/\//i.test(String(f.url));
-                            const src = isAbs ? f.url : thumbUrl(f.name,300);
+                            const bust = Date.now();
+                            const src = isAbs ? (f.url + `?t=${bust}`) : (thumbUrl(f.name,300) + `?t=${bust}`);
                             card.innerHTML = `<img loading=\"lazy\" src=\"${src}\"/><button class=\"rp-del\" title=\"Delete\" aria-label=\"Delete\" onclick=\"event.stopPropagation(); deleteLibraryFile('${f.name}')\">✕</button>`;
                             card.addEventListener('click',()=> chooseLibraryFile(f.name));
                             gImgs.appendChild(card);
@@ -3209,9 +3212,10 @@
                             card.className='rp-item';
                             card.title=f.name;
                             const abs = f && f.url && /^https?:\/\//i.test(String(f.url));
-                            const poster = abs ? '' : `/vthumb/300/${encodeURIComponent(f.name)}`;
+                            const bust = Date.now();
+                            const poster = abs ? '' : `/vthumb/300/${encodeURIComponent(f.name)}?t=${bust}`;
                             const posterAttr = poster ? ` poster="${poster}"` : '';
-                            const src = f.url ? f.url : mediaUrl(f.name);
+                            const src = f.url ? (f.url + `?t=${bust}`) : (mediaUrl(f.name) + `?t=${bust}`);
                             card.innerHTML = `<video preload=\"metadata\" muted playsinline${posterAttr} src=\"${src}\"></video><button class=\"rp-del\" title=\"Delete\" aria-label=\"Delete\" onclick=\"event.stopPropagation(); deleteLibraryFile('${f.name}')\">✕</button>`;
                             card.addEventListener('click',()=> chooseLibraryFile(f.name));
                             gVids.appendChild(card);
