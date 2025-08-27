@@ -3,6 +3,7 @@ import os
 import shutil as _shutil
 import subprocess
 from werkzeug.utils import secure_filename  # may be unused but kept for backward compat
+from werkzeug.middleware.proxy_fix import ProxyFix
 import uuid
 import json
 import shutil
@@ -39,6 +40,15 @@ except Exception as _log_e:
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-this'
+
+# Honor X-Forwarded-* from Cloudflare/NGINX and prefer HTTPS for URL generation
+# Safe for local dev; only affects how Flask infers scheme/host/port
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
+app.config.update(
+    PREFERRED_URL_SCHEME='https',
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+)
 print('DEBUG: app.py initialization start', flush=True)
 logging.debug('App module import start')
 

@@ -13,12 +13,12 @@ android {
 	targetSdk 34
 		versionCode 1
 		versionName "1.0"
-		// Allow overriding BASE URL at build time (e.g. -PPHTV_BASE_URL="https://tv.yourdomain.com/")
+		// Allow overriding BASE URL at build time (e.g. -PPHTV_BASE_URL="https://api.everydayadvertise.com/")
 		def suppliedBase = project.findProperty('PHTV_BASE_URL') as String
-		def defaultLan = 'http://192.168.1.109:5002/'
+		def defaultProd = 'https://api.everydayadvertise.com/'
 		def defaultEmu = 'http://10.0.2.2:5002/'
-		// Set a sane default; buildTypes below can refine per flavor
-		def baseForDefault = suppliedBase ?: defaultLan
+		// Default app base URL (can be overridden via -P)
+		def baseForDefault = suppliedBase ?: defaultProd
 		buildConfigField 'String', 'PHTV_BASE_URL', '"' + baseForDefault + '"'
 	}
 
@@ -26,16 +26,16 @@ android {
 		release {
 			minifyEnabled false
 			proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-			// Prefer supplied domain if provided; fallback to LAN IP
+			// Production: prefer supplied domain; fallback to public HTTPS
 			def suppliedBase = project.findProperty('PHTV_BASE_URL') as String
-			def defaultLan = 'http://192.168.1.109:5002/'
-			buildConfigField 'String', 'PHTV_BASE_URL', '"' + (suppliedBase ?: defaultLan) + '"'
+			def defaultProd = 'https://api.everydayadvertise.com/'
+			buildConfigField 'String', 'PHTV_BASE_URL', '"' + (suppliedBase ?: defaultProd) + '"'
 		}
 		debug {
 			// Prefer supplied domain if provided; otherwise emulator alias
 			def suppliedBase = project.findProperty('PHTV_BASE_URL') as String
-			def defaultEmu = 'http://10.0.2.2:5002/'
-			buildConfigField 'String', 'PHTV_BASE_URL', '"' + (suppliedBase ?: defaultEmu) + '"'
+			def defaultProd = 'https://api.everydayadvertise.com/'
+			buildConfigField 'String', 'PHTV_BASE_URL', '"' + (suppliedBase ?: defaultProd) + '"'
 		}
 	}
 
