@@ -1497,6 +1497,11 @@
         </div>
     </div>
 
+    <!-- Build stamp footer (helps validate deployed version) -->
+    <div style="position:fixed; right:8px; bottom:60px; font-size:10px; color:#7a7a7a; background:rgba(255,255,255,0.7); padding:3px 6px; border-radius:6px; border:1px solid #e5e7eb;">
+        build {{ build_stamp }}{% if git_commit %} · {{ git_commit }}{% endif %}
+    </div>
+
     <script>        
         // Global Variables - Must be declared first
         let currentStoreId = null; // Will be set after config loads
