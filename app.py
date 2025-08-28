@@ -263,6 +263,16 @@ def r2_list_objects(prefix: str = ''):
         for obj in page.get('Contents', []) or []:
             yield obj
 
+def r2_object_exists(key: str) -> bool:
+    try:
+        s3 = get_s3_client()
+        if not s3:
+            return False
+        s3.head_object(Bucket=os.environ['R2_BUCKET_NAME'], Key=key)
+        return True
+    except Exception:
+        return False
+
 # --- Screen heartbeat + status (placed after app initialization) ---
 HEARTBEAT_TIMEOUT = 60  # seconds
 
@@ -318,6 +328,42 @@ def screen_heartbeat():
     logging.debug('HB set last_seen for %s/%s', store_id, screen_id)
     save_store_config(cfg)
     return jsonify({'success': True})
+
+# -------- One-off migration: local static/uploads -> R2 bucket --------
+@app.route('/admin/migrate_to_r2', methods=['POST'])
+def migrate_to_r2():
+    if not r2_enabled():
+        return jsonify({'success': False, 'error': 'R2 not configured'}), 400
+    # Simple secret guard to avoid exposing in prod; set MIGRATE_SECRET env var
+    secret = os.environ.get('MIGRATE_SECRET')
+    provided = request.headers.get('X-Admin-Secret') or request.args.get('secret')
+    if not secret or provided != secret:
+        return jsonify({'success': False, 'error': 'unauthorized'}), 401
+    folder = app.config['UPLOAD_FOLDER']
+    migrated = []
+    skipped = []
+    failed = []
+    try:
+        for name in os.listdir(folder):
+            path = os.path.join(folder, name)
+            if not os.path.isfile(path):
+                continue
+            if not allowed_file(name):
+                continue
+            # Skip if already present in R2
+            if r2_object_exists(name):
+                skipped.append(name)
+                continue
+            try:
+                with open(path, 'rb') as fh:
+                    data = fh.read()
+                r2_put_bytes(name, data, content_type=_guess_mime(name))
+                migrated.append(name)
+            except Exception as e:
+                failed.append({'name': name, 'error': str(e)})
+        return jsonify({'success': True, 'migrated': migrated, 'skipped': skipped, 'failed': failed})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/screen_status', methods=['GET'])
 @slowlog(300)
@@ -656,6 +702,15 @@ def save_store_config(config):
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# Minimal content-type helper for uploads to R2
+def _guess_mime(filename: str) -> Optional[str]:
+    try:
+        import mimetypes
+        mt, _ = mimetypes.guess_type(filename)
+        return mt or None
+    except Exception:
+        return None
 
 # ---- Thumbnail helpers and endpoint ----
 def _image_ext(filename: str) -> str:
@@ -2068,7 +2123,16 @@ def upload_media():
                 f.save(dest)
         else:
             f.save(dest)
-        return jsonify({'success': True, 'filename': filename, 'media_type': classify_media(filename)})
+        # If R2 is configured, upload the saved file to the bucket using the same key (filename)
+        try:
+            if r2_enabled():
+                with open(dest, 'rb') as fh:
+                    data = fh.read()
+                r2_put_bytes(filename, data, content_type=_guess_mime(filename))
+        except Exception as _r2e:
+            # Log but do not fail the upload if R2 copy fails; local copy still exists
+            logging.warning('R2 upload failed for %s: %s', filename, _r2e)
+    return jsonify({'success': True, 'filename': filename, 'media_type': classify_media(filename), 'url': build_public_url(filename)})
     except Exception as e:
         print(f"upload_media error: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
