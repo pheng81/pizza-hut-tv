@@ -52,6 +52,33 @@ app.config.update(
 print('DEBUG: app.py initialization start', flush=True)
 logging.debug('App module import start')
 
+# Build/version metadata (helps verify production is updated)
+def _compute_build_stamp():
+    try:
+        # Prefer explicit environment value if provided by CI/deploy
+        env = os.environ.get('APP_BUILD')
+        if env:
+            return str(env)
+        # Fall back to mtime of this file for a stable, cache-busting stamp
+        return str(int(os.path.getmtime(__file__)))
+    except Exception:
+        try:
+            import time as _t
+            return str(int(_t.time()))
+        except Exception:
+            return 'unknown'
+
+BUILD_STAMP = _compute_build_stamp()
+
+def _git_short_commit():
+    try:
+        # Try git if available in runtime; ignore failures silently
+        out = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'], stderr=subprocess.DEVNULL)
+        return out.decode('utf-8').strip()
+    except Exception:
+        return None
+GIT_COMMIT = _git_short_commit()
+
 # ---- Simple slow-request logging and ETag helpers ----
 from functools import wraps
 import hashlib
@@ -133,6 +160,10 @@ def _add_cache_headers(resp):
         elif p.startswith('/api/'):
             # small API responses get short caching to smooth bursts
             resp.headers.setdefault('Cache-Control', 'public, max-age=15')
+        # Attach build metadata for easy troubleshooting across all responses
+        resp.headers['X-App-Build'] = BUILD_STAMP
+        if GIT_COMMIT:
+            resp.headers['X-App-Commit'] = GIT_COMMIT
     except Exception:
         pass
     return resp
@@ -409,13 +440,24 @@ def healthz():
     """Simple readiness/liveness probe. Returns 200 JSON and disables caching."""
     try:
         payload = {
-            'status': 'ok'
+            'status': 'ok',
+            'build': BUILD_STAMP,
+            'commit': GIT_COMMIT
         }
         resp = jsonify(payload)
         resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
         return resp
     except Exception:
         return jsonify({'status': 'error'}), 500
+
+# Simple version endpoint for human/debug consumption
+@app.route('/version')
+def version():
+    return jsonify({
+        'build': BUILD_STAMP,
+        'commit': GIT_COMMIT,
+        'time': datetime.utcnow().isoformat() + 'Z'
+    })
 
 # -------------------- Video Streaming with HTTP Range Support --------------------
 @app.route('/media/<path:filename>', methods=['GET','HEAD'])
@@ -986,7 +1028,8 @@ def dashboard():
             asset_bust = int(os.path.getmtime(logo_path)) if os.path.exists(logo_path) else int(time.time())
         except Exception:
             asset_bust = 0
-        resp = make_response(render_template('dashboard.html', config=config, media_base_url=get_media_base_url(), asset_bust=asset_bust))
+        # After computing asset_bust, render the template
+        resp = make_response(render_template('dashboard.html', config=config, media_base_url=get_media_base_url(), asset_bust=asset_bust, build_stamp=BUILD_STAMP, git_commit=GIT_COMMIT))
         # Avoid CDN/browser caching the admin dashboard HTML
         try:
             resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
