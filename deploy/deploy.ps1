@@ -5,7 +5,8 @@ param(
   [string[]]$ServiceNames = @('everydayadvertise','tv-api'),
   [string]$KeyPath = '',
   [switch]$Bootstrap,
-  [switch]$PreserveConfig
+  [switch]$PreserveConfig,
+  [switch]$ForceArchive
 )
 
 # Simple, repeatable deploy script to update your Lightsail VM.
@@ -36,29 +37,11 @@ Write-Host "Deploying to $User@$Server (Repo: $RepoPath)" -ForegroundColor Cyan
 
 if ($Bootstrap) {
   Write-Host "Running first-time bootstrap on the server..." -ForegroundColor Yellow
-  $bootstrapCmd = @"
-set -e
-sudo apt-get update -y
-sudo apt-get install -y git python3-venv ffmpeg
-
-mkdir -p "$(Split-Path -Path $RepoPath)"
-if [ ! -d "$RepoPath/.git" ]; then
-  git clone https://github.com/pheng81/pizza-hut-tv.git "$RepoPath"
-fi
-
-cd "$RepoPath"
-python3 -m venv .venv
-"$RepoPath/.venv/bin/pip" install --upgrade pip wheel
-"$RepoPath/.venv/bin/pip" install -r requirements.txt
-"$RepoPath/.venv/bin/pip" install gunicorn
-
-# Install standardized systemd unit (everydayadvertise.service)
-sudo cp deploy/everydayadvertise.service /etc/systemd/system/everydayadvertise.service
-sudo systemctl daemon-reload
-sudo systemctl enable --now everydayadvertise
-sudo systemctl status everydayadvertise --no-pager -l || true
-"@
-  Invoke-Remote "bash -lc '$bootstrapCmd'"
+    # Copy the prepared bootstrap script and execute it remotely.
+    # Using a file avoids CRLF and quoting issues over SSH.
+    Copy-ToRemote -localPath (Join-Path $PSScriptRoot 'bootstrap_server.sh') -remotePath '/tmp/bootstrap_server.sh'
+    # Run via bash with CR stripped to avoid shebang/CRLF issues
+    Invoke-Remote "tr -d '\r' </tmp/bootstrap_server.sh | bash"
 }
 
 Write-Host "Pulling latest code and restarting service..." -ForegroundColor Yellow
@@ -66,8 +49,92 @@ Write-Host "Pulling latest code and restarting service..." -ForegroundColor Yell
 $services = ($ServiceNames | ForEach-Object { $_.Trim() }) -join ' '
 $preserveStr = if ($PreserveConfig.IsPresent) { 'True' } else { 'False' }
 
-# Upload and run the robust server-side updater to avoid inline quoting issues
-Copy-ToRemote -localPath (Join-Path $PSScriptRoot 'update_server.sh') -remotePath '/tmp/update_server.sh'
-Invoke-Remote "bash -lc 'chmod +x /tmp/update_server.sh; REPO_PATH="$RepoPath" PRESERVE="$preserveStr" SERVICES="$services" /tmp/update_server.sh'"
+if (-not $ForceArchive) {
+  # Upload and run the robust server-side updater to avoid inline quoting issues
+  Copy-ToRemote -localPath (Join-Path $PSScriptRoot 'update_server.sh') -remotePath '/tmp/update_server.sh'
+  try {
+    # Execute update script by piping through bash with CR stripped; pass env vars to bash
+    $remoteUpdateCmd = "REPO_PATH='" + $RepoPath + "' PRESERVE='" + $preserveStr + "' SERVICES='" + $services + "' bash -s"
+    Invoke-Remote ("tr -d '\r' </tmp/update_server.sh | " + $remoteUpdateCmd)
+  }
+  catch {
+    Write-Warning "Remote git-based update failed. Falling back to archive upload and extract."
+    $ForceArchive = $true
+  }
+}
+
+if ($ForceArchive) {
+  # 1) Build archive of current working tree (includes uncommitted changes)
+  # Use a temp location to avoid archiving the archive itself and keep repo clean
+  $archivePath = Join-Path $env:TEMP ("phtv_site_" + [System.Guid]::NewGuid().ToString('n') + '.tar')
+  if (Test-Path $archivePath) { Remove-Item -Force $archivePath }
+  $rootDir = Split-Path -Parent $PSScriptRoot
+  # Prefer tar with excludes; fallback to Compress-Archive if tar is unavailable
+  $tarOk = $false
+  try {
+    $tarCmd = @(
+      'tar','-cf',"$archivePath",
+      '--exclude=.git','--exclude=.venv','--exclude=__pycache__','--exclude=__pycache__/**','--exclude=*.pyc','--exclude=*.pyo',
+      # exclude giant Android SDK/builds entirely
+      '--exclude=android_tv_app','--exclude=android_tv_app/**',
+      # avoid bundling any pre-existing archives
+      '--exclude=*.zip','--exclude=*.tar','--exclude=deploy/site.tar','--exclude=deploy/site.zip',
+      '-C',"$rootDir",'.'
+    )
+    & $tarCmd[0] $tarCmd[1..($tarCmd.Length-1)]
+    if ($LASTEXITCODE -eq 0) { $tarOk = $true }
+  } catch { $tarOk = $false }
+  if (-not $tarOk) {
+    $zipPath = Join-Path $env:TEMP ("phtv_site_" + [System.Guid]::NewGuid().ToString('n') + '.zip')
+    if (Test-Path $zipPath) { Remove-Item -Force $zipPath }
+    # Create zip of working tree excluding common folders; Compress-Archive lacks exclude, so copy to temp first
+    $tempStaging = Join-Path $env:TEMP ('phtv_stage_' + [System.Guid]::NewGuid().ToString('n'))
+    New-Item -ItemType Directory -Force -Path $tempStaging | Out-Null
+    robocopy "$rootDir" "$tempStaging" /E /XF *.pyc *.pyo *.zip *.tar /XD .git .venv __pycache__ android_tv_app | Out-Null
+    Compress-Archive -Path (Join-Path $tempStaging '*') -DestinationPath $zipPath -Force
+    Remove-Item -Recurse -Force $tempStaging
+    # Convert zip to tar on the server (we'll handle both below); prefer tar if created
+    $archivePath = $zipPath
+  }
+  if (-not (Test-Path $archivePath)) { throw "Failed to create working tree archive at $archivePath" }
+
+  # 2) Upload archive to server
+  $remoteArchive = if ($archivePath.ToLower().EndsWith('.zip')) { '/tmp/site.zip' } else { '/tmp/site.tar' }
+  Copy-ToRemote -localPath $archivePath -remotePath $remoteArchive
+
+  # 3) Extract on server, preserve config if requested, install deps, restart service
+  $cmdParts = @()
+  $cmdParts += "set -e"
+  $cmdParts += "mkdir -p '$RepoPath'"
+  if ($PreserveConfig.IsPresent) {
+    $cmdParts += "if [ -f '$RepoPath/store_config.json' ]; then cp '$RepoPath/store_config.json' /tmp/store_config.json.local.bak; fi"
+  }
+  if ($remoteArchive.EndsWith('.zip')) {
+    $cmdParts += "unzip -o $remoteArchive -d '$RepoPath' || (sudo apt-get update -y && sudo apt-get install -y unzip && unzip -o $remoteArchive -d '$RepoPath')"
+  } else {
+    $cmdParts += "tar -xf $remoteArchive -C '$RepoPath'"
+  }
+  $cmdParts += "python3 -m venv '$RepoPath/.venv' || true"
+  $cmdParts += "'$RepoPath/.venv/bin/python' -m ensurepip --upgrade || true"
+  $cmdParts += "'$RepoPath/.venv/bin/python' -m pip install --upgrade pip wheel"
+  $cmdParts += "'$RepoPath/.venv/bin/python' -m pip install -r '$RepoPath/requirements.txt'"
+  if ($PreserveConfig.IsPresent) {
+    $cmdParts += "if [ -f /tmp/store_config.json.local.bak ]; then cp /tmp/store_config.json.local.bak '$RepoPath/store_config.json'; fi"
+  }
+  $cmdParts += ('for svc in ' + $services + '; do if systemctl list-unit-files | grep -q ''^${svc}\.service''; then sudo systemctl restart "${svc}"; sudo systemctl status "${svc}" --no-pager -l || true; exit 0; fi; done')
+  $cmdParts += "echo 'No known service found; installing everydayadvertise.service' >&2"
+  # Install service as fallback and wire env file if present
+  $cmdParts += "if [ -f '$RepoPath/deploy/everydayadvertise.service' ]; then sudo cp '$RepoPath/deploy/everydayadvertise.service' /etc/systemd/system/everydayadvertise.service; fi"
+  $cmdParts += "sudo mkdir -p /etc/systemd/system/everydayadvertise.service.d"
+  $cmdParts += "if [ -f /etc/pizza-hut-tv.env ]; then printf '[Service]\\nEnvironmentFile=/etc/pizza-hut-tv.env\\n' | sudo tee /etc/systemd/system/everydayadvertise.service.d/override.conf >/dev/null; fi"
+  $cmdParts += "sudo systemctl daemon-reload"
+  $cmdParts += "sudo systemctl enable --now everydayadvertise || true"
+  $cmdParts += "sudo systemctl restart everydayadvertise || true"
+  $cmdParts += "sudo systemctl status everydayadvertise --no-pager -l || true"
+
+  $remoteCmd = ($cmdParts -join ' && ')
+  Invoke-Remote $remoteCmd
+  Write-Host 'Archive deploy completed.' -ForegroundColor Green
+}
 
 Write-Host "Done." -ForegroundColor Green
