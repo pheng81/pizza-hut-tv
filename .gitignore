@@ -1,3 +1,6 @@
+# Prevent committing secrets
+.env
+*.env
 # General
 .DS_Store
 .idea/

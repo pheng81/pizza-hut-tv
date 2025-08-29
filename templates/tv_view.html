@@ -61,7 +61,9 @@
 					}catch{}
 					return abs;
 				}
-				const rel = item.startsWith('/') ? item : `/static/uploads/${item}`;
+				const fname = item.startsWith('/') ? item.slice(1) : item;
+				const isVid = isVideoByName(fname);
+				const rel = `/${isVid? 'media' : 'static/uploads'}/${fname}`;
 				return `${ORIGIN}${rel}`;
 			}
 			const u = item.url || item.file || '';
@@ -78,7 +80,9 @@
 				}catch{}
 				return abs;
 			}
-			const rel = u.startsWith('/') ? u : `/static/uploads/${u}`;
+			const fname2 = (u.startsWith('/') ? u.slice(1) : u);
+			const isVid2 = isVideoByName(fname2);
+			const rel = `/${isVid2? 'media' : 'static/uploads'}/${fname2}`;
 			return `${ORIGIN}${rel}`;
 		}
 

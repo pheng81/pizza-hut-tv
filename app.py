@@ -155,11 +155,19 @@ def _add_cache_headers(resp):
     try:
         p = request.path or ''
         if p.startswith('/static/uploads/') or p.startswith('/thumb/') or p.startswith('/vthumb/'):
-            # Encourage client reuse; actual busting handled by unique filenames/URLs
-            resp.headers.setdefault('Cache-Control', 'public, max-age=2592000, immutable')
+            # Only long-cache successful media responses; never cache errors to avoid sticky 404s at CDN
+            if 200 <= resp.status_code < 300:
+                resp.headers['Cache-Control'] = 'public, max-age=2592000, immutable'
+            elif resp.status_code == 206:  # partial content
+                resp.headers['Cache-Control'] = 'public, max-age=3600'
+            else:
+                resp.headers['Cache-Control'] = 'no-store, max-age=0'
         elif p.startswith('/api/'):
             # small API responses get short caching to smooth bursts
-            resp.headers.setdefault('Cache-Control', 'public, max-age=15')
+            if 200 <= resp.status_code < 300:
+                resp.headers.setdefault('Cache-Control', 'public, max-age=15')
+            else:
+                resp.headers['Cache-Control'] = 'no-store, max-age=0'
         # Attach build metadata for easy troubleshooting across all responses
         resp.headers['X-App-Build'] = BUILD_STAMP
         if GIT_COMMIT:
@@ -220,8 +228,46 @@ def build_public_url(filename: str) -> str | None:
 # --- R2 (S3-compatible) integration ---
 def r2_enabled() -> bool:
     return bool(
-        os.environ.get('R2_BUCKET_NAME') and os.environ.get('R2_ENDPOINT_URL') and os.environ.get('R2_ACCESS_KEY_ID') and os.environ.get('R2_SECRET_ACCESS_KEY') and boto3 is not None
+        os.environ.get('R2_BUCKET_NAME')
+        and os.environ.get('R2_ENDPOINT_URL')
+        and os.environ.get('R2_ACCESS_KEY_ID')
+        and os.environ.get('R2_SECRET_ACCESS_KEY')
+        and boto3 is not None
     )
+
+def r2_diag() -> dict:
+    """Return non-secret diagnostics for R2 configuration.
+    Never include keys or secrets; only booleans and brief notes.
+    """
+    try:
+        d = {
+            'boto3_available': (boto3 is not None),
+            'env_present': {
+                'R2_BUCKET_NAME': bool(os.environ.get('R2_BUCKET_NAME')),
+                'R2_ENDPOINT_URL': bool(os.environ.get('R2_ENDPOINT_URL')),
+                'R2_ACCESS_KEY_ID': bool(os.environ.get('R2_ACCESS_KEY_ID')),
+                'R2_SECRET_ACCESS_KEY': bool(os.environ.get('R2_SECRET_ACCESS_KEY')),
+            },
+            'enabled': False,
+        }
+        d['enabled'] = bool(d['boto3_available'] and all(d['env_present'].values()))
+        # Optional lightweight connectivity probe if configured
+        if d['enabled']:
+            try:
+                s3 = get_s3_client()
+                # Try a trivial presign (no network call) to ensure client constructs
+                _ = s3.generate_presigned_url(
+                    'put_object',
+                    Params={'Bucket': os.environ['R2_BUCKET_NAME'], 'Key': f"diag-{uuid.uuid4()}.bin", 'ContentType': 'application/octet-stream'},
+                    ExpiresIn=60
+                )
+                d['presign_construct_ok'] = True
+            except Exception as _e:
+                d['presign_construct_ok'] = False
+                d['note'] = f"presign error: {_e.__class__.__name__}"
+        return d
+    except Exception as _e2:
+        return {'enabled': False, 'error': f'diag_failed: {_e2.__class__.__name__}'}
 
 _s3_client = None
 def get_s3_client():
@@ -230,12 +276,23 @@ def get_s3_client():
         return _s3_client
     if not r2_enabled():
         return None
+    # Use aggressive timeouts and minimal retries so uploads don't hang when R2 is unreachable
+    try:
+        cfg = BotoConfig(
+            signature_version='s3v4',
+            retries={'max_attempts': 1, 'mode': 'standard'},
+            connect_timeout=2,
+            read_timeout=5,
+        )
+    except TypeError:
+        # Fallback for older botocore without explicit timeout kwargs
+        cfg = BotoConfig(signature_version='s3v4', retries={'max_attempts': 1, 'mode': 'standard'})
     _s3_client = boto3.client(
         's3',
         aws_access_key_id=os.environ['R2_ACCESS_KEY_ID'],
         aws_secret_access_key=os.environ['R2_SECRET_ACCESS_KEY'],
         endpoint_url=os.environ['R2_ENDPOINT_URL'],
-        config=BotoConfig(signature_version='s3v4')
+        config=cfg
     )
     return _s3_client
 
@@ -506,6 +563,20 @@ def version():
     })
 
 # -------------------- Video Streaming with HTTP Range Support --------------------
+# More accurate MIME types improve playback compatibility for formats like MOV/MKV/AVI
+VIDEO_MIME = {
+    'mp4': 'video/mp4',
+    'm4v': 'video/mp4',
+    'webm': 'video/webm',
+    'ogg': 'video/ogg',
+    'mov': 'video/quicktime',
+    'avi': 'video/x-msvideo',
+    'mkv': 'video/x-matroska',
+}
+
+def _video_mime(ext: str) -> str:
+    ext = (ext or '').lower()
+    return VIDEO_MIME.get(ext, f'video/{ext or "mp4"}')
 @app.route('/media/<path:filename>', methods=['GET','HEAD'])
 def stream_media(filename):
     """Stream large video files with HTTP Range (partial content) support so clients can
@@ -543,7 +614,7 @@ def stream_media(filename):
     logging.debug(f"/media request filename=%s method=%s range=%s", filename, request.method, range_header)
     if request.method == 'HEAD':
         # Fast metadata response
-        resp = Response(status=200, mimetype=f'video/{"mp4" if ext=="m4v" else ext}')
+        resp = Response(status=200, mimetype=_video_mime(ext))
         resp.headers.add('Accept-Ranges', 'bytes')
         resp.headers.add('Content-Length', str(file_size))
         resp.headers.add('Last-Modified', lm_http)
@@ -589,7 +660,7 @@ def stream_media(filename):
                         yield data
 
             length = end - start + 1
-            resp = Response(partial_gen(start, end), 206, mimetype=f'video/{"mp4" if ext=="m4v" else ext}')
+            resp = Response(partial_gen(start, end), 206, mimetype=_video_mime(ext))
             resp.headers.add('Accept-Ranges', 'bytes')
             resp.headers.add('Content-Range', f'bytes {start}-{end}/{file_size}')
             resp.headers.add('Content-Length', str(length))
@@ -613,7 +684,7 @@ def stream_media(filename):
                 if not chunk:
                     break
                 yield chunk
-    resp = Response(generate(), 200, mimetype=f'video/{"mp4" if ext=="m4v" else ext}')
+    resp = Response(generate(), 200, mimetype=_video_mime(ext))
     resp.headers.add('Accept-Ranges', 'bytes')
     resp.headers.add('Content-Length', str(file_size))
     resp.headers.add('Last-Modified', lm_http)
@@ -1132,9 +1203,38 @@ def upload_to_screen():
         # Detect content-type
         content_type = file.mimetype or 'application/octet-stream'
         if r2_enabled():
-            data = file.read()
-            r2_put_bytes(filename, data, content_type)
-            print(f"[upload_to_screen] Uploaded to R2 as {filename}")
+            try:
+                data = file.read()
+                r2_put_bytes(filename, data, content_type)
+                print(f"[upload_to_screen] Uploaded to R2 as {filename}")
+            except Exception as _e_r2_up:
+                logging.warning('R2 direct upload failed, falling back to local: %s', _e_r2_up)
+                # Reset stream and fall back to local save
+                try:
+                    file.stream.seek(0)
+                except Exception:
+                    pass
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                try:
+                    ext = filename.rsplit('.',1)[-1].lower()
+                except Exception:
+                    ext = ''
+                if ext in IMAGE_EXTENSIONS and Image is not None and ImageOps is not None:
+                    try:
+                        img = Image.open(file.stream)
+                        img = ImageOps.exif_transpose(img)
+                        save_kwargs = {}
+                        if ext in ('jpg','jpeg'): save_kwargs = {'quality': 90, 'optimize': True}
+                        img.save(filepath, **save_kwargs)
+                    except Exception:
+                        try:
+                            file.stream.seek(0)
+                        except Exception:
+                            pass
+                        file.save(filepath)
+                else:
+                    file.save(filepath)
+                print(f"[upload_to_screen] Saved locally as fallback {filename} -> {filepath}")
         else:
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             # Normalize EXIF orientation for images to avoid client-side rotation surprises
@@ -2097,44 +2197,158 @@ def list_library():
 # ---- Upload media only (no playlist/config modification) ----
 @app.route('/upload_media', methods=['POST'])
 def upload_media():
-    if 'file' not in request.files:
-        return jsonify({'success': False, 'error': 'No file provided'}), 400
-    f = request.files['file']
-    if f.filename == '':
-        return jsonify({'success': False, 'error': 'No file selected'}), 400
-    if not allowed_file(f.filename):
-        return jsonify({'success': False, 'error': 'Invalid file type'}), 400
+    t0 = time.time()
     try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'error': 'No file provided'}), 400
+        f = request.files['file']
+        meta_len = request.content_length
+        print(f"[upload_media] start name={f.filename!r} content_length={meta_len} mimetype={getattr(f, 'mimetype', None)}")
+        if f.filename == '':
+            return jsonify({'success': False, 'error': 'No file selected'}), 400
+        if not allowed_file(f.filename):
+            return jsonify({'success': False, 'error': 'Invalid file type'}), 400
+
         ext = f.filename.rsplit('.', 1)[1].lower()
         filename = f"{uuid.uuid4()}.{ext}"
         dest = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        # Normalize EXIF orientation for images to avoid client-side rotation surprises
-        if ext in IMAGE_EXTENSIONS and Image is not None and ImageOps is not None:
+
+        # Normalize EXIF orientation for JPEGs only (PNG/WebP/etc. typically lack EXIF orientation)
+        if ext in ('jpg', 'jpeg') and Image is not None and ImageOps is not None:
             try:
                 img = Image.open(f.stream)
                 img = ImageOps.exif_transpose(img)
                 # Save with a reasonable quality and strip metadata by default
-                save_kwargs = {}
-                if ext in ('jpg','jpeg'): save_kwargs = {'quality': 90, 'optimize': True}
+                save_kwargs = {'quality': 90, 'optimize': True}
                 img.save(dest, **save_kwargs)
-            except Exception:
+                print(f"[upload_media] PIL save ok -> {dest}")
+            except Exception as pil_e:
                 # Fallback to raw save
-                f.stream.seek(0)
+                try:
+                    f.stream.seek(0)
+                except Exception:
+                    pass
+                print(f"[upload_media] PIL path failed ({pil_e}); falling back to raw save")
                 f.save(dest)
         else:
             f.save(dest)
+            print(f"[upload_media] raw save -> {dest}")
+
+        # File stats
+        try:
+            st = os.stat(dest)
+            print(f"[upload_media] saved bytes={st.st_size}")
+        except Exception:
+            pass
+
         # If R2 is configured, upload the saved file to the bucket using the same key (filename)
         try:
             if r2_enabled():
                 with open(dest, 'rb') as fh:
                     data = fh.read()
                 r2_put_bytes(filename, data, content_type=_guess_mime(filename))
+                print(f"[upload_media] R2 put ok key={filename}")
         except Exception as _r2e:
             # Log but do not fail the upload if R2 copy fails; local copy still exists
             logging.warning('R2 upload failed for %s: %s', filename, _r2e)
-    return jsonify({'success': True, 'filename': filename, 'media_type': classify_media(filename), 'url': build_public_url(filename)})
+        dt = int((time.time()-t0)*1000)
+        print(f"[upload_media] done file={filename} ms={dt}")
+        return jsonify({'success': True, 'filename': filename, 'media_type': classify_media(filename), 'url': build_public_url(filename)})
     except Exception as e:
         print(f"upload_media error: {e}")
+        import traceback as _tb
+        _tb.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ---- R2 Presigned direct-upload endpoint (bypasses origin/proxy limits) ----
+@app.route('/r2/presign_upload', methods=['POST', 'GET'])
+def r2_presign_upload():
+    try:
+        if not r2_enabled():
+            # Return non-secret diagnostics to help ops fix quickly
+            return jsonify({'success': False, 'error': 'R2 not configured on server', 'diag': r2_diag()}), 400
+        # Accept JSON, form-encoded, or query parameters (more tolerant for various clients)
+        data = request.get_json(silent=True) or {}
+        # request.values merges args and form
+        vals = request.values or {}
+        # Fallback: try parsing raw body if JSON wasn't parsed
+        if not data:
+            try:
+                raw = request.get_data(cache=True, as_text=True) or ''
+                if raw and raw.strip().startswith('{'):
+                    import json as _json
+                    data = _json.loads(raw)
+            except Exception:
+                data = {}
+        original = (
+            (data.get('filename') or data.get('name') or vals.get('filename') or vals.get('name') or '')
+        ).strip()
+        content_type = (
+            (data.get('content_type') or vals.get('content_type') or request.headers.get('X-Upload-Content-Type') or '')
+        ).strip() or None
+        if not original and not content_type:
+            # Minimal diagnostics to aid debugging without leaking secrets
+            try:
+                print(f"[presign] missing params; method={request.method} args={dict(request.args)} form_keys={list(getattr(request,'form',{}).keys())} headers_ct={request.headers.get('Content-Type')}")
+            except Exception:
+                pass
+            return jsonify({'success': False, 'error': 'filename or content_type required'}), 400
+        # Derive extension from filename when possible; fallback from content-type
+        ext = ''
+        if original and '.' in original:
+            ext = original.rsplit('.', 1)[-1].lower()
+        if not ext and content_type:
+            try:
+                import mimetypes
+                # Reverse map common types
+                exts = mimetypes.guess_all_extensions(content_type) or []
+                if exts:
+                    ext = exts[0].lstrip('.').lower()
+            except Exception:
+                pass
+        if not ext:
+            # Default to bin to avoid leaking original name
+            ext = 'bin'
+        # Validate extension against allowed set to avoid junk uploads
+        if ext not in ALLOWED_EXTENSIONS:
+            return jsonify({'success': False, 'error': f'Unsupported file extension: .{ext}'}), 400
+        key = f"{uuid.uuid4()}.{ext}"
+        s3 = get_s3_client()
+        # Ensure content-type is set for correct serving via CDN
+        if not content_type:
+            content_type = _guess_mime(key) or 'application/octet-stream'
+        try:
+            url = s3.generate_presigned_url(
+                'put_object',
+                Params={
+                    'Bucket': os.environ['R2_BUCKET_NAME'],
+                    'Key': key,
+                    'ContentType': content_type,
+                },
+                ExpiresIn=3600
+            )
+        except Exception as e:
+            logging.exception('Failed to presign R2 URL: %s', e)
+            return jsonify({'success': False, 'error': 'presign failed'}), 500
+        return jsonify({
+            'success': True,
+            'filename': key,
+            'upload_url': url,
+            'content_type': content_type,
+            'public_url': build_public_url(key),
+            'expires_in': 3600
+        })
+    except Exception as e:
+        logging.exception('r2_presign_upload error: %s', e)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ---- R2 status diagnostics (safe, no secrets) ----
+@app.route('/r2/status', methods=['GET'])
+def r2_status():
+    try:
+        d = r2_diag()
+        return jsonify({'success': True, 'r2': d})
+    except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # ---- Assign existing media to a screen (no file upload) ----
@@ -2150,7 +2364,7 @@ def assign_to_screen():
         if not store_id or not screen_id or not incoming:
             return jsonify({'success': False, 'error': 'store_id, screen_id, and filename are required'}), 400
 
-        # Normalize screen_id like in upload_to_screen (allow legacy short id)
+        # Early best-effort normalization (will be revalidated against loaded config below)
         try:
             cfg_probe = load_store_config()
             if store_id in cfg_probe.get('screens', {}) and screen_id not in cfg_probe['screens'][store_id]:
@@ -2175,6 +2389,15 @@ def assign_to_screen():
             return jsonify({'success': False, 'error': 'Invalid or unsupported file type'}), 400
 
         config = ensure_playlists_structure(load_store_config())
+
+        # Normalize screen_id against the actual config snapshot we will modify
+        try:
+            if store_id in config.get('screens', {}) and screen_id not in config['screens'][store_id]:
+                candidate = f"{store_id}_{screen_id}"
+                if candidate in config['screens'][store_id]:
+                    screen_id = candidate
+        except Exception:
+            pass
 
         # If apply_to_all requested from non-master, downgrade to single-store
         if apply_to_all:
@@ -2295,11 +2518,13 @@ def update_playlist_item(store_id, screen_id, item_id):
             if 'file' in payload:
                 new_file = payload.get('file')
                 if new_file:
-                    path = os.path.join(app.config['UPLOAD_FOLDER'], new_file)
-                    if not os.path.exists(path):
-                        return jsonify({'success': False, 'error': 'file not found in uploads'}), 400
+                    # For R2-backed storage, skip local existence check
                     if not allowed_file(new_file):
                         return jsonify({'success': False, 'error': 'invalid file type'}), 400
+                    if not r2_enabled():
+                        path = os.path.join(app.config['UPLOAD_FOLDER'], new_file)
+                        if not os.path.exists(path):
+                            return jsonify({'success': False, 'error': 'file not found in uploads'}), 400
                     item['file'] = new_file
                     item['media_type'] = classify_media(new_file)
                     updated = True

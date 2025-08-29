@@ -21,6 +21,29 @@
             if (window.MEDIA_BASE_URL && !window.MEDIA_BASE_URL.endsWith('/')) {
                 window.MEDIA_BASE_URL += '/';
             }
+            // If a CDN image 404s, fall back to origin /static/uploads/<key>
+            function _extractKey(val){
+                try {
+                    const s = String(val||'');
+                    if (/^https?:\/\//i.test(s)) {
+                        const u = new URL(s);
+                        const parts = (u.pathname||'').split('/').filter(Boolean);
+                        return parts.length ? parts[parts.length-1] : '';
+                    }
+                    const parts = s.split('/').filter(Boolean);
+                    return parts.length ? parts[parts.length-1] : s;
+                } catch { return ''; }
+            }
+            function fallbackToOrigin(img, original){
+                try{
+                    if(!img || img.dataset.fallbackTried) return;
+                    img.dataset.fallbackTried = '1';
+                    const key = _extractKey(original || img.currentSrc || img.src);
+                    if(!key) return;
+                    const local = '/static/uploads/' + encodeURIComponent(key);
+                    img.src = local;
+                }catch{}
+            }
             function mediaUrl(name){
                 if (!name) return '';
                 try {
@@ -34,6 +57,16 @@
                 const base = (window.MEDIA_BASE_URL || '/static/uploads/').replace(/\/+$/, '/');
                 const rel = String(name).replace(/^\/+/, '');
                 return base + rel;
+            }
+            // Build a video URL that goes through the server's streaming endpoint for Range support.
+            function videoUrl(name){
+                if (!name) return '';
+                try {
+                    if (/^https?:\/\//i.test(name)) return name; // absolute remote (e.g., R2) stays as-is
+                    if (name.startsWith('/media/')) return name;
+                    const rel = String(name).replace(/^\/+/, '');
+                    return '/media/' + encodeURIComponent(rel);
+                } catch(e) { return mediaUrl(name); }
             }
             // Build thumbnail URL for images. If input is an absolute URL (e.g. R2/CDN),
             // fall back to using it directly (no server-side thumb available for remote files).
@@ -1620,7 +1653,7 @@
             });
         }
         
-        function uploadFile(screenId, input) {
+        async function uploadFile(screenId, input) {
             const file = input.files[0];
             if (!file) return;
             console.log('[UPLOAD][START]', {store: currentStoreId, screenId, name: file.name, size: file.size});
@@ -1629,12 +1662,6 @@
             const applyToAllCheckbox = document.getElementById(`apply-all-${screenId}`);
             // Only master store is allowed to use Apply-To-All; force false otherwise
             const applyToAll = isMasterStore(currentStoreId) && applyToAllCheckbox && applyToAllCheckbox.checked;
-            
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('store_id', currentStoreId);
-            formData.append('screen_id', screenId);
-            formData.append('apply_to_all', applyToAll);
             
             // Show loading state
             const card = input.closest('.screen-card');
@@ -1647,19 +1674,51 @@
                     return;
                 }
             }
-            
-            fetch('/upload_to_screen', {
-                method: 'POST',
-                body: formData
-            })
-            .then(async response => {
-                let data = {};
-                try { data = await response.json(); } catch(e){ data = { success:false, error:'Invalid JSON response' }; }
-                data._http_status = response.status;
+                try {
+                // Try presigned direct upload first (bypasses Cloudflare limits)
+                let data = null;
+                try {
+                    const preResp = await fetch('/r2/presign_upload', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ filename: file.name, content_type: file.type || 'application/octet-stream' })
+                    });
+                    const preParsed = await readJsonOrText(preResp);
+                    const pre = preParsed.json;
+                    if (pre && pre.success && pre.upload_url && pre.filename) {
+                        const putResp = await fetch(pre.upload_url, {
+                            method: 'PUT', headers: { 'Content-Type': pre.content_type || (file.type || 'application/octet-stream') }, body: file
+                        });
+                        if (!putResp.ok) {
+                            const t = await putResp.text().catch(()=> '');
+                            throw new Error(`R2 upload failed (${putResp.status}). ${t.substring(0,160)}`);
+                        }
+                        // Assign to screen (supports apply_to_all when allowed)
+                        const assignPayload = { store_id: currentStoreId, screen_id: screenId, filename: pre.filename };
+                        if (applyToAll) assignPayload.apply_to_all = true;
+                        const assignResp = await fetch('/assign_to_screen', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(assignPayload)});
+                        const assignParsed = await readJsonOrText(assignResp);
+                        const assignJson = assignParsed.json || { success:false, error: (assignParsed.text||'').substring(0,200) };
+                        if(!assignJson.success){ throw new Error('Assign failed: '+(assignJson.error||'unknown')); }
+                        // Synthesize uniform data structure used below
+                        data = { success: true, filename: pre.filename, url: pre.public_url || mediaUrl(pre.filename), media_type: guessMediaType(pre.filename), applied_to_all: !!applyToAll, updated_stores: assignJson.updated_stores, skipped_stores: assignJson.skipped_stores, created_screens: assignJson.created_screens };
+                    } else {
+                        const errMsg = (pre && pre.error) || (preParsed.text && preParsed.text.substring(0,200)) || 'presign not available';
+                        console.warn('[UPLOAD] presign response not usable', { status: preResp.status, body: preParsed.text });
+                        throw new Error(errMsg);
+                    }
+                } catch (presignErr) {
+                    console.warn('[UPLOAD] presign path failed, falling back to origin upload:', presignErr);
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    formData.append('store_id', currentStoreId);
+                    formData.append('screen_id', screenId);
+                    formData.append('apply_to_all', applyToAll);
+                    const response = await fetch('/upload_to_screen', { method: 'POST', body: formData });
+                    const parsed = await readJsonOrText(response);
+                    data = parsed.json || { success:false, error: (parsed.text || 'Invalid JSON response').substring(0,200) };
+                    data._http_status = response.status;
+                }
                 console.log('[UPLOAD] Response', screenId, data);
-                return data;
-            })
-            .then(data => {
                 if (data.success) {
                     // Update the allStoresData object in memory
                     if (data.applied_to_all) {
@@ -1768,12 +1827,10 @@
                     }
                     alert(msg);
                 }
-            })
-            .catch(error => {
+            } catch (error) {
                 console.error('Error:', error);
-                alert('Upload failed');
-            })
-            .finally(() => {
+                alert('Upload failed: ' + (error && error.message ? error.message : String(error)));
+            } finally {
                 // Always refresh playlist for the screen after an attempt (success path already updated data)
                 if (typeof refreshPlaylist === 'function') {
                     try { refreshPlaylist(screenId); } catch(e) { console.warn('refreshPlaylist failed', e); }
@@ -1782,7 +1839,7 @@
                 try { console.log('[UPLOAD][FINAL STATE]', currentStoreId, screenId, allStoresData.screens[currentStoreId][screenId]); } catch {}
                 card.classList.remove('loading');
                 input.value = ''; // Reset file input
-            });
+            }
         }
         
         // New toggle handler for iOS-style switches
@@ -2025,9 +2082,9 @@
                 </div>
                 
                 <div class="screen-preview ${previewClass}" id="preview-${screenId}">
-                    ${screenData.file ? (()=>{ const ext=(screenData.file.split('.').pop()||'').toLowerCase(); const videoExt=['mp4','webm','ogg','mov','avi','mkv','m4v']; const url=mediaUrl(screenData.file); return videoExt.includes(ext)
+                    ${screenData.file ? (()=>{ const ext=(screenData.file.split('.').pop()||'').toLowerCase(); const videoExt=['mp4','webm','ogg','mov','avi','mkv','m4v']; const url=videoExt.includes(ext) ? videoUrl(screenData.file) : mediaUrl(screenData.file); return videoExt.includes(ext)
                         ? `<div class='preview-item'><video autoplay muted loop playsinline class="rotate-${rotation}" style="max-width:100%;max-height:100%;object-fit:contain" src="${url}"></video></div>`
-                        : `<div class='preview-item'><img src="${url}" alt="Screen content" class="rotate-${rotation}" style="max-width:100%;max-height:100%;object-fit:contain"></div>`; })() :
+                        : `<div class='preview-item'><img src="${url}" alt="Screen content" class="rotate-${rotation}" style="max-width:100%;max-height:100%;object-fit:contain" onerror="fallbackToOrigin(this, '${(screenData.file||'').replace(/'/g, "&#39;")}')"></div>`; })() :
                         '<div class="upload-area"><div style="margin-top: 20px;">No content uploaded</div></div>'
                     }
                 </div>
@@ -2870,12 +2927,26 @@
             if (['mp4','webm','ogg','mov','avi','mkv','m4v'].includes(ext)) {
         const poster = isAbs ? '' : `/vthumb/220/${encodeURIComponent(file)}`;
                 const posterAttr = poster ? ` poster="${poster}"` : '';
-        return `<video preload="metadata" muted playsinline autoplay loop${posterAttr} src="${mediaUrl(file)}" style="max-width:100%; max-height:100%; object-fit:cover"></video>`;
+        // For absolute URLs (e.g., R2/CDN), prefer local /media streaming first and fallback to absolute on error.
+    if(isAbs){
+            try{
+                const u = new URL(String(file));
+                const fname = (u.pathname.split('/').pop()||'').split('?')[0];
+                if(fname){
+                    const local = `/media/${encodeURIComponent(fname)}`;
+                    const abs = String(file).replace(/^http:/, 'https:');
+            return `<video preload="metadata" muted playsinline autoplay loop${posterAttr} src="${local}" onloadeddata="try{this.play();}catch(e){}" onerror="if(!this.dataset.fallback){this.dataset.fallback='1'; this.src='${abs}'; this.load(); try{this.play();}catch(e){}}" style="max-width:100%; max-height:100%; object-fit:cover"></video>`;
+                }
+            }catch{}
+        }
+        // Default: use Range-enabled /media endpoint
+    return `<video preload=\"metadata\" muted playsinline autoplay loop${posterAttr} src=\"${videoUrl(file)}\" onloadeddata=\"try{this.play();}catch(e){}\" style=\"max-width:100%; max-height:100%; object-fit:cover\"></video>`;
             }
-        const src220 = thumbUrl(file,220);
-        const src300 = thumbUrl(file,300);
-        const src600 = thumbUrl(file,600);
-        return `<img loading="lazy" decoding="async" src="${src220}" srcset="${src220} 220w, ${src300} 300w, ${src600} 600w" sizes="(max-width: 480px) 45vw, (max-width: 1024px) 200px, 220px" style="max-width:100%; max-height:100%; object-fit:cover;" />`;
+    const src220 = thumbUrl(file,220);
+    const src300 = thumbUrl(file,300);
+    const src600 = thumbUrl(file,600);
+    const orig = String(file).replace(/"/g,'&quot;');
+    return `<img loading="lazy" decoding="async" src="${src220}" srcset="${src220} 220w, ${src300} 300w, ${src600} 600w" sizes="(max-width: 480px) 45vw, (max-width: 1024px) 200px, 220px" style="max-width:100%; max-height:100%; object-fit:cover;" onerror="fallbackToOrigin(this, \"${orig}\")" />`;
         }
 
         function togglePlaylistItem(screenId, itemId, enabled) {
@@ -3095,8 +3166,7 @@
                     if(sd && typeof sd.rotation === 'number') currentRotation = sd.rotation;
                 } catch {}
                 const rotationClass = `rotate-${currentRotation}`;
-                const srcUrl = (item.url || mediaUrl(item.file)) + `?v=${Date.now()}`;
-                // Crossfade to avoid blank: preload next, then swap
+                // Crossfade helper
                 const doSwap = (node)=>{
                     node.style.maxWidth='100%'; node.style.maxHeight='100%'; node.style.objectFit='contain';
                     if(rotationClass) node.classList.add(rotationClass);
@@ -3108,13 +3178,41 @@
                         if(current){ current.style.opacity='0'; setTimeout(()=> current.remove(), 220); }
                     });
                 };
-                const swapFallback = ()=>{
-                    const img=document.createElement('img'); img.src=srcUrl; img.alt='Preview'; doSwap(img);
-                };
+                // Build robust source candidates
                 if(isVideo){
-                    preloadVideo(srcUrl).then(v=>{ v.autoplay=true; v.loop=true; v.muted=true; v.playsInline=true; doSwap(v); }).catch(swapFallback);
+                    const pickName = ()=>{
+                        if(item.file){ return String(item.file).split('/').pop().split('?')[0]; }
+                        const u = item.url || '';
+                        try{ const uu = new URL(u); return (uu.pathname.split('/').pop()||'').split('?')[0]; }catch{ return (String(u).split('/').pop()||'').split('?')[0]; }
+                    };
+                    const fname = pickName();
+                    const bust = Date.now();
+                    const candidates = [];
+                    if(fname){
+                        candidates.push(`/vpreview/360/${encodeURIComponent(fname)}?v=${bust}`);
+                        candidates.push(`/media/${encodeURIComponent(fname)}?v=${bust}`);
+                        candidates.push(`/static/uploads/${encodeURIComponent(fname)}?v=${bust}`);
+                    }
+                    if(item.url){ candidates.push(String(item.url)); }
+                    // Try each candidate sequentially
+                    (async ()=>{
+                        for(const u of candidates){
+                            try{
+                                const v = await preloadVideo(u);
+                                v.autoplay = true; v.loop = true; v.muted = true; v.playsInline = true;
+                                doSwap(v);
+                                try{ v.play().catch(()=>{}); }catch{}
+                                return;
+                            }catch{ /* try next */ }
+                        }
+                        // Final fallback: poster image
+                        const img = new Image(); img.alt='Preview';
+                        img.src = fname ? `/thumb/600/${encodeURIComponent(fname)}?v=${Date.now()}` : (item.url||'');
+                        doSwap(img);
+                    })();
                 } else {
-                    preloadImage(srcUrl).then(img=>{ doSwap(img); }).catch(swapFallback);
+                    const srcUrl = (item.url || mediaUrl(item.file) || '').concat(`?v=${Date.now()}`);
+                    preloadImage(srcUrl).then(img=>{ doSwap(img); }).catch(()=>{ const img=new Image(); img.src=srcUrl; doSwap(img); });
                 }
                 let dur = parseInt(item.duration,10); if(isNaN(dur)||dur<1) dur=10; if(dur>30) dur=30;
                 st.nextAt = Date.now() + dur*1000;
@@ -3280,21 +3378,118 @@
                     .then(r=>r.json()).then(d=>{ if(d.success){ closeReplaceModal(); refreshPlaylist(sid); } else { alert('Replace failed: '+(d.error||'unknown')); } });
                 }
             }
-            function doRpUpload(){
-                const inp=document.getElementById('rp-file');
-                if(!inp||!inp.files||!inp.files[0]){ alert('Pick a file'); return; }
-                const fd=new FormData(); fd.append('file', inp.files[0]);
-                const sid = rpCtx && rpCtx.screenId; const iid = rpCtx && rpCtx.itemId; if(!sid||!iid){ alert('No item context'); return; }
-                fetch('/upload_media',{method:'POST',body:fd}).then(r=>r.json()).then(d=>{
-                    if(!d.success){ alert('Upload failed: '+(d.error||'unknown')); return; }
-                    if(iid === 'SINGLE'){
-                        fetch('/assign_to_screen',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({store_id: currentStoreId, screen_id: sid, filename: d.filename})})
-                        .then(r=>r.json()).then(z=>{ if(z.success){ closeReplaceModal(); refreshPlaylist(sid);} else { alert('Assign failed: '+(z.error||'unknown')); } });
-                    } else {
-                        fetch(`/playlist/item/${currentStoreId}/${sid}/${iid}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({file:d.filename})})
-                        .then(r=>r.json()).then(x=>{ if(x.success){ closeReplaceModal(); refreshPlaylist(sid); } else { alert('Replace failed: '+(x.error||'unknown')); } });
+    async function doRpUpload(){
+                const inp = document.getElementById('rp-file');
+                if(!inp || !inp.files || !inp.files[0]){ alert('Pick a file'); return; }
+                const sid = rpCtx && rpCtx.screenId; const iid = rpCtx && rpCtx.itemId;
+                if(!sid || !iid){ alert('No item context'); return; }
+
+                // Find the upload button for UX feedback
+                const uploadBtn = (document.querySelector('#rp-view-upload .btn.primary'));
+                const prevLabel = uploadBtn ? uploadBtn.textContent : '';
+                if(uploadBtn){ uploadBtn.disabled = true; uploadBtn.textContent = 'Uploading…'; }
+
+                try {
+                    const file = inp.files[0];
+                    console.log('[RP][UPLOAD] start', { name: file.name, size: file.size, type: file.type });
+                    // Try presigned direct-to-R2 first to bypass Cloudflare upload limits.
+                    let data = null;
+                    try {
+                        const preResp = await fetch('/r2/presign_upload', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ filename: file.name, content_type: file.type || 'application/octet-stream' })
+                        });
+                        const preParsed = await readJsonOrText(preResp);
+                        const pre = preParsed.json;
+                        if (pre && pre.success && pre.upload_url && pre.filename) {
+                            // PUT file directly to R2
+                            const putResp = await fetch(pre.upload_url, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': pre.content_type || (file.type || 'application/octet-stream') },
+                                body: file
+                            });
+                            if (!putResp.ok) {
+                                const txt = await putResp.text().catch(()=> '');
+                                throw new Error(`R2 upload failed (${putResp.status}). ${txt.substring(0,120)}`);
+                            }
+                            // Success: synthesize minimal response as if /upload_media had saved it
+                            data = { success: true, filename: pre.filename, media_type: guessMediaType(pre.filename), url: pre.public_url || mediaUrl(pre.filename) };
+                        } else {
+                            const errMsg = (pre && pre.error) || (preParsed.text && preParsed.text.substring(0,200)) || 'presign not available';
+                            console.warn('[RP][UPLOAD] presign response not usable', { status: preResp.status, body: preParsed.text });
+                            throw new Error(errMsg);
+                        }
+                    } catch (presignErr) {
+                        console.warn('[RP][UPLOAD] presign path failed, falling back to origin upload:', presignErr);
+                        // Fallback to origin upload (may be limited by Cloudflare for very large files)
+                        const fd = new FormData();
+                        fd.append('file', file);
+                        // Setup a safety timeout so UI won’t hang forever if the network stalls
+                        const controller = new AbortController();
+                        const timeoutMs = 120000; // 120s safety timeout
+                        const timeoutId = setTimeout(()=>{ try { controller.abort('timeout'); } catch(_){} }, timeoutMs);
+                        const longWait = setTimeout(()=>{ if(uploadBtn){ uploadBtn.textContent = 'Still uploading…'; } }, 10000);
+                        const resp = await fetch('/upload_media', { method: 'POST', body: fd, cache: 'no-store', signal: controller.signal });
+                        clearTimeout(timeoutId); clearTimeout(longWait);
+                        const parsed = await readJsonOrText(resp);
+                        const json = parsed.json;
+                        if(!resp.ok || !json || json.success === false){
+                            if(resp.status === 413){ throw new Error('File too large. Increase server limit or try direct upload again.'); }
+                            throw new Error((json && json.error) || `Upload failed (HTTP ${resp.status})`);
+                        }
+                        data = json;
                     }
-                });
+                    console.log('[RP][UPLOAD] success', data);
+
+                    if(iid === 'SINGLE'){
+                        const r = await fetch('/assign_to_screen', {
+                            method:'POST', headers:{ 'Content-Type':'application/json' },
+                            body: JSON.stringify({ store_id: currentStoreId, screen_id: sid, filename: data.filename })
+                        });
+                        const parsedAssign = await readJsonOrText(r);
+                        const z = parsedAssign.json || { success:false, error: (parsedAssign.text||'').substring(0,200) };
+                        if(!z.success) throw new Error('Assign failed: ' + (z.error || 'unknown'));
+                        closeReplaceModal();
+                        refreshPlaylist(sid);
+                    } else {
+                        const r = await fetch(`/playlist/item/${currentStoreId}/${sid}/${iid}`, {
+                            method:'PATCH', headers:{ 'Content-Type':'application/json' },
+                            body: JSON.stringify({ file: data.filename })
+                        });
+                        const parsedPatch = await readJsonOrText(r);
+                        const x = parsedPatch.json || { success:false, error: (parsedPatch.text||'').substring(0,200) };
+                        if(!x.success) throw new Error('Replace failed: ' + (x.error || 'unknown'));
+                        closeReplaceModal();
+                        refreshPlaylist(sid);
+                    }
+                } catch(err){
+                    console.error('[RP][UPLOAD] error', err);
+                    if(String(err).includes('AbortError') || String(err).includes('timeout')){
+                        alert('Upload is taking too long or stalled. Please check your connection or try a smaller file.');
+                    } else {
+                        alert(String(err && err.message ? err.message : err || 'Upload failed'));
+                    }
+                } finally {
+                    if(uploadBtn){ uploadBtn.disabled = false; uploadBtn.textContent = prevLabel || 'Upload'; }
+                }
+            }
+
+            // Minimal client-side media type classifier matching server logic
+            function guessMediaType(name){
+                try{
+                    const ext = (String(name).split('.').pop()||'').toLowerCase();
+                    const v = ['mp4','webm','ogg','mov','avi','mkv','m4v'];
+                    return v.includes(ext) ? 'video' : 'image';
+                }catch{ return 'image'; }
+            }
+
+            // Read a Response body exactly once and try to parse JSON; fall back to raw text
+            async function readJsonOrText(resp){
+                try{
+                    const text = await resp.text();
+                    try{ return { json: JSON.parse(text), text }; }
+                    catch{ return { json: null, text } }
+                }catch(e){ return { json: null, text: '' } }
             }
 
             function deleteLibraryFile(name){
@@ -3741,9 +3936,10 @@
             const isAbs = /^https?:\/\//i.test(String(url));
             const fname = String(url).split('/').pop();
             const previewUrl = isAbs ? url : `/vpreview/360/${encodeURIComponent(fname||'')}`;
+            const fallbackVid = isAbs ? url : `/media/${encodeURIComponent(fname||'')}`;
             preloadVideo(previewUrl).then(v=>{ v.autoplay=true; v.loop=true; v.muted=true; v.playsInline=true; v.style.maxWidth='100%'; v.style.maxHeight='100%'; v.style.objectFit='contain'; if(rotation){ v.classList.add('rotate-'+rotation); } show(build(v)); }).catch(()=>{
-                // Fallback to original URL or image if preview fails
-                preloadVideo(url).then(v=>{ v.autoplay=true; v.loop=true; v.muted=true; v.playsInline=true; v.style.maxWidth='100%'; v.style.maxHeight='100%'; v.style.objectFit='contain'; if(rotation){ v.classList.add('rotate-'+rotation); } show(build(v)); }).catch(()=>{ const img=new Image(); img.src=url; img.style.maxWidth='100%'; img.style.maxHeight='100%'; img.style.objectFit='contain'; if(rotation){ img.className='rotate-'+rotation; } show(build(img)); });
+                // Fallback to server-streamed URL or final image if video fails
+                preloadVideo(fallbackVid).then(v=>{ v.autoplay=true; v.loop=true; v.muted=true; v.playsInline=true; v.style.maxWidth='100%'; v.style.maxHeight='100%'; v.style.objectFit='contain'; if(rotation){ v.classList.add('rotate-'+rotation); } show(build(v)); }).catch(()=>{ const img=new Image(); img.src=url; img.style.maxWidth='100%'; img.style.maxHeight='100%'; img.style.objectFit='contain'; if(rotation){ img.className='rotate-'+rotation; } show(build(img)); });
             });
         } else {
             preloadImage(url).then(img=>{ img.style.maxWidth='100%'; img.style.maxHeight='100%'; img.style.objectFit='contain'; if(rotation){ img.className='rotate-'+rotation; } show(build(img)); }).catch(()=>{ const img=document.createElement('img'); img.src=url; if(rotation){ img.className='rotate-'+rotation; } show(build(img)); });
