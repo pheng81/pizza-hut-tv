@@ -22,5 +22,9 @@ interface ApiService {
 
 	@POST("api/screen_heartbeat")
 	suspend fun sendHeartbeat(@Body body: HeartbeatReq): HeartbeatResp
+
+	// Client events: TV reports per-item load success/failure so dashboard can show status
+	@POST("api/client_event")
+	suspend fun postClientEvent(@Body body: ClientEventReq): BasicResp
 }
 

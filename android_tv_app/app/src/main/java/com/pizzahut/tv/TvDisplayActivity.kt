@@ -47,6 +47,8 @@ class TvDisplayActivity : AppCompatActivity() {
     var manualPrev: (() -> Unit)? = null
     private var heartbeatJob: Job? = null
     private var hbIndicator: TextView? = null
+    // Periodic per-item OK ping so dashboard lights stay green while item is displayed
+    private var itemOkPingJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -168,6 +170,8 @@ class TvDisplayActivity : AppCompatActivity() {
     override fun onDestroy() {
     try { heartbeatJob?.cancel() } catch (_: Exception) {}
     heartbeatJob = null
+        try { itemOkPingJob?.cancel() } catch (_: Exception) {}
+        itemOkPingJob = null
         try {
             exoPlayer?.stop()
             exoPlayer?.clearMediaItems()
@@ -176,6 +180,28 @@ class TvDisplayActivity : AppCompatActivity() {
         exoPlayer = null
         legacyVideoView?.let { try { it.stopPlayback() } catch (_: Exception) {}; it.visibility = ImageView.GONE }
         super.onDestroy()
+    }
+
+    // Class-level helpers to manage per-item OK ping lifecycle
+    fun cancelItemOkPing() {
+        try { itemOkPingJob?.cancel() } catch (_: Exception) {}
+        itemOkPingJob = null
+    }
+    fun startItemOkPing(storeId: String, screenId: String, file: String?, itemId: String?) {
+        if (file.isNullOrBlank()) return
+        cancelItemOkPing()
+        itemOkPingJob = lifecycleScope.launch(Dispatchers.IO) {
+            // Small initial delay to avoid racing immediate OK
+            try { delay(20_000) } catch (_: Exception) { return@launch }
+            while (isActive) {
+                try {
+                    ApiClient.service.postClientEvent(
+                        com.pizzahut.tv.api.ClientEventReq(storeId, screenId, "load_ok", file = file, itemId = itemId)
+                    )
+                } catch (_: Exception) {}
+                try { delay(25_000) } catch (_: Exception) { break }
+            }
+        }
     }
 
     private fun startHeartbeatLoop(storeId: String, screenId: String) {
@@ -408,7 +434,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
     fun isAnimated(file: String) = animatedExts.any { file.endsWith(".$it", true) }
     fun isAdvancedStill(file: String) = advancedStillExts.any { file.endsWith(".$it", true) }
 
-    fun loadAnimatedOrStatic(file: String, onDone: () -> Unit) {
+    fun loadAnimatedOrStatic(file: String, itemId: String?, onDone: (Boolean) -> Unit) {
         val url = ApiClientImageHelper.buildFileUrl(file)
         lifecycleScope.launch {
             if (isAnimated(file) && android.os.Build.VERSION.SDK_INT >= 28) {
@@ -428,22 +454,40 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                     imageView.setImageDrawable(drawable)
                     if (drawable is AnimatedImageDrawable) drawable.start()
                     binding.message.text = file.take(50)
+                    // report success
+                    try { ApiClient.service.postClientEvent(com.pizzahut.tv.api.ClientEventReq(storeId, screenId, "load_ok", file = file, itemId = itemId)) } catch (_: Exception) {}
+                    // start periodic ok ping to keep dashboard green while displayed
+                    startItemOkPing(storeId, screenId, file, itemId)
+                    onDone(true)
                 } else {
                     // fallback to bitmap path
                     val bmp = withContext(Dispatchers.IO) { fetchBitmap(url) }
                     if (bmp != null) {
                         imageView.setImageBitmap(bmp)
                         binding.message.text = file.take(50)
-                    } else binding.message.text = "Load failed: $file".take(60)
+                        try { ApiClient.service.postClientEvent(com.pizzahut.tv.api.ClientEventReq(storeId, screenId, "load_ok", file = file, itemId = itemId)) } catch (_: Exception) {}
+                        startItemOkPing(storeId, screenId, file, itemId)
+                        onDone(true)
+                    } else {
+                        binding.message.text = "Load failed: $file".take(60)
+                        try { ApiClient.service.postClientEvent(com.pizzahut.tv.api.ClientEventReq(storeId, screenId, "load_fail", file = file, itemId = itemId, error = "bitmap decode failed")) } catch (_: Exception) {}
+                        onDone(false)
+                    }
                 }
             } else {
                 val bmp = withContext(Dispatchers.IO) { fetchBitmap(url) }
                 if (bmp != null) {
                     imageView.setImageBitmap(bmp)
                     binding.message.text = file.take(50)
-                } else binding.message.text = "Load failed: $file".take(60)
+                    try { ApiClient.service.postClientEvent(com.pizzahut.tv.api.ClientEventReq(storeId, screenId, "load_ok", file = file, itemId = itemId)) } catch (_: Exception) {}
+                    startItemOkPing(storeId, screenId, file, itemId)
+                    onDone(true)
+                } else {
+                    binding.message.text = "Load failed: $file".take(60)
+                    try { ApiClient.service.postClientEvent(com.pizzahut.tv.api.ClientEventReq(storeId, screenId, "load_fail", file = file, itemId = itemId, error = "image fetch failed")) } catch (_: Exception) {}
+                    onDone(false)
+                }
             }
-            onDone()
         }
     }
 
@@ -527,6 +571,8 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
             playerView.removeCallbacks(it)
         }
         scheduleTick = null
+        // Do not cancel itemOkPingJob here; it's tied to the active item.
+        // Ping will be cancelled when switching items at the top of showAndSchedule() or onDestroy().
     }
     // Define schedule tick before showAndSchedule; use a function reference to avoid forward declaration issues
     fun ensureScheduleTick() {
@@ -557,6 +603,8 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
     }
 
     fun showAndSchedule() {
+    // Switching context to the next item: stop ping from previous item
+    cancelItemOkPing()
         // Re-filter on each step for near real-time schedule flips
         if (originalItems.isNotEmpty()) {
             val newFiltered = filterBySchedule(originalItems)
@@ -621,6 +669,12 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                         vv.visibility = ImageView.VISIBLE
                         vv.start()
                         binding.message.text = "Legacy PLAY ${file.take(14)}"
+                        // Report success for legacy playback
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            try { ApiClient.service.postClientEvent(com.pizzahut.tv.api.ClientEventReq(storeId, screenId, "load_ok", file = file, itemId = next.id)) } catch (_: Exception) {}
+                        }
+                        // Start periodic ok ping while this legacy video is playing
+                        startItemOkPing(storeId, screenId, file, next.id)
                         // Schedule rotation according to playlist duration
                         val durMs = (next.duration ?: 10).coerceAtLeast(1) * 1000L
                         cancelScheduled()
@@ -633,6 +687,9 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                     }
                     vv.setOnErrorListener { _, what, extra ->
                         binding.message.text = "LegacyErr w=$what e=$extra"
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            try { ApiClient.service.postClientEvent(com.pizzahut.tv.api.ClientEventReq(storeId, screenId, "load_fail", file = file, itemId = next.id, error = "legacy error w=$what e=$extra")) } catch (_: Exception) {}
+                        }
                         cancelScheduled()
                         try { vv.stopPlayback() } catch (_: Exception) {}
                         vv.visibility = ImageView.GONE
@@ -665,7 +722,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                 legacyVideoView?.visibility = ImageView.GONE
                 if (!playerListenersAttached) {
                     player.addListener(object: com.google.android.exoplayer2.Player.Listener {
-                        override fun onPlaybackStateChanged(stateCode: Int) {
+            override fun onPlaybackStateChanged(stateCode: Int) {
                             val f = currentVideoFile ?: "vid"
                             val label = when(stateCode){
                                 com.google.android.exoplayer2.Player.STATE_IDLE -> "IDLE"
@@ -679,6 +736,11 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                                 // Cancel stall watchdog once we are ready
                                 videoStallWatch?.let { playerView.removeCallbacks(it); imageView.removeCallbacks(it) }
                                 videoStallWatch = null
+                                lifecycleScope.launch(Dispatchers.IO) {
+                                    try { ApiClient.service.postClientEvent(com.pizzahut.tv.api.ClientEventReq(storeId, screenId, "load_ok", file = f, itemId = next.id)) } catch (_: Exception) {}
+                                }
+                                // Start periodic ok ping while this video item is playing
+                                startItemOkPing(storeId, screenId, f, next.id)
                             }
                             if (stateCode == com.google.android.exoplayer2.Player.STATE_ENDED) {
                                 // Advance if natural end happens early
@@ -691,6 +753,9 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                             val f = currentVideoFile ?: "vid"
                             binding.message.text = ("Err ${error.errorCodeName}" + (error.message?.let { ":"+it.take(20) } ?: "")).take(60)
                             val playerRef = exoPlayer ?: return
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                try { ApiClient.service.postClientEvent(com.pizzahut.tv.api.ClientEventReq(storeId, screenId, "load_fail", file = f, itemId = next.id, error = error.message)) } catch (_: Exception) {}
+                            }
                             // First error: try static fallback path once
                             if (!triedStaticFallbackForCurrent) {
                                 triedStaticFallbackForCurrent = true
@@ -699,6 +764,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                                     playerRef.setMediaSource(buildMediaSource(ApiClientImageHelper.buildImageUrl(f)))
                                     playerRef.prepare(); playerRef.playWhenReady = true
                                     binding.message.text = ("StaticFB ${f.take(10)}").take(60)
+                    // Don't report success yet; wait for READY state to confirm
                                     return
                                 } catch (_: Exception) { /* fall through */ }
                             }
@@ -756,6 +822,9 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
             // Skip formats we know we can't render without extra libs (e.g. svg / tiff) to avoid long black frames
             if (isAdvancedStill(file) && !(file.endsWith(".heic", true) || file.endsWith(".heif", true) || file.endsWith(".avif", true))) {
                 binding.message.text = "Unsupported: ${file.take(40)}"
+                lifecycleScope.launch(Dispatchers.IO) {
+                    try { ApiClient.service.postClientEvent(com.pizzahut.tv.api.ClientEventReq(storeId, screenId, "load_fail", file = file, error = "unsupported still format")) } catch (_: Exception) {}
+                }
                 imageView.postDelayed({ showAndSchedule() }, 3000)
                 return
             }
@@ -765,7 +834,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
             playerView.visibility = ImageView.GONE
             imageView.visibility = ImageView.VISIBLE
             binding.message.bringToFront()
-            loadAnimatedOrStatic(file) {
+            loadAnimatedOrStatic(file, next.id) { success ->
                 // Prefetch upcoming
                 val upcoming = if (state.items.isNotEmpty()) {
                     val idx = if (state.index >= state.items.size) 0 else state.index
@@ -774,6 +843,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                 prefetchNext(upcoming)
                 val durMs = (next.duration ?: 10).coerceAtLeast(1) * 1000L
                 cancelScheduled()
+                // If load succeeded, the ping was already started inside loadAnimatedOrStatic
                 scheduledRotation = Runnable { showAndSchedule() }
                 imageView.postDelayed(scheduledRotation!!, durMs)
             }
@@ -801,8 +871,16 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
             state.index = 0
             return
         }
-        // If list content changed, replace but preserve current position relative to current file
-        if (newFiles != prevFiles) {
+        // If list content changed OR item IDs changed for same files, replace but preserve current position relative to current file.
+        var idsChangedForSameFiles = false
+        if (newFiles == prevFiles) {
+            // Build file->id maps to detect when a server recreated an item (new id but same file)
+            val prevMap = prevItems.associate { (it.file ?: "") to (it.id ?: "") }
+            val newMap = filtered.associate { (it.file ?: "") to (it.id ?: "") }
+            // If any file that exists in both maps has a different id, treat as a change
+            idsChangedForSameFiles = newFiles.any { f -> (prevMap[f] ?: "") != (newMap[f] ?: "") }
+        }
+        if (newFiles != prevFiles || idsChangedForSameFiles) {
             val cur = currentItemFile
             state.items = filtered
             state.index = if (cur != null) {
@@ -823,6 +901,9 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                 originalItems = original
                 // Apply without resetting index if files are the same
                 applyNewList(original)
+                lifecycleScope.launch(Dispatchers.IO) {
+                    try { ApiClient.service.postClientEvent(com.pizzahut.tv.api.ClientEventReq(storeId, screenId, "playlist_reload")) } catch (_: Exception) {}
+                }
                 val cnt = state.items.size
                 if (cnt > 0) {
                     binding.message.text = "${cnt} items loaded"
