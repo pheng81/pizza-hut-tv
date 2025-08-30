@@ -11,9 +11,36 @@ from datetime import datetime, time as dtime, timedelta
 import logging
 import time
 from typing import Optional
-from dotenv import load_dotenv
+from dotenv import load_dotenv, dotenv_values
 
+# Load default .env first (if present)
 load_dotenv()
+
+# Also load r2.env if present and patch critical env vars early so R2 presign works in prod
+try:
+    _r2_env = dotenv_values('r2.env') or {}
+except Exception:
+    _r2_env = {}
+
+def _apply_r2_env_overrides():
+    try:
+        if not _r2_env:
+            return
+        # Populate missing R2 keys from r2.env
+        for k in ('R2_BUCKET_NAME','R2_ENDPOINT_URL','R2_ACCESS_KEY_ID','R2_SECRET_ACCESS_KEY'):
+            if _r2_env.get(k) and not os.environ.get(k):
+                os.environ[k] = _r2_env[k]
+        # If MEDIA_BASE_URL is set to an origin API host (bad default), prefer the CDN value from r2.env
+        cur = (os.environ.get('MEDIA_BASE_URL') or '').strip().rstrip('/')
+        if _r2_env.get('MEDIA_BASE_URL'):
+            bad_hosts = {'https://api.everydayadvertise.com','http://api.everydayadvertise.com'}
+            if not cur or cur in bad_hosts:
+                os.environ['MEDIA_BASE_URL'] = _r2_env['MEDIA_BASE_URL']
+    except Exception:
+        # Non-fatal; app can continue without R2
+        pass
+
+_apply_r2_env_overrides()
 
 # Optional boto3 for R2 (S3-compatible)
 try:
@@ -78,6 +105,16 @@ def _git_short_commit():
     except Exception:
         return None
 GIT_COMMIT = _git_short_commit()
+
+@app.route('/healthz')
+def _healthz():
+    return jsonify({
+        'ok': True,
+        'build': BUILD_STAMP,
+        'commit': GIT_COMMIT,
+        'r2_enabled': r2_enabled(),
+        'media_base_url': os.environ.get('MEDIA_BASE_URL')
+    })
 
 # ---- Simple slow-request logging and ETag helpers ----
 from functools import wraps
@@ -1648,11 +1685,25 @@ def apply_to_all():
 
 @app.route('/replicate_screen', methods=['POST'])
 def replicate_screen():
-    """Replicate an existing master store screen file to all other stores (respecting protection)."""
+    """Replicate a master store screen file to all other stores.
+
+    Behavior controlled by 'mode' in JSON body:
+    - 'override' (default): replace target screen's file and reset playlist to only the source file.
+    - 'addon': keep existing items and append the source file to the playlist if not present.
+
+    Always skips screens marked protected in target stores.
+    """
     try:
         data = request.get_json() or {}
         store_id = data.get('store_id')
         screen_id = data.get('screen_id')
+        mode = (data.get('mode') or 'override').lower()
+        selected_item_ids = data.get('selected_item_ids') or []
+        target_store_ids = data.get('target_store_ids') or []
+        if not isinstance(selected_item_ids, list):
+            selected_item_ids = []
+        if not isinstance(target_store_ids, list):
+            target_store_ids = []
         if not store_id or not screen_id:
             return jsonify({'error': 'store_id and screen_id required'}), 400
 
@@ -1675,9 +1726,38 @@ def replicate_screen():
         if screen_id not in master_screens:
             return jsonify({'error': 'Screen not found in master store'}), 404
 
-        source_file = master_screens[screen_id].get('file')
-        if not source_file:
-            return jsonify({'error': 'No file on this screen to replicate'}), 400
+        source_screen = master_screens[screen_id]
+        source_file = source_screen.get('file')
+        source_playlist = source_screen.get('playlist', [])
+
+        # Build list of source items if specific selection requested
+        source_items = []
+        if selected_item_ids:
+            by_id = {str(it.get('id')): it for it in source_playlist if isinstance(it, dict)}
+            for iid in selected_item_ids:
+                it = by_id.get(str(iid))
+                if it:
+                    # Shallow copy fields we care about; generate new id per target later
+                    copied = {
+                        'file': it.get('file'),
+                        'enabled': bool(it.get('enabled', True)),
+                        'start': it.get('start'),
+                        'end': it.get('end'),
+                        'schedule': it.get('schedule', []),
+                        'duration': it.get('duration', 10),
+                        'repeat': bool(it.get('repeat', True)),
+                        'link_next': bool(it.get('link_next', False)),
+                        'media_type': it.get('media_type') or classify_media(it.get('file') or '')
+                    }
+                    source_items.append(copied)
+            # If selection empty after filtering, clear the selection flag
+            if not source_items:
+                selected_item_ids = []
+
+        # If no selection, require a single source file as before
+        if not selected_item_ids:
+            if not source_file:
+                return jsonify({'error': 'No file on this screen to replicate'}), 400
 
         # Logical screen type for cross-store mapping
         screen_type = screen_id.split('_', 1)[1] if '_' in screen_id else screen_id
@@ -1686,7 +1766,14 @@ def replicate_screen():
         skipped_stores = []
         created_screens = []
 
+        # Optional filter: only apply to these stores if provided
+        target_filter = set(str(sid) for sid in target_store_ids) if target_store_ids else None
+
         for sid, screens in config.get('screens', {}).items():
+            if sid == master_store_id:
+                continue
+            if target_filter is not None and sid not in target_filter:
+                continue
             target_id = f"{sid}_{screen_type}"
             legacy_id = screen_type
 
@@ -1711,15 +1798,81 @@ def replicate_screen():
                 skipped_stores.append(sid)
                 continue
 
-            screens[actual_id]['file'] = source_file
-            pl = screens[actual_id].setdefault('playlist', [])
-            if not any(i.get('file') == source_file for i in pl):
-                pl.append({'id': str(uuid.uuid4()), 'file': source_file, 'enabled': True, 'start': None, 'end': None, 'schedule': [], 'duration': 10, 'repeat': True, 'link_next': False, 'media_type': classify_media(source_file)})
+            # Apply action based on mode and whether specific items were selected
+            if selected_item_ids:
+                # Using selected playlist items as the replication source
+                tgt_pl = screens[actual_id].setdefault('playlist', [])
+                if mode == 'addon':
+                    # Append any of the selected files that are not in target playlist (by file)
+                    existing_files = {i.get('file') for i in tgt_pl if isinstance(i, dict)}
+                    for src in source_items:
+                        f = src.get('file')
+                        if f and f not in existing_files:
+                            item = dict(src)
+                            item['id'] = str(uuid.uuid4())
+                            tgt_pl.append(item)
+                    # If target has no primary file, set to first selected
+                    if not screens[actual_id].get('file') and source_items:
+                        screens[actual_id]['file'] = source_items[0].get('file')
+                else:
+                    # override: upsert each selected item by file (replace settings if exists; add if missing)
+                    # Keep other existing items intact
+                    file_index = {}
+                    for idx, it in enumerate(list(tgt_pl)):
+                        f = isinstance(it, dict) and it.get('file')
+                        if f: file_index[f] = idx
+                    for src in source_items:
+                        f = src.get('file')
+                        if not f:
+                            continue
+                        if f in file_index:
+                            # Replace payload but preserve item id
+                            idx = file_index[f]
+                            existing = tgt_pl[idx] if 0 <= idx < len(tgt_pl) else None
+                            keep_id = (existing or {}).get('id') or str(uuid.uuid4())
+                            new_item = dict(src)
+                            new_item['id'] = keep_id
+                            tgt_pl[idx] = new_item
+                        else:
+                            new_item = dict(src)
+                            new_item['id'] = str(uuid.uuid4())
+                            tgt_pl.append(new_item)
+                    # Set primary file if empty
+                    if not screens[actual_id].get('file') and source_items:
+                        screens[actual_id]['file'] = source_items[0].get('file')
+            else:
+                # Legacy single-file replicate path
+                if mode == 'addon':
+                    # Keep existing items, append if missing
+                    pl = screens[actual_id].setdefault('playlist', [])
+                    if not any(i.get('file') == source_file for i in pl):
+                        pl.append({'id': str(uuid.uuid4()), 'file': source_file, 'enabled': True, 'start': None, 'end': None, 'schedule': [], 'duration': 10, 'repeat': True, 'link_next': False, 'media_type': classify_media(source_file)})
+                    if not screens[actual_id].get('file'):
+                        screens[actual_id]['file'] = source_file
+                else:
+                    # override: set file and replace playlist with only this item
+                    screens[actual_id]['file'] = source_file
+                    screens[actual_id]['playlist'] = [{
+                        'id': str(uuid.uuid4()),
+                        'file': source_file,
+                        'enabled': True,
+                        'start': None,
+                        'end': None,
+                        'schedule': [],
+                        'duration': 10,
+                        'repeat': True,
+                        'link_next': False,
+                        'media_type': classify_media(source_file)
+                    }]
             updated_stores.append(sid)
 
         save_store_config(config)
 
-        message = f"Replicated {screen_type} to {len(updated_stores)} stores"
+        action = 'Added to' if mode == 'addon' else 'Replaced in'
+        extra = ''
+        if selected_item_ids:
+            extra = f" using {len(source_items)} selected item(s)"
+        message = f"{action} {len(updated_stores)} stores ({screen_type}){extra}"
         if created_screens:
             message += f". Created {len(created_screens)} screens"
         if skipped_stores:
@@ -2347,7 +2500,8 @@ def r2_presign_upload():
 def r2_status():
     try:
         d = r2_diag()
-        return jsonify({'success': True, 'r2': d})
+        # Include MEDIA_BASE_URL snapshot for quick frontend sanity checks
+        return jsonify({'success': True, 'r2': d, 'media_base_url': get_media_base_url(), 'env_media_base_url': os.environ.get('MEDIA_BASE_URL')})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 

@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pizza Hut TV - Store Management Dashboard</title>
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+    <link rel="preconnect" href="https://cdn.everydayadvertise.com" crossorigin>
+    <link rel="dns-prefetch" href="//cdn.everydayadvertise.com">
     
         <!-- Configuration data for JavaScript -->
         <script type="application/json" id="config-data">{{ config | tojson | safe }}</script>
@@ -36,12 +38,43 @@
             }
             function fallbackToOrigin(img, original){
                 try{
-                    if(!img || img.dataset.fallbackTried) return;
+                    if(!img) return;
+                    const cur = original || img.currentSrc || img.src || '';
+                    const key = _extractKey(cur);
+                    const step = parseInt(img.dataset.fallbackStep || '0', 10);
+                    // Debug aid
+                    if (!img.dataset._dbg) { img.dataset._dbg = '1'; console.warn('[img-fallback] start', {cur, key}); }
+                    // Step 0: if URL has query, retry without query (common CDN quirk)
+                    if (step === 0) {
+                        const u = (()=>{ try { return new URL(cur); } catch { return null; }})();
+                        if (u && u.search) {
+                            u.search = '';
+                            img.dataset.fallbackStep = '1';
+                            console.warn('[img-fallback] retry without query', u.toString());
+                            img.src = u.toString();
+                            return;
+                        }
+                    }
+                    // Step 1: try origin static by key
+                    if (step <= 1) {
+                        if (!key) return; // nothing we can do
+                        const local = '/static/uploads/' + encodeURIComponent(key);
+                        img.dataset.fallbackStep = '2';
+                        console.warn('[img-fallback] fallback to origin', local);
+                        img.src = local;
+                        return;
+                    }
+                    // Step 2: absolute origin (belt-and-braces)
+                    if (step === 2) {
+                        if (!key) return;
+                        const abs = (location.origin || '').replace(/\/$/, '') + '/static/uploads/' + encodeURIComponent(key);
+                        img.dataset.fallbackStep = '3';
+                        console.warn('[img-fallback] fallback to absolute origin', abs);
+                        img.src = abs;
+                        return;
+                    }
+                    // Done
                     img.dataset.fallbackTried = '1';
-                    const key = _extractKey(original || img.currentSrc || img.src);
-                    if(!key) return;
-                    const local = '/static/uploads/' + encodeURIComponent(key);
-                    img.src = local;
                 }catch{}
             }
             function mediaUrl(name){
@@ -80,6 +113,16 @@
                 const safe = encodeURIComponent(String(name));
                 return `/thumb/${width}/${safe}`;
             }
+            // Global IMG error listener: if any image fails (e.g., CDN hotlink/404), auto-fallback to origin
+            window.addEventListener('error', function(ev){
+                try{
+                    const el = ev && ev.target;
+                    if (!el || el.tagName !== 'IMG') return;
+                    // if already tried fallback, skip
+                    if (el.dataset && el.dataset.fallbackTried) return;
+                    fallbackToOrigin(el);
+                }catch{}
+            }, true);
         </script>
         <style>
     .enable-switch.on::after, .enable-switch.off::after { content: ''; position: absolute; top: 1px; left: 1px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: all .25s; }
@@ -117,7 +160,7 @@
 
     /* Constrain grids so cards don't stretch too wide */
     .screens-grid, .promos-grid {
-        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(285px, 1fr));
     }
 
     /* Removed .header styles (header bar deleted) */
@@ -196,6 +239,22 @@
 
     /* Right actions container */
     .stores-header .stores-actions { margin-left: auto; display:flex; align-items:center; gap:8px; }
+    /* Top-right desktop/tablet actions */
+    .stores-header .stores-actions.desktop-actions { gap:10px; }
+    .stores-header .stores-actions .top-action-btn {
+        display:inline-flex; align-items:center; gap:6px; height:34px; padding:0 10px;
+        border:1px solid #d2d2d7; background:#fff; color:#1d1d1f; border-radius:10px;
+        cursor:pointer; transition: background .15s, border-color .15s; font-size:13px;
+    }
+    .stores-header .stores-actions .top-action-btn:hover { background:#f2f2f7; border-color:#c7c7cc; }
+    .stores-header .stores-actions .top-action-btn:active { transform: translateY(1px); }
+    .stores-header .stores-actions .top-action-btn:focus-visible { outline: 3px solid rgba(10,132,255,0.35); outline-offset: 2px; }
+    .stores-header .stores-actions .top-action-btn.danger { border-color:#ff3b30; color:#ff3b30; }
+    .stores-header .stores-actions .top-action-btn .icon { width:16px; height:16px; display:inline-block; }
+    .stores-header .stores-actions .top-action-btn .icon path,
+    .stores-header .stores-actions .top-action-btn .icon circle { stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    /* Hide on phones; we already have a mobile action row */
+    @media (max-width: 768px){ .stores-header .stores-actions.desktop-actions { display:none; } }
 
     /* Right-aligned subtle (ghost) button */
     .stores-header .stores-actions .quick-tips {
@@ -297,17 +356,17 @@
         
         .screens-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-            gap: 18px;
+            grid-template-columns: repeat(auto-fill, minmax(285px, 1fr));
+            gap: 16px;
             margin: 0 0 28px 0;
         }
-        .promos-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(260px,1fr)); gap:18px; margin:0 0 28px 0; }
+        .promos-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(285px,1fr)); gap:16px; margin:0 0 28px 0; }
         
         .screen-card {
             background-color: white;
             border: 1px solid #ddd;
             border-radius: 8px;
-            padding: 20px;
+            padding: 16px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             transition: border 0.3s ease, background-color 0.3s ease;
             position: relative;
@@ -950,48 +1009,8 @@
         .store-management .add-store-btn:hover { background:#0a7aff; }
         .store-management .add-store-btn:active { transform: translateY(1px); }
         .store-management .add-store-btn .icon { width:16px; height:16px; }
-        /* Move Add/Delete to a frosted bottom bar instead of top strip */
-        .store-management .add-store-btn, .store-management .delete-store-btn { display: none; }
-
-        /* Frosted bottom bar */
-        .bottom-blur-bar {
-            position: fixed;
-            left: 0; right: 0; bottom: 0;
-            height: 54px; /* ~15% lower than 64px */
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 10px 16px;
-            background: rgba(255,255,255,0.6);
-            backdrop-filter: blur(14px) saturate(140%);
-            -webkit-backdrop-filter: blur(14px) saturate(140%);
-            border-top: 1px solid rgba(255,255,255,0.35);
-            box-shadow: 0 -10px 24px rgba(0,0,0,0.08);
-            z-index: 999;
-        }
-    .bottom-blur-bar .bar-right { display: flex; align-items: center; gap: 4px; }
-        .bottom-blur-bar .bar-left { font-weight: 600; color: rgba(0,0,0,0.55); }
-        /* Ensure page content isn't hidden behind the bar */
-    body { padding-bottom: 68px; } /* reduced to match shorter bar */
-
-        /* Uniform, smaller action buttons in bottom bar (about 60% smaller) */
-        .bottom-blur-bar .add-store-btn,
-        .bottom-blur-bar .delete-store-btn {
-            width: 80px;            /* ~half width */
-            height: 24px;           /* uniform height */
-            padding: 0 6px;         /* tighter padding */
-            font-size: 10px;        /* slightly smaller text */
-            border-radius: 6px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-            line-height: 1;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .bottom-blur-bar .add-store-btn .icon { width: 12px; height: 12px; }
+    /* Keep add/delete hidden in the selector strip (actions live in header + mobile drawer) */
+    .store-management .add-store-btn, .store-management .delete-store-btn { display: none; }
         
     /* Modal Styles */
     .modal {
@@ -1227,7 +1246,7 @@
 
         /* ===== Responsive layout: make dashboard mobile-friendly ===== */
         /* Overall page container (this template uses .container, not .app-wrapper) */
-        .container { width:100%; max-width:1180px; margin:0 auto; padding:12px 20px 40px; box-sizing:border-box; }
+    .container { width:100%; max-width:1680px; margin:0 auto; padding:12px 20px 40px; box-sizing:border-box; }
 
         @media (max-width: 1024px){
             .container { padding:10px 16px 32px; }
@@ -1237,9 +1256,9 @@
         }
 
         @media (max-width: 768px){
-            /* Stack the header */
-            .stores-header { flex-direction: column; align-items: flex-start; gap: 10px; padding-left: 0; }
-            .stores-actions { width: 100%; display: flex; justify-content: flex-end; }
+            /* Mobile header: title left, hamburger top-right */
+            .stores-header { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; padding-left: 0; }
+            .stores-actions { display: none !important; }
             .stores-title { font-size: 26px; }
             .stores-title .tv-svg { width:32px; height:32px; }
             .stores-title .brand-logo { max-height: 32px; height: auto; }
@@ -1288,14 +1307,60 @@
             .pl-actions.inline-actions { padding: 3px 6px; }
         }
 
-        /* Mobile action row with 3 compact buttons in one line */
-        .mobile-actions { display:none; }
-        @media (max-width: 768px){
-            .mobile-actions { display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; margin: 8px 0 12px; }
-            .mobile-actions .add-store-btn,
-            .mobile-actions .delete-store-btn,
-            .mobile-actions .add-screen-btn { height:34px; padding:0 8px; font-size:12px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; gap:6px; }
+        /* Hide legacy mobile action row; replaced by hamburger menu */
+        .mobile-actions { display:none !important; }
+
+        /* Hamburger (visible on <=768px) */
+    .hamburger-btn { display:none; border:1px solid #d2d2d7; background:#fff; color:#1d1d1f; border-radius:10px; padding:5px 7px; cursor:pointer; }
+        .hamburger-btn .bar{ display:block; width:20px; height:2px; background:#1d1d1f; margin:4px 0; border-radius:2px; }
+        .hamburger-btn:focus-visible { outline: 3px solid rgba(10,132,255,0.35); outline-offset: 2px; }
+    @media (max-width: 768px){ .hamburger-btn { display:inline-flex; flex-direction:column; align-items:center; justify-content:center; margin-left:auto; } }
+
+        /* Off-canvas mobile drawer */
+        .drawer-backdrop { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.35); z-index:999; }
+        .drawer-backdrop.show { display:block; }
+    .mobile-drawer { position:fixed; top:0; right:-320px; width:300px; height:100%; background:#fff; box-shadow: -4px 0 14px rgba(0,0,0,0.15); transition:right .2s ease-in-out; z-index:1000; padding:12px; display:flex; flex-direction:column; gap:8px; }
+        .mobile-drawer.open { right:0; }
+        .mobile-drawer h4 { margin:6px 0 10px; font-size:16px; }
+        /* Compact iOS-like action rows inside drawer */
+        .mobile-drawer .top-action-btn {
+            appearance:none;
+            width:100%;
+            height:36px;
+            padding:0 12px;
+            display:inline-flex;
+            align-items:center;
+            justify-content:flex-start;
+            gap:8px;
+            border:1px solid #d2d2d7;
+            border-radius:12px;
+            background:#fff;
+            color:#1d1d1f;
+            font-size:14px;
+            font-weight:600;
         }
+        .mobile-drawer .top-action-btn:hover { background:#f2f2f7; border-color:#c7c7cc; }
+        .mobile-drawer .top-action-btn:active { transform: translateY(1px); }
+        .mobile-drawer .top-action-btn .icon { width:18px; height:18px; display:inline-block; }
+        .mobile-drawer .top-action-btn .icon path,
+        .mobile-drawer .top-action-btn .icon circle { stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+        .mobile-drawer .top-action-btn.danger { color:#ff3b30; border-color:#ff3b30; }
+
+    /* Simple modal for Apply-All confirmation */
+    .modal-backdrop { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:998; }
+    .modal-backdrop.show { display:block; }
+    .modal { display:none; position:fixed; inset:0; z-index:999; align-items:center; justify-content:center; }
+    .modal.show { display:flex; }
+    .modal-card { width:min(520px, 92vw); background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.2); border:1px solid #e5e7eb; }
+    .modal-card .modal-header { padding:14px 16px; border-bottom:1px solid #eee; font-weight:700; font-size:16px; }
+    .modal-card .modal-body { padding:12px 16px; max-height:60vh; overflow:auto; }
+    .modal-card .modal-footer { padding:12px 16px; border-top:1px solid #eee; display:flex; gap:8px; justify-content:flex-end; }
+    .modal-desc { font-size:13px; color:#444; margin-bottom:10px; }
+    .impact-list { margin:0; padding-left:16px; font-size:13px; max-height:34vh; overflow:auto; }
+    .btn { appearance:none; border:1px solid #d2d2d7; background:#fff; color:#1d1d1f; border-radius:10px; padding:6px 10px; cursor:pointer; font-weight:600; }
+    .btn.primary { background:#007aff; color:#fff; border-color:#0077ff; }
+    .btn.danger { background:#ff3b30; color:#fff; border-color:#ff3b30; }
+    .btn:hover { filter:brightness(0.98); }
     </style>
 </head>
 <body>
@@ -1305,135 +1370,30 @@
                         <div class="stores-title">
                                                         <img class="brand-logo" src="{{ url_for('static', filename='ea-logo.svg') }}?v={{ asset_bust|default(0) }}" alt="Everyday Advertise" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';" />
                             <span class="title-fallback">Everyday Advertise</span>
-                                                        <span class="tv-icons" aria-hidden="true">
-                                                                                        <!-- Inline wave-animated CSS-only icon with occasional waving arms -->
-                                                                                        <svg class="tv-svg" width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-                                                                                            <defs>
-                                                                                                <linearGradient id="screenGrad" x1="0" y1="0" x2="1" y2="1">
-                                                                                                    <stop offset="0%" stop-color="#ffffff" stop-opacity="0.85"/>
-                                                                                                    <stop offset="100%" stop-color="#f2f2f2"/>
-                                                                                                </linearGradient>
-                                                                                                <clipPath id="screenClip">
-                                                                                                    <rect x="44" y="56" width="168" height="120" rx="14" ry="14"/>
-                                                                                                </clipPath>
-                                                                                            </defs>
-
-                                                                                            <!-- Hanging mount -->
-                                                                                            <circle cx="128" cy="22" r="7" fill="#333"/>
-                                                                                            <line x1="128" y1="22" x2="128" y2="56" stroke="#333" stroke-width="5"/>
-
-                                                                                            <!-- TV group -->
-                                                                                            <g id="tv" style="transform-origin:128px 22px;">
-                                                                                                <!-- Screen -->
-                                                                                                <rect x="44" y="56" width="168" height="120" rx="14" ry="14" fill="url(#screenGrad)" stroke="#333" stroke-width="6"/>
-
-                                                                                                <!-- Shine -->
-                                                                                                <g clip-path="url(#screenClip)">
-                                                                                                    <rect id="shine" x="-120" y="56" width="80" height="120" fill="#ffffff" opacity="0.18" transform="skewX(-20)"/>
-                                                                                                </g>
-
-                                                                                                <!-- Face -->
-                                                                                                <g id="face">
-                                                                                                    <!-- Eyes -->
-                                                                                                    <g class="eye" style="transform-origin:92px 110px;">
-                                                                                                        <ellipse cx="92" cy="110" rx="10" ry="10" fill="#333"/>
-                                                                                                        <circle class="pupil" cx="92" cy="110" r="4" fill="#fefefe"/>
-                                                                                                    </g>
-                                                                                                    <g class="eye" style="transform-origin:164px 110px;">
-                                                                                                        <ellipse cx="164" cy="110" rx="10" ry="10" fill="#333"/>
-                                                                                                        <circle class="pupil" cx="164" cy="110" r="4" fill="#fefefe"/>
-                                                                                                    </g>
-
-                                                                                                    <!-- Mouth (crossfade between two paths) -->
-                                                                                                    <path class="mouth mouth-a" d="M92 142 Q128 160 164 142" fill="none" stroke="#333" stroke-width="6" stroke-linecap="round"/>
-                                                                                                    <path class="mouth mouth-b" d="M92 146 Q128 172 164 146" fill="none" stroke="#333" stroke-width="6" stroke-linecap="round" opacity="0"/>
-                                                                                                </g>
-
-                                                                                                <!-- Arms / Hands -->
-                                                                                                <g id="arm-left" class="arm" style="transform-origin:48px 116px; opacity:0;">
-                                                                                                    <rect x="44" y="106" width="12" height="34" rx="6" fill="#333"/>
-                                                                                                    <g class="fore" style="transform-origin:50px 140px;">
-                                                                                                        <rect x="46" y="138" width="12" height="26" rx="6" fill="#333"/>
-                                                                                                        <circle cx="52" cy="166" r="7" fill="#333"/>
-                                                                                                    </g>
-                                                                                                </g>
-                                                                                                <g id="arm-right" class="arm" style="transform-origin:208px 116px; opacity:0;">
-                                                                                                    <rect x="200" y="106" width="12" height="34" rx="6" fill="#333"/>
-                                                                                                    <g class="fore" style="transform-origin:206px 140px;">
-                                                                                                        <rect x="198" y="138" width="12" height="26" rx="6" fill="#333"/>
-                                                                                                        <circle cx="204" cy="166" r="7" fill="#333"/>
-                                                                                                    </g>
-                                                                                                </g>
-                                                                                            </g>
-
-                                                                                            <style>
-                                                                                                @keyframes sway { 0%, 100% { transform: rotate(-2deg) translateY(0); } 50% { transform: rotate(2deg) translateY(2px); } }
-                                                                                                #tv { animation: sway 5s ease-in-out infinite; }
-
-                                                                                                @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(2px); } }
-                                                                                                #face { animation: bob 3.8s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
-
-                                                                                                @keyframes blink { 0%, 88%, 100% { transform: scaleY(1); } 90%, 96% { transform: scaleY(0.1); } }
-                                                                                                .eye { animation: blink 3.6s infinite; transform-box: fill-box; }
-                                                                                                .eye:nth-of-type(2) { animation-delay: 0.15s; }
-
-                                                                                                @keyframes glance { 0%, 100% { transform: translateX(0); } 40% { transform: translateX(3px); } 70% { transform: translateX(-2px); } }
-                                                                                                .pupil { animation: glance 4.2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
-                                                                                                .eye:nth-of-type(2) .pupil { animation-delay: 0.1s; }
-
-                                                                                                @keyframes mouthA { 0%, 45%, 100% { opacity: 1; } 55%, 90% { opacity: 0; } }
-                                                                                                @keyframes mouthB { 0%, 45%, 100% { opacity: 0; } 55%, 90% { opacity: 1; } }
-                                                                                                .mouth-a { animation: mouthA 5s ease-in-out infinite; }
-                                                                                                .mouth-b { animation: mouthB 5s ease-in-out infinite; }
-
-                                                                                                @keyframes sweep { 0% { transform: translateX(0) skewX(-20deg); } 100% { transform: translateX(320px) skewX(-20deg); } }
-                                                                                                #shine { animation: sweep 6s linear infinite; transform-box: fill-box; }
-
-                                                                                                @keyframes armCycleL {
-                                                                                                    0%, 68% { opacity: 0; transform: rotate(0deg); }
-                                                                                                    70%     { opacity: 1; transform: rotate(-18deg); }
-                                                                                                    75%, 82%, 89% { opacity: 1; }
-                                                                                                    95%, 100% { opacity: 0; transform: rotate(0deg); }
-                                                                                                }
-                                                                                                @keyframes armCycleR {
-                                                                                                    0%, 48% { opacity: 0; transform: rotate(0deg); }
-                                                                                                    50%     { opacity: 1; transform: rotate(18deg); }
-                                                                                                    55%, 62%, 69% { opacity: 1; }
-                                                                                                    75%, 100% { opacity: 0; transform: rotate(0deg); }
-                                                                                                }
-
-                                                                                                @keyframes waveL {
-                                                                                                    0%, 100% { transform: rotate(0deg); }
-                                                                                                    72%      { transform: rotate(12deg); }
-                                                                                                    78%      { transform: rotate(-8deg); }
-                                                                                                    84%      { transform: rotate(10deg); }
-                                                                                                    90%      { transform: rotate(-6deg); }
-                                                                                                }
-                                                                                                @keyframes waveR {
-                                                                                                    0%, 100% { transform: rotate(0deg); }
-                                                                                                    52%      { transform: rotate(-12deg); }
-                                                                                                    58%      { transform: rotate(8deg); }
-                                                                                                    64%      { transform: rotate(-10deg); }
-                                                                                                    70%      { transform: rotate(6deg); }
-                                                                                                }
-
-                                                                                                .arm#arm-left  { animation: armCycleL 12s ease-in-out infinite; }
-                                                                                                .arm#arm-right { animation: armCycleR 12s ease-in-out infinite; }
-
-                                                                                                #arm-left .fore  { animation: waveL 12s ease-in-out infinite; transform-box: fill-box; }
-                                                                                                #arm-right .fore { animation: waveR 12s ease-in-out infinite; transform-box: fill-box; }
-
-                                                                                                #tv, #face, .eye, .pupil, #shine, .arm, .fore { transform-box: fill-box; }
-                                                                                            </style>
-                                                                                        </svg>
-                                                        </span>
-                                                        <button class="quick-tips" onclick="showQuickTips()" aria-label="Quick tips" title="Quick tips">
-                                                            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                                                                <circle cx="12" cy="12" r="9" fill="none"></circle>
-                                                                <path d="M9.6 9.2a2.4 2.4 0 1 1 4 1.7c-1.05.95-2.2 1.22-2.2 2.25v.7" fill="none"></path>
-                                                                <circle cx="12" cy="17.2" r="1.2" fill="currentColor"></circle>
-                                                            </svg>
+                                                    </div>
+                                                    <button class="hamburger-btn" onclick="toggleDrawer(true)" aria-label="Menu" title="Menu">
+                                                        <span class="bar"></span>
+                                                        <span class="bar"></span>
+                                                        <span class="bar"></span>
+                                                    </button>
+                                                    <div class="stores-actions desktop-actions" role="toolbar" aria-label="Header actions">
+                                                        <button class="top-action-btn" onclick="showAddStoreDialog()" title="Add Store">
+                                                            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+                                                            <span>Add Store</span>
                                                         </button>
+                                                        <button class="top-action-btn danger" id="delete-store-btn-top" onclick="deleteCurrentStore()" title="Delete selected store">
+                                                            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path></svg>
+                                                            <span>Delete</span>
+                                                        </button>
+                                                        <button class="top-action-btn" onclick="openUserProfile()" title="User profile">
+                                                            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c1.5-3.5 5-6 8-6s6.5 2.5 8 6"></path></svg>
+                                                            <span>Profile</span>
+                                                        </button>
+                                                        <button class="top-action-btn" onclick="futureAction()" title="Custom action">
+                                                            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6l6 12H6z"></path></svg>
+                                                            <span>Custom</span>
+                                                        </button>
+                                                    </div>
                                                 </div>
             </div>
             
@@ -1506,19 +1466,7 @@
                 <!-- Legacy static screen loop removed to avoid Jinja errors -->
             </div>
         <div class="apply-section">
-                <p style="margin-bottom: 15px; color: #666;">Apply to all Stores</p>
-                <button class="apply-btn" onclick="applyToAllStores()">Submit</button>
-                <div class="apply-all-section">
-                    <label>
-                        <input type="checkbox" id="apply-all" onchange="applyToAllStores()">
-                        <span>📡 Apply to ALL stores</span>
-                    </label>
-                    <div class="help-text">
-                        When checked, uploads will replace this screen in all stores
-                    </div>
-                </div>
-            
-            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd;">
+            <div style="margin-top: 0; padding-top: 0;">
                 <p style="margin-bottom: 15px; color: #666;">File Management</p>
                 <button class="gallery-btn" onclick="window.open('/gallery', '_blank')" style="margin-right: 10px;">
                     📁 View All Files
@@ -1529,6 +1477,60 @@
             </div>
         </div>
     </div>
+    
+    <!-- Mobile drawer (hamburger menu) -->
+    <div id="drawerBackdrop" class="drawer-backdrop" onclick="toggleDrawer(false)"></div>
+    <div id="mobileDrawer" class="mobile-drawer" role="dialog" aria-label="Menu" aria-modal="true">
+        <h4>Menu</h4>
+        <button class="top-action-btn" onclick="showAddStoreDialog()" title="Add Store">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+            <span>Add Store</span>
+        </button>
+        <button class="top-action-btn danger" onclick="deleteCurrentStore()" title="Delete selected store">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path></svg>
+            <span>Delete Store</span>
+        </button>
+        <button class="top-action-btn" onclick="openUserProfile()" title="User profile">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c1.5-3.5 5-6 8-6s6.5 2.5 8 6"></path></svg>
+            <span>Profile</span>
+        </button>
+        <button class="top-action-btn" onclick="futureAction()" title="Custom action">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6l6 12H6z"></path></svg>
+            <span>Custom</span>
+        </button>
+    </div>
+
+    <!-- Apply-All Confirmation Modal -->
+    <div id="applyAllModalBackdrop" class="modal-backdrop" onclick="closeApplyAllModal()"></div>
+    <div id="applyAllModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="applyAllTitle">
+        <div class="modal-card">
+            <div class="modal-header" id="applyAllTitle">Apply to ALL</div>
+            <div class="modal-body">
+                <div class="modal-desc" id="applyAllDesc">This will impact the stores below:</div>
+                <ol class="impact-list" id="applyAllList"></ol>
+                <div id="applySelHint" style="margin-top:8px;font-size:11px;color:#555;display:none;">Only the ticked playlist items from the master store will be applied.</div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeApplyAllModal()">Cancel</button>
+                <button class="btn primary" id="applyAllAction" onclick="confirmApplyAll()">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    function toggleDrawer(open){
+        const d = document.getElementById('mobileDrawer');
+        const b = document.getElementById('drawerBackdrop');
+        if(open){ d.classList.add('open'); b.classList.add('show'); }
+        else { d.classList.remove('open'); b.classList.remove('show'); }
+    }
+    function openUserProfile(){
+        alert('User profile coming soon');
+    }
+    function futureAction(){
+        alert('Custom action placeholder');
+    }
+    </script>
 
     <!-- Build stamp footer (helps validate deployed version) -->
     <div style="position:fixed; right:8px; bottom:60px; font-size:10px; color:#7a7a7a; background:rgba(255,255,255,0.7); padding:3px 6px; border-radius:6px; border:1px solid #e5e7eb;">
@@ -1658,22 +1660,14 @@
             if (!file) return;
             console.log('[UPLOAD][START]', {store: currentStoreId, screenId, name: file.name, size: file.size});
             
-            // Check if "Apply to All Stores" is checked
-            const applyToAllCheckbox = document.getElementById(`apply-all-${screenId}`);
-            // Only master store is allowed to use Apply-To-All; force false otherwise
-            const applyToAll = isMasterStore(currentStoreId) && applyToAllCheckbox && applyToAllCheckbox.checked;
+            // Auto-apply-to-all on upload has been removed. Use the per-screen Apply button instead.
+            const applyToAll = false;
             
             // Show loading state
             const card = input.closest('.screen-card');
             card.classList.add('loading');
             
-            if (applyToAll) {
-                // Show confirmation dialog
-                if (!confirm(`🚨 This will replace ${getScreenDisplayName(screenId)} in ALL stores with this file. Are you sure?`)) {
-                    card.classList.remove('loading');
-                    return;
-                }
-            }
+            // No auto apply confirmation here; handled by the dedicated Apply flow
                 try {
                 // Try presigned direct upload first (bypasses Cloudflare limits)
                 let data = null;
@@ -1694,7 +1688,6 @@
                         }
                         // Assign to screen (supports apply_to_all when allowed)
                         const assignPayload = { store_id: currentStoreId, screen_id: screenId, filename: pre.filename };
-                        if (applyToAll) assignPayload.apply_to_all = true;
                         const assignResp = await fetch('/assign_to_screen', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(assignPayload)});
                         const assignParsed = await readJsonOrText(assignResp);
                         const assignJson = assignParsed.json || { success:false, error: (assignParsed.text||'').substring(0,200) };
@@ -1707,12 +1700,22 @@
                         throw new Error(errMsg);
                     }
                 } catch (presignErr) {
-                    console.warn('[UPLOAD] presign path failed, falling back to origin upload:', presignErr);
+                    console.warn('[UPLOAD] presign path failed, considering origin fallback:', presignErr);
+                    // Guard: if file is very large, avoid origin fallback that may hit proxy limits
+                    try {
+                        const maxSafeMb = 95; // typical CF/NGINX limits ~100MB
+                        const fileMb = (file.size || 0) / (1024*1024);
+                        if (fileMb > maxSafeMb) {
+                            alert('Direct upload failed and this file is too large for the server path. Please retry direct upload.');
+                            card.classList.remove('loading');
+                            return;
+                        }
+                    } catch(_e){}
                     const formData = new FormData();
                     formData.append('file', file);
                     formData.append('store_id', currentStoreId);
                     formData.append('screen_id', screenId);
-                    formData.append('apply_to_all', applyToAll);
+                    // no apply_to_all on upload path
                     const response = await fetch('/upload_to_screen', { method: 'POST', body: formData });
                     const parsed = await readJsonOrText(response);
                     data = parsed.json || { success:false, error: (parsed.text || 'Invalid JSON response').substring(0,200) };
@@ -1822,6 +1825,8 @@
                     if (data.error) msg += ': ' + data.error;
                     if (data._http_status === 403) {
                         msg += '\nHint: Apply-To-All only allowed from Master Store.';
+                    } else if (data._http_status === 413) {
+                        msg += '\nTip: Use the Direct upload path (first step) for large files.';
                     } else if (data._http_status && data._http_status >=500) {
                         msg += '\nServer error. Check server logs.';
                     }
@@ -2026,26 +2031,10 @@
             });
         }
         
-        function applyToAllStores() {
-            fetch('/apply_to_all', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert(data.message);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-            });
-        }
+    // removed legacy global Apply-All; use per-screen "Apply to ALL stores" button in Master store
         
         function showQuickTips() {
-            alert('Quick Tips:\n\n1. Upload images for each screen\n2. Set orientation preferences\n3. Use "Apply to all Stores" to sync settings\n4. Click on screen names to view on TV display\n5. Add/Remove screens as needed');
+            alert('Quick Tips:\n\n1. Upload images/videos for each screen\n2. Set orientation preferences\n3. In the Master store, select playlist items and use the Apply button to sync to other stores\n4. Click on screen names to view on TV display\n5. Add/Remove screens as needed');
         }
         
         // Dynamic Screen Management Functions
@@ -2082,9 +2071,7 @@
                 </div>
                 
                 <div class="screen-preview ${previewClass}" id="preview-${screenId}">
-                    ${screenData.file ? (()=>{ const ext=(screenData.file.split('.').pop()||'').toLowerCase(); const videoExt=['mp4','webm','ogg','mov','avi','mkv','m4v']; const url=videoExt.includes(ext) ? videoUrl(screenData.file) : mediaUrl(screenData.file); return videoExt.includes(ext)
-                        ? `<div class='preview-item'><video autoplay muted loop playsinline class="rotate-${rotation}" style="max-width:100%;max-height:100%;object-fit:contain" src="${url}"></video></div>`
-                        : `<div class='preview-item'><img src="${url}" alt="Screen content" class="rotate-${rotation}" style="max-width:100%;max-height:100%;object-fit:contain" onerror="fallbackToOrigin(this, '${(screenData.file||'').replace(/'/g, "&#39;")}')"></div>`; })() :
+                    ${screenData.file ? (()=>{ const ext=(screenData.file.split('.').pop()||'').toLowerCase(); const videoExt=['mp4','webm','ogg','mov','avi','mkv','m4v']; const raw=screenData.file; const isAbs=/^https?:\/\//i.test(String(raw)); const bust=Date.now(); if(videoExt.includes(ext)){ const vurl = (videoUrl(raw) + (videoUrl(raw).includes('?')?'&':'?') + 'v=' + bust); return `<div class='preview-item'><video autoplay muted loop playsinline class=\"rotate-${rotation}\" style=\"max-width:100%;max-height:100%;object-fit:contain\" src=\"${vurl}\"></video></div>`; } else { const imgBase = isAbs ? mediaUrl(raw) : thumbUrl(raw, 600); const url = imgBase + (imgBase.includes('?')?'&':'?') + 'v=' + bust; return `<div class='preview-item'><img src=\"${url}\" alt=\"Screen content\" class=\"rotate-${rotation}\" style=\"max-width:100%;max-height:100%;object-fit:contain\" onerror=\"fallbackToOrigin(this, '${(screenData.file||'').replace(/'/g, "&#39;")}')\"></div>`; } })() :
                         '<div class="upload-area"><div style="margin-top: 20px;">No content uploaded</div></div>'
                     }
                 </div>
@@ -2114,13 +2101,8 @@
 
                 ${isMasterStore(currentStoreId) ? `
                 <div class="apply-all-section">
-                    <label>
-                        <input type="checkbox" id="apply-all-${screenId}" data-logical-type="${logicalType}" ${savedApplyAll ? 'checked' : ''}>
-                        <span>📡 Apply to ALL stores</span>
-                    </label>
-                    <div class="help-text">
-                        When checked, uploads will replace this screen in all stores
-                    </div>
+                    <button class="apply-btn" style="padding:8px 12px;border-radius:6px;background:#1f7aec;color:#fff;border:none;cursor:pointer;" onclick="applyAllForScreen('${screenId}')">📡 Apply to ALL stores</button>
+                    <div class="help-text">Tick one or more schedule items above, then click Apply to push to other stores</div>
                 </div>
                 ` : ''}
                 
@@ -2157,70 +2139,155 @@
             return card;
         }
 
-        // Persist Apply-to-All checkbox changes
-        document.addEventListener('change', (e) => {
-            if (e.target && e.target.id && e.target.id.startsWith('apply-all-')) {
-                const logicalType = e.target.getAttribute('data-logical-type');
-                if (!logicalType) return;
-                let applyAllState = {};
-                try { applyAllState = JSON.parse(localStorage.getItem('applyAllState') || '{}'); } catch {}
-                applyAllState[logicalType] = e.target.checked;
-                localStorage.setItem('applyAllState', JSON.stringify(applyAllState));
-                console.log('Apply-All state updated:', applyAllState);
-                // If checked after upload, replicate existing file immediately
-                if (e.target.checked) {
-                    const screenId = e.target.id.replace('apply-all-', '');
-                    if (!isMasterStore(currentStoreId)) {
-                        showMessage('⚠️ Apply-All only from MASTER store', '#e67e22');
-                        e.target.checked = false;
-                        applyAllState[logicalType] = false;
-                        localStorage.setItem('applyAllState', JSON.stringify(applyAllState));
-                        return;
-                    }
-                    const screensData = allStoresData.screens[currentStoreId] || {};
-                    const existing = screensData[screenId];
-                    if (!existing || !existing.file) {
-                        showMessage('ℹ️ No file yet. Upload and it will propagate.', '#3498db');
-                        return;
-                    }
-                    fetch('/replicate_screen', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ store_id: currentStoreId, screen_id: screenId })
-                    })
-                    .then(r => r.json())
-                    .then(data => {
-                        if (data.success) {
-                            const filename = data.filename;
-                            const screenType = data.screen_type;
-                            (data.updated_stores || []).forEach(storeId => {
-                                if (!allStoresData.screens[storeId]) allStoresData.screens[storeId] = {};
-                                const targetId = `${storeId}_${screenType}`;
-                                if (!allStoresData.screens[storeId][targetId]) allStoresData.screens[storeId][targetId] = {};
-                                allStoresData.screens[storeId][targetId].file = filename;
-                            });
-                            (data.created_screens || []).forEach(entry => {
-                                const parts = entry.split(':');
-                                if (parts.length === 2) {
-                                    const sId = parts[0];
-                                    const scrId = parts[1];
-                                    if (!allStoresData.screens[sId]) allStoresData.screens[sId] = {};
-                                    if (!allStoresData.screens[sId][scrId]) allStoresData.screens[sId][scrId] = {};
-                                    allStoresData.screens[sId][scrId].file = filename;
-                                }
-                            });
-                            showMessage(`📡 ${data.message}`);
-                        } else {
-                            showMessage('❌ Replication failed: ' + (data.error || 'Unknown'), '#e74c3c');
-                        }
-                    })
-                    .catch(err => {
-                        console.error('Replicate error', err);
-                        showMessage('❌ Replication error: ' + err.message, '#e74c3c');
-                    });
-                }
+        // Apply button handler
+        function applyAllForScreen(screenId){
+            if(!isMasterStore(currentStoreId)){
+                showMessage('⚠️ Apply-All only from MASTER store', '#e67e22');
+                return;
             }
-        });
+            // Require at least one selected playlist item
+            let selectedIds = [];
+            try{
+                const container = document.getElementById(`playlist-items-${screenId}`);
+                if(container){
+                    selectedIds = Array.from(container.querySelectorAll('input[type="checkbox"][data-bind="apply-select"]:checked')).map(cb=>cb.getAttribute('data-item-id')).filter(Boolean);
+                }
+            }catch{}
+            if(!selectedIds.length){ showMessage('Please tick one or more schedule items to apply', '#e67e22'); return; }
+            openApplyAllModal(screenId, 'override', selectedIds);
+        }
+
+        // Modal helpers
+    let applyAllModalState = { screenId: null, mode: 'override', selectedIds: [] };
+        function computeImpactedStores(screenId){
+            const screenType = screenId.includes('_') ? screenId.substring(screenId.indexOf('_')+1) : screenId;
+            const impacted = [];
+            const stores = allStoresData.stores || [];
+            for (const s of stores){
+                if (!s || !s.id || String(s.id) === String(currentStoreId)) continue;
+                const sid = s.id;
+                const scrs = (allStoresData.screens && allStoresData.screens[sid]) || {};
+                const targetId = `${sid}_${screenType}`;
+                const legacyId = screenType;
+                let actual = scrs[targetId] ? targetId : (scrs[legacyId] ? legacyId : null);
+                if (actual && scrs[actual] && scrs[actual].protected) continue; // skip protected
+                impacted.push({ id: sid, name: s.name });
+            }
+            return impacted;
+        }
+        function openApplyAllModal(screenId, mode, selectedIds){
+            applyAllModalState = { screenId, mode, selectedIds: Array.isArray(selectedIds)? selectedIds : [] };
+            const impacted = computeImpactedStores(screenId);
+            const modal = document.getElementById('applyAllModal');
+            const backdrop = document.getElementById('applyAllModalBackdrop');
+            document.getElementById('applyAllTitle').textContent = 'Apply to ALL';
+            document.getElementById('applyAllDesc').textContent = mode === 'override' ?
+                'If you proceed, this will replace the same screen number in the listed stores and remove their existing items. Protected stores will be skipped.' :
+                'If you proceed, this will add the current file to the listed stores without deleting their existing items. Protected stores will be skipped.';
+            document.getElementById('applyAllList').innerHTML = impacted.length ? impacted.map(s=>`<li><label style='display:flex;align-items:center;gap:8px;'><input type='checkbox' class='apply-store' data-store-id='${s.id}' checked><span>${s.name || s.id} (${s.id})</span></label></li>`).join('') : '<li>No stores to update</li>';
+            document.getElementById('applyAllAction').textContent = 'Apply to selected stores';
+            const hint = document.getElementById('applySelHint');
+            if (hint) hint.style.display = (selectedIds && selectedIds.length) ? 'block' : 'none';
+            modal.classList.add('show');
+            backdrop.classList.add('show');
+        }
+        function closeApplyAllModal(){
+            document.getElementById('applyAllModal').classList.remove('show');
+            document.getElementById('applyAllModalBackdrop').classList.remove('show');
+        }
+        function confirmApplyAll(){
+            const { screenId, mode, selectedIds } = applyAllModalState;
+            if (!screenId) { closeApplyAllModal(); return; }
+            // collect selected stores
+            const stores = Array.from(document.querySelectorAll('#applyAllList input.apply-store:checked')).map(cb=>cb.getAttribute('data-store-id'));
+            if(!stores.length){ showMessage('Select at least one store', '#e67e22'); return; }
+            fetch('/replicate_screen', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ store_id: currentStoreId, screen_id: screenId, mode, selected_item_ids: Array.isArray(selectedIds)? selectedIds : [], target_store_ids: stores })
+            })
+            .then(r=>r.json())
+            .then(data=>{
+                if (data && data.success){
+                    const filename = data.filename;
+                    const screenType = data.screen_type;
+                    // Prepare selected items snapshot from master
+                    let selectedItems = [];
+                    try{
+                        if (Array.isArray(selectedIds) && selectedIds.length){
+                            const masterPl = (((allStoresData||{}).screens||{})[currentStoreId]||{})[screenId];
+                            const list = (masterPl && Array.isArray(masterPl.playlist)) ? masterPl.playlist : [];
+                            const setIds = new Set(selectedIds.map(String));
+                            selectedItems = list.filter(it => it && setIds.has(String(it.id))).map(it=>({
+                                file: it.file,
+                                enabled: !!it.enabled,
+                                start: it.start || null,
+                                end: it.end || null,
+                                schedule: Array.isArray(it.schedule)? it.schedule : [],
+                                duration: it.duration || 10,
+                                repeat: !!it.repeat,
+                                link_next: !!it.link_next,
+                                media_type: it.media_type || ((it.file||'').split('.').pop())
+                            }));
+                        }
+                    }catch{}
+                    (data.updated_stores || []).forEach(storeId => {
+                        if (!allStoresData.screens[storeId]) allStoresData.screens[storeId] = {};
+                        const targetId = `${storeId}_${screenType}`;
+                        if (!allStoresData.screens[storeId][targetId]) allStoresData.screens[storeId][targetId] = {};
+                        const scr = allStoresData.screens[storeId][targetId];
+                        if (selectedItems.length){
+                            scr.playlist = Array.isArray(scr.playlist)? scr.playlist : [];
+                            if (mode === 'override'){
+                                const idxByFile = new Map(scr.playlist.filter(x=>x&&x.file).map((x,i)=>[x.file,i]));
+                                selectedItems.forEach(src=>{
+                                    if(idxByFile.has(src.file)){
+                                        const i = idxByFile.get(src.file);
+                                        const keepId = scr.playlist[i] && scr.playlist[i].id || String(Date.now()+Math.random());
+                                        scr.playlist[i] = Object.assign({ id: keepId }, src);
+                                    } else {
+                                        scr.playlist.push(Object.assign({ id: String(Date.now()+Math.random()) }, src));
+                                    }
+                                });
+                                if(!scr.file) scr.file = selectedItems[0].file;
+                            } else {
+                                const files = new Set(scr.playlist.filter(x=>x&&x.file).map(x=>x.file));
+                                selectedItems.forEach(src=>{ if(!files.has(src.file)){ scr.playlist.push(Object.assign({ id: String(Date.now()+Math.random()) }, src)); }});
+                                if(!scr.file) scr.file = selectedItems[0].file;
+                            }
+                        } else {
+                            if (mode === 'override'){
+                                scr.file = filename;
+                                scr.playlist = [{ id: String(Date.now()), file: filename, enabled:true, start:null, end:null, schedule:[], duration:10, repeat:true, link_next:false, media_type:(filename||'').split('.').pop() }];
+                            } else {
+                                scr.playlist = scr.playlist || [];
+                                if (!scr.playlist.some(it=>it && it.file===filename)) scr.playlist.push({ id: String(Date.now()+Math.random()), file: filename, enabled:true, start:null, end:null, schedule:[], duration:10, repeat:true, link_next:false, media_type:(filename||'').split('.').pop() });
+                                if (!scr.file) scr.file = filename;
+                            }
+                        }
+                    });
+                    (data.created_screens || []).forEach(entry => {
+                        const [sId, scrId] = entry.split(':');
+                        if (!allStoresData.screens[sId]) allStoresData.screens[sId] = {};
+                        if (!allStoresData.screens[sId][scrId]) allStoresData.screens[sId][scrId] = {};
+                        const scr = allStoresData.screens[sId][scrId];
+                        if (selectedItems.length){
+                            scr.playlist = selectedItems.map(si=>Object.assign({ id: String(Date.now()+Math.random()) }, si));
+                            scr.file = selectedItems[0].file;
+                        } else {
+                            scr.file = filename;
+                            scr.playlist = [{ id: String(Date.now()), file: filename, enabled:true, start:null, end:null, schedule:[], duration:10, repeat:true, link_next:false, media_type:(filename||'').split('.').pop() }];
+                        }
+                    });
+                    showMessage(data.message || 'Replicated');
+                    // no checkbox to reflect anymore
+                } else {
+                    alert((data && data.error) || 'Failed to replicate');
+                }
+            })
+            .catch(err=>{ console.error(err); alert('Failed to replicate'); })
+            .finally(()=>{ closeApplyAllModal(); });
+        }
         
         function getOrientationClass(screenData) {
             if (screenData.vertical && !screenData.horizontal) return 'vertical-mode';
@@ -2599,6 +2666,7 @@
                                                                                 <div class="pl-actions inline-actions primary-actions">\
                                                                                         <div class="group left">\
                                                                                             <button class="pl-switch ${item.enabled?'on':'off'}" aria-label="Toggle item" data-realstate="${item.enabled?'on':'off'}" title="Enable / Disable (independent of schedule)" onclick="toggleEnableSwitch(this,'${screenId}','${item.id}')"><span>${item.enabled?'On':'Off'}</span></button>\
+                                                                                            ${isMasterStore(currentStoreId) ? `<label style='display:inline-flex;align-items:center;gap:6px;margin-left:8px;font-size:11px;color:#444;'><input type='checkbox' data-bind='apply-select' data-item-id='${item.id}'><span>tick</span></label>` : ''}\
                                                                                         </div>\
                                                                                         <div class="group center combo-dur-del">\
                                                                                             <div class="dur-box small">
@@ -2920,34 +2988,45 @@
         
 
     function thumbForFile(file) {
-            if (!file) return '<div style="font-size:10px; color:#888;">N/A</div>';
-            const isAbs = /^https?:\/\//i.test(String(file));
-            const clean = String(file).split('?')[0];
-            const ext = (clean.includes('.') ? clean.split('.').pop() : '').toLowerCase();
-            if (['mp4','webm','ogg','mov','avi','mkv','m4v'].includes(ext)) {
-        const poster = isAbs ? '' : `/vthumb/220/${encodeURIComponent(file)}`;
-                const posterAttr = poster ? ` poster="${poster}"` : '';
-        // For absolute URLs (e.g., R2/CDN), prefer local /media streaming first and fallback to absolute on error.
-    if(isAbs){
-            try{
-                const u = new URL(String(file));
-                const fname = (u.pathname.split('/').pop()||'').split('?')[0];
-                if(fname){
-                    const local = `/media/${encodeURIComponent(fname)}`;
-                    const abs = String(file).replace(/^http:/, 'https:');
-            return `<video preload="metadata" muted playsinline autoplay loop${posterAttr} src="${local}" onloadeddata="try{this.play();}catch(e){}" onerror="if(!this.dataset.fallback){this.dataset.fallback='1'; this.src='${abs}'; this.load(); try{this.play();}catch(e){}}" style="max-width:100%; max-height:100%; object-fit:cover"></video>`;
-                }
-            }catch{}
-        }
-        // Default: use Range-enabled /media endpoint
-    return `<video preload=\"metadata\" muted playsinline autoplay loop${posterAttr} src=\"${videoUrl(file)}\" onloadeddata=\"try{this.play();}catch(e){}\" style=\"max-width:100%; max-height:100%; object-fit:cover\"></video>`;
+        // Always render a lightweight, reliable thumbnail for playlist tiles.
+        // - Images: use /thumb for local files; absolute URLs get cache-busted and fallback to origin on error.
+        // - Videos: prefer a generated /vthumb still by filename; if missing, fall back to a static placeholder.
+        if (!file) return '<div style="font-size:10px; color:#888;">N/A</div>';
+        const isAbs = /^https?:\/\//i.test(String(file));
+        const clean = String(file).split('?')[0];
+        const ext = (clean.includes('.') ? clean.split('.').pop() : '').toLowerCase();
+
+        // Video: play a lightweight looping preview; fall back to a still poster if preview isn't available
+        if (['mp4','webm','ogg','mov','avi','mkv','m4v'].includes(ext)) {
+            // Resolve a filename we can pass to server preview endpoints
+            let fname = clean;
+            if (isAbs) {
+                try { const u = new URL(String(file)); fname = (u.pathname.split('/').pop()||'').split('?')[0]; } catch { fname = (String(file).split('/').pop()||'').split('?')[0]; }
             }
-    const src220 = thumbUrl(file,220);
-    const src300 = thumbUrl(file,300);
-    const src600 = thumbUrl(file,600);
-    const orig = String(file).replace(/"/g,'&quot;');
-    return `<img loading="lazy" decoding="async" src="${src220}" srcset="${src220} 220w, ${src300} 300w, ${src600} 600w" sizes="(max-width: 480px) 45vw, (max-width: 1024px) 200px, 220px" style="max-width:100%; max-height:100%; object-fit:cover;" onerror="fallbackToOrigin(this, \"${orig}\")" />`;
+            const vthumbSrc = fname ? (`/vthumb/220/${encodeURIComponent(fname)}`) : '';
+            const vprevSrc = fname ? (`/vpreview/220/${encodeURIComponent(fname)}`) : '';
+            if (vprevSrc) {
+                return `<video muted autoplay loop playsinline preload="metadata" style="width:100%; height:100%; object-fit:cover;" ${vthumbSrc?`poster=\"${vthumbSrc}\"`:''}><source src="${vprevSrc}" type="video/mp4"></video>`;
+            }
+            // Fallback: static poster or placeholder
+            const placeholder = '/static/video_placeholder.svg';
+            const poster = vthumbSrc || placeholder;
+            return `<img loading="lazy" decoding="async" src="${poster}" style="max-width:100%; max-height:100%; object-fit:cover;" alt="Video" />`;
         }
+
+        // Image
+        const orig = String(file).replace(/"/g,'&quot;');
+        if (isAbs) {
+            // Use the absolute URL directly and rely on caching; onerror still falls back to origin
+            const src = String(file);
+            return `<img loading="lazy" decoding="async" src="${src}" style="max-width:100%; max-height:100%; object-fit:cover;" onerror="fallbackToOrigin(this, \"${orig}\")" />`;
+        }
+        // Local image: use server thumb endpoints with srcset
+        const src220 = thumbUrl(file,220);
+        const src300 = thumbUrl(file,300);
+        const src600 = thumbUrl(file,600);
+        return `<img loading="lazy" decoding="async" src="${src220}" srcset="${src220} 220w, ${src300} 300w, ${src600} 600w" sizes="(max-width: 480px) 45vw, (max-width: 1024px) 200px, 220px" style="max-width:100%; max-height:100%; object-fit:cover;" onerror="fallbackToOrigin(this, \"${orig}\")" />`;
+    }
 
         function togglePlaylistItem(screenId, itemId, enabled) {
             fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}`, {
@@ -3110,8 +3189,8 @@
             (()=>{ // IIFE to avoid globals clashing if script reloaded
              const previewTimers = {}; // screenId -> {timer,index,items,nextAt}
              function safeIsMaster(){ try { return typeof isMasterStore==='function' && isMasterStore(currentStoreId); } catch { return false; } }
-                 function updatePreviewPlaylist(screenId, items){
-                     if(!Array.isArray(items)) return;
+             function updatePreviewPlaylist(screenId, items){
+                if(!Array.isArray(items)) return;
                 const preview = document.getElementById(`preview-${screenId}`);
                 if(!preview) return;
                 // Compute schedule window filtering with day-of-week gating
@@ -3166,7 +3245,8 @@
                     if(sd && typeof sd.rotation === 'number') currentRotation = sd.rotation;
                 } catch {}
                 const rotationClass = `rotate-${currentRotation}`;
-                // Crossfade helper
+                const srcUrl = (item.url || mediaUrl(item.file)) + `?v=${Date.now()}`;
+                // Crossfade to avoid blank: preload next, then swap
                 const doSwap = (node)=>{
                     node.style.maxWidth='100%'; node.style.maxHeight='100%'; node.style.objectFit='contain';
                     if(rotationClass) node.classList.add(rotationClass);
@@ -3178,41 +3258,13 @@
                         if(current){ current.style.opacity='0'; setTimeout(()=> current.remove(), 220); }
                     });
                 };
-                // Build robust source candidates
+                const swapFallback = ()=>{
+                    const img=document.createElement('img'); img.src=srcUrl; img.alt='Preview'; doSwap(img);
+                };
                 if(isVideo){
-                    const pickName = ()=>{
-                        if(item.file){ return String(item.file).split('/').pop().split('?')[0]; }
-                        const u = item.url || '';
-                        try{ const uu = new URL(u); return (uu.pathname.split('/').pop()||'').split('?')[0]; }catch{ return (String(u).split('/').pop()||'').split('?')[0]; }
-                    };
-                    const fname = pickName();
-                    const bust = Date.now();
-                    const candidates = [];
-                    if(fname){
-                        candidates.push(`/vpreview/360/${encodeURIComponent(fname)}?v=${bust}`);
-                        candidates.push(`/media/${encodeURIComponent(fname)}?v=${bust}`);
-                        candidates.push(`/static/uploads/${encodeURIComponent(fname)}?v=${bust}`);
-                    }
-                    if(item.url){ candidates.push(String(item.url)); }
-                    // Try each candidate sequentially
-                    (async ()=>{
-                        for(const u of candidates){
-                            try{
-                                const v = await preloadVideo(u);
-                                v.autoplay = true; v.loop = true; v.muted = true; v.playsInline = true;
-                                doSwap(v);
-                                try{ v.play().catch(()=>{}); }catch{}
-                                return;
-                            }catch{ /* try next */ }
-                        }
-                        // Final fallback: poster image
-                        const img = new Image(); img.alt='Preview';
-                        img.src = fname ? `/thumb/600/${encodeURIComponent(fname)}?v=${Date.now()}` : (item.url||'');
-                        doSwap(img);
-                    })();
+                    preloadVideo(srcUrl).then(v=>{ v.autoplay=true; v.loop=true; v.muted=true; v.playsInline=true; doSwap(v); }).catch(swapFallback);
                 } else {
-                    const srcUrl = (item.url || mediaUrl(item.file) || '').concat(`?v=${Date.now()}`);
-                    preloadImage(srcUrl).then(img=>{ doSwap(img); }).catch(()=>{ const img=new Image(); img.src=srcUrl; doSwap(img); });
+                    preloadImage(srcUrl).then(img=>{ doSwap(img); }).catch(swapFallback);
                 }
                 let dur = parseInt(item.duration,10); if(isNaN(dur)||dur<1) dur=10; if(dur>30) dur=30;
                 st.nextAt = Date.now() + dur*1000;
@@ -3420,7 +3472,12 @@
                             throw new Error(errMsg);
                         }
                     } catch (presignErr) {
-                        console.warn('[RP][UPLOAD] presign path failed, falling back to origin upload:', presignErr);
+                        console.warn('[RP][UPLOAD] presign path failed, considering origin fallback:', presignErr);
+                        // Guard: if file is very large, avoid origin fallback which may be blocked by proxies
+                        try {
+                            const maxSafeMb = 90; const fileMb = (file.size||0)/(1024*1024);
+                            if(fileMb > maxSafeMb){ throw new Error('File too large for server path. Please use the Direct-to-Cloud upload (it runs automatically).'); }
+                        } catch(_e) {}
                         // Fallback to origin upload (may be limited by Cloudflare for very large files)
                         const fd = new FormData();
                         fd.append('file', file);
@@ -3434,7 +3491,7 @@
                         const parsed = await readJsonOrText(resp);
                         const json = parsed.json;
                         if(!resp.ok || !json || json.success === false){
-                            if(resp.status === 413){ throw new Error('File too large. Increase server limit or try direct upload again.'); }
+                            if(resp.status === 413){ throw new Error('File too large for server path. Please retry direct upload.'); }
                             throw new Error((json && json.error) || `Upload failed (HTTP ${resp.status})`);
                         }
                         data = json;
@@ -3467,7 +3524,12 @@
                     if(String(err).includes('AbortError') || String(err).includes('timeout')){
                         alert('Upload is taking too long or stalled. Please check your connection or try a smaller file.');
                     } else {
-                        alert(String(err && err.message ? err.message : err || 'Upload failed'));
+                        const msg = String(err && err.message ? err.message : err || 'Upload failed');
+                        if(/too large|413/i.test(msg)){
+                            alert('File too large for server path. Please click OK and try the upload again — it will go Direct-to-Cloud automatically.');
+                        } else {
+                            alert(msg);
+                        }
                     }
                 } finally {
                     if(uploadBtn){ uploadBtn.disabled = false; uploadBtn.textContent = prevLabel || 'Upload'; }
@@ -3971,18 +4033,6 @@
             </form>
         </div>
     </div>
-        <!-- Bottom Frosted Action Bar -->
-        <div class="bottom-blur-bar" role="toolbar" aria-label="Global actions">
-            <div class="bar-left">Everyday Advertise</div>
-            <div class="bar-right">
-                <button class="add-store-btn" onclick="showAddStoreDialog()" title="Add Store">
-                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M12 5v14M5 12h14" fill="none"></path>
-                    </svg>
-                    Add Store
-                </button>
-                <button class="delete-store-btn" id="delete-store-btn-footer" onclick="deleteCurrentStore()" title="Delete selected store">🗑️ Delete Store</button>
-            </div>
-        </div>
+        
     </body>
 </html>

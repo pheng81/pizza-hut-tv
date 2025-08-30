@@ -11,6 +11,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from app import app as flask_app
+import json
 
 
 @pytest.fixture()
@@ -43,8 +44,27 @@ def test_assign_uploaded_file_to_screen(client):
     fname = up['filename']
 
     # Assign to an existing store/screen from current store_config.json
-    # Using store_id '1765' and screen_id 'screen1' (normalizes to '1765_screen1')
-    payload = {'store_id': '1765', 'screen_id': 'screen1', 'filename': fname}
+    # Pick a store that exists in the current config and normalize 'screen1' -> '{store}_screen1'
+    cfg_path = ROOT / 'store_config.json'
+    with cfg_path.open('r', encoding='utf-8') as f:
+        cfg = json.load(f)
+    # Prefer a non-master store if available; fall back to master
+    master = cfg.get('master_store_id')
+    candidates = [s['id'] for s in cfg.get('stores', []) if s.get('id')]
+    if master in candidates and len(candidates) > 1:
+        # move master to end
+        candidates = [c for c in candidates if c != master] + [master]
+    chosen = None
+    for sid in candidates:
+        screens = cfg.get('screens', {}).get(sid, {})
+        # Look for a screen1 variant for that store
+        if f"{sid}_screen1" in screens or 'screen1' in screens:
+            chosen = sid
+            break
+    if not chosen:
+        # As a last resort, pick any store present in config
+        chosen = candidates[0]
+    payload = {'store_id': chosen, 'screen_id': 'screen1', 'filename': fname}
     r2 = client.post('/assign_to_screen', json=payload)
     assert r2.status_code == 200
     aj = r2.get_json()
