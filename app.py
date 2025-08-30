@@ -367,6 +367,33 @@ def r2_object_exists(key: str) -> bool:
     except Exception:
         return False
 
+# ---- Helpers to normalize store/screen ids across legacy/prefixed forms ----
+def _normalize_screen_ref(cfg, store_id: str, screen_id: str) -> tuple[str | None, str | None]:
+    """Return normalized (store_id, screen_id) present in cfg or (None, None).
+    Accepts either short or store-prefixed screen ids and legacy store mapping for '1881'.
+    """
+    try:
+        screens_all = cfg.get('screens', {}) or {}
+        if store_id not in screens_all and str(store_id) == '1881':
+            m = cfg.get('master_store_id')
+            if m and m in screens_all:
+                store_id = m
+        screens = screens_all.get(store_id) or {}
+        if screen_id in screens:
+            return store_id, screen_id
+        # Try add prefix
+        cand = f"{store_id}_{screen_id}" if '_' not in screen_id else None
+        if cand and cand in screens:
+            return store_id, cand
+        # Try strip prefix to short form
+        if '_' in screen_id:
+            short = screen_id.split('_', 1)[1]
+            if short in screens:
+                return store_id, short
+        return None, None
+    except Exception:
+        return None, None
+
 # --- Screen heartbeat + status (placed after app initialization) ---
 HEARTBEAT_TIMEOUT = 60  # seconds
 
@@ -422,6 +449,176 @@ def screen_heartbeat():
     logging.debug('HB set last_seen for %s/%s', store_id, screen_id)
     save_store_config(cfg)
     return jsonify({'success': True})
+
+# -------- Client event reporting (per-item load success/failure) --------
+@app.route('/api/client_event', methods=['POST'])
+def client_event():
+    """Android TV clients can report item-level events here.
+    Body JSON: {store_id, screen_id, event, file?, item_id?, error?}
+    Stores recent events and last status per item in config for dashboard visibility.
+    """
+    try:
+        data = request.get_json(force=True) or {}
+    except Exception:
+        data = {}
+    store_id = str(data.get('store_id') or '')
+    screen_id = str(data.get('screen_id') or '')
+    event = (data.get('event') or '').strip().lower()  # e.g., 'load_ok' | 'load_fail' | 'playlist_reload'
+    file = data.get('file')
+    item_id = data.get('item_id')
+    error = data.get('error')
+    if not store_id or not screen_id or not event:
+        return jsonify({'success': False, 'error': 'store_id, screen_id and event required'}), 400
+    cfg = ensure_playlists_structure(load_store_config())
+    ns, nid = _normalize_screen_ref(cfg, store_id, screen_id)
+    if not ns or not nid:
+        return jsonify({'success': False, 'error': 'screen not found'}), 404
+    scr = cfg['screens'][ns][nid]
+    ev = {
+        'ts': int(time.time()),
+        'event': event,
+        'file': file,
+        'item_id': item_id,
+        'error': (str(error)[:500] if error else None)
+    }
+    # Append to bounded events list
+    events = scr.setdefault('events', [])
+    events.append(ev)
+    if len(events) > 100:
+        del events[:-100]
+    # Update last_item_status map using item_id when available, else by file key
+    key = None
+    if item_id:
+        key = f"id:{item_id}"
+    elif file:
+        # normalize file to key (strip absolute URL)
+        v = str(file)
+        try:
+            if v.startswith('http://') or v.startswith('https://'):
+                v = v.rstrip('/').split('/')[-1]
+        except Exception:
+            pass
+        key = f"file:{v}"
+    if key:
+        last = scr.setdefault('last_item_status', {})
+        state = 'ok' if event in ('ok', 'load_ok', 'loaded') else ('fail' if 'fail' in event else event)
+        last[key] = {'state': state, 'ts': ev['ts'], 'error': ev['error'], 'file': file, 'item_id': item_id}
+        try:
+            app.logger.debug('client_event mapped key=%s state=%s file=%s item_id=%s', key, state, file, item_id)
+        except Exception:
+            pass
+    save_store_config(cfg)
+    return jsonify({'success': True})
+
+@app.route('/api/screen_events/<store_id>/<screen_id>', methods=['GET'])
+def screen_events(store_id, screen_id):
+    cfg = ensure_playlists_structure(load_store_config())
+    ns, nid = _normalize_screen_ref(cfg, store_id, screen_id)
+    if not ns or not nid:
+        return jsonify({'success': False, 'error': 'screen not found'}), 404
+    scr = cfg['screens'][ns][nid]
+    return jsonify({'success': True, 'events': scr.get('events', []), 'last_item_status': scr.get('last_item_status', {})})
+
+# -------- Debug: expose playlist-to-status mapping for troubleshooting --------
+@app.route('/api/debug_item_status/<store_id>/<screen_id>', methods=['GET'])
+def debug_item_status(store_id, screen_id):
+    cfg = ensure_playlists_structure(load_store_config())
+    ns, nid = _normalize_screen_ref(cfg, store_id, screen_id)
+    if not ns or not nid:
+        return jsonify({'success': False, 'error': 'screen not found'}), 404
+    scr = cfg['screens'][ns][nid]
+    pl = scr.get('playlist', []) or []
+    last = scr.get('last_item_status', {}) or {}
+    out = []
+    for it in pl:
+        try:
+            fid = it.get('id')
+            f = str(it.get('file') or '')
+            base = ''
+            if f:
+                try:
+                    base = f.split('?')[0].split('/')[-1]
+                except Exception:
+                    base = f
+            keys = []
+            if fid:
+                keys.append(f'id:{fid}')
+            if f:
+                keys.append(f'file:{f}')
+            if base and base != f:
+                keys.append(f'file:{base}')
+            matched_key = None
+            matched_status = None
+            for k in keys:
+                if k in last:
+                    matched_key = k
+                    matched_status = last.get(k)
+                    break
+            out.append({'id': fid, 'file': f, 'file_base': base, 'try_keys': keys, 'matched_key': matched_key, 'last_status': matched_status})
+        except Exception:
+            out.append({'id': it.get('id'), 'file': it.get('file'), 'error': 'inspect-failed'})
+    return jsonify({'success': True, 'keys_present': list(last.keys()), 'items': out})
+
+# -------- Lightweight command channel (dashboard -> client) --------
+@app.route('/api/push_command', methods=['POST'])
+def push_command():
+    """Queue a command for a screen. Body: {store_id, screen_id, type, item_id?, file?}
+    Types: 'reload', 'retry_item', 'flush_cache'. Clients should poll /api/commands.
+    """
+    try:
+        data = request.get_json(force=True) or {}
+    except Exception:
+        data = {}
+    store_id = str(data.get('store_id') or '')
+    screen_id = str(data.get('screen_id') or '')
+    ctype = (data.get('type') or '').strip().lower()
+    item_id = data.get('item_id')
+    file = data.get('file')
+    if not store_id or not screen_id or ctype not in {'reload','retry_item','flush_cache'}:
+        return jsonify({'success': False, 'error': 'invalid parameters'}), 400
+    cfg = ensure_playlists_structure(load_store_config())
+    ns, nid = _normalize_screen_ref(cfg, store_id, screen_id)
+    if not ns or not nid:
+        return jsonify({'success': False, 'error': 'screen not found'}), 404
+    cmd = {
+        'id': str(uuid.uuid4()),
+        'ts': int(time.time()),
+        'type': ctype,
+        'item_id': item_id,
+        'file': file
+    }
+    q = cfg['screens'][ns][nid].setdefault('cmd_queue', [])
+    q.append(cmd)
+    # Trim to last 50
+    if len(q) > 50:
+        del q[:-50]
+    save_store_config(cfg)
+    return jsonify({'success': True, 'command': cmd})
+
+@app.route('/api/commands', methods=['GET'])
+def pop_commands():
+    """Client polls for pending commands. Query: store_id, screen_id, limit? pop=1|0
+    Returns and optionally clears the queue.
+    """
+    store_id = request.args.get('store_id') or ''
+    screen_id = request.args.get('screen_id') or ''
+    pop = (request.args.get('pop','1') not in ('0','false','no'))
+    try:
+        limit = int(request.args.get('limit') or '10')
+    except Exception:
+        limit = 10
+    cfg = ensure_playlists_structure(load_store_config())
+    ns, nid = _normalize_screen_ref(cfg, store_id, screen_id)
+    if not ns or not nid:
+        return jsonify({'success': False, 'error': 'screen not found'}), 404
+    scr = cfg['screens'][ns][nid]
+    q = list(scr.get('cmd_queue', []))
+    out = q[:max(0, limit)]
+    if pop and out:
+        # remove returned commands
+        scr['cmd_queue'] = q[len(out):]
+        save_store_config(cfg)
+    return jsonify({'success': True, 'commands': out, 'remaining': len(scr.get('cmd_queue', []))})
 
 # -------- One-off migration: local static/uploads -> R2 bucket --------
 @app.route('/admin/migrate_to_r2', methods=['POST'])
@@ -2268,19 +2465,51 @@ def get_playlist(store_id, screen_id):
             save_store_config(cfg)
             print(f"DEBUG: Auto-removed {removed} missing file playlist items")
     pl = screen.get('playlist', [])
-    # Decorate with public URL for clients that support absolute URLs
+    # Decorate with public URL and last known status for clients/dashboard
+    last_status = screen.get('last_item_status') or {}
     out = []
     for item in pl:
         try:
             it = dict(item)
             it['url'] = build_public_url(it.get('file'))
+            # Prefer id mapping; if missing, fall back to file key.
+            # Robustness: handle absolute URLs and relative paths by also checking basename-only key.
+            ls = None
+            try:
+                if it.get('id'):
+                    k_id = f"id:{it.get('id')}"
+                    ls = last_status.get(k_id)
+                if (ls is None) and it.get('file'):
+                    f = str(it.get('file'))
+                    # absolute URL -> basename
+                    if f.startswith('http://') or f.startswith('https://'):
+                        try:
+                            f = f.rstrip('/').split('/')[-1]
+                        except Exception:
+                            pass
+                    # try exact path first
+                    k_file = f"file:{f}"
+                    ls = last_status.get(k_file)
+                    if ls is None:
+                        # also try basename of relative path (e.g., uploads/foo.jpg -> foo.jpg)
+                        try:
+                            base1 = f.split('/')[-1]
+                        except Exception:
+                            base1 = f
+                        k_base = f"file:{base1}"
+                        if k_base != k_file:
+                            ls = last_status.get(k_base)
+            except Exception:
+                ls = None
+            if ls is not None:
+                it['last_status'] = ls
             out.append(it)
         except Exception:
             out.append(item)
     print(f"DEBUG: Returning playlist items: {len(out)}")
     # Dashboard needs immediate consistency after changes; disable caching here.
     return (
-        {'success': True, 'playlist': out},
+    {'success': True, 'playlist': out, 'queue_len': len(screen.get('cmd_queue', [])), 'events_recent': len(screen.get('events', []))},
         200,
         {'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'}
     )

@@ -500,6 +500,12 @@
             border-color: #95a5a6;
             background-color: #f8f9fa;
         }
+    /* Per-item status dot (file-level) */
+    .item-status-dot { position:absolute; top:4px; left:4px; width:10px; height:10px; border-radius:50%; box-shadow:0 0 0 1px #fff, 0 1px 2px rgba(0,0,0,.25); z-index:4; }
+    .item-status-dot.ok { background:#1bcf5a; }
+    .item-status-dot.fail { background:#e74c3c; }
+    .item-status-dot.stale { background:#f1c40f; }
+    .item-status-dot.unknown { background:#bdc3c7; }
         
         .screen-preview img {
             max-width: 100%;
@@ -2564,7 +2570,20 @@
                       while(parts.length<3) parts.push(0); 
                       return parts[0]*3600+parts[1]*60+parts[2]; 
                   }; 
-                          items.forEach(item => {
+                  items.forEach(item => {
+                      const last = item.last_status || null;
+                      const failed = !!(last && last.state && String(last.state).toLowerCase().includes('fail'));
+                      // Compute per-item status class + tooltip
+                      const nowUnix = Math.floor(Date.now()/1000);
+                      const ts = last && last.ts ? parseInt(String(last.ts),10) : null;
+                      const age = (ts && !isNaN(ts)) ? (nowUnix - ts) : null;
+                      let statusClass = 'unknown';
+                      let statusTip = 'No report from TV yet';
+                      if (failed) { statusClass = 'fail'; statusTip = 'Last playback failed' + (last && last.error ? (': '+String(last.error)) : ''); }
+                      else if (last && String(last.state).toLowerCase().includes('ok')) {
+                          if (age !== null && age <= 60) { statusClass = 'ok'; statusTip = 'OK ~'+age+'s ago'; }
+                          else { statusClass = 'stale'; statusTip = 'OK but stale' + (age!=null?(' ~'+age+'s ago'):''); }
+                      }
                                 // Split ISO start/end into separate date/time if present
                                 let startVal = '';
                                 let endVal = '';
@@ -2622,12 +2641,22 @@
                                 const effectiveOn = item.enabled && inWindow;
                                                                 const row = document.createElement('div');
                                                                 row.className = 'playlist-row apple'+(effectiveOn?'':' dimmed');
+                                                                row.dataset.itemId = item.id || '';
+                                                                row.dataset.file = item.file || '';
+                                                                // Also tag basename for robust matching (handles absolute URLs and relative paths)
+                                                                try{
+                                                                    const fstr = String(item.file||'');
+                                                                    const base = fstr ? fstr.split('?')[0].split('/').pop() : '';
+                                                                    if(base) row.dataset.fileBase = base;
+                                                                }catch{}
                                                                 row.title = inWindow? 'Active now' : 'Outside scheduled window';
                                                                 row.innerHTML = `
                                                                     <div class=\"pl-top\">
                                                                                                         <div class=\"pl-col pl-thumb\"><div class=\"pl-thumb-click\" data-screen="${screenId}" data-item="${item.id}" style="position:relative;">
                                                                                                             ${thumbForFile(item.url || item.file)}
-                                                                                                            <div style=\"position:absolute;inset:auto 4px 4px auto;background:rgba(0,0,0,.6);color:#fff;font-size:10px;padding:2px 4px;border-radius:3px;\">Change</div>
+                                                                                                            <div class="item-status-dot ${statusClass}" title="${statusTip}"></div>
+                                                                                                            <div style=\"position:absolute;inset:auto 4px 4px auto;background:rgba(0,0,0,.6);color:#fff;font-size:10px;padding:2px 4px;border-radius:3px;\">Change</div>\
+                                                                                                            ${failed ? `<div title="${(last && last.error) ? String(last.error).replace(/\"/g,'&quot;') : 'Last playback failed on TV'}" style=\"position:absolute;top:4px;right:4px;background:#c0392b;color:#fff;font-size:10px;padding:2px 6px;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.2);\">FAILED</div>` : ''}
                                                                                                         </div></div>
                                                                         <div style=\"flex:1;display:flex;flex-direction:column;gap:4px;\">
                                                                             <div class=\"schedule-section\">
@@ -2677,6 +2706,7 @@
                                                                                             <input id="dur-${screenId}-${item.id}" type="hidden" value="${item.duration || 5}">
                                                                                         </div>\
                                                                                         <div class="group right">\
+                                                                                            ${failed ? `<button class=\"delete-pill tiny\" style=\"background:#d35400;border-color:#d35400\" onclick=\"retryItemOnTV('${screenId}','${item.id}',${JSON.stringify(item.file || '')})\">Retry on TV</button>` : ''}
                                                                                             <button class="delete-pill tiny" onclick="deletePlaylistItem('${screenId}','${item.id}')">Delete</button>
                                                                                         </div>
                                                                                 </div>
@@ -2691,6 +2721,8 @@
                           });
                     // Update rotating preview after DOM build
                     updatePreviewPlaylist(screenId, items);
+                    // Kick lightweight status refresh for this screen (avoid duplicate timers)
+                    ensureItemLightRefresher(screenId);
                 })
                 .catch((e)=>{
                     console.error('[Playlist] exception', e);
@@ -2701,6 +2733,23 @@
                     container.appendChild(badge);
                 })
                 .finally(()=>{ if (section) section.classList.remove('loading'); });
+        }
+
+        // Push a command to the Android TV client for this screen
+        async function pushScreenCommand(screenId, type, payload){
+            try{
+                const body = Object.assign({ store_id: currentStoreId, screen_id: screenId, type }, payload||{});
+                const r = await fetch('/api/push_command', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+                const j = await r.json().catch(()=>({}));
+                if(!r.ok || !j.success){ alert('Failed to send command'); return false; }
+                return true;
+            }catch(e){ alert('Failed to send command'); return false; }
+        }
+        function retryItemOnTV(screenId, itemId, file){
+            pushScreenCommand(screenId, 'retry_item', { item_id: itemId, file: file||null }).then(ok=>{ if(ok){ showMessage('Retry sent to TV', '#2ecc71'); }});
+        }
+        function reloadTV(screenId){
+            pushScreenCommand(screenId, 'reload', {}).then(ok=>{ if(ok){ showMessage('Reload sent to TV', '#2ecc71'); }});
         }
 
         function toLocalTimeHMSS(val){
@@ -3026,6 +3075,62 @@
         const src300 = thumbUrl(file,300);
         const src600 = thumbUrl(file,600);
         return `<img loading="lazy" decoding="async" src="${src220}" srcset="${src220} 220w, ${src300} 300w, ${src600} 600w" sizes="(max-width: 480px) 45vw, (max-width: 1024px) 200px, 220px" style="max-width:100%; max-height:100%; object-fit:cover;" onerror="fallbackToOrigin(this, \"${orig}\")" />`;
+    }
+
+    // --- Lightweight item status light refresher (doesn't rebuild DOM) ---
+    const _lightTimers = {};
+    function ensureItemLightRefresher(screenId){
+        if (_lightTimers[screenId]) return;
+        const tick = async ()=>{
+            try{
+                const bust = Date.now();
+                const res = await fetch(`/playlist/${currentStoreId}/${screenId}?_=${bust}`);
+                const data = await res.json();
+                if (data && data.success && Array.isArray(data.playlist)){
+                    const nowUnix = Math.floor(Date.now()/1000);
+                    const list = data.playlist;
+                    for (const it of list){
+                        const id = it.id || '';
+                        const file = it.file || '';
+                        const container = document.querySelector(`#playlist-items-${screenId}`);
+                        if (!container) continue;
+            const _esc = (v)=>{ try{ return CSS && CSS.escape ? CSS.escape(v) : String(v).replace(/"/g,'\\"'); }catch{ return String(v).replace(/"/g,'\\"'); } };
+            let row = null;
+            if (id) {
+                row = container.querySelector(`.playlist-row[data-item-id="${_esc(id)}"]`);
+            }
+            if (!row && file) {
+                row = container.querySelector(`.playlist-row[data-file="${_esc(file)}"]`);
+            }
+            if (!row && file) {
+                try{
+                    const base = String(file).split('?')[0].split('/').pop();
+                    if(base){ row = container.querySelector(`.playlist-row[data-file-base="${_esc(base)}"]`); }
+                }catch{}
+            }
+                        if (!row) continue;
+                        const dot = row.querySelector('.item-status-dot');
+                        if (!dot) continue;
+                        const last = it.last_status || null;
+                        const failed = !!(last && last.state && String(last.state).toLowerCase().includes('fail'));
+                        const ts = last && last.ts ? parseInt(String(last.ts),10) : null;
+                        const age = (ts && !isNaN(ts)) ? (nowUnix - ts) : null;
+                        let cls = 'unknown'; let tip = 'No report from TV yet';
+                        if (failed){ cls='fail'; tip = 'Last playback failed' + (last && last.error ? (': '+String(last.error)) : ''); }
+                        else if (last && String(last.state).toLowerCase().includes('ok')){
+                            if (age !== null && age <= 60){ cls='ok'; tip = 'OK ~'+age+'s ago'; }
+                            else { cls='stale'; tip = 'OK but stale' + (age!=null?(' ~'+age+'s ago'):''); }
+                        }
+                        dot.className = `item-status-dot ${cls}`;
+                        dot.title = tip;
+                    }
+                }
+            }catch(e){ /* ignore */ }
+            finally {
+        _lightTimers[screenId] = setTimeout(tick, 8000);
+            }
+        };
+    _lightTimers[screenId] = setTimeout(tick, 8000);
     }
 
         function togglePlaylistItem(screenId, itemId, enabled) {

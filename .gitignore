@@ -76,6 +76,7 @@ static/uploads/*
 *.zip
 *.tgz
 *.tar.gz
+deploy/*.tar
 local_data_sync.tgz
 code_sync.tgz
 

@@ -125,8 +125,10 @@ if ($ForceArchive) {
   $cmdParts += "echo 'No known service found; installing everydayadvertise.service' >&2"
   # Install service as fallback and wire env file if present
   $cmdParts += "if [ -f '$RepoPath/deploy/everydayadvertise.service' ]; then sudo cp '$RepoPath/deploy/everydayadvertise.service' /etc/systemd/system/everydayadvertise.service; fi"
+  # Ensure drop-in directory exists
   $cmdParts += "sudo mkdir -p /etc/systemd/system/everydayadvertise.service.d"
-  $cmdParts += "if [ -f /etc/pizza-hut-tv.env ]; then printf '[Service]\\nEnvironmentFile=/etc/pizza-hut-tv.env\\n' | sudo tee /etc/systemd/system/everydayadvertise.service.d/override.conf >/dev/null; fi"
+  # Write a proper override using printf|tee (safer than nested heredoc across PowerShell/SSH quoting)
+  $cmdParts += "if [ -f /etc/pizza-hut-tv.env ]; then printf '%s\n' '[Service]' 'EnvironmentFile=/etc/pizza-hut-tv.env' | sudo tee /etc/systemd/system/everydayadvertise.service.d/override.conf >/dev/null; fi"
   $cmdParts += "sudo systemctl daemon-reload"
   $cmdParts += "sudo systemctl enable --now everydayadvertise || true"
   $cmdParts += "sudo systemctl restart everydayadvertise || true"

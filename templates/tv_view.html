@@ -96,6 +96,31 @@
 		let timer = null;
 		let lastFetchTs = 0;
 
+		// Track items we have already probed/reported to avoid duplicates
+		const probedKeys = new Set();
+		const reportedOk = new Set();
+
+		// --- Lightweight client reporting so dashboard per-item lights work ---
+		async function postClientEvent(ev, item, err){
+			try{
+				const f = (typeof item === 'string') ? item : (item?.file || fileNameFrom(item) || '');
+				const id = (typeof item === 'object') ? (item?.id || null) : null;
+				await fetch(`${ORIGIN}/api/client_event`, {
+					method: 'POST', headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ store_id: storeId, screen_id: screenId, event: ev, file: f || null, item_id: id, error: err ? String(err).slice(0,200) : null })
+				}).catch(()=>{});
+			}catch{}
+		}
+
+		// Heartbeat so server knows this screen is active
+		async function sendHeartbeat(){
+			try{
+				await fetch(`${ORIGIN}/api/screen_heartbeat`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ store_id: storeId, screen_id: screenId }) });
+			}catch{}
+		}
+		// Kick immediately and every 30s
+		sendHeartbeat(); setInterval(sendHeartbeat, 30000);
+
 		async function fetchPlaylist(){
 			try{
 				const r = await fetch(`${ORIGIN}/playlist/${storeId}/${screenId}`);
@@ -103,24 +128,114 @@
 				if(j && j.success && Array.isArray(j.playlist)){
 					playlist = j.playlist;
 					if(idx >= playlist.length) idx = 0;
+					// Proactively probe status for unknown/stale items so the dashboard turns green fast
+					scheduleStatusProbes(playlist);
 				}
 			}catch(e){ /* keep current on error */ }
 			lastFetchTs = Date.now();
 		}
 
+		function keyFor(item){
+			const id = (item && item.id) ? String(item.id) : '';
+			const f = fileNameFrom(item);
+			return id || f || '';
+		}
+
+		function isStale(last){
+			if(!last || !last.ts) return true;
+			const ageSec = Math.floor(Date.now()/1000) - Number(last.ts||0);
+			return (last.state !== 'ok') || ageSec > 90; // slightly lenient window vs dashboard 60s
+		}
+
+		// Lightweight probes that avoid full playback but verify availability
+		function probeImage(url, timeoutMs=2500){
+			return new Promise((resolve)=>{
+				const img = new Image();
+				let done = false;
+				const finish = (ok)=>{ if(done) return; done = true; try{ img.onload=null; img.onerror=null; }catch{}; resolve(!!ok); };
+				const to = setTimeout(()=>{ clearTimeout(to); finish(false); }, timeoutMs);
+				img.onload = ()=>{ clearTimeout(to); finish(true); };
+				img.onerror = ()=>{ clearTimeout(to); finish(false); };
+				img.src = url;
+			});
+		}
+
+		function probeVideo(url, timeoutMs=3000){
+			return new Promise((resolve)=>{
+				const v = document.createElement('video');
+				v.preload = 'metadata'; v.muted = true; v.playsInline = true;
+				let done = false;
+				const finish = (ok)=>{ if(done) return; done = true; try{ v.removeAttribute('src'); v.load(); }catch{}; resolve(!!ok); };
+				const onMeta = ()=>{ cleanup(); finish(true); };
+				const onErr = ()=>{ cleanup(); finish(false); };
+				function cleanup(){ v.removeEventListener('loadedmetadata', onMeta); v.removeEventListener('error', onErr); if(to) clearTimeout(to); }
+				v.addEventListener('loadedmetadata', onMeta);
+				v.addEventListener('error', onErr);
+				const to = setTimeout(()=>{ cleanup(); finish(false); }, timeoutMs);
+				v.src = url; try{ v.load(); }catch{}
+			});
+		}
+
+		function sameHost(u1, u2){ try { return (new URL(u1)).host === (new URL(u2)).host; } catch { return false; } }
+
+		async function probeItemStatus(item){
+			const k = keyFor(item); if(!k) return;
+			if(probedKeys.has(k)) return; // avoid duplicate probes in short time
+			probedKeys.add(k);
+			// Skip if we already reported ok from this viewer
+			if(reportedOk.has(k)) return;
+			const url = mediaUrl(item);
+			if(!url) return;
+			const type = (item.media_type || '').toLowerCase();
+			const isVid = type === 'video' || isVideoByName(url);
+			// Build fallback to our origin if cross-origin
+			let fallbackUrl = '';
+			if(!sameHost(url, ORIGIN)){
+				const fname = fileNameFrom(item);
+				if(fname){ fallbackUrl = isVid ? `${ORIGIN}/media/${encodeURIComponent(fname)}` : `${ORIGIN}/static/uploads/${encodeURIComponent(fname)}`; }
+			}
+			let ok = false;
+			try{
+				ok = isVid ? await probeVideo(url) : await probeImage(url);
+				if(!ok && fallbackUrl){ ok = isVid ? await probeVideo(fallbackUrl) : await probeImage(fallbackUrl); }
+			}catch{ ok = false; }
+			if(ok){ reportedOk.add(k); postClientEvent('load_ok', item, null); }
+			else { postClientEvent('load_fail', item, 'probe failed'); }
+		}
+
+		function scheduleStatusProbes(list){
+			if(!Array.isArray(list) || !list.length) return;
+			let delay = 200; // small staggering to avoid bursts
+			for(const it of list){
+				try{
+					if(isStale(it.last_status)){
+						setTimeout(()=>{ probeItemStatus(it); }, delay);
+						delay += 300; // space probes ~0.3s apart
+					}
+				}catch{}
+			}
+		}
+
 		function preloadImage(url){
-			return new Promise((resolve,reject)=>{ const img = new Image(); img.onload=()=>resolve(img); img.onerror=reject; img.src=url; });
+			return new Promise((resolve,reject)=>{
+				const img = new Image();
+				let to = setTimeout(()=>{ img.onload = null; img.onerror = null; reject(new Error('image timeout')); }, 6000);
+				img.onload=()=>{ clearTimeout(to); resolve(img); };
+				img.onerror=(e)=>{ clearTimeout(to); reject(e||new Error('image error')); };
+				img.src=url;
+			});
 		}
 		function preloadVideo(url){
 			return new Promise((resolve,reject)=>{
 				const v = document.createElement('video');
 				v.autoplay = false; v.muted = true; v.playsInline = true; v.preload = 'auto';
 				const onReady = ()=>{ cleanup(); resolve(v); };
-				const onErr = (e)=>{ cleanup(); reject(e); };
-				function cleanup(){ v.removeEventListener('canplay', onReady); v.removeEventListener('error', onErr); }
+				const onErr = (e)=>{ cleanup(); reject(e||new Error('video error')); };
+				function cleanup(){ v.removeEventListener('canplay', onReady); v.removeEventListener('error', onErr); if (to) clearTimeout(to); }
 				v.addEventListener('canplay', onReady);
 				v.addEventListener('error', onErr);
-				v.src = url; v.load();
+				const to = setTimeout(()=>{ cleanup(); reject(new Error('video timeout')); }, 8000);
+				v.src = url; try{ v.load(); }catch{}
 			});
 		}
 
@@ -171,6 +286,8 @@
 					front.classList.add('fade'); front.classList.remove('visible');
 					setTimeout(()=>{ front.classList.add('hidden'); front.classList.remove('fade'); swapLayers(); }, 260);
 				});
+				// Report success
+				postClientEvent('load_ok', item, null);
 			}catch(e){
 				// Try fallback via our origin if available
 				if(fallbackUrl){
@@ -186,14 +303,30 @@
 							front.classList.add('fade'); front.classList.remove('visible');
 							setTimeout(()=>{ front.classList.add('hidden'); front.classList.remove('fade'); swapLayers(); }, 260);
 						});
+						// Report success via fallback
+						postClientEvent('load_ok', item, null);
 						return;
 					}catch(_f){ /* swallow */ }
 				}
-				/* skip on error */
+				// Report failure (skip rendering)
+				postClientEvent('load_fail', item, (e && e.message) ? e.message : 'load failed');
 			}
 		}
 
 		function nextIndex(){ if(!playlist.length) return 0; return (idx + 1) % playlist.length; }
+
+		// Minimal command polling so dashboard "Retry" and "Reload" work
+		async function pollCommands(){
+			try{
+				const r = await fetch(`${ORIGIN}/api/commands?store_id=${encodeURIComponent(storeId)}&screen_id=${encodeURIComponent(screenId)}&limit=5&pop=1`);
+				const j = await r.json();
+				if(j && j.success && Array.isArray(j)){ // some servers may return the array directly
+					for(const c of j){ if(c && c.type === 'reload'){ await fetchPlaylist(); idx = 0; } }
+				} else if (j && j.success && Array.isArray(j.commands)){
+					for(const c of j.commands){ if(c && c.type === 'reload'){ await fetchPlaylist(); idx = 0; } }
+				}
+			}catch{}
+		}
 
 		async function tick(){
 			if(!playlist.length){ await fetchPlaylist(); }
@@ -207,6 +340,8 @@
 			idx = nextIndex();
 			// periodic refresh of playlist
 			if(Date.now() - lastFetchTs > 20000){ fetchPlaylist(); }
+			// poll commands occasionally
+			if(Math.random() < 0.3){ pollCommands(); }
 			timer = setTimeout(tick, dur*1000);
 		}
 

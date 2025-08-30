@@ -59,3 +59,18 @@ data class HeartbeatResp(
 	@SerializedName("error") val error: String? = null
 )
 
+// Client events
+data class ClientEventReq(
+	@SerializedName("store_id") val storeId: String,
+	@SerializedName("screen_id") val screenId: String,
+	@SerializedName("event") val event: String, // e.g., "load_ok", "load_fail", "playlist_reload"
+	@SerializedName("file") val file: String? = null,
+	@SerializedName("item_id") val itemId: String? = null,
+	@SerializedName("error") val error: String? = null
+)
+
+data class BasicResp(
+	@SerializedName("success") val success: Boolean,
+	@SerializedName("error") val error: String? = null
+)
+
