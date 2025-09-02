@@ -8,7 +8,8 @@ User=ubuntu
 Group=ubuntu
 WorkingDirectory=/home/ubuntu/pizza-hut-tv
 Environment=PYTHONUNBUFFERED=1
-Environment=MEDIA_BASE_URL=https://api.everydayadvertise.com
+Environment=MEDIA_BASE_URL=https://cdn.everydayadvertise.com
+Environment=SESSION_COOKIE_DOMAIN=.everydayadvertise.com
 ExecStart=/home/ubuntu/pizza-hut-tv/.venv/bin/python -m gunicorn -c /home/ubuntu/pizza-hut-tv/deploy/gunicorn.conf.py app:app
 Restart=always
 RestartSec=5

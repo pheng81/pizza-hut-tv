@@ -21,7 +21,7 @@
 		</div>
 
 		<!-- Provide template vars as JSON so JS linter doesn't choke on Jinja syntax -->
-		<script id="tv-data" type="application/json">{"store_id": {{ store_id|tojson }}, "screen_id": {{ screen_id|tojson }}, "initial_file": {{ active_file|tojson }}}</script>
+	<script id="tv-data" type="application/json">{"store_id": {{ store_id|tojson }}, "screen_id": {{ screen_id|tojson }}, "initial_file": {{ active_file|tojson }}, "media_base_url": {{ (media_base_url or '')|tojson }}}</script>
 		<script>
 			const __tvCfg = JSON.parse(document.getElementById('tv-data')?.textContent || '{}');
 			// Ensure we always talk to HTTPS origin. If we don't have one (e.g., file://),
@@ -41,10 +41,11 @@
 			const storeId = __tvCfg.store_id;
 			const screenId = __tvCfg.screen_id;
 			const initialFile = __tvCfg.initial_file;
+			const MEDIA_BASE_URL = (function(){ try{ let b = __tvCfg.media_base_url || ''; if(b && !/\/$/.test(b)) b += '/'; return b; }catch{return '';} })();
 
 		const videoExt = ['mp4','webm','ogg','mov','avi','mkv','m4v'];
 		function isVideoByName(name){ if(!name) return false; const ext=(name.split('.').pop()||'').toLowerCase(); return videoExt.includes(ext); }
-		function mediaUrl(item){
+	function mediaUrl(item){
 			if(!item) return '';
 			if(typeof item === 'string') {
 				if (/^https?:\/\//i.test(item)) {
@@ -63,6 +64,10 @@
 				}
 				const fname = item.startsWith('/') ? item.slice(1) : item;
 				const isVid = isVideoByName(fname);
+				// Prefer CDN base for both images and videos when available
+				if (MEDIA_BASE_URL) {
+					return `${MEDIA_BASE_URL}${fname}`;
+				}
 				const rel = `/${isVid? 'media' : 'static/uploads'}/${fname}`;
 				return `${ORIGIN}${rel}`;
 			}
@@ -81,6 +86,10 @@
 				return abs;
 			}
 			const fname2 = (u.startsWith('/') ? u.slice(1) : u);
+			// Prefer CDN base when available
+			if (MEDIA_BASE_URL) {
+				return `${MEDIA_BASE_URL}${fname2}`;
+			}
 			const isVid2 = isVideoByName(fname2);
 			const rel = `/${isVid2? 'media' : 'static/uploads'}/${fname2}`;
 			return `${ORIGIN}${rel}`;

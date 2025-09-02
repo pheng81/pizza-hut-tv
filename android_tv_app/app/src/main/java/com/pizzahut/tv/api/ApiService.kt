@@ -20,6 +20,12 @@ interface ApiService {
 		@Path("storeId") storeId: String
 	): ScreensResponse
 
+	// Pairing: fetch stores for a user by 4-digit code
+	@GET("api/stores_by_code/{code}")
+	suspend fun getStoresByCode(
+		@Path("code") code: String
+	): CodeStoresResponse
+
 	@POST("api/screen_heartbeat")
 	suspend fun sendHeartbeat(@Body body: HeartbeatReq): HeartbeatResp
 

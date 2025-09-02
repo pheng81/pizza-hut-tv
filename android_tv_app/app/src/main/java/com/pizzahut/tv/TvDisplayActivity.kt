@@ -52,6 +52,7 @@ class TvDisplayActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+    com.pizzahut.tv.api.PairCodeHolder.init(applicationContext)
         binding = ActivityTvDisplayBinding.inflate(layoutInflater)
         setContentView(binding.root)
         binding.message.text = "Loading playlist..."
@@ -416,8 +417,12 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
     }
 
     fun prefetchNext(nextItem: com.pizzahut.tv.api.PlaylistItem?) {
+        val pref = nextItem?.url
         val nf = nextItem?.file ?: return
-    val nurl = ApiClientImageHelper.buildImageUrl(nf)
+        val nurl = when {
+            pref != null && pref.startsWith("http", true) -> pref
+            else -> ApiClientImageHelper.buildImageUrl(nf)
+        }
         if (ImageMemoryCache.get(nurl) == null) {
             lifecycleScope.launch(Dispatchers.IO) { fetchBitmap(nurl) }
         }
@@ -434,8 +439,8 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
     fun isAnimated(file: String) = animatedExts.any { file.endsWith(".$it", true) }
     fun isAdvancedStill(file: String) = advancedStillExts.any { file.endsWith(".$it", true) }
 
-    fun loadAnimatedOrStatic(file: String, itemId: String?, onDone: (Boolean) -> Unit) {
-        val url = ApiClientImageHelper.buildFileUrl(file)
+    fun loadAnimatedOrStatic(file: String, itemId: String?, preferredUrl: String?, onDone: (Boolean) -> Unit) {
+        val url = if (!preferredUrl.isNullOrBlank() && preferredUrl.startsWith("http", true)) preferredUrl else ApiClientImageHelper.buildFileUrl(file)
         lifecycleScope.launch {
             if (isAnimated(file) && android.os.Build.VERSION.SDK_INT >= 28) {
                 val drawable = withContext(Dispatchers.IO) {
@@ -642,7 +647,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
             binding.message.bringToFront()
             // Prefer /media (range streaming) for videos; fallback to static if needed
             val videoUrlPrimary = ApiClientImageHelper.buildVideoUrl(file)
-            val videoUrlFallback = ApiClientImageHelper.buildImageUrl(file)
+            val videoUrlFallback = if (!next.url.isNullOrBlank() && next.url!!.startsWith("http", true)) next.url!! else ApiClientImageHelper.buildImageUrl(file)
             binding.message.text = "VID ${file.take(18)}"
             // Legacy VideoView fallback (added lazily)
             fun ensureLegacy(): VideoView {
@@ -761,7 +766,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                                 triedStaticFallbackForCurrent = true
                                 try {
                                     playerRef.clearMediaItems()
-                                    playerRef.setMediaSource(buildMediaSource(ApiClientImageHelper.buildImageUrl(f)))
+                                    playerRef.setMediaSource(buildMediaSource(if (!next.url.isNullOrBlank() && next.url!!.startsWith("http", true)) next.url!! else ApiClientImageHelper.buildImageUrl(f)))
                                     playerRef.prepare(); playerRef.playWhenReady = true
                                     binding.message.text = ("StaticFB ${f.take(10)}").take(60)
                     // Don't report success yet; wait for READY state to confirm
@@ -788,7 +793,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                             triedStaticFallbackForCurrent = true
                             try {
                                 playerRef.clearMediaItems()
-                                playerRef.setMediaSource(buildMediaSource(ApiClientImageHelper.buildImageUrl(file)))
+                                playerRef.setMediaSource(buildMediaSource(if (!next.url.isNullOrBlank() && next.url!!.startsWith("http", true)) next.url!! else ApiClientImageHelper.buildImageUrl(file)))
                                 playerRef.prepare(); playerRef.playWhenReady = true
                                 binding.message.text = ("StaticFB ${file.take(10)}").take(60)
                             } catch (_: Exception) {
@@ -834,7 +839,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
             playerView.visibility = ImageView.GONE
             imageView.visibility = ImageView.VISIBLE
             binding.message.bringToFront()
-            loadAnimatedOrStatic(file, next.id) { success ->
+            loadAnimatedOrStatic(file, next.id, next.url) { success ->
                 // Prefetch upcoming
                 val upcoming = if (state.items.isNotEmpty()) {
                     val idx = if (state.index >= state.items.size) 0 else state.index

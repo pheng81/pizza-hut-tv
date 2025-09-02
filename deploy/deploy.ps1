@@ -6,7 +6,15 @@ param(
   [string]$KeyPath = '',
   [switch]$Bootstrap,
   [switch]$PreserveConfig,
-  [switch]$ForceArchive
+  [switch]$ForceArchive,
+  # Optional: create /etc/pizza-hut-tv.env on the server
+  [switch]$SetAdminEnv,
+  [string]$AdminUsername = 'admin',
+  [string]$AdminPassword = 'admin',
+  [string]$CookieDomain = '.everydayadvertise.com',
+  [string]$MediaBaseUrl = 'https://cdn.everydayadvertise.com',
+  # Optional persistent DB path on server (outside repo)
+  [string]$UsersDbPath = '/var/lib/pizza-hut-tv/users.sqlite'
 )
 
 # Simple, repeatable deploy script to update your Lightsail VM.
@@ -74,7 +82,8 @@ if ($ForceArchive) {
   try {
     $tarCmd = @(
       'tar','-cf',"$archivePath",
-      '--exclude=.git','--exclude=.venv','--exclude=__pycache__','--exclude=__pycache__/**','--exclude=*.pyc','--exclude=*.pyo',
+  '--exclude=.git','--exclude=.venv','--exclude=__pycache__','--exclude=__pycache__/**','--exclude=*.pyc','--exclude=*.pyo',
+  '--exclude=static/uploads','--exclude=static/uploads/**','--exclude=users.sqlite','--exclude=store_config__*.json',
       # exclude giant Android SDK/builds entirely
       '--exclude=android_tv_app','--exclude=android_tv_app/**',
       # avoid bundling any pre-existing archives
@@ -107,7 +116,10 @@ if ($ForceArchive) {
   $cmdParts += "set -e"
   $cmdParts += "mkdir -p '$RepoPath'"
   if ($PreserveConfig.IsPresent) {
-    $cmdParts += "if [ -f '$RepoPath/store_config.json' ]; then cp '$RepoPath/store_config.json' /tmp/store_config.json.local.bak; fi"
+  $cmdParts += "if [ -f '$RepoPath/store_config.json' ]; then cp '$RepoPath/store_config.json' /tmp/store_config.json.local.bak; fi"
+  $cmdParts += "mkdir -p /tmp/phtv_cfg_bak && cp -f '$RepoPath'/store_config__*.json /tmp/phtv_cfg_bak/ 2>/dev/null || true"
+  $cmdParts += "if [ -d '$RepoPath/static/uploads' ]; then mkdir -p /tmp/phtv_uploads_bak && rsync -a '$RepoPath/static/uploads/' /tmp/phtv_uploads_bak/; fi"
+  $cmdParts += "if [ -f '$RepoPath/users.sqlite' ]; then cp '$RepoPath/users.sqlite' /tmp/users.sqlite.bak; fi"
   }
   if ($remoteArchive.EndsWith('.zip')) {
     $cmdParts += "unzip -o $remoteArchive -d '$RepoPath' || (sudo apt-get update -y && sudo apt-get install -y unzip && unzip -o $remoteArchive -d '$RepoPath')"
@@ -119,7 +131,11 @@ if ($ForceArchive) {
   $cmdParts += "'$RepoPath/.venv/bin/python' -m pip install --upgrade pip wheel"
   $cmdParts += "'$RepoPath/.venv/bin/python' -m pip install -r '$RepoPath/requirements.txt'"
   if ($PreserveConfig.IsPresent) {
-    $cmdParts += "if [ -f /tmp/store_config.json.local.bak ]; then cp /tmp/store_config.json.local.bak '$RepoPath/store_config.json'; fi"
+  $cmdParts += "if [ -f /tmp/store_config.json.local.bak ]; then cp /tmp/store_config.json.local.bak '$RepoPath/store_config.json'; fi"
+  $cmdParts += "if ls /tmp/phtv_cfg_bak/store_config__*.json >/dev/null 2>&1; then cp -f /tmp/phtv_cfg_bak/store_config__*.json '$RepoPath' || true; fi"
+  $cmdParts += "if [ -d /tmp/phtv_uploads_bak ]; then mkdir -p '$RepoPath/static/uploads' && rsync -a /tmp/phtv_uploads_bak/ '$RepoPath/static/uploads/'; fi"
+  # Restore repo-local users.sqlite backup if present
+  $cmdParts += "if [ -f /tmp/users.sqlite.bak ]; then cp /tmp/users.sqlite.bak '$RepoPath/users.sqlite'; fi"
   }
   $cmdParts += ('for svc in ' + $services + '; do if systemctl list-unit-files | grep -q ''^${svc}\.service''; then sudo systemctl restart "${svc}"; sudo systemctl status "${svc}" --no-pager -l || true; exit 0; fi; done')
   $cmdParts += "echo 'No known service found; installing everydayadvertise.service' >&2"
@@ -137,6 +153,34 @@ if ($ForceArchive) {
   $remoteCmd = ($cmdParts -join ' && ')
   Invoke-Remote $remoteCmd
   Write-Host 'Archive deploy completed.' -ForegroundColor Green
+}
+
+# Optionally write /etc/pizza-hut-tv.env with admin credentials and cookie domain
+if ($SetAdminEnv.IsPresent) {
+  Write-Host "Configuring /etc/pizza-hut-tv.env (admin credentials + cookie domain)..." -ForegroundColor Yellow
+  $escapedUser = $AdminUsername
+  $escapedPass = $AdminPassword
+  $escapedCookie = $CookieDomain
+  $escapedMedia = $MediaBaseUrl
+
+  $remoteCmd2 = @()
+  $remoteCmd2 += 'set -e'
+  $remoteCmd2 += 'ENV=/etc/pizza-hut-tv.env'
+  $remoteCmd2 += 'sudo touch "$ENV"'
+  # Remove any previous ADMIN_ lines to avoid duplicates
+  $remoteCmd2 += 'sudo sed -i ''/^ADMIN_USERNAME=/d;/^ADMIN_PASSWORD=/d'' "$ENV"'
+  # Append fresh values (no quotes to keep simple; values should not contain spaces)
+  $remoteCmd2 += "printf '%s`n' 'ADMIN_USERNAME=$escapedUser' 'ADMIN_PASSWORD=$escapedPass' | sudo tee -a '$ENV' > /dev/null"
+  $remoteCmd2 += "printf '%s`n' 'SESSION_COOKIE_DOMAIN=$escapedCookie' 'MEDIA_BASE_URL=$escapedMedia' 'USERS_DB_PATH=$UsersDbPath' | sudo tee -a '$ENV' > /dev/null"
+  # Ensure everydayadvertise service references the env file via drop-in
+  $remoteCmd2 += 'sudo mkdir -p /etc/systemd/system/everydayadvertise.service.d'
+  $remoteCmd2 += 'printf ''%s\n'' ''[Service]'' ''EnvironmentFile=/etc/pizza-hut-tv.env'' | sudo tee /etc/systemd/system/everydayadvertise.service.d/override.conf >/dev/null'
+  $remoteCmd2 += 'sudo systemctl daemon-reload'
+  # Deterministic restart: try everydayadvertise, then tv-api
+  $remoteCmd2 += '(sudo systemctl restart everydayadvertise || sudo systemctl restart tv-api) || true'
+  $remoteCmd2 += '(sudo systemctl status everydayadvertise --no-pager -l || sudo systemctl status tv-api --no-pager -l) || true'
+  Invoke-Remote ($remoteCmd2 -join ' && ')
+  Write-Host "Admin env applied on server." -ForegroundColor Green
 }
 
 Write-Host "Done." -ForegroundColor Green

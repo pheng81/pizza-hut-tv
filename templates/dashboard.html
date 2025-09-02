@@ -23,6 +23,21 @@
             if (window.MEDIA_BASE_URL && !window.MEDIA_BASE_URL.endsWith('/')) {
                 window.MEDIA_BASE_URL += '/';
             }
+            // If MEDIA_BASE_URL points to a remote host, add preconnect/dns-prefetch dynamically
+            (function(){
+                try{
+                    const mbu = String(window.MEDIA_BASE_URL||'');
+                    if (/^https?:\/\//i.test(mbu)){
+                        const host = new URL(mbu).origin;
+                        const head = document.getElementsByTagName('head')[0];
+                        if (head){
+                            const mk = (rel,href,cross)=>{ const l=document.createElement('link'); l.rel=rel; l.href=href; if(cross) l.crossOrigin='anonymous'; head.appendChild(l); };
+                            mk('preconnect', host, true);
+                            mk('dns-prefetch', host.replace(/^https?:\/\//,'//'));
+                        }
+                    }
+                }catch{}
+            })();
             // If a CDN image 404s, fall back to origin /static/uploads/<key>
             function _extractKey(val){
                 try {
@@ -44,31 +59,41 @@
                     const step = parseInt(img.dataset.fallbackStep || '0', 10);
                     // Debug aid
                     if (!img.dataset._dbg) { img.dataset._dbg = '1'; console.warn('[img-fallback] start', {cur, key}); }
-                    // Step 0: if URL has query, retry without query (common CDN quirk)
+                    // Step 0: if we have an explicit original relative path (preferred), jump straight to origin path
+                    if (step === 0 && original && !/^https?:\/\//i.test(String(original))) {
+                        const base = '/static/uploads/';
+                        const origKey = _extractKey(original);
+                        img.dataset.fallbackStep = '1';
+                        const local1 = base + encodeURIComponent(origKey);
+                        console.warn('[img-fallback] use original key to origin', local1);
+                        img.src = local1;
+                        return;
+                    }
+                    // Step 1: if URL has query, retry without query (common CDN quirk)
                     if (step === 0) {
                         const u = (()=>{ try { return new URL(cur); } catch { return null; }})();
                         if (u && u.search) {
                             u.search = '';
-                            img.dataset.fallbackStep = '1';
+                            img.dataset.fallbackStep = '2';
                             console.warn('[img-fallback] retry without query', u.toString());
                             img.src = u.toString();
                             return;
                         }
                     }
-                    // Step 1: try origin static by key
-                    if (step <= 1) {
+                    // Step 2: try origin static by key
+                    if (step <= 2) {
                         if (!key) return; // nothing we can do
                         const local = '/static/uploads/' + encodeURIComponent(key);
-                        img.dataset.fallbackStep = '2';
+                        img.dataset.fallbackStep = '3';
                         console.warn('[img-fallback] fallback to origin', local);
                         img.src = local;
                         return;
                     }
-                    // Step 2: absolute origin (belt-and-braces)
-                    if (step === 2) {
+                    // Step 3: absolute origin (belt-and-braces)
+                    if (step === 3) {
                         if (!key) return;
                         const abs = (location.origin || '').replace(/\/$/, '') + '/static/uploads/' + encodeURIComponent(key);
-                        img.dataset.fallbackStep = '3';
+                        img.dataset.fallbackStep = '4';
                         console.warn('[img-fallback] fallback to absolute origin', abs);
                         img.src = abs;
                         return;
@@ -91,36 +116,51 @@
                 const rel = String(name).replace(/^\/+/, '');
                 return base + rel;
             }
-            // Build a video URL that goes through the server's streaming endpoint for Range support.
+            function escapeHtml(s){
+                try {
+                    return String(s).replace(/[&<>\"]/g, function(c){
+                        switch(c){ case '&': return '&amp;'; case '<': return '&lt;'; case '>': return '&gt;'; case '"': return '&quot;'; default: return c; }
+                    });
+                } catch { return s; }
+            }
+            // Build a video URL that prefers CDN (MEDIA_BASE_URL) with server fallback handled elsewhere.
             function videoUrl(name){
                 if (!name) return '';
                 try {
-                    if (/^https?:\/\//i.test(name)) return name; // absolute remote (e.g., R2) stays as-is
-                    if (name.startsWith('/media/')) return name;
-                    const rel = String(name).replace(/^\/+/, '');
-                    return '/media/' + encodeURIComponent(rel);
-                } catch(e) { return mediaUrl(name); }
+                    // Absolute remote URL (e.g., R2/CDN) -> keep
+                    if (/^https?:\/\//i.test(name)) return name;
+                    // Already absolute path -> keep
+                    if (name.startsWith('/')) return name;
+                } catch(e) {}
+                const base = (window.MEDIA_BASE_URL || '/static/uploads/').replace(/\/+$/, '/');
+                const rel = String(name).replace(/^\/+/, '');
+                return base + rel;
             }
             // Build thumbnail URL for images. If input is an absolute URL (e.g. R2/CDN),
             // fall back to using it directly (no server-side thumb available for remote files).
             function thumbUrl(name, width){
                 if(!name) return '';
+                // Prefer CDN path: <MEDIA_BASE_URL>/thumbs/<width>/<name>.webp (or .jpg)
                 try{
-                    if(/^https?:\/\//i.test(name)){
-                        return mediaUrl(name);
-                    }
-                }catch(e){}
-                const safe = encodeURIComponent(String(name));
-                return `/thumb/${width}/${safe}`;
+                    const base = (window.MEDIA_BASE_URL || '/static/uploads/').replace(/\/+$/, '/');
+                    const rel = String(name).replace(/^\/+/, '');
+                    // Default to .webp; server endpoint will handle actual format
+                    return `${base}thumbs/${width}/${rel}.webp`;
+                }catch(e){
+                    const safe = encodeURIComponent(String(name));
+                    return `/thumb/${width}/${safe}`;
+                }
             }
-            // Global IMG error listener: if any image fails (e.g., CDN hotlink/404), auto-fallback to origin
-            window.addEventListener('error', function(ev){
+        // Global IMG error listener: if any image fails (e.g., CDN hotlink/404), auto-fallback to origin
+        window.addEventListener('error', function(ev){
                 try{
                     const el = ev && ev.target;
                     if (!el || el.tagName !== 'IMG') return;
                     // if already tried fallback, skip
                     if (el.dataset && el.dataset.fallbackTried) return;
-                    fallbackToOrigin(el);
+            // pass along original relative path if provided by caller
+            const orig = (el.dataset && el.dataset.original) ? el.dataset.original : undefined;
+            fallbackToOrigin(el, orig);
                 }catch{}
             }, true);
         </script>
@@ -184,7 +224,7 @@
             padding: 20px;
             border-radius: 8px;
             margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: none;
         }
         
     .stores-header {
@@ -213,9 +253,12 @@
     .stores-title .tv-img { width:24px; height:24px; display:inline-block; vertical-align:middle; border-radius:4px; }
     .stores-title .tv-svg { width:44px; height:44px; display:inline-block; vertical-align:middle; }
     /* Brand logo in title */
-    .stores-title .brand-logo { max-height: 44px; height: auto; width: auto; display: inline-block; vertical-align: middle; margin-right: 8px; object-fit: contain; }
+    .stores-title .brand-logo { max-height: 44px; height: auto; width: auto; display: inline-block; vertical-align: middle; margin-right: 4px; object-fit: contain; }
     .stores-title { overflow: visible; }
     .stores-title .title-fallback { display: none; }
+    /* Header separator and avatar */
+    .stores-title .header-sep { width:2px; height:30px; background:#000; display:inline-block; margin:0 6px; border-radius:1px; }
+    .stores-title .header-avatar { width:32px; height:32px; border-radius:50%; object-fit:cover; display:inline-block; vertical-align:middle; background:#f2f2f7; border:1px solid #e5e5ea; }
         /* Apple-like primary button */
         .stores-header .add-store-btn {
             appearance: none;
@@ -230,8 +273,8 @@
             gap: 8px;
             font-weight: 600;
             font-size: 13px;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.15);
-            transition: background .2s, box-shadow .2s, transform .05s;
+            box-shadow: none;
+            transition: background .2s, transform .05s;
         }
         .stores-header .add-store-btn:hover { background: #0a7aff; }
         .stores-header .add-store-btn:active { transform: translateY(1px); }
@@ -364,10 +407,10 @@
         
         .screen-card {
             background-color: white;
-            border: 1px solid #ddd;
+            border: none;
             border-radius: 8px;
             padding: 16px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            box-shadow: none;
             transition: border 0.3s ease, background-color 0.3s ease;
             position: relative;
             overflow: hidden;
@@ -377,21 +420,21 @@
             position: absolute;
             inset:0;
             pointer-events:none;
-            background: linear-gradient(145deg, rgba(255,255,255,0) 70%, rgba(0,0,0,0.03));
+            background: none;
         }
         
         .screen-card.vertical-mode {
-            border-left: 4px solid #e74c3c;
+            border-left: none;
             background-color: #fdf2f2;
         }
         
         .screen-card.horizontal-mode {
-            border-left: 4px solid #3498db;
+            border-left: none;
             background-color: #f2f8fd;
         }
         
         .screen-card.default-mode {
-            border-left: 4px solid #95a5a6;
+            border-left: none;
             background-color: #f8f9fa;
         }
         
@@ -400,8 +443,24 @@
             padding: 8px;
             background: linear-gradient(135deg, #f0f8ff 0%, #e8f4f8 100%);
             border-radius: 6px;
-            border-left: 3px solid #007cba;
+            border-left: none;
             border: 1px solid #d1ecf1;
+        }
+        /* Make both Apply buttons consistent size and full width */
+        .apply-all-section .apply-btn {
+            display: block;
+            width: 100%;
+            min-height: 42px; /* consistent height */
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 14px;
+            line-height: 1.1;
+            margin: 6px 0 0 0; /* stack with slight gap */
+            text-align: center;
+            white-space: nowrap; /* avoid multi-line wrapping */
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         
         .protect-section {
@@ -409,7 +468,7 @@
             padding: 8px;
             background: linear-gradient(135deg, #fff5f5 0%, #ffe8e8 100%);
             border-radius: 6px;
-            border-left: 3px solid #dc3545;
+            border-left: none;
             border: 1px solid #f1d1d1;
         }
         
@@ -425,6 +484,16 @@
         .apply-all-section label {
             color: #0c5460;
         }
+
+    /* Upload progress UI */
+    .upload-progress { position:absolute; left:16px; right:16px; bottom:12px; height:8px; background:#e9ecef; border-radius:4px; overflow:hidden; box-shadow: none; }
+    .upload-progress .bar { height:100%; width:0%; background: linear-gradient(90deg, #6fa8ff, #2d7dff); transition: width .2s ease; }
+    .upload-progress .label { position:absolute; right:16px; bottom:24px; background: rgba(255,255,255,0.9); color:#333; font-size:12px; padding:2px 6px; border-radius:4px; box-shadow: none; }
+
+    /* Replace modal progress */
+    .rp-progress { margin-top:10px; position:relative; height:8px; background:#e9ecef; border-radius:4px; overflow:hidden; }
+    .rp-progress .bar { height:100%; width:0%; background: linear-gradient(90deg, #6fa8ff, #2d7dff); transition: width .2s ease; }
+    .rp-progress .label { display:inline-block; margin-top:6px; font-size:12px; color:#555; }
         
         .protect-section label {
             color: #721c24;
@@ -446,11 +515,27 @@
         
         .screen-title {
             font-size: 16px;
-            font-weight: bold;
-            margin-bottom: 15px;
-            text-align: center;
-            display:flex; align-items:center; justify-content:center; gap:8px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            display: grid;
+            grid-template-columns: auto 1fr auto; /* status | name | actions */
+            align-items: center;
+            gap: 8px;
+            padding-right: 44px; /* keep clear space for top-right remove button */
         }
+        .screen-title .st-left { display:inline-flex; align-items:center; gap:6px; min-width:0; }
+        .screen-title .st-center { min-width:0; }
+        .screen-title .st-center a,
+        .screen-title .st-center input { display:block; max-width:100%; width:100%; }
+        .screen-title .st-right { display:inline-flex; align-items:center; gap:6px; }
+        .screen-card.editing-title .remove-screen-btn { display:none; }
+        .edit-name-btn,
+        .name-save-btn,
+        .name-cancel-btn {
+            font-size:12px; line-height:1; padding:6px 8px; border:1px solid #dcdfe3; background:#fff; border-radius:6px; cursor:pointer;
+        }
+        .edit-name-btn:hover, .name-save-btn:hover, .name-cancel-btn:hover { background:#f6f7f9; }
+        .screen-title .st-center input { font-size:13px; padding:6px 10px; border:1px solid #dcdfe3; border-radius:6px; height: 30px; }
     .status-dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
         .status-dot.offline { background:#bbb; box-shadow:0 0 0 0 rgba(0,0,0,0.1); }
         .status-dot.online { background:#1bcf5a; box-shadow:0 0 8px rgba(27,207,90,0.6); }
@@ -501,7 +586,7 @@
             background-color: #f8f9fa;
         }
     /* Per-item status dot (file-level) */
-    .item-status-dot { position:absolute; top:4px; left:4px; width:10px; height:10px; border-radius:50%; box-shadow:0 0 0 1px #fff, 0 1px 2px rgba(0,0,0,.25); z-index:4; }
+    .item-status-dot { position:absolute; top:4px; left:4px; width:10px; height:10px; border-radius:50%; box-shadow:none; z-index:4; border:1px solid #fff; }
     .item-status-dot.ok { background:#1bcf5a; }
     .item-status-dot.fail { background:#e74c3c; }
     .item-status-dot.stale { background:#f1c40f; }
@@ -542,7 +627,7 @@
         }
         
     /* Compact action buttons row */
-    .upload-btn, .delete-btn, .rotate-btn { font-size:12px; line-height:1; padding:6px 12px; border-radius:6px; border:none; cursor:pointer; display:inline-flex; align-items:center; gap:4px; margin:0; box-shadow:0 1px 2px rgba(0,0,0,0.06); transition:.18s background,.18s box-shadow,.18s transform; }
+    .upload-btn, .delete-btn, .rotate-btn { font-size:12px; line-height:1; padding:6px 12px; border-radius:6px; border:none; cursor:pointer; display:inline-flex; align-items:center; gap:4px; margin:0; box-shadow:none; transition:.18s background,.18s box-shadow,.18s transform; }
     .upload-btn { background:#0d6efd; color:#fff; }
     .upload-btn:hover { background:#0b5ed7; }
     .delete-btn { background:#dc3545; color:#fff; }
@@ -604,7 +689,7 @@
             background-color: white;
             transition: .3s;
             border-radius: 50%;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            box-shadow: none;
         }
         .switch input:checked + .slider { background-color: #28a745; }
         .switch input:checked + .slider:before { transform: translateX(18px); }
@@ -662,7 +747,7 @@
     .rp-filters { display:inline-flex; align-items:center; gap:2px; background:#fff; border:1px solid #dcdfe3; border-radius:9999px; padding:2px; }
     .rp-filter-btn { appearance:none; border:none; background:transparent; padding:6px 12px; border-radius:9999px; font-size:12px; font-weight:600; color:#374151; cursor:pointer; }
     .rp-filter-btn.active { background:#0d6efd; color:#fff; }
-    .rp-del { position:absolute; top:4px; right:4px; width:24px; height:24px; border-radius:50%; background:rgba(255,255,255,0.95); border:1px solid #dcdfe3; box-shadow:0 1px 2px rgba(0,0,0,0.08); display:flex; align-items:center; justify-content:center; color:#7a7a7a; opacity:0; transition:opacity .15s, background .15s; }
+    .rp-del { position:absolute; top:4px; right:4px; width:24px; height:24px; border-radius:50%; background:rgba(255,255,255,0.95); border:1px solid #dcdfe3; box-shadow:none; display:flex; align-items:center; justify-content:center; color:#7a7a7a; opacity:0; transition:opacity .15s, background .15s; }
     .rp-item:hover .rp-del { opacity:1; }
     .rp-del:hover { background:#fff; color:#000; }
     .btn { padding:6px 10px; border-radius:6px; border:1px solid #dcdfe3; background:#fff; cursor:pointer; font-size:12px; }
@@ -705,7 +790,7 @@
             background-color: white;
             padding: 20px;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: none;
         }
         
         .apply-btn {
@@ -746,22 +831,22 @@
     .schedule-title { font-size:11px; font-weight:600; letter-spacing:.4px; color:#222; text-transform:uppercase; }
     .add-slot-btn { background:transparent; border:1px solid #0b7285; color:#0b7285; font-size:11px; padding:3px 9px; border-radius:14px; cursor:pointer; transition:.2s; line-height:1; }
     .add-slot-btn:hover { background:#0b7285; color:#fff; }
-        .add-slot-btn { background:linear-gradient(#ffffff,#f4f7fa); border:1px solid #b7c4d1; color:#1d5fa7; font-size:15px; width:28px; height:28px; display:flex; align-items:center; justify-content:center; padding:0; border-radius:9px; cursor:pointer; transition:.18s background,.18s box-shadow,.18s transform,.18s border; line-height:1; font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,0.08),0 0 0 0 rgba(38,132,255,0); }
-        .add-slot-btn:hover { background:#e8f2ff; border-color:#8fb8e3; box-shadow:0 2px 4px rgba(0,0,0,0.12),0 0 0 2px rgba(143,184,227,0.25); }
-        .add-slot-btn:active { background:#d9e9f9; transform:translateY(1px); box-shadow:0 1px 2px rgba(0,0,0,0.18),0 0 0 2px rgba(143,184,227,0.3); }
-        .add-slot-btn:focus-visible { outline:none; box-shadow:0 0 0 3px rgba(38,132,255,0.45); }
+    .add-slot-btn { background:linear-gradient(#ffffff,#f4f7fa); border:1px solid #b7c4d1; color:#1d5fa7; font-size:15px; width:28px; height:28px; display:flex; align-items:center; justify-content:center; padding:0; border-radius:9px; cursor:pointer; transition:.18s background,.18s box-shadow,.18s transform,.18s border; line-height:1; font-weight:600; box-shadow:none; }
+    .add-slot-btn:hover { background:#e8f2ff; border-color:#8fb8e3; box-shadow:none; }
+    .add-slot-btn:active { background:#d9e9f9; transform:translateY(1px); box-shadow:none; }
+    .add-slot-btn:focus-visible { outline:none; box-shadow:none; }
     .schedule-primary { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:6px; }
     .schedule-extra-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:6px; }
     .slot-box { position:relative; background:#fdfdfd; border:1px solid #dcdfe3; border-radius:6px; padding:4px 6px 6px; display:flex; flex-direction:column; gap:3px; min-width:0; }
-    .slot-box.highlight-active { border-color:#28a745; box-shadow:0 0 0 2px rgba(40,167,69,.15); }
+    .slot-box.highlight-active { border-color:#28a745; box-shadow:none; }
     .slot-label { font-size:9px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; color:#555; }
     .slot-inline { display:flex; gap:4px; align-items:center; width:100%; }
     .slot-inline input[type=date], .slot-inline input[type=text] { font-size:10px; padding:2px 4px; border:1px solid #cfd3d7; border-radius:4px; background:#fff; width:100%; min-width:0; }
-    .slot-inline input[type=date]:focus, .slot-inline input[type=text]:focus { outline:none; border-color:#0b7285; box-shadow:0 0 0 2px rgba(11,114,133,.2); }
+    .slot-inline input[type=date]:focus, .slot-inline input[type=text]:focus { outline:none; border-color:#0b7285; box-shadow:none; }
     .schedule-windows { margin-top:6px; display:flex; flex-direction:column; gap:6px; }
     .pl-actions.inline-actions { display:flex; align-items:flex-start; gap:6px; margin-top:4px; flex-wrap:wrap; background:#f6f8fa; border:1px solid #d0d7de; border-radius:8px; padding:3px 8px 4px; position:relative; width:100%; box-sizing:border-box; }
     .playlist-row.apple .pl-top > div:nth-child(2){ flex:1 1 auto; min-width:0; }
-    .pl-actions.inline-actions::before { content:""; position:absolute; inset:0; border-radius:12px; pointer-events:none; box-shadow:0 1px 2px rgba(0,0,0,0.06); }
+    .pl-actions.inline-actions::before { content:""; position:absolute; inset:0; border-radius:12px; pointer-events:none; box-shadow:none; }
     /* Unified square control size */
     .pl-actions.inline-actions .pl-switch,
     .pl-actions.inline-actions .pl-icon-btn,
@@ -769,14 +854,14 @@
     .pl-actions.inline-actions .pl-switch { width:40px; font-size:9px; border-radius:12px; padding:0 5px; background:#d1d6db; display:flex; align-items:center; justify-content:center; font-weight:600; color:#fff; letter-spacing:.3px; border:1px solid #c1c7cd; transition:.25s background,.25s box-shadow; cursor:pointer; }
     .pl-actions.inline-actions .pl-switch.on { background:#2fb355; }
     .pl-actions.inline-actions .pl-switch span { font-size:11px; }
-    .pl-actions.inline-actions .pl-icon-btn { width:20px; height:20px; border:1px solid #c4ccd3; background:#ffffff; border-radius:5px; font-size:11px; display:flex; align-items:center; justify-content:center; padding:0; line-height:1; color:#345; box-shadow:0 1px 2px rgba(0,0,0,0.05); transition:.2s background,.2s border,.2s box-shadow,.2s transform; }
+    .pl-actions.inline-actions .pl-icon-btn { width:20px; height:20px; border:1px solid #c4ccd3; background:#ffffff; border-radius:5px; font-size:11px; display:flex; align-items:center; justify-content:center; padding:0; line-height:1; color:#345; box-shadow:none; transition:.2s background,.2s border,.2s box-shadow,.2s transform; }
     .pl-actions.inline-actions .pl-icon-btn:hover { background:#eff4f8; border-color:#b6c0c9; }
     .pl-actions.inline-actions .pl-icon-btn:active { transform:translateY(1px); }
-    .pl-actions.inline-actions .pl-icon-btn.active { background:#e2f3ff; border-color:#7fbce4; box-shadow:0 0 0 2px rgba(127,188,228,0.35); color:#1168d4; }
+    .pl-actions.inline-actions .pl-icon-btn.active { background:#e2f3ff; border-color:#7fbce4; box-shadow:none; color:#1168d4; }
     .pl-actions.inline-actions .pl-icon-btn.danger { color:#c0271c; border-color:#e2b6b2; background:#fff; }
     .pl-actions.inline-actions .pl-icon-btn.danger:hover { background:#ffeceb; border-color:#df9f99; }
     .pl-actions.inline-actions .dur-wrap { position:relative; }
-    .pl-actions.inline-actions .dur-wrap input { padding:1px 12px 1px 5px; font-size:10px; border:1px solid #c4ccd3; border-radius:5px; background:#fff; width:46px; box-shadow:0 1px 2px rgba(0,0,0,0.04); }
+    .pl-actions.inline-actions .dur-wrap input { padding:1px 12px 1px 5px; font-size:10px; border:1px solid #c4ccd3; border-radius:5px; background:#fff; width:46px; box-shadow:none; }
     .pl-actions.inline-actions .dur-wrap:after { content:'s'; position:absolute; right:9px; top:50%; transform:translateY(-50%); font-size:12px; color:#56616b; pointer-events:none; }
     .pl-actions.inline-actions .dur-wrap input:focus { outline:2px solid #8fb8e3; outline-offset:0; }
     .pl-actions.inline-actions .ia-label { font-weight:600; font-size:10px; margin-right:3px; color:#202428; }
@@ -784,13 +869,13 @@
     .pl-actions.inline-actions .group .ia-label { min-width:auto; text-align:left; padding-right:2px; }
     @media (max-width:700px){ .pl-actions.inline-actions .group .ia-label { min-width:auto; } }
     .pl-actions.inline-actions .group { flex:0 0 auto; }
-    .pl-actions.inline-actions .dur-box { display:flex; align-items:center; gap:3px; background:#fff; padding:1px 5px; border:1px solid #c4ccd3; border-radius:12px; box-shadow:0 1px 2px rgba(0,0,0,0.04); }
+    .pl-actions.inline-actions .dur-box { display:flex; align-items:center; gap:3px; background:#fff; padding:1px 5px; border:1px solid #c4ccd3; border-radius:12px; box-shadow:none; }
     .pl-actions.inline-actions .dur-box .dur-display { min-width:20px; text-align:center; font-weight:500; font-size:10px; color:#222; }
     /* Flat duration +/- buttons */
     .pl-actions.inline-actions .pl-icon-btn.dur-btn { background:#fff; border-color:#cfd3d7; color:#222; width:18px; height:18px; font-weight:700; font-size:12px; border-radius:4px; }
     .pl-actions.inline-actions .pl-icon-btn.dur-btn:hover { background:#f2f4f7; border-color:#c2c7cc; }
     .pl-actions.inline-actions .pl-icon-btn.dur-btn:active { background:#e8eaee; }
-    .pl-actions.inline-actions .delete-pill { height:20px; padding:0 8px; border:1px solid #e2b6b2; background:#fff; color:#b42016; border-radius:12px; font-weight:500; letter-spacing:.1px; font-size:10px; box-shadow:0 1px 2px rgba(0,0,0,0.05); display:flex; align-items:center; }
+    .pl-actions.inline-actions .delete-pill { height:20px; padding:0 8px; border:1px solid #e2b6b2; background:#fff; color:#b42016; border-radius:12px; font-weight:500; letter-spacing:.1px; font-size:10px; box-shadow:none; display:flex; align-items:center; }
     .pl-actions.inline-actions .delete-pill:hover { background:#ffeceb; border-color:#dc9d98; }
     .pl-actions.inline-actions .delete-pill:active { background:#f9d8d5; }
     .pl-actions.inline-actions .group + .group { margin-left:4px; }
@@ -867,7 +952,7 @@
             border-radius: 8px;
             padding: 20px;
             margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: none;
         }
         
         .management-header h3 {
@@ -901,13 +986,14 @@
             background-color: #dc3545;
             color: white;
             border: none;
-            padding: 5px 10px;
-            border-radius: 3px;
+            padding: 6px 10px;
+            border-radius: 6px;
             cursor: pointer;
             font-size: 12px;
             position: absolute;
-            top: 5px;
-            right: 5px;
+            top: 8px;
+            right: 8px;
+            z-index: 2;
         }
         
         .remove-screen-btn:hover {
@@ -917,6 +1003,14 @@
         .screen-card {
             position: relative;
         }
+        /* Empty-state add tiles */
+        .screen-card.add-card { padding:0; border:1px dashed #d1d7de; background:#f9fafb; display:flex; align-items:center; justify-content:center; border-radius:10px; height:180px; cursor:pointer; transition: background .15s, border-color .15s, transform .05s; }
+        .screen-card.add-card:hover { background:#f3f4f6; border-color:#bfc6ce; }
+        .add-tile { text-align:center; color:#374151; display:flex; flex-direction:column; align-items:center; gap:8px; }
+        .add-tile .icon { width:42px; height:42px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:#e5e7eb; color:#111827; font-size:26px; font-weight:700; }
+        .add-tile .title { font-weight:600; font-size:14px; }
+        .add-tile .hint { font-size:12px; color:#6b7280; }
+        @media (max-width:768px){ .screen-card.add-card{ height:140px; } }
         
         /* Section Layout Styles */
         .screens-section, .promos-section {
@@ -924,7 +1018,7 @@
             border-radius: 8px;
             padding: 20px;
             margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: none;
         }
         
         .section-header {
@@ -1009,7 +1103,7 @@
             padding: 0 12px;
             display:inline-flex; align-items:center; gap:8px;
             font-weight:600; font-size:14px;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+            box-shadow: none;
             transition: background .2s, transform .05s;
         }
         .store-management .add-store-btn:hover { background:#0a7aff; }
@@ -1208,13 +1302,13 @@
     .playlist-row.apple .pl-switch { position:relative; background:#d0d5d9; border:none; border-radius:9px; cursor:pointer; padding:0 2px; display:flex; align-items:center; justify-content:center; font-size:7px; font-weight:600; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#fff; transition:.25s background,.25s box-shadow; letter-spacing:.2px; }
     .playlist-row.apple .pl-switch.on { background:#34c759; }
     .playlist-row.apple .pl-switch.off { background:#d0d5d9; }
-    .playlist-row.apple .pl-switch:before { content:""; position:absolute; left:2px; top:2px; width:10px; height:10px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,0.25); transform:translateX(0); transition:.25s transform; }
+    .playlist-row.apple .pl-switch:before { content:""; position:absolute; left:2px; top:2px; width:10px; height:10px; border-radius:50%; background:#fff; box-shadow:none; transform:translateX(0); transition:.25s transform; }
     .playlist-row.apple .pl-switch.on:before { transform:translateX(14px); }
     .playlist-row.apple .pl-switch:focus-visible { box-shadow:0 0 0 3px rgba(38,132,255,0.35); }
     .playlist-section { backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
     /* Time picker popup */
     .timepicker-overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.35); display:flex; align-items:center; justify-content:center; z-index:4000; }
-    .timepicker { background:#fff; border:1px solid #d0d3d7; border-radius:10px; padding:10px 14px 12px; width:220px; box-shadow:0 4px 14px rgba(0,0,0,0.18); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; }
+    .timepicker { background:#fff; border:1px solid #d0d3d7; border-radius:10px; padding:10px 14px 12px; width:220px; box-shadow:none; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; }
     .timepicker h4 { margin:0 0 8px; font-size:13px; font-weight:600; color:#222; }
     .timepicker .tp-grid { display:flex; gap:6px; }
     .timepicker .tp-col { flex:1; text-align:center; }
@@ -1246,7 +1340,7 @@
     .weekday-row { display:flex; gap:3px; flex-wrap:nowrap; margin-bottom:4px; }
     .weekday-row, .weekday-btn { pointer-events:auto; }
     .weekday-btn { width:18px; height:18px; padding:0; font-size:9px; font-weight:600; border:1px solid #b5bcc3; border-radius:50%; cursor:pointer; background:#f3f4f6; color:#374151; display:flex; align-items:center; justify-content:center; line-height:1; user-select:none; transition:.18s background,.18s border,.18s color; }
-    .weekday-btn.active { background:#2563eb; border-color:#1d4ed8; color:#fff; box-shadow:0 0 0 2px rgba(37,99,235,0.25); }
+    .weekday-btn.active { background:#2563eb; border-color:#1d4ed8; color:#fff; box-shadow:none; }
     .weekday-btn:hover { background:#e0e7ef; }
     .weekday-btn:active { transform:scale(.92); }
 
@@ -1316,48 +1410,55 @@
         /* Hide legacy mobile action row; replaced by hamburger menu */
         .mobile-actions { display:none !important; }
 
-        /* Hamburger (visible on <=768px) */
-    .hamburger-btn { display:none; border:1px solid #d2d2d7; background:#fff; color:#1d1d1f; border-radius:10px; padding:5px 7px; cursor:pointer; }
-        .hamburger-btn .bar{ display:block; width:20px; height:2px; background:#1d1d1f; margin:4px 0; border-radius:2px; }
-        .hamburger-btn:focus-visible { outline: 3px solid rgba(10,132,255,0.35); outline-offset: 2px; }
-    @media (max-width: 768px){ .hamburger-btn { display:inline-flex; flex-direction:column; align-items:center; justify-content:center; margin-left:auto; } }
+        /* Header action button: Account / More with chevron-down (visible on all sizes; right-aligned) */
+    .account-btn { display:inline-flex; align-items:center; gap:8px; margin-left:auto; border: none; background: transparent; color:#1d1d1f; border-radius:10px; padding:6px 10px; cursor:pointer; font-weight:600; }
+        .account-btn .account-text { font-size:14px; line-height:1; }
+        .account-btn .chev-down { width:16px; height:16px; display:inline-block; }
+        .account-btn .chev-down path { stroke: currentColor; stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+        .account-btn:focus-visible { outline: 3px solid rgba(10,132,255,0.35); outline-offset: 2px; }
 
         /* Off-canvas mobile drawer */
         .drawer-backdrop { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.35); z-index:999; }
         .drawer-backdrop.show { display:block; }
-    .mobile-drawer { position:fixed; top:0; right:-320px; width:300px; height:100%; background:#fff; box-shadow: -4px 0 14px rgba(0,0,0,0.15); transition:right .2s ease-in-out; z-index:1000; padding:12px; display:flex; flex-direction:column; gap:8px; }
+    .mobile-drawer { position:fixed; top:0; right:-320px; width:300px; height:100%; background:#fff; box-shadow: none; transition:right .2s ease-in-out; z-index:1000; padding:12px; display:flex; flex-direction:column; gap:8px; overflow:hidden; }
         .mobile-drawer.open { right:0; }
         .mobile-drawer h4 { margin:6px 0 10px; font-size:16px; }
-        /* Compact iOS-like action rows inside drawer */
-        .mobile-drawer .top-action-btn {
-            appearance:none;
-            width:100%;
-            height:36px;
-            padding:0 12px;
-            display:inline-flex;
-            align-items:center;
-            justify-content:flex-start;
-            gap:8px;
-            border:1px solid #d2d2d7;
-            border-radius:12px;
-            background:#fff;
-            color:#1d1d1f;
-            font-size:14px;
-            font-weight:600;
-        }
-        .mobile-drawer .top-action-btn:hover { background:#f2f2f7; border-color:#c7c7cc; }
-        .mobile-drawer .top-action-btn:active { transform: translateY(1px); }
-        .mobile-drawer .top-action-btn .icon { width:18px; height:18px; display:inline-block; }
-        .mobile-drawer .top-action-btn .icon path,
-        .mobile-drawer .top-action-btn .icon circle { stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; }
-        .mobile-drawer .top-action-btn.danger { color:#ff3b30; border-color:#ff3b30; }
+    /* Grouped action list inside drawer (Cupertino style) */
+    .mobile-drawer .action-list { border:none; border-radius:12px; overflow:hidden; background:#fff; display:flex; flex-direction:column; gap:6px; }
+    .mobile-drawer .action-item { display:flex; align-items:center; gap:10px; padding:12px; color:#1d1d1f; text-decoration:none; cursor:pointer; border:none; background:#fff; width:100%; text-align:left; font-weight:600; }
+    .mobile-drawer .action-item:last-child { border:none; }
+    .mobile-drawer .action-item:hover { background:#f2f2f7; text-decoration:none; }
+    .mobile-drawer .action-item .icon { width:18px; height:18px; display:inline-block; }
+    .mobile-drawer .action-item .icon path,
+    .mobile-drawer .action-item .icon circle { stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    /* No red emphasis for destructive action in drawer */
+    .mobile-drawer .action-item.danger { color:#1d1d1f; }
+    /* Profile panel: overlay from top, covers drawer items */
+    .profile-panel { position:absolute; inset:0; background:#fff; transform:translateY(-8px) scaleY(0); transform-origin:top; transition:transform .25s ease, opacity .25s ease; z-index:5; overflow:auto; pointer-events:none; opacity:.0; }
+    .profile-panel.open { transform:translateY(0) scaleY(1); pointer-events:auto; opacity:1; }
+    .profile-card { padding:16px 14px 18px; display:flex; flex-direction:column; gap:14px; }
+    .profile-title { display:flex; align-items:center; justify-content:space-between; font-weight:700; font-size:16px; }
+    .profile-title .close-x { appearance:none; border:1px solid #d2d2d7; background:#fff; border-radius:10px; padding:4px 8px; cursor:pointer; }
+    .profile-avatar-wrap { align-self:center; width:96px; height:96px; border-radius:50%; overflow:hidden; border:1px solid #e5e5ea; background:#f2f2f7; position:relative; }
+    .profile-avatar-wrap img { width:100%; height:100%; object-fit:cover; border-radius:50%; display:block; }
+    .profile-avatar-wrap .overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:12px; color:#fff; background:rgba(0,0,0,.35); opacity:0; transition:opacity .18s ease; border-radius:50%; pointer-events:none; }
+    .profile-avatar-wrap:hover .overlay { opacity:1; }
+    .avatar { width:48px; height:48px; border-radius:50%; background:#f2f2f7; object-fit:cover; }
+    .field { display:flex; flex-direction:column; gap:6px; }
+    .field label { font-size:12px; color:#555; }
+    .field input { border:1px solid #d2d2d7; border-radius:10px; padding:10px 12px; font-size:14px; width:100%; box-sizing:border-box; }
+    .profile-pass { display:flex; flex-direction:column; gap:8px; }
+    .actions-col { display:flex; flex-direction:column; gap:8px; }
+    .btn.block { width:100%; justify-content:center; box-sizing:border-box; }
+    /* Make profile panel buttons light grey only within the panel */
+    .profile-card .btn { background:#f2f2f7; color:#1d1d1f; border-color:#e5e5ea; }
 
     /* Simple modal for Apply-All confirmation */
     .modal-backdrop { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:998; }
     .modal-backdrop.show { display:block; }
     .modal { display:none; position:fixed; inset:0; z-index:999; align-items:center; justify-content:center; }
     .modal.show { display:flex; }
-    .modal-card { width:min(520px, 92vw); background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.2); border:1px solid #e5e7eb; }
+    .modal-card { width:min(520px, 92vw); background:#fff; border-radius:12px; box-shadow:none; border:1px solid #e5e7eb; }
     .modal-card .modal-header { padding:14px 16px; border-bottom:1px solid #eee; font-weight:700; font-size:16px; }
     .modal-card .modal-body { padding:12px 16px; max-height:60vh; overflow:auto; }
     .modal-card .modal-footer { padding:12px 16px; border-top:1px solid #eee; display:flex; gap:8px; justify-content:flex-end; }
@@ -1367,6 +1468,13 @@
     .btn.primary { background:#007aff; color:#fff; border-color:#0077ff; }
     .btn.danger { background:#ff3b30; color:#fff; border-color:#ff3b30; }
     .btn:hover { filter:brightness(0.98); }
+    /* Profile dropdown */
+    .profile-menu { position:fixed; top:56px; right:24px; background:#fff; border:1px solid #d2d2d7; border-radius:10px; box-shadow:none; width:220px; display:none; z-index:1100; }
+    .profile-menu.show { display:block; }
+    .profile-menu .item { display:flex; align-items:center; gap:10px; padding:10px 12px; color:#1d1d1f; text-decoration:none; cursor:pointer; }
+    .profile-menu .item:hover { background:#f2f2f7; }
+    .profile-menu .username { font-weight:600; font-size:13px; color:#111; }
+    .profile-menu .sep { height:1px; background:#e5e5ea; margin:6px 0; }
     </style>
 </head>
 <body>
@@ -1375,31 +1483,18 @@
         <div class="stores-header">
                         <div class="stores-title">
                                                         <img class="brand-logo" src="{{ url_for('static', filename='ea-logo.svg') }}?v={{ asset_bust|default(0) }}" alt="Everyday Advertise" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';" />
+                            <span class="header-sep" aria-hidden="true"></span>
+                            <img id="headerAvatar" class="header-avatar" alt="Profile" src="" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'28\' height=\'28\'><rect width=\'100%\' height=\'100%\' rx=\'14\' ry=\'14\' fill=\'%23f2f2f7\' stroke=\'%23e5e5ea\'/></svg>'" />
                             <span class="title-fallback">Everyday Advertise</span>
                                                     </div>
-                                                    <button class="hamburger-btn" onclick="toggleDrawer(true)" aria-label="Menu" title="Menu">
-                                                        <span class="bar"></span>
-                                                        <span class="bar"></span>
-                                                        <span class="bar"></span>
+                                                    <button class="account-btn" onclick="toggleDrawer(true)" aria-label="Account / More" title="Account / More">
+                                                        <span class="account-text">Account / More</span>
+                                                        <svg class="chev-down" viewBox="0 0 24 24" aria-hidden="true">
+                                                            <path d="M6 9l6 6 6-6" />
+                                                        </svg>
                                                     </button>
-                                                    <div class="stores-actions desktop-actions" role="toolbar" aria-label="Header actions">
-                                                        <button class="top-action-btn" onclick="showAddStoreDialog()" title="Add Store">
-                                                            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
-                                                            <span>Add Store</span>
-                                                        </button>
-                                                        <button class="top-action-btn danger" id="delete-store-btn-top" onclick="deleteCurrentStore()" title="Delete selected store">
-                                                            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path></svg>
-                                                            <span>Delete</span>
-                                                        </button>
-                                                        <button class="top-action-btn" onclick="openUserProfile()" title="User profile">
-                                                            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c1.5-3.5 5-6 8-6s6.5 2.5 8 6"></path></svg>
-                                                            <span>Profile</span>
-                                                        </button>
-                                                        <button class="top-action-btn" onclick="futureAction()" title="Custom action">
-                                                            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6l6 12H6z"></path></svg>
-                                                            <span>Custom</span>
-                                                        </button>
-                                                    </div>
+                                                    <!-- Desktop actions removed; all actions are inside the hamburger menu to match design -->
+                                                    <div class="stores-actions desktop-actions" role="toolbar" aria-label="Header actions" style="display:none"></div>
                                                 </div>
             </div>
             
@@ -1439,8 +1534,13 @@
                     <div class="section-left">
                         <h3>📺 Regular Screens</h3>
                         <div class="store-info" id="current-store-info">
+                            {% if config.stores and config.stores|length > 0 %}
                             <div class="store-number" id="current-store-id">{{ config.stores[0].id }}</div>
                             <div class="store-name" id="current-store-name">{{ config.stores[0].name }}</div>
+                            {% else %}
+                            <div class="store-number" id="current-store-id">—</div>
+                            <div class="store-name" id="current-store-name">No stores yet</div>
+                            {% endif %}
                             <div class="master-indicator" id="master-indicator" style="display: none; color: #f39c12; font-weight: bold;">
                                 👑 MASTER STORE
                             </div>
@@ -1453,6 +1553,15 @@
                 <div class="screens-grid" id="screens-grid">
                     <!-- Regular screens will be loaded here -->
                 </div>
+            </div>
+            <!-- Profile dropdown (anchored to the Profile button) -->
+            <div id="profileMenu" class="profile-menu" role="menu" aria-label="User menu">
+                <div class="item" tabindex="0">
+                    <span class="username">{{ (session.get('user') or {}).get('name') or 'User' }}</span>
+                </div>
+                <div class="sep"></div>
+                <a class="item" href="{{ url_for('profile') }}">Profile</a>
+                <a class="item" href="{{ url_for('logout') }}">Log out</a>
             </div>
             
             <!-- Promo Screens Section -->
@@ -1488,22 +1597,37 @@
     <div id="drawerBackdrop" class="drawer-backdrop" onclick="toggleDrawer(false)"></div>
     <div id="mobileDrawer" class="mobile-drawer" role="dialog" aria-label="Menu" aria-modal="true">
         <h4>Menu</h4>
-        <button class="top-action-btn" onclick="showAddStoreDialog()" title="Add Store">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
-            <span>Add Store</span>
-        </button>
-        <button class="top-action-btn danger" onclick="deleteCurrentStore()" title="Delete selected store">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path></svg>
-            <span>Delete Store</span>
-        </button>
-        <button class="top-action-btn" onclick="openUserProfile()" title="User profile">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c1.5-3.5 5-6 8-6s6.5 2.5 8 6"></path></svg>
-            <span>Profile</span>
-        </button>
-        <button class="top-action-btn" onclick="futureAction()" title="Custom action">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6l6 12H6z"></path></svg>
-            <span>Custom</span>
-        </button>
+        <div style="font-size:12px;color:#555;margin:4px 0 10px 0;">Username<br><strong>{{ user_email or '—' }}</strong></div>
+        <div style="font-size:12px;color:#555;">Android TV pairing code</div>
+        <div style="font-size:26px;font-weight:800;letter-spacing:3px;margin:2px 0 8px 0;">{{ link_code or '----' }}</div>
+        <button class="btn" style="margin-bottom:12px;" onclick="regenerateLinkCode()">Regenerate</button>
+        <div class="sep" style="height:1px;background:#e5e5ea;margin:8px 0 12px 0;"></div>
+        <div class="action-list" role="menu">
+            <button class="action-item" onclick="showAddStoreDialog()" title="Add Store">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+                <span>Add Store</span>
+            </button>
+            <button class="action-item danger" id="drawer-delete-store-btn" onclick="deleteCurrentStore()" title="Delete selected store">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path></svg>
+                <span>Delete Store</span>
+            </button>
+            <button class="action-item" onclick="toggleProfilePanel(true)" title="Profile">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c1.5-3.5 5-6 8-6s6.5 2.5 8 6"></path></svg>
+                <span>Profile</span>
+            </button>
+            <button class="action-item" onclick="futureAction()" title="Custom action">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6l6 12H6z"></path></svg>
+                <span>Custom</span>
+            </button>
+            <a class="action-item" href="{{ url_for('logout') }}" title="Log out">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                    <path d="M16 17l5-5-5-5" />
+                    <path d="M21 12H9" />
+                </svg>
+                <span>Log out</span>
+            </a>
+        </div>
     </div>
 
     <!-- Apply-All Confirmation Modal -->
@@ -1530,11 +1654,204 @@
         if(open){ d.classList.add('open'); b.classList.add('show'); }
         else { d.classList.remove('open'); b.classList.remove('show'); }
     }
-    function openUserProfile(){
-        alert('User profile coming soon');
+    function openUserProfile(){ toggleProfilePanel(true); }
+    async function loadHeaderAvatar(){
+        try{
+            const r = await fetch('/api/me');
+            const j = await r.json();
+            if(j && j.success){
+                const h = document.getElementById('headerAvatar');
+                if(h){ h.src = j.avatar_url || h.src; }
+            }
+        }catch(e){ /* ignore */ }
     }
+    function toggleProfilePanel(force){
+        let panel = document.getElementById('profilePanel');
+        if(!panel){
+            panel = document.createElement('div');
+            panel.id = 'profilePanel';
+            panel.className = 'profile-panel';
+            panel.innerHTML = `
+                <div class="profile-card">
+                    <div class="profile-title">
+                        <span>Profile</span>
+                        <button class="close-x" onclick="toggleProfilePanel(false)">✕</button>
+                    </div>
+                    <label for="avatarFile" class="profile-avatar-wrap" title="Change avatar" style="cursor:pointer;">
+                        <img id="avatarImg" src="" alt="Profile image" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'96\' height=\'96\'><rect width=\'100%\' height=\'100%\' rx=\'48\' ry=\'48\' fill=\'%23f2f2f7\'/></svg>'" />
+                        <div class="overlay">Tap to change</div>
+                    </label>
+                    <input id="avatarFile" type="file" accept="image/*" style="display:none" />
+                    <div class="field">
+                        <label for="fullNameInput">Your name</label>
+                        <input id="fullNameInput" placeholder="Enter your name" />
+                    </div>
+                    <div class="field">
+                        <label>Change password</label>
+                        <div class="profile-pass">
+                            <input id="curPwd" type="password" placeholder="Current" />
+                            <input id="newPwd" type="password" placeholder="New password" />
+                        </div>
+                    </div>
+                    <div class="actions-col">
+                        <button class="btn block" onclick="updateProfileAll()">Update</button>
+                        <button class="btn block" onclick="deleteAccount()">Delete account</button>
+                        <button class="btn block" onclick="toggleProfilePanel(false)">Close</button>
+                    </div>
+                    <div id="ppMsg" style="font-size:12px;color:#555"></div>
+                </div>`;
+            // Insert after the action list
+            const drawer = document.getElementById('mobileDrawer');
+            drawer.appendChild(panel);
+            // Wire avatar upload handler (click avatar triggers file chooser)
+            const f = panel.querySelector('#avatarFile');
+            // Note: <label for="avatarFile"> already triggers the file dialog when clicking the image.
+        f.addEventListener('change', async ()=>{
+                const file = f.files && f.files[0]; if(!file) return;
+                const fd = new FormData(); fd.append('avatar', file);
+                const r = await fetch('/api/profile/avatar', { method:'POST', body: fd });
+                const j = await r.json();
+                const msg = document.getElementById('ppMsg');
+                if(j.success){
+                    const imgEl = document.getElementById('avatarImg');
+                    // Use server-provided cache-busted URL; fallback to manual buster
+                    if(j.avatar_url){ imgEl.src = j.avatar_url; }
+                    else { imgEl.src = imgEl.src.split('?')[0] + '?t=' + Date.now(); }
+            // Allow re-selecting the same file later
+            f.value = '';
+            // Also update header avatar
+            const h = document.getElementById('headerAvatar');
+            if(h){ h.src = (j.avatar_url || (h.src ? h.src.split('?')[0] + '?t=' + Date.now() : '')); }
+                    msg.textContent='Avatar updated';
+                }
+                else { msg.textContent = j.error||'Avatar upload failed'; }
+            });
+        }
+        const open = (typeof force==='boolean')? force : !panel.classList.contains('open');
+        if(open){ panel.classList.add('open'); loadProfileIntoPanel(); }
+        else { panel.classList.remove('open'); }
+    }
+    async function loadProfileIntoPanel(){
+        try{
+            const r = await fetch('/api/me');
+            const j = await r.json();
+            if(!j.success) throw new Error(j.error||'failed');
+            document.getElementById('fullNameInput').value = (j.full_name || j.username || '').trim();
+            const img = document.getElementById('avatarImg');
+            img.src = j.avatar_url || '';
+        }catch(e){ console.warn('load profile failed', e); }
+    }
+    async function updateProfileAll(){
+        const nameVal = document.getElementById('fullNameInput').value.trim();
+        const cur = document.getElementById('curPwd').value;
+        const nw = document.getElementById('newPwd').value;
+        const msg = document.getElementById('ppMsg');
+        msg.textContent = '';
+        try{
+            const rn = await fetch('/api/profile/name', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ full_name: nameVal })});
+            const jn = await rn.json();
+            if(!jn.success){ msg.textContent = jn.error||'Failed to update name'; return; }
+        }catch(e){ msg.textContent = 'Failed to update name'; return; }
+        if(nw){
+            if(nw.length < 6){ msg.textContent = 'New password too short'; return; }
+            try{
+                const rp = await fetch('/api/profile/password', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ current_password: cur, new_password: nw })});
+                const jp = await rp.json();
+                if(!jp.success){ msg.textContent = jp.error||'Password change failed'; return; }
+            }catch(e){ msg.textContent = 'Password change failed'; return; }
+        }
+        msg.textContent = 'Profile updated';
+    }
+    async function deleteAccount(){
+        if(!confirm('Delete your account? This cannot be undone.')) return;
+        const cur = document.getElementById('curPwd').value;
+        const r = await fetch('/api/profile/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ current_password: cur })});
+        const j = await r.json();
+        if(j.success){ window.location.href = '/'; }
+        else { document.getElementById('ppMsg').textContent = j.error||'Failed to delete account'; }
+    }
+    // Show/hide user profile dropdown; position near trigger button
+    (function(){
+        // On page load, fetch avatar for header
+        loadHeaderAvatar();
+        let lastAnchor = null;
+        function placeMenu(menu, anchor){
+            try{
+                const r = anchor.getBoundingClientRect();
+                // Show to measure width
+                menu.style.visibility = 'hidden';
+                menu.style.display = 'block';
+                const mw = menu.offsetWidth;
+                const mh = menu.offsetHeight;
+                // Position below-right of anchor, keeping within viewport
+                let top = r.bottom + 8 + window.scrollY;
+                let left = r.right - mw + window.scrollX;
+                left = Math.max(8, Math.min(left, window.scrollX + window.innerWidth - mw - 8));
+                const maxTop = window.scrollY + window.innerHeight - mh - 8;
+                top = Math.min(top, maxTop);
+                menu.style.top = top + 'px';
+                menu.style.left = left + 'px';
+                menu.style.right = 'auto';
+                menu.style.visibility = '';
+            }catch{}
+        }
+        window.toggleProfileMenu = function(anchor){
+            try{
+                const menu = document.getElementById('profileMenu');
+                if(!menu) return;
+                const isSame = lastAnchor === anchor && menu.classList.contains('show');
+                // Toggle off if clicking same anchor
+                if(isSame){ menu.classList.remove('show'); lastAnchor = null; return; }
+                lastAnchor = anchor;
+                placeMenu(menu, anchor);
+                menu.classList.add('show');
+            }catch{}
+        }
+        // Click-away and ESC to close
+        document.addEventListener('click', function(ev){
+            const menu = document.getElementById('profileMenu');
+            if(!menu) return;
+            const t = ev.target;
+            const clickedInside = menu.contains(t) || (lastAnchor && lastAnchor.contains && lastAnchor.contains(t));
+            if(!clickedInside){ menu.classList.remove('show'); lastAnchor = null; }
+        });
+        document.addEventListener('keydown', function(ev){
+            if(ev.key === 'Escape'){
+                const menu = document.getElementById('profileMenu');
+                if(menu) menu.classList.remove('show');
+                lastAnchor = null;
+            }
+        });
+        // Reposition on resize
+        window.addEventListener('resize', function(){
+            const menu = document.getElementById('profileMenu');
+            if(menu && menu.classList.contains('show') && lastAnchor){ placeMenu(menu, lastAnchor); }
+        });
+        window.addEventListener('scroll', function(){
+            const menu = document.getElementById('profileMenu');
+            if(menu && menu.classList.contains('show') && lastAnchor){ placeMenu(menu, lastAnchor); }
+        }, true);
+    })();
     function futureAction(){
         alert('Custom action placeholder');
+    }
+    async function regenerateLinkCode(){
+        try{
+            const r = await fetch('/profile/regenerate_code', { method:'POST' });
+            const j = await r.json();
+            if(j && j.success){
+                // Update the visible code inside the drawer
+                const el = document.querySelector('#mobileDrawer');
+                if(el){
+                    const codes = el.querySelectorAll('div');
+                    // naive: the big code is the one with large font; re-render drawer by closing/opening
+                }
+                // Simpler: reload to reflect new code
+                location.reload();
+            } else {
+                alert('Failed to regenerate code');
+            }
+        }catch(e){ alert('Failed to regenerate: '+ e.message); }
     }
     </script>
 
@@ -1552,15 +1869,20 @@
         
         // Set currentStoreId from config data; restore last selection if saved
         (function(){
-            const firstId = allStoresData.stores[0].id;
+            const hasStores = Array.isArray(allStoresData.stores) && allStoresData.stores.length > 0;
+            const firstId = hasStores ? allStoresData.stores[0].id : null;
             try {
                 const saved = localStorage.getItem('lastStoreId');
-                if(saved && allStoresData.stores.some(s=>s.id===saved)){
+                if (hasStores && saved && allStoresData.stores.some(s=>s.id===saved)) {
                     currentStoreId = saved;
                 } else {
                     currentStoreId = firstId;
                 }
             } catch { currentStoreId = firstId; }
+            if (!currentStoreId) {
+                // Hide delete/add screen buttons until a store is created
+                try { document.getElementById('delete-store-btn-mobile').style.display = 'none'; } catch {}
+            }
         })();
         
         // Debug: Check if data loaded correctly
@@ -1669,9 +1991,21 @@
             // Auto-apply-to-all on upload has been removed. Use the per-screen Apply button instead.
             const applyToAll = false;
             
-            // Show loading state
+            // Show loading state + progress
             const card = input.closest('.screen-card');
             card.classList.add('loading');
+            // Ensure a progress UI exists in the card
+            let prog = card.querySelector('.upload-progress');
+            if(!prog){
+                prog = document.createElement('div');
+                prog.className = 'upload-progress';
+                prog.innerHTML = '<div class="bar" style="width:0%"></div><div class="label" style="display:none">0%</div>';
+                card.appendChild(prog);
+            }
+            const progBar = prog.querySelector('.bar');
+            const progLabel = prog.querySelector('.label');
+            const setProgress = (pct)=>{ try{ progBar.style.width = Math.max(0, Math.min(100, pct)) + '%'; progLabel.style.display='inline-block'; progLabel.textContent = Math.round(pct) + '%'; }catch{} };
+            setProgress(0);
             
             // No auto apply confirmation here; handled by the dedicated Apply flow
                 try {
@@ -1685,13 +2019,18 @@
                     const preParsed = await readJsonOrText(preResp);
                     const pre = preParsed.json;
                     if (pre && pre.success && pre.upload_url && pre.filename) {
-                        const putResp = await fetch(pre.upload_url, {
-                            method: 'PUT', headers: { 'Content-Type': pre.content_type || (file.type || 'application/octet-stream') }, body: file
+                        // XHR PUT with progress for presigned upload
+                        await new Promise((resolve, reject)=>{
+                            try{
+                                const xhr = new XMLHttpRequest();
+                                xhr.open('PUT', pre.upload_url, true);
+                                xhr.setRequestHeader('Content-Type', pre.content_type || (file.type || 'application/octet-stream'));
+                                xhr.upload.onprogress = (e)=>{ if(e && e.lengthComputable){ setProgress((e.loaded / e.total) * 100); } };
+                                xhr.onerror = ()=> reject(new Error('Network error during upload'));
+                                xhr.onload = ()=>{ if(xhr.status >= 200 && xhr.status < 300){ setProgress(100); resolve(); } else { reject(new Error('R2 upload failed ('+xhr.status+')')); } };
+                                xhr.send(file);
+                            }catch(err){ reject(err); }
                         });
-                        if (!putResp.ok) {
-                            const t = await putResp.text().catch(()=> '');
-                            throw new Error(`R2 upload failed (${putResp.status}). ${t.substring(0,160)}`);
-                        }
                         // Assign to screen (supports apply_to_all when allowed)
                         const assignPayload = { store_id: currentStoreId, screen_id: screenId, filename: pre.filename };
                         const assignResp = await fetch('/assign_to_screen', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(assignPayload)});
@@ -1722,7 +2061,17 @@
                     formData.append('store_id', currentStoreId);
                     formData.append('screen_id', screenId);
                     // no apply_to_all on upload path
-                    const response = await fetch('/upload_to_screen', { method: 'POST', body: formData });
+                    // Origin fallback with XHR to report progress
+                    const response = await new Promise((resolve, reject)=>{
+                        try{
+                            const xhr = new XMLHttpRequest();
+                            xhr.open('POST', '/upload_to_screen', true);
+                            xhr.upload.onprogress = (e)=>{ if(e && e.lengthComputable){ setProgress((e.loaded / e.total) * 100); } };
+                            xhr.onerror = ()=> reject(new Error('Network error during upload'));
+                            xhr.onload = ()=>{ const res = { ok: (xhr.status>=200 && xhr.status<300), status: xhr.status, text: ()=> Promise.resolve(xhr.responseText) }; resolve(res); };
+                            xhr.send(formData);
+                        }catch(err){ reject(err); }
+                    });
                     const parsed = await readJsonOrText(response);
                     data = parsed.json || { success:false, error: (parsed.text || 'Invalid JSON response').substring(0,200) };
                     data._http_status = response.status;
@@ -1838,9 +2187,12 @@
                     }
                     alert(msg);
                 }
+                // Remove progress on failure path after short delay
+                try{ setTimeout(()=>{ const p = card.querySelector('.upload-progress'); if(p) p.remove(); }, 600); }catch{}
             } catch (error) {
                 console.error('Error:', error);
                 alert('Upload failed: ' + (error && error.message ? error.message : String(error)));
+                try{ setTimeout(()=>{ const p = card.querySelector('.upload-progress'); if(p) p.remove(); }, 1200); }catch{}
             } finally {
                 // Always refresh playlist for the screen after an attempt (success path already updated data)
                 if (typeof refreshPlaylist === 'function') {
@@ -1848,6 +2200,8 @@
                 }
                 // Sanity: log resulting in-memory screen object
                 try { console.log('[UPLOAD][FINAL STATE]', currentStoreId, screenId, allStoresData.screens[currentStoreId][screenId]); } catch {}
+                // Remove progress UI a moment after finish
+                try{ setTimeout(()=>{ const p = card.querySelector('.upload-progress'); if(p) p.remove(); }, 500); }catch{}
                 card.classList.remove('loading');
                 input.value = ''; // Reset file input
             }
@@ -2048,7 +2402,7 @@
             loadScreensForStore(currentStoreId);
         }
         
-        function createScreenCard(screenId, screenData, storeId) {
+    function createScreenCard(screenId, screenData, storeId) {
             console.log('Creating card for:', screenId, 'with data:', screenData, 'for store:', storeId);
             const card = document.createElement('div');
             const orientationClass = getOrientationClass(screenData);
@@ -2063,21 +2417,69 @@
             
             card.className = `screen-card ${orientationClass}`;
             card.id = `card-${screenId}`;
+            card.dataset.store = String(storeId);
             
             card.innerHTML = `
                 <button class="remove-screen-btn" onclick="removeScreen('${screenId}')" title="Remove this screen">
                     ✕
                 </button>
                 <div class="screen-title">
-                    <span class="status-dot offline" id="status-dot-${screenId}" data-screen-id="${screenId}" title="Offline"></span>
-                    <span class="status-label" id="status-label-${screenId}">Offline</span>
-                    <a href="/tv_view/${storeId}/${screenId}" target="_blank" style="text-decoration: none; color: inherit;">
-                        ${getScreenDisplayName(screenId)}
-                    </a>
+                    <div class="st-left">
+                        <span class="status-dot offline" id="status-dot-${screenId}" data-screen-id="${screenId}" title="Offline"></span>
+                        <span class="status-label" id="status-label-${screenId}">Offline</span>
+                    </div>
+                    <div class="st-center">
+                        <a href="/tv_view/${storeId}/${screenId}" target="_blank" style="text-decoration: none; color: inherit;" id="name-link-${screenId}">
+                            ${escapeHtml(getScreenDisplayName(screenId))}
+                        </a>
+                        <div class="name-edit" id="name-edit-${screenId}" style="display:none;">
+                            <input type="text" id="name-input-${screenId}" value="${(screenData.name||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;')}" maxlength="100" placeholder="Custom name" onkeydown="if(event.key==='Enter'){ saveScreenName('${screenId}','${storeId}'); }">
+                        </div>
+                    </div>
+                    <div class="st-right">
+                        <button class="edit-name-btn" id="name-edit-btn-${screenId}" title="Edit name" onclick="startEditScreenName('${screenId}','${storeId}')">✏️</button>
+                        <span class="name-actions" id="name-actions-${screenId}" style="display:none;">
+                            <button class="name-save-btn" onclick="saveScreenName('${screenId}','${storeId}')" title="Save">💾</button>
+                            <button class="name-cancel-btn" onclick="cancelEditScreenName('${screenId}')" title="Cancel">✖</button>
+                        </span>
+                    </div>
                 </div>
                 
                 <div class="screen-preview ${previewClass}" id="preview-${screenId}">
-                    ${screenData.file ? (()=>{ const ext=(screenData.file.split('.').pop()||'').toLowerCase(); const videoExt=['mp4','webm','ogg','mov','avi','mkv','m4v']; const raw=screenData.file; const isAbs=/^https?:\/\//i.test(String(raw)); const bust=Date.now(); if(videoExt.includes(ext)){ const vurl = (videoUrl(raw) + (videoUrl(raw).includes('?')?'&':'?') + 'v=' + bust); return `<div class='preview-item'><video autoplay muted loop playsinline class=\"rotate-${rotation}\" style=\"max-width:100%;max-height:100%;object-fit:contain\" src=\"${vurl}\"></video></div>`; } else { const imgBase = isAbs ? mediaUrl(raw) : thumbUrl(raw, 600); const url = imgBase + (imgBase.includes('?')?'&':'?') + 'v=' + bust; return `<div class='preview-item'><img src=\"${url}\" alt=\"Screen content\" class=\"rotate-${rotation}\" style=\"max-width:100%;max-height:100%;object-fit:contain\" onerror=\"fallbackToOrigin(this, '${(screenData.file||'').replace(/'/g, "&#39;")}')\"></div>`; } })() :
+                    ${screenData.file ? (()=>{
+                        const ext=(screenData.file.split('.').pop()||'').toLowerCase();
+                        const videoExt=['mp4','webm','ogg','mov','avi','mkv','m4v'];
+                        const raw=screenData.file;
+                        const isAbs=/^https?:\/\//i.test(String(raw));
+                        const bust=Date.now();
+                        if(videoExt.includes(ext)){
+                            // Build a reliable initial video preview: prefer local /vpreview clip with a /vthumb poster
+                            let rel='';
+                            try{
+                                const base=(window.MEDIA_BASE_URL||'/static/uploads/').replace(/\/+$/,'/');
+                                const s=String(raw);
+                                if(s.startsWith('/')){
+                                    rel = s.replace(/^\/+/, '').replace(/^static\/uploads\//,'').replace(/^media\//,'');
+                                } else if(/^https?:\/\//i.test(s)){
+                                    if(s.startsWith(base)) rel = s.slice(base.length);
+                                } else {
+                                    rel = s;
+                                }
+                            }catch{}
+                            const hasRel = !!rel;
+                            const previewUrl = hasRel ? (`/vpreview/360/${encodeURIComponent(rel)}?v=${bust}`) : (videoUrl(raw) + (videoUrl(raw).includes('?')?'&':'?') + 'v=' + bust);
+                            const poster = hasRel ? (`/vthumb/360/${encodeURIComponent(rel)}?v=${bust}`) : '/static/video_placeholder.svg';
+                            // Use source element for better error handling and set a poster to avoid black flashes
+                            return `<div class='preview-item'>\
+<video autoplay muted loop playsinline preload="metadata" ${poster?`poster=\"${poster}\"`:''} class=\"rotate-${rotation}\" style=\"max-width:100%;max-height:100%;object-fit:contain\">\
+  <source src="${previewUrl}" type="video/mp4">\
+  </video></div>`;
+                        } else {
+                            const imgBase = isAbs ? mediaUrl(raw) : thumbUrl(raw, 600);
+                            const url = imgBase + (imgBase.includes('?')?'&':'?') + 'v=' + bust;
+                            return `<div class='preview-item'><img src=\"${url}\" alt=\"Screen content\" class=\"rotate-${rotation}\" style=\"max-width:100%;max-height:100%;object-fit:contain\" onerror=\"fallbackToOrigin(this, '${(screenData.file||'').replace(/'/g, "&#39;")}')\"></div>`;
+                        }
+                    })() :
                         '<div class="upload-area"><div style="margin-top: 20px;">No content uploaded</div></div>'
                     }
                 </div>
@@ -2107,8 +2509,10 @@
 
                 ${isMasterStore(currentStoreId) ? `
                 <div class="apply-all-section">
-                    <button class="apply-btn" style="padding:8px 12px;border-radius:6px;background:#1f7aec;color:#fff;border:none;cursor:pointer;" onclick="applyAllForScreen('${screenId}')">📡 Apply to ALL stores</button>
+                    <button class="apply-btn" style="background:#1f7aec;color:#fff;border:none;cursor:pointer;" onclick="applyAllForScreen('${screenId}')">📡 Apply to ALL stores</button>
+                    <button class="apply-btn" style="background:#f2f2f7;color:#1d1d1f;border:1px solid #dcdfe3;cursor:pointer;" title="Replace All Stores Screen" onclick="applyReplaceAllForScreen('${screenId}')">🧩 Replace All Stores Screen</button>
                     <div class="help-text">Tick one or more schedule items above, then click Apply to push to other stores</div>
+                    <div class="help-text">For REPLACE ALL, tick ALL items — targets will be made exactly the same as master</div>
                 </div>
                 ` : ''}
                 
@@ -2163,6 +2567,30 @@
             openApplyAllModal(screenId, 'override', selectedIds);
         }
 
+        // Replace-All (mirror) handler
+        function applyReplaceAllForScreen(screenId){
+            if(!isMasterStore(currentStoreId)){
+                showMessage('⚠️ Replace-All only from MASTER store', '#e67e22');
+                return;
+            }
+            const container = document.getElementById(`playlist-items-${screenId}`);
+            if(!container){ showMessage('Load playlist first', '#e67e22'); return; }
+            // collect ALL item ids in master playlist UI for this screen
+            let allIds = [];
+            let checkedIds = [];
+            try{
+                const allCbs = Array.from(container.querySelectorAll('input[type="checkbox"][data-bind="apply-select"]'));
+                allIds = allCbs.map(cb=>cb.getAttribute('data-item-id')).filter(Boolean);
+                checkedIds = allCbs.filter(cb=>cb.checked).map(cb=>cb.getAttribute('data-item-id')).filter(Boolean);
+            }catch{}
+            if(!allIds.length){ showMessage('No items to mirror — add items to master first', '#e67e22'); return; }
+            if(checkedIds.length !== allIds.length){
+                showMessage('Please tick ALL playlist items to use Replace ALL', '#e67e22');
+                return;
+            }
+            openApplyAllModal(screenId, 'mirror', allIds);
+        }
+
         // Modal helpers
     let applyAllModalState = { screenId: null, mode: 'override', selectedIds: [] };
         function computeImpactedStores(screenId){
@@ -2186,12 +2614,14 @@
             const impacted = computeImpactedStores(screenId);
             const modal = document.getElementById('applyAllModal');
             const backdrop = document.getElementById('applyAllModalBackdrop');
-            document.getElementById('applyAllTitle').textContent = 'Apply to ALL';
-            document.getElementById('applyAllDesc').textContent = mode === 'override' ?
+            document.getElementById('applyAllTitle').textContent = (mode === 'mirror') ? 'Replace ALL (Mirror Master)' : 'Apply to ALL';
+            document.getElementById('applyAllDesc').textContent = (mode === 'mirror') ?
+                'This will DELETE existing items and REPLACE the entire screen in selected stores to exactly match the master (same order/settings). Protected stores will be skipped.' :
+                (mode === 'override' ?
                 'If you proceed, this will replace the same screen number in the listed stores and remove their existing items. Protected stores will be skipped.' :
-                'If you proceed, this will add the current file to the listed stores without deleting their existing items. Protected stores will be skipped.';
+                'If you proceed, this will add the current file to the listed stores without deleting their existing items. Protected stores will be skipped.');
             document.getElementById('applyAllList').innerHTML = impacted.length ? impacted.map(s=>`<li><label style='display:flex;align-items:center;gap:8px;'><input type='checkbox' class='apply-store' data-store-id='${s.id}' checked><span>${s.name || s.id} (${s.id})</span></label></li>`).join('') : '<li>No stores to update</li>';
-            document.getElementById('applyAllAction').textContent = 'Apply to selected stores';
+            document.getElementById('applyAllAction').textContent = (mode === 'mirror') ? 'Replace selected stores' : 'Apply to selected stores';
             const hint = document.getElementById('applySelHint');
             if (hint) hint.style.display = (selectedIds && selectedIds.length) ? 'block' : 'none';
             modal.classList.add('show');
@@ -2237,12 +2667,31 @@
                             }));
                         }
                     }catch{}
+                    // For mirror mode, capture the full master snapshot once
+                    const isMirror = (mode === 'mirror');
+                    const mScr = ((((allStoresData||{}).screens||{})[currentStoreId]||{})[screenId]) || {};
+                    const masterList = Array.isArray(mScr.playlist) ? mScr.playlist : [];
                     (data.updated_stores || []).forEach(storeId => {
                         if (!allStoresData.screens[storeId]) allStoresData.screens[storeId] = {};
                         const targetId = `${storeId}_${screenType}`;
                         if (!allStoresData.screens[storeId][targetId]) allStoresData.screens[storeId][targetId] = {};
                         const scr = allStoresData.screens[storeId][targetId];
-                        if (selectedItems.length){
+                        if (isMirror){
+                            // Full replace to match master exactly
+                            scr.playlist = masterList.map(si=>Object.assign({ id: String(Date.now()+Math.random()) }, {
+                                file: si.file,
+                                enabled: !!si.enabled,
+                                start: si.start || null,
+                                end: si.end || null,
+                                schedule: Array.isArray(si.schedule)? si.schedule : [],
+                                duration: si.duration || 10,
+                                repeat: !!si.repeat,
+                                link_next: !!si.link_next,
+                                media_type: si.media_type || ((si.file||'').split('.').pop())
+                            }));
+                            // Prefer explicit file if present on master
+                            scr.file = mScr.file || (scr.playlist[0] && scr.playlist[0].file) || filename;
+                        } else if (selectedItems.length){
                             scr.playlist = Array.isArray(scr.playlist)? scr.playlist : [];
                             if (mode === 'override'){
                                 const idxByFile = new Map(scr.playlist.filter(x=>x&&x.file).map((x,i)=>[x.file,i]));
@@ -2277,7 +2726,20 @@
                         if (!allStoresData.screens[sId]) allStoresData.screens[sId] = {};
                         if (!allStoresData.screens[sId][scrId]) allStoresData.screens[sId][scrId] = {};
                         const scr = allStoresData.screens[sId][scrId];
-                        if (selectedItems.length){
+                        if (isMirror){
+                            scr.playlist = masterList.map(si=>Object.assign({ id: String(Date.now()+Math.random()) }, {
+                                file: si.file,
+                                enabled: !!si.enabled,
+                                start: si.start || null,
+                                end: si.end || null,
+                                schedule: Array.isArray(si.schedule)? si.schedule : [],
+                                duration: si.duration || 10,
+                                repeat: !!si.repeat,
+                                link_next: !!si.link_next,
+                                media_type: si.media_type || ((si.file||'').split('.').pop())
+                            }));
+                            scr.file = mScr.file || (scr.playlist[0] && scr.playlist[0].file) || filename;
+                        } else if (selectedItems.length){
                             scr.playlist = selectedItems.map(si=>Object.assign({ id: String(Date.now()+Math.random()) }, si));
                             scr.file = selectedItems[0].file;
                         } else {
@@ -2308,6 +2770,11 @@
         }
         
         function getScreenDisplayName(screenId) {
+            try {
+                const storeId = currentStoreId;
+                const sd = (allStoresData && allStoresData.screens && storeId && allStoresData.screens[storeId] && allStoresData.screens[storeId][screenId]) || null;
+                if (sd && sd.name) return sd.name;
+            } catch {}
             // Handle store-specific IDs (e.g., "1931_screen1" -> "Screen 1")
             if (screenId.includes('_')) {
                 const parts = screenId.split('_');
@@ -2333,6 +2800,62 @@
                 return `Promo ${num}`;
             }
             return screenId;
+        }
+
+    function startEditScreenName(screenId, storeId){
+            try{
+        const card = document.getElementById(`card-${screenId}`);
+        if (card) card.classList.add('editing-title');
+        document.getElementById(`name-link-${screenId}`).style.display = 'none';
+        document.getElementById(`name-edit-${screenId}`).style.display = 'block';
+        document.getElementById(`name-actions-${screenId}`).style.display = 'inline-flex';
+        const editBtn = document.getElementById(`name-edit-btn-${screenId}`);
+        if (editBtn) editBtn.style.display = 'none';
+                const inp = document.getElementById(`name-input-${screenId}`);
+                if (inp){ inp.focus(); inp.select(); }
+            }catch(e){ console.warn('startEditScreenName failed', e); }
+        }
+
+    function cancelEditScreenName(screenId){
+            try{
+        const card = document.getElementById(`card-${screenId}`);
+        if (card) card.classList.remove('editing-title');
+        document.getElementById(`name-edit-${screenId}`).style.display = 'none';
+        document.getElementById(`name-actions-${screenId}`).style.display = 'none';
+        const editBtn = document.getElementById(`name-edit-btn-${screenId}`);
+        if (editBtn) editBtn.style.display = '';
+        document.getElementById(`name-link-${screenId}`).style.display = '';
+            }catch(e){ console.warn('cancelEditScreenName failed', e); }
+        }
+
+        function saveScreenName(screenId, storeId){
+            try{
+                const inp = document.getElementById(`name-input-${screenId}`);
+                const val = (inp && inp.value ? inp.value.trim() : '');
+                fetch('/update_screen_name', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ store_id: storeId, screen_id: screenId, name: val })
+                })
+                .then(r=>r.json())
+                .then(j=>{
+                    if (j && j.success){
+                        // update in-memory config so getScreenDisplayName uses it
+                        try{
+                            if(!allStoresData.screens[storeId]) allStoresData.screens[storeId] = {};
+                            if(!allStoresData.screens[storeId][screenId]) allStoresData.screens[storeId][screenId] = {};
+                            const sd = allStoresData.screens[storeId][screenId];
+                            if (val) sd.name = val; else delete sd.name;
+                        }catch{}
+                        const link = document.getElementById(`name-link-${screenId}`);
+                        if (link){ link.textContent = getScreenDisplayName(screenId); }
+                        cancelEditScreenName(screenId);
+                    } else {
+                        alert((j && j.error) || 'Failed to save name');
+                    }
+                })
+                .catch(err=>{ console.error(err); alert('Failed to save name'); });
+            }catch(e){ console.error(e); }
         }
         
         function addNewScreen(screenType) {
@@ -2520,7 +3043,7 @@
         }catch(e){ return { ok:false, status:0, json:null, raw:String(e) }; }
     }
 
-    function refreshPlaylist(screenId) {
+    function refreshPlaylist(screenId, loadToken) {
             const container = document.getElementById(`playlist-items-${screenId}`);
             const section = document.getElementById(`playlist-${screenId}`);
             if (!container) return;
@@ -2531,6 +3054,10 @@
             const bust = Date.now();
             safeFetchJson(`/playlist/${currentStoreId}/${screenId}?_=${bust}`)
                 .then(res=>{
+                    // If user switched store since the request started, ignore this response
+                    if (loadToken != null && loadToken !== (window.__currentLoadToken||0)) return;
+                    // If the container disappeared (store changed), abort
+                    if (!document.getElementById(`playlist-items-${screenId}`)) return;
                     const data = res.json || {};
                     // Ignore very slow/stale responses if another refresh started later
                     if (Date.now() - requestStartedAt > 15000) return;
@@ -2656,7 +3183,7 @@
                                                                                                             ${thumbForFile(item.url || item.file)}
                                                                                                             <div class="item-status-dot ${statusClass}" title="${statusTip}"></div>
                                                                                                             <div style=\"position:absolute;inset:auto 4px 4px auto;background:rgba(0,0,0,.6);color:#fff;font-size:10px;padding:2px 4px;border-radius:3px;\">Change</div>\
-                                                                                                            ${failed ? `<div title="${(last && last.error) ? String(last.error).replace(/\"/g,'&quot;') : 'Last playback failed on TV'}" style=\"position:absolute;top:4px;right:4px;background:#c0392b;color:#fff;font-size:10px;padding:2px 6px;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.2);\">FAILED</div>` : ''}
+                                                                                                            ${failed ? `<div title="${(last && last.error) ? String(last.error).replace(/\"/g,'&quot;') : 'Last playback failed on TV'}" style=\"position:absolute;top:4px;right:4px;background:#c0392b;color:#fff;font-size:10px;padding:2px 6px;border-radius:4px;\">FAILED</div>` : ''}
                                                                                                         </div></div>
                                                                         <div style=\"flex:1;display:flex;flex-direction:column;gap:4px;\">
                                                                             <div class=\"schedule-section\">
@@ -3047,13 +3574,27 @@
 
         // Video: play a lightweight looping preview; fall back to a still poster if preview isn't available
         if (['mp4','webm','ogg','mov','avi','mkv','m4v'].includes(ext)) {
-            // Resolve a filename we can pass to server preview endpoints
-            let fname = clean;
-            if (isAbs) {
-                try { const u = new URL(String(file)); fname = (u.pathname.split('/').pop()||'').split('?')[0]; } catch { fname = (String(file).split('/').pop()||'').split('?')[0]; }
-            }
-            const vthumbSrc = fname ? (`/vthumb/220/${encodeURIComponent(fname)}`) : '';
-            const vprevSrc = fname ? (`/vpreview/220/${encodeURIComponent(fname)}`) : '';
+            // Resolve the full relative path (may include folders like 2025-08/clip.mp4)
+            const rel = (function toRel(u){
+                try{
+                    const base = (window.MEDIA_BASE_URL || '/static/uploads/').replace(/\/+$/, '/');
+                    const s = String(u||'');
+                    if (s.startsWith('/media/')) return decodeURIComponent(s.slice(7));
+                    if (s.startsWith('/static/uploads/')) return decodeURIComponent(s.slice('/static/uploads/'.length));
+                    if (s.startsWith(base)) return decodeURIComponent(s.slice(base.length));
+                    const url = new URL(s, location.origin);
+                    const pn = url.pathname.replace(/^\/+/, '');
+                    if (pn.startsWith('media/')) return decodeURIComponent(pn.slice('media/'.length));
+                    if (pn.startsWith('static/uploads/')) return decodeURIComponent(pn.slice('static/uploads/'.length));
+                    const b = new URL(base, location.origin);
+                    if (url.origin === b.origin && pn.startsWith(b.pathname.replace(/^\/+/, ''))) {
+                        return decodeURIComponent(pn.slice(b.pathname.replace(/^\/+/, '').length));
+                    }
+                    return decodeURIComponent(pn);
+                }catch{ return String(u||''); }
+            })(file);
+            const vthumbSrc = rel ? (`/vthumb/220/${encodeURIComponent(rel)}`) : '';
+            const vprevSrc = rel ? (`/vpreview/220/${encodeURIComponent(rel)}`) : '';
             if (vprevSrc) {
                 return `<video muted autoplay loop playsinline preload="metadata" style="width:100%; height:100%; object-fit:cover;" ${vthumbSrc?`poster=\"${vthumbSrc}\"`:''}><source src="${vprevSrc}" type="video/mp4"></video>`;
             }
@@ -3293,6 +3834,13 @@
             // --- Live Preview Rotation (Dashboard) ---
             (()=>{ // IIFE to avoid globals clashing if script reloaded
              const previewTimers = {}; // screenId -> {timer,index,items,nextAt}
+             // Expose a hard reset to cancel all running preview timers when changing store/views
+             window.resetAllPreviews = function(){
+                 try{
+                     Object.values(previewTimers).forEach(st=>{ if(st && st.timer){ clearTimeout(st.timer); st.timer = null; }});
+                     Object.keys(previewTimers).forEach(k=>{ delete previewTimers[k]; });
+                 }catch{}
+             };
              function safeIsMaster(){ try { return typeof isMasterStore==='function' && isMasterStore(currentStoreId); } catch { return false; } }
              function updatePreviewPlaylist(screenId, items){
                 if(!Array.isArray(items)) return;
@@ -3328,7 +3876,16 @@
                     return daysAllowed(item.days) && intervalActive(item.start,item.end);
                 }
                 const enabled = items.filter(i=> i.enabled && inWindow(i));
+                // Safety: ensure this preview belongs to the currently selected store to avoid cross-store races
+                try{
+                    const card = document.getElementById(`card-${screenId}`);
+                    if(card && card.dataset && card.dataset.store && card.dataset.store !== String(currentStoreId)){
+                        return; // stale card from previous store view
+                    }
+                }catch{}
                 if(!enabled.length){ stopPreview(screenId); preview.innerHTML='<div style="font-size:11px;color:#666;">(No scheduled content now)</div>'; return; }
+                // Remove any leftover placeholder in the preview area
+                try{ const ph = preview.querySelector('.upload-area'); if(ph) ph.remove(); }catch{}
                 const state = previewTimers[screenId] || {timer:null,index:0,items:enabled,nextAt:0};
                 state.items = enabled; // replace with filtered list
                 previewTimers[screenId] = state;
@@ -3350,26 +3907,82 @@
                     if(sd && typeof sd.rotation === 'number') currentRotation = sd.rotation;
                 } catch {}
                 const rotationClass = `rotate-${currentRotation}`;
-                const srcUrl = (item.url || mediaUrl(item.file)) + `?v=${Date.now()}`;
+                // Build efficient URLs:
+                // - Images: prefer CDN via mediaUrl()
+                // - Videos: prefer lightweight local /vpreview clip with poster; fallback to /media
+                let srcUrl = '';
+                let previewUrl = '';
+                let fallbackVid = '';
+                let poster = '';
+                if (isVideo) {
+                    const raw = (item && (item.url || item.file)) || '';
+                    // Derive a relative uploads path (including subfolders) when possible.
+                    // This mirrors the robust logic used in safeSwapPreview so /vpreview and /media work.
+                    const rel = (function toRel(u){
+                        try{
+                            const base = (window.MEDIA_BASE_URL || '/static/uploads/').replace(/\/+$/, '/');
+                            const s = String(u||'');
+                            if (s.startsWith('/media/')) return decodeURIComponent(s.slice(7));
+                            if (s.startsWith('/static/uploads/')) return decodeURIComponent(s.slice('/static/uploads/'.length));
+                            if (/^https?:\/\//i.test(s)){
+                                const url = new URL(s, location.origin);
+                                const pn = url.pathname.replace(/^\/+/, '');
+                                if (pn.startsWith('media/')) return decodeURIComponent(pn.slice('media/'.length));
+                                if (pn.startsWith('static/uploads/')) return decodeURIComponent(pn.slice('static/uploads/'.length));
+                                const b = new URL(base, location.origin);
+                                if (url.origin === b.origin && pn.startsWith(b.pathname.replace(/^\/+/, ''))){
+                                    return decodeURIComponent(pn.slice(b.pathname.replace(/^\/+/, '').length));
+                                }
+                                return '';
+                            } else {
+                                return decodeURIComponent(s.replace(/^\/+/, ''));
+                            }
+                        }catch{ return ''; }
+                    })(raw);
+                    if (rel) {
+                        previewUrl = `/vpreview/360/${encodeURIComponent(rel)}`;
+                        fallbackVid = `/media/${encodeURIComponent(rel)}`;
+                        poster = `/vthumb/360/${encodeURIComponent(rel)}`;
+                        srcUrl = previewUrl;
+                    } else {
+                        // Unknown/third-party URL: use it directly without preview endpoints
+                        srcUrl = raw ? String(raw) : '';
+                        previewUrl = srcUrl; fallbackVid = srcUrl; poster = '';
+                    }
+                } else {
+                    srcUrl = mediaUrl(item && (item.url || item.file));
+                }
                 // Crossfade to avoid blank: preload next, then swap
                 const doSwap = (node)=>{
                     node.style.maxWidth='100%'; node.style.maxHeight='100%'; node.style.objectFit='contain';
                     if(rotationClass) node.classList.add(rotationClass);
                     const wrap = document.createElement('div'); wrap.className='preview-item fading-in'; wrap.appendChild(node);
-                    const current = preview.querySelector('.preview-item');
+                    // Collect all existing preview layers (not just the first) to avoid stacked leftovers
+                    const existing = Array.from(preview.querySelectorAll('.preview-item'));
                     preview.appendChild(wrap);
                     requestAnimationFrame(()=>{
                         wrap.classList.remove('fading-in');
-                        if(current){ current.style.opacity='0'; setTimeout(()=> current.remove(), 220); }
+                        existing.forEach(el=>{ try { el.style.opacity='0'; setTimeout(()=> el.remove(), 220); } catch(_){} });
                     });
+                    // If a video was inserted, attempt playback immediately
+                    if (node && node.tagName === 'VIDEO') {
+                        try { const p = node.play(); if(p && p.catch) p.catch(()=>{}); } catch {}
+                    }
                 };
                 const swapFallback = ()=>{
-                    const img=document.createElement('img'); img.src=srcUrl; img.alt='Preview'; doSwap(img);
+                    const img=document.createElement('img'); img.src=srcUrl; img.alt='Preview';
+                    if (item && item.file && !/^https?:\/\//i.test(String(item.file))) { img.dataset.original = String(item.file); }
+                    doSwap(img);
                 };
                 if(isVideo){
-                    preloadVideo(srcUrl).then(v=>{ v.autoplay=true; v.loop=true; v.muted=true; v.playsInline=true; doSwap(v); }).catch(swapFallback);
+                    const usePoster = poster;
+                    const usePreview = previewUrl || srcUrl;
+                    const useFallback = fallbackVid || srcUrl;
+                    preloadVideo(usePreview).then(v=>{ v.autoplay=true; v.loop=true; v.muted=true; v.playsInline=true; v.preload='auto'; if(usePoster){ v.poster = usePoster; } doSwap(v); }).catch(()=>{
+                        preloadVideo(useFallback).then(v=>{ v.autoplay=true; v.loop=true; v.muted=true; v.playsInline=true; v.preload='auto'; if(usePoster){ v.poster = usePoster; } doSwap(v); }).catch(swapFallback);
+                    });
                 } else {
-                    preloadImage(srcUrl).then(img=>{ doSwap(img); }).catch(swapFallback);
+                    preloadImage(srcUrl).then(img=>{ if (item && item.file && !/^https?:\/\//i.test(String(item.file))) { img.dataset.original = String(item.file); } doSwap(img); }).catch(swapFallback);
                 }
                 let dur = parseInt(item.duration,10); if(isNaN(dur)||dur<1) dur=10; if(dur>30) dur=30;
                 st.nextAt = Date.now() + dur*1000;
@@ -3457,6 +4070,10 @@
                                         <div style="margin-top:8px;">
                                             <button class="btn primary" onclick="doRpUpload()">Upload</button>
                                         </div>
+                                        <div id="rp-progress-wrap" style="margin-top:8px;">
+                                            <div class="rp-progress" aria-hidden="true"><div class="bar" style="width:0%"></div></div>
+                                            <div class="label" id="rp-progress-label" aria-live="polite" style="display:none;">0%</div>
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="rp-actions">
@@ -3466,9 +4083,74 @@
                         document.body.appendChild(ov);
                 }
                 let rpCtx = null; // {screenId,itemId}
-                function openReplaceModal(screenId,itemId){ ensureReplaceModal(); rpCtx={screenId,itemId}; document.getElementById('rp-overlay').style.display='flex'; refreshLibrary(); }
-                function closeReplaceModal(){ const ov=document.getElementById('rp-overlay'); if(ov) ov.style.display='none'; rpCtx=null; }
+                let rpPrefix = '';
+                function resetRpUploadUI(){
+                    try{
+                        const wrap = document.getElementById('rp-progress-wrap');
+                        if(wrap){
+                            const bar = wrap.querySelector('.rp-progress .bar');
+                            if(bar) bar.style.width = '0%';
+                            const label = document.getElementById('rp-progress-label');
+                            if(label){ label.textContent = '0%'; label.style.display = 'none'; }
+                        }
+                        const uploadBtn = (document.querySelector('#rp-view-upload .btn.primary'));
+                        if(uploadBtn){ uploadBtn.disabled = false; uploadBtn.textContent = 'Upload'; }
+                        const inp = document.getElementById('rp-file'); if(inp){ inp.value=''; }
+                    }catch{}
+                }
+                function openReplaceModal(screenId,itemId){
+                    ensureReplaceModal(); rpCtx={screenId,itemId}; rpPrefix='';
+                    document.getElementById('rp-overlay').style.display='flex';
+                    resetRpUploadUI();
+                    renderRpBreadcrumb(); refreshLibrary();
+                }
+                function closeReplaceModal(){ const ov=document.getElementById('rp-overlay'); if(ov) ov.style.display='none'; rpCtx=null; resetRpUploadUI(); }
                 function switchRpTab(which){ const lib=document.getElementById('rp-view-lib'); const up=document.getElementById('rp-view-upload'); const t1=document.getElementById('rp-tab-lib'); const t2=document.getElementById('rp-tab-upload'); const isLib=which==='lib'; lib.style.display=isLib?'block':'none'; up.style.display=isLib?'none':'block'; t1.classList.toggle('active',isLib); t2.classList.toggle('active',!isLib); }
+                                function renderRpBreadcrumb(){
+                                        const cont = document.getElementById('rp-view-lib');
+                                        if(!cont) return;
+                                        let bar = document.getElementById('rp-folderbar');
+                                        if(!bar){
+                                                bar = document.createElement('div');
+                                                bar.id = 'rp-folderbar';
+                                                bar.style.cssText = 'display:flex;align-items:center;gap:8px;margin:8px 0 12px 0;flex-wrap:wrap;';
+                                                bar.innerHTML = `
+                                                    <div id="rp-breadcrumb" style="flex:1; display:flex; gap:6px; align-items:center; flex-wrap:wrap;"></div>
+                                                    <div style="display:flex; gap:6px;">
+                                                        <button class="btn" id="rp-new-folder">New Folder</button>
+                                                        <button class="btn" id="rp-rename-folder">Rename</button>
+                                                        <button class="btn" id="rp-delete-folder">Delete</button>
+                                                    </div>`;
+                                                cont.insertBefore(bar, cont.firstChild);
+                                                document.getElementById('rp-new-folder').addEventListener('click', createFolderPrompt);
+                                                document.getElementById('rp-rename-folder').addEventListener('click', renameFolderPrompt);
+                                                document.getElementById('rp-delete-folder').addEventListener('click', deleteFolderConfirm);
+                                        }
+                                        const crumb = document.getElementById('rp-breadcrumb');
+                                        if(!crumb) return;
+                                        // Build crumbs from rpPrefix
+                                        crumb.innerHTML = '';
+                                        const parts = rpPrefix ? rpPrefix.split('/') : [];
+                                        const mk = (label,prefix)=>{
+                                                const a=document.createElement('a'); a.href='#'; a.textContent=label; a.style.cssText='text-decoration:none;color:#0366d6;';
+                                                a.addEventListener('click', (e)=>{ e.preventDefault(); rpPrefix = prefix; renderRpBreadcrumb(); refreshLibrary(); });
+                                                return a;
+                                        };
+                                        const sep = ()=>{ const s=document.createElement('span'); s.textContent='›'; s.style.margin='0 4px'; return s; };
+                                        crumb.appendChild(mk('Library',''));
+                                        let acc = '';
+                                        parts.forEach((p,i)=>{
+                                                crumb.appendChild(sep());
+                                                acc = acc ? (acc + '/' + p) : p;
+                                                crumb.appendChild(mk(p, acc));
+                                        });
+                                        // Enable/disable rename/delete on root
+                                        const isRoot = !rpPrefix;
+                                        const ren = document.getElementById('rp-rename-folder');
+                                        const del = document.getElementById('rp-delete-folder');
+                                        if(ren) ren.disabled = isRoot;
+                                        if(del) del.disabled = isRoot;
+                                }
                 function setRpFilter(which){
                     const gImgs = document.getElementById('rp-grid-images');
                     const gVids = document.getElementById('rp-grid-videos');
@@ -3483,17 +4165,50 @@
                 }
                 function refreshLibrary(){
                     // Bypass any browser/CDN cache so deletions reflect immediately
-                    const url = '/library?ts=' + Date.now();
+                    const base = '/library';
+                    const qs = new URLSearchParams();
+                    if (rpPrefix) qs.set('prefix', rpPrefix);
+                    qs.set('ts', Date.now());
+                    const url = base + '?' + qs.toString();
                     fetch(url, { cache: 'no-store' }).then(r=>r.json()).then(d=>{
                         const gImgs=document.getElementById('rp-grid-images');
                         const gVids=document.getElementById('rp-grid-videos');
+                        let gDirs=document.getElementById('rp-grid-folders');
+                        if(!gDirs){
+                            // Insert a Folders grid above images
+                            const parent = document.getElementById('rp-view-lib');
+                            const foldersTitle = document.createElement('div');
+                            foldersTitle.className='rp-subtitle'; foldersTitle.textContent='Folders';
+                            const grid = document.createElement('div'); grid.className='rp-grid'; grid.id='rp-grid-folders';
+                            parent.insertBefore(grid, parent.children[2] || null);
+                            parent.insertBefore(foldersTitle, grid);
+                            gDirs = grid;
+                        }
                         if(!gImgs || !gVids) return;
                         if(!d.success){
-                            gImgs.innerHTML = '<div class="rp-empty">Failed to load library</div>';
+                            gDirs.innerHTML = '<div class="rp-empty">Failed to load library</div>';
+                            gImgs.innerHTML = '';
                             gVids.innerHTML = '';
                             return;
                         }
-                        const files=d.files||[];
+                        const files=d.files||[]; const dirs=d.dirs||[];
+                        // Render folders
+                        if (dirs.length === 0) {
+                            gDirs.innerHTML = '<div class="rp-empty">(no subfolders)</div>';
+                        } else {
+                            gDirs.innerHTML = '';
+                            dirs.forEach(dir=>{
+                                const card = document.createElement('div');
+                                card.className = 'rp-item';
+                                card.title = dir.name;
+                                card.innerHTML = `<div style="display:flex;align-items:center;gap:8px;">
+                                     <span style="font-size:18px">📁</span>
+                                     <span>${dir.name}</span>
+                                   </div>`;
+                                card.addEventListener('click', ()=>{ rpPrefix = dir.prefix; renderRpBreadcrumb(); refreshLibrary(); });
+                                gDirs.appendChild(card);
+                            });
+                        }
                         const imgs = files.filter(f=> (f.media_type!=='video'));
                         const vids = files.filter(f=> (f.media_type==='video'));
                         gImgs.innerHTML = imgs.length? '' : '<div class="rp-empty">No images</div>';
@@ -3504,7 +4219,7 @@
                             card.title=f.name;
                             const isAbs = f && f.url && /^https?:\/\//i.test(String(f.url));
                             const bust = Date.now();
-                            const src = isAbs ? (f.url + `?t=${bust}`) : (thumbUrl(f.name,300) + `?t=${bust}`);
+                            const src = isAbs ? (f.url + `?t=${bust}`) : (thumbUrl(f.name,220) + `?t=${bust}`);
                             card.innerHTML = `<img loading=\"lazy\" src=\"${src}\"/><button class=\"rp-del\" title=\"Delete\" aria-label=\"Delete\" onclick=\"event.stopPropagation(); deleteLibraryFile('${f.name}')\">✕</button>`;
                             card.addEventListener('click',()=> chooseLibraryFile(f.name));
                             gImgs.appendChild(card);
@@ -3515,7 +4230,9 @@
                             card.title=f.name;
                             const abs = f && f.url && /^https?:\/\//i.test(String(f.url));
                             const bust = Date.now();
-                            const poster = abs ? '' : `/vthumb/300/${encodeURIComponent(f.name)}?t=${bust}`;
+                            const posterCdn = abs ? '' : `${MEDIA_BASE_URL || '/static/uploads/'}vthumbs/220/${encodeURIComponent(f.name)}.jpg?t=${bust}`;
+                            const posterSrv = abs ? '' : `/vthumb/220/${encodeURIComponent(f.name)}?t=${bust}`;
+                            const poster = posterCdn || posterSrv;
                             const posterAttr = poster ? ` poster="${poster}"` : '';
                             const src = f.url ? (f.url + `?t=${bust}`) : (mediaUrl(f.name) + `?t=${bust}`);
                             card.innerHTML = `<video preload=\"metadata\" muted playsinline${posterAttr} src=\"${src}\"></video><button class=\"rp-del\" title=\"Delete\" aria-label=\"Delete\" onclick=\"event.stopPropagation(); deleteLibraryFile('${f.name}')\">✕</button>`;
@@ -3524,6 +4241,31 @@
                         });
                     });
                 }
+                        function createFolderPrompt(){
+                                const name = prompt('New folder name (letters, numbers, _, -, .):');
+                                if(!name){ return; }
+                                const ok = /^[A-Za-z0-9._-]+$/.test(name);
+                                if(!ok){ alert('Only letters, numbers, underscore (_), hyphen (-), and dot (.) are allowed.'); return; }
+                                fetch('/library/folder/create', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prefix: rpPrefix, name }) })
+                                    .then(r=>r.json()).then(d=>{ if(d && d.success){ refreshLibrary(); } else { alert('Create failed: '+(d && d.error)); } });
+                        }
+            function renameFolderPrompt(){
+                if(!rpPrefix){ return; }
+                const cur = rpPrefix.split('/').pop();
+                                const name = prompt('Rename folder to (letters, numbers, _, -, .):', cur);
+                                if(!name || name===cur){ return; }
+                                const ok = /^[A-Za-z0-9._-]+$/.test(name);
+                                if(!ok){ alert('Only letters, numbers, underscore (_), hyphen (-), and dot (.) are allowed.'); return; }
+                const parent = rpPrefix.includes('/') ? rpPrefix.split('/').slice(0,-1).join('/') : '';
+                fetch('/library/folder/rename', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prefix: rpPrefix, new_name: name }) })
+                  .then(r=>r.json()).then(d=>{ if(d && d.success){ rpPrefix = d.prefix || (parent? parent+'/'+name : name); renderRpBreadcrumb(); refreshLibrary(); } else { alert('Rename failed: '+(d && d.error)); } });
+            }
+            function deleteFolderConfirm(){
+                if(!rpPrefix){ return; }
+                if(!confirm('Delete this folder and all its contents?')) return;
+                fetch('/library/folder/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prefix: rpPrefix }) })
+                  .then(r=>r.json()).then(d=>{ if(d && d.success){ rpPrefix=''; renderRpBreadcrumb(); refreshLibrary(); } else { alert('Delete failed: '+(d && d.error)); } });
+            }
             function chooseLibraryFile(name){
                 if(!rpCtx) return;
                 const sid = rpCtx.screenId; const iid = rpCtx.itemId;
@@ -3549,26 +4291,38 @@
                 try {
                     const file = inp.files[0];
                     console.log('[RP][UPLOAD] start', { name: file.name, size: file.size, type: file.type });
+                    // Reset progress at start
+                    try{ const wrap=document.getElementById('rp-progress-wrap'); const bar=wrap?wrap.querySelector('.rp-progress .bar'):null; const lab=document.getElementById('rp-progress-label'); if(bar){ bar.style.width='0%'; } if(lab){ lab.textContent='0%'; lab.style.display='inline-block'; } }catch{}
                     // Try presigned direct-to-R2 first to bypass Cloudflare upload limits.
                     let data = null;
                     try {
+                        // Only include prefix if a folder is selected; otherwise
+                        // omit it so the server defaults to the current YYYY-MM.
+                        const prePayload = { filename: file.name, content_type: file.type || 'application/octet-stream' };
+                        if (rpPrefix) prePayload.prefix = rpPrefix;
                         const preResp = await fetch('/r2/presign_upload', {
                             method: 'POST', headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ filename: file.name, content_type: file.type || 'application/octet-stream' })
+                            body: JSON.stringify(prePayload)
                         });
                         const preParsed = await readJsonOrText(preResp);
                         const pre = preParsed.json;
                         if (pre && pre.success && pre.upload_url && pre.filename) {
-                            // PUT file directly to R2
-                            const putResp = await fetch(pre.upload_url, {
-                                method: 'PUT',
-                                headers: { 'Content-Type': pre.content_type || (file.type || 'application/octet-stream') },
-                                body: file
+                            // PUT with XHR to show progress
+                            const wrap = document.getElementById('rp-progress-wrap');
+                            const bar = wrap ? wrap.querySelector('.rp-progress .bar') : null;
+                            const label = document.getElementById('rp-progress-label');
+                            if(label) label.style.display = 'inline-block';
+                            await new Promise((resolve, reject)=>{
+                                try{
+                                    const xhr = new XMLHttpRequest();
+                                    xhr.open('PUT', pre.upload_url, true);
+                                    xhr.setRequestHeader('Content-Type', pre.content_type || (file.type || 'application/octet-stream'));
+                                    xhr.upload.onprogress = (e)=>{ if(e && e.lengthComputable){ const pct=(e.loaded/e.total)*100; if(bar){ bar.style.width=pct+'%'; } if(label){ label.textContent = Math.round(pct)+'%'; } } };
+                                    xhr.onerror = ()=> reject(new Error('Network error during upload'));
+                                    xhr.onload = ()=>{ if(xhr.status>=200 && xhr.status<300){ if(bar){ bar.style.width='100%'; } if(label){ label.textContent='100%'; } resolve(); } else { reject(new Error('R2 upload failed ('+xhr.status+')')); } };
+                                    xhr.send(file);
+                                }catch(err){ reject(err); }
                             });
-                            if (!putResp.ok) {
-                                const txt = await putResp.text().catch(()=> '');
-                                throw new Error(`R2 upload failed (${putResp.status}). ${txt.substring(0,120)}`);
-                            }
                             // Success: synthesize minimal response as if /upload_media had saved it
                             data = { success: true, filename: pre.filename, media_type: guessMediaType(pre.filename), url: pre.public_url || mediaUrl(pre.filename) };
                         } else {
@@ -3586,14 +4340,25 @@
                         // Fallback to origin upload (may be limited by Cloudflare for very large files)
                         const fd = new FormData();
                         fd.append('file', file);
-                        // Setup a safety timeout so UI won’t hang forever if the network stalls
-                        const controller = new AbortController();
-                        const timeoutMs = 120000; // 120s safety timeout
-                        const timeoutId = setTimeout(()=>{ try { controller.abort('timeout'); } catch(_){} }, timeoutMs);
-                        const longWait = setTimeout(()=>{ if(uploadBtn){ uploadBtn.textContent = 'Still uploading…'; } }, 10000);
-                        const resp = await fetch('/upload_media', { method: 'POST', body: fd, cache: 'no-store', signal: controller.signal });
-                        clearTimeout(timeoutId); clearTimeout(longWait);
-                        const parsed = await readJsonOrText(resp);
+                        // Only send prefix if a folder is selected; when omitted,
+                        // the server will auto-create/use the current YYYY-MM folder.
+                        if (rpPrefix) { fd.append('prefix', rpPrefix); }
+                        // XHR POST to show progress
+                        const wrap = document.getElementById('rp-progress-wrap');
+                        const bar = wrap ? wrap.querySelector('.rp-progress .bar') : null;
+                        const label = document.getElementById('rp-progress-label');
+                        if(label) label.style.display = 'inline-block';
+                        const resp = await new Promise((resolve, reject)=>{
+                            try{
+                                const xhr = new XMLHttpRequest();
+                                xhr.open('POST', '/upload_media', true);
+                                xhr.upload.onprogress = (e)=>{ if(e && e.lengthComputable){ const pct=(e.loaded/e.total)*100; if(bar){ bar.style.width=pct+'%'; } if(label){ label.textContent = Math.round(pct)+'%'; } } };
+                                xhr.onerror = ()=> reject(new Error('Network error during upload'));
+                                xhr.onload = ()=> resolve({ ok: (xhr.status>=200 && xhr.status<300), status: xhr.status, json: ()=> Promise.resolve(JSON.parse(xhr.responseText)), text: ()=> Promise.resolve(xhr.responseText) });
+                                xhr.send(fd);
+                            }catch(err){ reject(err); }
+                        });
+                        const parsed = await (resp.json ? resp.json() : readJsonOrText(resp));
                         const json = parsed.json;
                         if(!resp.ok || !json || json.success === false){
                             if(resp.status === 413){ throw new Error('File too large for server path. Please retry direct upload.'); }
@@ -3611,6 +4376,8 @@
                         const parsedAssign = await readJsonOrText(r);
                         const z = parsedAssign.json || { success:false, error: (parsedAssign.text||'').substring(0,200) };
                         if(!z.success) throw new Error('Assign failed: ' + (z.error || 'unknown'));
+                        // Clear progress and close
+                        try{ resetRpUploadUI(); }catch{}
                         closeReplaceModal();
                         refreshPlaylist(sid);
                     } else {
@@ -3621,6 +4388,7 @@
                         const parsedPatch = await readJsonOrText(r);
                         const x = parsedPatch.json || { success:false, error: (parsedPatch.text||'').substring(0,200) };
                         if(!x.success) throw new Error('Replace failed: ' + (x.error || 'unknown'));
+                        try{ resetRpUploadUI(); }catch{}
                         closeReplaceModal();
                         refreshPlaylist(sid);
                     }
@@ -3638,6 +4406,8 @@
                     }
                 } finally {
                     if(uploadBtn){ uploadBtn.disabled = false; uploadBtn.textContent = prevLabel || 'Upload'; }
+                    // Ensure progress UI resets if modal stays open
+                    try{ const wrap=document.getElementById('rp-progress-wrap'); const bar=wrap?wrap.querySelector('.rp-progress .bar'):null; const lab=document.getElementById('rp-progress-label'); if(bar){ bar.style.width='0%'; } if(lab){ lab.textContent='0%'; lab.style.display='none'; } }catch{}
                 }
             }
 
@@ -3731,7 +4501,12 @@
             setupAutoPlaylistRefresh();
         }
         
+        // Token to cancel in-flight loads when switching stores fast
+        let __currentLoadToken = 0;
         function loadScreensForStore(storeId) {
+            const myToken = ++__currentLoadToken;
+            // Cancel previews from previous store immediately to prevent cross-updates
+            if(typeof window.resetAllPreviews === 'function') try{ window.resetAllPreviews(); }catch{}
             console.log('Loading screens for store:', storeId);
             const screensData = allStoresData.screens[storeId] || {};
             console.log('Screens data for store', storeId, ':', screensData);
@@ -3762,6 +4537,8 @@
                 }
             });
             
+            // Collect IDs to trigger an initial playlist refresh after DOM is built
+            const toInitialRefresh = [];
             // Load regular screens - handle store-specific IDs in sorting
             Object.keys(screens)
                 .sort((a, b) => {
@@ -3784,7 +4561,24 @@
                 .forEach(screenId => {
                     const screenData = screens[screenId];
                     screensGrid.appendChild(createScreenCard(screenId, screenData, storeId));
+                    toInitialRefresh.push(screenId);
                 });
+            // If there are no regular screens, show an add placeholder
+            if (Object.keys(screens).length === 0) {
+                const ph = document.createElement('div');
+                ph.className = 'screen-card add-card';
+                ph.setAttribute('role','button');
+                ph.tabIndex = 0;
+                ph.onclick = () => addNewScreen('screen');
+                ph.onkeydown = (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); addNewScreen('screen'); } };
+                ph.innerHTML = `
+                    <div class="add-tile">
+                        <div class="icon">+</div>
+                        <div class="title">Add Screen</div>
+                        <div class="hint">Create your first display</div>
+                    </div>`;
+                screensGrid.appendChild(ph);
+            }
             
             // Load promo screens - handle store-specific IDs in sorting
             Object.keys(promos)
@@ -3808,7 +4602,26 @@
                 .forEach(screenId => {
                     const screenData = promos[screenId];
                     promosGrid.appendChild(createScreenCard(screenId, screenData, storeId));
+            toInitialRefresh.push(screenId);
                 });
+            // If there are no promo screens, show an add placeholder (same as regular screens)
+            if (Object.keys(promos).length === 0) {
+                const ph = document.createElement('div');
+                ph.className = 'screen-card add-card';
+                ph.setAttribute('role','button');
+                ph.tabIndex = 0;
+                ph.onclick = () => addNewScreen('promo');
+                ph.onkeydown = (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); addNewScreen('promo'); } };
+                ph.innerHTML = `
+                    <div class="add-tile">
+                        <div class="icon">+</div>
+                        <div class="title">Add Screen</div>
+                        <div class="hint">Create your first display</div>
+                    </div>`;
+                promosGrid.appendChild(ph);
+            }
+            // Kick an immediate playlist refresh for all visible screens so previews populate without manual reload
+            toInitialRefresh.forEach((sid, i)=>{ setTimeout(()=>{ try{ if(myToken === __currentLoadToken) refreshPlaylist(sid, myToken); }catch(e){ console.warn('initial refresh failed', sid, e); } }, i*80); });
             // After DOM build, ensure auto-refresh timer knows about any new playlist sections
             setupAutoPlaylistRefresh();
             // Start/restart status polling for this store
@@ -3866,15 +4679,11 @@
                         // Add the new store to the dropdown dynamically
                         addStoreToDropdown(storeId, storeName);
                         
-                        // Add empty screens config for new store
+                        // Initialize with no screens; UI will show add placeholders
                         if (!allStoresData.screens) {
                             allStoresData.screens = {};
                         }
-                        allStoresData.screens[storeId] = {
-                            'screen1': { file: null, vertical: false, horizontal: false, rotation: 0 },
-                            'screen2': { file: null, vertical: false, horizontal: false, rotation: 0 },
-                            'promo1': { file: null, vertical: false, horizontal: false, rotation: 0 }
-                        };
+                        allStoresData.screens[storeId] = {};
                         
                         // Switch to the new store
                         switchStore(storeId);
@@ -4053,36 +4862,58 @@
             if(playlistAutoRefreshHandle){ clearInterval(playlistAutoRefreshHandle); playlistAutoRefreshHandle=null; }
             if(!isMasterStore || !isMasterStore(currentStoreId)) return; // only master
             // Refresh visible playlists every 20s to catch time-window boundary changes
-            playlistAutoRefreshHandle = setInterval(()=>{
+        playlistAutoRefreshHandle = setInterval(()=>{
                 document.querySelectorAll('.playlist-section[id^="playlist-"]').forEach(sec=>{
                     const sid = sec.id.replace('playlist-','');
                     // Only refresh if section currently in DOM (visible)
-                    if(document.body.contains(sec)) refreshPlaylist(sid);
+            if(document.body.contains(sec)) refreshPlaylist(sid, window.__currentLoadToken||0);
                 });
             },20000);
         }
     </script>
     <script>
     // ---- Preview stability helpers ----
-    function preloadImage(url){
+    function preloadImage(url, timeoutMs=1800){
         return new Promise((resolve,reject)=>{
             const img = new Image();
-            img.onload = ()=>resolve(img);
-            img.onerror = reject;
+            let done = false;
+            const finish = (ok, val)=>{ if(done) return; done = true; clearTimeout(tid); ok? resolve(val): reject(val); };
+            const tid = setTimeout(()=>{
+                // Timeout: resolve with the element anyway so caller can swap and let error fallback kick in
+                resolve(img);
+            }, timeoutMs);
+            img.onload = ()=> finish(true, img);
+            img.onerror = (e)=> finish(false, e);
             img.src = url;
         });
     }
-    function preloadVideo(url){
+    function preloadVideo(url, timeoutMs=2200){
         return new Promise((resolve,reject)=>{
             const v = document.createElement('video');
-            v.muted = true; v.playsInline = true; v.preload = 'auto';
-            const onReady = ()=>{ cleanup(); resolve(v); };
-            const onErr = (e)=>{ cleanup(); reject(e); };
-            function cleanup(){ v.removeEventListener('canplay', onReady); v.removeEventListener('error', onErr); }
+            // Set attributes that maximize autoplay compatibility across browsers
+            v.muted = true; v.setAttribute('muted','');
+            v.autoplay = true; v.setAttribute('autoplay','');
+            v.playsInline = true; v.setAttribute('playsinline','');
+            v.preload = 'auto';
+            let done = false;
+            const finish = (ok, val)=>{ if(done) return; done = true; clearTimeout(tid); v.removeEventListener('canplay', onReady); v.removeEventListener('error', onErr); ok? resolve(val): reject(val); };
+            const onReady = ()=> finish(true, v);
+            const onErr = (e)=> finish(false, e);
+            const tid = setTimeout(()=>{
+                // Timeout: resolve with the element so caller can display it; browser will continue loading
+                finish(true, v);
+            }, timeoutMs);
             v.addEventListener('canplay', onReady);
             v.addEventListener('error', onErr);
             v.src = url; v.load();
         });
+    }
+    // Attempt to start playback; ignore rejections (autoplay policy differences)
+    function tryPlay(videoEl){
+        try{
+            const p = videoEl.play && videoEl.play();
+            if(p && typeof p.then === 'function') p.catch(()=>{});
+        }catch{}
     }
     function safeSwapPreview(previewEl, url, isVideo, rotation){
         const current = previewEl.querySelector('.preview-item');
@@ -4093,23 +4924,78 @@
             return wrap;
         };
         const show = (wrap)=>{
+            // Remove ALL previous layers, not only the first, to prevent any background leftovers
+            const existing = Array.from(previewEl.querySelectorAll('.preview-item'));
             previewEl.appendChild(wrap);
             requestAnimationFrame(()=>{
                 wrap.classList.remove('fading-in');
-                if(current){ current.style.opacity = '0'; setTimeout(()=> current.remove(), 220); }
+                existing.forEach(el=>{ try { el.style.opacity = '0'; setTimeout(()=> el.remove(), 220); } catch(_){} });
             });
+            // If the new node is a video, nudge playback
+            const v = wrap.querySelector('video');
+            if(v){ tryPlay(v); }
         };
         if(isVideo){
-            const isAbs = /^https?:\/\//i.test(String(url));
-            const fname = String(url).split('/').pop();
-            const previewUrl = isAbs ? url : `/vpreview/360/${encodeURIComponent(fname||'')}`;
-            const fallbackVid = isAbs ? url : `/media/${encodeURIComponent(fname||'')}`;
-            preloadVideo(previewUrl).then(v=>{ v.autoplay=true; v.loop=true; v.muted=true; v.playsInline=true; v.style.maxWidth='100%'; v.style.maxHeight='100%'; v.style.objectFit='contain'; if(rotation){ v.classList.add('rotate-'+rotation); } show(build(v)); }).catch(()=>{
+            // Derive the full relative path (with folders) from a public URL so preview endpoints can find the file
+            const rel = (function toRel(u){
+                try{
+                    const base = (window.MEDIA_BASE_URL || '/static/uploads/').replace(/\/+$/, '/');
+                    const s = String(u||'');
+                    if (s.startsWith('/media/')) return decodeURIComponent(s.slice(7));
+                    if (s.startsWith('/static/uploads/')) return decodeURIComponent(s.slice('/static/uploads/'.length));
+                    if (s.startsWith(base)) return decodeURIComponent(s.slice(base.length));
+                    const url = new URL(s, location.origin);
+                    const pn = url.pathname.replace(/^\/+/, '');
+                    if (pn.startsWith('media/')) return decodeURIComponent(pn.slice('media/'.length));
+                    if (pn.startsWith('static/uploads/')) return decodeURIComponent(pn.slice('static/uploads/'.length));
+                    const b = new URL(base, location.origin);
+                    if (url.origin === b.origin && pn.startsWith(b.pathname.replace(/^\/+/, ''))) {
+                        return decodeURIComponent(pn.slice(b.pathname.replace(/^\/+/, '').length));
+                    }
+                    return decodeURIComponent(pn);
+                }catch{ return String(u||''); }
+            })(url);
+            // Prefer small local preview clip and server media as fallback whenever we have a relative path
+            const previewUrl = rel ? (`/vpreview/360/${encodeURIComponent(rel)}`) : url;
+            const fallbackVid = rel ? (`/media/${encodeURIComponent(rel)}`) : url;
+            // Show a poster immediately to avoid a black box while the video buffers
+            const poster = rel ? (`/vthumb/360/${encodeURIComponent(rel)}`) : '';
+            preloadVideo(previewUrl).then(v=>{
+                v.autoplay = true; v.setAttribute('autoplay','');
+                v.loop = true;
+                v.muted = true; v.setAttribute('muted','');
+                v.playsInline = true; v.setAttribute('playsinline','');
+                v.preload = 'auto';
+                if(poster) v.poster = poster;
+                v.style.maxWidth='100%'; v.style.maxHeight='100%'; v.style.objectFit='contain';
+                if(rotation){ v.classList.add('rotate-'+rotation); }
+                show(build(v));
+            }).catch(()=>{
                 // Fallback to server-streamed URL or final image if video fails
-                preloadVideo(fallbackVid).then(v=>{ v.autoplay=true; v.loop=true; v.muted=true; v.playsInline=true; v.style.maxWidth='100%'; v.style.maxHeight='100%'; v.style.objectFit='contain'; if(rotation){ v.classList.add('rotate-'+rotation); } show(build(v)); }).catch(()=>{ const img=new Image(); img.src=url; img.style.maxWidth='100%'; img.style.maxHeight='100%'; img.style.objectFit='contain'; if(rotation){ img.className='rotate-'+rotation; } show(build(img)); });
+                preloadVideo(fallbackVid).then(v=>{
+                    v.autoplay = true; v.setAttribute('autoplay','');
+                    v.loop = true;
+                    v.muted = true; v.setAttribute('muted','');
+                    v.playsInline = true; v.setAttribute('playsinline','');
+                    v.preload = 'auto';
+                    if(poster) v.poster = poster;
+                    v.style.maxWidth='100%'; v.style.maxHeight='100%'; v.style.objectFit='contain';
+                    if(rotation){ v.classList.add('rotate-'+rotation); }
+                    show(build(v));
+                }).catch(()=>{
+                    const img = new Image();
+                    // Final safety: show a poster or a generic placeholder instead of an invalid video URL
+                    img.src = poster || '/static/video_placeholder.svg';
+                    img.alt = 'Video preview unavailable';
+                    img.decoding = 'async';
+                    img.setAttribute('fetchpriority','high');
+                    img.style.maxWidth='100%'; img.style.maxHeight='100%'; img.style.objectFit='contain';
+                    if(rotation){ img.className='rotate-'+rotation; }
+                    show(build(img));
+                });
             });
         } else {
-            preloadImage(url).then(img=>{ img.style.maxWidth='100%'; img.style.maxHeight='100%'; img.style.objectFit='contain'; if(rotation){ img.className='rotate-'+rotation; } show(build(img)); }).catch(()=>{ const img=document.createElement('img'); img.src=url; if(rotation){ img.className='rotate-'+rotation; } show(build(img)); });
+            preloadImage(url).then(img=>{ img.decoding='async'; img.setAttribute('fetchpriority','high'); img.style.maxWidth='100%'; img.style.maxHeight='100%'; img.style.objectFit='contain'; if(rotation){ img.className='rotate-'+rotation; } try { const u=new URL(url, location.origin); const last=u.pathname.split('/').filter(Boolean).pop(); if(last){ img.dataset.original = decodeURIComponent(last); } } catch { /* noop */ } show(build(img)); }).catch(()=>{ const img=document.createElement('img'); img.src=url; img.decoding='async'; img.setAttribute('fetchpriority','high'); if(rotation){ img.className='rotate-'+rotation; } try { const u=new URL(url, location.origin); const last=u.pathname.split('/').filter(Boolean).pop(); if(last){ img.dataset.original = decodeURIComponent(last); } } catch {} show(build(img)); });
         }
     }
     </script>

@@ -17,9 +17,21 @@ object ApiClient {
 			level = HttpLoggingInterceptor.Level.BASIC
 		}
 		OkHttpClient.Builder()
-			.connectTimeout(5, TimeUnit.SECONDS)
-			.readTimeout(8, TimeUnit.SECONDS)
-			.writeTimeout(8, TimeUnit.SECONDS)
+			.connectTimeout(10, TimeUnit.SECONDS)
+			.readTimeout(15, TimeUnit.SECONDS)
+			.writeTimeout(15, TimeUnit.SECONDS)
+			// Attach pairing code when available so server can scope to user config
+			.addInterceptor { chain ->
+				val orig = chain.request()
+				val b = orig.newBuilder()
+				try {
+					val code = PairCodeHolder.get()
+					if (!code.isNullOrBlank()) {
+						b.addHeader("X-User-Code", code)
+					}
+				} catch (_: Exception) {}
+				chain.proceed(b.build())
+			}
 			.addInterceptor(log)
 			.build()
 	}

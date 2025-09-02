@@ -47,12 +47,23 @@ Two ways to deploy updates:
   sudo systemctl status everydayadvertise --no-pager -l
 
 3) Cloudflare Tunnel (already configured):
+  Ensure all required hostnames map through the tunnel to the app:
 
-  Your tunnel maps api.everydayadvertise.com -> http://127.0.0.1:5002.
-  If you changed ports/path, update /etc/cloudflared/config.yml accordingly, then:
+  - api.everydayadvertise.com -> http://127.0.0.1:5002
+  - everydayadvertise.com     -> http://127.0.0.1:5002
+  - www.everydayadvertise.com -> http://127.0.0.1:5002
 
-  sudo systemctl restart cloudflared
-  curl -I https://api.everydayadvertise.com/
+  Edit /etc/cloudflared/config.yml (see deploy/cloudflared.config.yml as a template), then:
+
+    sudo systemctl restart cloudflared
+    curl -I https://everydayadvertise.com/
+    curl -I https://www.everydayadvertise.com/
+    curl -I https://api.everydayadvertise.com/
+
+  Notes:
+  - If you prefer DNS-only A/CNAME records for root and www, proxy them through the same tunnel.
+  - With NGINX config deploy/nginx-everydayadvertise.conf, all three hostnames are served.
+  - SESSION_COOKIE_DOMAIN is .everydayadvertise.com in deploy/everydayadvertise.service so login persists across subdomains.
 
 ## Notes
 - Service name: repo includes everydayadvertise.service (preferred). If you used tv-api.service before, you can keep it, but pick one to avoid confusion.

@@ -1,18 +1,16 @@
 package com.pizzahut.tv
 
 import android.content.Intent
-import android.graphics.Typeface
 import android.os.Bundle
 import android.view.KeyEvent
-import android.view.Gravity
-import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.setPadding
 import androidx.lifecycle.lifecycleScope
 import com.pizzahut.tv.api.ApiClient
 import kotlinx.coroutines.Dispatchers
+import java.net.SocketTimeoutException
+import java.net.ConnectException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -20,69 +18,75 @@ class SetupActivity : AppCompatActivity() {
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
 		setContentView(R.layout.activity_setup)
+	// Make pairing code accessible to network layer
+	com.pizzahut.tv.api.PairCodeHolder.init(applicationContext)
 
-		val storeInput = findViewById<EditText>(R.id.editTextStoreId)
-		val fetchBtn = findViewById<Button>(R.id.buttonFetchScreens)
-		val status = findViewById<TextView>(R.id.statusText)
-		val container = findViewById<LinearLayout>(R.id.screensContainer)
+		val codeInput = findViewById<EditText>(R.id.editTextPairCode)
+		val codeBtn = findViewById<Button>(R.id.buttonVerifyCode)
+		val codeStatus = findViewById<TextView>(R.id.codeStatusText)
+	// Store selection moved to StoreSelectActivity
 
 	val prefs = getSharedPreferences("phtv", MODE_PRIVATE)
 
-		fun fetchScreens() {
-			val storeId = storeInput.text?.toString()?.trim().orEmpty()
-			if (storeId.isEmpty()) {
-				status.text = "Enter your store number"
-				storeInput.requestFocus(); return
+	var verifiedCode: String? = null
+
+		fun verifyCode() {
+			val code = codeInput.text?.toString()?.trim().orEmpty()
+			if (code.length != 4 || code.any { !it.isDigit() }) {
+				codeStatus.text = "Enter 4-digit code"
+				codeInput.requestFocus(); return
 			}
-			status.text = "Loading screens..."
-			container.removeAllViews()
+			codeStatus.text = "Verifying…"
 			lifecycleScope.launch {
 				try {
-					val resp = withContext(Dispatchers.IO) { ApiClient.service.getScreens(storeId) }
-					val screens = resp.screens
-					if (screens.isEmpty()) {
-						status.text = "No screens found for store $storeId"
-						return@launch
-					}
-					status.text = "Select a screen"
-					prefs.edit().putString("storeId", storeId).apply()
-					// Create easy large buttons
-					val targetPx = (600 * resources.displayMetrics.density).toInt()
-					screens.forEach { s ->
-						val screenLabel = s.id.removePrefix("${storeId}_")
-						val b = Button(this@SetupActivity).apply {
-							text = screenLabel
-							textSize = 22f
-							isAllCaps = false
-							setPadding(24)
-							setOnClickListener {
-								// Save chosen screenId as plain id (e.g., screen1)
-								prefs.edit().putString("screenId", s.id).apply()
-								val i = Intent(this@SetupActivity, TvDisplayActivity::class.java)
-								i.putExtra("storeId", storeId)
-								i.putExtra("screenId", s.id)
-								i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
-								startActivity(i)
-								finish()
+					// Optional: quick health check to avoid long timeouts when server is down
+					withContext(Dispatchers.IO) {
+						try {
+							val url = java.net.URL(ApiClient.baseUrl + "healthz")
+							(url.openConnection() as java.net.HttpURLConnection).apply {
+								connectTimeout = 3000; readTimeout = 3000; requestMethod = "GET"
+								inputStream.use { /* ok */ }
 							}
-						}
-						val lp = LinearLayout.LayoutParams(
-							targetPx,
-							LinearLayout.LayoutParams.WRAP_CONTENT
-						).apply { topMargin = 16; gravity = Gravity.CENTER_HORIZONTAL }
-						container.addView(b, lp)
+						} catch (_: Exception) { /* ignore, proceed to API call */ }
 					}
+					val resp = withContext(Dispatchers.IO) { ApiClient.service.getStoresByCode(code) }
+					if (!resp.success) { codeStatus.text = resp.error ?: "Invalid code"; return@launch }
+					verifiedCode = code
+					prefs.edit().putString("pairCode", code).apply()
+					codeStatus.text = "Code linked"
+					// Navigate to StoreSelectActivity (step 2)
+					val i = Intent(this@SetupActivity, StoreSelectActivity::class.java)
+					i.putExtra("pairCode", code)
+					i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
+					startActivity(i)
+					finish()
+				} catch (e: SocketTimeoutException) {
+					codeStatus.text = "Network timeout connecting to server. Ensure the app is running on 10.0.2.2:5002"
+				} catch (e: ConnectException) {
+					codeStatus.text = "Cannot connect to server. Start Flask on 10.0.2.2:5002 or use production URL."
 				} catch (e: Exception) {
-					status.text = ("Network error: ${e.message}").take(80)
+					codeStatus.text = ("Network error: ${e.javaClass.simpleName}: ${e.message}").take(160)
 				}
 			}
 		}
 
-		fetchBtn.setOnClickListener { fetchScreens() }
-		storeInput.setOnEditorActionListener { _, actionId, _ ->
+
+		codeBtn.setOnClickListener { verifyCode() }
+		codeInput.setOnEditorActionListener { _, actionId, _ ->
 			if (actionId == EditorInfo.IME_ACTION_DONE || actionId == EditorInfo.IME_ACTION_GO) {
-				fetchScreens(); true
+				verifyCode(); true
 			} else false
+		}
+
+		// If a code was previously linked, jump directly to store selection
+		prefs.getString("pairCode", null)?.let { saved ->
+			if (saved.length == 4 && saved.all { it.isDigit() }) {
+				val i = Intent(this@SetupActivity, StoreSelectActivity::class.java)
+				i.putExtra("pairCode", saved)
+				i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
+				startActivity(i)
+				finish()
+			}
 		}
 	}
 

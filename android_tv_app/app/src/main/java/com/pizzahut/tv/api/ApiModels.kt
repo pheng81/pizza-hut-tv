@@ -1,5 +1,6 @@
 package com.pizzahut.tv.api
 
+import com.google.gson.JsonObject
 import com.google.gson.annotations.SerializedName
 
 data class PlaylistResponse(
@@ -10,6 +11,8 @@ data class PlaylistResponse(
 data class PlaylistItem(
 	@SerializedName("id") val id: String?,
 	@SerializedName("file") val file: String?,
+	// Absolute, server-built URL to the file (preferred for images when available)
+	@SerializedName("url") val url: String? = null,
 	@SerializedName("enabled") val enabled: Boolean? = true,
 	@SerializedName("duration") val duration: Int? = 10,
 	@SerializedName("repeat") val repeat: Boolean? = true,
@@ -72,5 +75,20 @@ data class ClientEventReq(
 data class BasicResp(
 	@SerializedName("success") val success: Boolean,
 	@SerializedName("error") val error: String? = null
+)
+
+// Pairing (stores by code)
+data class CodeStoresResponse(
+	@SerializedName("success") val success: Boolean,
+	@SerializedName("user") val user: CodeUser? = null,
+	@SerializedName("stores") val stores: List<StoreInfo> = emptyList(),
+	// Server returns an object map of storeId -> { screenId: { ... } }
+	// Use JsonObject to avoid strict shape expectations.
+	@SerializedName("screens") val screens: JsonObject? = null,
+	@SerializedName("error") val error: String? = null
+)
+
+data class CodeUser(
+	@SerializedName("username") val username: String?
 )
 

@@ -1,41 +1,41 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response, send_file, make_response
 import os
-import shutil as _shutil
-import subprocess
-from werkzeug.utils import secure_filename  # may be unused but kept for backward compat
-from werkzeug.middleware.proxy_fix import ProxyFix
-import uuid
 import json
-import shutil
-from datetime import datetime, time as dtime, timedelta
-import logging
 import time
+import logging
+import sqlite3
+import uuid
+import random
+import subprocess
+import shutil
+import smtplib
+import ssl
+from datetime import datetime, time as dtime, timedelta, timezone
+from email.message import EmailMessage
 from typing import Optional
+
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response, send_file, make_response, session, has_request_context
+from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv, dotenv_values
 
-# Load default .env first (if present)
+# Ensure both names available for existing code
+_shutil = shutil
+
+# Load .env first
 load_dotenv()
 
-# Also load r2.env if present and patch critical env vars early so R2 presign works in prod
-try:
-    _r2_env = dotenv_values('r2.env') or {}
-except Exception:
-    _r2_env = {}
-
 def _apply_r2_env_overrides():
+    """Best-effort: load r2.env and apply safe overrides so R2 works in prod shells.
+    Only sets env vars if they're not already set.
+    """
     try:
-        if not _r2_env:
-            return
-        # Populate missing R2 keys from r2.env
-        for k in ('R2_BUCKET_NAME','R2_ENDPOINT_URL','R2_ACCESS_KEY_ID','R2_SECRET_ACCESS_KEY'):
-            if _r2_env.get(k) and not os.environ.get(k):
-                os.environ[k] = _r2_env[k]
-        # If MEDIA_BASE_URL is set to an origin API host (bad default), prefer the CDN value from r2.env
-        cur = (os.environ.get('MEDIA_BASE_URL') or '').strip().rstrip('/')
-        if _r2_env.get('MEDIA_BASE_URL'):
-            bad_hosts = {'https://api.everydayadvertise.com','http://api.everydayadvertise.com'}
-            if not cur or cur in bad_hosts:
-                os.environ['MEDIA_BASE_URL'] = _r2_env['MEDIA_BASE_URL']
+        env_path = os.path.join(os.path.dirname(__file__), 'r2.env')
+        if os.path.exists(env_path):
+            vals = dotenv_values(env_path) or {}
+            for k in ('R2_BUCKET_NAME','R2_ENDPOINT_URL','R2_ACCESS_KEY_ID','R2_SECRET_ACCESS_KEY','MEDIA_BASE_URL'):
+                v = vals.get(k)
+                if v is not None and not os.environ.get(k):
+                    os.environ[k] = v
     except Exception:
         # Non-fatal; app can continue without R2
         pass
@@ -48,6 +48,72 @@ try:
     from botocore.config import Config as BotoConfig
 except Exception:
     boto3 = None
+
+# Global in-memory cache for library listings
+_LIB_CACHE: dict = {}
+
+# --- SQLite user database helpers ---
+def _db_path() -> str:
+    # Allow relocating the DB out of the repo so deploys don't overwrite it
+    p = os.environ.get('USERS_DB_PATH') or 'users.sqlite'
+    try:
+        d = os.path.dirname(p)
+        if d:
+            os.makedirs(d, exist_ok=True)
+    except Exception:
+        pass
+    return p
+
+def get_db():
+    db = sqlite3.connect(_db_path())
+    db.row_factory = sqlite3.Row
+    return db
+
+def init_db():
+    db = get_db()
+    db.execute('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password_hash TEXT)')
+    # Add columns/indexes best-effort
+    try:
+        cols = [r[1] for r in db.execute('PRAGMA table_info(users)').fetchall()]
+        if 'full_name' not in cols:
+            try:
+                db.execute('ALTER TABLE users ADD COLUMN full_name TEXT')
+            except Exception:
+                pass
+        if 'link_code' not in cols:
+            try:
+                db.execute('ALTER TABLE users ADD COLUMN link_code TEXT')
+                try:
+                    db.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_link_code ON users(link_code)')
+                except Exception:
+                    pass
+            except Exception:
+                pass
+        if 'email_verified' not in cols:
+            try:
+                db.execute('ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0')
+            except Exception:
+                pass
+        if 'verify_token' not in cols:
+            try:
+                db.execute('ALTER TABLE users ADD COLUMN verify_token TEXT')
+            except Exception:
+                pass
+        if 'verify_sent_at' not in cols:
+            try:
+                db.execute('ALTER TABLE users ADD COLUMN verify_sent_at INTEGER')
+            except Exception:
+                pass
+        if 'avatar' not in cols:
+            try:
+                db.execute('ALTER TABLE users ADD COLUMN avatar TEXT')
+            except Exception:
+                pass
+    except Exception:
+        pass
+    db.commit()
+
+init_db()
 
 # -------- Early logging to file for startup diagnostics (captures silent exits) --------
 LOG_FILE = 'startup_log.txt'
@@ -73,8 +139,10 @@ app.secret_key = 'your-secret-key-change-this'
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
 app.config.update(
     PREFERRED_URL_SCHEME='https',
-    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_SECURE=False if os.environ.get('FLASK_ENV') == 'development' else True,
     SESSION_COOKIE_SAMESITE='Lax',
+    # Set this in production to share login across subdomains: ".everydayadvertise.com"
+    SESSION_COOKIE_DOMAIN=os.environ.get('SESSION_COOKIE_DOMAIN') or None,
 )
 print('DEBUG: app.py initialization start', flush=True)
 logging.debug('App module import start')
@@ -105,6 +173,457 @@ def _git_short_commit():
     except Exception:
         return None
 GIT_COMMIT = _git_short_commit()
+
+# ---------------------- Auth setup (username/password + Google OAuth) ----------------------
+from functools import wraps
+try:
+    from authlib.integrations.flask_client import OAuth
+except Exception:
+    OAuth = None
+
+# Lightweight in-memory diagnostics buffers (safe, non-secret)
+try:
+    from collections import deque
+    _ASSIGN_DENIES = deque(maxlen=50)
+    _PRESIGNS = deque(maxlen=50)
+except Exception:
+    _ASSIGN_DENIES = []
+    _PRESIGNS = []
+
+    # ---------------------- Email sending helpers ----------------------
+    def _mail_configured():
+        return bool(os.environ.get('SMTP_HOST') and os.environ.get('SMTP_PORT') and os.environ.get('SMTP_USERNAME') and os.environ.get('SMTP_PASSWORD'))
+
+    def send_email(to_addr: str, subject: str, body: str) -> bool:
+        try:
+            host = os.environ.get('SMTP_HOST')
+            port = int(os.environ.get('SMTP_PORT') or '0')
+            user = os.environ.get('SMTP_USERNAME')
+            pwd = os.environ.get('SMTP_PASSWORD')
+            use_tls = str(os.environ.get('SMTP_USE_TLS') or 'true').lower() != 'false'
+            from_addr = os.environ.get('SMTP_FROM') or (user if user and '@' in user else f"no-reply@{(request.host or 'everydayadvertise.com').split(':')[0] if has_request_context() else 'everydayadvertise.com'}")
+            if not (host and port and user and pwd and to_addr):
+                raise RuntimeError('SMTP not fully configured')
+            msg = EmailMessage()
+            msg['Subject'] = subject
+            msg['From'] = from_addr
+            msg['To'] = to_addr
+            msg.set_content(body)
+            if use_tls:
+                context = ssl.create_default_context()
+                with smtplib.SMTP(host, port, timeout=15) as server:
+                    server.starttls(context=context)
+                    server.login(user, pwd)
+                    server.send_message(msg)
+            else:
+                with smtplib.SMTP(host, port, timeout=15) as server:
+                    server.login(user, pwd)
+                    server.send_message(msg)
+            return True
+        except Exception as e:
+            logging.warning('send_email failed: %s', e)
+            return False
+
+    def _issue_verification_token(username: str) -> str:
+        token = uuid.uuid4().hex + uuid.uuid4().hex
+        try:
+            db = get_db()
+            db.execute('UPDATE users SET verify_token = ?, verify_sent_at = ? WHERE username = ?', (token, int(time.time()), (username or '').strip().lower()))
+            db.commit()
+        except Exception as e:
+            logging.warning('Failed to persist verify token for %s: %s', username, e)
+        return token
+
+    def _send_verification_email(username: str):
+        try:
+            email = (username or '').strip().lower()
+            token = _issue_verification_token(email)
+            try:
+                verify_url = url_for('verify_email', token=token, _external=True, _scheme='https')
+            except Exception:
+                host = 'https://api.everydayadvertise.com'
+                verify_url = f"{host}/verify/{token}"
+            subject = 'Verify your EverydayAdvertise account'
+            body = f"Welcome! Please verify your email by clicking this link:\n\n{verify_url}\n\nThis link will confirm your account. If you did not sign up, please ignore this email."
+            if _mail_configured():
+                ok = send_email(email, subject, body)
+                if ok:
+                    logging.info('Verification email sent to %s', email)
+                else:
+                    logging.warning('SMTP send failed; printing verification URL: %s', verify_url)
+            else:
+                logging.warning('SMTP not configured; printing verification URL: %s', verify_url)
+            return True
+        except Exception as e:
+            logging.warning('send_verification_email failed: %s', e)
+            return False
+
+def login_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        # During tests, bypass auth requirements to keep unit tests simple
+        try:
+            if app.config.get('TESTING'):
+                return view(*args, **kwargs)
+        except Exception:
+            pass
+        if not session.get('user'):
+            return redirect(url_for('login', next=request.path))
+        return view(*args, **kwargs)
+    return wrapped
+
+def _effective_admin_creds():
+    exp_u = os.environ.get('ADMIN_USERNAME') or 'admin'
+    exp_p = os.environ.get('ADMIN_PASSWORD')
+    if not exp_p:
+        # Dev fallback to avoid lockout if password not set; override via DEV_DEFAULT_PASSWORD
+        dev_pwd = os.environ.get('DEV_DEFAULT_PASSWORD') or ('admin' if os.environ.get('FLASK_ENV') == 'development' else None)
+        exp_p = dev_pwd
+    return exp_u, exp_p
+
+def _check_basic_auth(u: str|None, p: str|None) -> bool:
+    exp_u, exp_p = _effective_admin_creds()
+    if not exp_p:
+        # No password set and not in development fallback -> always fail securely
+        return False
+    return (u or '') == exp_u and (p or '') == exp_p
+
+oauth = None
+if OAuth is not None:
+    try:
+        oauth = OAuth(app)
+        google_client_id = os.environ.get('GOOGLE_CLIENT_ID')
+        google_client_secret = os.environ.get('GOOGLE_CLIENT_SECRET')
+        if google_client_id and google_client_secret:
+            oauth.register(
+                name='google',
+                client_id=google_client_id,
+                client_secret=google_client_secret,
+                server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+                client_kwargs={'scope': 'openid email profile'},
+            )
+        ms_client_id = os.environ.get('MICROSOFT_CLIENT_ID')
+        ms_client_secret = os.environ.get('MICROSOFT_CLIENT_SECRET')
+        if ms_client_id and ms_client_secret:
+            oauth.register(
+                name='microsoft',
+                client_id=ms_client_id,
+                client_secret=ms_client_secret,
+                server_metadata_url='https://login.microsoftonline.com/common/v2.0/.well-known/openid-configuration',
+                userinfo_endpoint='https://graph.microsoft.com/oidc/userinfo',
+                client_kwargs={'scope': 'openid email profile offline_access'},
+            )
+    except Exception as _e:
+        logging.warning('OAuth init failed: %s', _e)
+
+@app.route('/login', methods=['GET','POST'])
+def login():
+    # Default values to avoid UnboundLocalError on GET
+    u = None
+    p = None
+    if request.method == 'POST':
+        u = request.form.get('username')
+        p = request.form.get('password')
+        # 1) Admin/basic auth via env vars
+        try:
+            if _check_basic_auth(u, p):
+                session['user'] = {'name': (u or '').strip().lower(), 'method': 'password'}
+                nxt = request.args.get('next')
+                if not nxt:
+                    # Prefer api subdomain for the dashboard after login
+                    try:
+                        host = request.host or ''
+                        if not host.startswith('api.') and 'everydayadvertise.com' in host:
+                            return redirect('https://api.everydayadvertise.com/dashboard')
+                    except Exception:
+                        pass
+                    nxt = url_for('dashboard')
+                return redirect(nxt)
+        except Exception:
+            # Fall through to local user check
+            pass
+
+        # 2) Local users (SQLite)
+        try:
+            db = get_db()
+            row = db.execute(
+                'SELECT username, password_hash FROM users WHERE username = ?',
+                (((u or '').strip().lower(),))
+            ).fetchone()
+            if row and check_password_hash(row['password_hash'], p or ''):
+                session['user'] = {'name': row['username'], 'method': 'local'}
+                # Ensure this user has a pairing code
+                try:
+                    _ensure_user_link_code(row['username'])
+                except Exception:
+                    pass
+                nxt = request.args.get('next')
+                if not nxt:
+                    try:
+                        host = request.host or ''
+                        if not host.startswith('api.') and 'everydayadvertise.com' in host:
+                            return redirect('https://api.everydayadvertise.com/dashboard')
+                    except Exception:
+                        pass
+                    nxt = url_for('dashboard')
+                return redirect(nxt)
+        except Exception as _e:
+            logging.warning('Local user login failed: %s', _e)
+
+        flash('Invalid username or password', 'error')
+
+    # If Google/Microsoft configured, show buttons
+    try:
+        google_enabled = bool(oauth and getattr(oauth, 'google', None))
+        microsoft_enabled = bool(oauth and getattr(oauth, 'microsoft', None))
+    except Exception:
+        google_enabled = False
+        microsoft_enabled = False
+
+    resp = make_response(render_template('login.html', google_enabled=google_enabled, microsoft_enabled=microsoft_enabled, build_stamp=BUILD_STAMP))
+    try:
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    except Exception:
+        pass
+    return resp
+
+@app.route('/signup', methods=['GET', 'POST'])
+def signup():
+    if request.method == 'POST':
+        full_name = (request.form.get('full_name') or '').strip()
+        username = request.form.get('username', '').strip().lower()
+        password = request.form.get('password', '')
+        password2 = request.form.get('password2', '')
+        if not username or not password:
+            flash('Email and password required', 'error')
+        elif '@' not in username or '.' not in username.split('@')[-1]:
+            flash('Please use a valid email address', 'error')
+        elif password != password2:
+            flash('Passwords do not match', 'error')
+        elif len(password) < 6:
+            flash('Password must be at least 6 characters', 'error')
+        else:
+            db = get_db()
+            try:
+                # Try inserting with full_name if column exists
+                try:
+                    db.execute('INSERT INTO users (username, password_hash, full_name) VALUES (?, ?, ?)', (
+                        username, generate_password_hash(password), full_name
+                    ))
+                except sqlite3.OperationalError:
+                    # Fallback for older DB without full_name
+                    db.execute('INSERT INTO users (username, password_hash) VALUES (?, ?)', (username, generate_password_hash(password)))
+                db.commit()
+                # Generate a pairing code for this new user
+                try:
+                    _ensure_user_link_code(username)
+                except Exception:
+                    pass
+                flash('Account created! Please sign in.', 'success')
+                return redirect(url_for('login'))
+            except sqlite3.IntegrityError:
+                flash('Username already exists', 'error')
+    # Mirror login page behavior: expose whether Google OAuth is enabled
+    try:
+        google_enabled = bool(oauth and getattr(oauth, 'google', None))
+        microsoft_enabled = bool(oauth and getattr(oauth, 'microsoft', None))
+    except Exception:
+        google_enabled = False
+        microsoft_enabled = False
+    resp = make_response(render_template('signup.html', google_enabled=google_enabled, microsoft_enabled=microsoft_enabled))
+    try:
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    except Exception:
+        pass
+    return resp
+
+@app.route('/logout')
+def logout():
+    session.pop('user', None)
+    # Redirect to the main public homepage after logout
+    try:
+        host = request.host or ''
+        if 'everydayadvertise.com' in host:
+            return redirect('https://everydayadvertise.com/')
+    except Exception:
+        pass
+    return redirect(url_for('home'))
+
+# ---------------------- Public homepage ----------------------
+@app.route('/')
+def home():
+    try:
+        # Provide cache-busting for logo and build info
+        import os, time as _t
+        logo_path = os.path.join(os.path.dirname(__file__), 'static', 'ea-logo.svg')
+        asset_bust = int(os.path.getmtime(logo_path)) if os.path.exists(logo_path) else int(_t.time())
+    except Exception:
+        asset_bust = 0
+    resp = make_response(render_template('home.html', build_stamp=BUILD_STAMP, git_commit=GIT_COMMIT, asset_bust=asset_bust))
+    try:
+        resp.headers['Cache-Control'] = 'public, max-age=300'
+    except Exception:
+        pass
+    return resp
+
+# ---------------------- Email verification routes ----------------------
+@app.route('/verify/<token>')
+def verify_email(token: str):
+    token = (token or '').strip()
+    if not token:
+        flash('Invalid verification link', 'error')
+        return redirect(url_for('login'))
+    try:
+        db = get_db()
+        row = db.execute('SELECT username FROM users WHERE verify_token = ?', (token,)).fetchone()
+        if not row:
+            flash('Verification link is invalid or already used', 'error')
+            return redirect(url_for('login'))
+        uname = (row['username'] or '').strip().lower()
+        db.execute('UPDATE users SET email_verified = 1, verify_token = NULL WHERE username = ?', (uname,))
+        db.commit()
+        flash('Email verified! You can now sign in.', 'success')
+    except Exception as e:
+        logging.warning('verify_email failed: %s', e)
+        flash('Could not verify email. Please try again.', 'error')
+    return redirect(url_for('login'))
+
+@app.route('/auth/google')
+def auth_google():
+    if not oauth or not getattr(oauth, 'google', None):
+        flash('Google Sign-In not configured', 'error')
+        return redirect(url_for('login'))
+    redirect_uri = url_for('auth_google_callback', _external=True)
+    return oauth.google.authorize_redirect(redirect_uri)
+
+@app.route('/auth/google/callback')
+def auth_google_callback():
+    if not oauth or not getattr(oauth, 'google', None):
+        flash('Google Sign-In not configured', 'error')
+        return redirect(url_for('login'))
+    try:
+        token = oauth.google.authorize_access_token()
+        userinfo = token.get('userinfo') or {}
+        # Some providers put userinfo under separate call; fallback
+        if not userinfo:
+            resp = oauth.google.get('userinfo')
+            userinfo = resp.json() if resp else {}
+        email = userinfo.get('email')
+        if not email:
+            flash('Google login failed: no email scope', 'error')
+            return redirect(url_for('login'))
+        # Optional domain restriction
+        allowed_domain = os.environ.get('GOOGLE_ALLOWED_DOMAIN')
+        if allowed_domain and not str(email).lower().endswith('@'+allowed_domain.lower()):
+            flash('Email domain not allowed', 'error')
+            return redirect(url_for('login'))
+        session['user'] = {'name': userinfo.get('name') or email, 'email': email, 'method': 'google'}
+        # Upsert a local user record so we can store a pairing code
+        try:
+            db = get_db()
+            uname = (email or '').strip().lower()
+            if uname:
+                try:
+                    # Try inserting with full_name if column exists
+                    db.execute('INSERT OR IGNORE INTO users (username, full_name) VALUES (?, ?)', (uname, userinfo.get('name') or uname))
+                except Exception:
+                    try:
+                        db.execute('INSERT OR IGNORE INTO users (username) VALUES (?)', (uname,))
+                    except Exception:
+                        pass
+                db.commit()
+                # Mark verified for OAuth sources
+                try:
+                    db.execute('UPDATE users SET email_verified = 1 WHERE username = ?', (uname,))
+                    db.commit()
+                except Exception:
+                    pass
+                _ensure_user_link_code(uname)
+        except Exception:
+            pass
+        nxt = request.args.get('next')
+        if not nxt:
+            try:
+                host = request.host or ''
+                if not host.startswith('api.') and 'everydayadvertise.com' in host:
+                    return redirect('https://api.everydayadvertise.com/dashboard')
+            except Exception:
+                pass
+            nxt = url_for('dashboard')
+        return redirect(nxt)
+    except Exception as e:
+        logging.exception('Google auth failed: %s', e)
+        flash('Google login failed', 'error')
+        return redirect(url_for('login'))
+
+@app.route('/auth/microsoft')
+def auth_microsoft():
+    if not oauth or not getattr(oauth, 'microsoft', None):
+        flash('Microsoft Sign-In not configured', 'error')
+        return redirect(url_for('login'))
+    redirect_uri = url_for('auth_microsoft_callback', _external=True)
+    return oauth.microsoft.authorize_redirect(redirect_uri)
+
+@app.route('/auth/microsoft/callback')
+def auth_microsoft_callback():
+    if not oauth or not getattr(oauth, 'microsoft', None):
+        flash('Microsoft Sign-In not configured', 'error')
+        return redirect(url_for('login'))
+    try:
+        token = oauth.microsoft.authorize_access_token()
+        # Try OIDC userinfo endpoint first
+        userinfo = {}
+        try:
+            resp = oauth.microsoft.get('userinfo')
+            if resp is not None:
+                userinfo = resp.json() or {}
+        except Exception:
+            userinfo = {}
+        # Fallback to id_token claims
+        if not userinfo:
+            userinfo = token.get('userinfo') or token.get('id_token_claims') or {}
+        email = userinfo.get('email') or userinfo.get('preferred_username')
+        name = userinfo.get('name') or (email.split('@')[0] if email else None)
+        if not email:
+            flash('Microsoft login failed: no email', 'error')
+            return redirect(url_for('login'))
+        session['user'] = {'name': name or email, 'email': email, 'method': 'microsoft'}
+        # Upsert a local user record so we can store a pairing code
+        try:
+            db = get_db()
+            uname = (email or '').strip().lower()
+            if uname:
+                try:
+                    db.execute('INSERT OR IGNORE INTO users (username, full_name) VALUES (?, ?)', (uname, name or uname))
+                except Exception:
+                    try:
+                        db.execute('INSERT OR IGNORE INTO users (username) VALUES (?)', (uname,))
+                    except Exception:
+                        pass
+                db.commit()
+                # Mark verified for OAuth sources
+                try:
+                    db.execute('UPDATE users SET email_verified = 1 WHERE username = ?', (uname,))
+                    db.commit()
+                except Exception:
+                    pass
+                _ensure_user_link_code(uname)
+        except Exception:
+            pass
+        nxt = request.args.get('next')
+        if not nxt:
+            try:
+                host = request.host or ''
+                if not host.startswith('api.') and 'everydayadvertise.com' in host:
+                    return redirect('https://api.everydayadvertise.com/dashboard')
+            except Exception:
+                pass
+            nxt = url_for('dashboard')
+        return redirect(nxt)
+    except Exception as e:
+        logging.exception('Microsoft auth failed: %s', e)
+        flash('Microsoft login failed', 'error')
+        return redirect(url_for('login'))
 
 @app.route('/healthz')
 def _healthz():
@@ -262,6 +781,56 @@ def build_public_url(filename: str) -> str | None:
         pass
     return get_media_base_url() + filename
 
+def _cdn_thumb_url(kind: str, width: int, rel_path: str) -> Optional[str]:
+    """Return CDN URL for a generated asset if R2 is enabled.
+    kind: 'thumbs' (webp), 'vthumbs' (jpg), or 'vpreviews' (mp4);
+    rel_path: original relative path (may include folders).
+    """
+    try:
+        if not r2_enabled():
+            return None
+        base = get_media_base_url()  # ensures trailing slash
+        # Map original extension to the generated one
+        stem = os.path.splitext(rel_path)[0]
+        if kind == 'thumbs':
+            out = stem + '.webp'
+        elif kind == 'vthumbs':
+            out = stem + '.jpg'
+        elif kind == 'vpreviews':
+            out = stem + '.mp4'
+        else:
+            return None
+        return f"{base}{kind}/{width}/{out}"
+    except Exception:
+        return None
+
+# ---- Safe folder/prefix utilities for library organization ----
+def _sanitize_prefix(prefix: str | None) -> str:
+    """Sanitize a folder prefix like '2025-08' or '2025-08/campaign-a'.
+    - Strips leading/trailing slashes
+    - Converts backslashes to slashes
+    - Only allow [A-Za-z0-9_-]/ separators
+    - Returns '' for root on any invalid input
+    """
+    try:
+        p = (prefix or '').strip().replace('\\','/').strip('/')
+        if not p:
+            return ''
+        for part in p.split('/'):
+            # Allow dots to support user namespaces like users/john_at_gmail.com and folder names with dots
+            if not part or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-" for c in part):
+                return ''
+        return p
+    except Exception:
+        return ''
+
+def _join_prefix_key(prefix: str, name: str) -> str:
+    p = _sanitize_prefix(prefix)
+    if not p:
+        return name
+    name = name.lstrip('/').replace('\\','/')
+    return f"{p}/{name}"
+
 # --- R2 (S3-compatible) integration ---
 def r2_enabled() -> bool:
     return bool(
@@ -278,24 +847,26 @@ def r2_diag() -> dict:
     """
     try:
         d = {
-            'boto3_available': (boto3 is not None),
             'env_present': {
                 'R2_BUCKET_NAME': bool(os.environ.get('R2_BUCKET_NAME')),
                 'R2_ENDPOINT_URL': bool(os.environ.get('R2_ENDPOINT_URL')),
                 'R2_ACCESS_KEY_ID': bool(os.environ.get('R2_ACCESS_KEY_ID')),
                 'R2_SECRET_ACCESS_KEY': bool(os.environ.get('R2_SECRET_ACCESS_KEY')),
             },
+            'boto3_available': boto3 is not None,
             'enabled': False,
         }
         d['enabled'] = bool(d['boto3_available'] and all(d['env_present'].values()))
-        # Optional lightweight connectivity probe if configured
         if d['enabled']:
             try:
                 s3 = get_s3_client()
-                # Try a trivial presign (no network call) to ensure client constructs
                 _ = s3.generate_presigned_url(
                     'put_object',
-                    Params={'Bucket': os.environ['R2_BUCKET_NAME'], 'Key': f"diag-{uuid.uuid4()}.bin", 'ContentType': 'application/octet-stream'},
+                    Params={
+                        'Bucket': os.environ['R2_BUCKET_NAME'],
+                        'Key': f"diag-{uuid.uuid4()}.bin",
+                        'ContentType': 'application/octet-stream'
+                    },
                     ExpiresIn=60
                 )
                 d['presign_construct_ok'] = True
@@ -414,7 +985,13 @@ def screen_heartbeat():
     logging.debug('HB recv store_id=%s screen_id=%s raw_body=%s', store_id, screen_id, data)
     if not store_id or not screen_id:
         return jsonify({'success': False, 'error': 'Missing store_id or screen_id'}), 400
-    cfg = load_store_config()
+    # If a device provides X-User-Code, scope to that user's config
+    header_code = request.headers.get('X-User-Code') or request.args.get('user_code')
+    user_key = _resolve_user_key_by_code(header_code)
+    # Require a pairing code when no dashboard session is present
+    if not user_key and not _safe_user_key():
+        return jsonify({'success': False, 'error': 'pair code required'}), 403
+    cfg = load_store_config_for_user_safe_key(user_key) if user_key else load_store_config()
     # Legacy mapping: if store_id changed (e.g., old '1881' -> current master), alias automatically
     try:
         master = cfg.get('master_store_id')
@@ -447,7 +1024,10 @@ def screen_heartbeat():
     # record last_seen epoch seconds
     store_screens[screen_id]['last_seen'] = int(time.time())
     logging.debug('HB set last_seen for %s/%s', store_id, screen_id)
-    save_store_config(cfg)
+    if user_key:
+        save_store_config_for_user_safe_key(user_key, cfg)
+    else:
+        save_store_config(cfg)
     return jsonify({'success': True})
 
 # -------- Client event reporting (per-item load success/failure) --------
@@ -469,7 +1049,12 @@ def client_event():
     error = data.get('error')
     if not store_id or not screen_id or not event:
         return jsonify({'success': False, 'error': 'store_id, screen_id and event required'}), 400
-    cfg = ensure_playlists_structure(load_store_config())
+    header_code = request.headers.get('X-User-Code') or request.args.get('user_code')
+    user_key = _resolve_user_key_by_code(header_code)
+    # Require a pairing code when no dashboard session is present
+    if not user_key and not _safe_user_key():
+        return jsonify({'success': False, 'error': 'pair code required'}), 403
+    cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(user_key) if user_key else load_store_config())
     ns, nid = _normalize_screen_ref(cfg, store_id, screen_id)
     if not ns or not nid:
         return jsonify({'success': False, 'error': 'screen not found'}), 404
@@ -507,12 +1092,20 @@ def client_event():
             app.logger.debug('client_event mapped key=%s state=%s file=%s item_id=%s', key, state, file, item_id)
         except Exception:
             pass
-    save_store_config(cfg)
+    if user_key:
+        save_store_config_for_user_safe_key(user_key, cfg)
+    else:
+        save_store_config(cfg)
     return jsonify({'success': True})
 
 @app.route('/api/screen_events/<store_id>/<screen_id>', methods=['GET'])
 def screen_events(store_id, screen_id):
-    cfg = ensure_playlists_structure(load_store_config())
+    # Require session or device pairing code
+    header_code = request.headers.get('X-User-Code') or request.args.get('user_code')
+    user_key = _resolve_user_key_by_code(header_code)
+    if not user_key and not _safe_user_key():
+        return jsonify({'success': False, 'error': 'pair code required'}), 403
+    cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(user_key) if user_key else load_store_config())
     ns, nid = _normalize_screen_ref(cfg, store_id, screen_id)
     if not ns or not nid:
         return jsonify({'success': False, 'error': 'screen not found'}), 404
@@ -522,7 +1115,12 @@ def screen_events(store_id, screen_id):
 # -------- Debug: expose playlist-to-status mapping for troubleshooting --------
 @app.route('/api/debug_item_status/<store_id>/<screen_id>', methods=['GET'])
 def debug_item_status(store_id, screen_id):
-    cfg = ensure_playlists_structure(load_store_config())
+    # Require session or device pairing code
+    header_code = request.headers.get('X-User-Code') or request.args.get('user_code')
+    user_key = _resolve_user_key_by_code(header_code)
+    if not user_key and not _safe_user_key():
+        return jsonify({'success': False, 'error': 'pair code required'}), 403
+    cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(user_key) if user_key else load_store_config())
     ns, nid = _normalize_screen_ref(cfg, store_id, screen_id)
     if not ns or not nid:
         return jsonify({'success': False, 'error': 'screen not found'}), 404
@@ -561,6 +1159,7 @@ def debug_item_status(store_id, screen_id):
 
 # -------- Lightweight command channel (dashboard -> client) --------
 @app.route('/api/push_command', methods=['POST'])
+@login_required
 def push_command():
     """Queue a command for a screen. Body: {store_id, screen_id, type, item_id?, file?}
     Types: 'reload', 'retry_item', 'flush_cache'. Clients should poll /api/commands.
@@ -576,6 +1175,7 @@ def push_command():
     file = data.get('file')
     if not store_id or not screen_id or ctype not in {'reload','retry_item','flush_cache'}:
         return jsonify({'success': False, 'error': 'invalid parameters'}), 400
+    # Dashboard-only: commands are queued under the admin's tenant config
     cfg = ensure_playlists_structure(load_store_config())
     ns, nid = _normalize_screen_ref(cfg, store_id, screen_id)
     if not ns or not nid:
@@ -602,12 +1202,17 @@ def pop_commands():
     """
     store_id = request.args.get('store_id') or ''
     screen_id = request.args.get('screen_id') or ''
-    pop = (request.args.get('pop','1') not in ('0','false','no'))
+    pop = (request.args.get('pop', '1') not in ('0', 'false', 'no'))
     try:
         limit = int(request.args.get('limit') or '10')
     except Exception:
         limit = 10
-    cfg = ensure_playlists_structure(load_store_config())
+    # Allow either device with pairing code or dashboard session
+    header_code = request.headers.get('X-User-Code') or request.args.get('user_code')
+    user_key = _resolve_user_key_by_code(header_code)
+    if not user_key and not _safe_user_key():
+        return jsonify({'success': False, 'error': 'pair code required'}), 403
+    cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(user_key) if user_key else load_store_config())
     ns, nid = _normalize_screen_ref(cfg, store_id, screen_id)
     if not ns or not nid:
         return jsonify({'success': False, 'error': 'screen not found'}), 404
@@ -617,7 +1222,10 @@ def pop_commands():
     if pop and out:
         # remove returned commands
         scr['cmd_queue'] = q[len(out):]
-        save_store_config(cfg)
+        if user_key:
+            save_store_config_for_user_safe_key(user_key, cfg)
+        else:
+            save_store_config(cfg)
     return jsonify({'success': True, 'commands': out, 'remaining': len(scr.get('cmd_queue', []))})
 
 # -------- One-off migration: local static/uploads -> R2 bucket --------
@@ -661,7 +1269,12 @@ def migrate_to_r2():
 @with_etag_json
 def screen_status():
     """Return online/offline status for all screens across all stores."""
-    cfg = load_store_config()
+    header_code = request.headers.get('X-User-Code') or request.args.get('user_code')
+    user_key = _resolve_user_key_by_code(header_code)
+    # Allow dashboard session without code; otherwise require code
+    if not user_key and not _safe_user_key():
+        return {'success': False, 'error': 'pair code required'}, 403
+    cfg = load_store_config_for_user_safe_key(user_key) if user_key else load_store_config()
     now = int(time.time())
     result = {}
     for store_id, screens in cfg.get('screens', {}).items():
@@ -677,7 +1290,11 @@ def screen_status():
 @with_etag_json
 def screen_status_by_store(store_id):
     """Return status mapping for a specific store (lighter payload for dashboard)."""
-    cfg = load_store_config()
+    header_code = request.headers.get('X-User-Code') or request.args.get('user_code')
+    user_key = _resolve_user_key_by_code(header_code)
+    if not user_key and not _safe_user_key():
+        return {'success': False, 'error': 'pair code required'}, 403
+    cfg = load_store_config_for_user_safe_key(user_key) if user_key else load_store_config()
     now = int(time.time())
     screens = cfg.get('screens', {}).get(store_id, {}) or {}
     result = {}
@@ -691,8 +1308,64 @@ def screen_status_by_store(store_id):
 
 # -------------------- Core Configuration & Media Type Definitions --------------------
 CONFIG_FILE = 'store_config.json'
+
+# --- Multi-tenant config selection (per-logged-in user) ---
+def _safe_user_key() -> Optional[str]:
+    """Return a safe identifier for the current logged-in user based on session.
+    Prefers email; falls back to username/name. Returns None if no session user.
+    The key is sanitized to [a-z0-9._-] and '@' becomes '_at_'.
+    """
+    try:
+        # Avoid touching session outside a request context (e.g., app startup / workers preload)
+        if not has_request_context():
+            return None
+        # Flask's session is a dict-like object; access directly
+        u = session.get('user')
+        if not isinstance(u, dict):
+            return None
+        # Accept multiple common identity keys: email, name, username, login
+        raw = (u.get('email') or u.get('name') or u.get('username') or u.get('login') or '').strip().lower()
+        if not raw:
+            return None
+        # replace '@' to keep email uniqueness without special char
+        raw = raw.replace('@', '_at_')
+        safe = ''.join(c for c in raw if (c.isalnum() or c in '._-'))
+        return safe or None
+    except Exception:
+        return None
+
+def _effective_config_path() -> str:
+    """Return the path to the active store config file.
+    - If a user is logged in (dashboard/browser requests), use a per-user file.
+    - Otherwise (TV clients without session), use the legacy global CONFIG_FILE.
+    """
+    try:
+        k = _safe_user_key()
+        if k:
+            return f"store_config__{k}.json"
+    except Exception:
+        pass
+    return CONFIG_FILE
+
+# Per-user content prefix util
+def _user_content_prefix() -> Optional[str]:
+    """Return a bucket/local prefix root for the current user, e.g. 'users/john_at_gmail.com'.
+    Returns None if no user (devices and public routes shouldn't access user media APIs).
+    In TESTING mode, return a stable fake user root for isolation.
+    """
+    k = _safe_user_key()
+    if not k:
+        try:
+            if app.config.get('TESTING'):
+                return 'users/testuser'
+        except Exception:
+            pass
+        return None
+    return f"users/{k}"
 UPLOAD_FOLDER = os.path.join('static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+AVATAR_FOLDER = os.path.join(UPLOAD_FOLDER, 'avatars')
+os.makedirs(AVATAR_FOLDER, exist_ok=True)
 
 # Cache folder for generated thumbnails
 THUMB_FOLDER = os.path.join('static', 'thumbs')
@@ -731,26 +1404,39 @@ def classify_media(filename: str) -> str:
     return 'image'
 
 def load_store_config():
-    """Load JSON config; create default if missing; backfill structural keys."""
-    if not os.path.exists(CONFIG_FILE):
-        cfg = get_default_config()
-        # Add master_store_id using first store if available
-        if cfg.get('stores'):
-            cfg['master_store_id'] = cfg['stores'][0]['id']
+    """Load JSON config; create default if missing; backfill structural keys.
+    Uses a per-user config file when a session user exists; otherwise global.
+    """
+    cfg_path = _effective_config_path()
+    is_user_scoped = (cfg_path != CONFIG_FILE)
+    if not os.path.exists(cfg_path):
+        # For user-scoped configs, start EMPTY (no stores/screens).
+        # For the global/legacy config, keep the legacy single master store.
+        cfg = get_default_config(user_scoped=is_user_scoped)
+        if cfg.get('stores') and 'master_store_id' not in cfg:
+            try:
+                cfg['master_store_id'] = cfg['stores'][0]['id']
+            except Exception:
+                pass
         save_store_config(cfg)
         return cfg
     try:
-        with open(CONFIG_FILE, 'r') as f:
+        with open(cfg_path, 'r') as f:
             cfg = json.load(f)
     except Exception:
         # Backup corrupt file and reset to default
-        backup_path = CONFIG_FILE + '.corrupt.bak'
+        backup_path = cfg_path + '.corrupt.bak'
         try:
-            shutil.copyfile(CONFIG_FILE, backup_path)
+            shutil.copyfile(cfg_path, backup_path)
             print(f"Backed up corrupt config to {backup_path}")
         except Exception:
             pass
-        cfg = get_default_config()
+        # On corrupt user-scoped config, reset to EMPTY; for global, use legacy default
+        if is_user_scoped:
+            cfg = get_default_config(user_scoped=True)
+        else:
+            cfg = get_default_config(user_scoped=False)
+    # For user-scoped configs, keep them empty until the user creates stores/screens.
     # Backfill master_store_id if missing
     if 'master_store_id' not in cfg and cfg.get('stores'):
         cfg['master_store_id'] = cfg['stores'][0]['id']
@@ -771,21 +1457,7 @@ def supported_extensions():
     # Return tuple to preserve stronger cache header via decorator
     return payload, 200, {'Cache-Control': 'public, max-age=3600'}
 
-# -------------------- Lightweight health endpoint --------------------
-@app.route('/healthz')
-def healthz():
-    """Simple readiness/liveness probe. Returns 200 JSON and disables caching."""
-    try:
-        payload = {
-            'status': 'ok',
-            'build': BUILD_STAMP,
-            'commit': GIT_COMMIT
-        }
-        resp = jsonify(payload)
-        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-        return resp
-    except Exception:
-        return jsonify({'status': 'error'}), 500
+# (duplicate /healthz removed; using earlier _healthz route)
 
 # Simple version endpoint for human/debug consumption
 @app.route('/version')
@@ -793,8 +1465,25 @@ def version():
     return jsonify({
         'build': BUILD_STAMP,
         'commit': GIT_COMMIT,
-        'time': datetime.utcnow().isoformat() + 'Z'
+    'time': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
     })
+
+@app.route('/whoami')
+def whoami():
+    """Lightweight diagnostics for session/user scoping.
+    Returns current session username variants, safe key, and active config path.
+    """
+    try:
+        u = session.get('user')
+        key = _safe_user_key()
+        return jsonify({
+            'success': True,
+            'session_user': u if isinstance(u, dict) else None,
+            'resolved_safe_key': key,
+            'config_path': _effective_config_path(),
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 # -------------------- Video Streaming with HTTP Range Support --------------------
 # More accurate MIME types improve playback compatibility for formats like MOV/MKV/AVI
@@ -974,8 +1663,23 @@ def ensure_playlists_structure(config):
         save_store_config(config)
     return config
 
-def get_default_config():
-    """Get default store configuration"""
+def get_default_config(user_scoped: bool = False):
+    """Get default store configuration.
+    - For new users (user_scoped=True): start empty (no stores/screens).
+    - For global legacy config: keep the existing single-store default.
+    """
+    if user_scoped:
+        # Seed a single master store with NO screens; the UI will show add placeholders.
+        master_id = '1000'
+        return {
+            'stores': [
+                {'id': master_id, 'name': 'My First Store'}
+            ],
+            'master_store_id': master_id,
+            'screens': {
+                master_id: {}
+            }
+        }
     return {
         'stores': [
             {'id': '1881', 'name': 'Canley Vale'}
@@ -992,15 +1696,362 @@ def get_default_config():
         }
     }
 
-def save_store_config(config):
-    """Save store configuration to JSON file"""
+# -------------------- User pairing code utilities --------------------
+def _safe_key_from_username(username: str | None) -> Optional[str]:
+    if not username:
+        return None
     try:
+        raw = str(username).strip().lower().replace('@', '_at_')
+        safe = ''.join(c for c in raw if (c.isalnum() or c in '._-'))
+        return safe or None
+    except Exception:
+        return None
+
+def _gen_unique_4digit_code(db) -> str:
+    # Try up to 50 attempts to avoid rare collisions
+    for _ in range(50):
+        code = str(random.randint(1000, 9999))
+        row = db.execute('SELECT 1 FROM users WHERE link_code = ?', (code,)).fetchone()
+        if not row:
+            return code
+    # As a fallback, return a time-based suffix to maintain 4 digits
+    return str(int(time.time()))[-4:]
+
+def _ensure_user_link_code(username: str) -> str:
+    db = get_db()
+    uname = (username or '').strip().lower()
+    r = db.execute('SELECT link_code FROM users WHERE username = ?', (uname,)).fetchone()
+    if r and r['link_code']:
+        return str(r['link_code'])
+    code = _gen_unique_4digit_code(db)
+    try:
+        db.execute('UPDATE users SET link_code = ? WHERE username = ?', (code, uname))
+        db.commit()
+    except Exception:
+        # If UPDATE failed (row might not exist), try insert minimal row
+        try:
+            db.execute('INSERT OR IGNORE INTO users (username, link_code) VALUES (?, ?)', (uname, code))
+            db.commit()
+        except Exception:
+            pass
+    return code
+
+def _resolve_user_key_by_code(raw_code: Optional[str]) -> Optional[str]:
+    """Map a 4-digit pairing code to the user's safe key for per-user configs.
+    Returns None if code is invalid or not found.
+    """
+    try:
+        code = (raw_code or '').strip()
+        if not (len(code) == 4 and code.isdigit()):
+            return None
+        db = get_db()
+        row = db.execute('SELECT username FROM users WHERE link_code = ?', (code,)).fetchone()
+        if not row:
+            return None
+        uname = (row['username'] or '').strip().lower()
+        return _safe_key_from_username(uname)
+    except Exception:
+        return None
+
+def _get_current_username_from_session() -> Optional[str]:
+    try:
+        # Avoid using session outside a request context
+        if not has_request_context():
+            return None
+        u = session.get('user')
+        if not isinstance(u, dict):
+            return None
+        # Prefer email when present (OAuth), else name/username/login
+        return (u.get('email') or u.get('name') or u.get('username') or u.get('login') or '').strip().lower() or None
+    except Exception:
+        return None
+
+def _config_path_for_user_safe_key(safe_key: str) -> str:
+    return f"store_config__{safe_key}.json"
+
+def load_store_config_for_user_safe_key(safe_key: str):
+    """Load another user's config by safe key (used for code-based listing).
+    Seeds from global master if missing, mirroring load_store_config behavior.
+    """
+    path = _config_path_for_user_safe_key(safe_key)
+    is_user_scoped = True
+    if not os.path.exists(path):
+        # New per-user config: start empty, not inherited from global
+        cfg = get_default_config(user_scoped=True)
+        if cfg.get('stores') and 'master_store_id' not in cfg:
+            try:
+                cfg['master_store_id'] = cfg['stores'][0]['id']
+            except Exception:
+                pass
+        # Save to user-scoped file
+        try:
+            tmp = path + '.tmp'
+            with open(tmp, 'w') as f:
+                json.dump(cfg, f, indent=2, ensure_ascii=False)
+            os.replace(tmp, path)
+        except Exception:
+            pass
+        return cfg
+    try:
+        with open(path, 'r') as f:
+            cfg = json.load(f)
+    except Exception:
+        # Corrupt -> back up and reset to per-user default (single master store)
+        try:
+            shutil.copyfile(path, path + '.corrupt.bak')
+        except Exception:
+            pass
+        cfg = get_default_config(user_scoped=True)
+        try:
+            tmp = path + '.tmp'
+            with open(tmp, 'w') as f:
+                json.dump(cfg, f, indent=2, ensure_ascii=False)
+            os.replace(tmp, path)
+        except Exception:
+            pass
+        return cfg
+    # backfill master_store_id
+    if 'master_store_id' not in cfg and cfg.get('stores'):
+        cfg['master_store_id'] = cfg['stores'][0]['id']
+        try:
+            tmp = path + '.tmp'
+            with open(tmp, 'w') as f:
+                json.dump(cfg, f, indent=2, ensure_ascii=False)
+            os.replace(tmp, path)
+        except Exception:
+            pass
+    return cfg
+
+def save_store_config_for_user_safe_key(safe_key: str, config):
+    """Save the given config to the per-user JSON path atomically."""
+    try:
+        path = _config_path_for_user_safe_key(safe_key)
+        tmp = path + '.tmp'
+        with open(tmp, 'w') as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, path)
+        print(f"Configuration atomically saved to {path}")
+    except Exception as e:
+        print(f"Error saving per-user configuration: {e}")
+        raise
+
+@app.route('/api/stores_by_code/<code>', methods=['GET'])
+@with_etag_json
+def stores_by_code(code):
+    """Return stores and screens for the user identified by a 4-digit code.
+    Response: {success, user:{username}, stores:[{id,name}], screens:{store_id:{screen_id:{...}}}}
+    """
+    try:
+        raw = (code or '').strip()
+        if not (len(raw) == 4 and raw.isdigit()):
+            return {'success': False, 'error': 'invalid code'}, 400
+        db = get_db()
+        row = db.execute('SELECT username FROM users WHERE link_code = ?', (raw,)).fetchone()
+        if not row:
+            return {'success': False, 'error': 'code not found'}, 404
+        uname = (row['username'] or '').strip().lower()
+        safe_key = _safe_key_from_username(uname)
+        if not safe_key:
+            return {'success': False, 'error': 'invalid user'}, 404
+        cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(safe_key))
+        # Return minimal listing to the TV app
+        return {
+            'success': True,
+            'user': {'username': uname},
+            'stores': cfg.get('stores', []),
+            'screens': cfg.get('screens', {})
+        }
+    except Exception as e:
+        return {'success': False, 'error': str(e)}, 500
+
+@app.route('/profile', methods=['GET'])
+@login_required
+def profile():
+    uname = _get_current_username_from_session()
+    code = None
+    full_name = None
+    try:
+        if uname:
+            code = _ensure_user_link_code(uname)
+            row = get_db().execute('SELECT full_name FROM users WHERE username = ?', (uname,)).fetchone()
+            full_name = (row['full_name'] if row and 'full_name' in row.keys() else None)
+    except Exception:
+        pass
+    # Basic cache control to avoid exposing stale codes
+    resp = make_response(render_template('profile.html', username=uname, full_name=full_name, link_code=code, build_stamp=BUILD_STAMP))
+    try:
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    except Exception:
+        pass
+    return resp
+
+@app.route('/profile/regenerate_code', methods=['POST'])
+@login_required
+def regenerate_code():
+    uname = _get_current_username_from_session()
+    if not uname:
+        return jsonify({'success': False, 'error': 'auth required'}), 403
+    db = get_db()
+    try:
+        code = _gen_unique_4digit_code(db)
+        db.execute('UPDATE users SET link_code = ? WHERE username = ?', (code, uname))
+        db.commit()
+        return jsonify({'success': True, 'link_code': code})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ----- Profile management APIs for in-drawer profile panel -----
+@app.route('/api/me', methods=['GET'])
+@login_required
+def api_me():
+    try:
+        uname = _get_current_username_from_session()
+        if not uname:
+            return jsonify({'success': False, 'error': 'auth required'}), 403
+        db = get_db()
+        row = db.execute('SELECT username, full_name, avatar FROM users WHERE username = ?', (uname,)).fetchone()
+        full_name = (row['full_name'] if row and 'full_name' in row.keys() else None)
+        avatar_rel = (row['avatar'] if row and 'avatar' in row.keys() else None)
+        avatar_url = None
+        try:
+            if avatar_rel:
+                avatar_url = url_for('static', filename=avatar_rel)
+        except Exception:
+            avatar_url = None
+        code = _ensure_user_link_code(uname)
+        return jsonify({'success': True, 'username': uname, 'full_name': full_name, 'avatar_url': avatar_url, 'link_code': code})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/profile/name', methods=['POST'])
+@login_required
+def api_profile_update_name():
+    try:
+        data = request.get_json() or {}
+        full_name = (data.get('full_name') or '').strip()
+        if len(full_name) < 2:
+            return jsonify({'success': False, 'error': 'name too short'}), 400
+        uname = _get_current_username_from_session()
+        db = get_db()
+        db.execute('UPDATE users SET full_name = ? WHERE username = ?', (full_name, uname))
+        db.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/profile/password', methods=['POST'])
+@login_required
+def api_profile_change_password():
+    try:
+        data = request.get_json() or {}
+        current = data.get('current_password') or ''
+        new = data.get('new_password') or ''
+        if len(new) < 6:
+            return jsonify({'success': False, 'error': 'password too short'}), 400
+        uname = _get_current_username_from_session()
+        db = get_db()
+        row = db.execute('SELECT password_hash FROM users WHERE username = ?', (uname,)).fetchone()
+        ph = row['password_hash'] if row else None
+        if not ph or not check_password_hash(ph, current):
+            return jsonify({'success': False, 'error': 'current password incorrect'}), 400
+        db.execute('UPDATE users SET password_hash = ? WHERE username = ?', (generate_password_hash(new), uname))
+        db.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/profile/delete', methods=['POST'])
+@login_required
+def api_profile_delete_account():
+    try:
+        data = request.get_json() or {}
+        current = data.get('current_password') or ''
+        uname = _get_current_username_from_session()
+        db = get_db()
+        row = db.execute('SELECT password_hash FROM users WHERE username = ?', (uname,)).fetchone()
+        ph = row['password_hash'] if row else None
+        if not ph or not check_password_hash(ph, current):
+            return jsonify({'success': False, 'error': 'current password incorrect'}), 400
+        # Remove per-user config file and any local uploads under users/<k>/
+        try:
+            safe_key = _safe_key_from_username(uname)
+            if safe_key:
+                cfg_file = f"store_config__{safe_key}.json"
+                if os.path.exists(cfg_file):
+                    try:
+                        os.remove(cfg_file)
+                    except Exception:
+                        pass
+                # Remove local uploads prefix folders if present
+                uploads_root = os.path.join('static', 'uploads')
+                prefix = os.path.join(uploads_root, 'users', safe_key)
+                if os.path.exists(prefix):
+                    import shutil
+                    try:
+                        shutil.rmtree(prefix, ignore_errors=True)
+                    except Exception:
+                        pass
+                # Remove avatar file
+                try:
+                    avatar_path = os.path.join('static', 'uploads', 'avatars', f'{safe_key}.png')
+                    if os.path.exists(avatar_path):
+                        os.remove(avatar_path)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        db.execute('DELETE FROM users WHERE username = ?', (uname,))
+        db.commit()
+        session.clear()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/profile/avatar', methods=['POST'])
+@login_required
+def api_profile_upload_avatar():
+    try:
+        if 'avatar' not in request.files:
+            return jsonify({'success': False, 'error': 'no file'}), 400
+        f = request.files['avatar']
+        if not f or f.filename == '':
+            return jsonify({'success': False, 'error': 'no file'}), 400
+        # Process image to square 256x256 PNG
+        from PIL import Image, ImageOps  # type: ignore
+        im = Image.open(f.stream)
+        im = ImageOps.exif_transpose(im)
+        im = ImageOps.fit(im, (256, 256), Image.Resampling.LANCZOS)
+        uname = _get_current_username_from_session()
+        safe_key = _safe_key_from_username(uname or '') or 'user'
+        save_path = os.path.join(AVATAR_FOLDER, f'{safe_key}.png')
+        im.save(save_path, format='PNG')
+        # Store relative path for static url building
+        rel = os.path.join('uploads', 'avatars', f'{safe_key}.png')
+        db = get_db()
+        db.execute('UPDATE users SET avatar = ? WHERE username = ?', (rel, uname))
+        db.commit()
+        url = url_for('static', filename=rel)
+        # Add cache-buster so the fresh avatar shows immediately
+        try:
+            ts = int(os.path.getmtime(save_path))
+            sep = '&' if ('?' in url) else '?'
+            url = f"{url}{sep}t={ts}"
+        except Exception:
+            pass
+        return jsonify({'success': True, 'avatar_url': url})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+def save_store_config(config):
+    """Save store configuration to the active JSON file (per-user or global)."""
+    try:
+        cfg_path = _effective_config_path()
         # Atomic write: write to temp file then replace
-        tmp_file = CONFIG_FILE + '.tmp'
+        tmp_file = cfg_path + '.tmp'
         with open(tmp_file, 'w') as f:
             json.dump(config, f, indent=2, ensure_ascii=False)
-        os.replace(tmp_file, CONFIG_FILE)
-        print(f"Configuration atomically saved to {CONFIG_FILE}")
+        os.replace(tmp_file, cfg_path)
+        print(f"Configuration atomically saved to {cfg_path}")
     except Exception as e:
         print(f"Error saving configuration: {e}")
         raise
@@ -1040,58 +2091,129 @@ except Exception:
 
 @app.route('/thumb/<int:width>/<path:filename>')
 def thumbnail(width: int, filename: str):
-    """Return a cached thumbnail for an uploaded image under static/uploads.
-    - width: target max width; height preserved by aspect ratio
-    - caches to static/thumbs/{width}_{basename}.webp
-    - if not an image or Pillow missing, redirect to original
+    """Return a cached thumbnail for an uploaded image.
+    - Supports nested folders (e.g., 2025-08/banner.jpg)
+    - Caches to static/thumbs/{width}_{path_no_ext}.webp (slashes -> '__')
+    - If local source doesn't exist and R2 is enabled, fetch from R2 to build the thumb.
+    - If Pillow missing, redirect to original.
     """
     try:
-        basename = os.path.basename(filename)
-        if not _is_image(basename):
-            return redirect(url_for('static', filename=f'uploads/{basename}'))
-        src_path = _safe_upload_path(basename)
-        if not os.path.exists(src_path):
-            return jsonify({'error': 'not found'}), 404
+        rel_path = str(filename).lstrip('/').replace('\\','/')
+        # If CDN has the object, redirect to it immediately
+        if r2_enabled():
+            try:
+                s3 = get_s3_client()
+                if s3:
+                    r2_key_try_webp = f"thumbs/{width}/" + os.path.splitext(rel_path)[0] + '.webp'
+                    r2_key_try_jpg  = f"thumbs/{width}/" + os.path.splitext(rel_path)[0] + '.jpg'
+                    try:
+                        s3.head_object(Bucket=os.environ['R2_BUCKET_NAME'], Key=r2_key_try_webp)
+                        cdn = _cdn_thumb_url('thumbs', width, rel_path)
+                        if cdn: return redirect(cdn, code=302)
+                    except Exception:
+                        try:
+                            s3.head_object(Bucket=os.environ['R2_BUCKET_NAME'], Key=r2_key_try_jpg)
+                            cdn = _cdn_thumb_url('thumbs', width, rel_path)
+                            if cdn: return redirect(cdn, code=302)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+        if not _is_image(rel_path):
+            return redirect(url_for('static', filename=f'uploads/{rel_path}'))
+        local_src = _safe_upload_path(rel_path)
+        have_local = os.path.exists(local_src)
 
-        cached_name = f"{width}_{os.path.splitext(basename)[0]}.webp"
+        # Build a cache key that includes folders to avoid collisions
+        name_no_ext = os.path.splitext(rel_path)[0].replace('/', '__')
+        cached_name = f"{width}_{name_no_ext}.webp"
         cached_path = os.path.abspath(os.path.join(THUMB_FOLDER, cached_name))
+
+        # Source mtime for rebuild decision
+        src_mtime = None
+        if have_local:
+            try:
+                src_mtime = os.path.getmtime(local_src)
+            except Exception:
+                src_mtime = None
+        elif r2_enabled():
+            try:
+                s3 = get_s3_client()
+                if s3:
+                    head = s3.head_object(Bucket=os.environ['R2_BUCKET_NAME'], Key=rel_path)
+                    lm = head.get('LastModified')
+                    if lm:
+                        src_mtime = int(lm.timestamp())
+            except Exception:
+                src_mtime = None
 
         # Decide if we need to rebuild
         rebuild = True
         if os.path.exists(cached_path):
-            try:
-                rebuild = os.path.getmtime(cached_path) < os.path.getmtime(src_path)
-            except Exception:
-                # If we cannot stat reliably, keep existing thumbnail
+            if src_mtime is None:
+                # If we cannot determine source time, keep existing
                 rebuild = False
+            else:
+                try:
+                    rebuild = os.path.getmtime(cached_path) < src_mtime
+                except Exception:
+                    rebuild = False
 
         if rebuild:
             if Image is None:
-                return redirect(url_for('static', filename=f'uploads/{basename}'))
+                return redirect(url_for('static', filename=f'uploads/{rel_path}'))
             try:
                 os.makedirs(THUMB_FOLDER, exist_ok=True)
-                with Image.open(src_path) as im:
-                    # Convert paletted/alpha to RGB for JPEG when needed
+                # Open source image from local or R2
+                if have_local:
+                    im_ctx = Image.open(local_src)
+                else:
+                    s3 = get_s3_client()
+                    if not s3:
+                        return redirect(url_for('static', filename=f'uploads/{rel_path}'))
+                    obj = s3.get_object(Bucket=os.environ['R2_BUCKET_NAME'], Key=rel_path)
+                    from io import BytesIO
+                    im_ctx = Image.open(BytesIO(obj['Body'].read()))
+                with im_ctx as im:
                     if im.mode in ('P', 'RGBA', 'LA'):
                         im = im.convert('RGB')
                     im_copy = im.copy()
-                    # Preserve aspect ratio using thumbnail(); very tall max height to avoid constraining height
                     target_w = int(width) if width>0 else 300
                     im_copy.thumbnail((target_w, 10000), Image.LANCZOS)
-                    # Adaptive quality: smaller thumbs get lower quality to cut bytes
                     q = 60 if target_w <= 220 else 78
+                    out_ext = 'webp'
                     try:
                         im_copy.save(cached_path, 'WEBP', quality=q, method=6)
                     except Exception:
-                        # Fallback to JPEG
                         fallback_path = cached_path[:-5] + '.jpg'
                         jq = 75 if target_w <= 220 else 85
                         im_copy.save(fallback_path, 'JPEG', quality=jq, optimize=True)
                         cached_path = fallback_path
                         cached_name = os.path.basename(cached_path)
+                        out_ext = 'jpg'
+
+                    # Push the generated thumbnail to R2 so CDN can serve it first
+                    try:
+                        if r2_enabled():
+                            s3 = get_s3_client()
+                            if s3:
+                                # Use original path but swap extension to output format, keep nested folders
+                                r2_key = f"thumbs/{width}/" + os.path.splitext(rel_path)[0] + ('.webp' if out_ext=='webp' else '.jpg')
+                                with open(cached_path, 'rb') as fh:
+                                    body = fh.read()
+                                ct = 'image/webp' if out_ext=='webp' else 'image/jpeg'
+                                s3.put_object(
+                                    Bucket=os.environ['R2_BUCKET_NAME'],
+                                    Key=r2_key,
+                                    Body=body,
+                                    ContentType=ct,
+                                    CacheControl='public, max-age=2592000'
+                                )
+                    except Exception as _upl_err:
+                        logging.debug('R2 upload (thumb) skipped/failed for %s: %s', rel_path, _upl_err)
             except Exception as e:
-                logging.error('Thumbnail build failed for %s: %s', basename, e)
-                return redirect(url_for('static', filename=f'uploads/{basename}'))
+                logging.error('Thumbnail build failed for %s: %s', rel_path, e)
+                return redirect(url_for('static', filename=f'uploads/{rel_path}'))
 
         resp = send_file(cached_path)
         try:
@@ -1144,9 +2266,25 @@ def _safe_video_path(name: str) -> str:
 @app.route('/vthumb/<int:width>/<path:filename>')
 def vthumbnail(width: int, filename: str):
     try:
-        basename = os.path.basename(filename)
-        src_path = _safe_video_path(basename)
-        cached_name = f"{width}_{os.path.splitext(basename)[0]}.jpg"
+        rel_path = str(filename).lstrip('/').replace('\\','/')
+        # If CDN has the object, redirect to it immediately
+        if r2_enabled():
+            try:
+                s3 = get_s3_client()
+                if s3:
+                    r2_key = f"vthumbs/{width}/" + os.path.splitext(rel_path)[0] + '.jpg'
+                    try:
+                        s3.head_object(Bucket=os.environ['R2_BUCKET_NAME'], Key=r2_key)
+                        cdn = _cdn_thumb_url('vthumbs', width, rel_path)
+                        if cdn: return redirect(cdn, code=302)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+        src_path = _safe_video_path(rel_path)
+        # Include folders in cache key to avoid collisions
+        name_no_ext = os.path.splitext(rel_path)[0].replace('/', '__')
+        cached_name = f"{width}_{name_no_ext}.jpg"
         cached_path = os.path.abspath(os.path.join(VTHUMB_FOLDER, cached_name))
         rebuild = True
         if os.path.exists(cached_path):
@@ -1160,14 +2298,53 @@ def vthumbnail(width: int, filename: str):
                 return jsonify({'error': 'ffmpeg not available'}), 404
             os.makedirs(VTHUMB_FOLDER, exist_ok=True)
             try:
+                # If local video source is missing but R2 is enabled, fetch to a temp file first
+                tmp_src = None
+                if not os.path.exists(src_path) and r2_enabled():
+                    try:
+                        s3 = get_s3_client()
+                        if s3:
+                            data = s3.get_object(Bucket=os.environ['R2_BUCKET_NAME'], Key=rel_path)['Body'].read()
+                            os.makedirs(os.path.dirname(src_path), exist_ok=True)
+                            tmp_src = os.path.join(VTHUMB_FOLDER, f"_src_{name_no_ext}")
+                            with open(tmp_src, 'wb') as fh:
+                                fh.write(data)
+                            src_use = tmp_src
+                        else:
+                            src_use = src_path
+                    except Exception:
+                        src_use = src_path
+                else:
+                    src_use = src_path
+
                 cmd = [
-                    ffmpeg, '-y', '-ss', '0.2', '-i', src_path,
+                    ffmpeg, '-y', '-ss', '0.2', '-i', src_use,
                     '-vframes', '1', '-vf', f'scale={int(width) if width>0 else 300}:-1',
                     cached_path
                 ]
                 subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                # Push the generated vthumb to R2 for CDN delivery
+                try:
+                    if r2_enabled():
+                        s3 = get_s3_client()
+                        if s3 and os.path.exists(cached_path):
+                            r2_key = f"vthumbs/{width}/" + os.path.splitext(rel_path)[0] + '.jpg'
+                            with open(cached_path, 'rb') as fh:
+                                body = fh.read()
+                            s3.put_object(
+                                Bucket=os.environ['R2_BUCKET_NAME'],
+                                Key=r2_key,
+                                Body=body,
+                                ContentType='image/jpeg',
+                                CacheControl='public, max-age=2592000'
+                            )
+                except Exception as _upl_err:
+                    logging.debug('R2 upload (vthumb) skipped/failed for %s: %s', rel_path, _upl_err)
+                if tmp_src and os.path.exists(tmp_src):
+                    try: os.remove(tmp_src)
+                    except Exception: pass
             except Exception as e:
-                logging.error('ffmpeg thumbnail failed for %s: %s', basename, e)
+                logging.error('ffmpeg thumbnail failed for %s: %s', rel_path, e)
                 return jsonify({'error': 'thumb failed'}), 500
         resp = send_file(cached_path)
         try:
@@ -1183,10 +2360,26 @@ def vthumbnail(width: int, filename: str):
 @app.route('/vpreview/<int:width>/<path:filename>')
 def vpreview(width: int, filename: str):
     try:
-        basename = os.path.basename(filename)
-        src_path = _safe_video_path(basename)
-        # Store mp4 previews for broad compatibility
-        cached_name = f"{width}_{os.path.splitext(basename)[0]}.mp4"
+        # Support files in nested folders (e.g., 2025-08/campaign/clip.mp4)
+        rel_path = str(filename).lstrip('/').replace('\\','/')
+        # If CDN has the preview, redirect to it immediately
+        if r2_enabled():
+            try:
+                s3 = get_s3_client()
+                if s3:
+                    r2_key = f"vpreviews/{width}/" + os.path.splitext(rel_path)[0] + '.mp4'
+                    try:
+                        s3.head_object(Bucket=os.environ['R2_BUCKET_NAME'], Key=r2_key)
+                        cdn = _cdn_thumb_url('vpreviews', width, rel_path)
+                        if cdn: return redirect(cdn, code=302)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+        src_path = _safe_video_path(rel_path)
+        # Store mp4 previews for broad compatibility; include folders in key to avoid collisions
+        name_no_ext = os.path.splitext(rel_path)[0].replace('/', '__')
+        cached_name = f"{width}_{name_no_ext}.mp4"
         cached_path = os.path.abspath(os.path.join(VPREVIEW_FOLDER, cached_name))
         rebuild = True
         if os.path.exists(cached_path):
@@ -1200,17 +2393,55 @@ def vpreview(width: int, filename: str):
                 return jsonify({'error': 'ffmpeg not available'}), 404
             os.makedirs(VPREVIEW_FOLDER, exist_ok=True)
             try:
+                # If local video source is missing but R2 is enabled, fetch to a temp file first
+                tmp_src = None
+                if not os.path.exists(src_path) and r2_enabled():
+                    try:
+                        s3 = get_s3_client()
+                        if s3:
+                            data = s3.get_object(Bucket=os.environ['R2_BUCKET_NAME'], Key=rel_path)['Body'].read()
+                            os.makedirs(os.path.dirname(src_path), exist_ok=True)
+                            tmp_src = os.path.join(VPREVIEW_FOLDER, f"_src_{name_no_ext}")
+                            with open(tmp_src, 'wb') as fh:
+                                fh.write(data)
+                            src_use = tmp_src
+                        else:
+                            src_use = src_path
+                    except Exception:
+                        src_use = src_path
+                else:
+                    src_use = src_path
                 # 6s low-bitrate H.264 baseline clip, scaled to width, no audio, faststart
                 target_w = int(width) if width>0 else 360
                 cmd = [
-                    ffmpeg, '-y', '-ss', '0', '-t', '6', '-i', src_path,
+                    ffmpeg, '-y', '-ss', '0', '-t', '6', '-i', src_use,
                     '-an', '-vf', f'scale={target_w}:-2',
                     '-c:v', 'libx264', '-profile:v', 'baseline', '-preset', 'veryfast', '-b:v', '600k',
                     '-movflags', '+faststart', cached_path
                 ]
                 subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                # Push the generated preview to R2 for CDN delivery
+                try:
+                    if r2_enabled():
+                        s3 = get_s3_client()
+                        if s3 and os.path.exists(cached_path):
+                            r2_key = f"vpreviews/{width}/" + os.path.splitext(rel_path)[0] + '.mp4'
+                            with open(cached_path, 'rb') as fh:
+                                body = fh.read()
+                            s3.put_object(
+                                Bucket=os.environ['R2_BUCKET_NAME'],
+                                Key=r2_key,
+                                Body=body,
+                                ContentType='video/mp4',
+                                CacheControl='public, max-age=2592000'
+                            )
+                except Exception as _upl_err:
+                    logging.debug('R2 upload (vpreview) skipped/failed for %s: %s', rel_path, _upl_err)
+                if tmp_src and os.path.exists(tmp_src):
+                    try: os.remove(tmp_src)
+                    except Exception: pass
             except Exception as e:
-                logging.error('ffmpeg vpreview failed for %s: %s', basename, e)
+                logging.error('ffmpeg vpreview failed for %s: %s', rel_path, e)
                 return jsonify({'error': 'preview failed'}), 500
         resp = send_file(cached_path, mimetype='video/mp4')
         try:
@@ -1361,13 +2592,20 @@ def pick_active_playlist_item(screen, parent_config=None, store_id=None, screen_
             pass
     return current_item.get('file')
 
-@app.route('/')
+@app.route('/dashboard')
+@login_required
 def dashboard():
     """Main dashboard page"""
     print("DEBUG: Dashboard route called")
     try:
         print("DEBUG: Loading store config...")
+        # load_store_config respects the logged-in session via _effective_config_path
         config = ensure_playlists_structure(load_store_config())
+        # Guard: ensure stores/screens keys exist even for new users
+        if 'stores' not in config or not isinstance(config.get('stores'), list):
+            config['stores'] = []
+        if 'screens' not in config or not isinstance(config.get('screens'), dict):
+            config['screens'] = {}
         # Expose media_base_url in config for front-end JS helpers
         try:
             mbu = get_media_base_url()
@@ -1388,8 +2626,25 @@ def dashboard():
             asset_bust = int(os.path.getmtime(logo_path)) if os.path.exists(logo_path) else int(time.time())
         except Exception:
             asset_bust = 0
+        # Compute user info for header menu (email + pairing code)
+        try:
+            u = session.get('user') or {}
+            uname = (u.get('email') or u.get('name') or u.get('username') or '').strip()
+            link_code = _ensure_user_link_code(uname) if uname else ''
+        except Exception:
+            uname = ''
+            link_code = ''
         # After computing asset_bust, render the template
-        resp = make_response(render_template('dashboard.html', config=config, media_base_url=get_media_base_url(), asset_bust=asset_bust, build_stamp=BUILD_STAMP, git_commit=GIT_COMMIT))
+        resp = make_response(render_template(
+            'dashboard.html',
+            config=config,
+            media_base_url=get_media_base_url(),
+            asset_bust=asset_bust,
+            build_stamp=BUILD_STAMP,
+            git_commit=GIT_COMMIT,
+            user_email=uname,
+            link_code=link_code
+        ))
         # Avoid CDN/browser caching the admin dashboard HTML
         try:
             resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
@@ -1403,6 +2658,7 @@ def dashboard():
         return f"Error: {e}", 500
 
 @app.route('/upload_to_screen', methods=['POST'])
+@login_required
 def upload_to_screen():
     """Upload file to specific screen"""
     store_id = request.form.get('store_id')
@@ -1433,14 +2689,18 @@ def upload_to_screen():
     print(f"[upload_to_screen] Incoming upload store={store_id} screen={screen_id} apply_all={apply_to_all} original_name={file.filename}")
     if file and allowed_file(file.filename):
         # Generate unique filename
-        filename = str(uuid.uuid4()) + '.' + file.filename.rsplit('.', 1)[1].lower()
+        randname = str(uuid.uuid4()) + '.' + file.filename.rsplit('.', 1)[1].lower()
+        # Put user content under users/<user>/<YYYY-MM>/
+        month_prefix = datetime.now(timezone.utc).strftime('%Y-%m')
+        user_root = _user_content_prefix() or 'public'
+        key = _join_prefix_key(_join_prefix_key(user_root, month_prefix), randname)
         # Detect content-type
         content_type = file.mimetype or 'application/octet-stream'
         if r2_enabled():
             try:
                 data = file.read()
-                r2_put_bytes(filename, data, content_type)
-                print(f"[upload_to_screen] Uploaded to R2 as {filename}")
+                r2_put_bytes(key, data, content_type)
+                print(f"[upload_to_screen] Uploaded to R2 as {key}")
             except Exception as _e_r2_up:
                 logging.warning('R2 direct upload failed, falling back to local: %s', _e_r2_up)
                 # Reset stream and fall back to local save
@@ -1448,9 +2708,12 @@ def upload_to_screen():
                     file.stream.seek(0)
                 except Exception:
                     pass
-                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                # Ensure local directory exists for user namespace
+                local_dir = os.path.join(app.config['UPLOAD_FOLDER'], os.path.dirname(key))
+                os.makedirs(local_dir, exist_ok=True)
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], key)
                 try:
-                    ext = filename.rsplit('.',1)[-1].lower()
+                    ext = randname.rsplit('.',1)[-1].lower()
                 except Exception:
                     ext = ''
                 if ext in IMAGE_EXTENSIONS and Image is not None and ImageOps is not None:
@@ -1468,12 +2731,15 @@ def upload_to_screen():
                         file.save(filepath)
                 else:
                     file.save(filepath)
-                print(f"[upload_to_screen] Saved locally as fallback {filename} -> {filepath}")
+                print(f"[upload_to_screen] Saved locally as fallback {key} -> {filepath}")
         else:
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            # Local-only: save under user namespace
+            local_dir = os.path.join(app.config['UPLOAD_FOLDER'], os.path.dirname(key))
+            os.makedirs(local_dir, exist_ok=True)
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], key)
             # Normalize EXIF orientation for images to avoid client-side rotation surprises
             try:
-                ext = filename.rsplit('.',1)[-1].lower()
+                ext = randname.rsplit('.',1)[-1].lower()
             except Exception:
                 ext = ''
             if ext in IMAGE_EXTENSIONS and Image is not None and ImageOps is not None:
@@ -1491,7 +2757,7 @@ def upload_to_screen():
                     file.save(filepath)
             else:
                 file.save(filepath)
-            print(f"[upload_to_screen] Saved as {filename} -> {filepath}")
+            print(f"[upload_to_screen] Saved as {key} -> {filepath}")
 
         # Update configuration
         config = ensure_playlists_structure(load_store_config())
@@ -1538,10 +2804,10 @@ def upload_to_screen():
                 skipped_stores.append(current_store_id)
             else:
                 scr = config['screens'][current_store_id][actual_screen_id]
-                scr['file'] = filename
+                scr['file'] = key
                 pl = scr.setdefault('playlist', [])
-                if not any(i.get('file') == filename for i in pl):
-                    pl.append({'id': str(uuid.uuid4()), 'file': filename, 'enabled': True, 'start': None, 'end': None, 'schedule': [], 'duration': 10, 'repeat': True, 'link_next': False, 'media_type': classify_media(filename)})
+                if not any(i.get('file') == key for i in pl):
+                    pl.append({'id': str(uuid.uuid4()), 'file': key, 'enabled': True, 'start': None, 'end': None, 'schedule': [], 'duration': 10, 'repeat': True, 'link_next': False, 'media_type': classify_media(key)})
                 updated_stores.append(current_store_id)
 
         save_store_config(config)
@@ -1554,9 +2820,9 @@ def upload_to_screen():
 
         return jsonify({
             'success': True,
-            'filename': filename,
-            'url': build_public_url(filename),
-            'media_type': classify_media(filename),
+            'filename': key,
+            'url': build_public_url(key),
+            'media_type': classify_media(key),
             'store_id': store_id,
             'screen_id': screen_id,
             'applied_to_all': True,
@@ -1569,17 +2835,17 @@ def upload_to_screen():
     # Single-store path
     if store_id in config.get('screens', {}) and screen_id in config['screens'].get(store_id, {}):
         screen_obj = config['screens'][store_id][screen_id]
-        screen_obj['file'] = filename
+        screen_obj['file'] = key
         pl = screen_obj.setdefault('playlist', [])
-        if not any(i.get('file') == filename for i in pl):
-            pl.append({'id': str(uuid.uuid4()), 'file': filename, 'enabled': True, 'start': None, 'end': None, 'schedule': [], 'duration': 10, 'repeat': True, 'link_next': False, 'media_type': classify_media(filename)})
+        if not any(i.get('file') == key for i in pl):
+            pl.append({'id': str(uuid.uuid4()), 'file': key, 'enabled': True, 'start': None, 'end': None, 'schedule': [], 'duration': 10, 'repeat': True, 'link_next': False, 'media_type': classify_media(key)})
         save_store_config(config)
-        print(f"[upload_to_screen] Single-store success store={store_id} screen={screen_id} file={filename} playlist_len={len(pl)}")
+        print(f"[upload_to_screen] Single-store success store={store_id} screen={screen_id} file={key} playlist_len={len(pl)}")
         return jsonify({
             'success': True,
-            'filename': filename,
-            'url': build_public_url(filename),
-            'media_type': classify_media(filename),
+            'filename': key,
+            'url': build_public_url(key),
+            'media_type': classify_media(key),
             'store_id': store_id,
             'screen_id': screen_id,
             'applied_to_all': False
@@ -1589,6 +2855,7 @@ def upload_to_screen():
     return jsonify({'success': False, 'error': 'screen not found'}), 404
 
 @app.route('/update_rotation', methods=['POST'])
+@login_required
 def update_rotation():
     """Update rotation setting for a screen"""
     try:
@@ -1615,6 +2882,7 @@ def update_rotation():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/update_orientation', methods=['POST'])
+@login_required
 def update_orientation():
     """Update screen orientation settings"""
     data = request.get_json()
@@ -1632,6 +2900,7 @@ def update_orientation():
     return jsonify({'error': 'Invalid screen'}), 400
 
 @app.route('/set_orientation_mode', methods=['POST'])
+@login_required
 def set_orientation_mode():
     """Set orientation mode in one call: vertical, horizontal, or default (none)."""
     try:
@@ -1660,6 +2929,7 @@ def set_orientation_mode():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/update_protection', methods=['POST'])
+@login_required
 def update_protection():
     """Update screen protection status"""
     try:
@@ -1683,6 +2953,45 @@ def update_protection():
         print(f"Error updating protection: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/update_screen_name', methods=['POST'])
+@login_required
+def update_screen_name():
+    """Set or clear a human-friendly name for a screen.
+    Body JSON: {store_id, screen_id, name}
+    - name: trimmed; if empty, the custom name is removed and UI falls back to derived label.
+    """
+    try:
+        data = request.get_json() or {}
+        store_id = str(data.get('store_id') or '').strip()
+        screen_id = str(data.get('screen_id') or '').strip()
+        name = str(data.get('name') or '').strip()
+        if not store_id or not screen_id:
+            return jsonify({'success': False, 'error': 'store_id and screen_id required'}), 400
+
+        cfg = ensure_playlists_structure(load_store_config())
+        ns, nid = _normalize_screen_ref(cfg, store_id, screen_id)
+        if not ns or not nid:
+            return jsonify({'success': False, 'error': 'screen not found'}), 404
+
+        # Sanitize length
+        if len(name) > 100:
+            name = name[:100]
+
+        scr = cfg.get('screens', {}).get(ns, {}).get(nid)
+        if scr is None:
+            return jsonify({'success': False, 'error': 'screen not found'}), 404
+        if name:
+            scr['name'] = name
+        else:
+            # Clear custom name to fall back to derived label
+            scr.pop('name', None)
+
+        save_store_config(cfg)
+        return jsonify({'success': True, 'name': scr.get('name', '')})
+    except Exception as e:
+        app.logger.exception('update_screen_name failed')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/tv_view/<store_id>/<screen_id>')
 def tv_view(store_id, screen_id):
     """TV display view for specific screen.
@@ -1694,9 +3003,10 @@ def tv_view(store_id, screen_id):
     config = load_store_config()
     screen_config = ensure_playlists_structure(config)['screens'].get(store_id, {}).get(screen_id, {})
     active_file = pick_active_playlist_item(screen_config, config, store_id, screen_id)
-    return render_template('tv_view.html', screen_config=screen_config, screen_id=screen_id, store_id=store_id, active_file=active_file)
+    return render_template('tv_view.html', screen_config=screen_config, screen_id=screen_id, store_id=store_id, active_file=active_file, media_base_url=get_media_base_url())
 
 @app.route('/delete_from_screen', methods=['POST'])
+@login_required
 def delete_from_screen():
     """Delete file from specific screen or force delete from gallery"""
     # Declare once at function start to avoid SyntaxError
@@ -1740,17 +3050,30 @@ def delete_from_screen():
         if force_delete and filename:
             print(f"Processing force delete for filename: {filename}")
             try:
+                # Enforce per-user ownership for force delete
+                user_root = _user_content_prefix()
+                if not user_root:
+                    return jsonify({'error': 'auth required'}), 403
+                # Map absolute URL to key and verify it resides under current user's namespace
+                fn_key = filename
+                try:
+                    if isinstance(fn_key, str) and (fn_key.startswith('http://') or fn_key.startswith('https://')):
+                        fn_key = fn_key.rstrip('/').split('/')[-1]
+                except Exception:
+                    pass
+                if not isinstance(fn_key, str) or not fn_key.startswith(user_root + '/'):
+                    return jsonify({'error': 'cross-tenant delete denied'}), 403
                 # Remove file from storage
                 removed_physical = False
                 if r2_enabled():
                     try:
-                        r2_delete_object(filename)
+                        r2_delete_object(fn_key)
                         removed_physical = True
-                        print(f"Force deleted R2 object: {filename}")
+                        print(f"Force deleted R2 object: {fn_key}")
                     except Exception as e:
                         print(f"R2 force delete failed (continuing): {e}")
                 else:
-                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], fn_key)
                     if os.path.exists(filepath):
                         os.remove(filepath)
                         removed_physical = True
@@ -1759,9 +3082,9 @@ def delete_from_screen():
                 # Remove file from all screens that use it
                 for sid, screens in config['screens'].items():
                     for scr_id, screen_data in screens.items():
-                        if screen_data.get('file') == filename:
+                        if screen_data.get('file') == fn_key:
                             config['screens'][sid][scr_id]['file'] = None
-                            print(f"Removed {filename} from store {sid}, screen {scr_id}")
+                            print(f"Removed {fn_key} from store {sid}, screen {scr_id}")
 
                 save_store_config(config)
                 try:
@@ -1812,7 +3135,14 @@ def delete_from_screen():
                         break
                 print(f"Reference check - file '{current_filename}' still_in_use={still_in_use}")
 
-                # Only remove the physical file if no other screen uses it
+                # Only remove the physical file if no other screen uses it AND it belongs to current user's namespace
+                user_root = _user_content_prefix()
+                allowed_delete = bool(user_root and isinstance(key_current, str) and key_current.startswith(user_root + '/'))
+                if not allowed_delete:
+                    print("Skipping physical delete; file not in current user's namespace")
+                    # Treat as still in use for response semantics to avoid implying deletion
+                    still_in_use = True
+
                 if not still_in_use:
                     if r2_enabled():
                         try:
@@ -1875,18 +3205,21 @@ def delete_from_screen():
         return jsonify({'error': f'Server error: {str(e)}'}), 500
 
 @app.route('/apply_to_all', methods=['POST'])
+@login_required
 def apply_to_all():
     """Apply settings to all stores"""
     # This would implement the "Apply to all Stores" functionality
     return jsonify({'success': True, 'message': 'Settings applied to all stores'})
 
 @app.route('/replicate_screen', methods=['POST'])
+@login_required
 def replicate_screen():
     """Replicate a master store screen file to all other stores.
 
     Behavior controlled by 'mode' in JSON body:
-    - 'override' (default): replace target screen's file and reset playlist to only the source file.
+    - 'override' (default): replace target screen's file and reset playlist to only the source file (or upsert selected items by file).
     - 'addon': keep existing items and append the source file to the playlist if not present.
+    - 'mirror': fully replace the target playlist to exactly match the master's current playlist (requires all items selected).
 
     Always skips screens marked protected in target stores.
     """
@@ -1951,8 +3284,33 @@ def replicate_screen():
             if not source_items:
                 selected_item_ids = []
 
-        # If no selection, require a single source file as before
-        if not selected_item_ids:
+        # Validation for mirror mode: must select all items from master
+        if mode == 'mirror':
+            master_ids = [str(it.get('id')) for it in source_playlist if isinstance(it, dict) and it.get('id') is not None]
+            if not master_ids:
+                return jsonify({'error': 'Master screen has no playlist items to mirror'}), 400
+            sel_set = set(str(x) for x in (selected_item_ids or []))
+            if set(master_ids) != sel_set:
+                return jsonify({'error': 'Please tick all playlist items to mirror/replace exactly'}), 400
+            # Ensure source_items reflects all items in order
+            source_items = []
+            for it in source_playlist:
+                if isinstance(it, dict):
+                    source_items.append({
+                        'file': it.get('file'),
+                        'enabled': bool(it.get('enabled', True)),
+                        'start': it.get('start'),
+                        'end': it.get('end'),
+                        'schedule': it.get('schedule', []),
+                        'duration': it.get('duration', 10),
+                        'repeat': bool(it.get('repeat', True)),
+                        'link_next': bool(it.get('link_next', False)),
+                        'media_type': it.get('media_type') or classify_media(it.get('file') or '')
+                    })
+            selected_item_ids = master_ids
+
+        # If no selection (non-mirror), require a single source file as before
+        if not selected_item_ids and mode != 'mirror':
             if not source_file:
                 return jsonify({'error': 'No file on this screen to replicate'}), 400
 
@@ -2011,6 +3369,15 @@ def replicate_screen():
                     # If target has no primary file, set to first selected
                     if not screens[actual_id].get('file') and source_items:
                         screens[actual_id]['file'] = source_items[0].get('file')
+                elif mode == 'mirror':
+                    # Replace the entire playlist with exactly the master's items (order preserved)
+                    new_pl = []
+                    for src in source_items:
+                        item = dict(src)
+                        item['id'] = str(uuid.uuid4())
+                        new_pl.append(item)
+                    screens[actual_id]['playlist'] = new_pl
+                    screens[actual_id]['file'] = new_pl[0].get('file') if new_pl else None
                 else:
                     # override: upsert each selected item by file (replace settings if exists; add if missing)
                     # Keep other existing items intact
@@ -2121,30 +3488,78 @@ def gallery():
     return render_template('gallery.html', images=images)
 
 @app.route('/delete_unused_files', methods=['POST'])
+@login_required
 def delete_unused_files():
-    """Delete all unused files"""
+    """Delete all unused files for the current user namespace (local and R2)."""
     try:
+        # Helper to normalize keys from possible absolute URLs
+        def _key_of(val: str) -> str:
+            v = str(val or '')
+            try:
+                if v.startswith('http://') or v.startswith('https://'):
+                    return v.rstrip('/').split('/')[-1]
+            except Exception:
+                pass
+            return v
+
+        user_root = _user_content_prefix()
+        if not user_root:
+            return jsonify({'success': False, 'error': 'auth required'}), 403
+
         config = load_store_config()
         used_files = set()
-        
-        # Collect all used files
-        for store_id, screens in config['screens'].items():
-            for screen_id, screen_data in screens.items():
-                if screen_data.get('file'):
-                    used_files.add(screen_data['file'])
-                for item in screen_data.get('playlist', []):
-                    if item.get('file'): used_files.add(item['file'])
-        
-        # Find and delete unused files
+
+        # Collect used files from this user's config only
+        for _sid, screens in (config.get('screens') or {}).items():
+            for _scr_id, screen_data in (screens or {}).items():
+                f = _key_of(screen_data.get('file'))
+                if f:
+                    used_files.add(f)
+                for item in screen_data.get('playlist', []) or []:
+                    fi = _key_of(item.get('file'))
+                    if fi:
+                        used_files.add(fi)
+
+        # Restrict used set to current namespace only
+        used_user = {k for k in used_files if isinstance(k, str) and k.startswith(user_root + '/')}
+
         deleted_count = 0
-        if os.path.exists(app.config['UPLOAD_FOLDER']):
-            for filename in os.listdir(app.config['UPLOAD_FOLDER']):
-                if allowed_file(filename) and filename not in used_files:
-                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                    os.remove(filepath)
-                    deleted_count += 1
-                    print(f"Deleted unused file: {filename}")
-        
+        if r2_enabled():
+            # Scan current user's prefix in R2
+            prefix = user_root + '/'
+            for obj in r2_list_objects(prefix):
+                key = obj.get('Key')
+                if not key or key.endswith('/'):
+                    continue
+                # Only delete allowed media types that are not referenced
+                if allowed_file(key) and key not in used_user:
+                    try:
+                        r2_delete_object(key)
+                        deleted_count += 1
+                        print(f"Deleted unused R2 object: {key}")
+                    except Exception as de:
+                        print(f"Failed to delete R2 object {key}: {de}")
+        else:
+            # Local filesystem: walk under user namespace folder
+            base = app.config['UPLOAD_FOLDER']
+            root_path = os.path.join(base, user_root)
+            if os.path.isdir(root_path):
+                for dirpath, _dirnames, filenames in os.walk(root_path):
+                    for name in filenames:
+                        if not allowed_file(name):
+                            continue
+                        abs_path = os.path.join(dirpath, name)
+                        # Compute object key: user_root + relative path using forward slashes
+                        rel_path = os.path.relpath(abs_path, base).replace('\\', '/')
+                        key = rel_path
+                        if key not in used_user:
+                            try:
+                                os.remove(abs_path)
+                                deleted_count += 1
+                                print(f"Deleted unused file: {key}")
+                            except Exception as le:
+                                print(f"Failed to delete file {key}: {le}")
+
         return jsonify({'success': True, 'deleted_count': deleted_count})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -2155,6 +3570,7 @@ def test_delete():
     return render_template('test_delete.html')
 
 @app.route('/add_screen', methods=['POST'])
+@login_required
 def add_screen():
     """Add a new screen to a store"""
     try:
@@ -2226,6 +3642,7 @@ def add_screen():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/delete_screen', methods=['POST'])
+@login_required
 def delete_screen():
     """Delete a screen and its associated file"""
     try:
@@ -2245,16 +3662,33 @@ def delete_screen():
         if store_id not in config['screens']:
             print(f"DEBUG: Store {store_id} not found in config")
             return jsonify({'error': 'Store not found'}), 404
-            
-        if screen_id not in config['screens'][store_id]:
-            print(f"DEBUG: Screen {screen_id} not found in store {store_id}")
-            print(f"DEBUG: Available screens in store {store_id}: {list(config['screens'][store_id].keys())}")
+        # Normalize provided id: accept both prefixed (e.g., "1881_screen1") and unprefixed ("screen1")
+        actual_id = screen_id
+        store_screens = config['screens'].get(store_id, {})
+        if actual_id not in store_screens:
+            print(f"DEBUG: Screen {actual_id} not directly in store {store_id}, attempting mapping")
+            # If given id is prefixed but for a different store, remap suffix to this store
+            if '_' in screen_id:
+                short = screen_id.split('_', 1)[1]
+                candidate = f"{store_id}_{short}"
+                if candidate in store_screens:
+                    actual_id = candidate
+                elif short in store_screens:
+                    actual_id = short
+            else:
+                # Unprefixed -> try store-prefixed variant
+                candidate = f"{store_id}_{screen_id}"
+                if candidate in store_screens:
+                    actual_id = candidate
+        if actual_id not in store_screens:
+            print(f"DEBUG: Screen {screen_id} not found (mapped={actual_id}) in store {store_id}")
+            print(f"DEBUG: Available screens in store {store_id}: {list(store_screens.keys())}")
             return jsonify({'error': 'Screen not found'}), 404
         
-        print(f"DEBUG: Found screen {screen_id} in store {store_id}")
+        print(f"DEBUG: Found screen {actual_id} in store {store_id}")
         
         # Delete associated file if exists
-        screen_data = config['screens'][store_id][screen_id]
+        screen_data = config['screens'][store_id][actual_id]
         if screen_data.get('file'):
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], screen_data['file'])
             if os.path.exists(filepath):
@@ -2262,15 +3696,15 @@ def delete_screen():
                 print(f"DEBUG: Deleted file: {filepath}")
         
         # Remove screen from configuration
-        del config['screens'][store_id][screen_id]
-        print(f"DEBUG: Removed screen {screen_id} from config")
+        del config['screens'][store_id][actual_id]
+        print(f"DEBUG: Removed screen {actual_id} from config")
         
         save_store_config(config)
         print(f"DEBUG: Configuration saved successfully")
         
         return jsonify({
             'success': True,
-            'message': f'Screen {screen_id} deleted successfully'
+            'message': f'Screen {actual_id} deleted successfully'
         })
         
     except Exception as e:
@@ -2280,8 +3714,9 @@ def delete_screen():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/add_store', methods=['POST'])
+@login_required
 def add_store():
-    """Add a new store with default screens"""
+    """Add a new store starting with no screens"""
     try:
         data = request.get_json()
         store_id = data.get('store_id')
@@ -2302,28 +3737,11 @@ def add_store():
             'id': store_id,
             'name': store_name
         })
-        
-        # Add default screens for new store (2 screens + 1 promo) with store-specific IDs
-        config['screens'][store_id] = {
-            f'{store_id}_screen1': {
-                'file': None,
-                'vertical': False,
-                'horizontal': False,
-                'rotation': 0
-            },
-            f'{store_id}_screen2': {
-                'file': None,
-                'vertical': False,
-                'horizontal': False,
-                'rotation': 0
-            },
-            f'{store_id}_promo1': {
-                'file': None,
-                'vertical': True,
-                'horizontal': False,
-                'rotation': 0
-            }
-        }
+        # Start with no screens; UI will show add placeholders for Screen and Promo
+        if 'screens' not in config:
+            config['screens'] = {}
+        if store_id not in config['screens']:
+            config['screens'][store_id] = {}
         
         save_store_config(config)
         
@@ -2331,7 +3749,7 @@ def add_store():
             'success': True,
             'store_id': store_id,
             'store_name': store_name,
-            'message': f'Store {store_id} - {store_name} added successfully with default screens'
+            'message': f'Store {store_id} - {store_name} added successfully'
         })
         
     except Exception as e:
@@ -2339,6 +3757,7 @@ def add_store():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/delete_store', methods=['POST'])
+@login_required
 def delete_store():
     """Delete a store and all its associated screens and files"""
     try:
@@ -2398,7 +3817,11 @@ def delete_store():
 @with_etag_json
 def get_playlist(store_id, screen_id):
     print(f"DEBUG: GET /playlist {store_id} {screen_id}")
-    cfg = ensure_playlists_structure(load_store_config())
+    header_code = request.headers.get('X-User-Code') or request.args.get('user_code')
+    user_key = _resolve_user_key_by_code(header_code)
+    if not user_key and not _safe_user_key():
+        return {'success': False, 'error': 'pair code required'}, 403
+    cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(user_key) if user_key else load_store_config())
     # Legacy mapping: if old store_id like '1881' no longer exists, map to current master store
     try:
         if store_id not in (cfg.get('screens') or {}) and str(store_id) == '1881':
@@ -2428,25 +3851,8 @@ def get_playlist(store_id, screen_id):
                 screen_id = prefixed
         screen = alt
     if not screen:
-        # If store exists, create the screen with defaults to avoid frontend errors
-        if store_id in cfg.get('screens', {}):
-            target_id = screen_id if '_' in screen_id else f"{store_id}_{screen_id}"
-            print(f"DEBUG: Auto-creating missing screen {target_id} in store {store_id}")
-            is_promo = target_id.split('_',1)[-1].startswith('promo') if '_' in target_id else target_id.startswith('promo')
-            screens[target_id] = {
-                'file': None,
-                'vertical': True if is_promo else False,
-                'horizontal': False if is_promo else False,
-                'rotation': 0,
-                'protected': False,
-                'playlist': []
-            }
-            save_store_config(cfg)
-            screen_id = target_id
-            screen = screens[target_id]
-        else:
-            print("DEBUG: Screen not found for playlist (after mapping)")
-            return jsonify({'success': False, 'error': 'screen not found'}), 404
+        print("DEBUG: Screen not found for playlist (after mapping)")
+        return jsonify({'success': False, 'error': 'screen not found'}), 404
     # Auto-clean missing-file items (local disk only)
     if not r2_enabled():
         original = screen.get('playlist', [])
@@ -2462,7 +3868,10 @@ def get_playlist(store_id, screen_id):
             cleaned.append(item)
         if removed:
             screen['playlist'] = cleaned
-            save_store_config(cfg)
+            if user_key:
+                save_store_config_for_user_safe_key(user_key, cfg)
+            else:
+                save_store_config(cfg)
             print(f"DEBUG: Auto-removed {removed} missing file playlist items")
     pl = screen.get('playlist', [])
     # Decorate with public URL and last known status for clients/dashboard
@@ -2516,68 +3925,227 @@ def get_playlist(store_id, screen_id):
 
 # ---- Media library listing (for choosing existing uploads) ----
 @app.route('/library')
+@login_required
 @slowlog(500)
 @with_etag_json
 def list_library():
+    """List media library with optional prefix scoping and directory discovery.
+    Query: prefix=foo/bar (optional)
+    Returns: {success, prefix, dirs:[{name,prefix}], files:[...]} where file names are keys relative to root.
+    """
     try:
-        # Small TTL cache to avoid re-statting many files for rapid refreshes
         global _LIB_CACHE
         now_ts = time.time()
+        prefix = _sanitize_prefix(request.args.get('prefix'))
+        user_root = _user_content_prefix()
+        if not user_root:
+            return jsonify({'success': False, 'error': 'auth required'}), 403
+        cache_key = f"{user_root}|{prefix or '__root__'}"
         try:
             if isinstance(_LIB_CACHE, dict):
-                entry = _LIB_CACHE.get('data')
+                entry = _LIB_CACHE.get(cache_key)
                 if entry and (now_ts - entry.get('ts', 0) < 10):
-                    payload = {'success': True, 'files': entry['files']}
-                    # Preserve stronger cache header and allow ETag via decorator
-                    return payload, 200, {'Cache-Control': 'public, max-age=60'}
+                    return (
+                        {'success': True, 'prefix': prefix, 'dirs': entry.get('dirs', []), 'files': entry.get('files', [])},
+                        200,
+                        {'Cache-Control': 'public, max-age=60'}
+                    )
         except Exception:
             _LIB_CACHE = {}
+
         files = []
+        dirs: list[dict] = []
         if r2_enabled():
-            for obj in r2_list_objects():
+            seen = set()
+            # Real storage prefix is under user namespace; UI prefix is relative to it
+            real_prefix = _join_prefix_key(user_root, prefix) if prefix else user_root
+            pfx = real_prefix + '/'
+            for obj in r2_list_objects(pfx):
                 name = obj.get('Key')
-                if not name or not allowed_file(name):
+                if not name:
                     continue
-                size = int(obj.get('Size') or 0)
-                mtime = int(obj.get('LastModified').timestamp()) if obj.get('LastModified') else 0
-                files.append({
-                    'name': name,
-                    'media_type': classify_media(name),
-                    'size': size,
-                    'mtime': mtime,
-                    'url': build_public_url(name)
-                })
+                # Gather subfolder names
+                if pfx and name.startswith(pfx):
+                    remainder = name[len(pfx):]
+                else:
+                    remainder = name
+                if '/' in remainder:
+                    d = remainder.split('/', 1)[0]
+                    if d and d not in seen:
+                        seen.add(d)
+                # Only include files that are directly under prefix (no further '/')
+                if remainder and '/' not in remainder and allowed_file(name):
+                    size = int(obj.get('Size') or 0)
+                    mtime = int(obj.get('LastModified').timestamp()) if obj.get('LastModified') else 0
+                    relkey = name  # full key (includes user namespace)
+                    files.append({
+                        'name': relkey,
+                        'media_type': classify_media(relkey),
+                        'size': size,
+                        'mtime': mtime,
+                        'url': build_public_url(relkey)
+                    })
+            for d in sorted(seen):
+                # Return UI prefix relative to user root, not including user namespace
+                new_ui_prefix = _join_prefix_key(prefix, d) if prefix else d
+                dirs.append({'name': d, 'prefix': new_ui_prefix})
         else:
-            folder = app.config['UPLOAD_FOLDER']
-            for name in os.listdir(folder):
-                path = os.path.join(folder, name)
-                if not os.path.isfile(path):
-                    continue
-                if not allowed_file(name):
-                    continue
-                stat = os.stat(path)
-                files.append({
-                    'name': name,
-                    'media_type': classify_media(name),
-                    'size': stat.st_size,
-                    'mtime': int(stat.st_mtime),
-                    'url': build_public_url(name)
-                })
-        # Sort by most recent first
+            base = app.config['UPLOAD_FOLDER']
+            # Local path under user namespace
+            folder = os.path.join(base, _join_prefix_key(user_root, prefix) if prefix else user_root)
+            if os.path.isdir(folder):
+                for name in os.listdir(folder):
+                    path = os.path.join(folder, name)
+                    if os.path.isdir(path):
+                        dirs.append({'name': name, 'prefix': _join_prefix_key(prefix, name)})
+                        continue
+                    if not os.path.isfile(path) or not allowed_file(name):
+                        continue
+                    stat = os.stat(path)
+                    # Files: return full key including user namespace
+                    relname = _join_prefix_key(_join_prefix_key(user_root, prefix), name) if prefix else _join_prefix_key(user_root, name)
+                    files.append({
+                        'name': relname,
+                        'media_type': classify_media(name),
+                        'size': stat.st_size,
+                        'mtime': int(stat.st_mtime),
+                        'url': build_public_url(relname)
+                    })
         files.sort(key=lambda x: x['mtime'], reverse=True)
-        payload = {'success': True, 'files': files}
+        payload = {'success': True, 'prefix': prefix, 'dirs': dirs, 'files': files}
         try:
-            _LIB_CACHE = {'data': {'ts': now_ts, 'files': files}}
+            _LIB_CACHE[cache_key] = {'ts': now_ts, 'dirs': dirs, 'files': files}
         except Exception:
             pass
-        # Keep explicit cache header at 60s via tuple
         return payload, 200, {'Cache-Control': 'public, max-age=60'}
     except Exception as e:
-        print(f"Error listing library: {e}")
+        logging.exception('list_library error: %s', e)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ---- Folder management (create / rename / delete) ----
+@app.route('/library/folder/create', methods=['POST'])
+@login_required
+def lib_folder_create():
+    try:
+        data = request.get_json(force=True) or {}
+        parent = _sanitize_prefix(data.get('prefix'))
+        user_root = _user_content_prefix()
+        if not user_root:
+            return jsonify({'success': False, 'error': 'auth required'}), 403
+        name = _sanitize_prefix(data.get('name'))
+        if not name:
+            return jsonify({'success': False, 'error': 'invalid folder name'}), 400
+        new_prefix_ui = _join_prefix_key(parent, name) if parent else name
+        new_prefix = _join_prefix_key(user_root, new_prefix_ui)
+        if r2_enabled():
+            # Create a marker to make empty folder visible
+            key = f"{new_prefix}/.keep"
+            try:
+                r2_put_bytes(key, b'', content_type='application/octet-stream')
+            except Exception:
+                pass
+        else:
+            os.makedirs(os.path.join(app.config['UPLOAD_FOLDER'], new_prefix), exist_ok=True)
+        # bust cache for affected prefixes (parent and new)
+        try:
+            for k in (f"{user_root}|{parent or '__root__'}", f"{user_root}|{new_prefix_ui}"):
+                _LIB_CACHE.pop(k, None)
+        except Exception:
+            pass
+        return jsonify({'success': True, 'prefix': new_prefix_ui})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/library/folder/delete', methods=['POST'])
+@login_required
+def lib_folder_delete():
+    try:
+        data = request.get_json(force=True) or {}
+        prefix_ui = _sanitize_prefix(data.get('prefix'))
+        user_root = _user_content_prefix()
+        if not user_root:
+            return jsonify({'success': False, 'error': 'auth required'}), 403
+        prefix = _join_prefix_key(user_root, prefix_ui) if prefix_ui else user_root
+        if not prefix:
+            return jsonify({'success': False, 'error': 'prefix required'}), 400
+        if r2_enabled():
+            s3 = get_s3_client()
+            if not s3:
+                return jsonify({'success': False, 'error': 'R2 not configured'}), 400
+            pfx = prefix + '/'
+            # Delete all keys under prefix
+            keys = [obj.get('Key') for obj in r2_list_objects(pfx)]
+            for k in keys:
+                try:
+                    r2_delete_object(k)
+                except Exception:
+                    pass
+        else:
+            path = os.path.join(app.config['UPLOAD_FOLDER'], prefix)
+            if os.path.isdir(path):
+                shutil.rmtree(path)
+        # bust caches for this prefix and its parent
+        try:
+            _LIB_CACHE.pop(f"{user_root}|{prefix_ui}", None)
+            parent = prefix_ui.rsplit('/', 1)[0] if '/' in prefix_ui else ''
+            _LIB_CACHE.pop(f"{user_root}|{parent or '__root__'}", None)
+        except Exception:
+            pass
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/library/folder/rename', methods=['POST'])
+@login_required
+def lib_folder_rename():
+    try:
+        data = request.get_json(force=True) or {}
+        prefix_ui = _sanitize_prefix(data.get('prefix'))
+        new_name = _sanitize_prefix(data.get('new_name'))
+        user_root = _user_content_prefix()
+        if not user_root:
+            return jsonify({'success': False, 'error': 'auth required'}), 403
+        # Bugfix: referenced undefined variable `prefix`; use `prefix_ui`
+        if not prefix_ui or not new_name:
+            return jsonify({'success': False, 'error': 'prefix and new_name required'}), 400
+        parent = prefix_ui.rsplit('/', 1)[0] if '/' in prefix_ui else ''
+        new_prefix_ui = _join_prefix_key(parent, new_name) if parent else new_name
+        old = _join_prefix_key(user_root, prefix_ui)
+        new_prefix = _join_prefix_key(user_root, new_prefix_ui)
+        if r2_enabled():
+            s3 = get_s3_client()
+            if not s3:
+                return jsonify({'success': False, 'error': 'R2 not configured'}), 400
+            oldp = old + '/'
+            keys = [obj.get('Key') for obj in r2_list_objects(oldp)]
+            bucket = os.environ['R2_BUCKET_NAME']
+            for k in keys:
+                rel = k[len(oldp):]
+                new_k = f"{new_prefix}/{rel}"
+                try:
+                    s3.copy_object(Bucket=bucket, CopySource={'Bucket': bucket, 'Key': k}, Key=new_k)
+                    r2_delete_object(k)
+                except Exception:
+                    pass
+        else:
+            src = os.path.join(app.config['UPLOAD_FOLDER'], old)
+            dst = os.path.join(app.config['UPLOAD_FOLDER'], new_prefix)
+            os.makedirs(os.path.dirname(dst) or app.config['UPLOAD_FOLDER'], exist_ok=True)
+            if os.path.exists(src):
+                os.rename(src, dst)
+        # bust caches for old/parent/new
+        try:
+            for k in (f"{user_root}|{prefix_ui}", f"{user_root}|{new_prefix_ui}", f"{user_root}|{parent or '__root__'}"):
+                _LIB_CACHE.pop(k, None)
+        except Exception:
+            pass
+        return jsonify({'success': True, 'prefix': new_prefix_ui})
+    except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # ---- Upload media only (no playlist/config modification) ----
 @app.route('/upload_media', methods=['POST'])
+@login_required
 def upload_media():
     t0 = time.time()
     try:
@@ -2592,8 +4160,32 @@ def upload_media():
             return jsonify({'success': False, 'error': 'Invalid file type'}), 400
 
         ext = f.filename.rsplit('.', 1)[1].lower()
+        # Per-user root plus optional UI prefix (current month default)
+        user_root = _user_content_prefix()
+        if not user_root:
+            return jsonify({'success': False, 'error': 'auth required'}), 403
+        # Respect explicitly provided empty prefix (root). Only default when not provided at all.
+        vals = request.values or {}
+        prefix_provided = ('prefix' in vals)
+        raw_prefix = vals.get('prefix') if prefix_provided else None
+        ui_prefix = _sanitize_prefix(raw_prefix)
+        if ui_prefix == '' and not prefix_provided:
+            ui_prefix = datetime.now(timezone.utc).strftime('%Y-%m')
+        req_prefix = _join_prefix_key(user_root, ui_prefix)
         filename = f"{uuid.uuid4()}.{ext}"
-        dest = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        # Bust library cache for this user/prefix and root so new files show up immediately
+        try:
+            for k in (f"{user_root}|{ui_prefix or '__root__'}", f"{user_root}|__root__"):
+                _LIB_CACHE.pop(k, None)
+        except Exception:
+            pass
+        # Ensure local subdirectory exists (under user namespace)
+        local_dir = os.path.join(app.config['UPLOAD_FOLDER'], req_prefix)
+        try:
+            os.makedirs(local_dir, exist_ok=True)
+        except Exception:
+            pass
+        dest = os.path.join(local_dir, filename)
 
         # Normalize EXIF orientation for JPEGs only (PNG/WebP/etc. typically lack EXIF orientation)
         if ext in ('jpg', 'jpeg') and Image is not None and ImageOps is not None:
@@ -2623,19 +4215,21 @@ def upload_media():
         except Exception:
             pass
 
-        # If R2 is configured, upload the saved file to the bucket using the same key (filename)
+        # If R2 is configured, upload the saved file to the bucket using the prefixed key
         try:
             if r2_enabled():
                 with open(dest, 'rb') as fh:
                     data = fh.read()
-                r2_put_bytes(filename, data, content_type=_guess_mime(filename))
-                print(f"[upload_media] R2 put ok key={filename}")
+                key = _join_prefix_key(req_prefix, filename)
+                r2_put_bytes(key, data, content_type=_guess_mime(filename))
+                print(f"[upload_media] R2 put ok key={key}")
         except Exception as _r2e:
             # Log but do not fail the upload if R2 copy fails; local copy still exists
             logging.warning('R2 upload failed for %s: %s', filename, _r2e)
         dt = int((time.time()-t0)*1000)
-        print(f"[upload_media] done file={filename} ms={dt}")
-        return jsonify({'success': True, 'filename': filename, 'media_type': classify_media(filename), 'url': build_public_url(filename)})
+        key = _join_prefix_key(req_prefix, filename)
+        print(f"[upload_media] done file={key} ms={dt}")
+        return jsonify({'success': True, 'filename': key, 'media_type': classify_media(filename), 'url': build_public_url(key)})
     except Exception as e:
         print(f"upload_media error: {e}")
         import traceback as _tb
@@ -2644,6 +4238,7 @@ def upload_media():
 
 # ---- R2 Presigned direct-upload endpoint (bypasses origin/proxy limits) ----
 @app.route('/r2/presign_upload', methods=['POST', 'GET'])
+@login_required
 def r2_presign_upload():
     try:
         if not r2_enabled():
@@ -2694,7 +4289,26 @@ def r2_presign_upload():
         # Validate extension against allowed set to avoid junk uploads
         if ext not in ALLOWED_EXTENSIONS:
             return jsonify({'success': False, 'error': f'Unsupported file extension: .{ext}'}), 400
-        key = f"{uuid.uuid4()}.{ext}"
+        # Per-user root + optional UI prefix; default month folder.
+        # Respect explicitly provided empty prefix (root). Only default when not provided at all.
+        user_root = _user_content_prefix()
+        if not user_root:
+            return jsonify({'success': False, 'error': 'auth required'}), 403
+        prefix_in_data = isinstance(data, dict) and ('prefix' in data)
+        prefix_in_vals = isinstance(vals, dict) and ('prefix' in vals)
+        prefix_provided = bool(prefix_in_data or prefix_in_vals)
+        raw_prefix = (data.get('prefix') if prefix_in_data else (vals.get('prefix') if prefix_in_vals else None))
+        ui_prefix = _sanitize_prefix(raw_prefix)
+        if ui_prefix == '' and not prefix_provided:
+            ui_prefix = datetime.now(timezone.utc).strftime('%Y-%m')
+        req_prefix = _join_prefix_key(user_root, ui_prefix)
+        key = _join_prefix_key(req_prefix, f"{uuid.uuid4()}.{ext}")
+        # Proactively bust library cache for this user/prefix so the new file appears right away
+        try:
+            for k in (f"{user_root}|{ui_prefix or '__root__'}", f"{user_root}|__root__"):
+                _LIB_CACHE.pop(k, None)
+        except Exception:
+            pass
         s3 = get_s3_client()
         # Ensure content-type is set for correct serving via CDN
         if not content_type:
@@ -2712,6 +4326,20 @@ def r2_presign_upload():
         except Exception as e:
             logging.exception('Failed to presign R2 URL: %s', e)
             return jsonify({'success': False, 'error': 'presign failed'}), 500
+        # Record minimal presign diag
+        try:
+            evt = {
+                'user': _safe_user_key(),
+                'key': key,
+                'ct': content_type,
+                'ts': int(time.time())
+            }
+            if isinstance(_PRESIGNS, list):
+                _PRESIGNS.append(evt)
+            else:
+                _PRESIGNS.append(evt)  # deque
+        except Exception:
+            pass
         return jsonify({
             'success': True,
             'filename': key,
@@ -2736,6 +4364,7 @@ def r2_status():
 
 # ---- Assign existing media to a screen (no file upload) ----
 @app.route('/assign_to_screen', methods=['POST'])
+@login_required
 def assign_to_screen():
     try:
         data = request.get_json() or {}
@@ -2757,17 +4386,76 @@ def assign_to_screen():
         except Exception:
             pass
 
-        # Map absolute public URL to object key when needed (R2/public URLs)
-        def _key_of(val: str) -> str:
-            v = str(val or '')
+        # Normalize incoming into an object key
+        key = str(incoming or '').strip()
+        # Enforce per-user ownership: key must be within user's namespace unless absolute URL to foreign CDN/origin is allowed
+        user_root = _user_content_prefix()
+        if not user_root:
+            return jsonify({'success': False, 'error': 'auth required'}), 403
+        # Allow absolute http(s) only if domain is our media base or origin; otherwise require namespaced key
+        raw_key = key
+        if key.startswith('http://') or key.startswith('https://'):
             try:
-                if v.startswith('http://') or v.startswith('https://'):
-                    return v.rstrip('/').split('/')[-1]
+                from urllib.parse import urlparse
+                u = urlparse(key)
+                base = (get_media_base_url() or '').strip('/')
+                # Extract path relative to host
+                path = (u.path or '').lstrip('/')
+                # If MEDIA_BASE_URL has a path prefix, accept both with/without it
+                # Also accept our origin paths under /static/uploads or /media
+                # Strip common origin prefixes to yield raw object key
+                if path.startswith('static/uploads/'):
+                    path = path[len('static/uploads/'):]
+                elif path.startswith('media/'):
+                    # Videos sometimes flow through /media/<key>; normalize to key
+                    path = path[len('media/'):]
+                # If MEDIA_BASE_URL points to a subpath (rare), remove that as well
+                try:
+                    if base:
+                        from urllib.parse import urlparse as _p
+                        b = _p(base if base.startswith('http') else ('http://' + base))
+                        bpath = (b.path or '').lstrip('/')
+                        if bpath and path.startswith(bpath + '/'):
+                            path = path[len(bpath)+1:]
+                except Exception:
+                    pass
+                # Decode any percent-encoded segments
+                try:
+                    from urllib.parse import unquote
+                    rel = unquote(path)
+                except Exception:
+                    rel = path
+                key = rel
             except Exception:
-                pass
-            return v
-
-        key = _key_of(incoming)
+                return jsonify({'success': False, 'error': 'invalid media URL'}), 400
+        # Final check: key must begin with user_root/
+        if not key.startswith(user_root + '/'):
+            # Soft-allow if this exact key was presigned by this user recently (same session user)
+            try:
+                me = _safe_user_key()
+                recent = list(_PRESIGNS)[-50:] if not isinstance(_PRESIGNS, list) else _PRESIGNS[-50:]
+                if any((evt.get('user') == me and evt.get('key') == key) for evt in recent):
+                    logging.info('assign_to_screen: allowing key via recent presign match for user=%s', me)
+                else:
+                    # Extra diagnostics to aid production triage (non-secret)
+                    info = {
+                        'user': me,
+                        'user_root': user_root,
+                        'incoming': str(incoming)[:500],
+                        'raw_key': str(raw_key)[:500],
+                        'normalized_key': str(key)[:500],
+                        'media_base': get_media_base_url(),
+                        'ts': int(time.time())
+                    }
+                    print(f"[assign_to_screen][DENY] {info}")
+                    if isinstance(_ASSIGN_DENIES, list):
+                        _ASSIGN_DENIES.append(info)
+                    else:
+                        _ASSIGN_DENIES.append(info)
+                    return jsonify({'success': False, 'error': 'cross-tenant media access denied'}), 403
+            except Exception:
+                # If diagnostics fail, fall back to deny safely
+                return jsonify({'success': False, 'error': 'cross-tenant media access denied'}), 403
         if not allowed_file(key):
             return jsonify({'success': False, 'error': 'Invalid or unsupported file type'}), 400
 
@@ -2870,23 +4558,47 @@ def assign_to_screen():
         print(f"assign_to_screen error: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+# Safe diagnostics for current session user
+@app.route('/debug/assign_recent')
+@login_required
+def debug_assign_recent():
+    try:
+        key = _safe_user_key()
+        # Filter to current user, newest first
+        denies = [d for d in list(_ASSIGN_DENIES)[-50:] if not key or d.get('user') == key]
+        pres = [p for p in list(_PRESIGNS)[-50:] if not key or p.get('user') == key]
+        return jsonify({'success': True, 'denies': denies[-20:], 'presigns': pres[-20:]})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # -------- Store & Screen discovery API (for device first-run setup) --------
 @app.route('/stores')
 @with_etag_json
 def list_stores():
-    cfg = ensure_playlists_structure(load_store_config())
+    header_code = request.headers.get('X-User-Code') or request.args.get('user_code')
+    user_key = _resolve_user_key_by_code(header_code)
+    if not user_key and not _safe_user_key():
+        return {'success': False, 'error': 'pair code required'}, 403
+    cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(user_key) if user_key else load_store_config())
     return {'success': True, 'stores': cfg.get('stores', [])}
 
 @app.route('/screens/<store_id>')
 @with_etag_json
 def list_screens(store_id):
-    cfg = ensure_playlists_structure(load_store_config())
+    header_code = request.headers.get('X-User-Code') or request.args.get('user_code')
+    user_key = _resolve_user_key_by_code(header_code)
+    if not user_key and not _safe_user_key():
+        return {'success': False, 'error': 'pair code required'}, 403
+    cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(user_key) if user_key else load_store_config())
+    if store_id not in (cfg.get('screens') or {}):
+        return {'success': False, 'error': 'store not found'}, 404
     screens = cfg.get('screens', {}).get(store_id, {})
     # Return as array of {id: screen_id}
     arr = [{'id': sid} for sid in screens.keys()]
     return {'success': True, 'screens': arr}
 
 @app.route('/playlist/item/<store_id>/<screen_id>/<item_id>', methods=['PATCH'])
+@login_required
 def update_playlist_item(store_id, screen_id, item_id):
     print(f"DEBUG: PATCH playlist item {store_id} {screen_id} {item_id}")
     cfg = ensure_playlists_structure(load_store_config())
@@ -2953,6 +4665,7 @@ def update_playlist_item(store_id, screen_id, item_id):
     return jsonify({'success': False, 'error': 'item not found'}), 404
 
 @app.route('/playlist/item/<store_id>/<screen_id>/<item_id>', methods=['DELETE'])
+@login_required
 def delete_playlist_item(store_id, screen_id, item_id):
     print(f"DEBUG: DELETE playlist item {store_id} {screen_id} {item_id}")
     cfg = ensure_playlists_structure(load_store_config())
@@ -2968,6 +4681,7 @@ def delete_playlist_item(store_id, screen_id, item_id):
 
 # ---- Schedule window management endpoints ----
 @app.route('/playlist/item/<store_id>/<screen_id>/<item_id>/schedule', methods=['POST'])
+@login_required
 def add_schedule_window(store_id, screen_id, item_id):
     cfg = ensure_playlists_structure(load_store_config())
     screen = cfg.get('screens', {}).get(store_id, {}).get(screen_id)
@@ -2997,6 +4711,7 @@ def add_schedule_window(store_id, screen_id, item_id):
     return jsonify({'success': False, 'error': 'item not found'}), 404
 
 @app.route('/playlist/item/<store_id>/<screen_id>/<item_id>/schedule/<int:index>', methods=['PATCH'])
+@login_required
 def update_schedule_window(store_id, screen_id, item_id, index):
     cfg = ensure_playlists_structure(load_store_config())
     screen = cfg.get('screens', {}).get(store_id, {}).get(screen_id)
@@ -3025,6 +4740,7 @@ def update_schedule_window(store_id, screen_id, item_id, index):
     return jsonify({'success': False, 'error': 'item not found'}), 404
 
 @app.route('/playlist/item/<store_id>/<screen_id>/<item_id>/schedule/<int:index>', methods=['DELETE'])
+@login_required
 def delete_schedule_window(store_id, screen_id, item_id, index):
     cfg = ensure_playlists_structure(load_store_config())
     screen = cfg.get('screens', {}).get(store_id, {}).get(screen_id)
