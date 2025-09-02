@@ -29,7 +29,7 @@
         "protected": false,
         "playlist": [
           {
-            "id": "56779f45-2632-41aa-9a66-84c5d0fa269a",
+            "id": "d8eb2c86-7a22-4dca-a26c-d9a76dd27510",
             "file": "users/testuser/2025-09/a.jpg",
             "enabled": true,
             "start": null,
@@ -41,7 +41,7 @@
             "media_type": "image"
           },
           {
-            "id": "c327922a-14c8-48d2-bb73-de2477509865",
+            "id": "39fb0ad4-0391-4da6-9155-c3ac9f535f05",
             "file": "users/testuser/2025-09/b.mp4",
             "enabled": true,
             "start": null,
@@ -232,7 +232,7 @@
     },
     "1200": {
       "1200_screen1": {
-        "file": "users/testuser/2025-09/792f108e-6e71-49b7-95a1-283d5ec7268a.gif",
+        "file": "users/testuser/2025-09/ad18100e-cbef-4d70-b7e6-282270a7cfa7.gif",
         "vertical": false,
         "horizontal": false,
         "rotation": 0,
@@ -740,6 +740,18 @@
             "repeat": true,
             "link_next": false,
             "media_type": "animated"
+          },
+          {
+            "id": "1d78b042-5035-42e6-abc8-6cf569b6727c",
+            "file": "users/testuser/2025-09/ad18100e-cbef-4d70-b7e6-282270a7cfa7.gif",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "animated"
           }
         ],
         "rotation_meta": {
@@ -972,7 +984,7 @@
             "repeat": true,
             "link_next": false,
             "media_type": "image",
-            "id": "f928dc5f-eb5b-4cae-a594-69d87c8dce5b"
+            "id": "95127df1-15e9-4a5f-8f5f-034864760dbd"
           },
           {
             "file": "users/testuser/2025-09/b.mp4",
@@ -984,7 +996,7 @@
             "repeat": true,
             "link_next": false,
             "media_type": "video",
-            "id": "8a8be834-75a3-4ea9-babe-f663f7c4241a"
+            "id": "d861f606-965c-47d3-8f2f-cdf365d0e2a8"
           }
         ],
         "rotation_meta": {
