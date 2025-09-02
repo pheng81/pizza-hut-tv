@@ -29,7 +29,7 @@
         "protected": false,
         "playlist": [
           {
-            "id": "065dca79-2b04-4528-9a02-e322fd16bd5d",
+            "id": "56779f45-2632-41aa-9a66-84c5d0fa269a",
             "file": "users/testuser/2025-09/a.jpg",
             "enabled": true,
             "start": null,
@@ -41,7 +41,7 @@
             "media_type": "image"
           },
           {
-            "id": "df7d858c-c7ae-4c82-837a-b36b55d08044",
+            "id": "c327922a-14c8-48d2-bb73-de2477509865",
             "file": "users/testuser/2025-09/b.mp4",
             "enabled": true,
             "start": null,
@@ -232,7 +232,7 @@
     },
     "1200": {
       "1200_screen1": {
-        "file": "users/testuser/2025-09/d913757f-4868-4efe-ba9c-cee9d8851f93.gif",
+        "file": "users/testuser/2025-09/792f108e-6e71-49b7-95a1-283d5ec7268a.gif",
         "vertical": false,
         "horizontal": false,
         "rotation": 0,
@@ -728,6 +728,18 @@
             "repeat": true,
             "link_next": false,
             "media_type": "animated"
+          },
+          {
+            "id": "be7a61ab-4414-4561-8bb3-3df93b534130",
+            "file": "users/testuser/2025-09/792f108e-6e71-49b7-95a1-283d5ec7268a.gif",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "animated"
           }
         ],
         "rotation_meta": {
@@ -960,7 +972,7 @@
             "repeat": true,
             "link_next": false,
             "media_type": "image",
-            "id": "06f8a652-6cf1-429e-b283-213251cd5ba8"
+            "id": "f928dc5f-eb5b-4cae-a594-69d87c8dce5b"
           },
           {
             "file": "users/testuser/2025-09/b.mp4",
@@ -972,7 +984,7 @@
             "repeat": true,
             "link_next": false,
             "media_type": "video",
-            "id": "ac5b05ce-a4f7-4899-beac-18da9faf14d9"
+            "id": "8a8be834-75a3-4ea9-babe-f663f7c4241a"
           }
         ],
         "rotation_meta": {

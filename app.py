@@ -817,7 +817,10 @@ def _sanitize_prefix(prefix: str | None) -> str:
         if not p:
             return ''
         for part in p.split('/'):
-            # Allow dots and spaces in folder names (spaces will be URL-encoded when linking)
+            # Allow dots and spaces to support user namespaces and readable folder names
+            # Disallow leading/trailing spaces within a part by trimming check
+            if part != part.strip():
+                return ''
             if not part or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._- " for c in part):
                 return ''
         return p

@@ -1560,6 +1560,7 @@
                     <span class="username">{{ (session.get('user') or {}).get('name') or 'User' }}</span>
                 </div>
                 <div class="sep"></div>
+                <a class="item" href="#" onclick="openLibraryManager(); return false;">Manage Library</a>
                 <a class="item" href="{{ url_for('profile') }}">Profile</a>
                 <a class="item" href="{{ url_for('logout') }}">Log out</a>
             </div>
@@ -1607,9 +1608,9 @@
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
                 <span>Add Store</span>
             </button>
-            <button class="action-item" onclick="openLibraryManager()" title="Library Manager">
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v12H3z"></path><path d="M3 10h18"></path></svg>
-                <span>Library Manager</span>
+            <button class="action-item" onclick="openLibraryManager()" title="Manage Library">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z"></path></svg>
+                <span>Manage Library</span>
             </button>
             <button class="action-item danger" id="drawer-delete-store-btn" onclick="deleteCurrentStore()" title="Delete selected store">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path></svg>
@@ -1659,6 +1660,15 @@
         else { d.classList.remove('open'); b.classList.remove('show'); }
     }
     function openUserProfile(){ toggleProfilePanel(true); }
+    function openLibraryManager(){
+        ensureReplaceModal();
+        rpCtx = { screenId: 'SINGLE', itemId: 'SINGLE' }; // neutral context
+        rpPrefix = '';
+        document.getElementById('rp-overlay').style.display='flex';
+        switchRpTab('lib');
+        renderRpBreadcrumb();
+        refreshLibrary();
+    }
     async function loadHeaderAvatar(){
         try{
             const r = await fetch('/api/me');
@@ -4110,15 +4120,6 @@
                 }
                 function closeReplaceModal(){ const ov=document.getElementById('rp-overlay'); if(ov) ov.style.display='none'; rpCtx=null; resetRpUploadUI(); }
                 function switchRpTab(which){ const lib=document.getElementById('rp-view-lib'); const up=document.getElementById('rp-view-upload'); const t1=document.getElementById('rp-tab-lib'); const t2=document.getElementById('rp-tab-upload'); const isLib=which==='lib'; lib.style.display=isLib?'block':'none'; up.style.display=isLib?'none':'block'; t1.classList.toggle('active',isLib); t2.classList.toggle('active',!isLib); }
-                // Open Library Manager standalone (no playlist context)
-                window.openLibraryManager = function(){
-                    ensureReplaceModal();
-                    rpCtx = { screenId: null, itemId: null };
-                    rpPrefix = '';
-                    document.getElementById('rp-overlay').style.display='flex';
-                    renderRpBreadcrumb();
-                    refreshLibrary();
-                }
                                 function renderRpBreadcrumb(){
                                         const cont = document.getElementById('rp-view-lib');
                                         if(!cont) return;
@@ -4254,21 +4255,21 @@
                         });
                     });
                 }
-                        function createFolderPrompt(){
-                                const name = prompt('New folder name (letters, numbers, space, _, -, .):');
+            function createFolderPrompt(){
+                const name = prompt('New folder name (letters, numbers, space, _, -, .):');
                                 if(!name){ return; }
-                                const ok = /^[A-Za-z0-9._- ]+$/.test(name);
-                                if(!ok){ alert('Only letters, numbers, underscore (_), hyphen (-), and dot (.) are allowed.'); return; }
+                const ok = /^[A-Za-z0-9._\-\. ]+$/.test(name) && name.trim() === name;
+                if(!ok){ alert('Only letters, numbers, underscore (_), hyphen (-), dot (.), and space are allowed. No leading/trailing spaces.'); return; }
                                 fetch('/library/folder/create', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prefix: rpPrefix, name }) })
                                     .then(r=>r.json()).then(d=>{ if(d && d.success){ refreshLibrary(); } else { alert('Create failed: '+(d && d.error)); } });
                         }
             function renameFolderPrompt(){
                 if(!rpPrefix){ return; }
                 const cur = rpPrefix.split('/').pop();
-                                const name = prompt('Rename folder to (letters, numbers, space, _, -, .):', cur);
+                const name = prompt('Rename folder to (letters, numbers, space, _, -, .):', cur);
                                 if(!name || name===cur){ return; }
-                                const ok = /^[A-Za-z0-9._- ]+$/.test(name);
-                                if(!ok){ alert('Only letters, numbers, underscore (_), hyphen (-), and dot (.) are allowed.'); return; }
+                const ok = /^[A-Za-z0-9._\-\. ]+$/.test(name) && name.trim() === name;
+                if(!ok){ alert('Only letters, numbers, underscore (_), hyphen (-), dot (.), and space are allowed. No leading/trailing spaces.'); return; }
                 const parent = rpPrefix.includes('/') ? rpPrefix.split('/').slice(0,-1).join('/') : '';
                 fetch('/library/folder/rename', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prefix: rpPrefix, new_name: name }) })
                   .then(r=>r.json()).then(d=>{ if(d && d.success){ rpPrefix = d.prefix || (parent? parent+'/'+name : name); renderRpBreadcrumb(); refreshLibrary(); } else { alert('Rename failed: '+(d && d.error)); } });
