@@ -29,7 +29,7 @@
         "protected": false,
         "playlist": [
           {
-            "id": "d8eb2c86-7a22-4dca-a26c-d9a76dd27510",
+            "id": "823fe9ad-6cbc-4809-b812-c030dce5150f",
             "file": "users/testuser/2025-09/a.jpg",
             "enabled": true,
             "start": null,
@@ -41,7 +41,7 @@
             "media_type": "image"
           },
           {
-            "id": "39fb0ad4-0391-4da6-9155-c3ac9f535f05",
+            "id": "dc999ed0-0b1c-4354-9d4c-17d572931d43",
             "file": "users/testuser/2025-09/b.mp4",
             "enabled": true,
             "start": null,
@@ -232,7 +232,7 @@
     },
     "1200": {
       "1200_screen1": {
-        "file": "users/testuser/2025-09/ad18100e-cbef-4d70-b7e6-282270a7cfa7.gif",
+        "file": "users/testuser/2025-09/65677c0f-5cb7-4a1e-9c63-4738ec8308d7.gif",
         "vertical": false,
         "horizontal": false,
         "rotation": 0,
@@ -752,6 +752,30 @@
             "repeat": true,
             "link_next": false,
             "media_type": "animated"
+          },
+          {
+            "id": "57ca5ac2-f254-4a2b-b755-5f951f6fc804",
+            "file": "users/testuser/2025-09/17161429-d9ce-4f36-a328-316226a62288.gif",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "animated"
+          },
+          {
+            "id": "c14d3c42-4fa9-4e60-a852-f47524d033f7",
+            "file": "users/testuser/2025-09/65677c0f-5cb7-4a1e-9c63-4738ec8308d7.gif",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "animated"
           }
         ],
         "rotation_meta": {
@@ -984,7 +1008,7 @@
             "repeat": true,
             "link_next": false,
             "media_type": "image",
-            "id": "95127df1-15e9-4a5f-8f5f-034864760dbd"
+            "id": "17319404-0a2c-44be-90d5-3663ab9e9c0c"
           },
           {
             "file": "users/testuser/2025-09/b.mp4",
@@ -996,7 +1020,7 @@
             "repeat": true,
             "link_next": false,
             "media_type": "video",
-            "id": "d861f606-965c-47d3-8f2f-cdf365d0e2a8"
+            "id": "a33ef78e-948a-48d8-845e-eb02566a90c0"
           }
         ],
         "rotation_meta": {
