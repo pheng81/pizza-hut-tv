@@ -29,7 +29,7 @@
         "protected": false,
         "playlist": [
           {
-            "id": "e44b558a-f4a2-4bc2-b54e-94df8f465bd9",
+            "id": "927c6891-36fb-42a4-864a-de48d8fd651e",
             "file": "users/testuser/2025-09/a.jpg",
             "enabled": true,
             "start": null,
@@ -41,7 +41,7 @@
             "media_type": "image"
           },
           {
-            "id": "834d44cb-5b8b-4303-96da-b18c8f743f77",
+            "id": "65f40590-afa9-4555-b4cd-99826cf36219",
             "file": "users/testuser/2025-09/b.mp4",
             "enabled": true,
             "start": null,
@@ -232,7 +232,7 @@
     },
     "1200": {
       "1200_screen1": {
-        "file": "users/testuser/2025-09/a26ae203-713f-46db-b355-eaacfe1a5532.gif",
+        "file": "users/testuser/2025-09/62421325-5214-416e-90c7-61d52772b79c.gif",
         "vertical": false,
         "horizontal": false,
         "rotation": 0,
@@ -692,6 +692,18 @@
             "repeat": true,
             "link_next": false,
             "media_type": "animated"
+          },
+          {
+            "id": "b34f7b46-0291-4ba6-850b-a1fb8faa0816",
+            "file": "users/testuser/2025-09/62421325-5214-416e-90c7-61d52772b79c.gif",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "animated"
           }
         ],
         "rotation_meta": {
@@ -924,7 +936,7 @@
             "repeat": true,
             "link_next": false,
             "media_type": "image",
-            "id": "98c4b91c-6102-454a-be71-86a1f1371513"
+            "id": "aab000f8-e262-42ea-849d-89ac2c0f26a3"
           },
           {
             "file": "users/testuser/2025-09/b.mp4",
@@ -936,7 +948,7 @@
             "repeat": true,
             "link_next": false,
             "media_type": "video",
-            "id": "10ff6b3c-8b47-48f0-b269-70a3b7cfcf51"
+            "id": "42f8f2cb-4122-4622-9850-6943a7d7cc9d"
           }
         ],
         "rotation_meta": {

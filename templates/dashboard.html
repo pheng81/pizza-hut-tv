@@ -4631,6 +4631,15 @@
         function showAddStoreDialog() {
             const modal = document.getElementById('addStoreModal');
             modal.classList.add('visible');
+            // default to single tab
+            const singleTab = document.getElementById('addStoreTabSingle');
+            const bulkTab = document.getElementById('addStoreTabBulk');
+            if (singleTab && bulkTab) {
+                singleTab.classList.add('active');
+                bulkTab.classList.remove('active');
+                document.getElementById('addStorePaneSingle').style.display = 'block';
+                document.getElementById('addStorePaneBulk').style.display = 'none';
+            }
             // focus first field after animation frame
             requestAnimationFrame(() => {
                 const first = document.getElementById('newStoreId');
@@ -4644,7 +4653,7 @@
             document.getElementById('addStoreForm').reset();
         }
         
-        function addNewStore() {
+    function addNewStore() {
             const storeId = document.getElementById('newStoreId').value.trim();
             const storeName = document.getElementById('newStoreName').value.trim();
             
@@ -4699,6 +4708,67 @@
             .catch(error => {
                 console.error('Network or parsing error:', error);
                 alert('❌ Network error or server issue: ' + error.message);
+            });
+        }
+
+        function addNewStoresBulk() {
+            const textarea = document.getElementById('bulkStores');
+            const raw = (textarea && textarea.value) ? textarea.value : '';
+            const lines = raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+            if (!lines.length) { alert('Please paste one or more lines'); return; }
+            // Accept formats: "1882, Liverpool" or "1882\tLiverpool" or "1882 Liverpool" (first token id, rest name)
+            const stores = [];
+            for (const line of lines) {
+                let id = '';
+                let name = '';
+                if (line.includes(',')) {
+                    const [a, ...rest] = line.split(',');
+                    id = (a || '').trim();
+                    name = rest.join(',').trim();
+                } else if (line.includes('\t')) {
+                    const [a, ...rest] = line.split('\t');
+                    id = (a || '').trim();
+                    name = rest.join(' ').trim();
+                } else {
+                    const parts = line.split(/\s+/);
+                    id = (parts.shift() || '').trim();
+                    name = parts.join(' ').trim();
+                }
+                if (id && name) {
+                    stores.push({ store_id: id, store_name: name });
+                }
+            }
+            if (!stores.length) { alert('No valid lines. Use: 1882, Liverpool'); return; }
+            fetch('/add_stores', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ stores })
+            }).then(r=>r.json()).then(data => {
+                if (!data.success) { alert('❌ ' + (data.error || 'Failed')); return; }
+                const added = data.added || [];
+                const skipped = data.skipped || [];
+                // Update UI for each added store
+                for (const s of added) {
+                    addStoreToDropdown(s.id, s.name);
+                    if (!allStoresData.screens) allStoresData.screens = {};
+                    allStoresData.screens[s.id] = {};
+                }
+                // Feedback
+                let msg = `✅ Added ${added.length} store(s)`;
+                if (skipped.length) {
+                    const first3 = skipped.slice(0,3).map(x=>`${x.id}: ${x.reason}`).join('; ');
+                    msg += `; Skipped ${skipped.length} (${first3}${skipped.length>3?'…':''})`;
+                }
+                alert(msg);
+                // If at least one added, switch to the first one
+                if (added.length) {
+                    switchStore(added[0].id);
+                }
+                // Clear textarea and close
+                if (textarea) textarea.value = '';
+                closeAddStoreDialog();
+            }).catch(err => {
+                console.error('bulk add failed', err);
+                alert('❌ Network error');
             });
         }
         
@@ -5004,24 +5074,45 @@
     <div id="addStoreModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="addStoreTitle" aria-describedby="addStoreDesc">
         <div class="modal-content" role="document">
             <div class="modal-header">
-                <h3 id="addStoreTitle">Add New Store</h3>
+                <h3 id="addStoreTitle">Add Store(s)</h3>
                 <button type="button" class="close" aria-label="Close" onclick="closeAddStoreDialog()" title="Close">&times;</button>
             </div>
-            <form id="addStoreForm" onsubmit="event.preventDefault(); addNewStore();">
-                <p id="addStoreDesc" class="helper">Create a new store entry with a numeric ID and a friendly name.</p>
+            <div style="padding: 0 18px 10px; display:flex; gap:8px;">
+                <button id="addStoreTabSingle" class="tab active" type="button" style="padding:6px 10px; border-radius:8px; border:1px solid #dcdfe3; background:#0d6efd; color:#fff; font-weight:600;" onclick="document.getElementById('addStorePaneSingle').style.display='block'; document.getElementById('addStorePaneBulk').style.display='none'; this.classList.add('active'); document.getElementById('addStoreTabBulk').classList.remove('active');">Single</button>
+                <button id="addStoreTabBulk" class="tab" type="button" style="padding:6px 10px; border-radius:8px; border:1px solid #dcdfe3; background:#fff; color:#1d1d1f; font-weight:600;" onclick="document.getElementById('addStorePaneSingle').style.display='none'; document.getElementById('addStorePaneBulk').style.display='block'; this.classList.add('active'); document.getElementById('addStoreTabSingle').classList.remove('active');">Bulk</button>
+            </div>
+
+            <div id="addStorePaneSingle" style="display:block;">
+                <form id="addStoreForm" onsubmit="event.preventDefault(); addNewStore();">
+                    <p id="addStoreDesc" class="helper" style="padding:0 18px;">Create a new store entry with a numeric ID and a friendly name.</p>
+                    <div class="form-group" style="padding: 0 18px;">
+                        <label for="newStoreId">Store ID</label>
+                        <input type="text" inputmode="numeric" pattern="[0-9]*" id="newStoreId" placeholder="e.g., 1882" required autofocus>
+                    </div>
+                    <div class="form-group" style="padding: 0 18px;">
+                        <label for="newStoreName">Store Name</label>
+                        <input type="text" id="newStoreName" placeholder="e.g., Liverpool Branch" required>
+                    </div>
+                    <div class="modal-buttons">
+                        <button type="button" class="btn-secondary" onclick="closeAddStoreDialog()">Cancel</button>
+                        <button type="submit" class="btn-primary">Add Store</button>
+                    </div>
+                </form>
+            </div>
+
+            <div id="addStorePaneBulk" style="display:none; padding: 0 18px 18px;">
+                <p class="helper">Paste multiple stores, one per line. Format examples: "1882, Liverpool" or "1883\tManchester" or "2001 London West" (first token is ID; the rest is the name).</p>
                 <div class="form-group">
-                    <label for="newStoreId">Store ID</label>
-                    <input type="text" inputmode="numeric" pattern="[0-9]*" id="newStoreId" placeholder="e.g., 1882" required autofocus>
+                    <label for="bulkStores">Stores List</label>
+                    <textarea id="bulkStores" rows="8" style="width:100%; box-sizing:border-box; border-radius: 12px; border: 1px solid rgba(60,60,67,0.29); padding: 10px; font-size: 14px;" placeholder="1882, Liverpool
+1883, Manchester
+2001, London West"></textarea>
                 </div>
-                <div class="form-group">
-                    <label for="newStoreName">Store Name</label>
-                    <input type="text" id="newStoreName" placeholder="e.g., Liverpool Branch" required>
-                </div>
-                <div class="modal-buttons">
+                <div class="modal-buttons" style="padding: 10px 0 0;">
                     <button type="button" class="btn-secondary" onclick="closeAddStoreDialog()">Cancel</button>
-                    <button type="submit" class="btn-primary">Add Store</button>
+                    <button type="button" class="btn-primary" onclick="addNewStoresBulk()">Add All</button>
                 </div>
-            </form>
+            </div>
         </div>
     </div>
         
