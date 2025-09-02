@@ -24,6 +24,12 @@ cd "$REPO_PATH"
 
 if [ "$PRESERVE" = "True" ]; then
   if [ -f store_config.json ]; then cp store_config.json /tmp/store_config.json.local.bak; fi
+  # Preserve per-user configs if present
+  mkdir -p /tmp/phtv_cfg_bak
+  cp -f store_config__*.json /tmp/phtv_cfg_bak/ 2>/dev/null || true
+  # Preserve uploads and database (if configured via env)
+  if [ -d static/uploads ]; then mkdir -p /tmp/phtv_uploads_bak && rsync -a static/uploads/ /tmp/phtv_uploads_bak/; fi
+  if [ -f users.sqlite ]; then cp users.sqlite /tmp/users.sqlite.bak; fi
   if git ls-files --error-unmatch store_config.json >/dev/null 2>&1; then
     git update-index --no-skip-worktree store_config.json || true
   fi
@@ -35,6 +41,12 @@ git pull --ff-only || { git fetch origin main && git checkout -f main && git res
 
 if [ "$PRESERVE" = "True" ]; then
   if [ -f /tmp/store_config.json.local.bak ]; then cp /tmp/store_config.json.local.bak store_config.json; fi
+  # Restore per-user configs
+  if ls /tmp/phtv_cfg_bak/store_config__*.json >/dev/null 2>&1; then cp -f /tmp/phtv_cfg_bak/store_config__*.json . || true; fi
+  # Restore uploads
+  if [ -d /tmp/phtv_uploads_bak ]; then mkdir -p static/uploads && rsync -a /tmp/phtv_uploads_bak/ static/uploads/; fi
+  # Restore DB if repo-local was used
+  if [ -f /tmp/users.sqlite.bak ] && [ ! -f "${USERS_DB_PATH:-}" ]; then cp /tmp/users.sqlite.bak users.sqlite; fi
   if git ls-files --error-unmatch store_config.json >/dev/null 2>&1; then
     git update-index --skip-worktree store_config.json || true
   fi
