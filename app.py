@@ -817,8 +817,8 @@ def _sanitize_prefix(prefix: str | None) -> str:
         if not p:
             return ''
         for part in p.split('/'):
-            # Allow dots to support user namespaces like users/john_at_gmail.com and folder names with dots
-            if not part or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-" for c in part):
+            # Allow dots and spaces in folder names (spaces will be URL-encoded when linking)
+            if not part or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._- " for c in part):
                 return ''
         return p
     except Exception:
