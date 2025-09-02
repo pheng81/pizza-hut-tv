@@ -147,3 +147,12 @@ Thumbs.db
 # Uploaded media (keep folder, ignore files)
 static/uploads/*
 !static/uploads/.gitkeep
+
+# Local runtime artifacts
+users.sqlite
+static/uploads/
+static/thumbs/
+static/vthumbs/
+static/vpreviews/
+store_config__*.json
+
