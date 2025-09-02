@@ -1,4 +1,8 @@
 import os
+import re
+import tempfile
+import urllib.request
+import urllib.parse
 import json
 import time
 import logging
@@ -321,6 +325,177 @@ def login():
     # Default values to avoid UnboundLocalError on GET
     u = None
     p = None
+
+# ---- Import media from third-party share links (Dropbox / Google Drive / OneDrive) ----
+@app.route('/import_from_url', methods=['POST'])
+@login_required
+def import_from_url():
+    try:
+        data = request.get_json(force=True) or {}
+        raw_url = (data.get('url') or '').strip()
+        raw_prefix = data.get('prefix')
+        if not raw_url:
+            return jsonify({'success': False, 'error': 'url required'}), 400
+
+        # Only allow specific providers to reduce SSRF surface
+        # Normalize common share URLs to direct-download endpoints when possible
+        def normalize_provider_link(u: str) -> tuple[str, str|None]:
+            try:
+                parsed = urllib.parse.urlparse(u)
+                host = (parsed.hostname or '').lower()
+                # Dropbox: www.dropbox.com/s/<id>/file?dl=0 -> dl=1; also support dl.dropboxusercontent.com
+                if host.endswith('dropbox.com') or host.endswith('dropboxusercontent.com'):
+                    q = urllib.parse.parse_qs(parsed.query)
+                    q['dl'] = ['1']
+                    new_q = urllib.parse.urlencode({k: v[-1] if isinstance(v, list) else v for k, v in q.items()})
+                    return ('dropbox', urllib.parse.urlunparse(parsed._replace(query=new_q)))
+                # Google Drive: https://drive.google.com/file/d/<id>/view -> https://drive.google.com/uc?export=download&id=<id>
+                if host.endswith('drive.google.com'):
+                    m = re.search(r"/file/d/([^/]+)/", parsed.path or '')
+                    if m:
+                        fid = m.group(1)
+                        return ('gdrive', f'https://drive.google.com/uc?export=download&id={fid}')
+                    # Already uc endpoint – keep
+                    if (parsed.path or '').startswith('/uc'):
+                        return ('gdrive', u)
+                # OneDrive: onedrive.live.com or 1drv.ms -> append download=1
+                if host.endswith('onedrive.live.com') or host.endswith('1drv.ms'):
+                    q = urllib.parse.parse_qs(parsed.query)
+                    q['download'] = ['1']
+                    new_q = urllib.parse.urlencode({k: v[-1] if isinstance(v, list) else v for k, v in q.items()})
+                    return ('onedrive', urllib.parse.urlunparse(parsed._replace(query=new_q)))
+                return ('unknown', None)
+            except Exception:
+                return ('unknown', None)
+
+        provider, norm = normalize_provider_link(raw_url)
+        if provider == 'unknown' or not norm:
+            return jsonify({'success': False, 'error': 'Only Dropbox, Google Drive, and OneDrive links are supported'}), 400
+
+        # Validate hostname again after normalization
+        host = (urllib.parse.urlparse(norm).hostname or '').lower()
+        allowed_hosts = (
+            'dropbox.com', 'dropboxusercontent.com',
+            'drive.google.com',
+            'onedrive.live.com', '1drv.ms'
+        )
+        if not any(host == h or host.endswith('.'+h) for h in allowed_hosts):
+            return jsonify({'success': False, 'error': 'Host not allowed'}), 400
+
+        # Fetch with tight limits
+        MAX_BYTES = int(os.environ.get('IMPORT_MAX_BYTES', '104857600'))  # 100 MiB default
+        timeout = float(os.environ.get('IMPORT_TIMEOUT', '25'))
+        req = urllib.request.Request(norm, headers={'User-Agent': 'PHTV/1.0'})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            status = getattr(resp, 'status', 200)
+            if status < 200 or status >= 300:
+                return jsonify({'success': False, 'error': f'Provider returned HTTP {status}'}), 502
+            clen = resp.getheader('Content-Length')
+            if clen:
+                try:
+                    if int(clen) > MAX_BYTES:
+                        return jsonify({'success': False, 'error': 'File too large'}), 413
+                except Exception:
+                    pass
+
+            # Determine a filename and extension
+            disp = resp.getheader('Content-Disposition') or ''
+            filename = None
+            # RFC 5987 style: filename*=UTF-8''<url-encoded-filename>
+            m = re.search(r"filename\*=UTF-8''([^\";]+)", disp)
+            if m:
+                filename = urllib.parse.unquote(m.group(1))
+            if not filename:
+                m2 = re.search(r'filename="?([^";]+)"?', disp)
+                if m2:
+                    filename = m2.group(1)
+            if not filename:
+                # Fallback to URL path basename
+                filename = os.path.basename(urllib.parse.urlparse(norm).path) or 'imported'
+
+            # Guess extension from filename or content-type
+            ext = ''
+            if '.' in filename:
+                ext = filename.rsplit('.', 1)[1].lower()
+            if not ext:
+                try:
+                    import mimetypes
+                    mt = resp.getheader('Content-Type') or 'application/octet-stream'
+                    exts = mimetypes.guess_all_extensions(mt) or []
+                    for e in exts:
+                        e2 = e.lstrip('.').lower()
+                        if e2 in ALLOWED_EXTENSIONS:
+                            ext = e2
+                            break
+                except Exception:
+                    pass
+            if ext not in ALLOWED_EXTENSIONS:
+                return jsonify({'success': False, 'error': f'File type not allowed ({ext or "unknown"})'}), 415
+
+            # Stream to temp file with size guard
+            tmpf = tempfile.NamedTemporaryFile(prefix='import_', suffix='.'+ext, delete=False)
+            tmp_path = tmpf.name
+            written = 0
+            try:
+                while True:
+                    chunk = resp.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    written += len(chunk)
+                    if written > MAX_BYTES:
+                        tmpf.close()
+                        os.unlink(tmp_path)
+                        return jsonify({'success': False, 'error': 'File too large'}), 413
+                    tmpf.write(chunk)
+                tmpf.flush()
+            finally:
+                try:
+                    tmpf.close()
+                except Exception:
+                    pass
+
+        # Persist into user library under requested prefix
+        user_root = _user_content_prefix()
+        if not user_root:
+            try: os.unlink(tmp_path)
+            except Exception: pass
+            return jsonify({'success': False, 'error': 'auth required'}), 403
+        ui_prefix = _sanitize_prefix(raw_prefix)
+        req_prefix = _join_prefix_key(user_root, ui_prefix)
+        # Generate a uuid-based destination name to avoid collisions
+        safe_name = f"{uuid.uuid4()}.{ext}"
+        local_dir = os.path.join(app.config['UPLOAD_FOLDER'], req_prefix)
+        os.makedirs(local_dir, exist_ok=True)
+        dest = os.path.join(local_dir, safe_name)
+        # Move tmp to destination
+        try:
+            os.replace(tmp_path, dest)
+        except Exception:
+            shutil.copyfile(tmp_path, dest)
+            try: os.unlink(tmp_path)
+            except Exception: pass
+
+        # Bust library cache for this user/prefix and root
+        try:
+            for k in (f"{user_root}|{ui_prefix or '__root__'}", f"{user_root}|__root__"):
+                _LIB_CACHE.pop(k, None)
+        except Exception:
+            pass
+
+        # Push to R2 if configured
+        try:
+            if r2_enabled():
+                with open(dest, 'rb') as fh:
+                    data_bytes = fh.read()
+                key = _join_prefix_key(req_prefix, safe_name)
+                r2_put_bytes(key, data_bytes, content_type=_guess_mime(safe_name))
+        except Exception:
+            pass
+
+        return jsonify({'success': True, 'filename': safe_name, 'url': build_public_url(_join_prefix_key(req_prefix, safe_name)), 'media_type': ext, 'provider': provider})
+    except Exception as e:
+        logging.exception('import_from_url error: %s', e)
+        return jsonify({'success': False, 'error': str(e)}), 500
     if request.method == 'POST':
         u = request.form.get('username')
         p = request.form.get('password')

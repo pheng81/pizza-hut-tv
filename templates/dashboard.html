@@ -4078,6 +4078,12 @@
                                         <div class="rp-grid" id="rp-grid-images"></div>
                                         <div class="rp-subtitle" style="margin-top:14px;">Videos</div>
                                         <div class="rp-grid" id="rp-grid-videos"></div>
+                                        <div class="rp-subtitle" style="margin-top:14px;">Import from link</div>
+                                        <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:6px 0 2px;">
+                                            <input id="rp-import-url" type="url" placeholder="Paste Dropbox / Google Drive / OneDrive share link" style="flex:1; min-width:240px; padding:8px 10px; border:1px solid #dcdfe3; border-radius:6px; font-size:12px;">
+                                            <button class="btn" onclick="rpImportFromUrl()">Import</button>
+                                        </div>
+                                        <div class="rp-help">We support public share links from Dropbox, Google Drive, and Microsoft OneDrive. Large files may take a moment to appear.</div>
                                     </div>
                                     <div id="rp-view-upload" style="display:none;">
                                         <input type="file" id="rp-file" accept="image/*,video/*" />
@@ -4255,6 +4261,25 @@
                         });
                     });
                 }
+            async function rpImportFromUrl(){
+                try{
+                    const inp = document.getElementById('rp-import-url');
+                    const url = (inp && inp.value || '').trim();
+                    if(!url){ alert('Paste a Dropbox / Google Drive / OneDrive link'); return; }
+                    if(!/(dropbox\.|drive\.google\.com|onedrive\.live\.com|1drv\.ms)/i.test(url)){
+                        if(!confirm('This link does not look like Dropbox/Drive/OneDrive. Try anyway?')) return;
+                    }
+                    const btns = Array.from(document.querySelectorAll('#rp-view-lib .btn'));
+                    btns.forEach(b=>b.disabled=true);
+                    const resp = await fetch('/import_from_url', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ url, prefix: rpPrefix }) });
+                    const j = await resp.json();
+                    btns.forEach(b=>b.disabled=false);
+                    if(!j.success){ alert(j.error || 'Import failed'); return; }
+                    inp.value = '';
+                    showMessage('✅ Imported file from link');
+                    refreshLibrary();
+                }catch(e){ alert('Import failed: '+ e.message); }
+            }
             function createFolderPrompt(){
                 const name = prompt('New folder name (letters, numbers, space, _, -, .):');
                                 if(!name){ return; }
