@@ -3183,6 +3183,40 @@ def tv_view(store_id, screen_id):
     active_file = pick_active_playlist_item(screen_config, config, store_id, screen_id)
     return render_template('tv_view.html', screen_config=screen_config, screen_id=screen_id, store_id=store_id, active_file=active_file, media_base_url=get_media_base_url())
 
+# ---------------------- Web Player (browser-based TV) ----------------------
+@app.route('/webplayer')
+def webplayer_index():
+    """Landing page to launch the browser-based TV player.
+    Lets user enter store_id, screen_id, and optional 4-digit pairing code.
+    """
+    try:
+        return render_template('webplayer/index.html')
+    except Exception as e:
+        return make_response(f"Webplayer index unavailable: {e}", 500)
+
+
+@app.route('/webplayer/play')
+def webplayer_play():
+    """Launch the full-screen web player for a given store/screen.
+    Query params: store_id, screen_id, code (optional pairing code)
+    """
+    store_id = (request.args.get('store_id') or '').strip()
+    screen_id = (request.args.get('screen_id') or '').strip()
+    code = (request.args.get('code') or '').strip()
+    if not store_id or not screen_id:
+        return redirect(url_for('webplayer_index'))
+    try:
+        config = load_store_config()
+        screen_config = ensure_playlists_structure(config).get('screens', {}).get(store_id, {}).get(screen_id, {})
+    except Exception:
+        screen_config = {}
+    try:
+        active_file = pick_active_playlist_item(screen_config, load_store_config(), store_id, screen_id)
+    except Exception:
+        active_file = None
+    # Render dedicated webplayer template; JS will handle pairing code in requests
+    return render_template('webplayer/player.html', store_id=store_id, screen_id=screen_id, active_file=active_file, media_base_url=get_media_base_url(), code=code)
+
 @app.route('/delete_from_screen', methods=['POST'])
 @login_required
 def delete_from_screen():
