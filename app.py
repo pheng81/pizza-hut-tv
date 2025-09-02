@@ -4184,6 +4184,19 @@ def lib_folder_rename():
                     r2_delete_object(k)
                 except Exception:
                     pass
+            # Preserve empty folders: if there were no keys (or all were filtered), ensure a marker exists at new prefix
+            try:
+                if not keys:
+                    marker_key = f"{new_prefix}/.keep"
+                    r2_put_bytes(marker_key, b'', content_type='application/octet-stream')
+                # Best-effort: remove any old marker if present
+                old_marker = f"{old}/.keep"
+                try:
+                    r2_delete_object(old_marker)
+                except Exception:
+                    pass
+            except Exception:
+                pass
         else:
             src = os.path.join(app.config['UPLOAD_FOLDER'], old)
             dst = os.path.join(app.config['UPLOAD_FOLDER'], new_prefix)
