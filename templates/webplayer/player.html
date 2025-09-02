@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Web Player</title>
+	<style>
+		html, body { height:100%; margin:0; background:#000; color:#fff; cursor:none; }
+		#stage { position:fixed; inset:0; width:100vw; height:100vh; overflow:hidden; background:#000; }
+		.layer { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#000; }
+		.hidden { display:none; }
+		.media { max-width:100%; max-height:100%; object-fit:contain; }
+		.fade { opacity:0; transition: opacity .25s ease; }
+		.visible { opacity:1; }
+		#overlay { position:fixed; left:10px; bottom:10px; color:#9aa7ff; font:12px/1.4 system-ui,Segoe UI,Roboto,Ubuntu,Arial; opacity:.22; }
+	</style>
+</head>
+<body>
+	<div id="stage">
+		<div class="layer" id="layerA"></div>
+		<div class="layer" id="layerB"></div>
+	</div>
+	<div id="overlay"></div>
+
+	<script>
+		const params = new URLSearchParams(location.search);
+		const storeId = params.get('store_id') || '';
+		const screenId = params.get('screen_id') || '';
+		const pairCode = params.get('code') || '';
+		const DEFAULT_ORIGIN = 'https://api.everydayadvertise.com';
+		const ORIGIN = (window.location && window.location.origin)
+			? (window.location.origin.startsWith('http:')
+				? window.location.origin.replace(/^http:/, 'https:')
+				: window.location.origin)
+			: DEFAULT_ORIGIN;
+		try{ if (location.protocol === 'http:' && /(^|\.)everydayadvertise\.com$/i.test(location.hostname)) { location.replace('https:' + location.href.slice(5)); } }catch{}
+
+		const videoExt = ['mp4','webm','ogg','mov','avi','mkv','m4v'];
+		function isVideoByName(name){ if(!name) return false; const ext=(name.split('.').pop()||'').toLowerCase(); return videoExt.includes(ext); }
+		function fileNameFrom(item){
+			if(!item) return '';
+			if(typeof item === 'string'){
+				try{ const u = new URL(item); return (u.pathname.split('/').pop()||''); }catch{ return (item.split('/').pop()||''); }
+			}
+			const f = item.file || '';
+			if(f) return String(f).split('/').pop()||'';
+			const u = item.url || '';
+			try{ const p = new URL(u).pathname; return (p.split('/').pop()||''); }catch{ return (String(u).split('/').pop()||''); }
+		}
+		function mediaUrl(item){
+			if(!item) return '';
+			const u = (typeof item === 'string') ? item : (item.url || item.file || '');
+			if(/^https?:\/\//i.test(u)) return u.replace(/^http:/,'https:');
+			const fname = (u.startsWith('/') ? u.slice(1) : u);
+			const isVid = isVideoByName(fname);
+			return `${ORIGIN}/${isVid ? 'media' : 'static/uploads'}/${fname}`;
+		}
+
+		const stage = document.getElementById('stage');
+		const layerA = document.getElementById('layerA');
+		const layerB = document.getElementById('layerB');
+		let front = layerA, back = layerB;
+		let playlist = [];
+		let idx = 0;
+		let timer = null;
+		let lastFetchTs = 0;
+
+		const overlay = document.getElementById('overlay');
+		overlay.textContent = `Store ${storeId} • Screen ${screenId}`;
+
+		async function fetchPlaylist(){
+			try{
+				const qs = new URLSearchParams();
+				if(pairCode) qs.set('user_code', pairCode);
+				const r = await fetch(`${ORIGIN}/playlist/${encodeURIComponent(storeId)}/${encodeURIComponent(screenId)}?`+qs.toString(), { cache:'no-store' });
+				const j = await r.json();
+				if(j && j.success && Array.isArray(j.playlist)){
+					playlist = j.playlist;
+					if(idx >= playlist.length) idx = 0;
+				}
+			}catch(e){ /* keep previous */ }
+			lastFetchTs = Date.now();
+		}
+
+		function clearNode(node){ while(node.firstChild) node.removeChild(node.firstChild); }
+		function swapLayers(){ const t = front; front = back; back = t; }
+		function preloadImage(url){ return new Promise((resolve,reject)=>{ const img=new Image(); let to=setTimeout(()=>{img.onload=null;img.onerror=null;reject(new Error('image timeout'));},6000); img.onload=()=>{clearTimeout(to);resolve(img)}; img.onerror=(e)=>{clearTimeout(to);reject(e||new Error('image error'));}; img.src=url; }); }
+		function preloadVideo(url){ return new Promise((resolve,reject)=>{ const v=document.createElement('video'); v.autoplay=false; v.muted=true; v.playsInline=true; v.preload='auto'; const onReady=()=>{cleanup();resolve(v)}; const onErr=(e)=>{cleanup();reject(e||new Error('video error'))}; function cleanup(){ v.removeEventListener('canplay', onReady); v.removeEventListener('error', onErr); if (to) clearTimeout(to); } v.addEventListener('canplay', onReady); v.addEventListener('error', onErr); const to = setTimeout(()=>{ cleanup(); reject(new Error('video timeout')); }, 8000); v.src=url; try{ v.load(); }catch{} }); }
+
+		async function showItem(item){
+			const url = mediaUrl(item);
+			if(!url) return;
+			const isVid = (item.media_type||'').toLowerCase()==='video' || isVideoByName(url);
+			try{
+				const node = isVid ? await preloadVideo(url) : await preloadImage(url);
+				node.className = 'media';
+				if(isVid){ node.loop = true; node.autoplay = true; node.muted = true; node.playsInline = true; }
+				clearNode(back); back.appendChild(node);
+				back.classList.add('fade'); back.classList.remove('hidden');
+				if(isVid){ setTimeout(()=>{ try{ node.play().catch(()=>{});}catch{} }, 0); }
+				requestAnimationFrame(()=>{
+					back.classList.add('visible'); back.classList.remove('fade');
+					front.classList.add('fade'); front.classList.remove('visible');
+					setTimeout(()=>{ front.classList.add('hidden'); front.classList.remove('fade'); swapLayers(); }, 260);
+				});
+			}catch{}
+		}
+
+		function nextIndex(){ if(!playlist.length) return 0; return (idx + 1) % playlist.length; }
+
+		async function tick(){
+			if(!playlist.length){ await fetchPlaylist(); }
+			if(!playlist.length){ timer = setTimeout(tick, 1500); return; }
+			const item = playlist[idx];
+			const dur = Math.max(1, parseInt(item.duration||10));
+			const next = playlist[nextIndex()];
+			if(next){ const u = mediaUrl(next); if(u){ const pre = isVideoByName(u) ? preloadVideo(u) : preloadImage(u); pre.catch(()=>{}); } }
+			await showItem(item);
+			idx = nextIndex();
+			if(Date.now() - lastFetchTs > 20000){ fetchPlaylist(); }
+			timer = setTimeout(tick, dur*1000);
+		}
+
+		(async function init(){
+			if(!storeId || !screenId){ location.href = '/webplayer'; return; }
+			// Kick off
+			tick();
+			// Keep-alive heartbeat so dashboard sees this webplayer as online
+			async function sendHeartbeat(){
+				try{
+					const headers = { 'Content-Type': 'application/json' };
+					const body = { store_id: storeId, screen_id: screenId };
+					if(pairCode){ /* device-only: no special header; code used in playlist fetch */ }
+					await fetch(`${ORIGIN}/api/screen_heartbeat`, { method:'POST', headers, body: JSON.stringify(body) });
+				}catch{}
+			}
+			sendHeartbeat(); setInterval(sendHeartbeat, 30000);
+			// Pause when tab hidden
+			document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ if(timer){ clearTimeout(timer); timer=null; } } else { if(!timer) tick(); } });
+		})();
+	</script>
+</body>
+</html>
