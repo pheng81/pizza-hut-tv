@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Choose Store & Screen</title>
+  <style>
+    html,body{height:100%;margin:0}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Arial,sans-serif;background:#0b0b0b;color:#f4f4f4;display:flex;flex-direction:column}
+    header{padding:14px 16px;background:#111;border-bottom:1px solid #222}
+    header .code{font-weight:700;letter-spacing:3px}
+    main{flex:1;display:flex;gap:18px;padding:16px}
+    .panel{flex:1;background:#141414;border:1px solid #242424;border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+    .panel h2{margin:0;padding:12px 14px;border-bottom:1px solid #242424;font-size:16px;background:#161616}
+    ul{list-style:none;margin:0;padding:0}
+    li{border-bottom:1px solid #1f1f1f}
+    li button{width:100%;text-align:left;background:transparent;border:0;color:#ddd;padding:12px 14px;cursor:pointer}
+    li button:hover{background:#1a1a1a}
+    .screens li button{display:flex;justify-content:space-between;align-items:center}
+    .go{background:#2e6ff2;color:#fff;border:none;border-radius:8px;padding:8px 12px}
+    .go:hover{background:#2a62d4}
+  </style>
+</head>
+<body>
+  <header>
+    <div>TV code: <span class="code" id="code"></span></div>
+  </header>
+  <main>
+    <div class="panel">
+      <h2>Stores</h2>
+      <ul id="stores"></ul>
+    </div>
+    <div class="panel">
+      <h2>Screens</h2>
+      <ul id="screens" class="screens"></ul>
+    </div>
+  </main>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const code = params.get('code') || '';
+    document.getElementById('code').textContent = code;
+    if(!(code.length===4 && /^[0-9]{4}$/.test(code))){ location.href = '/webplayer'; }
+
+    const storesEl = document.getElementById('stores');
+    const screensEl = document.getElementById('screens');
+    let data = null;
+    let currentStore = '';
+
+    function el(tag, attrs={}, text=''){
+      const e = document.createElement(tag);
+      for(const [k,v] of Object.entries(attrs)){ e.setAttribute(k, v); }
+      if(text) e.textContent = text;
+      return e;
+    }
+
+    function renderStores(){
+      storesEl.innerHTML = '';
+      const stores = (data && Array.isArray(data.stores)) ? data.stores : [];
+      for(const s of stores){
+        const li = el('li');
+        const btn = el('button');
+        btn.textContent = `${s.id} — ${s.name || ''}`;
+        btn.addEventListener('click', ()=>{ currentStore = String(s.id); renderScreens(); });
+        li.appendChild(btn); storesEl.appendChild(li);
+      }
+    }
+
+    function renderScreens(){
+      screensEl.innerHTML = '';
+      if(!currentStore) return;
+      const sc = (data && data.screens && data.screens[currentStore]) ? data.screens[currentStore] : {};
+      for(const [sid, obj] of Object.entries(sc)){
+        const li = el('li');
+        const btn = el('button');
+        const left = el('span', {}, `${sid}${obj && obj.name ? ' — '+obj.name : ''}`);
+        const go = el('span');
+        const goBtn = el('button', { class:'go' }, 'Open');
+        goBtn.addEventListener('click', ()=>{
+          const q = new URLSearchParams({ store_id: currentStore, screen_id: sid, code });
+          location.href = '/webplayer/play?' + q.toString();
+        });
+        go.appendChild(goBtn);
+        btn.appendChild(left); btn.appendChild(go);
+        li.appendChild(btn); screensEl.appendChild(li);
+      }
+    }
+
+    (async function init(){
+      try{
+        const r = await fetch(`/api/stores_by_code/${encodeURIComponent(code)}`, { cache:'no-store' });
+        data = await r.json();
+        if(!data || !data.success){ alert(data && data.error ? data.error : 'Code invalid'); location.href = '/webplayer'; return; }
+        renderStores();
+      }catch(e){ alert('Failed to load stores for this code'); location.href = '/webplayer'; }
+    })();
+  </script>
+</body>
+</html>

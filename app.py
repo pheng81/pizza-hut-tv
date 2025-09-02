@@ -3187,12 +3187,28 @@ def tv_view(store_id, screen_id):
 @app.route('/webplayer')
 def webplayer_index():
     """Landing page to launch the browser-based TV player.
-    Lets user enter store_id, screen_id, and optional 4-digit pairing code.
+    Step 1: Enter the 4-digit TV link (pairing) code.
     """
     try:
         return render_template('webplayer/index.html')
     except Exception as e:
         return make_response(f"Webplayer index unavailable: {e}", 500)
+
+
+@app.route('/webplayer/browse')
+def webplayer_browse():
+    """Step 2: After entering code, browse stores and screens.
+    Requires a valid 4-digit code in ?code=XXXX. The page fetches
+    /api/stores_by_code/<code> and renders a list; clicking a screen
+    opens the player.
+    """
+    code = (request.args.get('code') or '').strip()
+    if not (len(code) == 4 and code.isdigit()):
+        return redirect(url_for('webplayer_index'))
+    try:
+        return render_template('webplayer/browse.html', code=code)
+    except Exception as e:
+        return make_response(f"Webplayer browse unavailable: {e}", 500)
 
 
 @app.route('/webplayer/play')

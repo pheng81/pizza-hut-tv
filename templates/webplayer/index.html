@@ -3,17 +3,15 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Web Player Launcher</title>
+<title>Enter TV Link Code</title>
 <style>
   body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Arial,sans-serif;margin:0;display:grid;place-items:center;min-height:100vh;background:#0b0b0b;color:#f4f4f4}
-  .card{background:#141414;border:1px solid #2a2a2a;border-radius:12px;padding:24px;max-width:520px;width:94vw;box-shadow:0 6px 24px rgba(0,0,0,.35)}
+  .card{background:#141414;border:1px solid #2a2a2a;border-radius:12px;padding:24px;max-width:420px;width:92vw;box-shadow:0 6px 24px rgba(0,0,0,.35)}
   h1{margin:0 0 8px;font-size:22px}
-  p.hint{margin:0 0 18px;color:#bbb;font-size:14px}
+  p{margin:0 0 16px;color:#bbb;font-size:14px}
   label{display:block;font-size:13px;color:#ccc;margin:12px 0 6px}
-  input{width:100%;padding:10px 12px;background:#0e0e0e;border:1px solid #2f2f2f;border-radius:8px;color:#fff;outline:none}
+  input{width:100%;padding:12px 14px;background:#0e0e0e;border:1px solid #2f2f2f;border-radius:10px;color:#fff;outline:none;text-align:center;letter-spacing:6px;font-weight:700;font-size:22px}
   input:focus{border-color:#4aa3ff;box-shadow:0 0 0 3px rgba(74,163,255,0.2)}
-  .row{display:flex;gap:10px}
-  .row > div{flex:1}
   button{margin-top:16px;width:100%;padding:12px 14px;border:none;border-radius:9px;background:#2e6ff2;color:#fff;font-weight:600;cursor:pointer}
   button:hover{background:#2a62d4}
   .note{margin-top:14px;font-size:12px;color:#9a9a9a}
@@ -21,32 +19,20 @@
 </head>
 <body>
   <div class="card">
-    <h1>Launch Web Player</h1>
-    <p class="hint">Enter the Store ID and Screen ID to start the browser-based player. Optionally include your 4-digit pairing code for device-only access.</p>
-    <div class="row">
-      <div>
-        <label for="store">Store ID</label>
-        <input id="store" placeholder="e.g. 1881" />
-      </div>
-      <div>
-        <label for="screen">Screen ID</label>
-        <input id="screen" placeholder="e.g. screen1" />
-      </div>
-    </div>
-    <label for="code">Pairing code (optional)</label>
-    <input id="code" placeholder="4-digit code" />
-    <button id="go">Open Player</button>
-    <div class="note">The player runs full screen with the same playlist logic as the TV app.</div>
+    <h1>Enter TV Code</h1>
+    <p>Type the 4-digit code from your account (Profile) or Android TV app.</p>
+    <label for="code">4-digit code</label>
+    <input id="code" maxlength="4" pattern="\d{4}" inputmode="numeric" placeholder="____" />
+    <button id="go">Continue</button>
+    <div class="note">Next: choose a store and screen, then start the player.</div>
   </div>
   <script>
+    const codeEl = document.getElementById('code');
+    codeEl.addEventListener('input', ()=>{ codeEl.value = codeEl.value.replace(/[^0-9]/g,'').slice(0,4); });
     document.getElementById('go').addEventListener('click', ()=>{
-      const s = document.getElementById('store').value.trim();
-      const sc = document.getElementById('screen').value.trim();
-      const c = document.getElementById('code').value.trim();
-      if(!s || !sc){ alert('Please enter store and screen.'); return; }
-      const q = new URLSearchParams({ store_id: s, screen_id: sc });
-      if(c) q.set('code', c);
-      location.href = '/webplayer/play?' + q.toString();
+      const c = codeEl.value.trim();
+      if(!(c.length===4 && /^[0-9]{4}$/.test(c))){ alert('Please enter your 4-digit code.'); return; }
+      location.href = '/webplayer/browse?code=' + encodeURIComponent(c);
     });
   </script>
 </body>
