@@ -3756,6 +3756,63 @@ def add_store():
         print(f"Error adding store: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/add_stores', methods=['POST'])
+@login_required
+def add_stores_bulk():
+    """Add multiple stores in one request.
+    Body JSON: { stores: [ {store_id, store_name}, ... ] }
+    Returns: {success, added:[{id,name}], skipped:[{id,reason}], message}
+    """
+    try:
+        data = request.get_json() or {}
+        stores_in = data.get('stores') or []
+        if not isinstance(stores_in, list) or not stores_in:
+            return jsonify({'error': 'stores list required'}), 400
+
+        config = load_store_config()
+        # Build a fast lookup of existing ids
+        existing_ids = {str(s.get('id')) for s in (config.get('stores') or []) if s and s.get('id')}
+
+        added = []
+        skipped = []
+        seen_new = set()
+        for entry in stores_in:
+            try:
+                sid = str((entry.get('store_id') or '').strip())
+                sname = (entry.get('store_name') or '').strip()
+            except Exception:
+                sid = ''
+                sname = ''
+            if not sid or not sname:
+                skipped.append({'id': sid or '(blank)', 'reason': 'missing id or name'})
+                continue
+            if not sid.isdigit():
+                skipped.append({'id': sid, 'reason': 'id must be numeric'})
+                continue
+            if sid in existing_ids:
+                skipped.append({'id': sid, 'reason': 'already exists'})
+                continue
+            if sid in seen_new:
+                skipped.append({'id': sid, 'reason': 'duplicate in input'})
+                continue
+            # Append to config
+            config.setdefault('stores', []).append({'id': sid, 'name': sname})
+            config.setdefault('screens', {}).setdefault(sid, {})
+            seen_new.add(sid)
+            added.append({'id': sid, 'name': sname})
+
+        if added:
+            save_store_config(config)
+
+        msg = f"Added {len(added)} store(s)"
+        if skipped:
+            msg += f"; skipped {len(skipped)}"
+
+        return jsonify({'success': True, 'added': added, 'skipped': skipped, 'message': msg})
+    except Exception as e:
+        print(f"Error adding stores bulk: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/delete_store', methods=['POST'])
 @login_required
 def delete_store():
