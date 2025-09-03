@@ -36,7 +36,8 @@
 		try{ if (location.protocol === 'http:' && /(^|\.)everydayadvertise\.com$/i.test(location.hostname)) { location.replace('https:' + location.href.slice(5)); } }catch{}
 
 		const videoExt = ['mp4','webm','ogg','mov','avi','mkv','m4v'];
-		function isVideoByName(name){ if(!name) return false; const ext=(name.split('.').pop()||'').toLowerCase(); return videoExt.includes(ext); }
+		function extFromName(name){ if(!name) return ''; const n=String(name); const base=n.split('?')[0].split('#')[0]; return (base.split('.').pop()||'').toLowerCase(); }
+		function isVideoByName(name){ if(!name) return false; return videoExt.includes(extFromName(name)); }
 		function fileNameFrom(item){
 			if(!item) return '';
 			if(typeof item === 'string'){
@@ -47,10 +48,25 @@
 			const u = item.url || '';
 			try{ const p = new URL(u).pathname; return (p.split('/').pop()||''); }catch{ return (String(u).split('/').pop()||''); }
 		}
+		function relKeyFrom(item){
+			try{
+				if(!item) return '';
+				if(typeof item === 'string'){
+					if(/^https?:\/\//i.test(item)){ const u=new URL(item); return u.pathname.replace(/^\//,''); }
+					return item.startsWith('/')?item.slice(1):item;
+				}
+				if(item.file){ const s=String(item.file); return s.startsWith('/')?s.slice(1):s; }
+				if(item.url){ const u=new URL(String(item.url)); return u.pathname.replace(/^\//,''); }
+				return '';
+			}catch{ return ''; }
+		}
 		function mediaUrl(item){
 			if(!item) return '';
 			const u = (typeof item === 'string') ? item : (item.url || item.file || '');
-			if(/^https?:\/\//i.test(u)) return u.replace(/^http:/,'https:');
+			if(/^https?:\/\//i.test(u)){
+				// Keep absolute URL (CDN) for both images and videos; upgrade to HTTPS if needed
+				return u.replace(/^http:/,'https:');
+			}
 			const fname = (u.startsWith('/') ? u.slice(1) : u);
 			const isVid = isVideoByName(fname);
 			return `${ORIGIN}/${isVid ? 'media' : 'static/uploads'}/${fname}`;
@@ -64,6 +80,8 @@
 		let idx = 0;
 		let timer = null;
 		let lastFetchTs = 0;
+		const PLAYLIST_REFRESH_MIN_MS = 6000; // faster refresh so schedule changes apply quickly
+		const COMMANDS_POLL_MS = 3000; // poll for admin-triggered reloads
 
 		const overlay = document.getElementById('overlay');
 		overlay.textContent = `Store ${storeId} • Screen ${screenId}`;
@@ -72,25 +90,62 @@
 			try{
 				const qs = new URLSearchParams();
 				if(pairCode) qs.set('user_code', pairCode);
-				const r = await fetch(`${ORIGIN}/playlist/${encodeURIComponent(storeId)}/${encodeURIComponent(screenId)}?`+qs.toString(), { cache:'no-store' });
+				const r = await fetch(`${ORIGIN}/playlist/${encodeURIComponent(storeId)}/${encodeURIComponent(screenId)}?`+qs.toString(), { cache:'no-store', headers: pairCode?{'X-User-Code': pairCode}:{}});
 				const j = await r.json();
 				if(j && j.success && Array.isArray(j.playlist)){
 					playlist = j.playlist;
 					if(idx >= playlist.length) idx = 0;
 				}
-			}catch(e){ /* keep previous */ }
+			}catch(e){ overlay.textContent = `Playlist error: ${e&&e.message||'unknown'}`; }
 			lastFetchTs = Date.now();
+		}
+
+		async function pollCommands(){
+			try{
+				const qs = new URLSearchParams({ store_id: storeId, screen_id: screenId, limit: '5', pop: '1' });
+				if(pairCode) qs.set('user_code', pairCode);
+				const r = await fetch(`${ORIGIN}/api/commands?`+qs.toString(), { cache:'no-store', headers: pairCode?{'X-User-Code': pairCode}:{}});
+				const j = await r.json();
+				if(j && j.success && Array.isArray(j.commands) && j.commands.length){
+					const hasReload = j.commands.some(c=> (c && (c.type||'').toLowerCase()==='reload'));
+					if(hasReload){ await fetchPlaylist(); }
+				}
+			}catch{}
 		}
 
 		function clearNode(node){ while(node.firstChild) node.removeChild(node.firstChild); }
 		function swapLayers(){ const t = front; front = back; back = t; }
 		function preloadImage(url){ return new Promise((resolve,reject)=>{ const img=new Image(); let to=setTimeout(()=>{img.onload=null;img.onerror=null;reject(new Error('image timeout'));},6000); img.onload=()=>{clearTimeout(to);resolve(img)}; img.onerror=(e)=>{clearTimeout(to);reject(e||new Error('image error'));}; img.src=url; }); }
-		function preloadVideo(url){ return new Promise((resolve,reject)=>{ const v=document.createElement('video'); v.autoplay=false; v.muted=true; v.playsInline=true; v.preload='auto'; const onReady=()=>{cleanup();resolve(v)}; const onErr=(e)=>{cleanup();reject(e||new Error('video error'))}; function cleanup(){ v.removeEventListener('canplay', onReady); v.removeEventListener('error', onErr); if (to) clearTimeout(to); } v.addEventListener('canplay', onReady); v.addEventListener('error', onErr); const to = setTimeout(()=>{ cleanup(); reject(new Error('video timeout')); }, 8000); v.src=url; try{ v.load(); }catch{} }); }
+		function preloadVideo(url){
+			// Wait for a real readiness signal to avoid fading to a black frame
+			return new Promise((resolve,reject)=>{
+				const v=document.createElement('video');
+				v.autoplay=false; v.muted=true; v.playsInline=true; v.preload='auto';
+				let settled=false; let to=null;
+				const cleanup=()=>{
+					v.removeEventListener('loadeddata', onReady);
+					v.removeEventListener('canplay', onReady);
+					v.removeEventListener('error', onErr);
+					v.removeEventListener('stalled', onStall);
+					if(to) clearTimeout(to);
+				};
+				const finish=(ok, err)=>{ if(settled) return; settled=true; cleanup(); ok?resolve(v):reject(err||new Error('video error')); };
+				const onReady=()=>finish(true);
+				const onErr=(e)=>finish(false, e instanceof Error? e : new Error('video error'));
+				const onStall=()=>{ /* treat long initial stall as failure */ };
+				v.addEventListener('loadeddata', onReady);
+				v.addEventListener('canplay', onReady);
+				v.addEventListener('error', onErr);
+				v.addEventListener('stalled', onStall);
+				// Hard timeout: if we can't reach loadeddata/canplay in 8s, consider it failed
+				to=setTimeout(()=>finish(false, new Error('video timeout')), 8000);
+				v.src=url; try{ v.load(); }catch{}
+			}); }
 
 		async function showItem(item){
 			const url = mediaUrl(item);
 			if(!url) return;
-			const isVid = (item.media_type||'').toLowerCase()==='video' || isVideoByName(url);
+			const isVid = (item.media_type||'').toLowerCase()==='video' || isVideoByName(url) || isVideoByName(fileNameFrom(item));
 			try{
 				const node = isVid ? await preloadVideo(url) : await preloadImage(url);
 				node.className = 'media';
@@ -103,7 +158,32 @@
 					front.classList.add('fade'); front.classList.remove('visible');
 					setTimeout(()=>{ front.classList.add('hidden'); front.classList.remove('fade'); swapLayers(); }, 260);
 				});
-			}catch{}
+				try{ sendClientEvent('load_ok', item, null).catch(()=>{}); }catch{}
+			}catch(e){
+				// Fallback: if first try was CDN and we have a relative key, retry via origin /media
+				try{
+					if(isVid){
+						const rel = relKeyFrom(item);
+						if(rel){
+							const alt = `${ORIGIN}/media/${rel}`;
+							const node = await preloadVideo(alt);
+							node.className = 'media'; node.loop = true; node.autoplay = true; node.muted = true; node.playsInline = true;
+							clearNode(back); back.appendChild(node);
+							back.classList.add('fade'); back.classList.remove('hidden');
+							setTimeout(()=>{ try{ node.play().catch(()=>{});}catch{} }, 0);
+							requestAnimationFrame(()=>{
+								back.classList.add('visible'); back.classList.remove('fade');
+								front.classList.add('fade'); front.classList.remove('visible');
+								setTimeout(()=>{ front.classList.add('hidden'); front.classList.remove('fade'); swapLayers(); }, 260);
+							});
+							try{ sendClientEvent('load_ok', item, null).catch(()=>{}); }catch{}
+							return;
+						}
+					}
+				}catch{}
+				overlay.textContent = `Load error: ${e&&e.message||'unknown'}`;
+				try{ sendClientEvent('load_fail', item, String(e&&e.message||e)).catch(()=>{}); }catch{}
+			}
 		}
 
 		function nextIndex(){ if(!playlist.length) return 0; return (idx + 1) % playlist.length; }
@@ -117,8 +197,19 @@
 			if(next){ const u = mediaUrl(next); if(u){ const pre = isVideoByName(u) ? preloadVideo(u) : preloadImage(u); pre.catch(()=>{}); } }
 			await showItem(item);
 			idx = nextIndex();
-			if(Date.now() - lastFetchTs > 20000){ fetchPlaylist(); }
+			if(Date.now() - lastFetchTs > PLAYLIST_REFRESH_MIN_MS){ fetchPlaylist(); }
 			timer = setTimeout(tick, dur*1000);
+		}
+
+		async function sendClientEvent(event, item, error){
+			try{
+				const body = { store_id: String(storeId), screen_id: String(screenId), event: String(event||'') };
+				const fname = fileNameFrom(item); if(fname) body.file = fname;
+				if(item && item.id) body.item_id = item.id;
+				if(error) body.error = String(error).slice(0,200);
+				const qs = new URLSearchParams(); if(pairCode) qs.set('user_code', pairCode);
+				await fetch(`${ORIGIN}/api/client_event?`+qs.toString(), { method:'POST', headers: { 'Content-Type':'application/json', ...(pairCode?{'X-User-Code':pairCode}:{}) }, body: JSON.stringify(body) });
+			}catch{}
 		}
 
 		(async function init(){
@@ -130,10 +221,12 @@
 				try{
 					const qs = new URLSearchParams({ store_id: storeId, screen_id: screenId });
 					if(pairCode) qs.set('user_code', pairCode);
-					await fetch(`${ORIGIN}/api/screen_heartbeat?`+qs.toString(), { method:'GET', cache:'no-store' });
+					await fetch(`${ORIGIN}/api/screen_heartbeat?`+qs.toString(), { method:'GET', cache:'no-store', headers: pairCode?{'X-User-Code': pairCode}:{} });
 				}catch{}
 			}
 			sendHeartbeat(); setInterval(sendHeartbeat, 30000);
+			// Poll for server-side commands (like reload) to apply changes instantly
+			setInterval(pollCommands, COMMANDS_POLL_MS);
 			// Pause when tab hidden
 			document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ if(timer){ clearTimeout(timer); timer=null; } } else { if(!timer) tick(); } });
 		})();
