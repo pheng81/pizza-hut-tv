@@ -559,6 +559,12 @@
     /* Layering: media below, indicator above */
     .screen-preview .preview-item { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; opacity:1; transition:opacity .2s ease; z-index:1; }
     .screen-preview .preview-item.fading-in { opacity:0; }
+    /* Dashboard preview effect helpers */
+    .screen-preview .anim { transition: transform .32s ease, opacity .28s ease; will-change: transform, opacity; }
+    .screen-preview .enter-slide-l { transform: translateX(8%); opacity:0; }
+    .screen-preview .enter-slide-r { transform: translateX(-8%); opacity:0; }
+    .screen-preview .enter-zoom-in { transform: scale(1.08); opacity:0; }
+    .screen-preview .enter-zoom-out { transform: scale(0.92); opacity:0; }
     .screen-preview .preview-badge { position:absolute; top:4px; left:4px; z-index:3; pointer-events:none; }
         
         /* Vertical orientation preview - tall and narrow */
@@ -889,12 +895,12 @@
     .pl-actions.inline-actions .group.left { justify-self:start; }
     .pl-actions.inline-actions .group.center { justify-self:center; }
     .pl-actions.inline-actions .group.right { justify-self:end; }
-    /* Effect picker */
+    /* Effect picker: compact round numbered buttons */
     .effect-row { display:flex; align-items:center; gap:6px; margin:6px 0 0; flex-wrap:wrap; }
-    .effect-label { font-size:10px; font-weight:600; letter-spacing:.4px; text-transform:uppercase; color:#555; margin-right:4px; }
-    .effect-btn { height:20px; padding:0 8px; border:1px solid #c4ccd3; background:#fff; color:#222; border-radius:12px; font-size:10px; font-weight:600; cursor:pointer; box-shadow:none; }
+    .effect-btn { width:26px; height:26px; border:1px solid #c4ccd3; background:#fff; color:#1f2937; border-radius:50%; font-size:12px; font-weight:700; cursor:pointer; box-shadow:none; display:inline-flex; align-items:center; justify-content:center; line-height:1; }
     .effect-btn:hover { background:#f2f4f7; border-color:#bfc6cc; }
-    .effect-btn.active { background:#e2f3ff; border-color:#7fbce4; color:#1168d4; }
+    .effect-btn.active { background:#0ea5e9; border-color:#0ea5e9; color:#fff; }
+    .effect-btn:focus-visible { outline:2px solid #93c5fd; outline-offset:2px; }
     /* Smaller iOS-like switch and hide its text */
     .playlist-row.apple .pl-actions.inline-actions .pl-switch { width:32px; height:16px; font-size:0; position:relative; }
     .playlist-row.apple .pl-actions.inline-actions .pl-switch span { font-size:0; line-height:0; color:transparent; }
@@ -3405,10 +3411,10 @@
                                                                                         </div>
                                                                                 </div>
                                                                                 <div class="effect-row" data-screen="${screenId}" data-item="${item.id}">
-                                                                                    <span class="effect-label">Effect:</span>
-                                                                                    ${[ ['None',''], ['Fade','fade'], ['Slide L','slide-l'], ['Slide R','slide-r'], ['Zoom In','zoom-in'], ['Zoom Out','zoom-out'] ].map(([label,val])=>{
+                                                                                    ${[ ['', ''], ['1','fade'], ['2','slide-l'], ['3','slide-r'], ['4','zoom-in'], ['5','zoom-out'] ].map(([num,val])=>{
                                                                                         const active = (String(item.effect||'')===val) || (!item.effect && val==='');
-                                                                                        return `<button type="button" class="effect-btn ${active?'active':''}" data-effect="${val}" onclick="setItemEffect('${screenId}','${item.id}','${val}', this)">${label}</button>`;
+                                                                                        const text = num || '·';
+                                                                                        return `<button type="button" class="effect-btn ${active?'active':''}" title="${val||'none'}" data-effect="${val}" onclick="setItemEffect('${screenId}','${item.id}','${val}', this)">${text}</button>`;
                                                                                     }).join('')}
                                                                                 </div>
                                                                                 <div class="schedule-windows" id="sched-${screenId}-${item.id}">${renderScheduleWindows(item, screenId)}</div>
@@ -4130,12 +4136,19 @@
                 const doSwap = (node)=>{
                     node.style.maxWidth='100%'; node.style.maxHeight='100%'; node.style.objectFit='contain';
                     if(rotationClass) node.classList.add(rotationClass);
-                    const wrap = document.createElement('div'); wrap.className='preview-item fading-in'; wrap.appendChild(node);
+                    const wrap = document.createElement('div'); wrap.className='preview-item fading-in';
+                    // Apply selected effect on dashboard preview
+                    const eff = String(item && item.effect || '').toLowerCase();
+                    const map = { 'slide-l':'enter-slide-l', 'slide-r':'enter-slide-r', 'zoom-in':'enter-zoom-in', 'zoom-out':'enter-zoom-out' };
+                    if(eff && eff!=='fade') { node.classList.add('anim'); const c = map[eff]; if(c) node.classList.add(c); }
+                    wrap.appendChild(node);
                     // Collect all existing preview layers (not just the first) to avoid stacked leftovers
                     const existing = Array.from(preview.querySelectorAll('.preview-item'));
                     preview.appendChild(wrap);
                     requestAnimationFrame(()=>{
                         wrap.classList.remove('fading-in');
+                        // Clear entry transforms once visible so end state is neutral
+                        if(eff && eff!=='fade'){ try { node.classList.remove('enter-slide-l','enter-slide-r','enter-zoom-in','enter-zoom-out'); node.style.opacity=''; } catch {} }
                         existing.forEach(el=>{ try { el.style.opacity='0'; setTimeout(()=> el.remove(), 220); } catch(_){} });
                     });
                     // If a video was inserted, attempt playback immediately
