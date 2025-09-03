@@ -4022,6 +4022,16 @@
                  }catch{}
              };
              function safeIsMaster(){ try { return typeof isMasterStore==='function' && isMasterStore(currentStoreId); } catch { return false; } }
+             function keyFrom(item){
+                try{
+                    if(!item) return '';
+                    if(item.id) return `id:${item.id}`;
+                    const f = (item.url || item.file || '').toString();
+                    if(f) return `f:${f.split('?')[0]}`;
+                    return (item && item.file) ? `n:${String(item.file).split('/').pop()}` : '';
+                }catch{ return ''; }
+             }
+
              function updatePreviewPlaylist(screenId, items){
                 if(!Array.isArray(items)) return;
                 const preview = document.getElementById(`preview-${screenId}`);
@@ -4067,8 +4077,26 @@
                 // Remove any leftover placeholder in the preview area
                 try{ const ph = preview.querySelector('.upload-area'); if(ph) ph.remove(); }catch{}
                 const state = previewTimers[screenId] || {timer:null,index:0,items:enabled,nextAt:0};
+                // Detect if the currently showing item just became inactive due to schedule
+                let prevKey = '';
+                try{
+                    if(state.items && state.items.length){
+                        const curIdx = (state.index - 1 + state.items.length) % state.items.length;
+                        prevKey = keyFrom(state.items[curIdx]);
+                    }
+                }catch{}
                 state.items = enabled; // replace with filtered list
                 previewTimers[screenId] = state;
+                // If the previous item is not in the new enabled list, advance immediately to show transition
+                if(prevKey){
+                    const enabledKeys = new Set(enabled.map(keyFrom));
+                    if(!enabledKeys.has(prevKey)){
+                        try{ if(state.timer){ clearTimeout(state.timer); state.timer = null; } }catch{}
+                        state.index = 0;
+                        runPreview(screenId);
+                        return;
+                    }
+                }
                 if(!state.timer){ runPreview(screenId); }
              }
              function stopPreview(screenId){ const st=previewTimers[screenId]; if(st&&st.timer){ clearTimeout(st.timer); st.timer=null; } }
