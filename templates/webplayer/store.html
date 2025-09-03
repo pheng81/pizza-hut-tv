@@ -6,25 +6,26 @@
   <title>Web Player — Store Code</title>
   <style>
     html,body{height:100%;margin:0}
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Arial,sans-serif;display:grid;place-items:center;min-height:100vh;background:#0b0b0b;color:#f4f4f4}
-    .card{background:#141414;border:1px solid #2a2a2a;border-radius:12px;padding:24px;max-width:420px;width:92vw;box-shadow:0 6px 24px rgba(0,0,0,.35)}
-    h1{margin:0 0 8px;font-size:22px}
-    p{margin:0 0 16px;color:#bbb;font-size:14px}
-    label{display:block;font-size:13px;color:#ccc;margin:12px 0 6px}
-    input{width:100%;padding:12px 14px;background:#0e0e0e;border:1px solid #2f2f2f;border-radius:10px;color:#fff;outline:none;text-align:center;letter-spacing:2px;font-weight:700;font-size:20px}
-    input:focus{border-color:#4aa3ff;box-shadow:0 0 0 3px rgba(74,163,255,0.2)}
-    button{margin-top:16px;width:100%;padding:12px 14px;border:none;border-radius:9px;background:#2e6ff2;color:#fff;font-weight:600;cursor:pointer}
-    button:hover{background:#2a62d4}
-    .note{margin-top:14px;font-size:12px;color:#9a9a9a}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Arial,sans-serif;display:grid;place-items:center;min-height:100vh;background:#000;color:#f4f4f4}
+  .card{background:#0d0d0d;border:none;border-radius:12px;padding:28px;max-width:560px;width:min(92vw,560px);box-shadow:0 8px 30px rgba(0,0,0,.5)}
+    h1{margin:0 0 12px;font-size:26px;text-align:center}
+    p{margin:0 0 16px;color:#bbb;font-size:15px;text-align:center}
+    label{display:block;font-size:14px;color:#ccc;margin:12px 0 8px}
+  input{width:100%;padding:16px 18px;background:#000;border:1px solid #333;border-radius:10px;color:#fff;outline:none;text-align:center;letter-spacing:1px;font-weight:700;font-size:18px;box-sizing:border-box}
+    input::placeholder{color:#8a8a8a}
+  input:focus{border-color:#c8102e;box-shadow:none}
+  .btn{margin-top:18px;width:100%;padding:16px 18px;border:none;border-radius:10px;background:#c8102e;color:#fff;font-weight:700;cursor:pointer;font-size:16px;box-sizing:border-box}
+    .btn:hover{background:#ac0e29}
+    .note{margin-top:14px;font-size:12px;color:#9a9a9a;text-align:center}
   </style>
 </head>
 <body>
   <div class="card">
     <h1>Enter store code</h1>
     <p>TV code: <strong id="tvcode"></strong></p>
-    <label for="store">Store code</label>
-    <input id="store" maxlength="8" inputmode="numeric" placeholder="e.g. 1000" />
-    <button id="go">Continue</button>
+  <label for="store">Store code</label>
+  <input id="store" maxlength="8" inputmode="numeric" placeholder="Store code (e.g. 1000)" />
+  <button class="btn" id="go">Continue</button>
     <div class="note">You’ll choose a screen next.</div>
   </div>
   <script>

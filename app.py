@@ -1409,6 +1409,27 @@ def pop_commands():
             save_store_config(cfg)
     return jsonify({'success': True, 'commands': out, 'remaining': len(scr.get('cmd_queue', []))})
 
+# Internal helper: enqueue a command into the config object for a given screen
+def _enqueue_command_in_cfg(cfg, store_id, screen_id, ctype='reload', item_id=None, file=None):
+    try:
+        ns, nid = _normalize_screen_ref(cfg, str(store_id), str(screen_id))
+        if not ns or not nid:
+            return None
+        cmd = {
+            'id': str(uuid.uuid4()),
+            'ts': int(time.time()),
+            'type': ctype,
+            'item_id': item_id,
+            'file': file,
+        }
+        q = cfg.setdefault('screens', {}).setdefault(ns, {}).setdefault(nid, {}).setdefault('cmd_queue', [])
+        q.append(cmd)
+        if len(q) > 50:
+            del q[:-50]
+        return cmd
+    except Exception:
+        return None
+
 # -------- One-off migration: local static/uploads -> R2 bucket --------
 @app.route('/admin/migrate_to_r2', methods=['POST'])
 def migrate_to_r2():
@@ -2989,6 +3010,8 @@ def upload_to_screen():
                 pl = scr.setdefault('playlist', [])
                 if not any(i.get('file') == key for i in pl):
                     pl.append({'id': str(uuid.uuid4()), 'file': key, 'enabled': True, 'start': None, 'end': None, 'schedule': [], 'duration': 10, 'repeat': True, 'link_next': False, 'media_type': classify_media(key)})
+                # Auto-push a reload for this screen so TVs update fast
+                _enqueue_command_in_cfg(config, current_store_id, actual_screen_id, 'reload')
                 updated_stores.append(current_store_id)
 
         save_store_config(config)
@@ -3020,6 +3043,8 @@ def upload_to_screen():
         pl = screen_obj.setdefault('playlist', [])
         if not any(i.get('file') == key for i in pl):
             pl.append({'id': str(uuid.uuid4()), 'file': key, 'enabled': True, 'start': None, 'end': None, 'schedule': [], 'duration': 10, 'repeat': True, 'link_next': False, 'media_type': classify_media(key)})
+        # Auto-push a reload for this single screen
+        _enqueue_command_in_cfg(config, store_id, screen_id, 'reload')
         save_store_config(config)
         print(f"[upload_to_screen] Single-store success store={store_id} screen={screen_id} file={key} playlist_len={len(pl)}")
         return jsonify({
@@ -3188,6 +3213,7 @@ def tv_view(store_id, screen_id):
 
 # ---------------------- Web Player (browser-based TV) ----------------------
 @app.route('/webplayer')
+@app.route('/webplayer/')
 def webplayer_index():
     """Landing page to launch the browser-based TV player.
     Step 1: Enter the 4-digit TV link (pairing) code.
@@ -3199,6 +3225,7 @@ def webplayer_index():
 
 
 @app.route('/webplayer/browse')
+@app.route('/webplayer/browse/')
 def webplayer_browse():
     """Step 2: After entering TV code and store code, show screens for that store.
     Query: ?code=NNNN&store_id=STORE
@@ -3214,6 +3241,7 @@ def webplayer_browse():
         return make_response(f"Webplayer browse unavailable: {e}", 500)
 
 @app.route('/webplayer/store')
+@app.route('/webplayer/store/')
 def webplayer_store():
     """Intermediate step to enter store code after a valid TV code.
     Query: ?code=NNNN
@@ -3228,6 +3256,7 @@ def webplayer_store():
 
 
 @app.route('/webplayer/play')
+@app.route('/webplayer/play/')
 def webplayer_play():
     """Launch the full-screen web player for a given store/screen.
     Query params: store_id, screen_id, code (optional pairing code)
@@ -3673,6 +3702,11 @@ def replicate_screen():
                         'media_type': classify_media(source_file)
                     }]
             updated_stores.append(sid)
+            # Enqueue reload for each affected screen
+            try:
+                _enqueue_command_in_cfg(config, sid, actual_id, 'reload')
+            except Exception:
+                pass
 
         save_store_config(config)
 
@@ -4974,6 +5008,8 @@ def update_playlist_item(store_id, screen_id, item_id):
                 updated = True
             break
     if updated:
+        # Push a reload so connected TVs pick up changes quickly
+        _enqueue_command_in_cfg(cfg, store_id, screen_id, 'reload')
         save_store_config(cfg)
         return jsonify({'success': True})
     return jsonify({'success': False, 'error': 'item not found'}), 404
@@ -4989,6 +5025,7 @@ def delete_playlist_item(store_id, screen_id, item_id):
     before = len(screen.get('playlist', []))
     screen['playlist'] = [i for i in screen.get('playlist', []) if i.get('id') != item_id]
     if len(screen['playlist']) != before:
+        _enqueue_command_in_cfg(cfg, store_id, screen_id, 'reload')
         save_store_config(cfg)
         return jsonify({'success': True})
     return jsonify({'success': False, 'error': 'item not found'}), 404
@@ -5020,6 +5057,7 @@ def add_schedule_window(store_id, screen_id, item_id):
         if it.get('id') == item_id:
             sched = it.setdefault('schedule', [])
             sched.append(win)
+            _enqueue_command_in_cfg(cfg, store_id, screen_id, 'reload')
             save_store_config(cfg)
             return jsonify({'success': True, 'index': len(sched)-1, 'window': win})
     return jsonify({'success': False, 'error': 'item not found'}), 404
@@ -5048,6 +5086,7 @@ def update_schedule_window(store_id, screen_id, item_id, index):
                 if 'enabled' in payload:
                     en = payload.get('enabled')
                     sched[index]['enabled'] = bool(en) if isinstance(en, bool) else False
+                _enqueue_command_in_cfg(cfg, store_id, screen_id, 'reload')
                 save_store_config(cfg)
                 return jsonify({'success': True})
             return jsonify({'success': False, 'error': 'index out of range'}), 400
@@ -5065,6 +5104,7 @@ def delete_schedule_window(store_id, screen_id, item_id, index):
             sched = it.setdefault('schedule', [])
             if 0 <= index < len(sched):
                 removed = sched.pop(index)
+                _enqueue_command_in_cfg(cfg, store_id, screen_id, 'reload')
                 save_store_config(cfg)
                 return jsonify({'success': True, 'removed': removed})
             return jsonify({'success': False, 'error': 'index out of range'}), 400

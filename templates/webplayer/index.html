@@ -6,35 +6,108 @@
 <title>Web Player — TV Code</title>
 <style>
   html,body{height:100%;margin:0}
-  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Arial,sans-serif;display:grid;grid-template-rows:1fr auto;min-height:100vh;background:#0b0b0b;color:#f4f4f4}
-  .intro{position:fixed;inset:0;display:grid;place-items:center;background:#0b0b0b;z-index:10}
-  .intro .logo{width:min(72vw,880px);height:auto;opacity:.96}
-  .panel{background:#141414;border:1px solid #2a2a2a;border-radius:16px;padding:20px;max-width:480px;width:92vw;box-shadow:0 6px 24px rgba(0,0,0,.35);margin:22px auto}
-  h1{margin:0 0 6px;font-size:20px}
-  p{margin:0 0 12px;color:#bbb;font-size:14px}
-  label{display:block;font-size:12px;color:#ccc;margin:10px 0 6px}
-  input{width:100%;padding:12px 14px;background:#0e0e0e;border:1px solid #2f2f2f;border-radius:10px;color:#fff;outline:none;text-align:center;letter-spacing:6px;font-weight:800;font-size:22px}
-  input:focus{border-color:#4aa3ff;box-shadow:0 0 0 3px rgba(74,163,255,0.2)}
-  button{margin-top:14px;width:100%;padding:12px 14px;border:none;border-radius:9px;background:#2e6ff2;color:#fff;font-weight:600;cursor:pointer}
-  button:hover{background:#2a62d4}
-  .note{margin-top:10px;font-size:12px;color:#9a9a9a}
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Arial,sans-serif;display:grid;grid-template-rows:1fr auto;min-height:100vh;background:#000;color:#f4f4f4}
+  /* Center intro across a wide range of TV browsers */
+  .intro{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#0b0b0b;z-index:10}
+  @supports (place-items: center){
+    .intro{display:grid;place-items:center}
+    .intro > *{grid-area:1/1}
+  }
+  /* Make the intro about 50% smaller than before */
+  .intro .logo{width:min(36vw,440px);height:auto;opacity:.96;max-height:48vh}
+  .panel{background:#0d0d0d;border:none;border-radius:12px;padding:28px;max-width:560px;width:min(92vw,560px);box-shadow:0 8px 30px rgba(0,0,0,.5);margin:12vh auto}
+  h1{margin:0 0 12px;font-size:26px;font-weight:700;text-align:center}
+  p{margin:0 0 16px;color:#bbb;font-size:15px;text-align:center}
+  label{display:block;font-size:14px;color:#ccc;margin:12px 0 8px}
+  input{width:100%;padding:16px 18px;background:#000;border:1px solid #333;border-radius:10px;color:#fff;outline:none;text-align:center;letter-spacing:2px;font-weight:700;font-size:18px;box-sizing:border-box}
+  input::placeholder{color:#8a8a8a}
+  input:focus{border-color:#c8102e;box-shadow:none}
+  .btn{margin-top:18px;width:100%;padding:16px 18px;border:none;border-radius:10px;background:#c8102e;color:#fff;font-weight:700;cursor:pointer;font-size:16px;box-sizing:border-box}
+  .btn:hover{background:#ac0e29}
+  .note{margin-top:14px;font-size:12px;color:#9a9a9a;text-align:center}
 </style>
 </head>
 <body>
   <div class="intro" id="intro">
-    <img class="logo" src="/static/ea-logo-intro.svg" alt="Everyday Advertise intro" />
+    <!-- Prefer a tiny video clip for widest TV compatibility -->
+    <video id="intro-video" class="logo" autoplay muted playsinline preload="auto" poster="/static/ea-logo.svg" style="display:block; background:#0b0b0b; border-radius:8px;">
+      <source src="/static/intro.mp4" type="video/mp4">
+      <source src="/static/intro.webm" type="video/webm">
+    </video>
+    <!-- Animated SVG (fallback) -->
+    <img id="intro-svg" class="logo" src="/static/ea-logo-intro.svg" alt="Everyday Advertise intro" style="display:none" />
+    <!-- Fallback: static logo SVG (widely supported) -->
+    <img id="intro-static" class="logo" src="/static/ea-logo.svg" alt="Everyday Advertise" style="display:none" />
+    <!-- Final fallback: branded text with CSS fade/zoom -->
+    <div id="intro-text" class="logo" style="display:none; font-weight:800; font-size:clamp(28px,8vw,64px); text-align:center; line-height:1.1;">
+      Everyday<br/>Advertise
+    </div>
   </div>
   <div class="panel" id="step1">
-    <h1>Enter TV code</h1>
-    <p>Type the 4-digit code from your account or Android TV app.</p>
-    <label for="code">TV code (4 digits)</label>
-    <input id="code" maxlength="4" pattern="\d{4}" inputmode="numeric" placeholder="____" />
-    <button id="go">Continue</button>
-    <div class="note">Next: enter store code, then choose a screen.</div>
+    <h1>Enter your Android TV pairing code</h1>
+    <p>Type the 4-digit code from your TV app or profile page.</p>
+    <label for="code">4-digit code</label>
+    <input id="code" maxlength="4" pattern="\d{4}" inputmode="numeric" placeholder="4-digit code (e.g. 1126)" />
+    <button class="btn" id="go">Link Code</button>
+    <div class="note">Next you'll enter the store code and pick a screen.</div>
   </div>
   <script>
     // Auto-hide intro after ~3 seconds
     setTimeout(()=>{ const intro=document.getElementById('intro'); if(intro) intro.style.display='none'; const c=document.getElementById('code'); if(c) c.focus(); }, 3000);
+
+    // Max compatibility: video -> animated SVG -> static SVG -> text
+    (function ensureIntroVisible(){
+      const vidEl = document.getElementById('intro-video');
+      const svgEl = document.getElementById('intro-svg');
+      const staticEl = document.getElementById('intro-static');
+      const textEl = document.getElementById('intro-text');
+      const show = (el)=>{
+        if(vidEl) vidEl.style.display='none';
+        if(svgEl) svgEl.style.display='none';
+        if(staticEl) staticEl.style.display='none';
+        if(textEl) textEl.style.display='none';
+        if(el) el.style.display='block';
+      };
+      // 1) Prefer video intro; if it can't play, fall back
+      if(vidEl){
+        let switched=false;
+        const fallbackToSvg=()=>{ if(switched) return; switched=true; show(svgEl); };
+        const watchdog = setTimeout(()=>{
+          try{
+            const ready = vidEl.readyState || 0; // 0=HAVE_NOTHING, 2=HAVE_CURRENT_DATA
+            if(ready < 2 || (vidEl.duration && vidEl.currentTime===0)) fallbackToSvg();
+          }catch{ fallbackToSvg(); }
+        }, 700);
+        // Try to play; many TVs require muted + playsInline which we set
+        try{
+          const p = vidEl.play();
+          if(p && typeof p.then==='function'){
+            p.then(()=>{ /* ok */ }).catch(()=> fallbackToSvg());
+          }
+        }catch{ fallbackToSvg(); }
+        vidEl.addEventListener('error', fallbackToSvg);
+        vidEl.addEventListener('stalled', fallbackToSvg);
+        vidEl.addEventListener('abort', fallbackToSvg);
+        vidEl.addEventListener('loadeddata', ()=>{ try{ clearTimeout(watchdog); }catch{} });
+      }
+      // If SVG animated intro fails to load or is unsupported, switch to static
+      if(svgEl){
+        svgEl.addEventListener('error', ()=>{ show(staticEl); });
+        // Some TV browsers never fire load for SVGs via <img>; use a short watchdog
+        let switched = false;
+        const watchdog = setTimeout(()=>{
+          if(switched) return;
+          // If it's still default display (block) but not rendered, switch
+          try { if(svgEl.naturalWidth === 0) { switched=true; show(staticEl); } } catch { switched=true; show(staticEl); }
+        }, 500);
+        svgEl.addEventListener('load', ()=>{ if(!switched) { clearTimeout(watchdog); } });
+      }
+      if(staticEl){
+        staticEl.addEventListener('error', ()=>{ show(textEl); });
+        // Secondary watchdog in case static SVG also fails
+        setTimeout(()=>{ try{ if(staticEl.style.display!=='none' && staticEl.naturalWidth===0){ show(textEl); } }catch{ show(textEl); } }, 900);
+      }
+    })();
     const codeEl = document.getElementById('code');
     codeEl.addEventListener('input', ()=>{ codeEl.value = codeEl.value.replace(/[^0-9]/g,'').slice(0,4); });
     async function go(){
