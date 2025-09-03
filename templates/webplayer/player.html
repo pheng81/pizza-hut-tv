@@ -87,11 +87,23 @@
 		let idx = 0;
 		let timer = null;
 		let lastFetchTs = 0;
+		let currentItemKey = '';
+		let forceAdvanceNow = false;
 		const PLAYLIST_REFRESH_MIN_MS = 6000; // faster refresh so schedule changes apply quickly
 		const COMMANDS_POLL_MS = 3000; // poll for admin-triggered reloads
 
 		const overlay = document.getElementById('overlay');
 		overlay.textContent = `Store ${storeId} • Screen ${screenId}`;
+
+		function keyFrom(item){
+			try{
+				if(!item) return '';
+				if(item.id) return `id:${item.id}`;
+				const f = (item.url || item.file || '').toString();
+				if(f) return `f:${f.split('?')[0]}`;
+				return `n:${fileNameFrom(item)}`;
+			}catch{ return ''; }
+		}
 
 		async function fetchPlaylist(){
 			try{
@@ -102,6 +114,15 @@
 				if(j && j.success && Array.isArray(j.playlist)){
 					playlist = j.playlist;
 					if(idx >= playlist.length) idx = 0;
+					// If the currently showing item is no longer present (e.g., schedule switch), advance immediately
+					if(currentItemKey){
+						const stillPresent = playlist.some(it => keyFrom(it) === currentItemKey);
+						if(!stillPresent && playlist.length){
+							forceAdvanceNow = true;
+							if(timer){ clearTimeout(timer); timer = null; }
+							setTimeout(()=>{ if(!timer) tick(); }, 0);
+						}
+					}
 				}
 			}catch(e){ overlay.textContent = `Playlist error: ${e&&e.message||'unknown'}`; }
 			lastFetchTs = Date.now();
@@ -181,6 +202,7 @@
 					front.classList.add('fade'); front.classList.remove('visible');
 					setTimeout(()=>{ front.classList.add('hidden'); front.classList.remove('fade'); swapLayers(); }, 300);
 				});
+				currentItemKey = keyFrom(item);
 				try{ sendClientEvent('load_ok', item, null).catch(()=>{}); }catch{}
 			}catch(e){
 				// Fallback: if first try was CDN and we have a relative key, retry via origin /media
@@ -216,6 +238,8 @@
 		async function tick(){
 			if(!playlist.length){ await fetchPlaylist(); }
 			if(!playlist.length){ timer = setTimeout(tick, 1500); return; }
+			// On forced schedule switch, jump to first item to show transition immediately
+			if(forceAdvanceNow){ forceAdvanceNow = false; idx = 0; }
 			const item = playlist[idx];
 			const dur = Math.max(1, parseInt(item.duration||10));
 			const next = playlist[nextIndex()];
