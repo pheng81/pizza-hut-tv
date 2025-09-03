@@ -6,7 +6,7 @@
 	<title>Web Player</title>
 	<style>
 		html, body { height:100%; margin:0; background:#000; color:#fff; cursor:none; }
-		#stage { position:fixed; inset:0; width:100vw; height:100vh; overflow:hidden; background:#000; --layer-fade: 1s; --motion-dur: 1s; }
+		#stage { position:fixed; inset:0; width:100vw; height:100vh; overflow:hidden; background:#000; --layer-fade: 1s; --motion-dur: 1s; transform-origin: 50% 50%; }
 		.layer { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#000; }
 		.hidden { display:none; }
 		.media { max-width:100%; max-height:100%; object-fit:contain; }
@@ -105,6 +105,20 @@
 			}catch{ return ''; }
 		}
 
+		let orientationMode = 'default'; // 'vertical' | 'horizontal' | 'default'
+		function applyOrientation(){
+			try{
+				if(orientationMode === 'vertical'){
+					const vw = window.innerWidth || document.documentElement.clientWidth || 1920;
+					const vh = window.innerHeight || document.documentElement.clientHeight || 1080;
+					const s = Math.max(0.01, Math.min(5, vh / Math.max(vw,1)));
+					stage.style.transform = `rotate(90deg) scale(${s.toFixed(5)})`;
+				} else {
+					stage.style.transform = '';
+				}
+			}catch{}
+		}
+
 		async function fetchPlaylist(){
 			try{
 				const qs = new URLSearchParams();
@@ -113,6 +127,7 @@
 				const j = await r.json();
 				if(j && j.success && Array.isArray(j.playlist)){
 					playlist = j.playlist;
+					if(typeof j.orientation === 'string'){ orientationMode = j.orientation; applyOrientation(); }
 					if(idx >= playlist.length) idx = 0;
 					// If the currently showing item is no longer present (e.g., schedule switch), advance immediately
 					if(currentItemKey){
@@ -268,6 +283,7 @@
 			}catch{}
 		}
 
+		window.addEventListener('resize', ()=>{ try{ applyOrientation(); }catch{} });
 		(async function init(){
 			if(!storeId || !screenId){ location.href = '/webplayer'; return; }
 			// Kick off

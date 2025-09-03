@@ -1978,8 +1978,24 @@ def load_store_config_for_user_safe_key(safe_key: str):
     path = _config_path_for_user_safe_key(safe_key)
     is_user_scoped = True
     if not os.path.exists(path):
-        # New per-user config: start empty, not inherited from global
-        cfg = get_default_config(user_scoped=True)
+        # New per-user config: seed from current global config if available,
+        # so existing stores/screens layout is visible to the newly paired user.
+        try:
+            global_cfg = None
+            if os.path.exists(CONFIG_FILE):
+                with open(CONFIG_FILE, 'r') as f:
+                    global_cfg = json.load(f)
+            if isinstance(global_cfg, dict) and global_cfg.get('stores') and global_cfg.get('screens'):
+                # Shallow copy to avoid accidental mutation; per-user edits will diverge afterwards
+                cfg = {
+                    'stores': list(global_cfg.get('stores', [])),
+                    'screens': dict(global_cfg.get('screens', {})),
+                    'master_store_id': global_cfg.get('master_store_id') or (global_cfg.get('stores',[{}])[0].get('id') if global_cfg.get('stores') else None),
+                }
+            else:
+                cfg = get_default_config(user_scoped=True)
+        except Exception:
+            cfg = get_default_config(user_scoped=True)
         if cfg.get('stores') and 'master_store_id' not in cfg:
             try:
                 cfg['master_store_id'] = cfg['stores'][0]['id']
@@ -4216,6 +4232,9 @@ def get_playlist(store_id, screen_id):
         try:
             it = dict(item)
             it['url'] = build_public_url(it.get('file'))
+            # Ensure the effect is serialized explicitly for clients
+            if 'effect' in item and isinstance(item.get('effect'), str):
+                it['effect'] = item.get('effect')
             # Prefer id mapping; if missing, fall back to file key.
             # Robustness: handle absolute URLs and relative paths by also checking basename-only key.
             ls = None
@@ -4251,9 +4270,16 @@ def get_playlist(store_id, screen_id):
         except Exception:
             out.append(item)
     print(f"DEBUG: Returning playlist items: {len(out)}")
+    # Orientation mode for clients: vertical, horizontal, or default (none)
+    try:
+        v = bool(screen.get('vertical'))
+        h = bool(screen.get('horizontal'))
+        orientation_mode = 'vertical' if (v and not h) else ('horizontal' if (h and not v) else 'default')
+    except Exception:
+        orientation_mode = 'default'
     # Dashboard needs immediate consistency after changes; disable caching here.
     return (
-    {'success': True, 'playlist': out, 'queue_len': len(screen.get('cmd_queue', [])), 'events_recent': len(screen.get('events', []))},
+    {'success': True, 'playlist': out, 'queue_len': len(screen.get('cmd_queue', [])), 'events_recent': len(screen.get('events', [])), 'orientation': orientation_mode},
         200,
         {'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'}
     )
