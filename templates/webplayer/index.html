@@ -3,18 +3,17 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Web Player — Enter Codes</title>
+<title>Web Player — TV Code</title>
 <style>
   html,body{height:100%;margin:0}
   body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Arial,sans-serif;display:grid;grid-template-rows:1fr auto;min-height:100vh;background:#0b0b0b;color:#f4f4f4}
-  .intro{display:grid;place-items:center;position:relative}
+  .intro{position:fixed;inset:0;display:grid;place-items:center;background:#0b0b0b;z-index:10}
   .intro .logo{width:min(72vw,880px);height:auto;opacity:.96}
-  .panel{background:#141414;border:1px solid #2a2a2a;border-radius:16px;padding:20px;max-width:640px;width:92vw;box-shadow:0 6px 24px rgba(0,0,0,.35);margin:22px auto}
+  .panel{background:#141414;border:1px solid #2a2a2a;border-radius:16px;padding:20px;max-width:480px;width:92vw;box-shadow:0 6px 24px rgba(0,0,0,.35);margin:22px auto}
   h1{margin:0 0 6px;font-size:20px}
   p{margin:0 0 12px;color:#bbb;font-size:14px}
-  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   label{display:block;font-size:12px;color:#ccc;margin:10px 0 6px}
-  input{width:100%;padding:12px 14px;background:#0e0e0e;border:1px solid #2f2f2f;border-radius:10px;color:#fff;outline:none;text-align:center;letter-spacing:4px;font-weight:700;font-size:18px}
+  input{width:100%;padding:12px 14px;background:#0e0e0e;border:1px solid #2f2f2f;border-radius:10px;color:#fff;outline:none;text-align:center;letter-spacing:6px;font-weight:800;font-size:22px}
   input:focus{border-color:#4aa3ff;box-shadow:0 0 0 3px rgba(74,163,255,0.2)}
   button{margin-top:14px;width:100%;padding:12px 14px;border:none;border-radius:9px;background:#2e6ff2;color:#fff;font-weight:600;cursor:pointer}
   button:hover{background:#2a62d4}
@@ -22,38 +21,35 @@
 </style>
 </head>
 <body>
-  <div class="intro">
+  <div class="intro" id="intro">
     <img class="logo" src="/static/ea-logo-intro.svg" alt="Everyday Advertise intro" />
   </div>
-  <div class="panel">
-    <h1>Enter codes</h1>
-    <p>Use your TV link code and the store code, then choose a screen.</p>
-    <div class="row">
-      <div>
-        <label for="code">TV code (4 digits)</label>
-        <input id="code" maxlength="4" pattern="\d{4}" inputmode="numeric" placeholder="____" />
-      </div>
-      <div>
-        <label for="store">Store code</label>
-        <input id="store" maxlength="8" inputmode="numeric" placeholder="e.g. 1000" />
-      </div>
-    </div>
-    <button id="go">Browse screens</button>
-    <div class="note">Tip: On TV remotes, type numbers then press OK/Enter.</div>
+  <div class="panel" id="step1">
+    <h1>Enter TV code</h1>
+    <p>Type the 4-digit code from your account or Android TV app.</p>
+    <label for="code">TV code (4 digits)</label>
+    <input id="code" maxlength="4" pattern="\d{4}" inputmode="numeric" placeholder="____" />
+    <button id="go">Continue</button>
+    <div class="note">Next: enter store code, then choose a screen.</div>
   </div>
   <script>
+    // Auto-hide intro after ~3 seconds
+    setTimeout(()=>{ const intro=document.getElementById('intro'); if(intro) intro.style.display='none'; const c=document.getElementById('code'); if(c) c.focus(); }, 3000);
     const codeEl = document.getElementById('code');
-    const storeEl = document.getElementById('store');
     codeEl.addEventListener('input', ()=>{ codeEl.value = codeEl.value.replace(/[^0-9]/g,'').slice(0,4); });
-    storeEl.addEventListener('input', ()=>{ storeEl.value = storeEl.value.replace(/[^0-9]/g,'').slice(0,8); });
-    document.getElementById('go').addEventListener('click', ()=>{
+    async function go(){
       const c = codeEl.value.trim();
-      const s = storeEl.value.trim();
       if(!(c.length===4 && /^[0-9]{4}$/.test(c))){ alert('Please enter your 4-digit TV code.'); return; }
-      if(!s){ alert('Please enter your store code.'); return; }
-      const q = new URLSearchParams({ code:c, store_id:s });
-      location.href = '/webplayer/browse?' + q.toString();
-    });
+      // Validate code before moving on
+      try{
+        const r = await fetch(`/api/stores_by_code/${encodeURIComponent(c)}`, { cache:'no-store' });
+        const j = await r.json();
+        if(!j || !j.success){ alert(j && j.error ? j.error : 'TV code not valid'); return; }
+        location.href = '/webplayer/store?code=' + encodeURIComponent(c);
+      }catch(e){ alert('Could not verify code. Check your connection.'); }
+    }
+    document.getElementById('go').addEventListener('click', go);
+    document.addEventListener('keydown', (e)=>{ if(e.key==='Enter') go(); });
   </script>
 </body>
 </html>

@@ -3213,6 +3213,19 @@ def webplayer_browse():
     except Exception as e:
         return make_response(f"Webplayer browse unavailable: {e}", 500)
 
+@app.route('/webplayer/store')
+def webplayer_store():
+    """Intermediate step to enter store code after a valid TV code.
+    Query: ?code=NNNN
+    """
+    code = (request.args.get('code') or '').strip()
+    if not (len(code) == 4 and code.isdigit()):
+        return redirect(url_for('webplayer_index'))
+    try:
+        return render_template('webplayer/store.html', code=code)
+    except Exception as e:
+        return make_response(f"Webplayer store step unavailable: {e}", 500)
+
 
 @app.route('/webplayer/play')
 def webplayer_play():
