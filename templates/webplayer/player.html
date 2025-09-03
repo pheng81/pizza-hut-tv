@@ -6,19 +6,19 @@
 	<title>Web Player</title>
 	<style>
 		html, body { height:100%; margin:0; background:#000; color:#fff; cursor:none; }
-		#stage { position:fixed; inset:0; width:100vw; height:100vh; overflow:hidden; background:#000; }
+		#stage { position:fixed; inset:0; width:100vw; height:100vh; overflow:hidden; background:#000; --layer-fade: 1s; --motion-dur: 1s; }
 		.layer { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#000; }
 		.hidden { display:none; }
 		.media { max-width:100%; max-height:100%; object-fit:contain; }
 		/* Base fade */
-		.fade { opacity:0; transition: opacity .28s ease; }
+		.fade { opacity:0; transition: opacity var(--layer-fade) ease; }
 		.visible { opacity:1; }
 		/* Slide and zoom helpers applied on entering layer */
 		.enter-slide-l { transform: translateX(8%); opacity:0; }
 		.enter-slide-r { transform: translateX(-8%); opacity:0; }
 		.enter-zoom-in { transform: scale(1.08); opacity:0; }
 		.enter-zoom-out { transform: scale(0.92); opacity:0; }
-		.anim { transition: transform .32s ease, opacity .28s ease; will-change: transform, opacity; }
+		.anim { transition: transform var(--motion-dur) ease, opacity var(--motion-dur) ease; will-change: transform, opacity; }
 		#overlay { position:fixed; left:10px; bottom:10px; color:#9aa7ff; font:12px/1.4 system-ui,Segoe UI,Roboto,Ubuntu,Arial; opacity:.22; }
 	</style>
 </head>
@@ -174,7 +174,9 @@
 			const e = String(item && item.effect || '').toLowerCase();
 			if(!e) return '';
 			switch(e){
-				case 'fade': return 'fadeonly';
+				case 'fade':
+					// Use the default crossfade (layer fade-out) with no extra per-node class
+					return '';
 				case 'slide-l': return 'enter-slide-l';
 				case 'slide-r': return 'enter-slide-r';
 				case 'zoom-in': return 'enter-zoom-in';
@@ -198,9 +200,12 @@
 				if(isVid){ setTimeout(()=>{ try{ node.play().catch(()=>{});}catch{} }, 0); }
 				requestAnimationFrame(()=>{
 					back.classList.add('visible'); back.classList.remove('fade');
-					if(eff){ node.classList.remove('enter-slide-l','enter-slide-r','enter-zoom-in','enter-zoom-out'); node.style.opacity=''; }
 					front.classList.add('fade'); front.classList.remove('visible');
-					setTimeout(()=>{ front.classList.add('hidden'); front.classList.remove('fade'); swapLayers(); }, 300);
+					// Drop the enter-* class on the next frame to trigger the transition
+					requestAnimationFrame(()=>{
+						if(eff){ node.classList.remove('enter-slide-l','enter-slide-r','enter-zoom-in','enter-zoom-out'); node.style.opacity=''; }
+					});
+					setTimeout(()=>{ front.classList.add('hidden'); front.classList.remove('fade'); swapLayers(); }, 1100);
 				});
 				currentItemKey = keyFrom(item);
 				try{ sendClientEvent('load_ok', item, null).catch(()=>{}); }catch{}
@@ -219,9 +224,11 @@
 							setTimeout(()=>{ try{ node.play().catch(()=>{});}catch{} }, 0);
 							requestAnimationFrame(()=>{
 								back.classList.add('visible'); back.classList.remove('fade');
-								if(eff){ node.classList.remove('enter-slide-l','enter-slide-r','enter-zoom-in','enter-zoom-out'); node.style.opacity=''; }
 								front.classList.add('fade'); front.classList.remove('visible');
-								setTimeout(()=>{ front.classList.add('hidden'); front.classList.remove('fade'); swapLayers(); }, 300);
+								requestAnimationFrame(()=>{
+									if(eff){ node.classList.remove('enter-slide-l','enter-slide-r','enter-zoom-in','enter-zoom-out'); node.style.opacity=''; }
+								});
+								setTimeout(()=>{ front.classList.add('hidden'); front.classList.remove('fade'); swapLayers(); }, 1100);
 							});
 							try{ sendClientEvent('load_ok', item, null).catch(()=>{}); }catch{}
 							return;
