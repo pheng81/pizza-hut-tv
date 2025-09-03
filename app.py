@@ -4954,6 +4954,7 @@ def update_playlist_item(store_id, screen_id, item_id):
     if not screen:
         return jsonify({'success': False, 'error': 'screen not found'}), 404
     updated = False
+    allowed_effects = {'fade','slide-l','slide-r','zoom-in','zoom-out'}
     for item in screen.get('playlist', []):
         if item['id'] == item_id:
             payload = request.get_json() or {}
@@ -4985,6 +4986,17 @@ def update_playlist_item(store_id, screen_id, item_id):
                     else:
                         item[k] = payload[k]
                     updated = True
+            # Transition effect for item playback
+            if 'effect' in payload:
+                val = str(payload.get('effect') or '').strip().lower()
+                if val in allowed_effects:
+                    item['effect'] = val
+                elif val == '' or val == 'default' or val == 'none':
+                    item.pop('effect', None)
+                else:
+                    # ignore invalid values
+                    pass
+                updated = True
             # Days-of-week for primary interval
             if 'days' in payload:
                 if isinstance(payload['days'], list):

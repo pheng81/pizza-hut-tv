@@ -889,6 +889,12 @@
     .pl-actions.inline-actions .group.left { justify-self:start; }
     .pl-actions.inline-actions .group.center { justify-self:center; }
     .pl-actions.inline-actions .group.right { justify-self:end; }
+    /* Effect picker */
+    .effect-row { display:flex; align-items:center; gap:6px; margin:6px 0 0; flex-wrap:wrap; }
+    .effect-label { font-size:10px; font-weight:600; letter-spacing:.4px; text-transform:uppercase; color:#555; margin-right:4px; }
+    .effect-btn { height:20px; padding:0 8px; border:1px solid #c4ccd3; background:#fff; color:#222; border-radius:12px; font-size:10px; font-weight:600; cursor:pointer; box-shadow:none; }
+    .effect-btn:hover { background:#f2f4f7; border-color:#bfc6cc; }
+    .effect-btn.active { background:#e2f3ff; border-color:#7fbce4; color:#1168d4; }
     /* Smaller iOS-like switch and hide its text */
     .playlist-row.apple .pl-actions.inline-actions .pl-switch { width:32px; height:16px; font-size:0; position:relative; }
     .playlist-row.apple .pl-actions.inline-actions .pl-switch span { font-size:0; line-height:0; color:transparent; }
@@ -1930,6 +1936,21 @@
     console.log('Current store ID:', currentStoreId);
     // Initialize store search once stores data is available and selection resolved
     try { initStoreSearch(); } catch {}
+
+        // --- Effect setter ---
+        async function setItemEffect(screenId, itemId, effect, btn){
+            try{
+                const body = (effect && effect.length) ? { effect } : { effect: '' };
+                const r = await fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+                const j = await r.json();
+                if(!j || !j.success){ alert('Failed to update effect'); return; }
+                // Update UI active state
+                const row = btn && btn.closest('.effect-row');
+                if(row){ row.querySelectorAll('.effect-btn').forEach(b=> b.classList.toggle('active', b===btn)); }
+                // Refresh preview playlist for this screen
+                try { safeFetchJson(`/playlist/${currentStoreId}/${screenId}`).then(res=>{ const d = res.json||{}; if(res.ok && d.success) updatePreviewPlaylist(screenId, d.playlist||[]); }); } catch {}
+            }catch(e){ console.warn('setItemEffect failed', e); alert('Failed to update effect'); }
+        }
 
         // --- Store Search Setup ---
         function initStoreSearch(){
@@ -3382,6 +3403,13 @@
                                                                                             ${failed ? `<button class=\"delete-pill tiny\" style=\"background:#d35400;border-color:#d35400\" onclick=\"retryItemOnTV('${screenId}','${item.id}',${JSON.stringify(item.file || '')})\">Retry on TV</button>` : ''}
                                                                                             <button class="delete-pill tiny" onclick="deletePlaylistItem('${screenId}','${item.id}')">Delete</button>
                                                                                         </div>
+                                                                                </div>
+                                                                                <div class="effect-row" data-screen="${screenId}" data-item="${item.id}">
+                                                                                    <span class="effect-label">Effect:</span>
+                                                                                    ${[ ['None',''], ['Fade','fade'], ['Slide L','slide-l'], ['Slide R','slide-r'], ['Zoom In','zoom-in'], ['Zoom Out','zoom-out'] ].map(([label,val])=>{
+                                                                                        const active = (String(item.effect||'')===val) || (!item.effect && val==='');
+                                                                                        return `<button type="button" class="effect-btn ${active?'active':''}" data-effect="${val}" onclick="setItemEffect('${screenId}','${item.id}','${val}', this)">${label}</button>`;
+                                                                                    }).join('')}
                                                                                 </div>
                                                                                 <div class="schedule-windows" id="sched-${screenId}-${item.id}">${renderScheduleWindows(item, screenId)}</div>
                                                                             </div>

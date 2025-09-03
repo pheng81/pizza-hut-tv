@@ -10,8 +10,15 @@
 		.layer { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#000; }
 		.hidden { display:none; }
 		.media { max-width:100%; max-height:100%; object-fit:contain; }
-		.fade { opacity:0; transition: opacity .25s ease; }
+		/* Base fade */
+		.fade { opacity:0; transition: opacity .28s ease; }
 		.visible { opacity:1; }
+		/* Slide and zoom helpers applied on entering layer */
+		.enter-slide-l { transform: translateX(8%); opacity:0; }
+		.enter-slide-r { transform: translateX(-8%); opacity:0; }
+		.enter-zoom-in { transform: scale(1.08); opacity:0; }
+		.enter-zoom-out { transform: scale(0.92); opacity:0; }
+		.anim { transition: transform .32s ease, opacity .28s ease; will-change: transform, opacity; }
 		#overlay { position:fixed; left:10px; bottom:10px; color:#9aa7ff; font:12px/1.4 system-ui,Segoe UI,Roboto,Ubuntu,Arial; opacity:.22; }
 	</style>
 </head>
@@ -142,6 +149,19 @@
 				v.src=url; try{ v.load(); }catch{}
 			}); }
 
+		function effectClassFor(item){
+			const e = String(item && item.effect || '').toLowerCase();
+			if(!e) return '';
+			switch(e){
+				case 'fade': return 'fadeonly';
+				case 'slide-l': return 'enter-slide-l';
+				case 'slide-r': return 'enter-slide-r';
+				case 'zoom-in': return 'enter-zoom-in';
+				case 'zoom-out': return 'enter-zoom-out';
+				default: return '';
+			}
+		}
+
 		async function showItem(item){
 			const url = mediaUrl(item);
 			if(!url) return;
@@ -149,14 +169,17 @@
 			try{
 				const node = isVid ? await preloadVideo(url) : await preloadImage(url);
 				node.className = 'media';
+				const eff = effectClassFor(item);
+				if(eff){ node.classList.add('anim'); node.classList.add(eff); }
 				if(isVid){ node.loop = true; node.autoplay = true; node.muted = true; node.playsInline = true; }
 				clearNode(back); back.appendChild(node);
 				back.classList.add('fade'); back.classList.remove('hidden');
 				if(isVid){ setTimeout(()=>{ try{ node.play().catch(()=>{});}catch{} }, 0); }
 				requestAnimationFrame(()=>{
 					back.classList.add('visible'); back.classList.remove('fade');
+					if(eff){ node.classList.remove('enter-slide-l','enter-slide-r','enter-zoom-in','enter-zoom-out'); node.style.opacity=''; }
 					front.classList.add('fade'); front.classList.remove('visible');
-					setTimeout(()=>{ front.classList.add('hidden'); front.classList.remove('fade'); swapLayers(); }, 260);
+					setTimeout(()=>{ front.classList.add('hidden'); front.classList.remove('fade'); swapLayers(); }, 300);
 				});
 				try{ sendClientEvent('load_ok', item, null).catch(()=>{}); }catch{}
 			}catch(e){
@@ -168,13 +191,15 @@
 							const alt = `${ORIGIN}/media/${rel}`;
 							const node = await preloadVideo(alt);
 							node.className = 'media'; node.loop = true; node.autoplay = true; node.muted = true; node.playsInline = true;
+							const eff = effectClassFor(item); if(eff){ node.classList.add('anim'); node.classList.add(eff); }
 							clearNode(back); back.appendChild(node);
 							back.classList.add('fade'); back.classList.remove('hidden');
 							setTimeout(()=>{ try{ node.play().catch(()=>{});}catch{} }, 0);
 							requestAnimationFrame(()=>{
 								back.classList.add('visible'); back.classList.remove('fade');
+								if(eff){ node.classList.remove('enter-slide-l','enter-slide-r','enter-zoom-in','enter-zoom-out'); node.style.opacity=''; }
 								front.classList.add('fade'); front.classList.remove('visible');
-								setTimeout(()=>{ front.classList.add('hidden'); front.classList.remove('fade'); swapLayers(); }, 260);
+								setTimeout(()=>{ front.classList.add('hidden'); front.classList.remove('fade'); swapLayers(); }, 300);
 							});
 							try{ sendClientEvent('load_ok', item, null).catch(()=>{}); }catch{}
 							return;
