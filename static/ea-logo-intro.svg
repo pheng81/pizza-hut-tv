@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated intro animation: flowing-gradient reveal + gentle zoom -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 320" width="100%" height="100%"
+     xmlns:xlink="http://www.w3.org/1999/xlink">
+  <defs>
+    <!-- Store the original logo's vector shapes as a definition -->
+    <g id="logoShape">
+
+  <title id="title">Everyday Advertise</title>
+  <desc id="desc">Brand wordmark for Everyday Advertise with a pink-to-blue gradient fill.</desc>
+  <defs>
+    <linearGradient id="eaGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ff2d84"/>
+      <stop offset="50%" stop-color="#b544ff"/>
+      <stop offset="100%" stop-color="#3c6cff"/>
+    </linearGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="4" result="blur"/>
+      <feOffset dx="0" dy="2" result="offset"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.25"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="100%" height="100%" fill="none"/>
+
+  <g transform="translate(32, 160)" style="filter:url(#softShadow)">
+    <text x="0" y="0" fill="url(#eaGrad)"
+          font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+          font-weight="800" font-size="160" letter-spacing="1">
+      <tspan>Everyday</tspan>
+      <tspan x="0" dy="120">Advertise</tspan>
+    </text>
+  </g>
+
+    </g>
+
+    <!-- Convert any internal colors to solid white when used inside a mask -->
+    <filter id="toWhite" color-interpolation-filters="sRGB">
+      <feColorMatrix type="matrix"
+        values="0 0 0 0 1
+                0 0 0 0 1
+                0 0 0 0 1
+                0 0 0 1 0" />
+    </filter>
+
+    <!-- Mask of the logo silhouette (pure white) -->
+    <mask id="logoMask" maskUnits="objectBoundingBox">
+      <g filter="url(#toWhite)">
+        <use xlink:href="#logoShape"/>
+      </g>
+    </mask>
+
+    <!-- Moving wipe used as a clip-path (for reveal) -->
+    <clipPath id="wipeClip" clipPathUnits="objectBoundingBox">
+      <!-- Start slightly off-canvas, sweep across -->
+      <rect id="wipeRect" x="-0.1" y="-0.05" width="0.0" height="1.1">
+        <animate attributeName="x" values="-0.1;0;0" dur="1.2s" fill="freeze" begin="0.2s" />
+        <animate attributeName="width" values="0;1.2;1.2" dur="1.2s" fill="freeze" begin="0.2s" />
+      </rect>
+    </clipPath>
+
+    <!-- Flowing multi-stop gradient (animated transform) -->
+    <linearGradient id="flowGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%"  stop-color="#ff6a00" />
+      <stop offset="25%" stop-color="#ff00d4" />
+      <stop offset="50%" stop-color="#6a00ff" />
+      <stop offset="75%" stop-color="#00d4ff" />
+      <stop offset="100%" stop-color="#00ff88" />
+      <animateTransform attributeName="gradientTransform" type="translate"
+                        from="-1 0" to="1 0" dur="3.2s" repeatCount="indefinite" />
+    </linearGradient>
+
+    <!-- Subtle background glow behind the logo -->
+    <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+      </feMerge>
+    </filter>
+
+    <!-- Keyframes via CSS for fade + zoom -->
+    <style>
+      @keyframes fadeZoom {
+        0%   { opacity: 0; transform: scale(0.90); }
+        60%  { opacity: 1; transform: scale(1.02); }
+        100% { opacity: 1; transform: scale(1.00); }
+      }
+      /* Optional subtle yoyo shimmer on gradient saturation */
+      @keyframes pulse { 
+        0%,100% { filter: saturate(1); }
+        50%     { filter: saturate(1.2); }
+      }
+      .intro { animation: fadeZoom 1.0s ease-out forwards; transform-origin: 50% 50%; }
+      .flow  { animation: pulse 3.2s ease-in-out infinite; }
+    </style>
+  </defs>
+
+  <!-- Background glow layer (masked to logo) -->
+  <g class="intro" opacity="0.0">
+    <rect width="100%" height="100%" fill="url(#flowGrad)" filter="url(#softGlow)"
+          mask="url(#logoMask)">
+      <animate attributeName="opacity" values="0;0.6;0.2" dur="1.4s" fill="freeze" begin="0.1s" />
+    </rect>
+  </g>
+
+  <!-- Main logo fill with flowing gradient, revealed by sweeping clip -->
+  <g class="intro flow">
+    <rect width="100%" height="100%" fill="url(#flowGrad)"
+          mask="url(#logoMask)" clip-path="url(#wipeClip)" />
+  </g>
+</svg>

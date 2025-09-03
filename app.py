@@ -322,9 +322,77 @@ if OAuth is not None:
 
 @app.route('/login', methods=['GET','POST'])
 def login():
-    # Default values to avoid UnboundLocalError on GET
-    u = None
-    p = None
+    """Sign-in form with three auth paths:
+    1) Admin/basic via env vars
+    2) Local SQLite users
+    3) OAuth buttons (Google/Microsoft) rendered when configured
+    """
+    if request.method == 'POST':
+        u = (request.form.get('username') or '').strip().lower()
+        p = request.form.get('password') or ''
+
+        # 1) Admin/basic auth via env vars
+        try:
+            if _check_basic_auth(u, p):
+                session['user'] = {'name': u, 'method': 'password'}
+                nxt = request.args.get('next')
+                if not nxt:
+                    # Prefer api subdomain for the dashboard after login
+                    try:
+                        host = request.host or ''
+                        if not host.startswith('api.') and 'everydayadvertise.com' in host:
+                            return redirect('https://api.everydayadvertise.com/dashboard')
+                    except Exception:
+                        pass
+                    nxt = url_for('dashboard')
+                return redirect(nxt)
+        except Exception:
+            # Fall through to local user check
+            pass
+
+        # 2) Local users (SQLite)
+        try:
+            db = get_db()
+            row = db.execute(
+                'SELECT username, password_hash FROM users WHERE username = ?',
+                (u,)
+            ).fetchone()
+            if row and check_password_hash(row['password_hash'], p or ''):
+                session['user'] = {'name': row['username'], 'method': 'local'}
+                # Ensure this user has a pairing code
+                try:
+                    _ensure_user_link_code(row['username'])
+                except Exception:
+                    pass
+                nxt = request.args.get('next')
+                if not nxt:
+                    try:
+                        host = request.host or ''
+                        if not host.startswith('api.') and 'everydayadvertise.com' in host:
+                            return redirect('https://api.everydayadvertise.com/dashboard')
+                    except Exception:
+                        pass
+                    nxt = url_for('dashboard')
+                return redirect(nxt)
+        except Exception as _e:
+            logging.warning('Local user login failed: %s', _e)
+
+        flash('Invalid username or password', 'error')
+
+    # GET or failed POST -> render login page
+    try:
+        google_enabled = bool(oauth and getattr(oauth, 'google', None))
+        microsoft_enabled = bool(oauth and getattr(oauth, 'microsoft', None))
+    except Exception:
+        google_enabled = False
+        microsoft_enabled = False
+
+    resp = make_response(render_template('login.html', google_enabled=google_enabled, microsoft_enabled=microsoft_enabled, build_stamp=BUILD_STAMP))
+    try:
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    except Exception:
+        pass
+    return resp
 
 # ---- Import media from third-party share links (Dropbox / Google Drive / OneDrive) ----
 @app.route('/import_from_url', methods=['POST'])
@@ -496,71 +564,6 @@ def import_from_url():
     except Exception as e:
         logging.exception('import_from_url error: %s', e)
         return jsonify({'success': False, 'error': str(e)}), 500
-    if request.method == 'POST':
-        u = request.form.get('username')
-        p = request.form.get('password')
-        # 1) Admin/basic auth via env vars
-        try:
-            if _check_basic_auth(u, p):
-                session['user'] = {'name': (u or '').strip().lower(), 'method': 'password'}
-                nxt = request.args.get('next')
-                if not nxt:
-                    # Prefer api subdomain for the dashboard after login
-                    try:
-                        host = request.host or ''
-                        if not host.startswith('api.') and 'everydayadvertise.com' in host:
-                            return redirect('https://api.everydayadvertise.com/dashboard')
-                    except Exception:
-                        pass
-                    nxt = url_for('dashboard')
-                return redirect(nxt)
-        except Exception:
-            # Fall through to local user check
-            pass
-
-        # 2) Local users (SQLite)
-        try:
-            db = get_db()
-            row = db.execute(
-                'SELECT username, password_hash FROM users WHERE username = ?',
-                (((u or '').strip().lower(),))
-            ).fetchone()
-            if row and check_password_hash(row['password_hash'], p or ''):
-                session['user'] = {'name': row['username'], 'method': 'local'}
-                # Ensure this user has a pairing code
-                try:
-                    _ensure_user_link_code(row['username'])
-                except Exception:
-                    pass
-                nxt = request.args.get('next')
-                if not nxt:
-                    try:
-                        host = request.host or ''
-                        if not host.startswith('api.') and 'everydayadvertise.com' in host:
-                            return redirect('https://api.everydayadvertise.com/dashboard')
-                    except Exception:
-                        pass
-                    nxt = url_for('dashboard')
-                return redirect(nxt)
-        except Exception as _e:
-            logging.warning('Local user login failed: %s', _e)
-
-        flash('Invalid username or password', 'error')
-
-    # If Google/Microsoft configured, show buttons
-    try:
-        google_enabled = bool(oauth and getattr(oauth, 'google', None))
-        microsoft_enabled = bool(oauth and getattr(oauth, 'microsoft', None))
-    except Exception:
-        google_enabled = False
-        microsoft_enabled = False
-
-    resp = make_response(render_template('login.html', google_enabled=google_enabled, microsoft_enabled=microsoft_enabled, build_stamp=BUILD_STAMP))
-    try:
-        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-    except Exception:
-        pass
-    return resp
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
@@ -3197,16 +3200,16 @@ def webplayer_index():
 
 @app.route('/webplayer/browse')
 def webplayer_browse():
-    """Step 2: After entering code, browse stores and screens.
-    Requires a valid 4-digit code in ?code=XXXX. The page fetches
-    /api/stores_by_code/<code> and renders a list; clicking a screen
-    opens the player.
+    """Step 2: After entering TV code and store code, show screens for that store.
+    Query: ?code=NNNN&store_id=STORE
+    The page fetches /api/stores_by_code/<code> then lists screens of store_id.
     """
     code = (request.args.get('code') or '').strip()
-    if not (len(code) == 4 and code.isdigit()):
+    store_id = (request.args.get('store_id') or '').strip()
+    if not (len(code) == 4 and code.isdigit()) or not store_id:
         return redirect(url_for('webplayer_index'))
     try:
-        return render_template('webplayer/browse.html', code=code)
+        return render_template('webplayer/browse.html', code=code, store_id=store_id)
     except Exception as e:
         return make_response(f"Webplayer browse unavailable: {e}", 500)
 
