@@ -111,7 +111,7 @@
 				if(orientationMode === 'vertical'){
 					const vw = window.innerWidth || document.documentElement.clientWidth || 1920;
 					const vh = window.innerHeight || document.documentElement.clientHeight || 1080;
-					const s = Math.max(0.01, Math.min(5, vh / Math.max(vw,1)));
+					const s = Math.max(0.01, Math.min(5, Math.min(vw/Math.max(vh,1), vh/Math.max(vw,1))));
 					stage.style.transform = `rotate(90deg) scale(${s.toFixed(5)})`;
 				} else {
 					stage.style.transform = '';
