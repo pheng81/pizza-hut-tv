@@ -44,5 +44,6 @@
   <footer>
     Build {{ build_stamp or '' }}{% if git_commit %} • {{ git_commit }}{% endif %}
   </footer>
+  {% include '_cookie_consent.html' %}
 </body>
 </html>

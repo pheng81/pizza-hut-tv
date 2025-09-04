@@ -223,10 +223,78 @@ except Exception:
                 with smtplib.SMTP(host, port, timeout=15) as server:
                     server.login(user, pwd)
                     server.send_message(msg)
+            logging.info('send_email success to=%s via=%s:%s from=%s', to_addr, host, port, from_addr)
             return True
         except Exception as e:
             logging.warning('send_email failed: %s', e)
             return False
+
+# Unconditional email helpers (override definitions above if they were in an exception path)
+def _mail_configured():
+    return bool(os.environ.get('SMTP_HOST') and os.environ.get('SMTP_PORT') and os.environ.get('SMTP_USERNAME') and os.environ.get('SMTP_PASSWORD'))
+
+def send_email(to_addr: str, subject: str, body: str) -> bool:
+    """Send a plain-text email using SMTP settings from env.
+
+    Env vars:
+      - SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM, SMTP_USE_TLS
+      - SMTP_TIMEOUT (optional, seconds; default 12)
+    """
+    phase = 'init'
+    try:
+        host = os.environ.get('SMTP_HOST')
+        port = int(os.environ.get('SMTP_PORT') or '0')
+        user = os.environ.get('SMTP_USERNAME')
+        pwd = os.environ.get('SMTP_PASSWORD')
+        use_tls = str(os.environ.get('SMTP_USE_TLS') or 'true').lower() != 'false'
+        timeout = float(os.environ.get('SMTP_TIMEOUT') or 12)
+        from_addr = os.environ.get('SMTP_FROM') or (user if user and '@' in user else f"no-reply@{(request.host or 'everydayadvertise.com').split(':')[0] if has_request_context() else 'everydayadvertise.com'}")
+        if not (host and port and user and pwd and to_addr):
+            raise RuntimeError('SMTP not fully configured')
+        msg = EmailMessage()
+        msg['Subject'] = subject
+        msg['From'] = from_addr
+        msg['To'] = to_addr
+        msg.set_content(body)
+
+        t0 = time.time()
+        if use_tls:
+            context = ssl.create_default_context()
+            phase = 'connect'
+            with smtplib.SMTP(host, port, timeout=timeout) as server:
+                try:
+                    server.ehlo()
+                except Exception:
+                    pass
+                phase = 'starttls'
+                server.starttls(context=context)
+                try:
+                    server.ehlo()
+                except Exception:
+                    pass
+                phase = 'login'
+                server.login(user, pwd)
+                phase = 'send'
+                server.send_message(msg)
+        else:
+            phase = 'connect'
+            with smtplib.SMTP(host, port, timeout=timeout) as server:
+                phase = 'login'
+                server.login(user, pwd)
+                phase = 'send'
+                server.send_message(msg)
+        dt = (time.time() - t0) * 1000.0
+        logging.info('send_email success to=%s via=%s:%s tls=%s from=%s in %.0fms', to_addr, host, port, bool(use_tls), from_addr, dt)
+        return True
+    except smtplib.SMTPAuthenticationError as e:
+        logging.warning('send_email auth failed at phase=%s: %s', phase, e)
+        return False
+    except (smtplib.SMTPException, TimeoutError, OSError) as e:
+        logging.warning('send_email smtp error at phase=%s: %s', phase, e)
+        return False
+    except Exception as e:
+        logging.warning('send_email failed at phase=%s: %s', phase, e)
+        return False
 
     def _issue_verification_token(username: str) -> str:
         token = uuid.uuid4().hex + uuid.uuid4().hex
@@ -306,17 +374,25 @@ if OAuth is not None:
                 server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
                 client_kwargs={'scope': 'openid email profile'},
             )
+            try:
+                logging.debug('OAuth: Google provider registered')
+            except Exception:
+                pass
         ms_client_id = os.environ.get('MICROSOFT_CLIENT_ID')
         ms_client_secret = os.environ.get('MICROSOFT_CLIENT_SECRET')
+        ms_tenant = os.environ.get('MICROSOFT_TENANT_ID') or 'common'
         if ms_client_id and ms_client_secret:
             oauth.register(
                 name='microsoft',
                 client_id=ms_client_id,
                 client_secret=ms_client_secret,
-                server_metadata_url='https://login.microsoftonline.com/common/v2.0/.well-known/openid-configuration',
-                userinfo_endpoint='https://graph.microsoft.com/oidc/userinfo',
+                server_metadata_url=f'https://login.microsoftonline.com/{ms_tenant}/v2.0/.well-known/openid-configuration',
                 client_kwargs={'scope': 'openid email profile offline_access'},
             )
+            try:
+                logging.debug('OAuth: Microsoft provider registered')
+            except Exception:
+                pass
     except Exception as _e:
         logging.warning('OAuth init failed: %s', _e)
 
@@ -381,8 +457,10 @@ def login():
 
     # GET or failed POST -> render login page
     try:
-        google_enabled = bool(oauth and getattr(oauth, 'google', None))
-        microsoft_enabled = bool(oauth and getattr(oauth, 'microsoft', None))
+        google_env = bool(os.environ.get('GOOGLE_CLIENT_ID') and os.environ.get('GOOGLE_CLIENT_SECRET'))
+        ms_env = bool(os.environ.get('MICROSOFT_CLIENT_ID') and os.environ.get('MICROSOFT_CLIENT_SECRET'))
+        google_enabled = bool(oauth and getattr(oauth, 'google', None)) or google_env
+        microsoft_enabled = bool(oauth and getattr(oauth, 'microsoft', None)) or ms_env
     except Exception:
         google_enabled = False
         microsoft_enabled = False
@@ -393,6 +471,112 @@ def login():
     except Exception:
         pass
     return resp
+
+# ---------------------- Password reset (request + confirm) ----------------------
+def _issue_password_reset_token(username: str) -> Optional[str]:
+    try:
+        token = uuid.uuid4().hex + uuid.uuid4().hex
+        db = get_db()
+        # Reuse verify_token column to avoid schema change; store a time prefix to distinguish
+        stamped = f"reset:{int(time.time())}:{token}"
+        db.execute('UPDATE users SET verify_token = ?, verify_sent_at = ? WHERE username = ?', (stamped, int(time.time()), (username or '').strip().lower()))
+        db.commit()
+        return token
+    except Exception as e:
+        logging.warning('issue_password_reset_token failed: %s', e)
+        return None
+
+def _parse_reset_token_row(row) -> bool:
+    try:
+        vt = row['verify_token'] or ''
+        if not vt.startswith('reset:'): return False
+        parts = vt.split(':', 2)
+        if len(parts) != 3: return False
+        ts = int(parts[1] or '0')
+        # Valid for 1 hour
+        return (time.time() - ts) < 3600
+    except Exception:
+        return False
+
+@app.route('/forgot', methods=['GET','POST'])
+def forgot_password():
+    if request.method == 'POST':
+        email = (request.form.get('email') or '').strip().lower()
+        if not email:
+            flash('Please enter your email', 'error')
+            # Include an error flag in the redirect so the message shows even if cookies are scoped
+            return redirect(url_for('forgot_password', err=1))
+        try:
+            logging.info('forgot_password requested for %s', email)
+            db = get_db()
+            row = db.execute('SELECT username FROM users WHERE username = ?', (email,)).fetchone()
+            if not row:
+                # Do not reveal existence; show generic message
+                flash('If that email exists, we sent a reset link.', 'success')
+                return redirect(url_for('forgot_password', ok=1))
+            token = _issue_password_reset_token(email)
+            if not token:
+                flash('Could not start password reset. Try again later.', 'error')
+                return redirect(url_for('forgot_password', err=1))
+            try:
+                reset_url = url_for('reset_password', token=token, _external=True, _scheme='https')
+            except Exception:
+                host = 'https://api.everydayadvertise.com'
+                reset_url = f"{host}/reset/{token}"
+            body = f"We received a request to reset your password.\n\nClick this link to set a new password:\n{reset_url}\n\nIf you didn't request this, you can ignore this email. The link expires in 1 hour."
+            subject = 'Reset your EverydayAdvertise password'
+            if _mail_configured():
+                logging.info('Attempting SMTP send to %s (host=%s)', email, os.environ.get('SMTP_HOST'))
+                ok = send_email(email, subject, body)
+                if ok:
+                    flash('If that email exists, we sent a reset link.', 'success')
+                    return redirect(url_for('forgot_password', ok=1))
+                else:
+                    flash('Failed to send email. Try again later.', 'error')
+                    return redirect(url_for('forgot_password', err=1))
+            else:
+                logging.warning('SMTP not configured; password reset URL: %s', reset_url)
+                flash('If that email exists, we sent a reset link.', 'success')
+                return redirect(url_for('forgot_password', ok=1))
+        except Exception as e:
+            logging.warning('forgot_password error: %s', e)
+            flash('Could not process request.', 'error')
+            return redirect(url_for('forgot_password', err=1))
+    # GET
+    return render_template('forgot.html')
+
+@app.route('/reset/<token>', methods=['GET','POST'])
+def reset_password(token: str):
+    tok = (token or '').strip()
+    if not tok:
+        flash('Invalid reset link', 'error')
+        return redirect(url_for('login'))
+    try:
+        db = get_db()
+        row = db.execute('SELECT username, verify_token FROM users WHERE verify_token LIKE ?', (f'reset:%:{tok}',)).fetchone()
+        if not row or not _parse_reset_token_row(row):
+            flash('Reset link is invalid or expired', 'error')
+            return redirect(url_for('login'))
+        if request.method == 'POST':
+            pwd = request.form.get('password') or ''
+            if len(pwd) < 6:
+                flash('Password must be at least 6 characters', 'error')
+                return render_template('reset.html', token=tok)
+            try:
+                db.execute('UPDATE users SET password_hash = ?, verify_token = NULL WHERE username = ?', (generate_password_hash(pwd), row['username']))
+                db.commit()
+                flash('Password updated. You can now sign in.', 'success')
+                return redirect(url_for('login'))
+            except Exception as e:
+                logging.warning('reset_password update failed: %s', e)
+                flash('Could not update password', 'error')
+                return render_template('reset.html', token=tok)
+        # GET -> show form
+        return render_template('reset.html', token=tok)
+    except Exception as e:
+        logging.warning('reset_password error: %s', e)
+        flash('Reset link not valid', 'error')
+        return redirect(url_for('login'))
 
 # ---- Import media from third-party share links (Dropbox / Google Drive / OneDrive) ----
 @app.route('/import_from_url', methods=['POST'])
@@ -603,8 +787,10 @@ def signup():
                 flash('Username already exists', 'error')
     # Mirror login page behavior: expose whether Google OAuth is enabled
     try:
-        google_enabled = bool(oauth and getattr(oauth, 'google', None))
-        microsoft_enabled = bool(oauth and getattr(oauth, 'microsoft', None))
+        google_env = bool(os.environ.get('GOOGLE_CLIENT_ID') and os.environ.get('GOOGLE_CLIENT_SECRET'))
+        ms_env = bool(os.environ.get('MICROSOFT_CLIENT_ID') and os.environ.get('MICROSOFT_CLIENT_SECRET'))
+        google_enabled = bool(oauth and getattr(oauth, 'google', None)) or google_env
+        microsoft_enabled = bool(oauth and getattr(oauth, 'microsoft', None)) or ms_env
     except Exception:
         google_enabled = False
         microsoft_enabled = False
@@ -668,23 +854,81 @@ def verify_email(token: str):
 
 @app.route('/auth/google')
 def auth_google():
-    if not oauth or not getattr(oauth, 'google', None):
-        flash('Google Sign-In not configured', 'error')
+    # Ensure the Google client exists; lazily register if env vars are present
+    try:
+        client = None
+        if oauth:
+            if not getattr(oauth, 'google', None):
+                gid = os.environ.get('GOOGLE_CLIENT_ID')
+                gsecret = os.environ.get('GOOGLE_CLIENT_SECRET')
+                if gid and gsecret:
+                    try:
+                        oauth.register(
+                            name='google',
+                            client_id=gid,
+                            client_secret=gsecret,
+                            server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+                            client_kwargs={'scope': 'openid email profile'},
+                        )
+                        logging.info('OAuth: Google provider lazily registered in route')
+                    except Exception as _e:
+                        logging.warning('OAuth: google (re)register failed: %s', _e)
+            try:
+                client = oauth.create_client('google')
+            except Exception:
+                client = None
+
+        if not client:
+            flash('Google Sign-In not configured', 'error')
+            return redirect(url_for('login'))
+
+        try:
+            redirect_uri = url_for('auth_google_callback', _external=True)
+            # If a proxy ever yields http, prefer https externally
+            if redirect_uri.startswith('http://'):
+                redirect_uri = redirect_uri.replace('http://', 'https://', 1)
+        except Exception:
+            redirect_uri = 'https://api.everydayadvertise.com/auth/google/callback'
+
+        return client.authorize_redirect(redirect_uri)
+    except Exception as e:
+        logging.warning('Google auth init failed: %s', e)
+        flash('Google Sign-In not available', 'error')
         return redirect(url_for('login'))
-    redirect_uri = url_for('auth_google_callback', _external=True)
-    return oauth.google.authorize_redirect(redirect_uri)
 
 @app.route('/auth/google/callback')
 def auth_google_callback():
-    if not oauth or not getattr(oauth, 'google', None):
+    # Ensure google client exists in case of lazy registration need
+    try:
+        if oauth and not getattr(oauth, 'google', None):
+            gid = os.environ.get('GOOGLE_CLIENT_ID')
+            gsecret = os.environ.get('GOOGLE_CLIENT_SECRET')
+            if gid and gsecret:
+                try:
+                    oauth.register(
+                        name='google',
+                        client_id=gid,
+                        client_secret=gsecret,
+                        server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+                        client_kwargs={'scope': 'openid email profile'},
+                    )
+                    logging.info('OAuth: Google provider lazily registered in callback')
+                except Exception as _e:
+                    logging.warning('OAuth: google lazy register failed in callback: %s', _e)
+        client = oauth.create_client('google') if oauth else None
+        if not client:
+            flash('Google Sign-In not configured', 'error')
+            return redirect(url_for('login'))
+    except Exception as _e:
+        logging.warning('Google client prep failed: %s', _e)
         flash('Google Sign-In not configured', 'error')
         return redirect(url_for('login'))
     try:
-        token = oauth.google.authorize_access_token()
+        token = client.authorize_access_token()
         userinfo = token.get('userinfo') or {}
         # Some providers put userinfo under separate call; fallback
         if not userinfo:
-            resp = oauth.google.get('userinfo')
+            resp = client.get('userinfo')
             userinfo = resp.json() if resp else {}
         email = userinfo.get('email')
         if not email:
@@ -736,28 +980,184 @@ def auth_google_callback():
 
 @app.route('/auth/microsoft')
 def auth_microsoft():
-    if not oauth or not getattr(oauth, 'microsoft', None):
+    # Ensure OAuth exists
+    global oauth
+    if oauth is None and OAuth is not None:
+        try:
+            oauth = OAuth(app)
+            logging.info('OAuth: instantiated in route')
+        except Exception as _e:
+            logging.warning('OAuth: instantiate failed: %s', _e)
+    # Attempt (re)registration based on env
+    ms_client_id = os.environ.get('MICROSOFT_CLIENT_ID')
+    ms_client_secret = os.environ.get('MICROSOFT_CLIENT_SECRET')
+    # Resolve tenant locally to avoid relying on module init state
+    ms_tenant = os.environ.get('MICROSOFT_TENANT_ID') or 'common'
+    try:
+        if oauth and ms_client_id and ms_client_secret:
+            try:
+                # Register if not present
+                client = None
+                try:
+                    client = oauth.create_client('microsoft')
+                except Exception:
+                    client = None
+                if client is None:
+                    oauth.register(
+                        name='microsoft',
+                        client_id=ms_client_id,
+                        client_secret=ms_client_secret,
+                        server_metadata_url=f'https://login.microsoftonline.com/{ms_tenant}/v2.0/.well-known/openid-configuration',
+                        client_kwargs={'scope': 'openid email profile offline_access'},
+                    )
+                    logging.info('OAuth: Microsoft provider (re)registered in route')
+            except Exception as _e:
+                logging.warning('OAuth: microsoft (re)register failed: %s', _e)
+    except Exception:
+        pass
+    # Acquire client and proceed
+    try:
+        client = oauth.create_client('microsoft') if oauth else None
+    except Exception:
+        client = None
+    if not client:
+        # Fallback: construct authorize URL manually if env present
+        if ms_client_id:
+            try:
+                redirect_uri = url_for('auth_microsoft_callback', _external=True)
+                if redirect_uri.startswith('http://'):
+                    redirect_uri = redirect_uri.replace('http://', 'https://', 1)
+            except Exception:
+                redirect_uri = 'https://api.everydayadvertise.com/auth/microsoft/callback'
+            params = {
+                'client_id': ms_client_id,
+                'response_type': 'code',
+                'redirect_uri': redirect_uri,
+                'response_mode': 'query',
+                'scope': 'openid email profile offline_access',
+            }
+            try:
+                import urllib.parse as _up
+                tenant_for_auth = os.environ.get('MICROSOFT_TENANT_ID') or 'common'
+                auth_url = f'https://login.microsoftonline.com/{tenant_for_auth}/oauth2/v2.0/authorize?' + _up.urlencode(params)
+                logging.warning('OAuth: redirecting via manual Microsoft authorize URL (no client)')
+                return redirect(auth_url)
+            except Exception as _e:
+                logging.warning('OAuth: manual authorize URL build failed: %s', _e)
         flash('Microsoft Sign-In not configured', 'error')
         return redirect(url_for('login'))
-    redirect_uri = url_for('auth_microsoft_callback', _external=True)
-    return oauth.microsoft.authorize_redirect(redirect_uri)
+    # Build a https-safe redirect URI (proxy may yield http)
+    try:
+        redirect_uri = url_for('auth_microsoft_callback', _external=True)
+        if redirect_uri.startswith('http://'):
+            redirect_uri = redirect_uri.replace('http://', 'https://', 1)
+    except Exception:
+        redirect_uri = 'https://api.everydayadvertise.com/auth/microsoft/callback'
+    return client.authorize_redirect(redirect_uri)
 
 @app.route('/auth/microsoft/callback')
 def auth_microsoft_callback():
-    if not oauth or not getattr(oauth, 'microsoft', None):
-        flash('Microsoft Sign-In not configured', 'error')
-        return redirect(url_for('login'))
+    # Ensure client exists (lazy register if needed)
+    global oauth
     try:
-        token = oauth.microsoft.authorize_access_token()
-        # Try OIDC userinfo endpoint first
-        userinfo = {}
+        if (oauth is None) and (OAuth is not None):
+            oauth = OAuth(app)
+            logging.warning('OAuth: instantiated in callback')
+        if oauth and not getattr(oauth, 'microsoft', None):
+            ms_client_id = os.environ.get('MICROSOFT_CLIENT_ID')
+            ms_client_secret = os.environ.get('MICROSOFT_CLIENT_SECRET')
+            if ms_client_id and ms_client_secret:
+                try:
+                    ms_tenant = os.environ.get('MICROSOFT_TENANT_ID') or 'common'
+                    oauth.register(
+                        name='microsoft',
+                        client_id=ms_client_id,
+                        client_secret=ms_client_secret,
+                        server_metadata_url=f'https://login.microsoftonline.com/{ms_tenant}/v2.0/.well-known/openid-configuration',
+                        client_kwargs={'scope': 'openid email profile offline_access'},
+                    )
+                    logging.warning('OAuth: Microsoft provider lazily registered in callback')
+                except Exception as _e:
+                    logging.error('OAuth: lazy register in callback failed: %s', _e)
+    except Exception as _e:
+        logging.error('OAuth: callback init failed: %s', _e)
+    # Prefer a client from registry rather than attribute access
+    client = None
+    try:
+        client = oauth.create_client('microsoft') if oauth else None
+    except Exception:
+        client = None
+
+    # Helper: manual token exchange + userinfo when client is missing or ID token validation fails
+    def _manual_token_and_userinfo():
         try:
-            resp = oauth.microsoft.get('userinfo')
-            if resp is not None:
-                userinfo = resp.json() or {}
+            import requests as _rq
+            code = request.args.get('code')
+            ms_client_id = os.environ.get('MICROSOFT_CLIENT_ID')
+            ms_client_secret = os.environ.get('MICROSOFT_CLIENT_SECRET')
+            ms_tenant = os.environ.get('MICROSOFT_TENANT_ID') or 'common'
+            if not (code and ms_client_id and ms_client_secret):
+                return None, None
+            try:
+                redirect_uri = url_for('auth_microsoft_callback', _external=True)
+            except Exception:
+                redirect_uri = 'https://api.everydayadvertise.com/auth/microsoft/callback'
+            data = {
+                'client_id': ms_client_id,
+                'client_secret': ms_client_secret,
+                'grant_type': 'authorization_code',
+                'code': code,
+                'redirect_uri': redirect_uri,
+            }
+            tresp = _rq.post(f'https://login.microsoftonline.com/{ms_tenant}/oauth2/v2.0/token', data=data, timeout=12)
+            try:
+                tj = tresp.json() or {}
+            except Exception:
+                tj = {}
+            access_token = tj.get('access_token')
+            if not access_token:
+                logging.error('Microsoft fallback token exchange failed: status=%s body=%s', tresp.status_code, tresp.text[:500])
+                return None, None
+            # Fetch OIDC userinfo
+            userinfo = {}
+            try:
+                uresp = _rq.get('https://graph.microsoft.com/oidc/userinfo', headers={'Authorization': f'Bearer {access_token}'}, timeout=10)
+                if 200 <= uresp.status_code < 300:
+                    userinfo = uresp.json() or {}
+            except Exception as _e:
+                logging.warning('Microsoft fallback userinfo error: %s', _e)
+            if not userinfo:
+                return None, None
+            return tj, userinfo
+        except Exception as _e:
+            logging.error('Microsoft manual flow exception: %s', _e)
+            return None, None
+
+    # Acquire token and userinfo
+    token = None
+    userinfo = {}
+    # Prefer manual token exchange first to avoid issuer validation issues on /common
+    token, userinfo = _manual_token_and_userinfo()
+    if token is None:
+        # Fallback to Authlib's standard flow only if manual exchange failed
+        if not client:
+            flash('Microsoft login failed', 'error')
+            return redirect(url_for('login'))
+        try:
+            token = client.authorize_access_token()
+        except Exception as e:
+            logging.error('Microsoft authorize_access_token failed: %s', e)
+            flash('Microsoft login failed', 'error')
+            return redirect(url_for('login'))
+        # If we got here via Authlib, try to fetch userinfo via the provider
+        try:
+            if not userinfo and client:
+                resp = client.get('userinfo')
+                if resp is not None:
+                    userinfo = resp.json() or {}
         except Exception:
             userinfo = {}
-        # Fallback to id_token claims
+        # Fallback to id_token claims (Authlib path only)
         if not userinfo:
             userinfo = token.get('userinfo') or token.get('id_token_claims') or {}
         email = userinfo.get('email') or userinfo.get('preferred_username')
@@ -798,10 +1198,49 @@ def auth_microsoft_callback():
                 pass
             nxt = url_for('dashboard')
         return redirect(nxt)
-    except Exception as e:
-        logging.exception('Microsoft auth failed: %s', e)
-        flash('Microsoft login failed', 'error')
-        return redirect(url_for('login'))
+    else:
+        # Manual-first path succeeded: set session, upsert user, and redirect
+        try:
+            email = (userinfo.get('email') or userinfo.get('preferred_username') or '').strip().lower()
+            name = userinfo.get('name') or (email.split('@')[0] if email else None)
+        except Exception:
+            email = None
+            name = None
+        if not email:
+            logging.error('Microsoft manual flow: missing email in userinfo: %s', userinfo)
+            flash('Microsoft login failed: no email', 'error')
+            return redirect(url_for('login'))
+        session['user'] = {'name': name or email, 'email': email, 'method': 'microsoft'}
+        try:
+            db = get_db()
+            uname = email
+            if uname:
+                try:
+                    db.execute('INSERT OR IGNORE INTO users (username, full_name) VALUES (?, ?)', (uname, name or uname))
+                except Exception:
+                    try:
+                        db.execute('INSERT OR IGNORE INTO users (username) VALUES (?)', (uname,))
+                    except Exception:
+                        pass
+                db.commit()
+                try:
+                    db.execute('UPDATE users SET email_verified = 1 WHERE username = ?', (uname,))
+                    db.commit()
+                except Exception:
+                    pass
+                _ensure_user_link_code(uname)
+        except Exception as _e:
+            logging.warning('Microsoft manual flow user upsert failed: %s', _e)
+        nxt = request.args.get('next')
+        if not nxt:
+            try:
+                host = request.host or ''
+                if not host.startswith('api.') and 'everydayadvertise.com' in host:
+                    return redirect('https://api.everydayadvertise.com/dashboard')
+            except Exception:
+                pass
+            nxt = url_for('dashboard')
+        return redirect(nxt)
 
 @app.route('/healthz')
 def _healthz():
@@ -811,6 +1250,43 @@ def _healthz():
         'commit': GIT_COMMIT,
         'r2_enabled': r2_enabled(),
         'media_base_url': os.environ.get('MEDIA_BASE_URL')
+    })
+
+@app.route('/diag/auth')
+def _diag_auth():
+    try:
+        google_env = bool(os.environ.get('GOOGLE_CLIENT_ID') and os.environ.get('GOOGLE_CLIENT_SECRET'))
+    except Exception:
+        google_env = False
+    try:
+        ms_env = bool(os.environ.get('MICROSOFT_CLIENT_ID') and os.environ.get('MICROSOFT_CLIENT_SECRET'))
+    except Exception:
+        ms_env = False
+    try:
+        google_client = False
+        if oauth:
+            try:
+                google_client = bool(oauth.create_client('google'))
+            except Exception:
+                google_client = False
+    except Exception:
+        google_client = False
+    try:
+        ms_client = False
+        if oauth:
+            try:
+                ms_client = bool(oauth.create_client('microsoft'))
+            except Exception:
+                ms_client = False
+    except Exception:
+        ms_client = False
+    return jsonify({
+        'google_env': google_env,
+        'microsoft_env': ms_env,
+        'google_client': google_client,
+        'microsoft_client': ms_client,
+        'build': BUILD_STAMP,
+        'commit': GIT_COMMIT,
     })
 
 # ---- Simple slow-request logging and ETag helpers ----
@@ -3291,8 +3767,14 @@ def webplayer_play():
         active_file = pick_active_playlist_item(screen_config, load_store_config(), store_id, screen_id)
     except Exception:
         active_file = None
-    # Render dedicated webplayer template; JS will handle pairing code in requests
-    return render_template('webplayer/player.html', store_id=store_id, screen_id=screen_id, active_file=active_file, media_base_url=get_media_base_url(), code=code)
+    # Use legacy template for older Samsung Tizen browsers for maximum compatibility
+    try:
+        ua = (request.user_agent.string or '')
+    except Exception:
+        ua = ''
+    legacy = (request.args.get('legacy') == '1') or (('Tizen' in ua) or ('TizenBrowser' in ua) or ('SMART-TV' in ua) or ('SmartTV' in ua) or ('Maple' in ua))
+    template_name = 'webplayer/player_legacy.html' if legacy else 'webplayer/player.html'
+    return render_template(template_name, store_id=store_id, screen_id=screen_id, active_file=active_file, media_base_url=get_media_base_url(), code=code)
 
 @app.route('/delete_from_screen', methods=['POST'])
 @login_required
@@ -4278,8 +4760,15 @@ def get_playlist(store_id, screen_id):
     except Exception:
         orientation_mode = 'default'
     # Dashboard needs immediate consistency after changes; disable caching here.
+    # Include display rotation (0/90/180/270) so clients can honor it.
+    try:
+        rotation = int(screen.get('rotation') or 0)
+        if rotation not in (0,90,180,270):
+            rotation = 0
+    except Exception:
+        rotation = 0
     return (
-    {'success': True, 'playlist': out, 'queue_len': len(screen.get('cmd_queue', [])), 'events_recent': len(screen.get('events', [])), 'orientation': orientation_mode},
+    {'success': True, 'playlist': out, 'queue_len': len(screen.get('cmd_queue', [])), 'events_recent': len(screen.get('events', [])), 'orientation': orientation_mode, 'rotation': rotation},
         200,
         {'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'}
     )
@@ -4980,7 +5469,7 @@ def update_playlist_item(store_id, screen_id, item_id):
     if not screen:
         return jsonify({'success': False, 'error': 'screen not found'}), 404
     updated = False
-    allowed_effects = {'fade','slide-l','slide-r','zoom-in','zoom-out'}
+    allowed_effects = {'fade','slide-l','slide-r','zoom-in','zoom-out','rotate'}
     for item in screen.get('playlist', []):
         if item['id'] == item_id:
             payload = request.get_json() or {}

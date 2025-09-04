@@ -5,7 +5,7 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 	<title>Web Player</title>
 	<style>
-		html, body { height:100%; margin:0; background:#000; color:#fff; cursor:none; }
+		html, body { height:100%; margin:0; background:#000; color:#fff; cursor:none; overflow:hidden; }
 		#stage { position:fixed; inset:0; width:100vw; height:100vh; overflow:hidden; background:#000; --layer-fade: 1s; --motion-dur: 1s; transform-origin: 50% 50%; }
 		.layer { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#000; }
 		.hidden { display:none; }
@@ -18,6 +18,9 @@
 		.enter-slide-r { transform: translateX(-8%); opacity:0; }
 		.enter-zoom-in { transform: scale(1.08); opacity:0; }
 		.enter-zoom-out { transform: scale(0.92); opacity:0; }
+		/* Continuous rotation effect */
+		.enter-rotate { animation: spin 10s linear infinite; }
+		@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 		.anim { transition: transform var(--motion-dur) ease, opacity var(--motion-dur) ease; will-change: transform, opacity; }
 		#overlay { position:fixed; left:10px; bottom:10px; color:#9aa7ff; font:12px/1.4 system-ui,Segoe UI,Roboto,Ubuntu,Arial; opacity:.22; }
 	</style>
@@ -30,6 +33,18 @@
 	<div id="overlay"></div>
 
 	<script>
+		function isTizenTV(){ try{ return /Tizen|TizenBrowser|SamsungBrowser|SMART-TV|SmartTV|Maple/i.test(navigator.userAgent||''); }catch(e){ return false; } }
+		function isFullscreen(){ return !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement); }
+		function requestFs(el){ try{ var e=el||document.documentElement; var r=e.requestFullscreen||e.webkitRequestFullscreen||e.mozRequestFullScreen||e.msRequestFullscreen; if(r){ var p=r.call(e); if(p && p.catch) p.catch(function(){}); } }catch(e){} }
+		function ensureFullscreenOnGesture(){
+			var fired=false;
+			function handler(){ if(fired) return; fired=true; if(!isFullscreen()) requestFs(document.documentElement); cleanup(); }
+			function onKey(ev){ ev=ev||window.event; var k=ev.key||ev.keyCode; if(k==='Enter' || k===13 || k===32) handler(); }
+			function cleanup(){ window.removeEventListener('click', handler); window.removeEventListener('touchstart', handler); window.removeEventListener('keydown', onKey); }
+			window.addEventListener('click', handler, { once:true });
+			window.addEventListener('touchstart', handler, { once:true });
+			window.addEventListener('keydown', onKey);
+		}
 		const params = new URLSearchParams(location.search);
 		const storeId = params.get('store_id') || '';
 		const screenId = params.get('screen_id') || '';
@@ -79,7 +94,7 @@
 			return `${ORIGIN}/${isVid ? 'media' : 'static/uploads'}/${fname}`;
 		}
 
-		const stage = document.getElementById('stage');
+	const stage = document.getElementById('stage');
 		const layerA = document.getElementById('layerA');
 		const layerB = document.getElementById('layerB');
 		let front = layerA, back = layerB;
@@ -106,16 +121,22 @@
 		}
 
 		let orientationMode = 'default'; // 'vertical' | 'horizontal' | 'default'
+		let displayRotation = 0; // 0|90|180|270
 		function applyOrientation(){
 			try{
-				if(orientationMode === 'vertical'){
-					const vw = window.innerWidth || document.documentElement.clientWidth || 1920;
-					const vh = window.innerHeight || document.documentElement.clientHeight || 1080;
-					const s = Math.max(0.01, Math.min(5, Math.min(vw/Math.max(vh,1), vh/Math.max(vw,1))));
-					stage.style.transform = `rotate(90deg) scale(${s.toFixed(5)})`;
-				} else {
-					stage.style.transform = '';
+				// Base rotation from orientation
+				let rot = (orientationMode === 'vertical') ? 90 : 0;
+				let total = ((rot + (Number(displayRotation)||0)) % 360 + 360) % 360;
+				// Scale to fit when the final rotation is 90 or 270
+				const vw = window.innerWidth || document.documentElement.clientWidth || 1920;
+				const vh = window.innerHeight || document.documentElement.clientHeight || 1080;
+				let scale = 1;
+				if (total % 180 === 90) {
+					scale = Math.max(0.01, Math.min(5, Math.min(vw/Math.max(vh,1), vh/Math.max(vw,1))));
 				}
+				const parts = [`rotate(${total}deg)`];
+				if (scale !== 1) { parts.push(`scale(${scale.toFixed(5)})`); }
+				stage.style.transform = parts.join(' ');
 			}catch{}
 		}
 
@@ -127,7 +148,9 @@
 				const j = await r.json();
 				if(j && j.success && Array.isArray(j.playlist)){
 					playlist = j.playlist;
-					if(typeof j.orientation === 'string'){ orientationMode = j.orientation; applyOrientation(); }
+					if(typeof j.orientation === 'string'){ orientationMode = j.orientation; }
+					if(typeof j.rotation === 'number'){ displayRotation = (j.rotation||0); }
+					applyOrientation();
 					if(idx >= playlist.length) idx = 0;
 					// If the currently showing item is no longer present (e.g., schedule switch), advance immediately
 					if(currentItemKey){
@@ -196,6 +219,7 @@
 				case 'slide-r': return 'enter-slide-r';
 				case 'zoom-in': return 'enter-zoom-in';
 				case 'zoom-out': return 'enter-zoom-out';
+				case 'rotate': return 'enter-rotate';
 				default: return '';
 			}
 		}
@@ -286,6 +310,11 @@
 		window.addEventListener('resize', ()=>{ try{ applyOrientation(); }catch{} });
 		(async function init(){
 			if(!storeId || !screenId){ location.href = '/webplayer'; return; }
+			// Try to enter fullscreen early on Tizen; if blocked, wait for a gesture
+			try{ if(isTizenTV() && !isFullscreen()){ setTimeout(function(){ if(!isFullscreen()) requestFs(document.documentElement); }, 120); } }catch(e){}
+			ensureFullscreenOnGesture();
+			// Hint for Tizen users if fullscreen is blocked
+			try{ if(isTizenTV()){ setTimeout(()=>{ if(!isFullscreen()){ overlay.textContent = `${overlay.textContent} • Press Enter to go Fullscreen`; } }, 800); } }catch{}
 			// Kick off
 			tick();
 			// Keep-alive heartbeat so dashboard sees this webplayer as online

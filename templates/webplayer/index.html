@@ -9,12 +9,16 @@
   body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Arial,sans-serif;display:grid;grid-template-rows:1fr auto;min-height:100vh;background:#000;color:#f4f4f4}
   /* Center intro across a wide range of TV browsers */
   .intro{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#0b0b0b;z-index:10}
+  .intro{transition:opacity .25s ease}
   @supports (place-items: center){
     .intro{display:grid;place-items:center}
     .intro > *{grid-area:1/1}
   }
   /* Make the intro about 50% smaller than before */
   .intro .logo{width:min(36vw,440px);height:auto;opacity:.96;max-height:48vh}
+  /* Simple, safe intro animation for older TV browsers (Tizen): scale+fade in */
+  @keyframes tizenIntro { from { opacity:0; transform: scale(0.97); } to { opacity:1; transform: scale(1); } }
+  .anim-simple { animation: tizenIntro 650ms ease-out 1; }
   .panel{background:#0d0d0d;border:none;border-radius:12px;padding:28px;max-width:560px;width:min(92vw,560px);box-shadow:0 8px 30px rgba(0,0,0,.5);margin:12vh auto}
   h1{margin:0 0 12px;font-size:26px;font-weight:700;text-align:center}
   p{margin:0 0 16px;color:#bbb;font-size:15px;text-align:center}
@@ -52,77 +56,132 @@
     <div class="note">Next you'll enter the store code and pick a screen.</div>
   </div>
   <script>
-    // Auto-hide intro after ~3 seconds
-    setTimeout(()=>{ const intro=document.getElementById('intro'); if(intro) intro.style.display='none'; const c=document.getElementById('code'); if(c) c.focus(); }, 3000);
+    // Enforce HTTPS on our domain for some TV browsers
+    try{ if (location.protocol === 'http:' && /(^|\.)everydayadvertise\.com$/i.test(location.hostname)) { location.replace('https:' + location.href.slice(5)); } }catch(e){}
+
+    // --- Helpers (ES5-compatible) ---
+    function isTizenTV(){
+      var ua = '' + (navigator && navigator.userAgent || '');
+      return /Tizen|TizenBrowser|SamsungBrowser|SMART-TV|SmartTV|Maple/i.test(ua);
+    }
+    function hideIntro(force){
+      try{
+        var intro = document.getElementById('intro');
+        if(!intro) return;
+        var hidden = intro.getAttribute('data-hidden');
+        if(hidden === '1' && !force) return;
+        intro.setAttribute('data-hidden','1');
+        try{ intro.style.opacity='0'; intro.style.pointerEvents='none'; }catch(e){}
+        setTimeout(function(){ try{ intro.style.display='none'; if(intro.parentNode){ intro.parentNode.removeChild(intro); } }catch(e){} }, 500);
+        try{ var c=document.getElementById('code'); if(c && typeof c.focus==='function'){ c.focus(); } }catch(e){}
+      }catch(e){}
+    }
+    // On Tizen, show a lightweight animated static logo, then fade out automatically
+    if(isTizenTV()){
+      try{
+        var vid = document.getElementById('intro-video'); if(vid) vid.style.display='none';
+        var svg = document.getElementById('intro-svg'); if(svg) svg.style.display='none';
+        var st = document.getElementById('intro-static');
+        if(st){ st.style.display='block'; st.className = (st.className||'') + ' anim-simple'; }
+      }catch(e){}
+      setTimeout(function(){ hideIntro(true); }, 1800);
+    } else {
+      // Primary 3s hide + safeties
+      setTimeout(function(){ hideIntro(false); }, 3000);
+      setTimeout(function(){ hideIntro(true); }, 6000);
+      setTimeout(function(){ hideIntro(true); }, 9000);
+    }
 
     // Max compatibility: video -> animated SVG -> static SVG -> text
     (function ensureIntroVisible(){
-      const vidEl = document.getElementById('intro-video');
-      const svgEl = document.getElementById('intro-svg');
-      const staticEl = document.getElementById('intro-static');
-      const textEl = document.getElementById('intro-text');
-      const show = (el)=>{
-        if(vidEl) vidEl.style.display='none';
-        if(svgEl) svgEl.style.display='none';
-        if(staticEl) staticEl.style.display='none';
-        if(textEl) textEl.style.display='none';
-        if(el) el.style.display='block';
-      };
-      // 1) Prefer video intro; if it can't play, fall back
-      if(vidEl){
-        let switched=false;
-        const fallbackToSvg=()=>{ if(switched) return; switched=true; show(svgEl); };
-        const watchdog = setTimeout(()=>{
-          try{
-            const ready = vidEl.readyState || 0; // 0=HAVE_NOTHING, 2=HAVE_CURRENT_DATA
-            if(ready < 2 || (vidEl.duration && vidEl.currentTime===0)) fallbackToSvg();
-          }catch{ fallbackToSvg(); }
-        }, 700);
-        // Try to play; many TVs require muted + playsInline which we set
-        try{
-          const p = vidEl.play();
-          if(p && typeof p.then==='function'){
-            p.then(()=>{ /* ok */ }).catch(()=> fallbackToSvg());
-          }
-        }catch{ fallbackToSvg(); }
-        vidEl.addEventListener('error', fallbackToSvg);
-        vidEl.addEventListener('stalled', fallbackToSvg);
-        vidEl.addEventListener('abort', fallbackToSvg);
-        vidEl.addEventListener('loadeddata', ()=>{ try{ clearTimeout(watchdog); }catch{} });
+      var vidEl = document.getElementById('intro-video');
+      var svgEl = document.getElementById('intro-svg');
+      var staticEl = document.getElementById('intro-static');
+      var textEl = document.getElementById('intro-text');
+      function show(el){
+        try{ if(vidEl) vidEl.style.display='none'; }catch(e){}
+        try{ if(svgEl) svgEl.style.display='none'; }catch(e){}
+        try{ if(staticEl) staticEl.style.display='none'; }catch(e){}
+        try{ if(textEl) textEl.style.display='none'; }catch(e){}
+        try{ if(el) el.style.display='block'; }catch(e){}
       }
-      // If SVG animated intro fails to load or is unsupported, switch to static
+      if(isTizenTV()){
+        // Prefer static SVG with simple CSS animation on Tizen
+        show(staticEl);
+        try{ if(staticEl){ staticEl.className = (staticEl.className||'') + ' anim-simple'; } }catch(e){}
+        return;
+      }
+      if(vidEl){
+        var switched=false;
+        function fallbackToSvg(){ if(switched) return; switched=true; show(svgEl); }
+        var watchdog = setTimeout(function(){
+          try{
+            var ready = vidEl.readyState || 0;
+            if(ready < 2 || (vidEl.duration && vidEl.currentTime===0)) fallbackToSvg();
+          }catch(e){ fallbackToSvg(); }
+        }, 700);
+        try{
+          var p = vidEl.play();
+          if(p && typeof p.then==='function'){
+            p.then(function(){ /* ok */ }).catch(function(){ fallbackToSvg(); });
+          }
+        }catch(e){ fallbackToSvg(); }
+        function onTime(){ try{ if(vidEl.currentTime>=2) hideIntro(false); }catch(e){} }
+        try{ vidEl.addEventListener('timeupdate', onTime); }catch(e){}
+        try{ vidEl.addEventListener('ended', function(){ hideIntro(true); }); }catch(e){}
+        try{ vidEl.addEventListener('error', fallbackToSvg); }catch(e){}
+        try{ vidEl.addEventListener('stalled', fallbackToSvg); }catch(e){}
+        try{ vidEl.addEventListener('abort', fallbackToSvg); }catch(e){}
+        try{ vidEl.addEventListener('loadeddata', function(){ try{ clearTimeout(watchdog); }catch(e){} }); }catch(e){}
+      }
       if(svgEl){
-        svgEl.addEventListener('error', ()=>{ show(staticEl); });
-        // Some TV browsers never fire load for SVGs via <img>; use a short watchdog
-        let switched = false;
-        const watchdog = setTimeout(()=>{
-          if(switched) return;
-          // If it's still default display (block) but not rendered, switch
-          try { if(svgEl.naturalWidth === 0) { switched=true; show(staticEl); } } catch { switched=true; show(staticEl); }
+        try{ svgEl.addEventListener('error', function(){ show(staticEl); }); }catch(e){}
+        var switched2 = false;
+        var watchdog2 = setTimeout(function(){
+          if(switched2) return;
+          try { if(svgEl.naturalWidth === 0) { switched2=true; show(staticEl); } } catch(e) { switched2=true; show(staticEl); }
         }, 500);
-        svgEl.addEventListener('load', ()=>{ if(!switched) { clearTimeout(watchdog); } });
+        try{ svgEl.addEventListener('load', function(){ if(!switched2){ try{ clearTimeout(watchdog2); }catch(e){} } }); }catch(e){}
       }
       if(staticEl){
-        staticEl.addEventListener('error', ()=>{ show(textEl); });
-        // Secondary watchdog in case static SVG also fails
-        setTimeout(()=>{ try{ if(staticEl.style.display!=='none' && staticEl.naturalWidth===0){ show(textEl); } }catch{ show(textEl); } }, 900);
+        try{ staticEl.addEventListener('error', function(){ show(textEl); }); }catch(e){}
+        setTimeout(function(){ try{ if(staticEl.style.display!=='none' && staticEl.naturalWidth===0){ show(textEl); } }catch(e){ show(textEl); } }, 900);
       }
     })();
-    const codeEl = document.getElementById('code');
-    codeEl.addEventListener('input', ()=>{ codeEl.value = codeEl.value.replace(/[^0-9]/g,'').slice(0,4); });
-    async function go(){
-      const c = codeEl.value.trim();
-      if(!(c.length===4 && /^[0-9]{4}$/.test(c))){ alert('Please enter your 4-digit TV code.'); return; }
-      // Validate code before moving on
+    try{ document.addEventListener('visibilitychange', function(){ if(!document.hidden){ setTimeout(function(){ hideIntro(false); }, 1200); } }); }catch(e){}
+    (function(){ var tries=0; var id=setInterval(function(){ tries++; hideIntro(false); if(tries>=5) try{ clearInterval(id); }catch(e){} }, 2000); })();
+
+    var codeEl = document.getElementById('code');
+    try{
+      codeEl.addEventListener('input', function(){ try{ codeEl.value = codeEl.value.replace(/[^0-9]/g,'').slice(0,4); }catch(e){} });
+      codeEl.addEventListener('keyup', function(){ try{ codeEl.value = codeEl.value.replace(/[^0-9]/g,'').slice(0,4); }catch(e){} });
+      codeEl.addEventListener('change', function(){ try{ codeEl.value = codeEl.value.replace(/[^0-9]/g,'').slice(0,4); }catch(e){} });
+    }catch(e){}
+
+    function go(){
       try{
-        const r = await fetch(`/api/stores_by_code/${encodeURIComponent(c)}`, { cache:'no-store' });
-        const j = await r.json();
-        if(!j || !j.success){ alert(j && j.error ? j.error : 'TV code not valid'); return; }
-        location.href = '/webplayer/store?code=' + encodeURIComponent(c);
-      }catch(e){ alert('Could not verify code. Check your connection.'); }
+        var c = (codeEl.value || '').replace(/\s+/g,'');
+        if(!(c.length===4 && /^[0-9]{4}$/.test(c))){ alert('Please enter your 4-digit TV code.'); return; }
+        var url = '/api/stores_by_code/' + encodeURIComponent(c);
+        function onOk(){ try{ window.location.href = '/webplayer/store?code=' + encodeURIComponent(c); }catch(e){} }
+        function onFail(msg){ alert(msg || 'TV code not valid'); }
+        if(window.fetch){
+          try{
+            fetch(url, { cache:'no-store' }).then(function(r){ return r.json(); }).then(function(j){ if(j && j.success){ onOk(); } else { onFail(j && j.error); } }).catch(function(){ onFail('Could not verify code. Check your connection.'); });
+          }catch(e){ onFail('Could not verify code.'); }
+        } else {
+          try{
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', url, true);
+            xhr.onreadystatechange = function(){ if(xhr.readyState===4){ try{ var j = JSON.parse(xhr.responseText); if(j && j.success){ onOk(); } else { onFail(j && j.error); } }catch(e){ onFail('Could not verify code.'); } } };
+            xhr.onerror = function(){ onFail('Network error.'); };
+            xhr.send();
+          }catch(e){ onFail('Could not verify code.'); }
+        }
+      }catch(e){ alert('Unexpected error.'); }
     }
-    document.getElementById('go').addEventListener('click', go);
-    document.addEventListener('keydown', (e)=>{ if(e.key==='Enter') go(); });
+    try{ document.getElementById('go').addEventListener('click', go); }catch(e){}
+    try{ document.addEventListener('keydown', function(e){ e=e||window.event; if((e.key||e.keyCode)==='Enter' || e.keyCode===13){ go(); } }); }catch(e){}
   </script>
 </body>
 </html>
