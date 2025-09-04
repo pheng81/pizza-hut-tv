@@ -19,7 +19,7 @@
   </style>
 </head>
 <body>
-  <header>
+  <header style="display:flex;align-items:center;justify-content:center;">
     <div>TV code: <span class="code" id="code"></span> • Store: <span id="store"></span></div>
   </header>
   <main>
@@ -29,50 +29,66 @@
     </div>
   </main>
   <script>
-    const params = new URLSearchParams(location.search);
-    const code = params.get('code') || '';
-    const storeId = (params.get('store_id')||'').trim();
+    function getQuery(){
+      var q = {};
+      try{
+        var s = window.location.search || '';
+        if(s && s.charAt(0)==='?') s = s.slice(1);
+        var parts = s.split('&');
+        for(var i=0;i<parts.length;i++){
+          var kv = parts[i].split('=');
+          var k = decodeURIComponent(kv[0]||'');
+          var v = decodeURIComponent((kv[1]||'').replace(/\+/g,' '));
+          if(k) q[k]=v;
+        }
+      }catch(e){}
+      return q;
+    }
+    var params = getQuery();
+    var code = params.code || '';
+    var storeId = (params.store_id||'').replace(/\s+/g,'');
     document.getElementById('code').textContent = code;
     document.getElementById('store').textContent = storeId || '-';
-    if(!(code.length===4 && /^[0-9]{4}$/.test(code)) || !storeId){ location.href = '/webplayer'; }
+    if(!(code.length===4 && /^[0-9]{4}$/.test(code)) || !storeId){ window.location.href = '/webplayer'; }
 
-    const screensEl = document.getElementById('screens');
-    let data = null;
+    var screensEl = document.getElementById('screens');
+    var data = null;
 
-    function el(tag, attrs={}, text=''){
-      const e = document.createElement(tag);
-      for(const [k,v] of Object.entries(attrs)){ e.setAttribute(k, v); }
+    function el(tag, attrs, text){
+      var e = document.createElement(tag);
+      attrs = attrs || {};
+      for(var k in attrs){ if(attrs.hasOwnProperty(k)) e.setAttribute(k, attrs[k]); }
       if(text) e.textContent = text;
       return e;
     }
 
     function renderScreens(){
       screensEl.innerHTML = '';
-      const sc = (data && data.screens && data.screens[storeId]) ? data.screens[storeId] : {};
-      const entries = Object.entries(sc);
+      var sc = (data && data.screens && data.screens[storeId]) ? data.screens[storeId] : {};
+      var entries = [];
+      for(var k in sc){ if(sc.hasOwnProperty(k)) entries.push([k, sc[k]]); }
       if(!entries.length){
-        const li = el('li'); li.appendChild(el('button',{},'No screens found for this store')); screensEl.appendChild(li); return;
+        var li = el('li'); li.appendChild(el('button',{},'No screens found for this store')); screensEl.appendChild(li); return;
       }
-      for(const [sid, obj] of entries){
-        const li = el('li');
-        const btn = el('button');
-        btn.textContent = `${sid}${obj && obj.name ? ' — '+obj.name : ''}`;
-        btn.addEventListener('click', ()=>{
-          const q = new URLSearchParams({ store_id: storeId, screen_id: sid, code });
-          location.href = '/webplayer/play?' + q.toString();
-        });
+      for(var i=0;i<entries.length;i++){
+        var sid = entries[i][0]; var obj = entries[i][1];
+        var li = el('li');
+        var btn = el('button');
+        btn.textContent = sid + (obj && obj.name ? ' — ' + obj.name : '');
+        (function(sid){ btn.addEventListener('click', function(){ window.location.href = '/webplayer/play?store_id=' + encodeURIComponent(storeId) + '&screen_id=' + encodeURIComponent(sid) + '&code=' + encodeURIComponent(code); }); })(sid);
         li.appendChild(btn); screensEl.appendChild(li);
       }
-      const first = screensEl.querySelector('button'); if(first) first.focus();
+      try{ var first = screensEl.querySelector('button'); if(first) first.focus(); }catch(e){}
     }
 
-    (async function init(){
-      try{
-        const r = await fetch(`/api/stores_by_code/${encodeURIComponent(code)}`, { cache:'no-store' });
-        data = await r.json();
-        if(!data || !data.success){ alert(data && data.error ? data.error : 'Code invalid'); location.href = '/webplayer'; return; }
-        renderScreens();
-      }catch(e){ alert('Failed to load screens for this code'); location.href = '/webplayer'; }
+    (function init(){
+      function onData(){ if(!data || !data.success){ alert((data && data.error) ? data.error : 'Code invalid'); window.location.href = '/webplayer'; return; } renderScreens(); }
+      var url = '/api/stores_by_code/' + encodeURIComponent(code);
+      if(window.fetch){
+        try{ fetch(url, { cache:'no-store' }).then(function(r){ return r.json(); }).then(function(j){ data=j; onData(); }).catch(function(){ alert('Failed to load screens for this code'); window.location.href = '/webplayer'; }); }catch(e){ alert('Failed to load screens for this code'); window.location.href = '/webplayer'; }
+      } else {
+        try{ var xhr = new XMLHttpRequest(); xhr.open('GET', url, true); xhr.onreadystatechange=function(){ if(xhr.readyState===4){ try{ data = JSON.parse(xhr.responseText); onData(); }catch(e){ alert('Failed to load screens'); window.location.href='/webplayer'; } } }; xhr.onerror=function(){ alert('Network error'); window.location.href='/webplayer'; }; xhr.send(); }catch(e){ alert('Failed to load screens'); window.location.href='/webplayer'; }
+      }
     })();
   </script>
 </body>

@@ -15,6 +15,9 @@
 		.enter-slide-r { transform: translateX(-8%); opacity:0; }
 		.enter-zoom-in { transform: scale(1.08); opacity:0; }
 		.enter-zoom-out { transform: scale(0.92); opacity:0; }
+		/* Continuous rotation effect */
+		.enter-rotate { animation: spin 10s linear infinite; }
+		@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 		.anim { transition: transform var(--motion-dur) ease, opacity var(--motion-dur) ease; will-change: transform, opacity; }
 		#overlay { position:fixed; left:10px; bottom:10px; color:#9aa7ff; font:12px/1.4 system-ui,Segoe UI,Roboto,Ubuntu,Arial; opacity:.22; }
 	</style>
@@ -136,16 +139,20 @@
 		sendHeartbeat(); setInterval(sendHeartbeat, 30000);
 
 		let orientationMode = 'default';
+		let displayRotation = 0; // 0|90|180|270
 		function applyOrientation(){
 			try{
+				let rot = 0; let scale = 1;
 				if(orientationMode === 'vertical'){
 					const vw = window.innerWidth || document.documentElement.clientWidth || 1920;
 					const vh = window.innerHeight || document.documentElement.clientHeight || 1080;
-					const s = Math.max(0.01, Math.min(5, Math.min(vw/Math.max(vh,1), vh/Math.max(vw,1))));
-					stage.style.transform = `rotate(90deg) scale(${s.toFixed(5)})`;
-				} else {
-					stage.style.transform = '';
+					scale = Math.max(0.01, Math.min(5, Math.min(vw/Math.max(vh,1), vh/Math.max(vw,1))));
+					rot = 90;
 				}
+				let total = ((rot + (Number(displayRotation)||0)) % 360 + 360) % 360;
+				const parts = [`rotate(${total}deg)`];
+				if(scale !== 1){ parts.push(`scale(${scale.toFixed(5)})`); }
+				stage.style.transform = parts.join(' ');
 			}catch{}
 		}
 
@@ -155,7 +162,9 @@
 				const j = await r.json();
 				if(j && j.success && Array.isArray(j.playlist)){
 					playlist = j.playlist;
-					if(typeof j.orientation === 'string'){ orientationMode = j.orientation; applyOrientation(); }
+					if(typeof j.orientation === 'string'){ orientationMode = j.orientation; }
+					if(typeof j.rotation === 'number'){ displayRotation = (j.rotation||0); }
+					applyOrientation();
 					if(idx >= playlist.length) idx = 0;
 					// Proactively probe status for unknown/stale items so the dashboard turns green fast
 					scheduleStatusProbes(playlist);
@@ -277,6 +286,7 @@
 					case 'slide-r': return 'enter-slide-r';
 					case 'zoom-in': return 'enter-zoom-in';
 					case 'zoom-out': return 'enter-zoom-out';
+					case 'rotate': return 'enter-rotate';
 					case 'fade': default: return '';
 				}
 			}catch{ return ''; }

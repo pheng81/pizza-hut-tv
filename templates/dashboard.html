@@ -562,8 +562,11 @@
     /* Dashboard preview effect helpers */
     .screen-preview .anim { transition: transform .32s ease, opacity .28s ease; will-change: transform, opacity; }
     .screen-preview .enter-slide-l { transform: translateX(8%); opacity:0; }
+    .screen-preview .enter-slide-l { transform: translateX(8%); opacity:0; }
     .screen-preview .enter-slide-r { transform: translateX(-8%); opacity:0; }
     .screen-preview .enter-zoom-in { transform: scale(1.08); opacity:0; }
+    .screen-preview .enter-rotate { animation: dash-spin 2.5s linear infinite; }
+    @keyframes dash-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     .screen-preview .enter-zoom-out { transform: scale(0.92); opacity:0; }
     .screen-preview .preview-badge { position:absolute; top:4px; left:4px; z-index:3; pointer-events:none; }
         
@@ -2646,13 +2649,15 @@
                     }
                 </div>
                 
-                <div class="button-row" style="justify-content:center;">
-                    <button class="upload-btn" onclick="openReplaceModal('${screenId}','SINGLE')">Upload / Pick</button>
+                <div class="button-row" style="justify-content:center; flex-wrap: nowrap; gap:6px; align-items:center; width:100%;">
+                    <button class="upload-btn" onclick="openReplaceModal('${screenId}','SINGLE')" style="flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 10px; font-size:clamp(10px, 2vw, 12px);">Schedule</button>
                     ${screenData.file ? 
-                        `<button class=\"delete-btn\" onclick=\"deleteFile('${screenId}')\" title=\"Delete current file\">🗑️ Delete</button>` : 
+                        `<button class=\"delete-btn\" onclick=\"deleteFile('${screenId}')\" title=\"Delete current file\" style=\"flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 10px; font-size:clamp(10px, 2vw, 12px);\">🗑️ Delete</button>` : 
                         ''
                     }
-                    <input type="file" class="file-input" id="file-${screenId}" 
+                    <button class="rotate-btn" type="button" onclick="rotateScreen('${screenId}')" title="Rotate image 90°" style="flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 10px; font-size:clamp(10px, 2vw, 12px);">⤾ Rotate</button>
+                    <span id="rotation-indicator-${screenId}" class="rotation-indicator rotate-${rotation}" title="Current rotation" style="flex:0 0 18px; width:18px; height:18px;"></span>
+                    <input type="file" class="file-input" id="file-${screenId}" style="display:none;"
                            accept="image/*,video/*" onchange="uploadFile('${screenId}', this)">
                 </div>
                 
@@ -3411,7 +3416,7 @@
                                                                                         </div>
                                                                                 </div>
                                                                                 <div class="effect-row" data-screen="${screenId}" data-item="${item.id}">
-                                                                                    ${[ ['', ''], ['1','fade'], ['2','slide-l'], ['3','slide-r'], ['4','zoom-in'], ['5','zoom-out'] ].map(([num,val])=>{
+                                                                                    ${[ ['', ''], ['1','fade'], ['2','slide-l'], ['3','slide-r'], ['4','zoom-in'], ['5','zoom-out'], ['6','rotate'] ].map(([num,val])=>{
                                                                                         const active = (String(item.effect||'')===val) || (!item.effect && val==='');
                                                                                         const text = num || '·';
                                                                                         return `<button type="button" class="effect-btn ${active?'active':''}" title="${val||'none'}" data-effect="${val}" onclick="setItemEffect('${screenId}','${item.id}','${val}', this)">${text}</button>`;
@@ -4167,7 +4172,7 @@
                     const wrap = document.createElement('div'); wrap.className='preview-item fading-in';
                     // Apply selected effect on dashboard preview
                     const eff = String(item && item.effect || '').toLowerCase();
-                    const map = { 'slide-l':'enter-slide-l', 'slide-r':'enter-slide-r', 'zoom-in':'enter-zoom-in', 'zoom-out':'enter-zoom-out' };
+                    const map = { 'slide-l':'enter-slide-l', 'slide-r':'enter-slide-r', 'zoom-in':'enter-zoom-in', 'zoom-out':'enter-zoom-out', 'rotate':'enter-rotate' };
                     if(eff && eff!=='fade') { node.classList.add('anim'); const c = map[eff]; if(c) node.classList.add(c); }
                     wrap.appendChild(node);
                     // Collect all existing preview layers (not just the first) to avoid stacked leftovers
@@ -4176,7 +4181,7 @@
                     requestAnimationFrame(()=>{
                         wrap.classList.remove('fading-in');
                         // Clear entry transforms once visible so end state is neutral
-                        if(eff && eff!=='fade'){ try { node.classList.remove('enter-slide-l','enter-slide-r','enter-zoom-in','enter-zoom-out'); node.style.opacity=''; } catch {} }
+                        if(eff && eff!=='fade'){ try { node.classList.remove('enter-slide-l','enter-slide-r','enter-zoom-in','enter-zoom-out','enter-rotate'); node.style.opacity=''; } catch {} }
                         existing.forEach(el=>{ try { el.style.opacity='0'; setTimeout(()=> el.remove(), 220); } catch(_){} });
                     });
                     // If a video was inserted, attempt playback immediately
@@ -5357,4 +5362,5 @@
     </div>
         
     </body>
+    {% include '_cookie_consent.html' %}
 </html>

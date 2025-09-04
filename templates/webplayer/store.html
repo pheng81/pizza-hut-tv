@@ -6,7 +6,7 @@
   <title>Web Player — Store Code</title>
   <style>
     html,body{height:100%;margin:0}
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Arial,sans-serif;display:grid;place-items:center;min-height:100vh;background:#000;color:#f4f4f4}
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Arial,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#000;color:#f4f4f4}
   .card{background:#0d0d0d;border:none;border-radius:12px;padding:28px;max-width:560px;width:min(92vw,560px);box-shadow:0 8px 30px rgba(0,0,0,.5)}
     h1{margin:0 0 12px;font-size:26px;text-align:center}
     p{margin:0 0 16px;color:#bbb;font-size:15px;text-align:center}
@@ -29,21 +29,36 @@
     <div class="note">You’ll choose a screen next.</div>
   </div>
   <script>
-    const params = new URLSearchParams(location.search);
-    const code = (params.get('code')||'').trim();
-    if(!(code.length===4 && /^[0-9]{4}$/.test(code))){ location.href = '/webplayer'; }
-    document.getElementById('tvcode').textContent = code;
-    const storeEl = document.getElementById('store');
-    storeEl.addEventListener('input', ()=>{ storeEl.value = storeEl.value.replace(/[^0-9]/g,'').slice(0,8); });
-    function go(){
-      const s = storeEl.value.trim();
-      if(!s){ alert('Please enter your store code.'); return; }
-      const q = new URLSearchParams({ code, store_id: s });
-      location.href = '/webplayer/browse?' + q.toString();
+    function getQuery(){
+      var q = {};
+      try{
+        var s = window.location.search || '';
+        if(s && s.charAt(0)==='?') s = s.slice(1);
+        var parts = s.split('&');
+        for(var i=0;i<parts.length;i++){
+          var kv = parts[i].split('=');
+          var k = decodeURIComponent(kv[0]||'');
+          var v = decodeURIComponent((kv[1]||'').replace(/\+/g,' '));
+          if(k) q[k]=v;
+        }
+      }catch(e){}
+      return q;
     }
-    document.getElementById('go').addEventListener('click', go);
-    document.addEventListener('keydown', (e)=>{ if(e.key==='Enter') go(); });
-    setTimeout(()=>{ storeEl.focus(); }, 50);
+    var params = getQuery();
+    var code = (params.code||'').replace(/\s+/g,'');
+    if(!(code.length===4 && /^[0-9]{4}$/.test(code))){ window.location.href = '/webplayer'; }
+    document.getElementById('tvcode').textContent = code;
+    var storeEl = document.getElementById('store');
+    try{ storeEl.addEventListener('input', function(){ storeEl.value = storeEl.value.replace(/[^0-9]/g,'').slice(0,8); }); }catch(e){}
+    function go(){
+      var s = (storeEl.value||'').replace(/\s+/g,'');
+      if(!s){ alert('Please enter your store code.'); return; }
+      var url = '/webplayer/browse?code=' + encodeURIComponent(code) + '&store_id=' + encodeURIComponent(s);
+      window.location.href = url;
+    }
+    try{ document.getElementById('go').addEventListener('click', go); }catch(e){}
+    try{ document.addEventListener('keydown', function(e){ e=e||window.event; if((e.key||e.keyCode)==='Enter' || e.keyCode===13){ go(); } }); }catch(e){}
+    setTimeout(function(){ try{ storeEl.focus(); }catch(e){} }, 50);
   </script>
 </body>
 </html>
