@@ -13,4 +13,5 @@ object PairCodeHolder {
         val ctx = appContext ?: return null
         return try { ctx.getSharedPreferences("phtv", Context.MODE_PRIVATE).getString("pairCode", null) } catch (_: Exception) { null }
     }
+    fun codeOrNull(): String? = get()
 }
