@@ -84,7 +84,35 @@
       xhr.onreadystatechange=function(){ if(xhr.readyState===4){ try{ var j=JSON.parse(xhr.responseText); if(j && j.success){ if(j.playlist){ playlist=j.playlist; if(idx>=playlist.length) idx=0; } if(j.orientation){ orientationMode=String(j.orientation||'default'); } if(typeof j.rotation==='number'){ displayRotation = (j.rotation||0); } applyOrientation(); } }catch(e){} lastFetchTs=Date.now(); } };
       try{ xhr.send(); }catch(e){}
     }
-    function tick(){ if(!playlist.length){ fetchPlaylist(); timer=setTimeout(tick,1500); return; } var item=playlist[idx]; var dur=Math.max(1, parseInt(item.duration||10,10)); var next=playlist[nextIndex()]; if(next){ var u=mediaUrl(next); if(u){ (isVideoByName(u)?preloadVideo:preloadImage)(u,function(){}); } } showItem(item); idx=nextIndex(); if(Date.now()-lastFetchTs>20000) fetchPlaylist(); timer=setTimeout(tick,dur*1000); }
+    function tick(){
+      if(!playlist.length){ fetchPlaylist(); timer=setTimeout(tick,1500); return; }
+      var item=playlist[idx];
+      var dur=Math.max(1, parseInt(item.duration||10,10));
+      var next=playlist[nextIndex()];
+      if(next){ var u=mediaUrl(next); if(u){ (isVideoByName(u)?preloadVideo:preloadImage)(u,function(){}); } }
+      showItem(item);
+      idx=nextIndex();
+      if(Date.now()-lastFetchTs>20000) fetchPlaylist();
+      // Sync alignment by start_epoch when present
+      try{
+        var sref = item && item.sync_ref || null;
+        var se = sref && Number(sref.start_epoch||0);
+        if(se && isFinite(se) && dur){
+          var now = Date.now();
+          var base = se*1000;
+          var period = Math.max(1000, dur*1000);
+          var n = Math.ceil((now - base)/period);
+          var nextAt = base + n*period;
+          var delay = Math.max(0, nextAt - now);
+          if(delay < 50) delay = 50;
+          if(timer){ try{ clearTimeout(timer); }catch(e){} }
+          timer = setTimeout(tick, delay);
+          return;
+        }
+      }catch(e){}
+      if(timer){ try{ clearTimeout(timer); }catch(e){} }
+      timer=setTimeout(tick,dur*1000);
+    }
 
   window.addEventListener ? window.addEventListener('resize', function(){ applyOrientation(); }) : null;
   // Try entering fullscreen early; if blocked, wait for a gesture

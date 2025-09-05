@@ -21,13 +21,24 @@ data class PlaylistItem(
 	@SerializedName("end") val end: String? = null,
 	@SerializedName("schedule") val schedule: List<ScheduleWindow>? = emptyList(),
 	@SerializedName("days") val days: List<String>? = emptyList(),
-	@SerializedName("media_type") val mediaType: String? = null
+	@SerializedName("media_type") val mediaType: String? = null,
+	// Optional sync metadata when this item is part of a synchronized group
+	@SerializedName("sync_ref") val syncRef: SyncRef? = null
 )
 
 data class ScheduleWindow(
 	@SerializedName("start") val start: String?,
 	@SerializedName("end") val end: String?,
 	@SerializedName("days") val days: List<String>? = null
+)
+
+// Synchronization metadata for items that are part of a multi-screen sync group
+data class SyncRef(
+	@SerializedName("group") val group: String? = null,
+	@SerializedName("role") val role: String? = null, // master | follower
+	@SerializedName("order") val order: Int? = null,
+	// Epoch seconds at which the group cadence starts; align switches to this cadence
+	@SerializedName("start_epoch") val startEpoch: Long? = null
 )
 
 // Device setup discovery

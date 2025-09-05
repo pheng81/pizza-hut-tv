@@ -3162,6 +3162,54 @@ def parse_time_string(val, now):
 
 def pick_active_playlist_item(screen, parent_config=None, store_id=None, screen_id=None):
     pl = screen.get('playlist', [])
+    # If this screen is part of a sync group but doesn't yet have a concrete playlist item,
+    # synthesize a read-only placeholder item so dashboard and players can show the synced media.
+    try:
+        groups = (cfg.get('sync_groups') or {}) if isinstance(cfg.get('sync_groups'), dict) else {}
+        # Track which sync groups already have a real item on this screen
+        have_groups = set()
+        for _it in (pl or []):
+            try:
+                _sr = _it.get('sync_ref') if isinstance(_it, dict) else None
+                if isinstance(_sr, dict) and _sr.get('group'):
+                    have_groups.add(_sr.get('group'))
+            except Exception:
+                continue
+        # Append placeholders for memberships missing a concrete item
+        for gid, grp in (groups.items() if isinstance(groups, dict) else []):
+            try:
+                members = grp.get('members') or []
+                mem = next((m for m in members if m.get('screen_id') == screen_id), None)
+                if not mem:
+                    continue
+                if gid in have_groups:
+                    continue
+                fname = grp.get('filename') or None
+                if not fname:
+                    continue
+                placeholder = {
+                    'id': f"virtual:{gid}:{screen_id}",
+                    'file': fname,
+                    'enabled': True,
+                    'start': None,
+                    'end': None,
+                    'schedule': [],
+                    'duration': 10,
+                    'repeat': True,
+                    'link_next': False,
+                    'media_type': classify_media(fname),
+                    'sync_ref': {
+                        'group': gid,
+                        'role': mem.get('role') or 'follower',
+                        'order': mem.get('order', 0)
+                    }
+                }
+                # Do not mutate stored config; return a view list including the placeholder
+                pl = list(pl) + [placeholder]
+            except Exception:
+                continue
+    except Exception:
+        pass
     if not pl:
         return screen.get('file')
     # Use local server time (was UTC) so user-entered wall-clock times align with expectations
@@ -4652,9 +4700,11 @@ def get_playlist(store_id, screen_id):
     print(f"DEBUG: GET /playlist {store_id} {screen_id}")
     header_code = request.headers.get('X-User-Code') or request.args.get('user_code')
     user_key = _resolve_user_key_by_code(header_code)
+    # Prefer per-user config when either a pair code OR a logged-in session user exists
     if not user_key and not _safe_user_key():
         return {'success': False, 'error': 'pair code required'}, 403
-    cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(user_key) if user_key else load_store_config())
+    ukey = user_key or _safe_user_key()
+    cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
     # Legacy mapping: if old store_id like '1881' no longer exists, map to current master store
     try:
         if store_id not in (cfg.get('screens') or {}) and str(store_id) == '1881':
@@ -4684,8 +4734,32 @@ def get_playlist(store_id, screen_id):
                 screen_id = prefixed
         screen = alt
     if not screen:
-        print("DEBUG: Screen not found for playlist (after mapping)")
-        return jsonify({'success': False, 'error': 'screen not found'}), 404
+        # Auto-create a default screen entry so dashboard and players can proceed
+        try:
+            part = screen_id.split('_', 1)[1] if '_' in screen_id else screen_id
+            is_promo = str(part).startswith('promo')
+            sdata = {
+                'file': None,
+                'vertical': True if is_promo else False,
+                'horizontal': False if is_promo else True,
+                'rotation': 0,
+                'protected': False,
+                'playlist': []
+            }
+            screens[screen_id] = sdata
+            # Persist in whichever config space we're using
+            try:
+                if user_key:
+                    save_store_config_for_user_safe_key(user_key, cfg)
+                else:
+                    save_store_config(cfg)
+            except Exception:
+                pass
+            screen = sdata
+            print(f"DEBUG: Auto-created screen entry {store_id}/{screen_id}")
+        except Exception:
+            print("DEBUG: Screen not found for playlist (after mapping)")
+            return jsonify({'success': False, 'error': 'screen not found'}), 404
     # Auto-clean missing-file items (local disk only)
     if not r2_enabled():
         original = screen.get('playlist', [])
@@ -4717,6 +4791,29 @@ def get_playlist(store_id, screen_id):
             # Ensure the effect is serialized explicitly for clients
             if 'effect' in item and isinstance(item.get('effect'), str):
                 it['effect'] = item.get('effect')
+            # If part of a sync group, attach group timing info
+            try:
+                sref = item.get('sync_ref') if isinstance(item, dict) else None
+                if isinstance(sref, dict):
+                    gid = sref.get('group')
+                    if gid:
+                        grp = (cfg.get('sync_groups') or {}).get(gid) or {}
+                        se = grp.get('start_epoch') or grp.get('start') or grp.get('created_at')
+                        it.setdefault('sync_ref', dict(sref))
+                        # Attach alignment epoch if present
+                        if se:
+                            it['sync_ref']['start_epoch'] = int(se)
+                        # Also attach group segmentation metadata for client-side split playback
+                        try:
+                            cnt = int(grp.get('count') or 0)
+                            if cnt > 1:
+                                it['sync_ref']['count'] = cnt
+                        except Exception:
+                            pass
+                        mode = grp.get('mode') or 'split-h'
+                        it['sync_ref']['mode'] = mode
+            except Exception:
+                pass
             # Prefer id mapping; if missing, fall back to file key.
             # Robustness: handle absolute URLs and relative paths by also checking basename-only key.
             ls = None
@@ -4751,6 +4848,127 @@ def get_playlist(store_id, screen_id):
             out.append(it)
         except Exception:
             out.append(item)
+    # If no synced item is visible but this screen belongs to a sync group, synthesize a virtual follower item
+    try:
+        def synthesize_for(gid, grp, mem):
+            fname = grp.get('filename')
+            if not fname:
+                return None
+            return {
+                'id': f"virtual:{gid}:{screen_id}",
+                'file': fname,
+                'url': build_public_url(fname),
+                'enabled': True,
+                'start': None,
+                'end': None,
+                'schedule': grp.get('schedule') or [],
+                'duration': 10,
+                'repeat': True,
+                'link_next': False,
+                'media_type': classify_media(fname),
+                'sync_ref': {
+                    'group': gid,
+                    'role': mem.get('role') or 'follower',
+                    'order': mem.get('order') or 0,
+                    'virtual': True,
+                    'start_epoch': int(grp.get('start_epoch') or grp.get('start') or grp.get('created_at') or 0),
+                    'count': int(grp.get('count') or 0),
+                    'mode': grp.get('mode') or 'split-h'
+                }
+            }
+
+        # If there is already a synced item, skip synthesis
+        has_sync = False
+        for it in out:
+            try:
+                sref = it.get('sync_ref') if isinstance(it, dict) else None
+                if isinstance(sref, dict) and sref.get('group'):
+                    has_sync = True
+                    break
+            except Exception:
+                pass
+        if not has_sync:
+            sync_groups = (cfg.get('sync_groups') or {})
+            # Consider both prefixed and short ids for matching
+            alt_ids = {screen_id}
+            try:
+                if '_' in screen_id:
+                    short = screen_id.split('_', 1)[1]
+                    alt_ids.add(short)
+                else:
+                    alt_ids.add(f"{store_id}_{screen_id}")
+            except Exception:
+                pass
+            for gid, grp in sync_groups.items():
+                try:
+                    for mem in (grp.get('members') or []):
+                        sid = mem.get('screen_id')
+                        if sid and sid in alt_ids:
+                            vit = synthesize_for(gid, grp, mem)
+                            if vit:
+                                out.append(vit)
+                            raise StopIteration
+                except StopIteration:
+                    break
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    # Implicit multi-screen mirror: if this screen has no items and appears to be a numbered
+    # sibling (e.g., screen2/3) while the base sibling (screen1) in the same store has a file,
+    # synthesize a virtual follower item using that base file. This makes follower screens show
+    # something even when a formal sync group hasn't been created yet.
+    try:
+        if not out:
+            import re
+            short = screen_id.split('_', 1)[1] if '_' in screen_id else screen_id
+            m = re.match(r'^(.*?)(\d+)$', short)
+            if m:
+                prefix, num = m.group(1), int(m.group(2) or 0)
+                if num >= 2:
+                    base_short = f"{prefix}1"
+                    # Prefer current-store-prefixed id first, then short id
+                    base_ids = [f"{store_id}_{base_short}", base_short]
+                    base_scr = None
+                    for bid in base_ids:
+                        base_scr = (screens or {}).get(bid)
+                        if base_scr:
+                            break
+                    if isinstance(base_scr, dict):
+                        fname = base_scr.get('file')
+                        if not fname:
+                            try:
+                                plb = base_scr.get('playlist') or []
+                                if plb:
+                                    fname = plb[0].get('file')
+                            except Exception:
+                                fname = None
+                        if fname:
+                            se = ((int(time.time()) // 5) + 2) * 5
+                out.append({
+                                'id': f"virtual:implicit:{store_id}:{screen_id}",
+                                'file': fname,
+                                'url': build_public_url(fname),
+                                'enabled': True,
+                                'start': None,
+                                'end': None,
+                                'schedule': [],
+                                'duration': 10,
+                                'repeat': True,
+                                'link_next': False,
+                                'media_type': classify_media(fname),
+                                'sync_ref': {
+                                    'group': f"implicit:{store_id}:{prefix}",
+                                    'role': 'follower',
+                                    'order': max(0, num-1),
+                                    'virtual': True,
+                    'start_epoch': se,
+                    'count': 0,
+                    'mode': 'split-h'
+                                }
+                            })
+    except Exception:
+        pass
     print(f"DEBUG: Returning playlist items: {len(out)}")
     # Orientation mode for clients: vertical, horizontal, or default (none)
     try:
@@ -5442,7 +5660,8 @@ def list_stores():
     user_key = _resolve_user_key_by_code(header_code)
     if not user_key and not _safe_user_key():
         return {'success': False, 'error': 'pair code required'}, 403
-    cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(user_key) if user_key else load_store_config())
+    ukey = user_key or _safe_user_key()
+    cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
     return {'success': True, 'stores': cfg.get('stores', [])}
 
 @app.route('/screens/<store_id>')
@@ -5452,7 +5671,8 @@ def list_screens(store_id):
     user_key = _resolve_user_key_by_code(header_code)
     if not user_key and not _safe_user_key():
         return {'success': False, 'error': 'pair code required'}, 403
-    cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(user_key) if user_key else load_store_config())
+    ukey = user_key or _safe_user_key()
+    cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
     if store_id not in (cfg.get('screens') or {}):
         return {'success': False, 'error': 'store not found'}, 404
     screens = cfg.get('screens', {}).get(store_id, {})
@@ -5464,7 +5684,9 @@ def list_screens(store_id):
 @login_required
 def update_playlist_item(store_id, screen_id, item_id):
     print(f"DEBUG: PATCH playlist item {store_id} {screen_id} {item_id}")
-    cfg = ensure_playlists_structure(load_store_config())
+    # Persist in the same per-user config the dashboard is using
+    ukey = _safe_user_key()
+    cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
     screen = cfg.get('screens', {}).get(store_id, {}).get(screen_id)
     if not screen:
         return jsonify({'success': False, 'error': 'screen not found'}), 404
@@ -5533,11 +5755,93 @@ def update_playlist_item(store_id, screen_id, item_id):
                         new_sched.append(w)
                 item['schedule'] = new_sched
                 updated = True
+            # Propagate to sync group members if this item is part of a sync group
+            try:
+                sref = item.get('sync_ref') if isinstance(item, dict) else None
+                if updated and isinstance(sref, dict) and sref.get('group'):
+                    gid = sref.get('group')
+                    group = (cfg.get('sync_groups') or {}).get(gid)
+                    if isinstance(group, dict):
+                        members = group.get('members') or []
+                        # Keep group filename in sync when 'file' changes on master
+                        if 'file' in (payload or {}) and payload.get('file'):
+                            try:
+                                group['filename'] = payload.get('file')
+                            except Exception:
+                                pass
+                        # Fields that are safe to propagate
+                        prop_keys = set()
+                        for k in ['file','enabled','start','end','duration','repeat','link_next','effect','days','schedule']:
+                            if k in (payload or {}):
+                                prop_keys.add(k)
+                        for m in members:
+                            msid = m.get('screen_id')
+                            mid = m.get('item_id')
+                            if not msid or not mid:
+                                continue
+                            if msid == screen_id and mid == item_id:
+                                continue  # already applied
+                            try:
+                                tgt = cfg.get('screens', {}).get(store_id, {}).get(msid)
+                                if not tgt:
+                                    continue
+                                for it2 in (tgt.get('playlist') or []):
+                                    if it2.get('id') == mid:
+                                        # Apply only provided keys; reuse sanitized schedule handling
+                                        if 'file' in prop_keys and 'file' in payload:
+                                            nf = payload.get('file')
+                                            if nf and allowed_file(nf):
+                                                it2['file'] = nf
+                                                it2['media_type'] = classify_media(nf)
+                                        for k in ['enabled','start','end','duration','repeat','link_next']:
+                                            if k in prop_keys:
+                                                if k == 'duration':
+                                                    try:
+                                                        dval = int(str(payload[k]).strip())
+                                                        if dval < 1:
+                                                            dval = 1
+                                                        it2[k] = dval
+                                                    except Exception:
+                                                        pass
+                                                else:
+                                                    it2[k] = payload.get(k)
+                                        if 'effect' in prop_keys:
+                                            val = str(payload.get('effect') or '').strip().lower()
+                                            allowed_effects = {'fade','slide-l','slide-r','zoom-in','zoom-out','rotate'}
+                                            if val in allowed_effects:
+                                                it2['effect'] = val
+                                            elif val in ('', 'default', 'none'):
+                                                it2.pop('effect', None)
+                                        if 'days' in prop_keys:
+                                            dv = payload.get('days')
+                                            if isinstance(dv, list):
+                                                it2['days'] = [str(d).lower()[:3] for d in dv if d]
+                                            elif dv is None:
+                                                it2.pop('days', None)
+                                        if 'schedule' in prop_keys and isinstance(payload.get('schedule'), list):
+                                            new_sched = []
+                                            for win in payload.get('schedule'):
+                                                if isinstance(win, dict):
+                                                    w = {'start': win.get('start'), 'end': win.get('end')}
+                                                    if 'days' in win and isinstance(win.get('days'), list):
+                                                        w['days'] = [str(d).lower()[:3] for d in win.get('days') if d]
+                                                    new_sched.append(w)
+                                            it2['schedule'] = new_sched
+                                        # Enqueue reload for that screen
+                                        _enqueue_command_in_cfg(cfg, store_id, msid, 'reload')
+                                        break
+                            except Exception:
+                                continue
+            except Exception:
+                pass
             break
     if updated:
         # Push a reload so connected TVs pick up changes quickly
         _enqueue_command_in_cfg(cfg, store_id, screen_id, 'reload')
-        save_store_config(cfg)
+        if ukey:
+            save_store_config_for_user_safe_key(ukey, cfg)
+        else:
+            save_store_config(cfg)
         return jsonify({'success': True})
     return jsonify({'success': False, 'error': 'item not found'}), 404
 
@@ -5545,23 +5849,83 @@ def update_playlist_item(store_id, screen_id, item_id):
 @login_required
 def delete_playlist_item(store_id, screen_id, item_id):
     print(f"DEBUG: DELETE playlist item {store_id} {screen_id} {item_id}")
-    cfg = ensure_playlists_structure(load_store_config())
+    ukey = _safe_user_key()
+    cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
     screen = cfg.get('screens', {}).get(store_id, {}).get(screen_id)
     if not screen:
         return jsonify({'success': False, 'error': 'screen not found'}), 404
-    before = len(screen.get('playlist', []))
-    screen['playlist'] = [i for i in screen.get('playlist', []) if i.get('id') != item_id]
-    if len(screen['playlist']) != before:
+    # Find the item and determine if it's part of a sync group
+    target_item = None
+    for it in (screen.get('playlist') or []):
+        if it.get('id') == item_id:
+            target_item = it
+            break
+    if not target_item:
+        return jsonify({'success': False, 'error': 'item not found'}), 404
+    sref = target_item.get('sync_ref') if isinstance(target_item, dict) else None
+    if isinstance(sref, dict) and sref.get('group'):
+        # When deleting a synced item: if master, remove entire group; if follower, remove only this member
+        gid = sref.get('group')
+        group = (cfg.get('sync_groups') or {}).get(gid)
+        # Remove this item from its screen
+        screen['playlist'] = [i for i in screen.get('playlist', []) if i.get('id') != item_id]
         _enqueue_command_in_cfg(cfg, store_id, screen_id, 'reload')
-        save_store_config(cfg)
+        if isinstance(group, dict):
+            role = sref.get('role')
+            members = group.get('members') or []
+            if role == 'master':
+                # Delete all members' items and remove the group entirely
+                for m in members:
+                    msid = m.get('screen_id')
+                    mid = m.get('item_id')
+                    if not msid or not mid:
+                        continue
+                    try:
+                        tgt = cfg.get('screens', {}).get(store_id, {}).get(msid)
+                        if not tgt:
+                            continue
+                        before_len = len(tgt.get('playlist') or [])
+                        tgt['playlist'] = [i for i in (tgt.get('playlist') or []) if i.get('id') != mid]
+                        if len(tgt['playlist']) != before_len:
+                            _enqueue_command_in_cfg(cfg, store_id, msid, 'reload')
+                    except Exception:
+                        continue
+                try:
+                    cfg.get('sync_groups', {}).pop(gid, None)
+                except Exception:
+                    pass
+            else:
+                # Follower removed: drop from group members; if no members left, remove group
+                try:
+                    new_members = [m for m in members if m.get('item_id') != item_id]
+                    group['members'] = new_members
+                    if not new_members:
+                        cfg.get('sync_groups', {}).pop(gid, None)
+                except Exception:
+                    pass
+        if ukey:
+            save_store_config_for_user_safe_key(ukey, cfg)
+        else:
+            save_store_config(cfg)
         return jsonify({'success': True})
+    else:
+        before = len(screen.get('playlist', []))
+        screen['playlist'] = [i for i in screen.get('playlist', []) if i.get('id') != item_id]
+        if len(screen['playlist']) != before:
+            _enqueue_command_in_cfg(cfg, store_id, screen_id, 'reload')
+            if ukey:
+                save_store_config_for_user_safe_key(ukey, cfg)
+            else:
+                save_store_config(cfg)
+            return jsonify({'success': True})
     return jsonify({'success': False, 'error': 'item not found'}), 404
 
 # ---- Schedule window management endpoints ----
 @app.route('/playlist/item/<store_id>/<screen_id>/<item_id>/schedule', methods=['POST'])
 @login_required
 def add_schedule_window(store_id, screen_id, item_id):
-    cfg = ensure_playlists_structure(load_store_config())
+    ukey = _safe_user_key()
+    cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
     screen = cfg.get('screens', {}).get(store_id, {}).get(screen_id)
     if not screen:
         return jsonify({'success': False, 'error': 'screen not found'}), 404
@@ -5584,15 +5948,47 @@ def add_schedule_window(store_id, screen_id, item_id):
         if it.get('id') == item_id:
             sched = it.setdefault('schedule', [])
             sched.append(win)
+            # If part of a sync group, mirror to all members
+            try:
+                sref = it.get('sync_ref') if isinstance(it, dict) else None
+                if isinstance(sref, dict) and sref.get('group'):
+                    gid = sref.get('group')
+                    group = (cfg.get('sync_groups') or {}).get(gid)
+                    members = (group.get('members') or []) if isinstance(group, dict) else []
+                    for m in members:
+                        msid = m.get('screen_id')
+                        mid = m.get('item_id')
+                        if not msid or not mid:
+                            continue
+                        if msid == screen_id and mid == item_id:
+                            continue
+                        try:
+                            tgt = cfg.get('screens', {}).get(store_id, {}).get(msid)
+                            if not tgt:
+                                continue
+                            for it2 in (tgt.get('playlist') or []):
+                                if it2.get('id') == mid:
+                                    sch2 = it2.setdefault('schedule', [])
+                                    sch2.append(dict(win))
+                                    _enqueue_command_in_cfg(cfg, store_id, msid, 'reload')
+                                    break
+                        except Exception:
+                            continue
+            except Exception:
+                pass
             _enqueue_command_in_cfg(cfg, store_id, screen_id, 'reload')
-            save_store_config(cfg)
+            if ukey:
+                save_store_config_for_user_safe_key(ukey, cfg)
+            else:
+                save_store_config(cfg)
             return jsonify({'success': True, 'index': len(sched)-1, 'window': win})
     return jsonify({'success': False, 'error': 'item not found'}), 404
 
 @app.route('/playlist/item/<store_id>/<screen_id>/<item_id>/schedule/<int:index>', methods=['PATCH'])
 @login_required
 def update_schedule_window(store_id, screen_id, item_id, index):
-    cfg = ensure_playlists_structure(load_store_config())
+    ukey = _safe_user_key()
+    cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
     screen = cfg.get('screens', {}).get(store_id, {}).get(screen_id)
     if not screen:
         return jsonify({'success': False, 'error': 'screen not found'}), 404
@@ -5613,8 +6009,51 @@ def update_schedule_window(store_id, screen_id, item_id, index):
                 if 'enabled' in payload:
                     en = payload.get('enabled')
                     sched[index]['enabled'] = bool(en) if isinstance(en, bool) else False
+                # Propagate to sync group members at same index if present
+                try:
+                    sref = it.get('sync_ref') if isinstance(it, dict) else None
+                    if isinstance(sref, dict) and sref.get('group'):
+                        gid = sref.get('group')
+                        group = (cfg.get('sync_groups') or {}).get(gid)
+                        members = (group.get('members') or []) if isinstance(group, dict) else []
+                        for m in members:
+                            msid = m.get('screen_id')
+                            mid = m.get('item_id')
+                            if not msid or not mid:
+                                continue
+                            if msid == screen_id and mid == item_id:
+                                continue
+                            try:
+                                tgt = cfg.get('screens', {}).get(store_id, {}).get(msid)
+                                if not tgt:
+                                    continue
+                                for it2 in (tgt.get('playlist') or []):
+                                    if it2.get('id') == mid:
+                                        sch2 = it2.setdefault('schedule', [])
+                                        if 0 <= index < len(sch2):
+                                            if 'start' in payload: sch2[index]['start'] = payload.get('start')
+                                            if 'end' in payload: sch2[index]['end'] = payload.get('end')
+                                            if 'days' in payload:
+                                                valid_days = {'mon','tue','wed','thu','fri','sat','sun'}
+                                                days = payload.get('days') or []
+                                                if isinstance(days, list):
+                                                    sch2[index]['days'] = [d for d in days if isinstance(d, str) and d.lower() in valid_days]
+                                                else:
+                                                    sch2[index]['days'] = []
+                                            if 'enabled' in payload:
+                                                en = payload.get('enabled')
+                                                sch2[index]['enabled'] = bool(en) if isinstance(en, bool) else False
+                                            _enqueue_command_in_cfg(cfg, store_id, msid, 'reload')
+                                        break
+                            except Exception:
+                                continue
+                except Exception:
+                    pass
                 _enqueue_command_in_cfg(cfg, store_id, screen_id, 'reload')
-                save_store_config(cfg)
+                if ukey:
+                    save_store_config_for_user_safe_key(ukey, cfg)
+                else:
+                    save_store_config(cfg)
                 return jsonify({'success': True})
             return jsonify({'success': False, 'error': 'index out of range'}), 400
     return jsonify({'success': False, 'error': 'item not found'}), 404
@@ -5622,7 +6061,8 @@ def update_schedule_window(store_id, screen_id, item_id, index):
 @app.route('/playlist/item/<store_id>/<screen_id>/<item_id>/schedule/<int:index>', methods=['DELETE'])
 @login_required
 def delete_schedule_window(store_id, screen_id, item_id, index):
-    cfg = ensure_playlists_structure(load_store_config())
+    ukey = _safe_user_key()
+    cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
     screen = cfg.get('screens', {}).get(store_id, {}).get(screen_id)
     if not screen:
         return jsonify({'success': False, 'error': 'screen not found'}), 404
@@ -5631,8 +6071,40 @@ def delete_schedule_window(store_id, screen_id, item_id, index):
             sched = it.setdefault('schedule', [])
             if 0 <= index < len(sched):
                 removed = sched.pop(index)
+                # Mirror deletion to sync group members
+                try:
+                    sref = it.get('sync_ref') if isinstance(it, dict) else None
+                    if isinstance(sref, dict) and sref.get('group'):
+                        gid = sref.get('group')
+                        group = (cfg.get('sync_groups') or {}).get(gid)
+                        members = (group.get('members') or []) if isinstance(group, dict) else []
+                        for m in members:
+                            msid = m.get('screen_id')
+                            mid = m.get('item_id')
+                            if not msid or not mid:
+                                continue
+                            if msid == screen_id and mid == item_id:
+                                continue
+                            try:
+                                tgt = cfg.get('screens', {}).get(store_id, {}).get(msid)
+                                if not tgt:
+                                    continue
+                                for it2 in (tgt.get('playlist') or []):
+                                    if it2.get('id') == mid:
+                                        sch2 = it2.setdefault('schedule', [])
+                                        if 0 <= index < len(sch2):
+                                            sch2.pop(index)
+                                            _enqueue_command_in_cfg(cfg, store_id, msid, 'reload')
+                                        break
+                            except Exception:
+                                continue
+                except Exception:
+                    pass
                 _enqueue_command_in_cfg(cfg, store_id, screen_id, 'reload')
-                save_store_config(cfg)
+                if ukey:
+                    save_store_config_for_user_safe_key(ukey, cfg)
+                else:
+                    save_store_config(cfg)
                 return jsonify({'success': True, 'removed': removed})
             return jsonify({'success': False, 'error': 'index out of range'}), 400
     return jsonify({'success': False, 'error': 'item not found'}), 404
@@ -5646,6 +6118,169 @@ def get_playlist_legacy_1881(screen_id):
         # Call into the primary handler logic by passing mapped ids
         return get_playlist(master, screen_id)
     return jsonify({'success': False, 'error': 'legacy mapping unavailable'}), 404
+
+# ---------------- Multi-screen Sync (create groups and mark items) ----------------
+@app.route('/sync/create', methods=['POST'])
+@login_required
+def create_sync_group():
+    """Create a synchronized playlist item across multiple screens within a store.
+    Body JSON: { store_id, base_screen_id, count, filename }
+    - base_screen_id: the first screen (e.g., 'screen1', 'promo1'). We'll attempt to add subsequent
+      numeric siblings (screen2, screen3, ...) up to count screens if present in the store.
+    - count: 2..5; we only include existing screens and skip missing ones.
+    - filename: existing media key within the current user's namespace (or absolute URL that normalizes to it).
+    Returns: { success, group_id, used_screens:[...], members:[{screen_id,item_id,role,order}], skipped:[...] }
+    """
+    try:
+        data = request.get_json(force=True) or {}
+        store_id = str(data.get('store_id') or '').strip()
+        base_screen_id = str(data.get('base_screen_id') or '').strip()
+        try:
+            count = int(data.get('count') or 0)
+        except Exception:
+            count = 0
+        incoming = str(data.get('filename') or data.get('file') or '').strip()
+
+        if not store_id or not base_screen_id or count < 2 or count > 5 or not incoming:
+            return jsonify({'success': False, 'error': 'store_id, base_screen_id, count (2-5), and filename are required'}), 400
+
+        # Normalize/validate media key ownership (similar to assign_to_screen)
+        key = incoming
+        user_root = _user_content_prefix()
+        if not user_root:
+            return jsonify({'success': False, 'error': 'auth required'}), 403
+        if key.startswith('http://') or key.startswith('https://'):
+            try:
+                from urllib.parse import urlparse, unquote
+                u = urlparse(key)
+                path = (u.path or '').lstrip('/')
+                if path.startswith('static/uploads/'):
+                    path = path[len('static/uploads/'):]
+                elif path.startswith('media/'):
+                    path = path[len('media/'):]
+                # Remove MEDIA_BASE_URL path prefix if present
+                try:
+                    base = (get_media_base_url() or '').strip('/')
+                    if base:
+                        b = urlparse(base if base.startswith('http') else ('http://' + base))
+                        bpath = (b.path or '').lstrip('/')
+                        if bpath and path.startswith(bpath + '/'):
+                            path = path[len(bpath)+1:]
+                except Exception:
+                    pass
+                key = unquote(path)
+            except Exception:
+                return jsonify({'success': False, 'error': 'invalid media URL'}), 400
+        if not key.startswith(user_root + '/'):
+            return jsonify({'success': False, 'error': 'cross-tenant media access denied'}), 403
+        if not allowed_file(key):
+            return jsonify({'success': False, 'error': 'invalid or unsupported file type'}), 400
+
+        ukey = _safe_user_key()
+        cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
+        if store_id not in (cfg.get('screens') or {}):
+            return jsonify({'success': False, 'error': 'store not found'}), 404
+
+        screens_map = cfg['screens'][store_id]
+        # Normalize base_screen_id to an actual key present in this store (handles legacy short vs store-prefixed ids)
+        if base_screen_id not in screens_map:
+            candidate = f"{store_id}_{base_screen_id}"
+            if candidate in screens_map:
+                base_screen_id = candidate
+        # Build the list of sibling screens from base + sequential index if any, preserving any prefix
+        import re
+        m = re.match(r'^(.*?)(\d+)$', base_screen_id)
+        candidates: list[str] = []
+        if m:
+            prefix, num = m.group(1), int(m.group(2))
+            for i in range(count):
+                candidates.append(f"{prefix}{num + i}")
+        else:
+            # No trailing number; just use base_screen_id only (count ignored beyond 1)
+            candidates = [base_screen_id]
+
+        used = []
+        skipped = []
+        members = []
+        group_id = str(uuid.uuid4())
+        # Choose a common start timestamp a bit in the future to allow devices to fetch and align
+        now = int(time.time())
+        # Align to next 5-second boundary, at least +5s from now
+        start_epoch = ((now // 5) + 2) * 5
+        # Ensure top-level sync_groups container
+        try:
+            if not isinstance(cfg.get('sync_groups'), dict):
+                cfg['sync_groups'] = {}
+        except Exception:
+            cfg['sync_groups'] = {}
+
+        for idx, sid in enumerate(candidates):
+            scr = screens_map.get(sid)
+            if not scr:
+                # Auto-create missing screen with defaults based on type (promo = vertical)
+                try:
+                    store_prefix = f"{store_id}_"
+                    part = sid[len(store_prefix):] if sid.startswith(store_prefix) else sid
+                    is_promo = str(part).startswith('promo')
+                    scr = {
+                        'file': None,
+                        'vertical': True if is_promo else False,
+                        'horizontal': False if is_promo else True,
+                        'rotation': 0,
+                        'protected': False
+                    }
+                    screens_map[sid] = scr
+                except Exception:
+                    skipped.append(sid)
+                    continue
+            # Ensure playlist exists
+            pl = scr.setdefault('playlist', [])
+            # Create a new item for this sync group (avoid duplicate exact same key+group)
+            existing = next((it for it in pl if it.get('file') == key and isinstance(it.get('sync_ref'), dict) and it['sync_ref'].get('group') == group_id), None)
+            if existing:
+                item = existing
+            else:
+                item = {
+                    'id': str(uuid.uuid4()),
+                    'file': key,
+                    'enabled': True,
+                    'start': None,
+                    'end': None,
+                    'schedule': [],
+                    'duration': 10,
+                    'repeat': True,
+                    'link_next': False,
+                    'media_type': classify_media(key)
+                }
+                pl.append(item)
+            role = 'master' if idx == 0 else 'follower'
+            item['sync_ref'] = {'group': group_id, 'role': role, 'order': idx}
+            scr['file'] = key  # show as current for screen preview
+            used.append(sid)
+            members.append({'screen_id': sid, 'item_id': item['id'], 'role': role, 'order': idx})
+            _enqueue_command_in_cfg(cfg, store_id, sid, 'reload')
+
+        # Persist group metadata
+        cfg['sync_groups'][group_id] = {
+            'store_id': store_id,
+            'base': base_screen_id,
+            'count': count,
+            'filename': key,
+            'members': members,
+            'created_at': now,
+            'start_epoch': start_epoch,
+            # default segmentation mode: split horizontally across N screens
+            'mode': 'split-h'
+        }
+
+        if ukey:
+            save_store_config_for_user_safe_key(ukey, cfg)
+        else:
+            save_store_config(cfg)
+        return jsonify({'success': True, 'group_id': group_id, 'used_screens': used, 'members': members, 'skipped': skipped, 'start_epoch': start_epoch})
+    except Exception as e:
+        app.logger.exception('create_sync_group failed')
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5002))  # Use 5002 since 5000 seems blocked
