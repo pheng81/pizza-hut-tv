@@ -62,7 +62,7 @@ class TvDisplayActivity : AppCompatActivity() {
             setBackgroundColor(Color.BLACK)
             adjustViewBounds = true
             layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-            scaleType = ImageView.ScaleType.FIT_CENTER
+            scaleType = ImageView.ScaleType.MATRIX // we'll control crop for split mode
         }
         // ExoPlayer-based video surface (replaces VideoView for faster start & caching)
         val playerView = com.google.android.exoplayer2.ui.StyledPlayerView(this).apply {
@@ -439,6 +439,43 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
     fun isAnimated(file: String) = animatedExts.any { file.endsWith(".$it", true) }
     fun isAdvancedStill(file: String) = advancedStillExts.any { file.endsWith(".$it", true) }
 
+    fun applySplitCropForImage(item: com.pizzahut.tv.api.PlaylistItem) {
+        try {
+            val s = item.syncRef
+            val mode = s?.mode?.lowercase() ?: ""
+            val order = (s?.order ?: 0).coerceAtLeast(0)
+            val count = (s?.count ?: 0)
+            // Reset
+            imageView.imageMatrix = android.graphics.Matrix()
+            if (mode == "split-h" && count > 1) {
+                // Compute pan so that we show only the segment [order/count] horizontally
+                val w = imageView.width.takeIf { it > 0 } ?: binding.root.width
+                val h = imageView.height.takeIf { it > 0 } ?: binding.root.height
+                if (w > 0 && h > 0) {
+                    // Scale to cover then translate horizontally
+                    val d = imageView.drawable ?: return
+                    val dw = d.intrinsicWidth.toFloat()
+                    val dh = d.intrinsicHeight.toFloat()
+                    if (dw > 0 && dh > 0) {
+                        val scale = maxOf(w / dw, h / dh)
+                        val segW = w.toFloat()
+                        val totalW = segW * count
+                        val centerX = (order + 0.5f) * segW
+                        val targetX = centerX - (w / 2f)
+                        val m = android.graphics.Matrix()
+                        m.setScale(scale, scale)
+                        // Translate so that the visible window starts at targetX in the scaled space
+                        val scaledW = dw * scale
+                        val maxOffset = (scaledW - totalW).coerceAtLeast(0f)
+                        val offset = (targetX / totalW) * maxOffset
+                        m.postTranslate(-offset, (h - dh * scale) / 2f)
+                        imageView.imageMatrix = m
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
     fun loadAnimatedOrStatic(file: String, itemId: String?, preferredUrl: String?, onDone: (Boolean) -> Unit) {
         val url = if (!preferredUrl.isNullOrBlank() && preferredUrl.startsWith("http", true)) preferredUrl else ApiClientImageHelper.buildFileUrl(file)
         lifecycleScope.launch {
@@ -459,6 +496,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                     imageView.setImageDrawable(drawable)
                     if (drawable is AnimatedImageDrawable) drawable.start()
                     binding.message.text = file.take(50)
+                    applySplitCropForImage(originalItems.find { it.id == itemId } ?: originalItems.firstOrNull { it.file == file } ?: com.pizzahut.tv.api.PlaylistItem(id=null,file=file, url=null, enabled=true, duration=10, repeat=true, linkNext=false, start=null, end=null, schedule= emptyList(), days= emptyList(), mediaType="image", syncRef=null))
                     // report success
                     try { ApiClient.service.postClientEvent(com.pizzahut.tv.api.ClientEventReq(storeId, screenId, "load_ok", file = file, itemId = itemId)) } catch (_: Exception) {}
                     // start periodic ok ping to keep dashboard green while displayed
@@ -469,6 +507,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                     val bmp = withContext(Dispatchers.IO) { fetchBitmap(url) }
                     if (bmp != null) {
                         imageView.setImageBitmap(bmp)
+                        applySplitCropForImage(originalItems.find { it.id == itemId } ?: originalItems.firstOrNull { it.file == file } ?: com.pizzahut.tv.api.PlaylistItem(id=null,file=file, url=null, enabled=true, duration=10, repeat=true, linkNext=false, start=null, end=null, schedule= emptyList(), days= emptyList(), mediaType="image", syncRef=null))
                         binding.message.text = file.take(50)
                         try { ApiClient.service.postClientEvent(com.pizzahut.tv.api.ClientEventReq(storeId, screenId, "load_ok", file = file, itemId = itemId)) } catch (_: Exception) {}
                         startItemOkPing(storeId, screenId, file, itemId)
@@ -483,6 +522,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                 val bmp = withContext(Dispatchers.IO) { fetchBitmap(url) }
                 if (bmp != null) {
                     imageView.setImageBitmap(bmp)
+                    applySplitCropForImage(originalItems.find { it.id == itemId } ?: originalItems.firstOrNull { it.file == file } ?: com.pizzahut.tv.api.PlaylistItem(id=null,file=file, url=null, enabled=true, duration=10, repeat=true, linkNext=false, start=null, end=null, schedule= emptyList(), days= emptyList(), mediaType="image", syncRef=null))
                     binding.message.text = file.take(50)
                     try { ApiClient.service.postClientEvent(com.pizzahut.tv.api.ClientEventReq(storeId, screenId, "load_ok", file = file, itemId = itemId)) } catch (_: Exception) {}
                     startItemOkPing(storeId, screenId, file, itemId)
@@ -759,6 +799,31 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                                 }
                                 // Start periodic ok ping while this video item is playing
                                 startItemOkPing(storeId, screenId, f, next.id)
+                                // Apply split crop by translating the video surface within the playerView
+                                try {
+                                    val s = next.syncRef
+                                    val mode = s?.mode?.lowercase() ?: ""
+                                    val order = (s?.order ?: 0).coerceAtLeast(0)
+                                    val count = (s?.count ?: 0)
+                                    if (mode == "split-h" && count > 1) {
+                                        val segWidth = playerView.width
+                                        if (segWidth > 0) {
+                                            val total = segWidth * count
+                                            val centerX = (order + 0.5f) * segWidth
+                                            val target = centerX - (segWidth / 2f)
+                                            // Use content frame translation to pan horizontally over a larger virtual canvas
+                                            val content = playerView.videoSurfaceView ?: playerView
+                                            content.translationX = -target
+                                            // Scale to cover height if needed
+                                            content.scaleX = count.toFloat()
+                                            content.pivotX = 0f
+                                        }
+                                    } else {
+                                        val content = playerView.videoSurfaceView ?: playerView
+                                        content.translationX = 0f
+                                        content.scaleX = 1f
+                                    }
+                                } catch (_: Exception) {}
                             }
                             if (stateCode == com.google.android.exoplayer2.Player.STATE_ENDED) {
                                 // Advance if natural end happens early
@@ -916,7 +981,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
         binding.message.text = "Fetching playlist..."
         lifecycleScope.launch {
             try {
-                val resp = ApiClient.service.getPlaylist(storeId, screenId)
+                val resp = ApiClient.service.getPlaylist(storeId, screenId, com.pizzahut.tv.api.PairCodeHolder.codeOrNull())
                 val original = resp.playlist ?: emptyList()
                 originalItems = original
                 // Apply without resetting index if files are the same

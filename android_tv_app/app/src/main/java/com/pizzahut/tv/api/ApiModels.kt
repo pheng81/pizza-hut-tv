@@ -38,7 +38,11 @@ data class SyncRef(
 	@SerializedName("role") val role: String? = null, // master | follower
 	@SerializedName("order") val order: Int? = null,
 	// Epoch seconds at which the group cadence starts; align switches to this cadence
-	@SerializedName("start_epoch") val startEpoch: Long? = null
+	@SerializedName("start_epoch") val startEpoch: Long? = null,
+	// Number of screens in the group; when >1 and mode=split-h, each screen renders a horizontal slice
+	@SerializedName("count") val count: Int? = null,
+	// Segmentation mode ("split-h" for horizontal slicing)
+	@SerializedName("mode") val mode: String? = null
 )
 
 // Device setup discovery

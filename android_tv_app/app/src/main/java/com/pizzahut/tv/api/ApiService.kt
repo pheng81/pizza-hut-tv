@@ -1,6 +1,7 @@
 package com.pizzahut.tv.api
 
 import retrofit2.http.Body
+import retrofit2.http.Header
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
@@ -9,7 +10,8 @@ interface ApiService {
 	@GET("playlist/{storeId}/{screenId}")
 	suspend fun getPlaylist(
 		@Path("storeId") storeId: String,
-		@Path("screenId") screenId: String
+		@Path("screenId") screenId: String,
+		@Header("X-User-Code") userCode: String? = com.pizzahut.tv.api.PairCodeHolder.codeOrNull()
 	): PlaylistResponse
 
 	@GET("stores")
