@@ -242,12 +242,18 @@
 					const left = segW * order; // percent
 					// Use clip-path to reveal only this slice of the intrinsic media box
 					node.style.clipPath = `inset(0% ${Math.max(0,100-(left+segW)).toFixed(5)}% 0% ${left.toFixed(5)}%)`;
+					// Also apply transform-based fallback to ensure slicing on browsers where clip-path/object-position is flaky
+					node.style.transformOrigin = 'left center';
+					// Apply scale first then translate by slice fraction of scaled width
+					node.style.transform = `scaleX(${count}) translateX(-${(order/count*100).toFixed(5)}%)`;
 					// For videos/images, also adjust object-position to pan to the center of the slice
 					const centerX = left + segW/2;
 					node.style.objectPosition = `${centerX.toFixed(5)}% 50%`;
 				}else{
 					node.classList.remove('segment');
 					node.style.clipPath = '';
+					node.style.transformOrigin = '';
+					node.style.transform = '';
 					node.style.objectPosition = '';
 				}
 			}catch{}
