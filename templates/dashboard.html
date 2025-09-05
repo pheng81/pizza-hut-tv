@@ -2651,6 +2651,7 @@
                 
                 <div class="button-row" style="justify-content:center; flex-wrap: nowrap; gap:6px; align-items:center; width:100%;">
                     <button class="upload-btn" onclick="openReplaceModal('${screenId}','SINGLE')" style="flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 10px; font-size:clamp(10px, 2vw, 12px);">Schedule</button>
+                    <button class="upload-btn" onclick="openSyncModal('${screenId}')" style="flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 10px; font-size:clamp(10px, 2vw, 12px); background:#495057;">Sync Upload</button>
                     ${screenData.file ? 
                         `<button class=\"delete-btn\" onclick=\"deleteFile('${screenId}')\" title=\"Delete current file\" style=\"flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 10px; font-size:clamp(10px, 2vw, 12px);\">🗑️ Delete</button>` : 
                         ''
@@ -3359,15 +3360,16 @@
                                                                     <div class=\"pl-top\">
                                                                                                         <div class=\"pl-col pl-thumb\"><div class=\"pl-thumb-click\" data-screen="${screenId}" data-item="${item.id}" style="position:relative;">
                                                                                                             ${thumbForFile(item.url || item.file)}
+                                                                                                            ${item && item.sync_ref && item.sync_ref.role==='follower' ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5);color:#fff;font-weight:800;font-size:36px;letter-spacing:2px;">Sync</div>` : ''}
                                                                                                             <div class="item-status-dot ${statusClass}" title="${statusTip}"></div>
                                                                                                             <div style=\"position:absolute;inset:auto 4px 4px auto;background:rgba(0,0,0,.6);color:#fff;font-size:10px;padding:2px 4px;border-radius:3px;\">Change</div>\
                                                                                                             ${failed ? `<div title="${(last && last.error) ? String(last.error).replace(/\"/g,'&quot;') : 'Last playback failed on TV'}" style=\"position:absolute;top:4px;right:4px;background:#c0392b;color:#fff;font-size:10px;padding:2px 6px;border-radius:4px;\">FAILED</div>` : ''}
                                                                                                         </div></div>
                                                                         <div style=\"flex:1;display:flex;flex-direction:column;gap:4px;\">
-                                                                            <div class=\"schedule-section\">
+                                        <div class=\"schedule-section\"> 
                                                                                 <div class=\"schedule-header\">
-                                                                                    <div class=\"schedule-title\">Schedule</div>
-                                                                                    <button type=\"button\" class=\"add-slot-btn\" onclick=\"addScheduleWindow('${screenId}','${item.id}')\" title=\"Add schedule window\">+</button>
+                                            <div class=\"schedule-title\">Schedule</div>
+                                            ${item && item.sync_ref && item.sync_ref.role==='follower' ? '' : `<button type=\"button\" class=\"add-slot-btn\" onclick=\"addScheduleWindow('${screenId}','${item.id}')\" title=\"Add schedule window\">+</button>`}
                                                                                 </div>
                                                                                                                                                                 <div style="margin-top:4px;font-size:11px;font-weight:600;color:#555;display:flex;align-items:center;gap:6px;">
                                                                                                                                                                     <span style="letter-spacing:.3px;">Repeat:</span>
@@ -3382,47 +3384,34 @@
                                                                                 <div class="schedule-primary one-row">
                                                                                     <div class="slot-box dual ${inWindow && item.enabled? 'highlight-active':''}">
                                                                                         <div class="dual-col">
-                                                                                            <span class="slot-label">Start</span>
-                                                                                            <div class="slot-inline">
-                                                                                                <input type="date" id="pstartdate-${screenId}-${item.id}" value="${startDateVal}" onchange="playlistDateTimeChanged('${screenId}','${item.id}')">
-                                                                                                <input class="tp-input" readonly data-field="start" data-screen="${screenId}" data-item="${item.id}" id="pstart-${screenId}-${item.id}" type="text" value="${startVal}" placeholder="HH:MM:SS" onclick="openTimePicker(this)" oninput="playlistDateTimeChanged('${screenId}','${item.id}')">
-                                                                                            </div>
+                                                                                            ${item && item.sync_ref && item.sync_ref.role==='follower' ? '<div style="font-size:12px;color:#666;">(Sync-controlled)</div>' : `<span class=\"slot-label\">Start</span><div class=\"slot-inline\"><input type=\"date\" id=\"pstartdate-${screenId}-${item.id}\" value=\"${startDateVal}\" onchange=\"playlistDateTimeChanged('${screenId}','${item.id}')\"><input class=\"tp-input\" readonly data-field=\"start\" data-screen=\"${screenId}\" data-item=\"${item.id}\" id=\"pstart-${screenId}-${item.id}\" type=\"text\" value=\"${startVal}\" placeholder=\"HH:MM:SS\" onclick=\"openTimePicker(this)\" oninput=\"playlistDateTimeChanged('${screenId}','${item.id}')\"></div>`}
                                                                                         </div>
                                                                                         <div class="dual-col">
-                                                                                            <span class="slot-label">End</span>
-                                                                                            <div class="slot-inline">
-                                                                                                <input type="date" id="penddate-${screenId}-${item.id}" value="${endDateVal}" onchange="playlistDateTimeChanged('${screenId}','${item.id}')">
-                                                                                                <input class="tp-input" readonly data-field="end" data-screen="${screenId}" data-item="${item.id}" id="pend-${screenId}-${item.id}" type="text" value="${endVal}" placeholder="HH:MM:SS" onclick="openTimePicker(this)" oninput="playlistDateTimeChanged('${screenId}','${item.id}')">
-                                                                                            </div>
+                                                                                            ${item && item.sync_ref && item.sync_ref.role==='follower' ? '<div style="font-size:12px;color:#666;">(Sync-controlled)</div>' : `<span class=\"slot-label\">End</span><div class=\"slot-inline\"><input type=\"date\" id=\"penddate-${screenId}-${item.id}\" value=\"${endDateVal}\" onchange=\"playlistDateTimeChanged('${screenId}','${item.id}')\"><input class=\"tp-input\" readonly data-field=\"end\" data-screen=\"${screenId}\" data-item=\"${item.id}\" id=\"pend-${screenId}-${item.id}\" type=\"text\" value=\"${endVal}\" placeholder=\"HH:MM:SS\" onclick=\"openTimePicker(this)\" oninput=\"playlistDateTimeChanged('${screenId}','${item.id}')\"></div>`}
                                                                                         </div>
                                                                                     </div>
                                                                                 </div>
                                                                                 <div class="pl-actions inline-actions primary-actions">\
                                                                                         <div class="group left">\
-                                                                                            <button class="pl-switch ${item.enabled?'on':'off'}" aria-label="Toggle item" data-realstate="${item.enabled?'on':'off'}" title="Enable / Disable (independent of schedule)" onclick="toggleEnableSwitch(this,'${screenId}','${item.id}')"><span>${item.enabled?'On':'Off'}</span></button>\
+                                                                                            ${item && item.sync_ref && item.sync_ref.role==='follower' ? '' : `<button class=\"pl-switch ${item.enabled?'on':'off'}\" aria-label=\"Toggle item\" data-realstate=\"${item.enabled?'on':'off'}\" title=\"Enable / Disable (independent of schedule)\" onclick=\"toggleEnableSwitch(this,'${screenId}','${item.id}')\"><span>${item.enabled?'On':'Off'}</span></button>`}\
                                                                                             ${isMasterStore(currentStoreId) ? `<label style='display:inline-flex;align-items:center;gap:6px;margin-left:8px;font-size:11px;color:#444;'><input type='checkbox' data-bind='apply-select' data-item-id='${item.id}'><span>tick</span></label>` : ''}\
                                                                                         </div>\
                                                                                         <div class="group center combo-dur-del">\
-                                                                                            <div class="dur-box small">
-                                                                                                <button class="pl-icon-btn dur-btn" onclick="adjustDuration('${screenId}','${item.id}',-1, event)" aria-label="Decrease duration">−</button>
-                                                                                                <div class="dur-display" id="durdisp-${screenId}-${item.id}">${(item.duration||5)}s</div>
-                                                                                                <button class="pl-icon-btn dur-btn" onclick="adjustDuration('${screenId}','${item.id}',1, event)" aria-label="Increase duration">+</button>
-                                                                                            </div>
-                                                                                            <input id="dur-${screenId}-${item.id}" type="hidden" value="${item.duration || 5}">
+                                                                                            ${item && item.sync_ref && item.sync_ref.role==='follower' ? '<div style="font-size:12px;color:#666;">Duration (sync)</div>' : `<div class=\"dur-box small\"><button class=\"pl-icon-btn dur-btn\" onclick=\"adjustDuration('${screenId}','${item.id}',-1, event)\" aria-label=\"Decrease duration\">−</button><div class=\"dur-display\" id=\"durdisp-${screenId}-${item.id}\">${(item.duration||5)}s</div><button class=\"pl-icon-btn dur-btn\" onclick=\"adjustDuration('${screenId}','${item.id}',1, event)\" aria-label=\"Increase duration\">+</button></div><input id=\"dur-${screenId}-${item.id}\" type=\"hidden\" value=\"${item.duration || 5}\">`}
                                                                                         </div>\
                                                                                         <div class="group right">\
                                                                                             ${failed ? `<button class=\"delete-pill tiny\" style=\"background:#d35400;border-color:#d35400\" onclick=\"retryItemOnTV('${screenId}','${item.id}',${JSON.stringify(item.file || '')})\">Retry on TV</button>` : ''}
-                                                                                            <button class="delete-pill tiny" onclick="deletePlaylistItem('${screenId}','${item.id}')">Delete</button>
+                                                                                            ${(item && item.sync_ref && item.sync_ref.role==='follower') ? '' : `<button class=\"delete-pill tiny\" onclick=\"deletePlaylistItem('${screenId}','${item.id}')\">Delete</button>`}
                                                                                         </div>
                                                                                 </div>
                                                                                 <div class="effect-row" data-screen="${screenId}" data-item="${item.id}">
-                                                                                    ${[ ['', ''], ['1','fade'], ['2','slide-l'], ['3','slide-r'], ['4','zoom-in'], ['5','zoom-out'], ['6','rotate'] ].map(([num,val])=>{
+                                                                                    ${(true && !(item && item.sync_ref && item.sync_ref.role==='follower')) ? [ ['', ''], ['1','fade'], ['2','slide-l'], ['3','slide-r'], ['4','zoom-in'], ['5','zoom-out'], ['6','rotate'] ].map(([num,val])=>{
                                                                                         const active = (String(item.effect||'')===val) || (!item.effect && val==='');
                                                                                         const text = num || '·';
                                                                                         return `<button type="button" class="effect-btn ${active?'active':''}" title="${val||'none'}" data-effect="${val}" onclick="setItemEffect('${screenId}','${item.id}','${val}', this)">${text}</button>`;
-                                                                                    }).join('')}
+                                                                                    }).join('') : '<div style="font-size:12px;color:#666;">Effects (sync)</div>'}
                                                                                 </div>
-                                                                                <div class="schedule-windows" id="sched-${screenId}-${item.id}">${renderScheduleWindows(item, screenId)}</div>
+                                                                                <div class="schedule-windows" id="sched-${screenId}-${item.id}">${(item && item.sync_ref && item.sync_ref.role==='follower') ? '<div style="height:80px;display:flex;align-items:center;justify-content:center;background:#eef2f7;color:#334155;border:1px dashed #94a3b8;border-radius:6px;font-weight:700;">Sync..</div>' : renderScheduleWindows(item, screenId)}</div>
                                                                             </div>
                                                                         </div>
                                                                         ${!inWindow && item.enabled? '<div class=\\"time-off-badge\\">TIME OFF</div>':''}
@@ -4700,6 +4689,79 @@
                 }).catch(err=>{
                     alert('Delete failed: ' + err.message);
                 });
+            }
+
+            // --- Sync Upload Modal ---
+            function ensureSyncModal(){
+                if(document.getElementById('sync-overlay')) return;
+                const ov = document.createElement('div');
+                ov.id = 'sync-overlay';
+                ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);display:none;align-items:center;justify-content:center;z-index:1000;';
+                ov.innerHTML = `
+                    <div style="width:420px;max-width:95vw;background:#fff;border-radius:8px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.2);">
+                        <div style="font-weight:700;font-size:16px;margin-bottom:10px;">Screen Sync Upload</div>
+                        <div style="font-size:12px;color:#444;margin-bottom:8px;">Pick how many screens to span. We'll add this media as a synchronized item across sequential screens (e.g., screen1..screen3) in this store.</div>
+                        <div style="display:flex;align-items:center;gap:10px;margin:10px 0;">
+                            <label for="sync-count" style="font-size:12px;">Number of screens</label>
+                            <select id="sync-count">
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                            </select>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:8px;margin:8px 0 12px 0;">
+                            <button class="btn" onclick="openReplaceModal(window.__syncTargetScreen||'', 'SINGLE'); closeSyncModal();" title="Upload new media">Upload new…</button>
+                            <span style="font-size:12px;color:#666;">or choose from Library below:</span>
+                        </div>
+                        <div style="max-height:44vh;overflow:auto;border:1px solid #e5e7eb;border-radius:6px;padding:8px;">
+                            <div id="sync-lib" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;"></div>
+                        </div>
+                        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">
+                            <button class="btn" onclick="closeSyncModal()">Close</button>
+                            <button class="btn primary" onclick="refreshSyncLibrary()">Refresh</button>
+                        </div>
+                    </div>`;
+                document.body.appendChild(ov);
+            }
+            function openSyncModal(screenId){ ensureSyncModal(); window.__syncTargetScreen = screenId; document.getElementById('sync-overlay').style.display='flex'; refreshSyncLibrary(); }
+            function closeSyncModal(){ const ov=document.getElementById('sync-overlay'); if(ov) ov.style.display='none'; }
+            async function refreshSyncLibrary(){
+                const cont = document.getElementById('sync-lib'); if(!cont) return; cont.innerHTML = '<div style="font-size:12px;color:#666;">Loading…</div>';
+                try{
+                    const bust = Date.now();
+                    const r = await fetch('/library?ts='+bust, { cache:'no-store' });
+                    const j = await r.json();
+                    if(!j.success){ cont.innerHTML = '<div style="font-size:12px;color:#c00;">Failed to load library</div>'; return; }
+                    const files = j.files||[];
+                    cont.innerHTML = '';
+                    files.forEach(f=>{
+                        const card = document.createElement('div');
+                        card.style.cssText = 'display:flex;flex-direction:column;gap:6px;border:1px solid #e5e7eb;border-radius:6px;padding:6px;cursor:pointer;';
+                        const isVid = (f.media_type === 'video');
+                        const bust = Date.now();
+                        const img = isVid ? `<video muted preload=\"metadata\" style=\"width:100%;height:80px;object-fit:cover\" src=\"${f.url}\"></video>` : `<img loading=\"lazy\" style=\"width:100%;height:80px;object-fit:cover\" src=\"${thumbUrl(f.name,220)}?t=${bust}\">`;
+                        card.innerHTML = img + `<div style=\"font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;\" title=\"${f.name}\">${f.name}</div>`;
+                        card.addEventListener('click', ()=> chooseSyncFile(f.name));
+                        cont.appendChild(card);
+                    });
+                }catch(e){ cont.innerHTML = '<div style="font-size:12px;color:#c00;">Error loading</div>'; }
+            }
+            async function chooseSyncFile(name){
+                try{
+                    const screenId = window.__syncTargetScreen; if(!screenId){ alert('No target screen'); return; }
+                    const sel = document.getElementById('sync-count');
+                    const count = parseInt(sel && sel.value || '2', 10);
+                    const payload = { store_id: currentStoreId, base_screen_id: screenId, count, filename: name };
+                    const r = await fetch('/sync/create', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+                    const j = await r.json();
+                    if(!j.success){ alert('Sync create failed: ' + (j.error||'unknown')); return; }
+                    closeSyncModal();
+                    // Refresh all involved preview playlists
+                    try{ refreshPlaylist(screenId); }catch{}
+                    try{ (j.used_screens||[]).forEach(s=>{ if(s!==screenId) refreshPlaylist(s); }); }catch{}
+                    showMessage('Sync group created across '+ (j.used_screens||[]).length +' screen(s)');
+                }catch(e){ alert('Sync create failed: '+ e.message); }
             }
         
         // Store Management Functions

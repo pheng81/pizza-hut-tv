@@ -560,6 +560,18 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
     var scheduleTick: Runnable? = null
     var showNext: (() -> Unit)? = null
     var currentItemFile: String? = null
+    // Compute ms until the next cadence boundary for a sync group; returns null if no sync
+    fun msUntilNextSyncBoundary(item: com.pizzahut.tv.api.PlaylistItem?): Long? {
+        val start = item?.syncRef?.startEpoch ?: return null
+        val durSec = (item.duration ?: 10).coerceAtLeast(1)
+        val nowMs = System.currentTimeMillis()
+        val startMs = start * 1000L
+        if (nowMs < startMs) return (startMs - nowMs).coerceAtLeast(0L)
+        val d = durSec * 1000L
+        val elapsed = (nowMs - startMs) % d
+        val remain = d - elapsed
+        return remain.coerceAtLeast(0L)
+    }
     fun cancelScheduled() {
         scheduledRotation?.let {
             imageView.removeCallbacks(it)
@@ -680,15 +692,16 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                         }
                         // Start periodic ok ping while this legacy video is playing
                         startItemOkPing(storeId, screenId, file, next.id)
-                        // Schedule rotation according to playlist duration
-                        val durMs = (next.duration ?: 10).coerceAtLeast(1) * 1000L
+                        // Schedule rotation according to playlist duration, aligned to sync cadence if provided
+                        val defaultDurMs = (next.duration ?: 10).coerceAtLeast(1) * 1000L
+                        val alignMs = msUntilNextSyncBoundary(next)
                         cancelScheduled()
                         scheduledRotation = Runnable {
                             try { vv.stopPlayback() } catch (_: Exception) {}
                             vv.visibility = ImageView.GONE
                             showAndSchedule()
                         }
-                        vv.postDelayed(scheduledRotation!!, durMs)
+                        vv.postDelayed(scheduledRotation!!, (alignMs ?: defaultDurMs))
                     }
                     vv.setOnErrorListener { _, what, extra ->
                         binding.message.text = "LegacyErr w=$what e=$extra"
@@ -805,8 +818,9 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                     }
                 }
                 playerView.postDelayed(videoStallWatch!!, 8_000L)
-                // Schedule rotation based on playlist duration
-                val durMs = (next.duration ?: 10).coerceAtLeast(1) * 1000L
+                // Schedule rotation based on playlist duration, align to cadence when available
+                val defaultDurMs = (next.duration ?: 10).coerceAtLeast(1) * 1000L
+                val alignMs = msUntilNextSyncBoundary(next)
                 cancelScheduled()
                 scheduledRotation = Runnable {
                     // Move to next item after configured duration
@@ -818,7 +832,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
             legacyVideoView?.let { try { it.stopPlayback() } catch (_: Exception) {}; it.visibility = ImageView.GONE }
                     showAndSchedule()
                 }
-                playerView.postDelayed(scheduledRotation!!, durMs)
+                playerView.postDelayed(scheduledRotation!!, (alignMs ?: defaultDurMs))
             } catch (e: Exception) {
                 binding.message.text = ("ExoFail ${e.message}").take(60)
                 useLegacy()
@@ -846,11 +860,12 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                     state.items.getOrNull(idx)
                 } else null
                 prefetchNext(upcoming)
-                val durMs = (next.duration ?: 10).coerceAtLeast(1) * 1000L
+                val defaultDurMs = (next.duration ?: 10).coerceAtLeast(1) * 1000L
+                val alignMs = msUntilNextSyncBoundary(next)
                 cancelScheduled()
                 // If load succeeded, the ping was already started inside loadAnimatedOrStatic
                 scheduledRotation = Runnable { showAndSchedule() }
-                imageView.postDelayed(scheduledRotation!!, durMs)
+                imageView.postDelayed(scheduledRotation!!, (alignMs ?: defaultDurMs))
             }
         }
     }
