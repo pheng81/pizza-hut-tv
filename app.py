@@ -4794,24 +4794,33 @@ def get_playlist(store_id, screen_id):
             # If part of a sync group, attach group timing info
             try:
                 sref = item.get('sync_ref') if isinstance(item, dict) else None
+                gid = None
                 if isinstance(sref, dict):
                     gid = sref.get('group')
-                    if gid:
-                        grp = (cfg.get('sync_groups') or {}).get(gid) or {}
-                        se = grp.get('start_epoch') or grp.get('start') or grp.get('created_at')
-                        it.setdefault('sync_ref', dict(sref))
-                        # Attach alignment epoch if present
-                        if se:
-                            it['sync_ref']['start_epoch'] = int(se)
-                        # Also attach group segmentation metadata for client-side split playback
-                        try:
-                            cnt = int(grp.get('count') or 0)
-                            if cnt > 1:
-                                it['sync_ref']['count'] = cnt
-                        except Exception:
-                            pass
-                        mode = grp.get('mode') or 'split-h'
-                        it['sync_ref']['mode'] = mode
+                # If no sync_ref on item, try to infer group membership from config (screen in group)
+                if not gid:
+                    try:
+                        for ggid, g in (cfg.get('sync_groups') or {}).items():
+                            for mem in (g.get('members') or []):
+                                if mem.get('screen_id') == screen_id:
+                                    gid = ggid; sref = {'group': ggid, 'order': mem.get('order'), 'role': mem.get('role','follower')}
+                                    break
+                            if gid: break
+                    except Exception:
+                        gid = None
+                if gid:
+                    grp = (cfg.get('sync_groups') or {}).get(gid) or {}
+                    se = grp.get('start_epoch') or grp.get('start') or grp.get('created_at')
+                    it.setdefault('sync_ref', dict(sref or {}))
+                    if se:
+                        it['sync_ref']['start_epoch'] = int(se)
+                    try:
+                        cnt = int(grp.get('count') or 0)
+                        if cnt > 1:
+                            it['sync_ref']['count'] = cnt
+                    except Exception:
+                        pass
+                    it['sync_ref']['mode'] = grp.get('mode') or 'split-h'
             except Exception:
                 pass
             # Prefer id mapping; if missing, fall back to file key.
