@@ -4404,8 +4404,10 @@ def add_screen():
         
         if not store_id:
             return jsonify({'error': 'Store ID is required'}), 400
-            
-        config = load_store_config()
+
+        # Respect per-user segmented config if present
+        ukey = _safe_user_key()
+        config = load_store_config_for_user_safe_key(ukey) if ukey else load_store_config()
         
         if store_id not in config['screens']:
             config['screens'][store_id] = {}
@@ -4453,11 +4455,15 @@ def add_screen():
             'protected': False
         }
         
-        save_store_config(config)
+        if ukey:
+            save_store_config_for_user_safe_key(ukey, config)
+        else:
+            save_store_config(config)
         
         return jsonify({
-            'success': True, 
+            'success': True,
             'screen_id': new_screen_id,
+            'screen': config['screens'][store_id][new_screen_id],
             'message': f'Added {new_screen_id} successfully'
         })
         
@@ -4479,8 +4485,9 @@ def delete_screen():
         if not store_id or not screen_id:
             print("DEBUG: Missing store_id or screen_id")
             return jsonify({'error': 'Store ID and Screen ID are required'}), 400
-            
-        config = load_store_config()
+
+        ukey = _safe_user_key()
+        config = load_store_config_for_user_safe_key(ukey) if ukey else load_store_config()
         print(f"DEBUG: Available stores: {list(config['screens'].keys())}")
         
         if store_id not in config['screens']:
@@ -4523,7 +4530,10 @@ def delete_screen():
         del config['screens'][store_id][actual_id]
         print(f"DEBUG: Removed screen {actual_id} from config")
         
-        save_store_config(config)
+        if ukey:
+            save_store_config_for_user_safe_key(ukey, config)
+        else:
+            save_store_config(config)
         print(f"DEBUG: Configuration saved successfully")
         
         return jsonify({
@@ -4929,53 +4939,58 @@ def get_playlist(store_id, screen_id):
     # something even when a formal sync group hasn't been created yet.
     try:
         if not out:
-            import re
-            short = screen_id.split('_', 1)[1] if '_' in screen_id else screen_id
-            m = re.match(r'^(.*?)(\d+)$', short)
-            if m:
-                prefix, num = m.group(1), int(m.group(2) or 0)
-                if num >= 2:
-                    base_short = f"{prefix}1"
-                    # Prefer current-store-prefixed id first, then short id
-                    base_ids = [f"{store_id}_{base_short}", base_short]
-                    base_scr = None
-                    for bid in base_ids:
-                        base_scr = (screens or {}).get(bid)
-                        if base_scr:
-                            break
-                    if isinstance(base_scr, dict):
-                        fname = base_scr.get('file')
-                        if not fname:
-                            try:
-                                plb = base_scr.get('playlist') or []
-                                if plb:
-                                    fname = plb[0].get('file')
-                            except Exception:
-                                fname = None
-                        if fname:
-                            se = ((int(time.time()) // 5) + 2) * 5
-                out.append({
-                                'id': f"virtual:implicit:{store_id}:{screen_id}",
-                                'file': fname,
-                                'url': build_public_url(fname),
-                                'enabled': True,
-                                'start': None,
-                                'end': None,
-                                'schedule': [],
-                                'duration': 10,
-                                'repeat': True,
-                                'link_next': False,
-                                'media_type': classify_media(fname),
-                                'sync_ref': {
-                                    'group': f"implicit:{store_id}:{prefix}",
-                                    'role': 'follower',
-                                    'order': max(0, num-1),
-                                    'virtual': True,
-                    'start_epoch': se,
-                    'count': 0,
-                    'mode': 'split-h'
-                                }
-                            })
+            # NEW: Skip implicit mirror for a brand-new empty screen (no file, no playlist) so it appears truly empty.
+            # This prevents a freshly added screen from auto-inheriting base screen media and looking "sync controlled" unintentionally.
+            if screen.get('file') is None and not screen.get('playlist'):
+                pass  # Leave it empty; user can explicitly sync or add media later.
+            else:
+                import re
+                short = screen_id.split('_', 1)[1] if '_' in screen_id else screen_id
+                m = re.match(r'^(.*?)(\d+)$', short)
+                if m:
+                    prefix, num = m.group(1), int(m.group(2) or 0)
+                    if num >= 2:
+                        base_short = f"{prefix}1"
+                        # Prefer current-store-prefixed id first, then short id
+                        base_ids = [f"{store_id}_{base_short}", base_short]
+                        base_scr = None
+                        for bid in base_ids:
+                            base_scr = (screens or {}).get(bid)
+                            if base_scr:
+                                break
+                        if isinstance(base_scr, dict):
+                            fname = base_scr.get('file')
+                            if not fname:
+                                try:
+                                    plb = base_scr.get('playlist') or []
+                                    if plb:
+                                        fname = plb[0].get('file')
+                                except Exception:
+                                    fname = None
+                            if fname:
+                                se = ((int(time.time()) // 5) + 2) * 5
+                                out.append({
+                                    'id': f"virtual:implicit:{store_id}:{screen_id}",
+                                    'file': fname,
+                                    'url': build_public_url(fname),
+                                    'enabled': True,
+                                    'start': None,
+                                    'end': None,
+                                    'schedule': [],
+                                    'duration': 10,
+                                    'repeat': True,
+                                    'link_next': False,
+                                    'media_type': classify_media(fname),
+                                    'sync_ref': {
+                                        'group': f"implicit:{store_id}:{prefix}",
+                                        'role': 'follower',
+                                        'order': max(0, num-1),
+                                        'virtual': True,
+                                        'start_epoch': se,
+                                        'count': 0,
+                                        'mode': 'split-h'
+                                    }
+                                })
     except Exception:
         pass
     print(f"DEBUG: Returning playlist items: {len(out)}")
@@ -5673,9 +5688,14 @@ def list_stores():
     cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
     return {'success': True, 'stores': cfg.get('stores', [])}
 
-@app.route('/screens/<store_id>')
+@app.route('/screens_list/<store_id>')
 @with_etag_json
-def list_screens(store_id):
+def list_screens_legacy_array(store_id):
+    """Legacy endpoint returning an array of {'id': screen_id} objects.
+
+    NOTE: The dashboard now uses /screens/<store_id> which returns a mapping
+    of screen_id -> screen_object. This endpoint retained for older TV clients.
+    """
     header_code = request.headers.get('X-User-Code') or request.args.get('user_code')
     user_key = _resolve_user_key_by_code(header_code)
     if not user_key and not _safe_user_key():
@@ -5685,9 +5705,8 @@ def list_screens(store_id):
     if store_id not in (cfg.get('screens') or {}):
         return {'success': False, 'error': 'store not found'}, 404
     screens = cfg.get('screens', {}).get(store_id, {})
-    # Return as array of {id: screen_id}
     arr = [{'id': sid} for sid in screens.keys()]
-    return {'success': True, 'screens': arr}
+    return {'success': True, 'screens': arr, 'legacy': True}
 
 @app.route('/playlist/item/<store_id>/<screen_id>/<item_id>', methods=['PATCH'])
 @login_required
@@ -5853,6 +5872,21 @@ def update_playlist_item(store_id, screen_id, item_id):
             save_store_config(cfg)
         return jsonify({'success': True})
     return jsonify({'success': False, 'error': 'item not found'}), 404
+
+@app.route('/screens/<store_id>', methods=['GET'])
+@login_required
+def get_screens_for_store(store_id: str):
+    """Return authoritative screen map for a single store (used by dashboard to purge phantom client entries)."""
+    try:
+        ukey = _safe_user_key()
+        cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
+        screens_all = cfg.get('screens') or {}
+        if store_id not in screens_all:
+            return jsonify({'success': False, 'error': 'store not found'}), 404
+        return jsonify({'success': True, 'store_id': store_id, 'screens': screens_all.get(store_id) or {}})
+    except Exception as e:
+        app.logger.exception('get_screens_for_store failed')
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/playlist/item/<store_id>/<screen_id>/<item_id>', methods=['DELETE'])
 @login_required
@@ -6289,6 +6323,251 @@ def create_sync_group():
         return jsonify({'success': True, 'group_id': group_id, 'used_screens': used, 'members': members, 'skipped': skipped, 'start_epoch': start_epoch})
     except Exception as e:
         app.logger.exception('create_sync_group failed')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/sync/expand', methods=['POST'])
+@login_required
+def expand_sync_group():
+    """Expand an existing sync group to a higher screen count.
+    Body JSON: { store_id, group_id, new_count }
+    Constraints:
+      - new_count must be > current member count and <= 5
+      - Auto-create missing sequential screens if needed
+    Returns: { success, group_id, added: [...], members:[...], count }
+    """
+    try:
+        data = request.get_json(force=True) or {}
+        store_id = str(data.get('store_id') or '').strip()
+        group_id = str(data.get('group_id') or '').strip()
+        try:
+            new_count = int(data.get('new_count') or 0)
+        except Exception:
+            new_count = 0
+        if not store_id or not group_id or new_count < 2 or new_count > 5:
+            return jsonify({'success': False, 'error': 'store_id, group_id and new_count(2-5) required'}), 400
+        ukey = _safe_user_key()
+        cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
+        groups = cfg.get('sync_groups') or {}
+        grp = groups.get(group_id)
+        if not grp or grp.get('store_id') != store_id:
+            return jsonify({'success': False, 'error': 'group not found'}), 404
+        members = grp.get('members') or []
+        cur_count = len(members)
+        if new_count <= cur_count:
+            return jsonify({'success': False, 'error': 'new_count must be greater than current member count', 'current': cur_count}), 400
+        if new_count > 5:
+            return jsonify({'success': False, 'error': 'max 5 screens'}), 400
+        screens_map = (cfg.get('screens') or {}).get(store_id)
+        if not isinstance(screens_map, dict):
+            return jsonify({'success': False, 'error': 'store not found'}), 404
+        base = grp.get('base') or ''
+        import re, uuid as _uuid
+        m = re.match(r'^(.*?)(\d+)$', base)
+        if not m:
+            return jsonify({'success': False, 'error': 'base screen not numeric-suffixed; cannot auto-expand'}), 400
+        prefix, num = m.group(1), int(m.group(2))
+        added = []
+        media_file = grp.get('filename')
+        # Build needed candidate ids up to new_count
+        for order in range(cur_count, new_count):
+            sid = f"{prefix}{num + order}"
+            scr = screens_map.get(sid)
+            if not scr:
+                # create blank screen
+                short = sid.split('_',1)[1] if '_' in sid else sid
+                is_promo = short.startswith('promo')
+                scr = {
+                    'file': None,
+                    'vertical': True if is_promo else False,
+                    'horizontal': False if is_promo else True,
+                    'rotation': 0,
+                    'protected': False
+                }
+                screens_map[sid] = scr
+            pl = scr.setdefault('playlist', [])
+            item = {
+                'id': str(_uuid.uuid4()),
+                'file': media_file,
+                'enabled': True,
+                'start': None,
+                'end': None,
+                'schedule': [],
+                'duration': 10,
+                'repeat': True,
+                'link_next': False,
+                'media_type': classify_media(media_file)
+            }
+            role = 'follower'
+            item['sync_ref'] = {'group': group_id, 'role': role, 'order': order}
+            pl.append(item)
+            scr['file'] = media_file
+            members.append({'screen_id': sid, 'item_id': item['id'], 'role': role, 'order': order})
+            added.append(sid)
+            _enqueue_command_in_cfg(cfg, store_id, sid, 'reload')
+        grp['count'] = new_count
+        grp['members'] = members
+        if ukey:
+            save_store_config_for_user_safe_key(ukey, cfg)
+        else:
+            save_store_config(cfg)
+        return jsonify({'success': True, 'group_id': group_id, 'added': added, 'members': members, 'count': new_count})
+    except Exception as e:
+        app.logger.exception('expand_sync_group failed')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/sync/add_follower', methods=['POST'])
+@login_required
+def add_sync_follower():
+    """Add one follower screen to a base sync layout.
+    Body: { store_id, base_screen_id }
+    Behavior:
+      - If a sync group already exists with base == base_screen_id (or resolves to it), append one follower (max 5 total)
+      - If none exists, create a new group of size 2 (master + one follower) using the base screen's current file/playlist first item.
+      - Auto-create the follower screen if absent (sequential numeric: screen2, screen3 ...).
+    Returns: { success, group_id, new_screen, members, count }
+    """
+    try:
+        data = request.get_json(force=True) or {}
+        store_id = str(data.get('store_id') or '').strip()
+        base_screen_id = str(data.get('base_screen_id') or '').strip()
+        if not store_id or not base_screen_id:
+            return jsonify({'success': False, 'error': 'store_id and base_screen_id required'}), 400
+        ukey = _safe_user_key()
+        cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
+        screens_map = (cfg.get('screens') or {}).get(store_id)
+        if not isinstance(screens_map, dict):
+            return jsonify({'success': False, 'error': 'store not found'}), 404
+        # Normalize base id (accept short form screen1)
+        if base_screen_id not in screens_map:
+            cand = f"{store_id}_{base_screen_id}"
+            if cand in screens_map:
+                base_screen_id = cand
+        base_scr = screens_map.get(base_screen_id)
+        if not isinstance(base_scr, dict):
+            return jsonify({'success': False, 'error': 'base screen not found'}), 404
+        # Determine media file from base screen (file or first playlist item)
+        media_file = base_scr.get('file')
+        if not media_file:
+            try:
+                plb = base_scr.get('playlist') or []
+                if plb:
+                    media_file = plb[0].get('file')
+            except Exception:
+                pass
+        if not media_file:
+            return jsonify({'success': False, 'error': 'base screen has no media; assign a video first'}), 400
+        groups = cfg.get('sync_groups') or {}
+        # Locate existing group that uses this base
+        group_id = None
+        grp = None
+        for gid, g in groups.items():
+            if g.get('store_id') == store_id and g.get('base') == base_screen_id:
+                group_id = gid; grp = g; break
+        import uuid as _uuid, time as _time, re
+        import re as _re
+        m = _re.match(r'^(.*?)(\d+)$', base_screen_id)
+        if not grp:
+            # Create new group with count=2
+            if not m:
+                return jsonify({'success': False, 'error': 'base id not numeric-suffixed; cannot auto create group'}), 400
+            prefix, num = m.group(1), int(m.group(2))
+            group_id = str(_uuid.uuid4())
+            members = []
+            # Ensure playlist + master item
+            pl = base_scr.setdefault('playlist', [])
+            master_item = None
+            for it in pl:
+                if it.get('file') == media_file:
+                    master_item = it; break
+            if not master_item:
+                master_item = {
+                    'id': str(_uuid.uuid4()), 'file': media_file, 'enabled': True, 'start': None, 'end': None,
+                    'schedule': [], 'duration': 10, 'repeat': True, 'link_next': False, 'media_type': classify_media(media_file)
+                }
+                pl.append(master_item)
+            master_item['sync_ref'] = {'group': group_id, 'role': 'master', 'order': 0}
+            members.append({'screen_id': base_screen_id, 'item_id': master_item['id'], 'role': 'master', 'order': 0})
+            # Create follower screen id
+            follower_sid = f"{prefix}{num+1}"
+            follower_scr = screens_map.get(follower_sid)
+            if not follower_scr:
+                short = follower_sid.split('_',1)[1] if '_' in follower_sid else follower_sid
+                is_promo = short.startswith('promo')
+                follower_scr = {
+                    'file': None, 'vertical': True if is_promo else False, 'horizontal': False if is_promo else True,
+                    'rotation': 0, 'protected': False
+                }
+                screens_map[follower_sid] = follower_scr
+            fpl = follower_scr.setdefault('playlist', [])
+            f_item = {
+                'id': str(_uuid.uuid4()), 'file': media_file, 'enabled': True, 'start': None, 'end': None,
+                'schedule': [], 'duration': 10, 'repeat': True, 'link_next': False, 'media_type': classify_media(media_file)
+            }
+            f_item['sync_ref'] = {'group': group_id, 'role': 'follower', 'order': 1}
+            fpl.append(f_item)
+            follower_scr['file'] = media_file
+            members.append({'screen_id': follower_sid, 'item_id': f_item['id'], 'role': 'follower', 'order': 1})
+            now = int(_time.time())
+            start_epoch = ((now // 5) + 2) * 5
+            cfg.setdefault('sync_groups', {})[group_id] = {
+                'store_id': store_id, 'base': base_screen_id, 'count': 2, 'filename': media_file,
+                'members': members, 'created_at': now, 'start_epoch': start_epoch, 'mode': 'split-h'
+            }
+            _enqueue_command_in_cfg(cfg, store_id, base_screen_id, 'reload')
+            _enqueue_command_in_cfg(cfg, store_id, follower_sid, 'reload')
+            if ukey:
+                save_store_config_for_user_safe_key(ukey, cfg)
+            else:
+                save_store_config(cfg)
+            return jsonify({'success': True, 'group_id': group_id, 'new_screen': follower_sid, 'members': members, 'count': 2, 'created': True, 'filename': media_file})
+        # Expand existing group
+        members = grp.get('members') or []
+        cur_count = len(members)
+        if cur_count >= 5:
+            return jsonify({'success': False, 'error': 'max 5 screens reached', 'count': cur_count}), 400
+        if not m:
+            return jsonify({'success': False, 'error': 'base id not numeric-suffixed; cannot expand'}, 400)
+        prefix, num = m.group(1), int(m.group(2))
+        new_order = cur_count
+        follower_sid = f"{prefix}{num + new_order - 0}"  # order 0 is master, so order==cur_count -> suffix num+cur_count
+        if follower_sid in [m['screen_id'] for m in members]:
+            # Find next unused numeric id
+            k = num + 1
+            while True:
+                candidate = f"{prefix}{k}"
+                if candidate not in [m['screen_id'] for m in members]:
+                    follower_sid = candidate
+                    break
+                k += 1
+        follower_scr = screens_map.get(follower_sid)
+        if not follower_scr:
+            short = follower_sid.split('_',1)[1] if '_' in follower_sid else follower_sid
+            is_promo = short.startswith('promo')
+            follower_scr = {
+                'file': None, 'vertical': True if is_promo else False, 'horizontal': False if is_promo else True,
+                'rotation': 0, 'protected': False
+            }
+            screens_map[follower_sid] = follower_scr
+        fpl = follower_scr.setdefault('playlist', [])
+        import uuid as _uuid2
+        f_item = {
+            'id': str(_uuid2.uuid4()), 'file': media_file, 'enabled': True, 'start': None, 'end': None,
+            'schedule': [], 'duration': 10, 'repeat': True, 'link_next': False, 'media_type': classify_media(media_file)
+        }
+        f_item['sync_ref'] = {'group': group_id, 'role': 'follower', 'order': new_order}
+        fpl.append(f_item)
+        follower_scr['file'] = media_file
+        members.append({'screen_id': follower_sid, 'item_id': f_item['id'], 'role': 'follower', 'order': new_order})
+        grp['members'] = members
+        grp['count'] = len(members)
+        _enqueue_command_in_cfg(cfg, store_id, follower_sid, 'reload')
+        if ukey:
+            save_store_config_for_user_safe_key(ukey, cfg)
+        else:
+            save_store_config(cfg)
+        return jsonify({'success': True, 'group_id': group_id, 'new_screen': follower_sid, 'members': members, 'count': grp['count'], 'created': False, 'filename': media_file})
+    except Exception as e:
+        app.logger.exception('add_sync_follower failed')
         return jsonify({'success': False, 'error': str(e)}), 500
 
 if __name__ == '__main__':
