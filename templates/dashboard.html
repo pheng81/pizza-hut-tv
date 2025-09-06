@@ -4333,6 +4333,25 @@
                 }
                 // Crossfade to avoid blank: preload next, then swap
                 const doSwap = (node)=>{
+                    // Apply multi-screen slice cropping for sync groups (horizontal only for now)
+                    try{
+                        const sref = item && item.sync_ref || {};
+                        const cnt = parseInt(sref.count||0,10);
+                        const ord = parseInt(sref.order||0,10);
+                        const mode = String(sref.mode||'split-h').toLowerCase();
+                        if(cnt>1 && ord>=0){
+                            if(mode==='split-h'){
+                                node.style.clipPath = '';
+                                node.style.transformOrigin = 'left center';
+                                node.style.transform = `scaleX(${cnt}) translateX(-${(ord/cnt*100).toFixed(5)}%)`;
+                                node.style.objectPosition = `${((ord+0.5)/cnt*100).toFixed(5)}% 50%`;
+                            } else if(mode==='split-v'){
+                                node.style.transformOrigin = 'center top';
+                                node.style.transform = `scaleY(${cnt}) translateY(-${(ord/cnt*100).toFixed(5)}%)`;
+                                node.style.objectPosition = `50% ${((ord+0.5)/cnt*100).toFixed(5)}%`;
+                            }
+                        }
+                    }catch{}
                     node.style.maxWidth='100%'; node.style.maxHeight='100%'; node.style.objectFit='contain';
                     if(rotationClass) node.classList.add(rotationClass);
                     const wrap = document.createElement('div'); wrap.className='preview-item fading-in';
