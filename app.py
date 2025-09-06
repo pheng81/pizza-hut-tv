@@ -5883,7 +5883,28 @@ def get_screens_for_store(store_id: str):
         screens_all = cfg.get('screens') or {}
         if store_id not in screens_all:
             return jsonify({'success': False, 'error': 'store not found'}), 404
-        return jsonify({'success': True, 'store_id': store_id, 'screens': screens_all.get(store_id) or {}})
+        store_map = screens_all.get(store_id) or {}
+        # Filter out any screens whose prefixed store segment doesn't match (phantom leakage from other stores / prior sync operations)
+        cleaned = {}
+        removed = []
+        for sid, sval in list(store_map.items()):
+            if '_' in sid:
+                pref = sid.split('_', 1)[0]
+                if pref != store_id:
+                    removed.append(sid)
+                    continue
+            # Allow legacy unprefixed ids like 'screen1', 'promo1'
+            cleaned[sid] = sval
+        if removed:
+            # Persist cleanup so future calls don't re-send phantoms
+            screens_all[store_id] = cleaned
+            cfg['screens'] = screens_all
+            if ukey:
+                save_store_config_for_user_safe_key(ukey, cfg)
+            else:
+                save_store_config(cfg)
+            app.logger.warning('Purged %d cross-store screen ids from %s: %s', len(removed), store_id, removed)
+        return jsonify({'success': True, 'store_id': store_id, 'screens': cleaned})
     except Exception as e:
         app.logger.exception('get_screens_for_store failed')
         return jsonify({'success': False, 'error': str(e)}), 500
