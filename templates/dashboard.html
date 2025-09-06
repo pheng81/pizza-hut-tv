@@ -1515,6 +1515,9 @@
     }
     .sync-slice-inner { width:100%; height:100%; position:relative; }
     .sync-slice-badge { position:absolute; bottom:2px; right:4px; background:rgba(0,0,0,.55); color:#fff; font-size:9px; padding:2px 4px; border-radius:4px; font-weight:600; letter-spacing:.5px; }
+    /* Dashboard rotating preview slice */
+    .sync-preview-slice { position:relative; width:100%; height:100%; overflow:hidden; }
+    .sync-preview-slice > video, .sync-preview-slice > img { width:100%; height:100%; object-fit:cover; transform-origin:left center; }
     </style>
 </head>
 <body>
@@ -4352,14 +4355,18 @@
                             }
                         }
                     }catch{}
-                    node.style.maxWidth='100%'; node.style.maxHeight='100%'; node.style.objectFit='contain';
+                    node.style.maxWidth='100%'; node.style.maxHeight='100%';
+                    const hasSlice = !!(node.style.transform && /scale[XY]\(/.test(node.style.transform));
+                    node.style.objectFit = hasSlice ? 'cover' : 'contain';
                     if(rotationClass) node.classList.add(rotationClass);
                     const wrap = document.createElement('div'); wrap.className='preview-item fading-in';
-                    // Apply selected effect on dashboard preview
+                    // Wrap in overflow hidden container if sliced so scaling doesn't spill
+                    let contentNode = node;
+                    if(hasSlice){ const outer=document.createElement('div'); outer.className='sync-preview-slice'; outer.appendChild(node); contentNode = outer; }
                     const eff = String(item && item.effect || '').toLowerCase();
                     const map = { 'slide-l':'enter-slide-l', 'slide-r':'enter-slide-r', 'zoom-in':'enter-zoom-in', 'zoom-out':'enter-zoom-out', 'rotate':'enter-rotate' };
                     if(eff && eff!=='fade') { node.classList.add('anim'); const c = map[eff]; if(c) node.classList.add(c); }
-                    wrap.appendChild(node);
+                    wrap.appendChild(contentNode);
                     // Collect all existing preview layers (not just the first) to avoid stacked leftovers
                     const existing = Array.from(preview.querySelectorAll('.preview-item'));
                     preview.appendChild(wrap);
