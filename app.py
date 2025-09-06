@@ -4422,6 +4422,26 @@ def add_screen():
                     del config['screens'][store_id][stray_promo]
                 except Exception:
                     pass
+
+        # Purge any sync groups whose base screen no longer exists (prevents resurrecting old sync state when reusing ids)
+        try:
+            groups = config.get('sync_groups') or {}
+            to_del = []
+            for gid, grp in list(groups.items()):
+                if grp.get('store_id') != store_id:
+                    continue
+                base = grp.get('base')
+                if base and base not in config['screens'][store_id]:
+                    to_del.append(gid)
+            if to_del:
+                for gid in to_del:
+                    groups.pop(gid, None)
+                if groups:
+                    config['sync_groups'] = groups
+                else:
+                    config.pop('sync_groups', None)
+        except Exception:
+            pass
         
         # Find next available screen number for store-specific screen IDs
         store_prefix = f"{store_id}_"
@@ -4553,6 +4573,49 @@ def delete_screen():
         # Remove screen from configuration
         del config['screens'][store_id][actual_id]
         print(f"DEBUG: Removed screen {actual_id} from config")
+
+        # Clean up any sync groups referencing this screen
+        try:
+            groups = config.get('sync_groups') or {}
+            changed = False
+            for gid, grp in list(groups.items()):
+                if grp.get('store_id') != store_id:
+                    continue
+                members = grp.get('members') or []
+                if grp.get('base') == actual_id:
+                    # Remove entire group; scrub sync_ref items from all member screens
+                    for m in members:
+                        msid = m.get('screen_id')
+                        scr = config['screens'][store_id].get(msid) if store_id in config['screens'] else None
+                        if isinstance(scr, dict):
+                            pl = scr.get('playlist') or []
+                            scr['playlist'] = [it for it in pl if not (isinstance(it, dict) and (it.get('sync_ref') or {}).get('group') == gid)]
+                    groups.pop(gid, None)
+                    changed = True
+                else:
+                    # Remove member referencing this screen
+                    new_members = [m for m in members if m.get('screen_id') != actual_id]
+                    if len(new_members) != len(members):
+                        # Scrub playlist items on that screen (already removed) from other screens just in case
+                        for m in members:
+                            msid = m.get('screen_id')
+                            scr = config['screens'][store_id].get(msid) if store_id in config['screens'] else None
+                            if isinstance(scr, dict):
+                                pl = scr.get('playlist') or []
+                                scr['playlist'] = [it for it in pl if not (isinstance(it, dict) and (it.get('sync_ref') or {}).get('group') == gid and it.get('sync_ref', {}).get('role') == 'follower' and it.get('screen_id') == actual_id)]
+                        grp['members'] = new_members
+                        grp['count'] = len(new_members)
+                        # If less than 2 members remain, remove group entirely
+                        if grp['count'] < 2:
+                            groups.pop(gid, None)
+                        changed = True
+            if changed:
+                if groups:
+                    config['sync_groups'] = groups
+                else:
+                    config.pop('sync_groups', None)
+        except Exception as _sg_clean_err:
+            print('WARN: sync group cleanup failed', _sg_clean_err)
         
         if ukey:
             save_store_config_for_user_safe_key(ukey, config)
