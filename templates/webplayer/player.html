@@ -235,7 +235,7 @@
 				const mode = (sref.mode||'').toLowerCase();
 				const order = Math.max(0, parseInt(sref.order||0));
 				const count = Math.max(0, parseInt(sref.count||0));
-				if(mode==='split-h' && count && count>1){
+				if((mode==='split-h' || !mode) && count && count>1){
 					// Horizontal split: divide content width into equal segments, pan to this segment
 					node.classList.add('segment');
 					const segW = 100 / count; // percent
@@ -249,6 +249,16 @@
 					// For videos/images, also adjust object-position to pan to the center of the slice
 					const centerX = left + segW/2;
 					node.style.objectPosition = `${centerX.toFixed(5)}% 50%`;
+				} else if(mode==='split-v' && count && count>1){
+					// Vertical split (future): divide content height into segments
+					node.classList.add('segment');
+					const segH = 100 / count;
+					const top = segH * order;
+					node.style.clipPath = `inset(${top.toFixed(5)}% 0% ${Math.max(0,100-(top+segH)).toFixed(5)}% 0%)`;
+					node.style.transformOrigin = 'center top';
+					node.style.transform = `scaleY(${count}) translateY(-${(order/count*100).toFixed(5)}%)`;
+					const centerY = top + segH/2;
+					node.style.objectPosition = `50% ${centerY.toFixed(5)}%`;
 				}else{
 					node.classList.remove('segment');
 					node.style.clipPath = '';
