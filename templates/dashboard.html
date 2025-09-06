@@ -2654,11 +2654,11 @@
                     }
                 </div>
                 
-                <div class="button-row" style="justify-content:center; flex-wrap:nowrap; gap:4px; align-items:stretch; width:100%;">
-                    <button class="upload-btn" onclick="openReplaceModal('${screenId}','SINGLE')" style="flex:1 1 90px; min-width:0; padding:4px 6px; height:28px; font-size:11px; display:flex; align-items:center; justify-content:center;">Schedule</button>
-                    ${(screenData.sync_ref && screenData.sync_ref.role==='follower') ? '' : `<button class=\"upload-btn\" onclick=\"openSyncModal('${screenId}')\" style=\"flex:1 1 90px; min-width:0; padding:4px 6px; height:28px; font-size:11px; display:flex; align-items:center; justify-content:center; background:#495057;\">Sync</button>`}
-                    ${screenData.file ? `<button class=\"delete-btn\" onclick=\"deleteFile('${screenId}')\" title=\"Delete current file\" style=\"flex:1 1 70px; min-width:0; padding:4px 6px; height:28px; font-size:11px; display:flex; align-items:center; justify-content:center;\">Del</button>` : ''}
-                    <button class="rotate-btn" type="button" onclick="rotateScreen('${screenId}')" title="Rotate image 90°" style="flex:1 1 70px; min-width:0; padding:4px 6px; height:28px; font-size:11px; display:flex; align-items:center; justify-content:center;">Rotate</button>
+                <div class="button-row" style="display:flex; flex-wrap:nowrap; gap:6px; align-items:stretch; width:100%;">
+                    <button class="upload-btn" onclick="openReplaceModal('${screenId}','SINGLE')" style="flex:1 1 0; padding:6px 4px; height:30px; font-size:11px; display:flex; align-items:center; justify-content:center;">Schedule</button>
+                    ${(screenData.sync_ref && screenData.sync_ref.role==='follower') ? '' : `<button class=\"upload-btn\" onclick=\"openSyncModal('${screenId}')\" style=\"flex:1 1 0; padding:6px 4px; height:30px; font-size:11px; display:flex; align-items:center; justify-content:center; background:#495057;\">Sync</button>`}
+                    ${screenData.file ? `<button class=\"delete-btn\" onclick=\"deleteFile('${screenId}')\" title=\"Delete current file\" style=\"flex:1 1 0; padding:6px 4px; height:30px; font-size:11px; display:flex; align-items:center; justify-content:center;\">Del</button>` : ''}
+                    <button class="rotate-btn" type="button" onclick="rotateScreen('${screenId}')" title="Rotate image 90°" style="flex:1 1 0; padding:6px 4px; height:30px; font-size:11px; display:flex; align-items:center; justify-content:center;">Rotate</button>
                     <span id="rotation-indicator-${screenId}" class="rotation-indicator rotate-${rotation}" title="Current rotation" style="flex:0 0 14px; width:14px; height:14px; align-self:center;"></span>
                     <input type="file" class="file-input" id="file-${screenId}" style="display:none;" accept="image/*,video/*" onchange="uploadFile('${screenId}', this)">
                 </div>
