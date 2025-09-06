@@ -1587,9 +1587,14 @@
                             </div>
                         </div>
                     </div>
-                    <button class="add-screen-btn" onclick="addNewScreen('screen')">
-                        ➕ Add Screen
-                    </button>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <button class="add-screen-btn" onclick="addNewScreen('screen')">
+                            ➕ Add Screen
+                        </button>
+                        <button id="add-sync-screen-btn" class="add-screen-btn" style="background:#555;" onclick="addSyncFollower()" title="Add follower screen to existing sync group (create base via Sync Upload if disabled)" disabled>
+                            🔗 Add Sync Screen
+                        </button>
+                    </div>
                 </div>
                 <div class="screens-grid" id="screens-grid">
                     <!-- Regular screens will be loaded here -->
@@ -3037,37 +3042,184 @@
             }catch(e){ console.error(e); }
         }
         
-        function addNewScreen(screenType) {
-            console.log('Adding new screen:', screenType, 'for store:', currentStoreId);
-            fetch('/add_screen', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    store_id: currentStoreId,
-                    screen_type: screenType
-                })
-            })
-            .then(response => {
-                console.log('Response status:', response.status);
-                return response.json();
-            })
-            .then(data => {
-                console.log('Response data:', data);
-                if (data.success) {
-                    alert(`✅ ${data.message}`);
-                    // Reload the page to show the new screen
-                    window.location.reload();
-                } else {
-                    alert(`❌ Error: ${data.error}`);
-                }
-            })
-            .catch(error => {
-                console.error('Error adding screen:', error);
-                alert('❌ Failed to add screen');
-            });
+        async function addNewScreen(screenType) {
+            try {
+                console.log('Adding new screen:', screenType, 'for store:', currentStoreId);
+                const resp = await fetch('/add_screen', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ store_id: currentStoreId, screen_type: screenType })
+                });
+                const data = await resp.json();
+                console.log('Add screen response:', data);
+                if(!data.success){ alert(`❌ Error: ${data.error}`); return; }
+                // Inject into in-memory model
+                if(!allStoresData.screens) allStoresData.screens = {};
+                if(!allStoresData.screens[currentStoreId]) allStoresData.screens[currentStoreId] = {};
+                allStoresData.screens[currentStoreId][data.screen_id] = data.screen || { file:null, vertical:false, horizontal:true, rotation:0, protected:false, playlist:[] };
+                // Re-render without full reload
+                await loadScreensForStore(currentStoreId);
+                alert(`✅ ${data.message}`);
+            } catch(e){
+                console.error('Error adding screen:', e);
+                alert('❌ Failed to add screen: '+ e.message);
+            }
         }
+
+        function detectExpandableSyncGroup(){
+            try {
+                if(!window.allStoresData || !currentStoreId) return { has:false, count:0 };
+                let has=false; let count=0; let groupId=null;
+                const screens = (allStoresData.screens && allStoresData.screens[currentStoreId]) || {};
+                for(const sid in screens){
+                    const pl = (screens[sid] && screens[sid].playlist) || [];
+                    for(const it of pl){
+                        if(it && it.sync_ref && it.sync_ref.role === 'master'){
+                            has=true; groupId = it.sync_ref.group; break;
+                        }
+                    }
+                    if(has) break;
+                }
+                if(has && groupId){
+                    // Count members via order max
+                    let maxOrder=-1;
+                    for(const sid in screens){
+                        const pl = (screens[sid] && screens[sid].playlist) || [];
+                        for(const it of pl){
+                            if(it && it.sync_ref && it.sync_ref.group===groupId){
+                                if(typeof it.sync_ref.order==='number' && it.sync_ref.order>maxOrder) maxOrder=it.sync_ref.order;
+                            }
+                        }
+                    }
+                    count = maxOrder+1;
+                }
+                return { has, count };
+            } catch { return { has:false, count:0 }; }
+        }
+
+    async function addSyncFollower(){
+            try{
+                console.log('[SYNC][FOLLOWER] Click start');
+                // Find base (master) screen
+                const screens = (allStoresData.screens && allStoresData.screens[currentStoreId]) || {};
+                let baseScreen=null;
+                for(const sid in screens){
+                    const pl=(screens[sid]&&screens[sid].playlist)||[];
+                    for(const it of pl){ if(it && it.sync_ref && it.sync_ref.role==='master'){ baseScreen=sid; break; } }
+                    if(baseScreen) break;
+                }
+                // Fallback: if no master yet, try canonical first screen id (store-prefixed or plain)
+                if(!baseScreen){
+                    const guess1 = Object.keys(screens).find(k=>/screen1$/.test(k));
+                    if(guess1){
+                        baseScreen = guess1;
+                        console.log('[SYNC][FOLLOWER] Fallback using base screen guess', baseScreen);
+                    }
+                }
+                if(!baseScreen){
+                    console.warn('[SYNC][FOLLOWER] Still no base screen found; screens=', Object.keys(screens));
+                    alert('Need at least one regular screen with media before adding sync follower.');
+                    return;
+                }
+                console.log('[SYNC][FOLLOWER] Detected base screen:', baseScreen);
+                const payload = { store_id: currentStoreId, base_screen_id: baseScreen };
+                let resp;
+                try{
+                    resp = await fetch('/sync/add_follower',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+                }catch(netErr){
+                    console.error('[SYNC][FOLLOWER] Network error', netErr);
+                    alert('Network error adding follower: '+ netErr.message);
+                    return;
+                }
+                console.log('[SYNC][FOLLOWER] HTTP status', resp.status);
+                if(resp.redirected){ console.log('[SYNC][FOLLOWER] Redirected to', resp.url); }
+                if(!resp.ok){
+                    const text = await resp.text();
+                    console.error('[SYNC][FOLLOWER] Non-OK response body:', text.substring(0,400));
+                    alert('Add follower failed (HTTP '+resp.status+'): '+ text.substring(0,180));
+                    return;
+                }
+                let j;
+                try{ j = await resp.json(); }
+                catch(parseErr){
+                    console.error('[SYNC][FOLLOWER] JSON parse error', parseErr);
+                    alert('Add follower response not JSON (possibly login redirect). Please refresh & re-login.');
+                    return;
+                }
+                console.log('[SYNC][FOLLOWER] Response JSON', j);
+                if(!j.success){ alert('Add follower failed: '+ (j.error||'unknown')); return; }
+                try{
+                    // Inject new follower screen locally so UI updates without full page reload
+                    const newSid = j.new_screen;
+                    const mediaFromResp = j.filename;
+                    if(!allStoresData.screens) allStoresData.screens = {};
+                    if(!allStoresData.screens[currentStoreId]) allStoresData.screens[currentStoreId] = {};
+                    const storeScreens = allStoresData.screens[currentStoreId];
+                    if(!storeScreens[newSid]){
+                        // Derive base media file from base screen
+                        const baseScrObj = storeScreens[baseScreen] || {};
+                        let baseFile = mediaFromResp || baseScrObj.file;
+                        if(!baseFile){
+                            try{ const pl = baseScrObj.playlist||[]; if(pl.length) baseFile = pl[0].file; }catch{}
+                        }
+                        if(baseFile){
+                            // Find member entry for new screen to get order/role/item id
+                            let memEntry = null;
+                            try{ if(j.members && Array.isArray(j.members)) memEntry = j.members.find(m=>m.screen_id===newSid); }catch{}
+                            const order = memEntry && typeof memEntry.order==='number' ? memEntry.order : 1;
+                            const role = (memEntry && memEntry.role) || 'follower';
+                            const itemId = (memEntry && memEntry.item_id) || (self.crypto && crypto.randomUUID ? crypto.randomUUID() : ('itm_'+Math.random().toString(36).slice(2)));
+                            storeScreens[newSid] = {
+                                file: baseFile,
+                                vertical: false,
+                                horizontal: true,
+                                rotation: 0,
+                                protected: false,
+                                playlist: [{
+                                    id: itemId,
+                                    file: baseFile,
+                                    enabled: true,
+                                    start: null,
+                                    end: null,
+                                    schedule: [],
+                                    duration: 10,
+                                    repeat: true,
+                                    link_next: false,
+                                    media_type: (typeof guessMediaType==='function') ? guessMediaType(baseFile) : 'video',
+                                    sync_ref: { group: j.group_id, role: role, order: order }
+                                }]
+                            };
+                            console.log('[SYNC][FOLLOWER] Injected new screen into local model', newSid, storeScreens[newSid]);
+                        } else {
+                            console.warn('[SYNC][FOLLOWER] Could not determine base file to inject new screen locally; UI may need manual refresh');
+                        }
+                    } else {
+                        console.log('[SYNC][FOLLOWER] New screen already present locally', newSid);
+                    }
+                }catch(injectErr){ console.warn('[SYNC][FOLLOWER] Local inject failed', injectErr); }
+                try{ loadScreensForStore(currentStoreId); }catch{}
+                try{ refreshSyncAddButton(); }catch{}
+                alert((j.created? 'Created new sync group with follower ' : 'Added follower ') + j.new_screen + ' (total '+ j.count +')');
+                const btn=document.getElementById('add-sync-screen-btn');
+                if(btn){
+                    if(j.count >=5){ btn.disabled = true; btn.textContent='🔗 Max 5 reached'; }
+                    else { btn.disabled = false; btn.textContent='🔗 Add Sync Screen'; }
+                }
+            }catch(e){ alert('Add follower error: '+ e.message); }
+        }
+
+        function refreshSyncAddButton(){
+            try{
+                const btn=document.getElementById('add-sync-screen-btn'); if(!btn) return;
+                const st = detectExpandableSyncGroup();
+                if(st.count >=5){ btn.disabled=true; btn.textContent='🔗 Max 5 reached'; }
+                else { btn.disabled=false; btn.textContent='🔗 Add Sync Screen'; }
+            }catch{}
+        }
+        setTimeout(refreshSyncAddButton, 800);
+        // Also refresh on store switch hook
+        const _origLoadScreensForStore = loadScreensForStore;
+        loadScreensForStore = function(storeId){ _origLoadScreensForStore(storeId); setTimeout(refreshSyncAddButton, 600); };
         
         function removeScreen(screenId) {
             console.log('=== REMOVE SCREEN DEBUG START ===');
@@ -4761,6 +4913,29 @@
                     try{ refreshPlaylist(screenId); }catch{}
                     try{ (j.used_screens||[]).forEach(s=>{ if(s!==screenId) refreshPlaylist(s); }); }catch{}
                     showMessage('Sync group created across '+ (j.used_screens||[]).length +' screen(s)');
+                    // --- NEW: update allStoresData so Add Sync Screen button appears immediately ---
+                    try {
+                        if(!allStoresData.screens[currentStoreId]) allStoresData.screens[currentStoreId] = {};
+                        const mediaFile = j.filename || payload.filename;
+                        (j.members||[]).forEach(mem=>{
+                            const sid = mem.screen_id;
+                            if(!allStoresData.screens[currentStoreId][sid]) allStoresData.screens[currentStoreId][sid] = { playlist: [] };
+                            const scr = allStoresData.screens[currentStoreId][sid];
+                            if(!Array.isArray(scr.playlist)) scr.playlist = [];
+                            const existing = scr.playlist.find(it=> it.sync_ref && it.sync_ref.group === j.group_id && it.sync_ref.role === mem.role);
+                            if(!existing){
+                                scr.playlist.push({ id: mem.item_id, file: mediaFile, enabled:true, schedule:[], duration:10, repeat:true, link_next:false, sync_ref:{ group: j.group_id, role: mem.role, order: mem.order } });
+                            }
+                            if(!scr.file) scr.file = mediaFile;
+                        });
+                        const btn = document.getElementById('add-sync-screen-btn');
+                        if(btn){
+                            btn.disabled = false; // enable now that a master exists
+                            btn.textContent = '🔗 Add Sync Screen';
+                        }
+                        try { if(typeof refreshSyncAddButton==='function') refreshSyncAddButton(); } catch {}
+                        console.log('[SYNC][CREATE] Local state updated; sync button enabled');
+                    } catch(e){ console.warn('Failed to update local sync state', e); }
                 }catch(e){ alert('Sync create failed: '+ e.message); }
             }
         
@@ -4810,12 +4985,39 @@
         
         // Token to cancel in-flight loads when switching stores fast
         let __currentLoadToken = 0;
-        function loadScreensForStore(storeId) {
+        async function loadScreensForStore(storeId) {
             const myToken = ++__currentLoadToken;
+            // Fetch authoritative screens map first (await) so we don't render stale phantom entries
+            try {
+                const resp = await fetch(`/screens/${storeId}?t=`+Date.now(), { cache:'no-store' });
+                const j = await resp.json();
+                if(j && j.success){
+                    if(!allStoresData.screens) allStoresData.screens = {};
+                    allStoresData.screens[storeId] = j.screens || {};
+                    // Defensive: if legacy endpoint returned an array of {id}, convert to map
+                    if(Array.isArray(allStoresData.screens[storeId])){
+                        const arr = allStoresData.screens[storeId];
+                        const remapped = {};
+                        arr.forEach(o=>{ if(o && o.id){ remapped[o.id] = remapped[o.id] || { id:o.id, playlist:[], created_at:Date.now() }; }});
+                        allStoresData.screens[storeId] = remapped;
+                    }
+                    console.log('[SYNC] Refreshed authoritative screens for store', storeId, Object.keys(allStoresData.screens[storeId]||{}));
+                } else {
+                    console.warn('[SYNC] Could not refresh screens for store', storeId, j && j.error);
+                }
+            }catch(e){ console.warn('[SYNC] refresh screens exception', e); }
             // Cancel previews from previous store immediately to prevent cross-updates
             if(typeof window.resetAllPreviews === 'function') try{ window.resetAllPreviews(); }catch{}
             console.log('Loading screens for store:', storeId);
-            const screensData = allStoresData.screens[storeId] || {};
+            let screensData = allStoresData.screens[storeId] || {};
+            // Extra defensive: if still an array (legacy response), remap to object
+            if(Array.isArray(screensData)){
+                const remap = {};
+                screensData.forEach(o=>{ if(o && o.id){ remap[o.id] = o; }});
+                allStoresData.screens[storeId] = remap;
+                screensData = remap;
+                console.log('[SYNC][DEFENSIVE] Remapped legacy array to map with keys:', Object.keys(remap));
+            }
             console.log('Screens data for store', storeId, ':', screensData);
             
             const screensGrid = document.getElementById('screens-grid');
@@ -4832,9 +5034,20 @@
             Object.keys(screensData).forEach(screenId => {
                 // Handle store-specific screen IDs (e.g., "1931_screen1")
                 if (screenId.includes('_screen')) {
-                    screens[screenId] = screensData[screenId];
+                    const prefix = screenId.split('_screen')[0];
+                    if(prefix === storeId){
+                        screens[screenId] = screensData[screenId];
+                    } else {
+                        // Skip cross-store leakage
+                        console.warn('[FILTER] Skipping screen with mismatched store prefix', screenId, 'expected', storeId);
+                    }
                 } else if (screenId.includes('_promo')) {
-                    promos[screenId] = screensData[screenId];
+                    const prefix = screenId.split('_promo')[0];
+                    if(prefix === storeId){
+                        promos[screenId] = screensData[screenId];
+                    } else {
+                        console.warn('[FILTER] Skipping promo with mismatched store prefix', screenId, 'expected', storeId);
+                    }
                 } else if (screenId.startsWith('screen')) {
                     // Handle legacy screen IDs for backward compatibility
                     screens[screenId] = screensData[screenId];
