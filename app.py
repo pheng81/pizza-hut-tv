@@ -4401,6 +4401,8 @@ def add_screen():
         data = request.get_json()
         store_id = data.get('store_id')
         screen_type = data.get('screen_type', 'screen')  # 'screen' or 'promo'
+        if screen_type not in ('screen','promo'):
+            screen_type = 'screen'
         
         if not store_id:
             return jsonify({'error': 'Store ID is required'}), 400
@@ -4411,6 +4413,15 @@ def add_screen():
         
         if store_id not in config['screens']:
             config['screens'][store_id] = {}
+
+        # If this is a brand-new store namespace and an old stray promo seed like f"{store_id}_promo1" exists, remove it unless user explicitly requested promo
+        if screen_type == 'screen':
+            stray_promo = f"{store_id}_promo1"
+            if stray_promo in config['screens'][store_id] and not config['screens'][store_id][stray_promo].get('file') and not config['screens'][store_id][stray_promo].get('playlist'):
+                try:
+                    del config['screens'][store_id][stray_promo]
+                except Exception:
+                    pass
         
         # Find next available screen number for store-specific screen IDs
         store_prefix = f"{store_id}_"
