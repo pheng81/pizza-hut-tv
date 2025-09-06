@@ -4440,8 +4440,19 @@ def add_screen():
         else:
             next_num = 1
 
-        # Create store-specific screen ID: store_id + screen_type + number
-        new_screen_id = f"{store_id}_{screen_type}{next_num}"
+        # Create store-specific screen ID; fill gaps (e.g. if screen1 deleted, reuse 1)
+        used = set()
+        for s in existing_screens:
+            try:
+                num_str = s.replace(screen_type, '')
+                if num_str:
+                    used.add(int(num_str))
+            except Exception:
+                pass
+        gap = 1
+        while gap in used:
+            gap += 1
+        new_screen_id = f"{store_id}_{screen_type}{gap}"
         
         # Set default orientation based on screen type
         is_promo = screen_type.startswith('promo')
@@ -4452,7 +4463,9 @@ def add_screen():
             'vertical': is_promo,  # Promos default to vertical
             'horizontal': not is_promo,  # Regular screens default to horizontal
             'rotation': 0,
-            'protected': False
+            'protected': False,
+            'playlist': [],
+            'fresh': True  # Hint for UI to treat as new, not part of any prior sync
         }
         
         if ukey:
