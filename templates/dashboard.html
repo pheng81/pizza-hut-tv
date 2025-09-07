@@ -1506,14 +1506,6 @@
     .profile-menu .item:hover { background:#f2f2f7; }
     .profile-menu .username { font-weight:600; font-size:13px; color:#111; }
     .profile-menu .sep { height:1px; background:#e5e5ea; margin:6px 0; }
-    /* Multi-screen sync slice preview */
-    .sync-slice-wrapper { position:relative; width:100%; height:100%; overflow:hidden; background:#000; }
-    .sync-slice-inner { position:relative; width:100%; height:100%; overflow:hidden; }
-    .sync-slice-inner > video, .sync-slice-inner > img { height:100%; object-fit:cover; width:calc(100% * var(--count,1)); position:relative; left:calc(-1 * var(--order,0) * 100%); display:block; }
-    .sync-slice-badge { position:absolute; bottom:2px; right:4px; background:rgba(0,0,0,.55); color:#fff; font-size:9px; padding:2px 4px; border-radius:4px; font-weight:600; letter-spacing:.5px; }
-    /* Dashboard rotating preview slice */
-    .sync-preview-slice { position:relative; width:100%; height:100%; overflow:hidden; }
-    .sync-preview-slice > video, .sync-preview-slice > img { height:100%; object-fit:cover; width:calc(100% * var(--count,1)); position:relative; left:calc(-1 * var(--order,0) * 100%); }
     </style>
 </head>
 <body>
@@ -3177,8 +3169,7 @@
                             const order = memEntry && typeof memEntry.order==='number' ? memEntry.order : 1;
                             const role = (memEntry && memEntry.role) || 'follower';
                             const itemId = (memEntry && memEntry.item_id) || (self.crypto && crypto.randomUUID ? crypto.randomUUID() : ('itm_'+Math.random().toString(36).slice(2)));
-                const cnt = parseInt(j.count||0,10) || 2;
-                storeScreens[newSid] = {
+                            storeScreens[newSid] = {
                                 file: baseFile,
                                 vertical: false,
                                 horizontal: true,
@@ -3195,7 +3186,7 @@
                                     repeat: true,
                                     link_next: false,
                                     media_type: (typeof guessMediaType==='function') ? guessMediaType(baseFile) : 'video',
-                    sync_ref: { group: j.group_id, role: role, order: order, count: cnt, mode: 'split-h' }
+                                    sync_ref: { group: j.group_id, role: role, order: order }
                                 }]
                             };
                             console.log('[SYNC][FOLLOWER] Injected new screen into local model', newSid, storeScreens[newSid]);
@@ -3207,11 +3198,6 @@
                     }
                 }catch(injectErr){ console.warn('[SYNC][FOLLOWER] Local inject failed', injectErr); }
                 try{ loadScreensForStore(currentStoreId); }catch{}
-                // Force playlist refresh for base and new screen to pull authoritative sync_ref with count
-                try{ refreshPlaylist(baseScreen); }catch{}
-                try{ if(j.new_screen) refreshPlaylist(j.new_screen); }catch{}
-                // Delayed second pull (backend may still be persisting group metadata)
-                setTimeout(()=>{ try{ refreshPlaylist(baseScreen); }catch{} try{ if(j.new_screen) refreshPlaylist(j.new_screen); }catch{} }, 1200);
                 try{ refreshSyncAddButton(); }catch{}
                 alert((j.created? 'Created new sync group with follower ' : 'Added follower ') + j.new_screen + ' (total '+ j.count +')');
                 const btn=document.getElementById('add-sync-screen-btn');
@@ -3525,7 +3511,7 @@
                                                                 row.innerHTML = `
                                                                     <div class=\"pl-top\">
                                                                                                         <div class=\"pl-col pl-thumb\"><div class=\"pl-thumb-click\" data-screen="${screenId}" data-item="${item.id}" style="position:relative;">
-                                                                                                            ${buildSyncThumb(item)}
+                                                                                                            ${thumbForFile(item.url || item.file)}
                                                                                                             ${item && item.sync_ref && item.sync_ref.role==='follower' && idx===0 ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5);color:#fff;font-weight:800;font-size:36px;letter-spacing:2px;">Sync</div>` : ''}
                                                                                                             <div class="item-status-dot ${statusClass}" title="${statusTip}"></div>
                                                                                                             <div style=\"position:absolute;inset:auto 4px 4px auto;background:rgba(0,0,0,.6);color:#fff;font-size:10px;padding:2px 4px;border-radius:3px;\">Change</div>\
@@ -3535,7 +3521,7 @@
                                         <div class=\"schedule-section\"> 
                                                                                 <div class=\"schedule-header\">
                                             <div class=\"schedule-title\">Schedule</div>
-                                            ${(item && item.sync_ref && item.sync_ref.role==='follower' && idx===0) ? '<button type="button" class="add-slot-btn" disabled style="opacity:.35;cursor:not-allowed;" title="Controlled by sync base">+</button>' : `<button type="button" class="add-slot-btn" onclick="addScheduleWindow('${screenId}','${item.id}')" title="Add schedule window">+</button>`}
+                                            <button type="button" class="add-slot-btn" onclick="addScheduleWindow('${screenId}','${item.id}')" title="Add schedule window">+</button>
                                                                                 </div>
                                                                                                                                                                 <div style="margin-top:4px;font-size:11px;font-weight:600;color:#555;display:flex;align-items:center;gap:6px;">
                                                                                                                                                                     <span style="letter-spacing:.3px;">Repeat:</span>
@@ -3543,9 +3529,6 @@
                                                                                     ${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((d,i)=>{
                                                                                         const code=d.toLowerCase().slice(0,3);
                                                                                         const active=(item.days||[]).includes(code)?'active':'';
-                                                                                        if(item && item.sync_ref && item.sync_ref.role==='follower' && idx===0){
-                                                                                            return `<div class=\"weekday-btn ${active}\" style=\"pointer-events:none;opacity:.35;\" title=\"Controlled by sync base\">${d[0]}</div>`;
-                                                                                        }
                                                                                         return `<div class=\"weekday-btn ${active}\" data-day=\"${code}\" onclick=\"toggleItemWeekday('${screenId}','${item.id}','${code}',this)\">${d[0]}</div>`;
                                                                                     }).join('')}
                                                                                                                                                                     </div>
@@ -3553,10 +3536,10 @@
                                                                                 <div class="schedule-primary one-row">
                                                                                     <div class="slot-box dual ${inWindow && item.enabled? 'highlight-active':''}">
                                                                                         <div class="dual-col">
-                                                                                            <span class="slot-label">Start</span><div class="slot-inline">${(item && item.sync_ref && item.sync_ref.role==='follower' && idx===0) ? `<input type=\"date\" disabled value=\"${startDateVal}\" style=\"opacity:.35;\"><input class=\"tp-input\" disabled type=\"text\" value=\"${startVal}\" style=\"opacity:.35;\">` : `<input type=\"date\" id=\"pstartdate-${screenId}-${item.id}\" value=\"${startDateVal}\" onchange=\"playlistDateTimeChanged('${screenId}','${item.id}')\"><input class=\"tp-input\" readonly data-field=\"start\" data-screen=\"${screenId}\" data-item=\"${item.id}\" id=\"pstart-${screenId}-${item.id}\" type=\"text\" value=\"${startVal}\" placeholder=\"HH:MM:SS\" onclick=\"openTimePicker(this)\" oninput=\"playlistDateTimeChanged('${screenId}','${item.id}')\">`} </div>
+                                                                                            <span class="slot-label">Start</span><div class="slot-inline"><input type="date" id="pstartdate-${screenId}-${item.id}" value="${startDateVal}" onchange="playlistDateTimeChanged('${screenId}','${item.id}')"><input class="tp-input" readonly data-field="start" data-screen="${screenId}" data-item="${item.id}" id="pstart-${screenId}-${item.id}" type="text" value="${startVal}" placeholder="HH:MM:SS" onclick="openTimePicker(this)" oninput="playlistDateTimeChanged('${screenId}','${item.id}')"></div>
                                                                                         </div>
                                                                                         <div class="dual-col">
-                                                                                            <span class="slot-label">End</span><div class="slot-inline">${(item && item.sync_ref && item.sync_ref.role==='follower' && idx===0) ? `<input type=\"date\" disabled value=\"${endDateVal}\" style=\"opacity:.35;\"><input class=\"tp-input\" disabled type=\"text\" value=\"${endVal}\" style=\"opacity:.35;\">` : `<input type=\"date\" id=\"penddate-${screenId}-${item.id}\" value=\"${endDateVal}\" onchange=\"playlistDateTimeChanged('${screenId}','${item.id}')\"><input class=\"tp-input\" readonly data-field=\"end\" data-screen=\"${screenId}\" data-item=\"${item.id}\" id=\"pend-${screenId}-${item.id}\" type=\"text\" value=\"${endVal}\" placeholder=\"HH:MM:SS\" onclick=\"openTimePicker(this)\" oninput=\"playlistDateTimeChanged('${screenId}','${item.id}')\">`} </div>
+                                                                                            <span class="slot-label">End</span><div class="slot-inline"><input type="date" id="penddate-${screenId}-${item.id}" value="${endDateVal}" onchange="playlistDateTimeChanged('${screenId}','${item.id}')"><input class="tp-input" readonly data-field="end" data-screen="${screenId}" data-item="${item.id}" id="pend-${screenId}-${item.id}" type="text" value="${endVal}" placeholder="HH:MM:SS" onclick="openTimePicker(this)" oninput="playlistDateTimeChanged('${screenId}','${item.id}')"></div>
                                                                                         </div>
                                                                                     </div>
                                                                                 </div>
@@ -3961,19 +3944,6 @@
         return `<img loading="lazy" decoding="async" src="${src220}" srcset="${src220} 220w, ${src300} 300w, ${src600} 600w" sizes="(max-width: 480px) 45vw, (max-width: 1024px) 200px, 220px" style="max-width:100%; max-height:100%; object-fit:cover;" onerror="fallbackToOrigin(this, \"${orig}\")" />`;
     }
 
-    // Build a sync-sliced thumbnail wrapper if item belongs to a multi-screen sync group.
-    function buildSyncThumb(item){
-        try{
-            const sref = item && item.sync_ref;
-            const cnt = sref && parseInt(sref.count||0,10);
-            const order = sref && parseInt(sref.order||0,10);
-            if(!cnt || cnt<2 || order==null) return thumbForFile(item.url || item.file);
-            // Use horizontal split for now (mode split-h). We crop via CSS transform scaleX + translateX.
-            const base = thumbForFile(item.url || item.file);
-            return `<div class=\"sync-slice-wrapper\" data-count=\"${cnt}\" data-order=\"${order}\"><div class=\"sync-slice-inner\" style=\"--count:${cnt};--order:${order};\">${base}</div><div class=\"sync-slice-badge\">${order+1}/${cnt}</div></div>`;
-        }catch(e){ return thumbForFile(item && (item.url||item.file)); }
-    }
-
     // --- Lightweight item status light refresher (doesn't rebuild DOM) ---
     const _lightTimers = {};
     function ensureItemLightRefresher(screenId){
@@ -4291,6 +4261,35 @@
                     if(sd && typeof sd.rotation === 'number') currentRotation = sd.rotation;
                 } catch {}
                 const rotationClass = `rotate-${currentRotation}`;
+                // Helper to compute sync slicing (horizontal) info if item is part of a sync group
+                function getSyncSliceMeta(){
+                    if(!item || !item.sync_ref) return null;
+                    const sr = item.sync_ref;
+                    let count = (typeof sr.count==='number' && sr.count>1) ? sr.count : 0;
+                    const order = (typeof sr.order==='number' && sr.order>=0) ? sr.order : 0;
+                    // Infer count if missing by scanning all playlists in current store
+                    if(!count){
+                        try {
+                            const storePls = allStoresData.playlists && allStoresData.playlists[currentStoreId];
+                            if(storePls){
+                                let maxOrder = 0; let found=false;
+                                Object.values(storePls).forEach(arr=>{
+                                    if(!Array.isArray(arr)) return;
+                                    arr.forEach(it=>{
+                                        if(it && it.sync_ref && it.sync_ref.group===sr.group){
+                                            found=true;
+                                            if(typeof it.sync_ref.order==='number' && it.sync_ref.order>maxOrder) maxOrder = it.sync_ref.order;
+                                        }
+                                    });
+                                });
+                                if(found) count = maxOrder+1;
+                            }
+                        }catch{}
+                    }
+                    if(count>1) return {count, order, mode: sr.mode||'split-h'};
+                    return null;
+                }
+                const syncMeta = getSyncSliceMeta();
                 // Build efficient URLs:
                 // - Images: prefer CDN via mediaUrl()
                 // - Videos: prefer lightweight local /vpreview clip with poster; fallback to /media
@@ -4324,93 +4323,55 @@
                         }catch{ return ''; }
                     })(raw);
                     if (rel) {
-                        const encRel = rel.split('/').map(s=>encodeURIComponent(s)).join('/');
-                        // Default lightweight preview endpoints
-                        previewUrl = `/vpreview/360/${encRel}`;
-                        fallbackVid = `/media/${encRel}`;
-                        poster = `/vthumb/360/${encRel}`;
+                        previewUrl = `/vpreview/360/${encodeURIComponent(rel)}`;
+                        fallbackVid = `/media/${encodeURIComponent(rel)}`;
+                        poster = `/vthumb/360/${encodeURIComponent(rel)}`;
                         srcUrl = previewUrl;
                     } else {
+                        // Unknown/third-party URL: use it directly without preview endpoints
                         srcUrl = raw ? String(raw) : '';
                         previewUrl = srcUrl; fallbackVid = srcUrl; poster = '';
                     }
-                    // For synchronized slices we need the full quality stream (preview sizing can misalign slices).
-                    try {
-                        if(item && item.sync_ref && item.sync_ref.group){
-                            // Prefer original CDN/full URL if available to avoid 404 on /media when using R2
-                            if(item.url && /^https?:\/\//i.test(item.url)){
-                                srcUrl = item.url; fallbackVid = item.url; previewUrl = item.url; poster = poster || '';
-                            } else if(fallbackVid) {
-                                srcUrl = fallbackVid; previewUrl = fallbackVid; // use full file not vpreview for sync
-                            }
-                            // If previewUrl still points at /vpreview, override to /media for stability
-                            if(/\/vpreview\//.test(previewUrl) && fallbackVid){ previewUrl = fallbackVid; srcUrl = fallbackVid; }
-                        }
-                    } catch {}
-                    // Normalize any accidental %2F encodings in path (causes 404 on server expecting path segments)
-                    try {
-                        function normPath(p){ if(!p) return p; return p.replace(/%2F/gi,'/'); }
-                        previewUrl = normPath(previewUrl);
-                        fallbackVid = normPath(fallbackVid);
-                        srcUrl = normPath(srcUrl);
-                        poster = normPath(poster);
-                        }
-                    catch{}
                 } else {
                     srcUrl = mediaUrl(item && (item.url || item.file));
                 }
                 // Crossfade to avoid blank: preload next, then swap
                 const doSwap = (node)=>{
-                    // Apply multi-screen slice cropping for sync groups (horizontal only for now)
-                    try{
-                        const sref = item && item.sync_ref || {};
-                        let cnt = parseInt(sref.count||0,10);
-                        const ord = parseInt(sref.order||0,10);
-                        const mode = String(sref.mode||'split-h').toLowerCase();
-                        // If count missing but this item belongs to a group, try to infer from sibling items in this preview cycle
-                        if((!cnt || cnt<2) && sref.group){
-                            try {
-                                // Highest explicit count from siblings
-                                const groupItems = (st.items||[]).filter(it => it && it.sync_ref && it.sync_ref.group === sref.group);
-                                const explicitMax = groupItems.reduce((m,it)=>{ const c=parseInt(it.sync_ref && it.sync_ref.count||0,10); return c>m?c:m; },0);
-                                if(explicitMax>1) cnt = explicitMax; else if(groupItems.length>1) cnt = groupItems.length; // fallback: number of members
-                            } catch {}
-                        }
-                        if(cnt>1 && ord>=0){
-                            if(mode==='split-h'){
-                                node.style.width = `calc(100% * ${cnt})`;
-                                node.style.left = `calc(-1 * ${ord} * 100%)`;
-                                node.style.position = 'relative';
-                                node.style.objectFit = 'cover';
-                            } else if(mode==='split-v'){
-                                node.style.height = `calc(100% * ${cnt})`;
-                                node.style.top = `calc(-1 * ${ord} * 100%)`;
-                                node.style.position = 'relative';
-                                node.style.objectFit = 'cover';
-                            }
-                        } else if (sref.group && (!cnt || cnt<2)) {
-                            // Diagnostic marker when group detected but count unresolved
-                            node.dataset.syncWarn = 'no-count';
-                            console.warn('[PREVIEW-SYNC]', 'missing count; showing full media', {screenId, file:item && item.file, group:sref.group});
-                        }
-                    }catch{}
-                    node.style.maxWidth='100%'; node.style.maxHeight='100%';
-                    const hasSlice = !!(node.style.width && node.style.width.startsWith('calc(100% *'));
-                    node.style.objectFit = hasSlice ? 'cover' : 'contain';
+                    node.style.maxWidth='100%'; node.style.maxHeight='100%'; node.style.objectFit='contain';
                     if(rotationClass) node.classList.add(rotationClass);
+                    // Apply horizontal sync slicing if applicable
+                    if(syncMeta && syncMeta.mode==='split-h'){
+                        try{
+                            const {count, order} = syncMeta;
+                            // Ensure container hides overflow
+                            preview.style.overflow='hidden';
+                            // Expand media width and shift left by order portions
+                            node.style.width = `calc(100% * ${count})`;
+                            node.style.flex = '0 0 auto';
+                            node.style.objectFit = 'cover';
+                            node.style.transformOrigin = 'top left';
+                            node.style.transform = `translateX(-${order*100}%)`;
+                            // Add a small slice badge
+                            let sb = preview.querySelector('.slice-badge');
+                            if(!sb){
+                                sb = document.createElement('div');
+                                sb.className='slice-badge';
+                                sb.style.cssText='position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,0.55);color:#fff;font-size:10px;padding:2px 6px;border-radius:10px;font-weight:600;z-index:5;pointer-events:none;';
+                                preview.appendChild(sb);
+                            }
+                            sb.textContent = `Slice ${order+1}/${count}`;
+                            console.debug('[PREVIEW-SYNC] applied slice', {screenId, order, count, file:item && item.file});
+                        }catch(e){ console.warn('[PREVIEW-SYNC] slice apply failed', e); }
+                    } else {
+                        // Remove any old slice badge if present (non-slice item now showing)
+                        try { const old = preview.querySelector('.slice-badge'); if(old) old.remove(); } catch{}
+                    }
                     const wrap = document.createElement('div'); wrap.className='preview-item fading-in';
-                    // Wrap in overflow hidden container if sliced so scaling doesn't spill
-                    let contentNode = node;
-                    if(hasSlice){ const outer=document.createElement('div'); outer.className='sync-preview-slice'; outer.style.setProperty('--count', node.style.width?node.style.width:''); outer.appendChild(node); contentNode = outer; }
-                    // Add small badge with slice info for diagnostics
-                    try {
-                        const sref2 = item && item.sync_ref || {}; const c=parseInt(sref2.count||0,10); const o=parseInt(sref2.order||0,10);
-                        if(c>1){ const badge=document.createElement('div'); badge.style.cssText='position:absolute;top:2px;left:4px;background:rgba(0,0,0,.55);color:#fff;font-size:9px;padding:2px 4px;border-radius:4px;font-weight:600;'; badge.textContent=`${o+1}/${c}`; wrap.appendChild(badge);} }
-                    catch{}
+                    // Apply selected effect on dashboard preview
                     const eff = String(item && item.effect || '').toLowerCase();
                     const map = { 'slide-l':'enter-slide-l', 'slide-r':'enter-slide-r', 'zoom-in':'enter-zoom-in', 'zoom-out':'enter-zoom-out', 'rotate':'enter-rotate' };
                     if(eff && eff!=='fade') { node.classList.add('anim'); const c = map[eff]; if(c) node.classList.add(c); }
-                    wrap.appendChild(contentNode);
+                    wrap.appendChild(node);
                     // Collect all existing preview layers (not just the first) to avoid stacked leftovers
                     const existing = Array.from(preview.querySelectorAll('.preview-item'));
                     preview.appendChild(wrap);
@@ -4426,50 +4387,19 @@
                     }
                 };
                 const swapFallback = ()=>{
-                    if(isVideo){
-                        // Final attempt: create a raw video element even if preload heuristic failed
-                        try{
-                            const v=document.createElement('video');
-                            const rawSrc = (fallbackVid || previewUrl || srcUrl);
-                            if(rawSrc) v.src = rawSrc;
-                            v.autoplay=true; v.loop=true; v.muted=true; v.playsInline=true; v.preload='auto';
-                            if(poster){ v.poster = poster; }
-                            v.addEventListener('error',()=>{ console.warn('[PREVIEW-VID]', 'ultimate fallback video failed', {screenId, file:item.file, src:rawSrc}); });
-                            doSwap(v);
-                            return;
-                        }catch(err){ console.warn('[PREVIEW-VID]', 'could not construct fallback video element', err); }
-                    }
-                    const img=document.createElement('img');
-                    img.src= poster || srcUrl || fallbackVid || '';
-                    img.alt='Preview';
+                    const img=document.createElement('img'); img.src=srcUrl; img.alt='Preview';
                     if (item && item.file && !/^https?:\/\//i.test(String(item.file))) { img.dataset.original = String(item.file); }
-                    if(!img.src){ img.style.background='#000'; img.style.display='flex'; img.style.alignItems='center'; img.style.justifyContent='center'; img.textContent='(no src)'; }
                     doSwap(img);
                 };
                 if(isVideo){
                     const usePoster = poster;
                     const usePreview = previewUrl || srcUrl;
                     const useFallback = fallbackVid || srcUrl;
-                    if(!previewUrl){ console.warn('[PREVIEW-VID]', 'no previewUrl derived (maybe external URL)', {screenId, file:item.file, raw:srcUrl}); }
-                    // Try primary (which may already be full /media for sync) then fallback, then static placeholder
-                    preloadVideo(usePreview).then(v=>{
-                        v.autoplay=true; v.loop=true; v.muted=true; v.playsInline=true; v.preload='auto'; if(usePoster){ v.poster = usePoster; }
-                        v.addEventListener('error', ()=>{
-                            console.warn('[PREVIEW-VID]', 'error after load start, trying fallback', {screenId, file:item.file});
-                            if(useFallback && useFallback!==usePreview){
-                                preloadVideo(useFallback).then(v2=>{ v2.autoplay=true; v2.loop=true; v2.muted=true; v2.playsInline=true; v2.preload='auto'; if(usePoster){ v2.poster=usePoster; } doSwap(v2); }).catch(()=>swapFallback());
-                            }
-                        }, {once:true});
-                        doSwap(v);
-                    }).catch(()=>{
-                        if(useFallback && useFallback!==usePreview){
-                            preloadVideo(useFallback).then(v=>{ v.autoplay=true; v.loop=true; v.muted=true; v.playsInline=true; v.preload='auto'; if(usePoster){ v.poster = usePoster; } doSwap(v); }).catch(()=>{ console.warn('[PREVIEW-VID]', 'both preview & fallback failed, using img fallback', {screenId, file:item.file}); swapFallback(); });
-                        } else {
-                            swapFallback();
-                        }
+                    preloadVideo(usePreview).then(v=>{ v.autoplay=true; v.loop=true; v.muted=true; v.playsInline=true; v.preload='auto'; if(usePoster){ v.poster = usePoster; } doSwap(v); }).catch(()=>{
+                        preloadVideo(useFallback).then(v=>{ v.autoplay=true; v.loop=true; v.muted=true; v.playsInline=true; v.preload='auto'; if(usePoster){ v.poster = usePoster; } doSwap(v); }).catch(swapFallback);
                     });
                 } else {
-                    preloadImage(srcUrl).then(img=>{ if (item && item.file && !/^https?:\/\//i.test(String(item.file))) { img.dataset.original = String(item.file); } doSwap(img); }).catch(err=>{ console.warn('[PREVIEW-IMG]', 'image preload failed', {screenId, file:item.file, src:srcUrl, err}); swapFallback(); });
+                    preloadImage(srcUrl).then(img=>{ if (item && item.file && !/^https?:\/\//i.test(String(item.file))) { img.dataset.original = String(item.file); } doSwap(img); }).catch(swapFallback);
                 }
                 let dur = parseInt(item.duration,10); if(isNaN(dur)||dur<1) dur=10; if(dur>30) dur=30;
                 st.nextAt = Date.now() + dur*1000;
