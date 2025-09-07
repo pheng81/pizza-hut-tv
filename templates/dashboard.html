@@ -1508,16 +1508,12 @@
     .profile-menu .sep { height:1px; background:#e5e5ea; margin:6px 0; }
     /* Multi-screen sync slice preview */
     .sync-slice-wrapper { position:relative; width:100%; height:100%; overflow:hidden; background:#000; }
-    .sync-slice-wrapper video, .sync-slice-wrapper img { width:100%; height:100%; object-fit:cover; display:block; transform-origin:left center; }
-    .sync-slice-wrapper[data-count] video, .sync-slice-wrapper[data-count] img { 
-        /* Crop horizontally by scaling then translating left for each order. */
-        transform: translateX(calc(-1 * var(--order,0) * 100% / var(--count,1))) scaleX(var(--count,1));
-    }
-    .sync-slice-inner { width:100%; height:100%; position:relative; }
+    .sync-slice-inner { position:relative; width:100%; height:100%; overflow:hidden; }
+    .sync-slice-inner > video, .sync-slice-inner > img { height:100%; object-fit:cover; width:calc(100% * var(--count,1)); position:relative; left:calc(-1 * var(--order,0) * 100%); display:block; }
     .sync-slice-badge { position:absolute; bottom:2px; right:4px; background:rgba(0,0,0,.55); color:#fff; font-size:9px; padding:2px 4px; border-radius:4px; font-weight:600; letter-spacing:.5px; }
     /* Dashboard rotating preview slice */
     .sync-preview-slice { position:relative; width:100%; height:100%; overflow:hidden; }
-    .sync-preview-slice > video, .sync-preview-slice > img { width:100%; height:100%; object-fit:cover; transform-origin:left center; }
+    .sync-preview-slice > video, .sync-preview-slice > img { height:100%; object-fit:cover; width:calc(100% * var(--count,1)); position:relative; left:calc(-1 * var(--order,0) * 100%); }
     </style>
 </head>
 <body>
@@ -4344,25 +4340,26 @@
                         const mode = String(sref.mode||'split-h').toLowerCase();
                         if(cnt>1 && ord>=0){
                             if(mode==='split-h'){
-                                node.style.clipPath = '';
-                                node.style.transformOrigin = 'left center';
-                                node.style.transform = `scaleX(${cnt}) translateX(-${(ord/cnt*100).toFixed(5)}%)`;
-                                node.style.objectPosition = `${((ord+0.5)/cnt*100).toFixed(5)}% 50%`;
+                                node.style.width = `calc(100% * ${cnt})`;
+                                node.style.left = `calc(-1 * ${ord} * 100%)`;
+                                node.style.position = 'relative';
+                                node.style.objectFit = 'cover';
                             } else if(mode==='split-v'){
-                                node.style.transformOrigin = 'center top';
-                                node.style.transform = `scaleY(${cnt}) translateY(-${(ord/cnt*100).toFixed(5)}%)`;
-                                node.style.objectPosition = `50% ${((ord+0.5)/cnt*100).toFixed(5)}%`;
+                                node.style.height = `calc(100% * ${cnt})`;
+                                node.style.top = `calc(-1 * ${ord} * 100%)`;
+                                node.style.position = 'relative';
+                                node.style.objectFit = 'cover';
                             }
                         }
                     }catch{}
                     node.style.maxWidth='100%'; node.style.maxHeight='100%';
-                    const hasSlice = !!(node.style.transform && /scale[XY]\(/.test(node.style.transform));
+                    const hasSlice = !!(node.style.width && node.style.width.startsWith('calc(100% *'));
                     node.style.objectFit = hasSlice ? 'cover' : 'contain';
                     if(rotationClass) node.classList.add(rotationClass);
                     const wrap = document.createElement('div'); wrap.className='preview-item fading-in';
                     // Wrap in overflow hidden container if sliced so scaling doesn't spill
                     let contentNode = node;
-                    if(hasSlice){ const outer=document.createElement('div'); outer.className='sync-preview-slice'; outer.appendChild(node); contentNode = outer; }
+                    if(hasSlice){ const outer=document.createElement('div'); outer.className='sync-preview-slice'; outer.style.setProperty('--count', node.style.width?node.style.width:''); outer.appendChild(node); contentNode = outer; }
                     const eff = String(item && item.effect || '').toLowerCase();
                     const map = { 'slide-l':'enter-slide-l', 'slide-r':'enter-slide-r', 'zoom-in':'enter-zoom-in', 'zoom-out':'enter-zoom-out', 'rotate':'enter-rotate' };
                     if(eff && eff!=='fade') { node.classList.add('anim'); const c = map[eff]; if(c) node.classList.add(c); }
