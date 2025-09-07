@@ -6405,7 +6405,8 @@ def create_sync_group():
                 }
                 pl.append(item)
             role = 'master' if idx == 0 else 'follower'
-            item['sync_ref'] = {'group': group_id, 'role': role, 'order': idx}
+            # Include count and mode immediately so clients don't rely on later augmentation
+            item['sync_ref'] = {'group': group_id, 'role': role, 'order': idx, 'count': count, 'mode': 'split-h'}
             scr['file'] = key  # show as current for screen preview
             used.append(sid)
             members.append({'screen_id': sid, 'item_id': item['id'], 'role': role, 'order': idx})
@@ -6506,7 +6507,7 @@ def expand_sync_group():
                 'media_type': classify_media(media_file)
             }
             role = 'follower'
-            item['sync_ref'] = {'group': group_id, 'role': role, 'order': order}
+            item['sync_ref'] = {'group': group_id, 'role': role, 'order': order, 'count': new_count, 'mode': 'split-h'}
             pl.append(item)
             scr['file'] = media_file
             members.append({'screen_id': sid, 'item_id': item['id'], 'role': role, 'order': order})
