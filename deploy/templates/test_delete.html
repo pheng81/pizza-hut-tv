@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Delete Function Test</title>
+</head>
+<body>
+    <h1>Delete Function Test</h1>
+    <button onclick="testDelete()">Test Delete for screen1</button>
+    <div id="result"></div>
+
+    <script>
+        function testDelete() {
+            console.log('Testing delete function...');
+            
+            const requestData = {
+                store_id: '1881',
+                screen_id: 'screen1'
+            };
+            
+            console.log('Sending request:', requestData);
+            
+            fetch('/delete_from_screen', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestData)
+            })
+            .then(response => {
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                return response.json();
+            })
+            .then(data => {
+                console.log('Response data:', data);
+                document.getElementById('result').innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('result').innerHTML = '<pre style="color: red;">Error: ' + error.message + '</pre>';
+            });
+        }
+    </script>
+</body>
+</html>

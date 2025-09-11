@@ -10,8 +10,7 @@ interface ApiService {
 	@GET("playlist/{storeId}/{screenId}")
 	suspend fun getPlaylist(
 		@Path("storeId") storeId: String,
-		@Path("screenId") screenId: String,
-		@Header("X-User-Code") userCode: String? = com.pizzahut.tv.api.PairCodeHolder.codeOrNull()
+		@Path("screenId") screenId: String
 	): PlaylistResponse
 
 	@GET("stores")
@@ -27,6 +26,13 @@ interface ApiService {
 	suspend fun getStoresByCode(
 		@Path("code") code: String
 	): CodeStoresResponse
+
+	// Raw variant to detect HTML/login when server returns non-JSON
+	@GET("api/stores_by_code/{code}")
+	suspend fun getStoresByCodeRaw(
+		@Path("code") code: String,
+		@Header("Accept") accept: String = "text/plain, application/json"
+	): String
 
 	@POST("api/screen_heartbeat")
 	suspend fun sendHeartbeat(@Body body: HeartbeatReq): HeartbeatResp

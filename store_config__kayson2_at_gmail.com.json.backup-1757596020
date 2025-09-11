@@ -1,0 +1,113 @@
+{
+  "stores": [
+    {
+      "id": "1000",
+      "name": "My First Store"
+    }
+  ],
+  "master_store_id": "1000",
+  "screens": {
+    "1000": {
+      "1000_screen1": {
+        "file": "users/kayson2_at_gmail.com/2025-09/87fa0048-f8c0-4a0d-b35a-cbd0dff43cc1.mp4",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "id": "34d287a8-04f7-4c6e-b122-056f615bf09c",
+            "file": "users/kayson2_at_gmail.com/2025-09/87fa0048-f8c0-4a0d-b35a-cbd0dff43cc1.mp4",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "video",
+            "sync_ref": {
+              "group": "b62d4bd1-0537-4e4e-bc53-5746d16aa904",
+              "role": "master",
+              "order": 0
+            }
+          }
+        ],
+        "fresh": true,
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "cmd_queue": [
+          {
+            "id": "a4b490a6-a23f-4374-8bed-61e1d5eb60fc",
+            "ts": 1757596020,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ]
+      },
+      "1000_screen2": {
+        "file": "users/kayson2_at_gmail.com/2025-09/87fa0048-f8c0-4a0d-b35a-cbd0dff43cc1.mp4",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "id": "3c64a688-6d15-497f-90ca-acb3f1b87eb4",
+            "file": "users/kayson2_at_gmail.com/2025-09/87fa0048-f8c0-4a0d-b35a-cbd0dff43cc1.mp4",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "video",
+            "sync_ref": {
+              "group": "b62d4bd1-0537-4e4e-bc53-5746d16aa904",
+              "role": "follower",
+              "order": 1
+            }
+          }
+        ],
+        "cmd_queue": [
+          {
+            "id": "d624ff91-a79a-416d-8c4d-b0eb75ab2847",
+            "ts": 1757596020,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ]
+      }
+    }
+  },
+  "sync_groups": {
+    "b62d4bd1-0537-4e4e-bc53-5746d16aa904": {
+      "store_id": "1000",
+      "base": "1000_screen1",
+      "count": 2,
+      "filename": "users/kayson2_at_gmail.com/2025-09/87fa0048-f8c0-4a0d-b35a-cbd0dff43cc1.mp4",
+      "members": [
+        {
+          "screen_id": "1000_screen1",
+          "item_id": "34d287a8-04f7-4c6e-b122-056f615bf09c",
+          "role": "master",
+          "order": 0
+        },
+        {
+          "screen_id": "1000_screen2",
+          "item_id": "3c64a688-6d15-497f-90ca-acb3f1b87eb4",
+          "role": "follower",
+          "order": 1
+        }
+      ],
+      "created_at": 1757596020,
+      "start_epoch": 1757596030,
+      "mode": "split-h"
+    }
+  }
+}

@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Web Player</title>
+	<style>
+		html, body { height:100%; margin:0; background:#000; color:#fff; cursor:none; overflow:hidden; }
+		#stage { position:fixed; top:0; left:0; right:0; bottom:0; width:100%; height:100%; overflow:hidden; background:#000; }
+		.layer { position:absolute; top:0; left:0; right:0; bottom:0; display:block; background:#000; text-align:center; }
+		.layer table { width:100%; height:100%; border-collapse:collapse; margin:0; padding:0; }
+		.layer td { vertical-align:middle; text-align:center; padding:0; margin:0; }
+		.hidden { display:none; }
+		.media { max-width:100%; max-height:100%; display:block; margin:0 auto; }
+		/* TV-compatible segment styling with fallbacks */
+		.media.segment {
+			width: 100vw;
+			height: 100vh;
+			max-width: none;
+			max-height: none;
+			position: absolute;
+			top: 0;
+			left: 0;
+			object-fit: fill; /* Force full screen coverage */
+		}
+		/* Fallback clip utility updated dynamically via style */
+		/* Base fade with cross-browser support */
+		.fade { 
+			opacity:0; 
+			-webkit-transition: opacity 1s ease; 
+			-moz-transition: opacity 1s ease; 
+			-o-transition: opacity 1s ease; 
+			transition: opacity 1s ease; 
+		}
+		.visible { opacity:1; }
+		/* Slide and zoom helpers applied on entering layer */
+		.enter-slide-l { transform: translateX(8%); opacity:0; }
+		.enter-slide-r { transform: translateX(-8%); opacity:0; }
+		.enter-zoom-in { transform: scale(1.08); opacity:0; }
+		.enter-zoom-out { transform: scale(0.92); opacity:0; }
+		/* Continuous rotation effect */
+		.enter-rotate { animation: spin 10s linear infinite; }
+		@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+		.anim { transition: transform var(--motion-dur) ease, opacity var(--motion-dur) ease; will-change: transform, opacity; }
+		#overlay { position:fixed; left:10px; bottom:10px; color:#9aa7ff; font:12px/1.4 system-ui,Segoe UI,Roboto,Ubuntu,Arial; opacity:.22; }
+	</style>
+</head>
+<body>
+	<div id="stage">
+		<div class="layer" id="layerA"></div>
+		<div class="layer" id="layerB"></div>
+	</div>
+	<div id="overlay"></div>
+
+	<script>
+		function isTizenTV(){ try{ return /Tizen|TizenBrowser|SamsungBrowser|SMART-TV|SmartTV|Maple/i.test(navigator.userAgent||''); }catch(e){ return false; } }
+		function isFullscreen(){ return !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement); }
+		function requestFs(el){ try{ var e=el||document.documentElement; var r=e.requestFullscreen||e.webkitRequestFullscreen||e.mozRequestFullScreen||e.msRequestFullscreen; if(r){ var p=r.call(e); if(p && p.catch) p.catch(function(){}); } }catch(e){} }
+		function ensureFullscreenOnGesture(){
+			var fired=false;
+			function handler(){ if(fired) return; fired=true; if(!isFullscreen()) requestFs(document.documentElement); cleanup(); }
+			function onKey(ev){ ev=ev||window.event; var k=ev.key||ev.keyCode; if(k==='Enter' || k===13 || k===32) handler(); }
+			function cleanup(){ window.removeEventListener('click', handler); window.removeEventListener('touchstart', handler); window.removeEventListener('keydown', onKey); }
+			window.addEventListener('click', handler, { once:true });
+			window.addEventListener('touchstart', handler, { once:true });
+			window.addEventListener('keydown', onKey);
+		}
+		const params = new URLSearchParams(location.search);
+		const storeId = params.get('store_id') || '';
+		const screenId = params.get('screen_id') || '';
+		const pairCode = params.get('code') || '';
+		const DEFAULT_ORIGIN = 'https://api.everydayadvertise.com';
+		const ORIGIN = (window.location && window.location.origin)
+			? (window.location.origin.startsWith('http:')
+				? window.location.origin.replace(/^http:/, 'https:')
+				: window.location.origin)
+			: DEFAULT_ORIGIN;
+		try{ if (location.protocol === 'http:' && /(^|\.)everydayadvertise\.com$/i.test(location.hostname)) { location.replace('https:' + location.href.slice(5)); } }catch{}
+
+		const videoExt = ['mp4','webm','ogg','mov','avi','mkv','m4v'];
+		function extFromName(name){ if(!name) return ''; const n=String(name); const base=n.split('?')[0].split('#')[0]; return (base.split('.').pop()||'').toLowerCase(); }
+		function isVideoByName(name){ if(!name) return false; return videoExt.includes(extFromName(name)); }
+		function fileNameFrom(item){
+			if(!item) return '';
+			if(typeof item === 'string'){
+				try{ const u = new URL(item); return (u.pathname.split('/').pop()||''); }catch{ return (item.split('/').pop()||''); }
+			}
+			const f = item.file || '';
+			if(f) return String(f).split('/').pop()||'';
+			const u = item.url || '';
+			try{ const p = new URL(u).pathname; return (p.split('/').pop()||''); }catch{ return (String(u).split('/').pop()||''); }
+		}
+		function relKeyFrom(item){
+			try{
+				if(!item) return '';
+				if(typeof item === 'string'){
+					if(/^https?:\/\//i.test(item)){ const u=new URL(item); return u.pathname.replace(/^\//,''); }
+					return item.startsWith('/')?item.slice(1):item;
+				}
+				if(item.file){ const s=String(item.file); return s.startsWith('/')?s.slice(1):s; }
+				if(item.url){ const u=new URL(String(item.url)); return u.pathname.replace(/^\//,''); }
+				return '';
+			}catch{ return ''; }
+		}
+		function mediaUrl(item){
+			if(!item) return '';
+			const u = (typeof item === 'string') ? item : (item.url || item.file || '');
+			if(/^https?:\/\//i.test(u)){
+				// Keep absolute URL (CDN) for both images and videos; upgrade to HTTPS if needed
+				return u.replace(/^http:/,'https:');
+			}
+			const fname = (u.startsWith('/') ? u.slice(1) : u);
+			const isVid = isVideoByName(fname);
+			return `${ORIGIN}/${isVid ? 'media' : 'static/uploads'}/${fname}`;
+		}
+
+	const stage = document.getElementById('stage');
+		const layerA = document.getElementById('layerA');
+		const layerB = document.getElementById('layerB');
+		let front = layerA, back = layerB;
+		let playlist = [];
+		let idx = 0;
+		let timer = null;
+		let lastFetchTs = 0;
+		let currentItemKey = '';
+		let forceAdvanceNow = false;
+		const PLAYLIST_REFRESH_MIN_MS = 6000; // faster refresh so schedule changes apply quickly
+		const COMMANDS_POLL_MS = 3000; // poll for admin-triggered reloads
+
+		const overlay = document.getElementById('overlay');
+		overlay.textContent = `Store ${storeId} • Screen ${screenId}`;
+
+		function keyFrom(item){
+			try{
+				if(!item) return '';
+				if(item.id) return `id:${item.id}`;
+				const f = (item.url || item.file || '').toString();
+				if(f) return `f:${f.split('?')[0]}`;
+				return `n:${fileNameFrom(item)}`;
+			}catch{ return ''; }
+		}
+
+		let orientationMode = 'default'; // 'vertical' | 'horizontal' | 'default'
+		let displayRotation = 0; // 0|90|180|270
+		function applyOrientation(){
+			try{
+				// Base rotation from orientation
+				let rot = (orientationMode === 'vertical') ? 90 : 0;
+				let total = ((rot + (Number(displayRotation)||0)) % 360 + 360) % 360;
+				// Scale to fit when the final rotation is 90 or 270
+				const vw = window.innerWidth || document.documentElement.clientWidth || 1920;
+				const vh = window.innerHeight || document.documentElement.clientHeight || 1080;
+				let scale = 1;
+				if (total % 180 === 90) {
+					scale = Math.max(0.01, Math.min(5, Math.min(vw/Math.max(vh,1), vh/Math.max(vw,1))));
+				}
+				const parts = [`rotate(${total}deg)`];
+				if (scale !== 1) { parts.push(`scale(${scale.toFixed(5)})`); }
+				stage.style.transform = parts.join(' ');
+			}catch{}
+		}
+
+		async function fetchPlaylist(){
+			try{
+				const qs = new URLSearchParams();
+				if(pairCode) qs.set('user_code', pairCode);
+				const r = await fetch(`${ORIGIN}/playlist/${encodeURIComponent(storeId)}/${encodeURIComponent(screenId)}?`+qs.toString(), { cache:'no-store', headers: pairCode?{'X-User-Code': pairCode}:{}});
+				const j = await r.json();
+				if(j && j.success && Array.isArray(j.playlist)){
+					playlist = j.playlist;
+					if(typeof j.orientation === 'string'){ orientationMode = j.orientation; }
+					if(typeof j.rotation === 'number'){ displayRotation = (j.rotation||0); }
+					applyOrientation();
+					if(idx >= playlist.length) idx = 0;
+					// If the currently showing item is no longer present (e.g., schedule switch), advance immediately
+					if(currentItemKey){
+						const stillPresent = playlist.some(it => keyFrom(it) === currentItemKey);
+						if(!stillPresent && playlist.length){
+							forceAdvanceNow = true;
+							if(timer){ clearTimeout(timer); timer = null; }
+							setTimeout(()=>{ if(!timer) tick(); }, 0);
+						}
+					}
+				}
+			}catch(e){ overlay.textContent = `Playlist error: ${e&&e.message||'unknown'}`; }
+			lastFetchTs = Date.now();
+		}
+
+		async function pollCommands(){
+			try{
+				const qs = new URLSearchParams({ store_id: storeId, screen_id: screenId, limit: '5', pop: '1' });
+				if(pairCode) qs.set('user_code', pairCode);
+				const r = await fetch(`${ORIGIN}/api/commands?`+qs.toString(), { cache:'no-store', headers: pairCode?{'X-User-Code': pairCode}:{}});
+				const j = await r.json();
+				if(j && j.success && Array.isArray(j.commands) && j.commands.length){
+					const hasReload = j.commands.some(c=> (c && (c.type||'').toLowerCase()==='reload'));
+					if(hasReload){ await fetchPlaylist(); }
+				}
+			}catch{}
+		}
+
+		function clearNode(node){ while(node.firstChild) node.removeChild(node.firstChild); }
+		function swapLayers(){ const t = front; front = back; back = t; }
+		function preloadImage(url){ return new Promise((resolve,reject)=>{ const img=new Image(); let to=setTimeout(()=>{img.onload=null;img.onerror=null;reject(new Error('image timeout'));},6000); img.onload=()=>{clearTimeout(to);resolve(img)}; img.onerror=(e)=>{clearTimeout(to);reject(e||new Error('image error'));}; img.src=url; }); }
+		function preloadVideo(url){
+			// Wait for a real readiness signal to avoid fading to a black frame
+			return new Promise(function(resolve,reject){
+				var v=document.createElement('video');
+				v.autoplay=false; v.muted=true; v.preload='auto';
+				
+				// TV-compatible video attributes
+				if(v.setAttribute) {
+					v.setAttribute('playsinline', 'true');
+					v.setAttribute('webkit-playsinline', 'true');
+					v.setAttribute('muted', 'true');
+					v.setAttribute('crossorigin', 'anonymous');
+				}
+				
+				var settled=false; var to=null;
+				var cleanup=function(){
+					if(v.removeEventListener) {
+						v.removeEventListener('loadeddata', onReady);
+						v.removeEventListener('canplay', onReady);
+						v.removeEventListener('error', onErr);
+						v.removeEventListener('stalled', onStall);
+					}
+					if(to) clearTimeout(to);
+				};
+				var finish=function(ok, err){ 
+					if(settled) return; 
+					settled=true; 
+					cleanup(); 
+					if(ok) resolve(v); else reject(err || new Error('video error')); 
+				};
+				var onReady=function(){finish(true);};
+				var onErr=function(e){finish(false, e instanceof Error? e : new Error('video error'));};
+				var onStall=function(){ /* treat long initial stall as failure */ };
+				v.addEventListener('loadeddata', onReady);
+				v.addEventListener('canplay', onReady);
+				v.addEventListener('error', onErr);
+				v.addEventListener('stalled', onStall);
+				// Hard timeout: if we can't reach loadeddata/canplay in 8s, consider it failed
+				to=setTimeout(()=>finish(false, new Error('video timeout')), 8000);
+				v.src=url; try{ v.load(); }catch{}
+			}); }
+
+		function effectClassFor(item){
+			const e = String(item && item.effect || '').toLowerCase();
+			if(!e) return '';
+			switch(e){
+				case 'fade':
+					// Use the default crossfade (layer fade-out) with no extra per-node class
+					return '';
+				case 'slide-l': return 'enter-slide-l';
+				case 'slide-r': return 'enter-slide-r';
+				case 'zoom-in': return 'enter-zoom-in';
+				case 'zoom-out': return 'enter-zoom-out';
+				case 'rotate': return 'enter-rotate';
+				default: return '';
+			}
+		}
+
+		function computeSegmentStyles(node, item){
+			try{
+				var sref = item && item.sync_ref || {};
+				var mode = (sref.mode||'').toLowerCase();
+				var order = Math.max(0, parseInt(sref.order||0));
+				var count = Math.max(0, parseInt(sref.count||0));
+				
+				// Debug logging to console
+				if(typeof console !== 'undefined' && console.log) {
+					console.log('computeSegmentStyles:', {
+						file: item && item.file || 'unknown',
+						mode: mode,
+						order: order,
+						count: count,
+						sync_ref: sref
+					});
+				}
+				
+				if((mode === 'split-h' || !mode) && count && count > 1){
+					// TV-compatible horizontal split but keep the working transform logic
+					node.className = node.className.replace(/\bsegment\b/g, '') + ' segment';
+					
+					// Force full screen dimensions for height coverage
+					node.style.position = 'absolute';
+					node.style.top = '0px';
+					node.style.left = '0px';
+					node.style.width = '100vw';
+					node.style.height = '100vh';
+					node.style.objectFit = 'fill'; // Force full height and width coverage
+					
+					// KEEP THE WORKING TRANSFORM LOGIC - don't change this!
+					var scaleX = count; // Scale by number of segments (3x for 3 screens)
+					var translateX = -(order * 100 / count); // Move to correct segment: 0%, -33.33%, -66.66%
+					var transformValue = 'scaleX(' + scaleX + ') translateX(' + translateX + '%)';
+					
+					// Apply with vendor prefixes for TV compatibility
+					node.style.webkitTransformOrigin = 'left top';
+					node.style.mozTransformOrigin = 'left top';
+					node.style.oTransformOrigin = 'left top';
+					node.style.transformOrigin = 'left top';
+					
+					node.style.webkitTransform = transformValue;
+					node.style.mozTransform = transformValue;
+					node.style.oTransform = transformValue;
+					node.style.transform = transformValue;
+					
+					if(typeof console !== 'undefined' && console.log) {
+						console.log('Applied segment transform:', transformValue);
+					}
+					
+				} else {
+					// Reset all styles for non-segment content
+					if(typeof console !== 'undefined' && console.log) {
+						console.log('No segment styling applied - showing normally');
+					}
+					node.className = node.className.replace(/\bsegment\b/g, '');
+					
+					// Clear all transform styles
+					node.style.webkitTransform = '';
+					node.style.mozTransform = '';
+					node.style.oTransform = '';
+					node.style.transform = '';
+					node.style.webkitTransformOrigin = '';
+					node.style.mozTransformOrigin = '';
+					node.style.oTransformOrigin = '';
+					node.style.transformOrigin = '';
+					
+					// Reset positioning
+					node.style.position = '';
+					node.style.top = '';
+					node.style.left = '';
+					node.style.width = '';
+					node.style.height = '';
+				}
+			}catch(e){
+				if(typeof console !== 'undefined' && console.error) {
+					console.error('computeSegmentStyles error:', e);
+				}
+			}
+		}
+
+		async function showItem(item){
+			const url = mediaUrl(item);
+			if(!url) return;
+			const isVid = (item.media_type||'').toLowerCase()==='video' || isVideoByName(url) || isVideoByName(fileNameFrom(item));
+			try{
+				const node = isVid ? await preloadVideo(url) : await preloadImage(url);
+				node.className = 'media';
+				const eff = effectClassFor(item);
+				if(eff){ node.classList.add('anim'); node.classList.add(eff); }
+				if(isVid){ node.loop = true; node.autoplay = true; node.muted = true; node.playsInline = true; }
+				// Apply split segment cropping if this item is part of a split group
+				computeSegmentStyles(node, item);
+				clearNode(back); back.appendChild(node);
+				back.classList.add('fade'); back.classList.remove('hidden');
+				if(isVid){ setTimeout(()=>{ try{ node.play().catch(()=>{});}catch{} }, 0); }
+				requestAnimationFrame(()=>{
+					back.classList.add('visible'); back.classList.remove('fade');
+					front.classList.add('fade'); front.classList.remove('visible');
+					// Drop the enter-* class on the next frame to trigger the transition
+					requestAnimationFrame(()=>{
+						if(eff){ node.classList.remove('enter-slide-l','enter-slide-r','enter-zoom-in','enter-zoom-out'); node.style.opacity=''; }
+					});
+					setTimeout(()=>{ front.classList.add('hidden'); front.classList.remove('fade'); swapLayers(); }, 1100);
+				});
+				currentItemKey = keyFrom(item);
+				try{ sendClientEvent('load_ok', item, null).catch(()=>{}); }catch{}
+			}catch(e){
+				// Fallback: if first try was CDN and we have a relative key, retry via origin /media
+				try{
+					if(isVid){
+						const rel = relKeyFrom(item);
+						if(rel){
+							const alt = `${ORIGIN}/media/${rel}`;
+							const node = await preloadVideo(alt);
+							node.className = 'media'; node.loop = true; node.autoplay = true; node.muted = true; node.playsInline = true;
+							const eff = effectClassFor(item); if(eff){ node.classList.add('anim'); node.classList.add(eff); }
+							computeSegmentStyles(node, item);
+							clearNode(back); back.appendChild(node);
+							back.classList.add('fade'); back.classList.remove('hidden');
+							setTimeout(()=>{ try{ node.play().catch(()=>{});}catch{} }, 0);
+							requestAnimationFrame(()=>{
+								back.classList.add('visible'); back.classList.remove('fade');
+								front.classList.add('fade'); front.classList.remove('visible');
+								requestAnimationFrame(()=>{
+									if(eff){ node.classList.remove('enter-slide-l','enter-slide-r','enter-zoom-in','enter-zoom-out'); node.style.opacity=''; }
+								});
+								setTimeout(()=>{ front.classList.add('hidden'); front.classList.remove('fade'); swapLayers(); }, 1100);
+							});
+							try{ sendClientEvent('load_ok', item, null).catch(()=>{}); }catch{}
+							return;
+						}
+					}
+				}catch{}
+				overlay.textContent = `Load error: ${e&&e.message||'unknown'}`;
+				try{ sendClientEvent('load_fail', item, String(e&&e.message||e)).catch(()=>{}); }catch{}
+			}
+		}
+
+		function nextIndex(){ if(!playlist.length) return 0; return (idx + 1) % playlist.length; }
+
+		async function tick(){
+			if(!playlist.length){ await fetchPlaylist(); }
+			if(!playlist.length){ timer = setTimeout(tick, 1500); return; }
+			// On forced schedule switch, jump to first item to show transition immediately
+			if(forceAdvanceNow){ forceAdvanceNow = false; idx = 0; }
+			const item = playlist[idx];
+			const dur = Math.max(1, parseInt(item.duration||10));
+			const next = playlist[nextIndex()];
+			if(next){ const u = mediaUrl(next); if(u){ const pre = isVideoByName(u) ? preloadVideo(u) : preloadImage(u); pre.catch(()=>{}); } }
+			await showItem(item);
+			idx = nextIndex();
+			if(Date.now() - lastFetchTs > PLAYLIST_REFRESH_MIN_MS){ fetchPlaylist(); }
+			// Sync alignment: if item has sync_ref.start_epoch, align next switch to that cadence
+			try{
+				const sref = item && item.sync_ref || null;
+				const se = sref && Number(sref.start_epoch||0);
+				if(se && isFinite(se) && dur){
+					const now = Date.now();
+					const base = se*1000;
+					const period = Math.max(1000, dur*1000);
+					const n = Math.ceil((now - base)/period);
+					const nextAt = base + n*period;
+					let delay = Math.max(0, nextAt - now);
+					// Avoid zero-delay tight loops
+					if(delay < 50) delay = 50;
+					if(timer){ clearTimeout(timer); }
+					timer = setTimeout(tick, delay);
+					return;
+				}
+			}catch(e){}
+			if(timer){ clearTimeout(timer); }
+			timer = setTimeout(tick, dur*1000);
+		}
+
+		async function sendClientEvent(event, item, error){
+			try{
+				const body = { store_id: String(storeId), screen_id: String(screenId), event: String(event||'') };
+				const fname = fileNameFrom(item); if(fname) body.file = fname;
+				if(item && item.id) body.item_id = item.id;
+				if(error) body.error = String(error).slice(0,200);
+				const qs = new URLSearchParams(); if(pairCode) qs.set('user_code', pairCode);
+				await fetch(`${ORIGIN}/api/client_event?`+qs.toString(), { method:'POST', headers: { 'Content-Type':'application/json', ...(pairCode?{'X-User-Code':pairCode}:{}) }, body: JSON.stringify(body) });
+			}catch{}
+		}
+
+		window.addEventListener('resize', ()=>{ try{ applyOrientation(); }catch{} });
+		(async function init(){
+			if(!storeId || !screenId){ location.href = '/webplayer'; return; }
+			// Try to enter fullscreen early on Tizen; if blocked, wait for a gesture
+			try{ if(isTizenTV() && !isFullscreen()){ setTimeout(function(){ if(!isFullscreen()) requestFs(document.documentElement); }, 120); } }catch(e){}
+			ensureFullscreenOnGesture();
+			// Hint for Tizen users if fullscreen is blocked
+			try{ if(isTizenTV()){ setTimeout(()=>{ if(!isFullscreen()){ overlay.textContent = `${overlay.textContent} • Press Enter to go Fullscreen`; } }, 800); } }catch{}
+			// Kick off
+			tick();
+			// Keep-alive heartbeat so dashboard sees this webplayer as online
+			async function sendHeartbeat(){
+				try{
+					const qs = new URLSearchParams({ store_id: storeId, screen_id: screenId });
+					if(pairCode) qs.set('user_code', pairCode);
+					await fetch(`${ORIGIN}/api/screen_heartbeat?`+qs.toString(), { method:'GET', cache:'no-store', headers: pairCode?{'X-User-Code': pairCode}:{} });
+				}catch{}
+			}
+			sendHeartbeat(); setInterval(sendHeartbeat, 30000);
+			// Poll for server-side commands (like reload) to apply changes instantly
+			setInterval(pollCommands, COMMANDS_POLL_MS);
+			// Pause when tab hidden
+			document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ if(timer){ clearTimeout(timer); timer=null; } } else { if(!timer) tick(); } });
+		})();
+	</script>
+</body>
+</html>

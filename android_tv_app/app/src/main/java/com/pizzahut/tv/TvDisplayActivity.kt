@@ -32,6 +32,8 @@ import java.util.Calendar
 import java.text.SimpleDateFormat
 import java.util.Locale
 import com.pizzahut.tv.api.HeartbeatReq
+import android.util.Log
+private const val TAG = "PHTV"
 
 class TvDisplayActivity : AppCompatActivity() {
     // Made public so extension functions can access
@@ -49,10 +51,34 @@ class TvDisplayActivity : AppCompatActivity() {
     private var hbIndicator: TextView? = null
     // Periodic per-item OK ping so dashboard lights stay green while item is displayed
     private var itemOkPingJob: Job? = null
+    // Reusable HTTP client used by ExoPlayer and media probes
+    var mediaHttpClient: okhttp3.OkHttpClient? = null
+    // Screen transform like web player: orientation 'vertical' rotates stage 90deg; rotation adds extra degrees
+    var orientationMode: String = "default" // 'vertical' | 'horizontal' | 'default'
+    var displayRotation: Int = 0 // 0|90|180|270
+    // Developer toggle: allow sliced videos to play on emulator (default false)
+    fun isEmuSliceVideoForced(): Boolean {
+        // Default ON so emulator plays sliced videos unless explicitly turned OFF
+        return try { getSharedPreferences("phtv_dev", MODE_PRIVATE).getBoolean("emu_slice_video_force", true) } catch (_: Exception) { true }
+    }
+    fun setEmuSliceVideoForced(on: Boolean) {
+        try { getSharedPreferences("phtv_dev", MODE_PRIVATE).edit().putBoolean("emu_slice_video_force", on).apply() } catch (_: Exception) { }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
     com.pizzahut.tv.api.PairCodeHolder.init(applicationContext)
+    // Pick up any server override persisted from SetupActivity
+    ApiClient.initFromPrefs(applicationContext)
+        // If a pairCode was injected when launching this Activity, persist it immediately
+        try {
+            intent?.getStringExtra("pairCode")?.let { injected ->
+                if (injected.isNotBlank()) {
+                    val prefs = getSharedPreferences("phtv", MODE_PRIVATE)
+                    prefs.edit().putString("pairCode", injected.trim()).apply()
+                }
+            }
+        } catch (_: Exception) { }
         binding = ActivityTvDisplayBinding.inflate(layoutInflater)
         setContentView(binding.root)
         binding.message.text = "Loading playlist..."
@@ -62,14 +88,25 @@ class TvDisplayActivity : AppCompatActivity() {
             setBackgroundColor(Color.BLACK)
             adjustViewBounds = true
             layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-            scaleType = ImageView.ScaleType.MATRIX // we'll control crop for split mode
+            // Match webplayer: fill and crop
+            scaleType = ImageView.ScaleType.CENTER_CROP
         }
         // ExoPlayer-based video surface (replaces VideoView for faster start & caching)
-        val playerView = com.google.android.exoplayer2.ui.StyledPlayerView(this).apply {
+    val playerView = com.google.android.exoplayer2.ui.StyledPlayerView(this).apply {
             setBackgroundColor(Color.BLACK)
             layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             useController = false
             visibility = ImageView.GONE
+            // Ensure we can clip/crop slices: prefer TextureView and zoom to fill
+            try {
+                this.resizeMode = com.google.android.exoplayer2.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            } catch (_: Exception) {}
+            try {
+                // 2 == SURFACE_TYPE_TEXTURE_VIEW in PlayerView
+                val cls = com.google.android.exoplayer2.ui.PlayerView::class.java
+                val m = cls.methods.firstOrNull { it.name == "setSurfaceType" && it.parameterTypes.size == 1 }
+                m?.invoke(this, 2)
+            } catch (_: Exception) { }
         }
     // Add media views behind the existing status message (index 0 => back)
     binding.root.addView(playerView, 0)
@@ -98,7 +135,8 @@ class TvDisplayActivity : AppCompatActivity() {
         binding.root.addView(debugOverlay, dbgParams)
         // Show current base URL briefly to verify connection target
         try {
-            debugOverlay?.text = ("Base: " + ApiClient.baseUrl).take(60)
+            val emuForce = if (isEmuSliceVideoForced()) "ON" else "OFF"
+            debugOverlay?.text = ("Base: " + ApiClient.baseUrl + "\nEmuSliceVideo: " + emuForce).take(80)
             debugOverlay?.postDelayed({ debugOverlay?.text = "" }, 6000)
         } catch (_: Exception) {}
 
@@ -115,8 +153,12 @@ class TvDisplayActivity : AppCompatActivity() {
         binding.root.addView(hbIndicator, hbParams)
 
     val prefs = getSharedPreferences("phtv", MODE_PRIVATE)
-    val storeId = intent.getStringExtra("storeId") ?: prefs.getString("storeId", null) ?: "0000"
-    val screenId = intent.getStringExtra("screenId") ?: prefs.getString("screenId", null) ?: "screen1"
+    val extraStore = intent.getStringExtra("storeId")?.trim().orEmpty()
+    val savedStore = prefs.getString("storeId", null)?.trim().orEmpty()
+    val storeId = if (extraStore.isNotEmpty()) extraStore else if (savedStore.isNotEmpty()) savedStore else "0000"
+    val extraScreen = intent.getStringExtra("screenId")?.trim().orEmpty()
+    val savedScreen = prefs.getString("screenId", null)?.trim().orEmpty()
+    val screenId = if (extraScreen.isNotEmpty()) extraScreen else if (savedScreen.isNotEmpty()) savedScreen else "screen1"
 
     binding.message.text = "Store $storeId / Screen $screenId\nLoading playlist..."
 
@@ -131,6 +173,28 @@ class TvDisplayActivity : AppCompatActivity() {
         // Kick off initial and periodic refresh & rotation
     startPlaylistLoop(storeId, screenId, imageView, playerView)
     startHeartbeatLoop(storeId, screenId)
+    }
+
+    // Apply rotation/scale similar to web tv_view/player: rotate 90 for vertical, then add displayRotation, and scale to fit when 90/270
+    fun applyOrientationTransform() {
+        try {
+            val baseRot = if (orientationMode.equals("vertical", ignoreCase = true)) 90 else 0
+            var total = ((baseRot + displayRotation) % 360 + 360) % 360
+            val vw = resources.displayMetrics.widthPixels.coerceAtLeast(1)
+            val vh = resources.displayMetrics.heightPixels.coerceAtLeast(1)
+            var scale = 1f
+            if (total % 180 == 90) {
+                // When rotated, match shortest side vs longest to keep content fully visible
+                val sx = vw.toFloat() / vh.toFloat()
+                val sy = vh.toFloat() / vw.toFloat()
+                scale = kotlin.math.max(0.01f, kotlin.math.min(5f, kotlin.math.min(sx, sy)))
+            }
+            // Apply to root container
+            binding.root.pivotX = 0f; binding.root.pivotY = 0f
+            binding.root.rotation = total.toFloat()
+            binding.root.scaleX = scale
+            binding.root.scaleY = scale
+        } catch (_: Exception) { }
     }
 
     private fun launchSetupAndReset() {
@@ -163,6 +227,16 @@ class TvDisplayActivity : AppCompatActivity() {
     override fun onKeyLongPress(keyCode: Int, event: KeyEvent?): Boolean {
         if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
             launchSetupAndReset()
+            return true
+        }
+        if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+            val newVal = !isEmuSliceVideoForced()
+            setEmuSliceVideoForced(newVal)
+            val msg = if (newVal) "Emu slice video: ON" else "Emu slice video: OFF"
+            try {
+                debugOverlay?.text = msg
+                debugOverlay?.postDelayed({ debugOverlay?.text = "" }, 2500)
+            } catch (_: Exception) {}
             return true
         }
         return super.onKeyLongPress(keyCode, event)
@@ -439,43 +513,6 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
     fun isAnimated(file: String) = animatedExts.any { file.endsWith(".$it", true) }
     fun isAdvancedStill(file: String) = advancedStillExts.any { file.endsWith(".$it", true) }
 
-    fun applySplitCropForImage(item: com.pizzahut.tv.api.PlaylistItem) {
-        try {
-            val s = item.syncRef
-            val mode = s?.mode?.lowercase() ?: ""
-            val order = (s?.order ?: 0).coerceAtLeast(0)
-            val count = (s?.count ?: 0)
-            // Reset
-            imageView.imageMatrix = android.graphics.Matrix()
-            if (mode == "split-h" && count > 1) {
-                // Compute pan so that we show only the segment [order/count] horizontally
-                val w = imageView.width.takeIf { it > 0 } ?: binding.root.width
-                val h = imageView.height.takeIf { it > 0 } ?: binding.root.height
-                if (w > 0 && h > 0) {
-                    // Scale to cover then translate horizontally
-                    val d = imageView.drawable ?: return
-                    val dw = d.intrinsicWidth.toFloat()
-                    val dh = d.intrinsicHeight.toFloat()
-                    if (dw > 0 && dh > 0) {
-                        val scale = maxOf(w / dw, h / dh)
-                        val segW = w.toFloat()
-                        val totalW = segW * count
-                        val centerX = (order + 0.5f) * segW
-                        val targetX = centerX - (w / 2f)
-                        val m = android.graphics.Matrix()
-                        m.setScale(scale, scale)
-                        // Translate so that the visible window starts at targetX in the scaled space
-                        val scaledW = dw * scale
-                        val maxOffset = (scaledW - totalW).coerceAtLeast(0f)
-                        val offset = (targetX / totalW) * maxOffset
-                        m.postTranslate(-offset, (h - dh * scale) / 2f)
-                        imageView.imageMatrix = m
-                    }
-                }
-            }
-        } catch (_: Exception) {}
-    }
-
     fun loadAnimatedOrStatic(file: String, itemId: String?, preferredUrl: String?, onDone: (Boolean) -> Unit) {
         val url = if (!preferredUrl.isNullOrBlank() && preferredUrl.startsWith("http", true)) preferredUrl else ApiClientImageHelper.buildFileUrl(file)
         lifecycleScope.launch {
@@ -496,7 +533,6 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                     imageView.setImageDrawable(drawable)
                     if (drawable is AnimatedImageDrawable) drawable.start()
                     binding.message.text = file.take(50)
-                    applySplitCropForImage(originalItems.find { it.id == itemId } ?: originalItems.firstOrNull { it.file == file } ?: com.pizzahut.tv.api.PlaylistItem(id=null,file=file, url=null, enabled=true, duration=10, repeat=true, linkNext=false, start=null, end=null, schedule= emptyList(), days= emptyList(), mediaType="image", syncRef=null))
                     // report success
                     try { ApiClient.service.postClientEvent(com.pizzahut.tv.api.ClientEventReq(storeId, screenId, "load_ok", file = file, itemId = itemId)) } catch (_: Exception) {}
                     // start periodic ok ping to keep dashboard green while displayed
@@ -507,7 +543,6 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                     val bmp = withContext(Dispatchers.IO) { fetchBitmap(url) }
                     if (bmp != null) {
                         imageView.setImageBitmap(bmp)
-                        applySplitCropForImage(originalItems.find { it.id == itemId } ?: originalItems.firstOrNull { it.file == file } ?: com.pizzahut.tv.api.PlaylistItem(id=null,file=file, url=null, enabled=true, duration=10, repeat=true, linkNext=false, start=null, end=null, schedule= emptyList(), days= emptyList(), mediaType="image", syncRef=null))
                         binding.message.text = file.take(50)
                         try { ApiClient.service.postClientEvent(com.pizzahut.tv.api.ClientEventReq(storeId, screenId, "load_ok", file = file, itemId = itemId)) } catch (_: Exception) {}
                         startItemOkPing(storeId, screenId, file, itemId)
@@ -522,7 +557,6 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                 val bmp = withContext(Dispatchers.IO) { fetchBitmap(url) }
                 if (bmp != null) {
                     imageView.setImageBitmap(bmp)
-                    applySplitCropForImage(originalItems.find { it.id == itemId } ?: originalItems.firstOrNull { it.file == file } ?: com.pizzahut.tv.api.PlaylistItem(id=null,file=file, url=null, enabled=true, duration=10, repeat=true, linkNext=false, start=null, end=null, schedule= emptyList(), days= emptyList(), mediaType="image", syncRef=null))
                     binding.message.text = file.take(50)
                     try { ApiClient.service.postClientEvent(com.pizzahut.tv.api.ClientEventReq(storeId, screenId, "load_ok", file = file, itemId = itemId)) } catch (_: Exception) {}
                     startItemOkPing(storeId, screenId, file, itemId)
@@ -547,8 +581,35 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
         val existing = exoPlayer
         if (existing != null) return existing
     val simpleCache = AppMediaCacheHolder.get(this)
-        val okClient = okhttp3.OkHttpClient.Builder().build()
-        val okFactory = com.google.android.exoplayer2.ext.okhttp.OkHttpDataSource.Factory(okClient)
+        val okClientBuilder = okhttp3.OkHttpClient.Builder()
+            .addInterceptor { chain ->
+                val original = chain.request()
+                val builder = original.newBuilder()
+                // Propagate pairing header so gated media endpoints work
+                try {
+                    val code = com.pizzahut.tv.api.PairCodeHolder.get()
+                    if (!code.isNullOrBlank()) builder.addHeader("X-User-Code", code)
+                } catch (_: Exception) {}
+                // Ensure Accept header favors MP4 when no explicit type was set
+                if (original.header("Accept").isNullOrBlank()) {
+                    builder.addHeader("Accept", "video/mp4,video/*;q=0.9,*/*;q=0.8")
+                }
+                if (original.header("User-Agent").isNullOrBlank()) {
+                    builder.header("User-Agent", "ExoPlayer (Android TV)")
+                }
+                chain.proceed(builder.build())
+            }
+            .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
+        // Attach basic HTTP logging to observe status codes and redirects
+        try {
+            val httpLogger = okhttp3.logging.HttpLoggingInterceptor { msg -> Log.d("OkHttp", msg) }
+            httpLogger.level = okhttp3.logging.HttpLoggingInterceptor.Level.BASIC
+            okClientBuilder.addInterceptor(httpLogger)
+        } catch (_: Exception) {}
+        val okClient = okClientBuilder.build()
+        mediaHttpClient = okClient
+    val okFactory = com.google.android.exoplayer2.ext.okhttp.OkHttpDataSource.Factory(okClient)
         val upstream = com.google.android.exoplayer2.upstream.DefaultDataSource.Factory(this, okFactory)
         cacheDataSourceFactory = com.google.android.exoplayer2.upstream.cache.CacheDataSource.Factory()
             .setCache(simpleCache)
@@ -556,7 +617,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
             .setFlags(com.google.android.exoplayer2.upstream.cache.CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
         val renderersFactory = com.google.android.exoplayer2.DefaultRenderersFactory(this)
             .setEnableDecoderFallback(true)
-            .setExtensionRendererMode(com.google.android.exoplayer2.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
+            .setExtensionRendererMode(com.google.android.exoplayer2.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
     val built = com.google.android.exoplayer2.ExoPlayer.Builder(this)
             .setRenderersFactory(renderersFactory)
             .setSeekForwardIncrementMs(5_000)
@@ -583,6 +644,34 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
     return progressiveFactory.createMediaSource(item)
     }
 
+    suspend fun probeMedia(url: String): String = withContext(Dispatchers.IO) {
+        val client = mediaHttpClient ?: return@withContext "no-client"
+        return@withContext try {
+            val req = okhttp3.Request.Builder()
+                .url(url)
+                .addHeader("Range", "bytes=0-1023")
+                .addHeader("Accept", "video/mp4,video/*;q=0.9,*/*;q=0.8")
+                .build()
+            client.newCall(req).execute().use { resp ->
+                val code = resp.code
+                val ct = resp.header("Content-Type") ?: ""
+                val cl = resp.header("Content-Length") ?: ""
+                "HTTP $code ct=${ct.take(24)} len=${cl.take(12)}"
+            }
+        } catch (e: Exception) { "ERR ${e.message}" }
+    }
+
+    suspend fun probeCode(url: String): Int? = withContext(Dispatchers.IO) {
+        val client = mediaHttpClient ?: return@withContext null
+        return@withContext try {
+            val req = okhttp3.Request.Builder()
+                .url(url)
+                .addHeader("Range", "bytes=0-1")
+                .build()
+            client.newCall(req).execute().use { it.code }
+        } catch (_: Exception) { null }
+    }
+
     suspend fun headOk(url: String, timeoutMs: Int = 4000): Pair<Boolean,String?> = withContext(Dispatchers.IO) {
         return@withContext try {
             val u = URL(url)
@@ -600,17 +689,20 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
     var scheduleTick: Runnable? = null
     var showNext: (() -> Unit)? = null
     var currentItemFile: String? = null
-    // Compute ms until the next cadence boundary for a sync group; returns null if no sync
-    fun msUntilNextSyncBoundary(item: com.pizzahut.tv.api.PlaylistItem?): Long? {
-        val start = item?.syncRef?.startEpoch ?: return null
-        val durSec = (item.duration ?: 10).coerceAtLeast(1)
-        val nowMs = System.currentTimeMillis()
-        val startMs = start * 1000L
-        if (nowMs < startMs) return (startMs - nowMs).coerceAtLeast(0L)
-        val d = durSec * 1000L
-        val elapsed = (nowMs - startMs) % d
-        val remain = d - elapsed
-        return remain.coerceAtLeast(0L)
+    // Align next switch to sync_ref.start_epoch cadence (like web player)
+    fun alignedDelayMs(baseDurMs: Long, sref: com.pizzahut.tv.api.SyncRef?): Long {
+        if (baseDurMs <= 0L || sref == null) return baseDurMs
+        val startEpoch = sref.startEpoch ?: return baseDurMs
+        return try {
+            val nowSec = System.currentTimeMillis() / 1000L
+            val durSec = (baseDurMs / 1000L).coerceAtLeast(1L)
+            val elapsed = (nowSec - startEpoch).coerceAtLeast(0L)
+            val mod = elapsed % durSec
+            val remainSec = if (mod == 0L) durSec else (durSec - mod)
+            val ms = remainSec * 1000L
+            // Keep within sane bounds to avoid instant flips
+            ms.coerceIn(300L, baseDurMs)
+        } catch (_: Exception) { baseDurMs }
     }
     fun cancelScheduled() {
         scheduledRotation?.let {
@@ -697,10 +789,286 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
             playerView.visibility = ImageView.VISIBLE
             // Ensure message is above player
             binding.message.bringToFront()
-            // Prefer /media (range streaming) for videos; fallback to static if needed
-            val videoUrlPrimary = ApiClientImageHelper.buildVideoUrl(file)
-            val videoUrlFallback = if (!next.url.isNullOrBlank() && next.url!!.startsWith("http", true)) next.url!! else ApiClientImageHelper.buildImageUrl(file)
-            binding.message.text = "VID ${file.take(18)}"
+            // Helper: detect emulator (AOSP TV on x86 etc.)
+            fun isEmulatorDevice(): Boolean {
+                return try {
+                    val fp = android.os.Build.FINGERPRINT.lowercase()
+                    val model = android.os.Build.MODEL.lowercase()
+                    val brand = android.os.Build.BRAND.lowercase()
+                    fp.contains("generic") || fp.contains("unknown") ||
+                            model.contains("google_sdk") || model.contains("emulator") || model.contains("sdk_gphone") || model.contains("aosp tv on x86") ||
+                            brand.contains("generic")
+                } catch (_: Exception) { false }
+            }
+            // If this item is part of a split group, wrap the given view to only show the assigned slice (idempotent)
+            fun applySegmentWrapTo(targetView: android.view.View) {
+                try {
+                    val sref = next.syncRef
+                    val mode = sref?.mode?.lowercase() ?: "split-h"
+                    val order = (sref?.order ?: 0).coerceAtLeast(0)
+                    val count = (sref?.count ?: 0).coerceAtLeast(0)
+                    val isH = (mode == "split-h" || mode.isBlank())
+                    val isV = (mode == "split-v")
+                    if (!(((isH || isV) && count > 1))) {
+                        // No split: if already wrapped, just normalize transforms
+                        val maybeInner = targetView.parent as? android.widget.FrameLayout
+                        if (maybeInner?.tag == "seg-inner") {
+                            maybeInner.pivotX = 0f; maybeInner.pivotY = 0f
+                            maybeInner.scaleX = 1f
+                            maybeInner.scaleY = 1f
+                            maybeInner.translationX = 0f
+                            maybeInner.translationY = 0f
+                        }
+                        // Also schedule a re-apply after layout
+                        targetView.postDelayed({
+                            try {
+                                val inner2 = targetView.parent as? android.widget.FrameLayout
+                                if (inner2?.tag == "seg-inner") { inner2.pivotX = 0f; inner2.pivotY = 0f; inner2.scaleX = 1f; inner2.scaleY = 1f; inner2.translationX = 0f; inner2.translationY = 0f }
+                            } catch (_: Exception) {}
+                        }, 120)
+                        return
+                    }
+                    val currentParent = targetView.parent as? ViewGroup ?: return
+                    // If already wrapped (parent tagged as seg-inner), just update transforms
+                    if (currentParent is android.widget.FrameLayout && currentParent.tag == "seg-inner") {
+                        val inner = currentParent
+                        inner.pivotX = 0f; inner.pivotY = 0f
+                        val wrapView = (inner.parent as? android.view.View)
+                        val wrapWidth = wrapView?.width?.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+                        val wrapHeight = wrapView?.height?.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
+                        if (isH) {
+                            inner.scaleX = count.toFloat(); inner.scaleY = 1f
+                            inner.translationX = - (order * wrapWidth.toFloat()); inner.translationY = 0f
+                        } else {
+                            inner.scaleY = count.toFloat(); inner.scaleX = 1f
+                            inner.translationY = - (order * wrapHeight.toFloat()); inner.translationX = 0f
+                        }
+                        // Re-apply again shortly in case dimensions were 0 at first
+                        targetView.postDelayed({
+                            try {
+                                val innerR = targetView.parent as? android.widget.FrameLayout
+                                if (innerR is android.widget.FrameLayout && innerR.tag == "seg-inner") {
+                                    val wrapView2 = (innerR.parent as? android.view.View)
+                                    val w2 = wrapView2?.width?.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+                                    val h2 = wrapView2?.height?.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
+                                    if (isH) {
+                                        innerR.scaleX = count.toFloat(); innerR.scaleY = 1f
+                                        innerR.translationX = - (order * w2.toFloat()); innerR.translationY = 0f
+                                    } else {
+                                        innerR.scaleY = count.toFloat(); innerR.scaleX = 1f
+                                        innerR.translationY = - (order * h2.toFloat()); innerR.translationX = 0f
+                                    }
+                                }
+                            } catch (_: Exception) {}
+                        }, 120)
+                        return
+                    }
+                    // Wrap once: replace playerView with wrap(inner(playerView)) at same index
+                    val originalParent = currentParent
+                    val originalIndex = originalParent.indexOfChild(targetView)
+                    val originalLp = targetView.layoutParams
+                    // Create containers and move view
+                    val wrap = android.widget.FrameLayout(this).apply {
+                        tag = "seg-wrap"
+                        layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                        clipToPadding = true; clipChildren = true
+                    }
+                    val inner = android.widget.FrameLayout(this).apply {
+                        tag = "seg-inner"
+                        layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                    }
+                    try { originalParent.removeView(targetView) } catch (_: Exception) {}
+                    inner.addView(targetView, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+                    wrap.addView(inner)
+                    // Insert wrapper back at the same position with previous layout params if available
+                    if (originalIndex >= 0) originalParent.addView(wrap, originalIndex, originalLp)
+                    else originalParent.addView(wrap)
+                    // Apply transforms for slice
+                    inner.pivotX = 0f; inner.pivotY = 0f
+                    val wrapWidth = wrap.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+                    val wrapHeight = wrap.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
+                    if (isH) {
+                        inner.scaleX = count.toFloat(); inner.scaleY = 1f
+                        inner.translationX = - (order * wrapWidth.toFloat()); inner.translationY = 0f
+                    } else {
+                        inner.scaleY = count.toFloat(); inner.scaleX = 1f
+                        inner.translationY = - (order * wrapHeight.toFloat()); inner.translationX = 0f
+                    }
+                    // Re-apply after layout to ensure correct measured dims
+                    targetView.postDelayed({
+                        try {
+                            val innerR = targetView.parent as? android.widget.FrameLayout
+                            val wrapR = innerR?.parent as? android.widget.FrameLayout
+                            if (innerR != null && wrapR != null) {
+                                val w2 = wrapR.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+                                val h2 = wrapR.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
+                                if (isH) {
+                                    innerR.scaleX = count.toFloat(); innerR.scaleY = 1f
+                                    innerR.translationX = - (order * w2.toFloat()); innerR.translationY = 0f
+                                } else {
+                                    innerR.scaleY = count.toFloat(); innerR.scaleX = 1f
+                                    innerR.translationY = - (order * h2.toFloat()); innerR.translationX = 0f
+                                }
+                            }
+                        } catch (_: Exception) {}
+                    }, 120)
+                } catch (_: Exception) {}
+            }
+            // Apply wrap for video view
+            applySegmentWrapTo(playerView)
+            // Determine if we should force-static for emulator on sliced media
+            val isSlice = (next.syncRef?.count ?: 0) > 1
+            val emulatorSliceWanted = isSlice && isEmulatorDevice() && !isEmuSliceVideoForced()
+            // Prefer absolute URL from server when provided; otherwise use /media. Fallback to the alternate, then static image.
+            val absUrl = next.url?.takeIf { it.startsWith("http", true) }
+            val mediaUrl = ApiClientImageHelper.buildVideoUrl(file)
+            val staticUrl = ApiClientImageHelper.buildImageUrl(file)
+            val videoUrlPrimary = absUrl ?: mediaUrl
+            val videoUrlFallback = if (absUrl != null) mediaUrl else staticUrl
+            // Clarify normal vs sync-slice in label similar to web player
+            runCatching {
+                val sref = next.syncRef
+                val cnt = (sref?.count ?: 0)
+                if (cnt > 1) {
+                    val modeCh = (sref?.mode?.lowercase() ?: "h").let { if (it.contains('v')) 'V' else 'H' }
+                    val ord = (sref?.order ?: 0)
+                    binding.message.text = ("SYNC ${modeCh}${cnt} #${ord}  " + file.take(18)).take(60)
+                } else {
+                    binding.message.text = ("VID " + file.take(18)).take(60)
+                }
+            }.onFailure { binding.message.text = "VID ${file.take(18)}" }
+            fun showStaticFallback() {
+                try {
+                    try { exoPlayer?.stop(); exoPlayer?.clearMediaItems() } catch (_: Exception) {}
+                    legacyVideoView?.let { try { it.stopPlayback() } catch (_: Exception) {}; it.visibility = ImageView.GONE }
+                    playerView.visibility = ImageView.GONE
+                    imageView.visibility = ViewGroup.VISIBLE
+                    // Apply split-slice cropping for images too (matches web player)
+                    runCatching {
+                        val sref = next.syncRef
+                        val mode = sref?.mode?.lowercase() ?: "split-h"
+                        val order = (sref?.order ?: 0).coerceAtLeast(0)
+                        val count = (sref?.count ?: 0).coerceAtLeast(0)
+                        val isH = (mode == "split-h" || mode.isBlank())
+                        val isV = (mode == "split-v")
+                        if ((isH || isV) && count > 1) {
+                            val currentParent = imageView.parent as? ViewGroup
+                            if (currentParent != null) {
+                                // If already wrapped, update transforms else wrap now
+                                val maybeInner = imageView.parent as? android.widget.FrameLayout
+                                if (maybeInner?.tag == "seg-inner") {
+                                    val inner = maybeInner
+                                    inner.pivotX = 0f; inner.pivotY = 0f
+                                    val wrapView = (inner.parent as? android.view.View)
+                                    val wrapWidth = wrapView?.width?.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+                                    val wrapHeight = wrapView?.height?.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
+                                    if (isH) {
+                                        inner.scaleX = count.toFloat(); inner.scaleY = 1f
+                                        inner.translationX = - (order * wrapWidth.toFloat()); inner.translationY = 0f
+                                    } else {
+                                        inner.scaleY = count.toFloat(); inner.scaleX = 1f
+                                        inner.translationY = - (order * wrapHeight.toFloat()); inner.translationX = 0f
+                                    }
+                                } else {
+                                    val originalIndex = currentParent.indexOfChild(imageView)
+                                    val originalLp = imageView.layoutParams
+                                    val wrap = android.widget.FrameLayout(this).apply {
+                                        tag = "seg-wrap"
+                                        layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                                        clipToPadding = true; clipChildren = true
+                                    }
+                                    val inner = android.widget.FrameLayout(this).apply {
+                                        tag = "seg-inner"
+                                        layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                                    }
+                                    try { currentParent.removeView(imageView) } catch (_: Exception) {}
+                                    inner.addView(imageView, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+                                    wrap.addView(inner)
+                                    if (originalIndex >= 0) currentParent.addView(wrap, originalIndex, originalLp) else currentParent.addView(wrap)
+                                    inner.pivotX = 0f; inner.pivotY = 0f
+                                    val wrapWidth = wrap.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+                                    val wrapHeight = wrap.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
+                                    if (isH) {
+                                        inner.scaleX = count.toFloat(); inner.scaleY = 1f
+                                        inner.translationX = - (order * wrapWidth.toFloat()); inner.translationY = 0f
+                                    } else {
+                                        inner.scaleY = count.toFloat(); inner.scaleX = 1f
+                                        inner.translationY = - (order * wrapHeight.toFloat()); inner.translationX = 0f
+                                    }
+                                }
+                            }
+                        } else {
+                            // Not split: if previously wrapped, reset transforms
+                            val maybeInner = imageView.parent as? android.widget.FrameLayout
+                            if (maybeInner?.tag == "seg-inner") {
+                                maybeInner.pivotX = 0f; maybeInner.pivotY = 0f
+                                maybeInner.scaleX = 1f
+                                maybeInner.scaleY = 1f
+                                maybeInner.translationX = 0f
+                                maybeInner.translationY = 0f
+                            }
+                        }
+                    }
+                    binding.message.bringToFront()
+                    // If this was a sliced item, ensure the image is wrapped the same way for correct cropping
+                    if ((next.syncRef?.count ?: 0) > 1) {
+                        applySegmentWrapTo(imageView)
+                    }
+                    // If the original file is a video, try thumbnail candidates (.jpg/.png) under static/uploads
+                    val lower = file.lowercase()
+                    val isVid = lower.endsWith(".mp4") || lower.endsWith(".webm") || lower.endsWith(".mkv") || lower.endsWith(".mov") || lower.endsWith(".avi") || lower.endsWith(".m4v")
+                    if (isVid) {
+                        val base = file.substringBeforeLast('.')
+                        val jpg = ApiClientImageHelper.buildImageUrl(base + ".jpg")
+                        val png = ApiClientImageHelper.buildImageUrl(base + ".png")
+                        // If server provided absolute URL, try same-location jpg/png first (useful with CDNs)
+                        val absBase = absUrl?.substringBeforeLast('.')
+                        val absJpg = absBase?.plus(".jpg")
+                        val absPng = absBase?.plus(".png")
+                        lifecycleScope.launch {
+                            // order: abs jpg -> abs png -> local jpg -> local png -> animated/static fallback
+                            val bmpJ = withContext(Dispatchers.IO) {
+                                absJpg?.let { fetchBitmap(it) } ?: fetchBitmap(jpg)
+                            }
+                            if (bmpJ != null) {
+                                imageView.setImageBitmap(bmpJ)
+                                val label = if (absJpg != null) "abs.jpg" else "jpg"
+                                binding.message.text = ("Thumb ${base.take(14)}.$label").take(60)
+                                Log.w(TAG, "using static jpg thumb for " + file)
+                            } else {
+                                val bmpP = withContext(Dispatchers.IO) {
+                                    absPng?.let { fetchBitmap(it) } ?: fetchBitmap(png)
+                                }
+                                if (bmpP != null) {
+                                    imageView.setImageBitmap(bmpP)
+                                    val label = if (absPng != null) "abs.png" else "png"
+                                    binding.message.text = ("Thumb ${base.take(14)}.$label").take(60)
+                                    Log.w(TAG, "using static png thumb for " + file)
+                                } else {
+                                    // Fallback to attempt loading the same path under static (may be an animated asset)
+                                    loadAnimatedOrStatic(file, next.id, staticUrl) { _ -> }
+                                    Log.w(TAG, "using static fallback (no thumb) for " + file)
+                                }
+                            }
+                        }
+                    } else {
+                        loadAnimatedOrStatic(file, next.id, staticUrl) { _ -> }
+                        Log.w(TAG, "using static fallback for " + file)
+                    }
+                } catch (_: Exception) {}
+            }
+            // Emulator safeguard: if slice on emulator, use static path and skip ExoPlayer setup
+            if (emulatorSliceWanted) {
+                binding.message.text = ("Slice static (emu) ${file.take(10)}").take(60)
+                showStaticFallback()
+                // Schedule rotation based on playlist duration
+                val durMs = (next.duration ?: 10).coerceAtLeast(1) * 1000L
+                val aligned = alignedDelayMs(durMs, next.syncRef)
+                cancelScheduled()
+                scheduledRotation = Runnable { showAndSchedule() }
+                playerView.postDelayed(scheduledRotation!!, aligned)
+                return
+            }
             // Legacy VideoView fallback (added lazily)
             fun ensureLegacy(): VideoView {
                 val existing = legacyVideoView
@@ -714,12 +1082,14 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                 legacyVideoView = vv
                 return vv
             }
-            fun useLegacy() {
+        fun useLegacy() {
                 try {
                     binding.message.text = "Legacy start ${file.take(16)}"
                     val vv = ensureLegacy()
                     playerView.visibility = ImageView.GONE
-                    vv.setVideoURI(Uri.parse(videoUrlFallback))
+            // If fallback is a static image (no video), point legacy to the primary video URL instead
+            val legacyUrl = if (videoUrlFallback.contains("/static/")) videoUrlPrimary else videoUrlFallback
+            vv.setVideoURI(Uri.parse(legacyUrl))
                     vv.setOnPreparedListener { mp ->
                         // Do not loop automatically; we'll advance based on playlist duration
                         mp.isLooping = false
@@ -732,16 +1102,16 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                         }
                         // Start periodic ok ping while this legacy video is playing
                         startItemOkPing(storeId, screenId, file, next.id)
-                        // Schedule rotation according to playlist duration, aligned to sync cadence if provided
-                        val defaultDurMs = (next.duration ?: 10).coerceAtLeast(1) * 1000L
-                        val alignMs = msUntilNextSyncBoundary(next)
+                        // Schedule rotation according to playlist duration
+                        val durMs = (next.duration ?: 10).coerceAtLeast(1) * 1000L
+                        val aligned = alignedDelayMs(durMs, next.syncRef)
                         cancelScheduled()
                         scheduledRotation = Runnable {
                             try { vv.stopPlayback() } catch (_: Exception) {}
                             vv.visibility = ImageView.GONE
                             showAndSchedule()
                         }
-                        vv.postDelayed(scheduledRotation!!, (alignMs ?: defaultDurMs))
+                        vv.postDelayed(scheduledRotation!!, aligned)
                     }
                     vv.setOnErrorListener { _, what, extra ->
                         binding.message.text = "LegacyErr w=$what e=$extra"
@@ -789,6 +1159,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                                 com.google.android.exoplayer2.Player.STATE_ENDED -> "END"
                                 else -> stateCode.toString()
                             }
+                            Log.d(TAG, "state=" + label + " file=" + f)
                             binding.message.text = ("${f.take(12)} $label").take(60)
                             if (stateCode == com.google.android.exoplayer2.Player.STATE_READY) {
                                 // Cancel stall watchdog once we are ready
@@ -799,31 +1170,6 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                                 }
                                 // Start periodic ok ping while this video item is playing
                                 startItemOkPing(storeId, screenId, f, next.id)
-                                // Apply split crop by translating the video surface within the playerView
-                                try {
-                                    val s = next.syncRef
-                                    val mode = s?.mode?.lowercase() ?: ""
-                                    val order = (s?.order ?: 0).coerceAtLeast(0)
-                                    val count = (s?.count ?: 0)
-                                    if (mode == "split-h" && count > 1) {
-                                        val segWidth = playerView.width
-                                        if (segWidth > 0) {
-                                            val total = segWidth * count
-                                            val centerX = (order + 0.5f) * segWidth
-                                            val target = centerX - (segWidth / 2f)
-                                            // Use content frame translation to pan horizontally over a larger virtual canvas
-                                            val content = playerView.videoSurfaceView ?: playerView
-                                            content.translationX = -target
-                                            // Scale to cover height if needed
-                                            content.scaleX = count.toFloat()
-                                            content.pivotX = 0f
-                                        }
-                                    } else {
-                                        val content = playerView.videoSurfaceView ?: playerView
-                                        content.translationX = 0f
-                                        content.scaleX = 1f
-                                    }
-                                } catch (_: Exception) {}
                             }
                             if (stateCode == com.google.android.exoplayer2.Player.STATE_ENDED) {
                                 // Advance if natural end happens early
@@ -834,33 +1180,120 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                         }
                         override fun onPlayerError(error: com.google.android.exoplayer2.PlaybackException) {
                             val f = currentVideoFile ?: "vid"
-                            binding.message.text = ("Err ${error.errorCodeName}" + (error.message?.let { ":"+it.take(20) } ?: "")).take(60)
+                            val emsg = error.message ?: ""
+                            val hint = if (emsg.contains("CLEARTEXT", true) || emsg.contains("cleartext", true)) {
+                                " (HTTP blocked)"
+                            } else if (emsg.contains("403") || emsg.contains("401")) {
+                                " (auth?)"
+                            } else ""
+                            Log.e(TAG, "playerError code=" + error.errorCodeName + " msg=" + (error.message ?: ""))
+                            binding.message.text = ("Err ${error.errorCodeName}$hint" + (emsg.let { if (it.isNotBlank()) ":"+it.take(20) else "" })).take(60)
                             val playerRef = exoPlayer ?: return
                             lifecycleScope.launch(Dispatchers.IO) {
                                 try { ApiClient.service.postClientEvent(com.pizzahut.tv.api.ClientEventReq(storeId, screenId, "load_fail", file = f, itemId = next.id, error = error.message)) } catch (_: Exception) {}
                             }
-                            // First error: try static fallback path once
+                // First error: try static fallback path once
                             if (!triedStaticFallbackForCurrent) {
                                 triedStaticFallbackForCurrent = true
                                 try {
-                                    playerRef.clearMediaItems()
-                                    playerRef.setMediaSource(buildMediaSource(if (!next.url.isNullOrBlank() && next.url!!.startsWith("http", true)) next.url!! else ApiClientImageHelper.buildImageUrl(f)))
-                                    playerRef.prepare(); playerRef.playWhenReady = true
-                                    binding.message.text = ("StaticFB ${f.take(10)}").take(60)
-                    // Don't report success yet; wait for READY state to confirm
-                                    return
+                    // Show static image instead of trying to stream it via ExoPlayer
+                    binding.message.text = ("StaticFB ${f.take(10)}").take(60)
+                    showStaticFallback(); return
                                 } catch (_: Exception) { /* fall through */ }
                             }
-                            // Second failure: skip to next instead of legacy unless explicit fallback needed
-                            cancelScheduled()
-                            // Mild delay to avoid tight loop
-                            playerView.postDelayed({ showAndSchedule() }, 500)
+                            // Second failure: try legacy player as last resort before skipping
+                            try {
+                                useLegacy(); return
+                            } catch (_: Exception) {
+                                // Skip to next
+                                cancelScheduled()
+                                playerView.postDelayed({ showAndSchedule() }, 500)
+                            }
                         }
                     })
                     playerListenersAttached = true
                 }
                 player.setMediaSource(buildMediaSource(videoUrlPrimary))
                 player.prepare(); player.playWhenReady = true
+                
+                // Apply video slicing for sync groups (same logic as images)
+                runCatching {
+                    val sref = next.syncRef
+                    val mode = sref?.mode?.lowercase() ?: "split-h"
+                    val order = (sref?.order ?: 0).coerceAtLeast(0)
+                    val count = (sref?.count ?: 0).coerceAtLeast(0)
+                    val isH = (mode == "split-h" || mode.isBlank())
+                    val isV = (mode == "split-v")
+                    
+                    Log.d(TAG, "Video slicing check: mode=$mode, order=$order, count=$count, file=${next.file}")
+                    
+                    if ((isH || isV) && count > 1) {
+                        Log.d(TAG, "Applying video slicing transforms...")
+                        
+                        // Delay to ensure playerView is ready
+                        playerView.post {
+                            runCatching {
+                                // Apply the same segment wrapping to playerView as we do for imageView
+                                applySegmentWrapTo(playerView)
+                                
+                                // Apply slice transformation to the wrapped container
+                                val maybeInner = playerView.parent as? android.widget.FrameLayout
+                                if (maybeInner?.tag == "seg-inner") {
+                                    val inner = maybeInner
+                                    inner.pivotX = 0f; inner.pivotY = 0f
+                                    val wrapView = (inner.parent as? android.view.View)
+                                    val wrapWidth = wrapView?.width?.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+                                    val wrapHeight = wrapView?.height?.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
+                                    
+                                    if (isH) {
+                                        inner.scaleX = count.toFloat(); inner.scaleY = 1f
+                                        inner.translationX = - (order * wrapWidth.toFloat()); inner.translationY = 0f
+                                    } else {
+                                        inner.scaleY = count.toFloat(); inner.scaleX = 1f
+                                        inner.translationY = - (order * wrapHeight.toFloat()); inner.translationX = 0f
+                                    }
+                                    
+                                    Log.d(TAG, "✅ Applied video slice: mode=$mode, order=$order, count=$count, scaleX=${inner.scaleX}, translateX=${inner.translationX}")
+                                } else {
+                                    Log.w(TAG, "Failed to find seg-inner container for video slicing")
+                                }
+                            }.onFailure { e ->
+                                Log.e(TAG, "Error in video slicing post-delay: ${e.message}")
+                            }
+                        }
+                    } else {
+                        Log.d(TAG, "Video slicing not needed: isH=$isH, isV=$isV, count=$count")
+                    }
+                }.onFailure { e ->
+                    Log.e(TAG, "Error in video slicing setup: ${e.message}")
+                }
+                
+                // Proactive probe: if primary looks blocked (e.g., 403), try fallback automatically
+        lifecycleScope.launch {
+                    val primary = probeCode(videoUrlPrimary)
+                    val goodPrimary = primary != null && (primary in 200..206 || primary in 300..399)
+                    if (!goodPrimary && currentVideoFile == file) {
+                        val fb = probeCode(videoUrlFallback)
+                        val goodFb = fb != null && (fb in 200..206 || fb in 300..399)
+            Log.d(TAG, "probe primary=" + (primary ?: -1) + " fb=" + (fb ?: -1) + " file=" + file)
+                        if (goodFb && currentVideoFile == file && exoPlayer?.playbackState != com.google.android.exoplayer2.Player.STATE_READY) {
+                            binding.message.text = ("HTTP ${primary ?: -1} → FB").take(60)
+                            if (videoUrlFallback.startsWith(ApiClient.baseUrl + "static/")) {
+                                showStaticFallback()
+                            } else {
+                                try {
+                                    exoPlayer?.clearMediaItems()
+                                    exoPlayer?.setMediaSource(buildMediaSource(videoUrlFallback))
+                                    exoPlayer?.prepare(); exoPlayer?.playWhenReady = true
+                                    Log.d(TAG, "switched to fallback for " + file)
+                                } catch (_: Exception) {}
+                            }
+                        } else if (!goodFb && currentVideoFile == file) {
+                            binding.message.text = ("Blocked P=${primary ?: -1} F=${fb ?: -1}").take(60)
+                Log.w(TAG, "blocked primary=" + (primary ?: -1) + " fb=" + (fb ?: -1) + " for " + file)
+                        }
+                    }
+                }
                 // If we remain buffering for too long, try static fallback once, else skip
                 videoStallWatch = Runnable {
                     val stillCurrent = currentVideoFile == file
@@ -871,21 +1304,31 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                             triedStaticFallbackForCurrent = true
                             try {
                                 playerRef.clearMediaItems()
-                                playerRef.setMediaSource(buildMediaSource(if (!next.url.isNullOrBlank() && next.url!!.startsWith("http", true)) next.url!! else ApiClientImageHelper.buildImageUrl(file)))
-                                playerRef.prepare(); playerRef.playWhenReady = true
-                                binding.message.text = ("StaticFB ${file.take(10)}").take(60)
+                                val fbUrl = videoUrlFallback
+                                if (fbUrl.startsWith(ApiClient.baseUrl + "static/")) {
+                                    binding.message.text = ("StaticFB after stall ${file.take(10)}").take(60)
+                                    Log.w(TAG, "stall -> static fallback " + file)
+                                    showStaticFallback(); return@Runnable
+                                } else {
+                                    playerRef.setMediaSource(buildMediaSource(fbUrl))
+                                    playerRef.prepare(); playerRef.playWhenReady = true
+                                    binding.message.text = ("FB after stall ${file.take(10)}").take(60)
+                                    Log.w(TAG, "stall -> fallback " + file)
+                                }
                             } catch (_: Exception) {
+                                try { Log.w(TAG, "stall -> legacy " + file); useLegacy(); return@Runnable } catch (_: Exception) {}
                                 cancelScheduled(); playerView.postDelayed({ showAndSchedule() }, 300)
                             }
                         } else {
+                            try { binding.message.text = "Legacy after stall"; Log.w(TAG, "legacy after stall " + file); useLegacy(); return@Runnable } catch (_: Exception) {}
                             cancelScheduled(); playerView.postDelayed({ showAndSchedule() }, 300)
                         }
                     }
                 }
-                playerView.postDelayed(videoStallWatch!!, 8_000L)
-                // Schedule rotation based on playlist duration, align to cadence when available
-                val defaultDurMs = (next.duration ?: 10).coerceAtLeast(1) * 1000L
-                val alignMs = msUntilNextSyncBoundary(next)
+                playerView.postDelayed(videoStallWatch!!, 5_000L)
+                // Schedule rotation based on playlist duration
+                val durMs = (next.duration ?: 10).coerceAtLeast(1) * 1000L
+                val aligned = alignedDelayMs(durMs, next.syncRef)
                 cancelScheduled()
                 scheduledRotation = Runnable {
                     // Move to next item after configured duration
@@ -897,7 +1340,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
             legacyVideoView?.let { try { it.stopPlayback() } catch (_: Exception) {}; it.visibility = ImageView.GONE }
                     showAndSchedule()
                 }
-                playerView.postDelayed(scheduledRotation!!, (alignMs ?: defaultDurMs))
+                playerView.postDelayed(scheduledRotation!!, aligned)
             } catch (e: Exception) {
                 binding.message.text = ("ExoFail ${e.message}").take(60)
                 useLegacy()
@@ -925,12 +1368,12 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                     state.items.getOrNull(idx)
                 } else null
                 prefetchNext(upcoming)
-                val defaultDurMs = (next.duration ?: 10).coerceAtLeast(1) * 1000L
-                val alignMs = msUntilNextSyncBoundary(next)
+                val durMs = (next.duration ?: 10).coerceAtLeast(1) * 1000L
+                val aligned = alignedDelayMs(durMs, next.syncRef)
                 cancelScheduled()
                 // If load succeeded, the ping was already started inside loadAnimatedOrStatic
                 scheduledRotation = Runnable { showAndSchedule() }
-                imageView.postDelayed(scheduledRotation!!, (alignMs ?: defaultDurMs))
+                imageView.postDelayed(scheduledRotation!!, aligned)
             }
         }
     }
@@ -981,8 +1424,14 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
         binding.message.text = "Fetching playlist..."
         lifecycleScope.launch {
             try {
-                val resp = ApiClient.service.getPlaylist(storeId, screenId, com.pizzahut.tv.api.PairCodeHolder.codeOrNull())
+                val resp = ApiClient.service.getPlaylist(storeId, screenId)
                 val original = resp.playlist ?: emptyList()
+                // Mirror web orientation/rotation if provided by backend
+                try {
+                    orientationMode = resp.orientation?.lowercase() ?: orientationMode
+                    displayRotation = resp.rotation ?: displayRotation
+                    applyOrientationTransform()
+                } catch (_: Exception) {}
                 originalItems = original
                 // Apply without resetting index if files are the same
                 applyNewList(original)
