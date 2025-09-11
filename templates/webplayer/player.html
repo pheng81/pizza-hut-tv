@@ -4,19 +4,56 @@
 	<meta charset="UTF-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 	<title>Web Player</title>
+	<link rel="preconnect" href="https://cdn.everydayadvertise.com" crossorigin>
+	<link rel="dns-prefetch" href="//cdn.everydayadvertise.com">
+	<link rel="dns-prefetch" href="//api.everydayadvertise.com">
 	<style>
 		html, body { height:100%; margin:0; background:#000; color:#fff; cursor:none; overflow:hidden; }
-		#stage { position:fixed; inset:0; width:100vw; height:100vh; overflow:hidden; background:#000; --layer-fade: 1s; --motion-dur: 1s; transform-origin: 50% 50%; }
-		.layer { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#000; }
+		#stage { position:fixed; top:0; left:0; right:0; bottom:0; width:100%; height:100%; overflow:hidden; background:#000; }
+		.layer { position:absolute; top:0; left:0; right:0; bottom:0; display:block; background:#000; text-align:center; }
+		.layer table { width:100%; height:100%; border-collapse:collapse; margin:0; padding:0; }
+		.layer td { vertical-align:middle; text-align:center; padding:0; margin:0; }
 		.hidden { display:none; }
-		.media { max-width:100%; max-height:100%; object-fit:contain; }
-		/* When splitting one wide video across multiple screens, we clip and pan per segment */
+		.media { max-width:100%; max-height:100%; display:block; margin:0 auto; }
+		/* TV-compatible segment styling with fallbacks */
 		.media.segment {
-			object-fit: cover; /* fill then crop */
+			width: 100vw;
+			height: 100vh;
+			max-width: none;
+			max-height: none;
+			position: absolute;
+			top: 0;
+			left: 0;
+			object-fit: fill; /* Force full screen coverage */
+		}
+		/* Wrapper used on TVs to avoid transforms on <video> rendering */
+		.segment-wrap {
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 100vw;
+			height: 100vh;
+			overflow: hidden;
+			background: #000;
+		}
+		/* Inner container that actually receives transforms; keeps video itself untransformed */
+		.segment-inner {
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 100vw;
+			height: 100vh;
+			overflow: visible;
 		}
 		/* Fallback clip utility updated dynamically via style */
-		/* Base fade */
-		.fade { opacity:0; transition: opacity var(--layer-fade) ease; }
+		/* Base fade with cross-browser support */
+		.fade { 
+			opacity:0; 
+			-webkit-transition: opacity 1s ease; 
+			-moz-transition: opacity 1s ease; 
+			-o-transition: opacity 1s ease; 
+			transition: opacity 1s ease; 
+		}
 		.visible { opacity:1; }
 		/* Slide and zoom helpers applied on entering layer */
 		.enter-slide-l { transform: translateX(8%); opacity:0; }
@@ -36,9 +73,28 @@
 		<div class="layer" id="layerB"></div>
 	</div>
 	<div id="overlay"></div>
+	<!-- Hidden preloader bin (TV-friendly: avoid display:none) -->
+	<div id="preload-bin" style="position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;overflow:hidden;opacity:0;"></div>
 
 	<script>
 		function isTizenTV(){ try{ return /Tizen|TizenBrowser|SamsungBrowser|SMART-TV|SmartTV|Maple/i.test(navigator.userAgent||''); }catch(e){ return false; } }
+		function isLowEndTV(){
+			try{
+				var ua = (navigator.userAgent||'');
+				// Heuristics for older TV stacks (Vewd/Opera TV, HbbTV, legacy WebKit, generic AOSP)
+				return /HbbTV|Maple|InettvBrowser|Vewd|Opera TV|AOSP TV|Amlogic|MStar|Hisilicon|ChangHong|Coocaa|MiTV|HiBrowser/i.test(ua);
+			}catch(e){ return false; }
+		}
+		function isVewdTV(){
+			try{ return /Vewd|Opera TV|OIPF|HbbTV/i.test(navigator.userAgent||''); }catch(e){ return false; }
+		}
+		function supportsTransform(){
+			try{
+				var s = document.body && document.body.style ? document.body.style : null;
+				if(!s) return false;
+				return ('transform' in s) || ('webkitTransform' in s) || ('mozTransform' in s) || ('oTransform' in s) || ('msTransform' in s);
+			}catch(e){ return true; }
+		}
 		function isFullscreen(){ return !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement); }
 		function requestFs(el){ try{ var e=el||document.documentElement; var r=e.requestFullscreen||e.webkitRequestFullscreen||e.mozRequestFullScreen||e.msRequestFullscreen; if(r){ var p=r.call(e); if(p && p.catch) p.catch(function(){}); } }catch(e){} }
 		function ensureFullscreenOnGesture(){
@@ -54,6 +110,7 @@
 		const storeId = params.get('store_id') || '';
 		const screenId = params.get('screen_id') || '';
 		const pairCode = params.get('code') || '';
+		const debugMode = params.get('debug') === '1' || params.get('debug') === 'true';
 		const DEFAULT_ORIGIN = 'https://api.everydayadvertise.com';
 		const ORIGIN = (window.location && window.location.origin)
 			? (window.location.origin.startsWith('http:')
@@ -114,6 +171,34 @@
 
 		const overlay = document.getElementById('overlay');
 		overlay.textContent = `Store ${storeId} • Screen ${screenId}`;
+
+		// Lightweight LRU preloader cache for faster switches
+		const PRELOAD_AHEAD = 2; // prefetch next 2 items
+		const MAX_CACHE = 3; // max cached media elements
+		const preloadCache = new Map(); // url -> { node, type, ts }
+		function cachePut(url, entry){
+			if(!url || !entry) return; preloadCache.set(url, entry); trimCache();
+		}
+		function cacheGet(url){ return preloadCache.get(url); }
+		function cacheTake(url){ const e=preloadCache.get(url); if(e){ preloadCache.delete(url); } return e; }
+		function trimCache(){
+			if(preloadCache.size <= MAX_CACHE) return;
+			const arr = Array.from(preloadCache.entries());
+			arr.sort((a,b)=> (a[1].ts||0) - (b[1].ts||0));
+			while(preloadCache.size > MAX_CACHE && arr.length){
+				const [url, ent] = arr.shift(); try{ if(ent && ent.node && ent.type==='video'){ ent.node.pause(); ent.node.remove(); } }catch{}
+				preloadCache.delete(url);
+			}
+		}
+		async function primePreload(item){
+			try{
+				if(!item) return; const url = mediaUrl(item); if(!url) return;
+				if(cacheGet(url)) return; // already primed
+				const isVid = (item.media_type||'').toLowerCase()==='video' || isVideoByName(url) || isVideoByName(fileNameFrom(item));
+				const node = isVid ? await preloadVideo(url) : await preloadImage(url);
+				cachePut(url, { node, type: isVid?'video':'image', ts: Date.now() });
+			}catch{}
+		}
 
 		function keyFrom(item){
 			try{
@@ -187,31 +272,126 @@
 		function clearNode(node){ while(node.firstChild) node.removeChild(node.firstChild); }
 		function swapLayers(){ const t = front; front = back; back = t; }
 		function preloadImage(url){ return new Promise((resolve,reject)=>{ const img=new Image(); let to=setTimeout(()=>{img.onload=null;img.onerror=null;reject(new Error('image timeout'));},6000); img.onload=()=>{clearTimeout(to);resolve(img)}; img.onerror=(e)=>{clearTimeout(to);reject(e||new Error('image error'));}; img.src=url; }); }
+		function videoMimeFrom(url){
+			const e = extFromName(url);
+			switch(e){
+				case 'mp4': case 'm4v': case 'mov': return 'video/mp4';
+				case 'webm': return 'video/webm';
+				case 'ogv': case 'ogg': return 'video/ogg';
+				case 'm3u8': return 'application/x-mpegURL';
+				case 'avi': return 'video/x-msvideo';
+				case 'mkv': return 'video/x-matroska';
+				default: return '';
+			}
+		}
+
 		function preloadVideo(url){
-			// Wait for a real readiness signal to avoid fading to a black frame
-			return new Promise((resolve,reject)=>{
-				const v=document.createElement('video');
-				v.autoplay=false; v.muted=true; v.playsInline=true; v.preload='auto';
-				let settled=false; let to=null;
-				const cleanup=()=>{
-					v.removeEventListener('loadeddata', onReady);
-					v.removeEventListener('canplay', onReady);
-					v.removeEventListener('error', onErr);
-					v.removeEventListener('stalled', onStall);
+			// TV-friendly preloader: attach to DOM, longer timeout, broader ready signals
+			return new Promise(function(resolve,reject){
+				var v=document.createElement('video');
+				v.autoplay=false; v.muted=true; v.preload='auto'; v.playsInline = true;
+				// Attributes widely needed for TV engines
+				try{
+					v.setAttribute('playsinline','true');
+					v.setAttribute('webkit-playsinline','true');
+					v.setAttribute('muted','true');
+					// Some Chinese/Android-based TV browsers (X5) honor these
+					v.setAttribute('x5-video-player-type','h5');
+					v.setAttribute('x5-playsinline','true');
+				}catch(e){}
+
+				// On Vewd/OperaTV, offscreen preloading often doesn't buffer. Resolve immediately with the element.
+				if(isVewdTV()){
+					try{
+						// Provide a <source> for better type detection
+						var srcEl=document.createElement('source');
+						srcEl.src=url; var mt=videoMimeFrom(url); if(mt) srcEl.type=mt;
+						v.appendChild(srcEl);
+						v.src=url; v.load();
+					}catch(e){}
+					return resolve(v);
+				}
+				// Attach to hidden bin to trigger buffering in strict engines
+				try{
+					var bin = document.getElementById('preload-bin');
+					if(bin) bin.appendChild(v);
+				}catch(e){}
+				var settled=false; var to=null; var earlyPrimeDone=false;
+				var cleanup=function(){
+					try{
+						v.removeEventListener('loadeddata', onReady);
+						v.removeEventListener('canplay', onReady);
+						v.removeEventListener('canplaythrough', onReady);
+						v.removeEventListener('loadedmetadata', onMeta);
+						v.removeEventListener('error', onErr);
+						v.removeEventListener('stalled', onStall);
+					}catch(e){}
 					if(to) clearTimeout(to);
 				};
-				const finish=(ok, err)=>{ if(settled) return; settled=true; cleanup(); ok?resolve(v):reject(err||new Error('video error')); };
-				const onReady=()=>finish(true);
-				const onErr=(e)=>finish(false, e instanceof Error? e : new Error('video error'));
-				const onStall=()=>{ /* treat long initial stall as failure */ };
-				v.addEventListener('loadeddata', onReady);
-				v.addEventListener('canplay', onReady);
-				v.addEventListener('error', onErr);
-				v.addEventListener('stalled', onStall);
-				// Hard timeout: if we can't reach loadeddata/canplay in 8s, consider it failed
-				to=setTimeout(()=>finish(false, new Error('video timeout')), 8000);
-				v.src=url; try{ v.load(); }catch{}
+				var finish=function(ok, err){
+					if(settled) return;
+					settled=true; cleanup();
+					if(ok) resolve(v); else reject(err || new Error('video error'));
+				};
+				var onMeta=function(){
+					// Some TVs need a play/pause kick after metadata; skip for Vewd/HbbTV
+					if(!isVewdTV() && !earlyPrimeDone){
+						earlyPrimeDone=true;
+						try{ var p=v.play(); if(p&&p.then){ p.then(function(){ try{ v.pause(); }catch(e){} }).catch(function(){}); } }catch(e){}
+					}
+				};
+				var onReady=function(){
+					// Accept when enough data is ready or we saw canplay/canplaythrough
+					try{
+						if(v.readyState >= 2 /* HAVE_CURRENT_DATA */) return finish(true);
+					}catch(e){}
+					return finish(true);
+				};
+				var onErr=function(e){ finish(false, e instanceof Error? e : new Error('video error')); };
+				var onStall=function(){};
+				try{
+					v.addEventListener('loadedmetadata', onMeta);
+					v.addEventListener('loadeddata', onReady);
+					v.addEventListener('canplay', onReady);
+					v.addEventListener('canplaythrough', onReady);
+					v.addEventListener('error', onErr);
+					v.addEventListener('stalled', onStall);
+				}catch(e){}
+				// Longer timeout for TVs (20s)
+				to=setTimeout(function(){ finish(false, new Error('video timeout')); }, 20000);
+				try{
+					// Add <source> with type to help older engines
+					var srcEl=document.createElement('source');
+					srcEl.src=url; var mt=videoMimeFrom(url); if(mt) srcEl.type=mt;
+					v.appendChild(srcEl);
+					v.src=url; v.load();
+				}catch(e){}
 			}); }
+
+		function tryPlayWithPrompt(video){
+			try{
+				var p = video.play();
+				if(p && p.then){
+					p.catch(function(){
+						// Autoplay blocked. Prompt user to press OK/Enter.
+						var msgShown=false;
+						function showMsg(){ if(msgShown) return; msgShown=true; overlay.textContent = `${overlay.textContent} • Press OK/Enter to start`; }
+						function clearMsg(){ overlay.textContent = overlay.textContent.replace(/\s•\sPress OK\/Enter to start$/,''); }
+						function handler(){
+							window.removeEventListener('keydown', onKey);
+							window.removeEventListener('click', handler);
+							window.removeEventListener('touchstart', handler);
+							clearMsg(); try{ video.play().catch(function(){}); }catch(e){}
+						}
+						function onKey(ev){ var k=ev && (ev.key||ev.keyCode); if(k==='Enter'||k===13||k===32){ handler(); } }
+						showMsg();
+						window.addEventListener('keydown', onKey);
+						window.addEventListener('click', handler);
+						window.addEventListener('touchstart', handler);
+					});
+				}
+			}catch(e){}
+		}
 
 		function effectClassFor(item){
 			const e = String(item && item.effect || '').toLowerCase();
@@ -231,68 +411,149 @@
 
 		function computeSegmentStyles(node, item){
 			try{
-				const sref = item && item.sync_ref || {};
-				const mode = (sref.mode||'').toLowerCase();
-				const order = Math.max(0, parseInt(sref.order||0));
-				const count = Math.max(0, parseInt(sref.count||0));
-				if((mode==='split-h' || !mode) && count && count>1){
-					// Horizontal split: divide content width into equal segments, pan to this segment
-					node.classList.add('segment');
-					const segW = 100 / count; // percent
-					const left = segW * order; // percent
-					// Use clip-path to reveal only this slice of the intrinsic media box
-					node.style.clipPath = `inset(0% ${Math.max(0,100-(left+segW)).toFixed(5)}% 0% ${left.toFixed(5)}%)`;
-					// Also apply transform-based fallback to ensure slicing on browsers where clip-path/object-position is flaky
-					node.style.transformOrigin = 'left center';
-					// Apply scale first then translate by slice fraction of scaled width
-					node.style.transform = `scaleX(${count}) translateX(-${(order/count*100).toFixed(5)}%)`;
-					// For videos/images, also adjust object-position to pan to the center of the slice
-					const centerX = left + segW/2;
-					node.style.objectPosition = `${centerX.toFixed(5)}% 50%`;
-				} else if(mode==='split-v' && count && count>1){
-					// Vertical split (future): divide content height into segments
-					node.classList.add('segment');
-					const segH = 100 / count;
-					const top = segH * order;
-					node.style.clipPath = `inset(${top.toFixed(5)}% 0% ${Math.max(0,100-(top+segH)).toFixed(5)}% 0%)`;
-					node.style.transformOrigin = 'center top';
-					node.style.transform = `scaleY(${count}) translateY(-${(order/count*100).toFixed(5)}%)`;
-					const centerY = top + segH/2;
-					node.style.objectPosition = `50% ${centerY.toFixed(5)}%`;
-				}else{
-					node.classList.remove('segment');
-					node.style.clipPath = '';
-					node.style.transformOrigin = '';
-					node.style.transform = '';
-					node.style.objectPosition = '';
+				var sref = item && item.sync_ref || {};
+				var mode = (sref.mode||'').toLowerCase();
+				var order = Math.max(0, parseInt(sref.order||0));
+				var count = Math.max(0, parseInt(sref.count||0));
+				
+				// Debug logging to console
+				if(typeof console !== 'undefined' && console.log) {
+					console.log('computeSegmentStyles:', {
+						file: item && item.file || 'unknown',
+						mode: mode,
+						order: order,
+						count: count,
+						sync_ref: sref
+					});
 				}
-			}catch{}
+				
+				if((mode === 'split-h' || !mode) && count && count > 1){
+					// Use a clip wrapper + inner transform container to avoid transforming <video> directly
+					node.className = node.className.replace(/\bsegment\b/g, '') + ' segment';
+					var wrap = document.createElement('div');
+					wrap.className = 'segment-wrap';
+					var inner = document.createElement('div');
+					inner.className = 'segment-inner';
+					wrap.appendChild(inner);
+					inner.appendChild(node);
+
+					// Ensure media fills the viewport space of the inner container
+					node.style.position = 'absolute';
+					node.style.top = '0px';
+					node.style.left = '0px';
+					node.style.width = '100vw';
+					node.style.height = '100vh';
+					node.style.objectFit = 'fill';
+
+					var screenWidth = window.innerWidth || document.documentElement.clientWidth || 1920;
+					var screenHeight = window.innerHeight || document.documentElement.clientHeight || 1080;
+					if(isLowEndTV() || !supportsTransform()){
+						// Pixel fallback: expand inner horizontally and offset by the slice index
+						wrap.style.width = screenWidth + 'px';
+						wrap.style.height = screenHeight + 'px';
+						wrap.style.overflow = 'hidden';
+						inner.style.position = 'absolute';
+						inner.style.top = '0px';
+						inner.style.left = (-(order * screenWidth)) + 'px';
+						inner.style.width = (screenWidth * count) + 'px';
+						inner.style.height = screenHeight + 'px';
+						// Stretch media to full inner width so only 1/count shows in the clipped wrap
+						node.style.width = (screenWidth * count) + 'px';
+						node.style.height = screenHeight + 'px';
+						if(typeof console !== 'undefined' && console.log){ console.log('Applied pixel fallback (inner)'); }
+					}else{
+						// Transform approach: scale inner by count and shift so slice order is visible within wrap
+						var scaleX = count;
+						var translateX = -(order * 100 / count);
+						var transformValue = 'scaleX(' + scaleX + ') translateX(' + translateX + '%)';
+						inner.style.webkitTransformOrigin = 'left top';
+						inner.style.mozTransformOrigin = 'left top';
+						inner.style.oTransformOrigin = 'left top';
+						inner.style.transformOrigin = 'left top';
+						inner.style.webkitTransform = transformValue;
+						inner.style.mozTransform = transformValue;
+						inner.style.oTransform = transformValue;
+						inner.style.transform = transformValue;
+						if(typeof console !== 'undefined' && console.log) { console.log('Applied segment transform (inner):', transformValue); }
+					}
+					return wrap; // return wrapper to be appended
+				} else {
+					// Reset all styles for non-segment content
+					if(typeof console !== 'undefined' && console.log) {
+						console.log('No segment styling applied - showing normally');
+					}
+					node.className = node.className.replace(/\bsegment\b/g, '');
+					
+					// Clear all transform styles
+					node.style.webkitTransform = '';
+					node.style.mozTransform = '';
+					node.style.oTransform = '';
+					node.style.transform = '';
+					node.style.webkitTransformOrigin = '';
+					node.style.mozTransformOrigin = '';
+					node.style.oTransformOrigin = '';
+					node.style.transformOrigin = '';
+					
+					// Reset positioning
+					node.style.position = '';
+					node.style.top = '';
+					node.style.left = '';
+					node.style.width = '';
+					node.style.height = '';
+				}
+			}catch(e){
+				if(typeof console !== 'undefined' && console.error) {
+					console.error('computeSegmentStyles error:', e);
+				}
+			}
 		}
 
 		async function showItem(item){
-			const url = mediaUrl(item);
+			let url = mediaUrl(item);
 			if(!url) return;
 			const isVid = (item.media_type||'').toLowerCase()==='video' || isVideoByName(url) || isVideoByName(fileNameFrom(item));
+			// Prefer origin URL on Vewd/OperaTV to avoid CORS/CDN quirks
+			if(isVid && isVewdTV()){
+				const rel = relKeyFrom(item);
+				if(rel){ url = `${ORIGIN}/media/${rel}`; }
+			}
 			try{
-				const node = isVid ? await preloadVideo(url) : await preloadImage(url);
+				let cached = cacheTake(url);
+				const node = cached?.node || (isVid ? await preloadVideo(url) : await preloadImage(url));
 				node.className = 'media';
 				const eff = effectClassFor(item);
 				if(eff){ node.classList.add('anim'); node.classList.add(eff); }
 				if(isVid){ node.loop = true; node.autoplay = true; node.muted = true; node.playsInline = true; }
 				// Apply split segment cropping if this item is part of a split group
-				computeSegmentStyles(node, item);
-				clearNode(back); back.appendChild(node);
+				var maybeWrap = computeSegmentStyles(node, item);
+				clearNode(back); back.appendChild(maybeWrap || node);
 				back.classList.add('fade'); back.classList.remove('hidden');
-				if(isVid){ setTimeout(()=>{ try{ node.play().catch(()=>{});}catch{} }, 0); }
-				requestAnimationFrame(()=>{
-					back.classList.add('visible'); back.classList.remove('fade');
-					front.classList.add('fade'); front.classList.remove('visible');
-					// Drop the enter-* class on the next frame to trigger the transition
+				if(isVid){ setTimeout(()=>{ try{ tryPlayWithPrompt(node); }catch{} }, 0); }
+				// Wait for first frame for videos to avoid black crossfade
+				const reveal = ()=>{
 					requestAnimationFrame(()=>{
-						if(eff){ node.classList.remove('enter-slide-l','enter-slide-r','enter-zoom-in','enter-zoom-out'); node.style.opacity=''; }
+						back.classList.add('visible'); back.classList.remove('fade');
+						front.classList.add('fade'); front.classList.remove('visible');
+						requestAnimationFrame(()=>{
+							if(eff){ node.classList.remove('enter-slide-l','enter-slide-r','enter-zoom-in','enter-zoom-out'); node.style.opacity=''; }
+						});
+						setTimeout(()=>{ front.classList.add('hidden'); front.classList.remove('fade'); swapLayers(); }, 1100);
 					});
-					setTimeout(()=>{ front.classList.add('hidden'); front.classList.remove('fade'); swapLayers(); }, 1100);
-				});
+				};
+				if(isVid){
+					let revealed=false;
+					function safeReveal(){ if(revealed) return; revealed=true; reveal(); }
+					try{
+						if((node.readyState||0) >= 2){ safeReveal(); }
+						else{
+							node.addEventListener('loadeddata', safeReveal, { once:true });
+							node.addEventListener('canplay', safeReveal, { once:true });
+							setTimeout(safeReveal, 1200); // safety fallback
+						}
+					}catch(e){ setTimeout(safeReveal, 300); }
+				}else{
+					reveal();
+				}
 				currentItemKey = keyFrom(item);
 				try{ sendClientEvent('load_ok', item, null).catch(()=>{}); }catch{}
 			}catch(e){
@@ -305,8 +566,8 @@
 							const node = await preloadVideo(alt);
 							node.className = 'media'; node.loop = true; node.autoplay = true; node.muted = true; node.playsInline = true;
 							const eff = effectClassFor(item); if(eff){ node.classList.add('anim'); node.classList.add(eff); }
-							computeSegmentStyles(node, item);
-							clearNode(back); back.appendChild(node);
+							var maybeWrap = computeSegmentStyles(node, item);
+							clearNode(back); back.appendChild(maybeWrap || node);
 							back.classList.add('fade'); back.classList.remove('hidden');
 							setTimeout(()=>{ try{ node.play().catch(()=>{});}catch{} }, 0);
 							requestAnimationFrame(()=>{
@@ -337,7 +598,11 @@
 			const item = playlist[idx];
 			const dur = Math.max(1, parseInt(item.duration||10));
 			const next = playlist[nextIndex()];
-			if(next){ const u = mediaUrl(next); if(u){ const pre = isVideoByName(u) ? preloadVideo(u) : preloadImage(u); pre.catch(()=>{}); } }
+			// Prefetch next 2 items with LRU cache
+			for(let i=1;i<=PRELOAD_AHEAD;i++){
+				const it = playlist[(idx + i) % playlist.length];
+				primePreload(it);
+			}
 			await showItem(item);
 			idx = nextIndex();
 			if(Date.now() - lastFetchTs > PLAYLIST_REFRESH_MIN_MS){ fetchPlaylist(); }

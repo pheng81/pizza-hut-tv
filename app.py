@@ -52,6 +52,8 @@ try:
     from botocore.config import Config as BotoConfig
 except Exception:
     boto3 = None
+    # Ensure name exists so later references do not raise NameError when boto3 missing
+    BotoConfig = None
 
 # Global in-memory cache for library listings
 _LIB_CACHE: dict = {}
@@ -296,39 +298,39 @@ def send_email(to_addr: str, subject: str, body: str) -> bool:
         logging.warning('send_email failed at phase=%s: %s', phase, e)
         return False
 
-    def _issue_verification_token(username: str) -> str:
-        token = uuid.uuid4().hex + uuid.uuid4().hex
-        try:
-            db = get_db()
-            db.execute('UPDATE users SET verify_token = ?, verify_sent_at = ? WHERE username = ?', (token, int(time.time()), (username or '').strip().lower()))
-            db.commit()
-        except Exception as e:
-            logging.warning('Failed to persist verify token for %s: %s', username, e)
-        return token
+def _issue_verification_token(username: str) -> str:
+    token = uuid.uuid4().hex + uuid.uuid4().hex
+    try:
+        db = get_db()
+        db.execute('UPDATE users SET verify_token = ?, verify_sent_at = ? WHERE username = ?', (token, int(time.time()), (username or '').strip().lower()))
+        db.commit()
+    except Exception as e:
+        logging.warning('Failed to persist verify token for %s: %s', username, e)
+    return token
 
-    def _send_verification_email(username: str):
+def _send_verification_email(username: str):
+    try:
+        email = (username or '').strip().lower()
+        token = _issue_verification_token(email)
         try:
-            email = (username or '').strip().lower()
-            token = _issue_verification_token(email)
-            try:
-                verify_url = url_for('verify_email', token=token, _external=True, _scheme='https')
-            except Exception:
-                host = 'https://api.everydayadvertise.com'
-                verify_url = f"{host}/verify/{token}"
-            subject = 'Verify your EverydayAdvertise account'
-            body = f"Welcome! Please verify your email by clicking this link:\n\n{verify_url}\n\nThis link will confirm your account. If you did not sign up, please ignore this email."
-            if _mail_configured():
-                ok = send_email(email, subject, body)
-                if ok:
-                    logging.info('Verification email sent to %s', email)
-                else:
-                    logging.warning('SMTP send failed; printing verification URL: %s', verify_url)
+            verify_url = url_for('verify_email', token=token, _external=True, _scheme='https')
+        except Exception:
+            host = 'https://api.everydayadvertise.com'
+            verify_url = f"{host}/verify/{token}"
+        subject = 'Verify your EverydayAdvertise account'
+        body = f"Welcome! Please verify your email by clicking this link:\n\n{verify_url}\n\nThis link will confirm your account. If you did not sign up, please ignore this email."
+        if _mail_configured():
+            ok = send_email(email, subject, body)
+            if ok:
+                logging.info('Verification email sent to %s', email)
             else:
-                logging.warning('SMTP not configured; printing verification URL: %s', verify_url)
-            return True
-        except Exception as e:
-            logging.warning('send_verification_email failed: %s', e)
-            return False
+                logging.warning('SMTP send failed; printing verification URL: %s', verify_url)
+        else:
+            logging.warning('SMTP not configured; printing verification URL: %s', verify_url)
+        return True
+    except Exception as e:
+        logging.warning('send_verification_email failed: %s', e)
+        return False
 
 def login_required(view):
     @wraps(view)
@@ -2053,6 +2055,12 @@ os.makedirs(THUMB_FOLDER, exist_ok=True)
 os.makedirs(VTHUMB_FOLDER, exist_ok=True)
 os.makedirs(VPREVIEW_FOLDER, exist_ok=True)
 
+# Cache folders for video slicing
+SLICE_CACHE_FOLDER = os.path.join('static', 'cache', 'slices')
+TEMP_CACHE_FOLDER = os.path.join('static', 'cache', 'temp')
+os.makedirs(SLICE_CACHE_FOLDER, exist_ok=True)
+os.makedirs(TEMP_CACHE_FOLDER, exist_ok=True)
+
 # Categorized extension sets (keep lowercase)
 IMAGE_EXTENSIONS = {
     'png', 'jpg', 'jpeg', 'bmp', 'webp', 'svg', 'avif', 'heic', 'heif', 'tif', 'tiff'
@@ -2191,6 +2199,18 @@ def stream_media(filename):
 
     file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     if not os.path.exists(file_path):
+        # If a CDN base is configured, redirect so clients (ExoPlayer) can fetch from R2/Cloudflare
+        try:
+            cdn = os.environ.get('MEDIA_BASE_URL')
+            if isinstance(cdn, str) and (cdn.startswith('http://') or cdn.startswith('https://')):
+                if not cdn.endswith('/'):
+                    cdn = cdn + '/'
+                target = cdn + filename
+                logging.debug("/media redirecting missing file to CDN: %s -> %s", filename, target)
+                # 302 is widely followed; client will reissue Range to the target
+                return redirect(target, code=302)
+        except Exception:
+            pass
         return jsonify({'error': 'not found'}), 404
 
     file_size = os.path.getsize(file_path)
@@ -2214,7 +2234,18 @@ def stream_media(filename):
     range_header = request.headers.get('Range')
     logging.debug(f"/media request filename=%s method=%s range=%s", filename, request.method, range_header)
     if request.method == 'HEAD':
-        # Fast metadata response
+        # Fast metadata response; if file missing, prefer HEAD redirect to CDN
+        if not os.path.exists(file_path):
+            try:
+                cdn = os.environ.get('MEDIA_BASE_URL')
+                if isinstance(cdn, str) and (cdn.startswith('http://') or cdn.startswith('https://')):
+                    if not cdn.endswith('/'):
+                        cdn = cdn + '/'
+                    target = cdn + filename
+                    return redirect(target, code=302)
+            except Exception:
+                pass
+            return jsonify({'error': 'not found'}), 404
         resp = Response(status=200, mimetype=_video_mime(ext))
         resp.headers.add('Accept-Ranges', 'bytes')
         resp.headers.add('Content-Length', str(file_size))
@@ -2300,6 +2331,11 @@ def ensure_playlists_structure(config):
     changed = False
     for store_id, screens in config.get('screens', {}).items():
         for sid, sdata in screens.items():
+            # SAFETY: Backup existing playlist before any modifications
+            existing_playlist = sdata.get('playlist')
+            if existing_playlist and isinstance(existing_playlist, list) and len(existing_playlist) > 0:
+                print(f"DEBUG: Found existing playlist for {store_id}/{sid} with {len(existing_playlist)} items")
+            
             if 'playlist' not in sdata or not isinstance(sdata.get('playlist'), list):
                 pl = []
                 if sdata.get('file'):
@@ -2315,6 +2351,7 @@ def ensure_playlists_structure(config):
                         'link_next': False,
                         'media_type': classify_media(sdata['file'])
                     })
+                    print(f"DEBUG: Created new playlist for {store_id}/{sid} from file: {sdata['file']}")
                 sdata['playlist'] = pl
                 changed = True
             # Initialize runtime rotation metadata if not present
@@ -2737,9 +2774,42 @@ def api_profile_upload_avatar():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 def save_store_config(config):
-    """Save store configuration to the active JSON file (per-user or global)."""
+    """Save store configuration to the active JSON file (per-user or global) with automatic backup."""
     try:
         cfg_path = _effective_config_path()
+        
+        # SAFETY: Create backup before overwriting if file exists and has content
+        if os.path.exists(cfg_path):
+            try:
+                with open(cfg_path, 'r') as f:
+                    existing_cfg = json.load(f)
+                # Count total playlist items for safety check
+                total_items = 0
+                for store_id, screens in existing_cfg.get('screens', {}).items():
+                    for screen_id, screen_data in screens.items():
+                        total_items += len(screen_data.get('playlist', []))
+                
+                if total_items > 0:
+                    # Create timestamped backup
+                    import time
+                    timestamp = int(time.time())
+                    backup_path = f"{cfg_path}.backup-{timestamp}"
+                    shutil.copyfile(cfg_path, backup_path)
+                    print(f"DEBUG: Created backup with {total_items} playlist items: {backup_path}")
+                    
+                    # Keep only last 5 backups to prevent disk bloat
+                    try:
+                        import glob
+                        backup_files = sorted(glob.glob(f"{cfg_path}.backup-*"))
+                        if len(backup_files) > 5:
+                            for old_backup in backup_files[:-5]:
+                                os.remove(old_backup)
+                                print(f"DEBUG: Cleaned old backup: {old_backup}")
+                    except Exception:
+                        pass
+            except Exception as e:
+                print(f"Warning: Could not create backup: {e}")
+        
         # Atomic write: write to temp file then replace
         tmp_file = cfg_path + '.tmp'
         with open(tmp_file, 'w') as f:
@@ -2749,6 +2819,86 @@ def save_store_config(config):
     except Exception as e:
         print(f"Error saving configuration: {e}")
         raise
+
+def cleanup_slice_cache():
+    """Clean up old video slice cache files to prevent disk bloat."""
+    try:
+        import glob
+        import time
+        
+        # Clean slices older than 7 days
+        slice_pattern = os.path.join(SLICE_CACHE_FOLDER, "*.mp4")
+        temp_pattern = os.path.join(TEMP_CACHE_FOLDER, "*")
+        
+        current_time = time.time()
+        week_ago = current_time - (7 * 24 * 60 * 60)  # 7 days in seconds
+        
+        cleaned_count = 0
+        
+        # Clean old slice files
+        for cache_file in glob.glob(slice_pattern):
+            try:
+                if os.path.getmtime(cache_file) < week_ago:
+                    os.remove(cache_file)
+                    cleaned_count += 1
+            except Exception:
+                pass
+        
+        # Clean old temp files (older than 1 day)
+        day_ago = current_time - (24 * 60 * 60)
+        for temp_file in glob.glob(temp_pattern):
+            try:
+                if os.path.getmtime(temp_file) < day_ago:
+                    os.remove(temp_file)
+                    cleaned_count += 1
+            except Exception:
+                pass
+        
+        if cleaned_count > 0:
+            print(f"DEBUG: Cleaned {cleaned_count} old cache files")
+        
+    except Exception as e:
+        print(f"WARNING: Cache cleanup failed: {e}")
+
+# Run cache cleanup on startup
+cleanup_slice_cache()
+
+def check_ffmpeg_available():
+    """Check if FFmpeg is available in the system PATH or common locations."""
+    # Common FFmpeg locations on Windows
+    ffmpeg_locations = [
+        'ffmpeg',  # System PATH
+        'C:\\ffmpeg\\bin\\ffmpeg.exe',
+        'C:\\FFmpeg\\bin\\ffmpeg.exe',
+        os.path.join(os.path.dirname(__file__), 'ffmpeg', 'bin', 'ffmpeg.exe'),
+        os.path.join(os.path.dirname(__file__), 'ffmpeg.exe')
+    ]
+    
+    for ffmpeg_path in ffmpeg_locations:
+        try:
+            result = subprocess.run([ffmpeg_path, '-version'], capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                print(f"DEBUG: FFmpeg found at: {ffmpeg_path}")
+                # Store the working path for later use
+                global FFMPEG_PATH
+                FFMPEG_PATH = ffmpeg_path
+                return True
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            continue
+        except Exception as e:
+            print(f"WARNING: FFmpeg check failed for {ffmpeg_path}: {e}")
+            continue
+    
+    print("WARNING: FFmpeg not found in any common locations")
+    print("Install FFmpeg using: python setup_ffmpeg.ps1")
+    return False
+
+# Check FFmpeg availability on startup
+FFMPEG_PATH = 'ffmpeg'  # Default to PATH
+FFMPEG_AVAILABLE = check_ffmpeg_available()
+if not FFMPEG_AVAILABLE:
+    print("WARNING: Video slicing will not work without FFmpeg.")
+    print("Install FFmpeg using: powershell -ExecutionPolicy Bypass -File setup_ffmpeg.ps1")
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -3165,7 +3315,12 @@ def pick_active_playlist_item(screen, parent_config=None, store_id=None, screen_
     # If this screen is part of a sync group but doesn't yet have a concrete playlist item,
     # synthesize a read-only placeholder item so dashboard and players can show the synced media.
     try:
-        groups = (cfg.get('sync_groups') or {}) if isinstance(cfg.get('sync_groups'), dict) else {}
+        # Use the provided parent_config to resolve sync groups; avoid referencing undefined names
+        groups = {}
+        if isinstance(parent_config, dict):
+            sg = parent_config.get('sync_groups')
+            if isinstance(sg, dict):
+                groups = sg
         # Track which sync groups already have a real item on this screen
         have_groups = set()
         for _it in (pl or []):
@@ -4857,7 +5012,8 @@ def get_playlist(store_id, screen_id):
         except Exception:
             print("DEBUG: Screen not found for playlist (after mapping)")
             return jsonify({'success': False, 'error': 'screen not found'}), 404
-    # Auto-clean missing-file items (local disk only)
+    # FIXED: Auto-clean missing-file items (local disk only) - DO NOT RUN IF R2 IS ENABLED
+    # This was causing playlist data loss when files exist on CDN but not locally
     if not r2_enabled():
         original = screen.get('playlist', [])
         cleaned = []
@@ -4867,8 +5023,11 @@ def get_playlist(store_id, screen_id):
             if f:
                 path = os.path.join(app.config['UPLOAD_FOLDER'], f)
                 if not os.path.exists(path):
-                    removed += 1
-                    continue
+                    # SAFETY: Only remove if file path looks like a local upload, not CDN URL
+                    if not f.startswith('http') and not f.startswith('users/'):
+                        removed += 1
+                        print(f"DEBUG: Removing local missing file: {f}")
+                        continue
             cleaned.append(item)
         if removed:
             screen['playlist'] = cleaned
@@ -4876,7 +5035,9 @@ def get_playlist(store_id, screen_id):
                 save_store_config_for_user_safe_key(user_key, cfg)
             else:
                 save_store_config(cfg)
-            print(f"DEBUG: Auto-removed {removed} missing file playlist items")
+            print(f"DEBUG: Auto-removed {removed} missing LOCAL file playlist items")
+    else:
+        print("DEBUG: R2 enabled - skipping local file existence check to preserve CDN-based playlists")
     pl = screen.get('playlist', [])
     # Decorate with public URL and last known status for clients/dashboard
     last_status = screen.get('last_item_status') or {}
@@ -4884,7 +5045,39 @@ def get_playlist(store_id, screen_id):
     for item in pl:
         try:
             it = dict(item)
-            it['url'] = build_public_url(it.get('file'))
+            
+            # Check if this is a sync video that needs slicing for Android clients
+            sref = item.get('sync_ref') if isinstance(item, dict) else None
+            needs_slicing = False
+            if sref and isinstance(sref, dict):
+                count = sref.get('count', 1)
+                file_type = item.get('media_type', '')
+                if count > 1 and file_type == 'video':
+                    needs_slicing = True
+            
+            # Build URL with slicing consideration
+            base_url = build_public_url(it.get('file'))
+            if needs_slicing and base_url:
+                # For Android clients with sync videos, use slice-video endpoint
+                user_agent = request.headers.get('User-Agent', '').lower()
+                is_android = 'android' in user_agent or 'okhttp' in user_agent
+                
+                if is_android:
+                    # Use our slice-video endpoint for better Android compatibility
+                    video_file = it.get('file', '')
+                    if video_file:
+                        slice_url = url_for('slice_video', video_path=video_file, _external=True)
+                        slice_url += f"?slice_mode={sref.get('mode', 'split-h')}"
+                        slice_url += f"&slice_count={sref.get('count', 1)}"
+                        slice_url += f"&slice_order={sref.get('order', 0)}"
+                        it['url'] = slice_url
+                        it['slice_aware'] = True  # Flag for client debugging
+                    else:
+                        it['url'] = base_url
+                else:
+                    it['url'] = base_url
+            else:
+                it['url'] = base_url
             # Ensure the effect is serialized explicitly for clients
             if 'effect' in item and isinstance(item.get('effect'), str):
                 it['effect'] = item.get('effect')
@@ -4911,13 +5104,29 @@ def get_playlist(store_id, screen_id):
                     it.setdefault('sync_ref', dict(sref or {}))
                     if se:
                         it['sync_ref']['start_epoch'] = int(se)
+                    
+                    # CRITICAL: Always include count, mode, and order for Android TV clients
+                    # Android ExoPlayer needs these fields to calculate video slice positions
                     try:
-                        cnt = int(grp.get('count') or 0)
-                        if cnt > 1:
-                            it['sync_ref']['count'] = cnt
+                        cnt = int(grp.get('count') or len(grp.get('members', [])) or 1)
+                        it['sync_ref']['count'] = cnt
                     except Exception:
-                        pass
+                        it['sync_ref']['count'] = 1
+                    
+                    # Always include mode for video slicing direction
                     it['sync_ref']['mode'] = grp.get('mode') or 'split-h'
+                    
+                    # Always include order/position for this screen in the sync group
+                    try:
+                        # Find current screen's order in group members
+                        current_order = 0
+                        for i, mem in enumerate(grp.get('members', [])):
+                            if mem.get('screen_id') == screen_id:
+                                current_order = mem.get('order', i)
+                                break
+                        it['sync_ref']['order'] = current_order
+                    except Exception:
+                        it['sync_ref']['order'] = 0
             except Exception:
                 pass
             # Prefer id mapping; if missing, fall back to file key.
@@ -4978,7 +5187,7 @@ def get_playlist(store_id, screen_id):
                     'order': mem.get('order') or 0,
                     'virtual': True,
                     'start_epoch': int(grp.get('start_epoch') or grp.get('start') or grp.get('created_at') or 0),
-                    'count': int(grp.get('count') or 0),
+                    'count': int(grp.get('count') or len(grp.get('members', [])) or 1),
                     'mode': grp.get('mode') or 'split-h'
                 }
             }
@@ -6678,6 +6887,259 @@ def add_sync_follower():
     except Exception as e:
         app.logger.exception('add_sync_follower failed')
         return jsonify({'success': False, 'error': str(e)}), 500
+
+# Video slicing endpoint for Android TV compatibility
+@app.route('/slice-video/<path:video_path>')
+def slice_video(video_path):
+    """
+    FFmpeg-based video slicing endpoint for Android TV.
+    Serves actual cropped video segments instead of ultra-wide videos.
+    Works like webplayer - takes 5760x1080 video and serves 1920x1080 slices.
+    """
+    try:
+        # Get slice parameters from query string
+        slice_mode = request.args.get('slice_mode', 'split-h')
+        slice_count = int(request.args.get('slice_count', 1))
+        slice_order = int(request.args.get('slice_order', 0))
+        
+        print(f"DEBUG: slice_video request - path={video_path}, mode={slice_mode}, count={slice_count}, order={slice_order}")
+        
+        # If no slicing needed, redirect to original
+        if slice_count <= 1:
+            base_url = get_media_base_url() + video_path
+            return redirect(base_url)
+        
+        # Check if FFmpeg is available
+        if not FFMPEG_AVAILABLE:
+            print("WARNING: FFmpeg not available, redirecting to original video")
+            print("INFO: To enable video slicing, install FFmpeg:")
+            print("  - Windows: choco install ffmpeg (or download from https://ffmpeg.org/)")
+            print("  - Add ffmpeg.exe to your PATH")
+            print("  - Restart the Flask server")
+            
+            # Fallback to original video with headers indicating no slicing
+            base_url = get_media_base_url() + video_path
+            response = redirect(base_url)
+            response.headers['X-Slice-Fallback'] = 'ffmpeg-unavailable'
+            response.headers['X-Slice-Info'] = f"mode={slice_mode},count={slice_count},order={slice_order}"
+            return response
+        
+        # Generate cache key for this specific slice
+        cache_key = f"{video_path.replace('/', '_').replace('\\', '_')}_slice_{slice_mode}_{slice_count}_{slice_order}"
+        cached_slice_path = os.path.join(SLICE_CACHE_FOLDER, f"{cache_key}.mp4")
+        
+        # Check if slice already exists in cache
+        if os.path.exists(cached_slice_path):
+            print(f"DEBUG: Serving cached slice: {cached_slice_path}")
+            response = send_file(cached_slice_path, mimetype='video/mp4')
+            response.headers['X-Slice-Cached'] = 'true'
+            response.headers['Cache-Control'] = 'public, max-age=86400'  # Cache for 24 hours
+            return response
+        
+        # Get the original video file path
+        original_video_path = None
+        if r2_enabled():
+            # For R2/CDN videos, we need to download them first
+            original_url = get_media_base_url() + video_path
+            safe_filename = video_path.replace('/', '_').replace('\\', '_')
+            temp_video_path = os.path.join(TEMP_CACHE_FOLDER, safe_filename)
+            
+            # Download video if not already cached
+            if not os.path.exists(temp_video_path):
+                print(f"DEBUG: Downloading video from CDN: {original_url}")
+                try:
+                    urllib.request.urlretrieve(original_url, temp_video_path)
+                    print(f"DEBUG: Downloaded {os.path.getsize(temp_video_path) / 1024 / 1024:.2f} MB")
+                except Exception as e:
+                    print(f"ERROR: Failed to download video: {e}")
+                    base_url = get_media_base_url() + video_path
+                    return redirect(base_url)
+            
+            original_video_path = temp_video_path
+        else:
+            # For local videos
+            original_video_path = os.path.join(app.config['UPLOAD_FOLDER'], video_path)
+        
+        # Verify original video exists
+        if not os.path.exists(original_video_path):
+            print(f"ERROR: Original video not found: {original_video_path}")
+            return jsonify({'error': 'Original video not found'}), 404
+        
+        # Generate FFmpeg command for video slicing
+        success = generate_video_slice_ffmpeg(
+            original_video_path, 
+            cached_slice_path,
+            slice_mode, 
+            slice_count, 
+            slice_order
+        )
+        
+        if success and os.path.exists(cached_slice_path):
+            print(f"DEBUG: Successfully created slice: {cached_slice_path}")
+            print(f"DEBUG: Slice file size: {os.path.getsize(cached_slice_path) / 1024 / 1024:.2f} MB")
+            
+            # Add cache headers for better performance
+            response = send_file(cached_slice_path, mimetype='video/mp4')
+            response.headers['Cache-Control'] = 'public, max-age=86400'  # Cache for 24 hours
+            response.headers['X-Slice-Info'] = f"mode={slice_mode},count={slice_count},order={slice_order}"
+            response.headers['X-Slice-Generated'] = 'true'
+            return response
+        else:
+            print(f"ERROR: Failed to create video slice")
+            # Fallback to original video
+            base_url = get_media_base_url() + video_path
+            response = redirect(base_url)
+            response.headers['X-Slice-Fallback'] = 'generation-failed'
+            return response
+        
+    except Exception as e:
+        app.logger.exception('slice_video failed')
+        print(f"ERROR: slice_video exception: {e}")
+        # Fallback to original video on any error
+        try:
+            base_url = get_media_base_url() + video_path
+            response = redirect(base_url)
+            response.headers['X-Slice-Fallback'] = 'exception'
+            return response
+        except:
+            return jsonify({'error': str(e)}), 500
+
+def generate_video_slice_ffmpeg(input_path, output_path, mode, count, order):
+    """
+    Generate video slice using FFmpeg crop filter.
+    Similar to webplayer logic but creates actual video files.
+    """
+    try:
+        # Check if FFmpeg is available
+        if not FFMPEG_AVAILABLE:
+            print("ERROR: FFmpeg not available, cannot slice video")
+            return False
+        
+        import subprocess
+        
+        # First, get video dimensions
+        ffprobe_cmd = FFMPEG_PATH.replace('ffmpeg', 'ffprobe') if 'ffmpeg' in FFMPEG_PATH else 'ffprobe'
+        probe_cmd = [
+            ffprobe_cmd, '-v', 'quiet', '-print_format', 'json', 
+            '-show_format', '-show_streams', input_path
+        ]
+        
+        try:
+            probe_result = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=30)
+            if probe_result.returncode != 0:
+                print(f"ERROR: ffprobe failed: {probe_result.stderr}")
+                return False
+            
+            import json
+            probe_data = json.loads(probe_result.stdout)
+            
+            # Find video stream
+            video_stream = None
+            for stream in probe_data.get('streams', []):
+                if stream.get('codec_type') == 'video':
+                    video_stream = stream
+                    break
+            
+            if not video_stream:
+                print("ERROR: No video stream found")
+                return False
+            
+            input_width = int(video_stream.get('width', 0))
+            input_height = int(video_stream.get('height', 0))
+            
+            print(f"DEBUG: Input video dimensions: {input_width}x{input_height}")
+            
+        except Exception as e:
+            print(f"WARNING: Could not probe video, using defaults: {e}")
+            # Default for ultra-wide sync videos
+            input_width = 5760
+            input_height = 1080
+        
+        # Calculate slice dimensions and position
+        if mode == 'split-h':
+            # Horizontal split (most common for sync videos)
+            slice_width = input_width // count
+            slice_height = input_height
+            crop_x = order * slice_width
+            crop_y = 0
+        elif mode == 'split-v':
+            # Vertical split
+            slice_width = input_width
+            slice_height = input_height // count
+            crop_x = 0
+            crop_y = order * slice_height
+        else:
+            print(f"ERROR: Unsupported slice mode: {mode}")
+            return False
+        
+        print(f"DEBUG: Crop parameters - x={crop_x}, y={crop_y}, w={slice_width}, h={slice_height}")
+        
+        # Build FFmpeg command for cropping
+        # crop=w:h:x:y - width:height:x_offset:y_offset
+        crop_filter = f"crop={slice_width}:{slice_height}:{crop_x}:{crop_y}"
+        
+        ffmpeg_cmd = [
+            FFMPEG_PATH, '-y',  # -y to overwrite output file
+            '-i', input_path,
+            '-vf', crop_filter,
+            '-c:a', 'copy',  # Copy audio without re-encoding
+            '-c:v', 'libx264',  # Re-encode video with h264
+            '-preset', 'fast',  # Fast encoding preset
+            '-crf', '23',  # Good quality setting
+            output_path
+        ]
+        
+        print(f"DEBUG: Running FFmpeg: {' '.join(ffmpeg_cmd)}")
+        
+        # Run FFmpeg with timeout
+        result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, timeout=120)
+        
+        if result.returncode == 0:
+            print(f"DEBUG: FFmpeg succeeded, output file size: {os.path.getsize(output_path) / 1024 / 1024:.2f} MB")
+            return True
+        else:
+            print(f"ERROR: FFmpeg failed: {result.stderr}")
+            return False
+        
+    except subprocess.TimeoutExpired:
+        print("ERROR: FFmpeg timeout")
+        return False
+    except Exception as e:
+        print(f"ERROR: FFmpeg exception: {e}")
+        return False
+
+@app.route('/admin/ffmpeg-status')
+def ffmpeg_status():
+    """Admin endpoint to check FFmpeg status and test video slicing."""
+    try:
+        # Re-check FFmpeg availability
+        global FFMPEG_AVAILABLE, FFMPEG_PATH
+        FFMPEG_AVAILABLE = check_ffmpeg_available()
+        
+        status = {
+            'ffmpeg_available': FFMPEG_AVAILABLE,
+            'ffmpeg_path': FFMPEG_PATH if FFMPEG_AVAILABLE else None,
+            'slice_cache_folder': SLICE_CACHE_FOLDER,
+            'temp_cache_folder': TEMP_CACHE_FOLDER,
+            'cache_exists': os.path.exists(SLICE_CACHE_FOLDER),
+            'temp_exists': os.path.exists(TEMP_CACHE_FOLDER)
+        }
+        
+        if FFMPEG_AVAILABLE:
+            # Test FFmpeg version
+            try:
+                result = subprocess.run([FFMPEG_PATH, '-version'], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    version_line = result.stdout.split('\n')[0]
+                    status['ffmpeg_version'] = version_line
+                else:
+                    status['ffmpeg_error'] = result.stderr
+            except Exception as e:
+                status['ffmpeg_test_error'] = str(e)
+        
+        return jsonify(status)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5002))  # Use 5002 since 5000 seems blocked

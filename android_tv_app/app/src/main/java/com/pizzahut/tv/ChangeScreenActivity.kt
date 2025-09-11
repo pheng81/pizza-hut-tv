@@ -28,9 +28,11 @@ class ChangeScreenActivity : AppCompatActivity() {
 		storeInput.setText(prefs.getString("storeId", ""))
 
 		fun pick(storeId: String, screenId: String) {
-			prefs.edit().putString("storeId", storeId).putString("screenId", screenId).apply()
+			val s = storeId.trim(); val scr = screenId.trim()
+			if (s.isEmpty() || scr.isEmpty()) { Toast.makeText(this, "Invalid store/screen", Toast.LENGTH_SHORT).show(); return }
+			prefs.edit().putString("storeId", s).putString("screenId", scr).apply()
 			startActivity(Intent(this, TvDisplayActivity::class.java).apply {
-				putExtra("storeId", storeId); putExtra("screenId", screenId)
+				putExtra("storeId", s); putExtra("screenId", scr)
 				addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
 			})
 			finish()

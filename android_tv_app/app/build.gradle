@@ -5,12 +5,12 @@ plugins {
 
 android {
 	namespace 'com.pizzahut.tv'
-	compileSdk 34
+	compileSdk 36
 
 	defaultConfig {
 		applicationId 'com.pizzahut.tv'
 		minSdk 21
-	targetSdk 34
+	targetSdk 36
 		versionCode 1
 		versionName "1.0"
 		// Allow overriding BASE URL at build time (e.g. -PPHTV_BASE_URL="https://api.everydayadvertise.com/")
@@ -59,6 +59,7 @@ dependencies {
 	implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
 	implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
 	implementation 'com.squareup.retrofit2:retrofit:2.11.0'
+	implementation 'com.squareup.retrofit2:converter-scalars:2.11.0'
 	implementation 'com.squareup.retrofit2:converter-gson:2.11.0'
 	implementation 'com.squareup.okhttp3:logging-interceptor:4.12.0'
 	// ExoPlayer for faster, smoother video playback & pre-buffering
