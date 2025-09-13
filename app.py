@@ -3227,11 +3227,16 @@ def _ffmpeg_bin() -> Optional[str]:
         if env_bin and os.path.exists(env_bin) and os.access(env_bin, os.X_OK):
             return env_bin
         # 2) PATH search
-        found = _shutil.which('ffmpeg')
+        # Prefer PATH lookup; on Windows, both 'ffmpeg' and 'ffmpeg.exe' are valid
+        found = shutil.which('ffmpeg') or shutil.which('ffmpeg.exe')
         if found:
             return found
         # 3) Common system locations (systemd may have a reduced PATH)
         for p in ('/usr/bin/ffmpeg', '/usr/local/bin/ffmpeg', '/bin/ffmpeg'):
+            if os.path.exists(p) and os.access(p, os.X_OK):
+                return p
+        # 4) Windows common install path
+        for p in (r'C:\\ffmpeg\\bin\\ffmpeg.exe', r'C:\\ffmpeg\\ffmpeg.exe'):
             if os.path.exists(p) and os.access(p, os.X_OK):
                 return p
     except Exception:
@@ -5186,6 +5191,18 @@ def get_playlist(store_id, screen_id):
     else:
         print("DEBUG: R2 enabled - skipping local file existence check to preserve CDN-based playlists")
     pl = screen.get('playlist', [])
+    # Effective User-Agent detection with optional override via query for debugging/testing
+    try:
+        _ua_override = (request.args.get('ua_override') or request.args.get('ua') or '').strip().lower()
+    except Exception:
+        _ua_override = ''
+    try:
+        _ua_header = request.headers.get('User-Agent', '').strip().lower()
+    except Exception:
+        _ua_header = ''
+    ua_effective = _ua_override or _ua_header
+    if _ua_override:
+        print(f"DEBUG: UA override in query detected -> using ua='{ua_effective}' (header was '{_ua_header}')")
     # Decorate with public URL and last known status for clients/dashboard
     last_status = screen.get('last_item_status') or {}
     out = []
@@ -5242,15 +5259,37 @@ def get_playlist(store_id, screen_id):
                     
                     # Always include order/position for this screen in the sync group
                     try:
-                        # Find current screen's order in group members
-                        current_order = 0
+                        # Find current screen's order in group members; consider both short and store-prefixed IDs
+                        alt_ids = {screen_id}
+                        try:
+                            if '_' in screen_id:
+                                short = screen_id.split('_', 1)[1]
+                                alt_ids.add(short)
+                            else:
+                                alt_ids.add(f"{store_id}_{screen_id}")
+                        except Exception:
+                            pass
+                        found = False
                         for i, mem in enumerate(grp.get('members', [])):
-                            if mem.get('screen_id') == screen_id:
-                                current_order = mem.get('order', i)
+                            sid = mem.get('screen_id')
+                            if sid and sid in alt_ids:
+                                it['sync_ref']['order'] = mem.get('order', i)
+                                found = True
                                 break
-                        it['sync_ref']['order'] = current_order
+                        if not found:
+                            # Preserve existing order if provided on the item; otherwise default to 0
+                            try:
+                                ex_order = sref.get('order')
+                                it['sync_ref']['order'] = int(ex_order) if ex_order is not None else 0
+                            except Exception:
+                                it['sync_ref']['order'] = 0
                     except Exception:
-                        it['sync_ref']['order'] = 0
+                        # As a last resort, leave existing order or 0
+                        try:
+                            ex_order = sref.get('order')
+                            it['sync_ref']['order'] = int(ex_order) if ex_order is not None else 0
+                        except Exception:
+                            it['sync_ref']['order'] = 0
             except Exception:
                 pass
             # --- Dynamic slice URL assignment (after sync_ref augmentation) ---
@@ -5262,23 +5301,27 @@ def get_playlist(store_id, screen_id):
                     sorder = int(sref2.get('order') or 0)
                     smode = (sref2.get('mode') or 'split-h').lower()
                     if scount > 1:
-                        ua = request.headers.get('User-Agent', '').lower()
-                        # Broaden Android TV / ExoPlayer heuristics.
+                        ua = ua_effective
                         android_tokens = ('android', 'okhttp', 'exoplayer', 'nvidia', 'bravia', 'shield')
                         is_android = any(tok in ua for tok in android_tokens)
+                        vfile = it.get('file')
                         print(f"DEBUG: Slice decision ua='{ua}' is_android={is_android} count={scount} order={sorder} mode={smode}")
-                        if is_android:
-                            vfile = it.get('file')
-                            if vfile:
-                                slice_url = url_for('slice_video', video_path=vfile, _external=True)
-                                slice_url += f"?slice_mode={smode}&slice_count={scount}&slice_order={sorder}"
+                        if vfile:
+                            slice_url = url_for('slice_video', video_path=vfile, _external=True)
+                            slice_url += f"?slice_mode={smode}&slice_count={scount}&slice_order={sorder}"
+                            # Always expose slice_url so clients can opt-in reliably
+                            it['slice_url'] = slice_url
+                            it['slice_info'] = {'mode': smode, 'count': scount, 'order': sorder}
+                            it['slice_aware'] = True
+                            if is_android:
+                                # For Android, prefer server-sliced URL
                                 it['url'] = slice_url
-                                it['slice_aware'] = True
-                                print(f"DEBUG: Assigned slice URL: {slice_url}")
+                                print(f"DEBUG: Assigned slice URL (Android): {slice_url}")
                             else:
-                                print("DEBUG: Cannot assign slice URL (missing file field)")
+                                # Non-Android: leave base URL; client may CSS/JS crop, but can still read slice_url
+                                print(f"DEBUG: Exposed slice_url (non-Android): {slice_url}")
                         else:
-                            print("DEBUG: Non-Android client; leaving base URL (client may CSS/JS crop)")
+                            print("DEBUG: Cannot assign slice URL (missing file field)")
             except Exception as e_slice:
                 print(f"WARNING: Slice URL assignment error: {e_slice}")
             # Prefer id mapping; if missing, fall back to file key.
@@ -5439,6 +5482,42 @@ def get_playlist(store_id, screen_id):
                                         'mode': 'split-h'
                                     }
                                 })
+    except Exception:
+        pass
+    # Post-process: ensure any synthesized or late-added sync items also get slice URLs for Android clients
+    try:
+        ua = ua_effective
+        android_tokens = ('android', 'okhttp', 'exoplayer', 'nvidia', 'bravia', 'shield')
+        is_android = any(tok in ua for tok in android_tokens)
+        for i, it in enumerate(out):
+            try:
+                if not isinstance(it, dict):
+                    continue
+                media_type = it.get('media_type') or classify_media(it.get('file') or '')
+                sref = it.get('sync_ref') if isinstance(it.get('sync_ref'), dict) else None
+                if media_type != 'video' or not sref:
+                    continue
+                scount = int(sref.get('count') or 1)
+                if scount <= 1:
+                    continue
+                sorder = int(sref.get('order') or 0)
+                smode = str(sref.get('mode') or 'split-h').lower()
+                vfile = it.get('file')
+                if not vfile:
+                    continue
+                # Always expose slice_url/info so clients can opt-in
+                slice_url = url_for('slice_video', video_path=vfile, _external=True)
+                slice_url += f"?slice_mode={smode}&slice_count={scount}&slice_order={sorder}"
+                it['slice_url'] = it.get('slice_url') or slice_url
+                it['slice_info'] = it.get('slice_info') or {'mode': smode, 'count': scount, 'order': sorder}
+                it['slice_aware'] = True
+                # For Android UA, prefer server slice URL in main url field if not already set
+                cur_url = it.get('url') or ''
+                if is_android and '/slice-video/' not in cur_url:
+                    it['url'] = slice_url
+                    print(f"DEBUG: Post-assigned slice URL for item[{i}] (Android): {slice_url}")
+            except Exception as _e_postslice:
+                print(f"WARNING: Post slice assign failed for item[{i}]: {_e_postslice}")
     except Exception:
         pass
     print(f"DEBUG: Returning playlist items: {len(out)}")
@@ -7060,7 +7139,7 @@ def serve_video_file_with_range_support(file_path, is_cached='false'):
         with open(file_path, 'rb') as f:
             f.seek(start)
             remaining = end - start + 1
-            chunk = 1024 * 256  # 256KB sub-chunks
+            chunk = 1024 * 1024  # 1MB sub-chunks
             while remaining > 0:
                 read_len = min(chunk, remaining)
                 data = f.read(read_len)
@@ -7071,7 +7150,7 @@ def serve_video_file_with_range_support(file_path, is_cached='false'):
 
     # Helper: stream entire file in chunks (when no Range header)
     def generate_full():
-        chunk_size = 1024 * 512  # 512KB
+        chunk_size = 1024 * 1024  # 1MB
         with open(file_path, 'rb') as f:
             while True:
                 chunk = f.read(chunk_size)
@@ -7092,7 +7171,7 @@ def serve_video_file_with_range_support(file_path, is_cached='false'):
             start = int(start_str) if start_str else 0
 
             # If no end specified, serve up to CHUNK_MAX to keep transfers predictable for some clients
-            CHUNK_MAX = 1024 * 1024  # 1MB per response for open-ended requests
+            CHUNK_MAX = 8 * 1024 * 1024  # 8MB per response for open-ended requests
             if end_str.strip() == '':
                 end = min(start + CHUNK_MAX - 1, file_size - 1)
             else:
@@ -7143,8 +7222,10 @@ def slice_video(video_path):
         slice_mode = request.args.get('slice_mode', 'split-h')
         slice_count = int(request.args.get('slice_count', 1))
         slice_order = int(request.args.get('slice_order', 0))
-        
+
         print(f"DEBUG: slice_video request - path={video_path}, mode={slice_mode}, count={slice_count}, order={slice_order}")
+        # Optional: force refresh to regenerate slice with latest encoder settings
+        force_refresh = str(request.args.get('refresh') or '').strip().lower() in ('1', 'true', 'yes')
         
         # If no slicing needed, redirect to original
         if slice_count <= 1:
@@ -7170,10 +7251,17 @@ def slice_video(video_path):
         cache_key = f"{video_path.replace('/', '_').replace('\\', '_')}_slice_{slice_mode}_{slice_count}_{slice_order}"
         cached_slice_path = os.path.join(SLICE_CACHE_FOLDER, f"{cache_key}.mp4")
         
-        # Check if slice already exists in cache
+        # Check if slice already exists in cache (unless force refresh)
         if os.path.exists(cached_slice_path):
-            print(f"DEBUG: Serving cached slice: {cached_slice_path}")
-            return serve_video_file_with_range_support(cached_slice_path, 'true')
+            if force_refresh:
+                try:
+                    os.remove(cached_slice_path)
+                    print(f"DEBUG: Removed cached slice due to refresh request: {cached_slice_path}")
+                except Exception as _e_del:
+                    print(f"WARNING: Failed to delete cached slice for refresh: {_e_del}")
+            else:
+                print(f"DEBUG: Serving cached slice: {cached_slice_path}")
+                return serve_video_file_with_range_support(cached_slice_path, 'true')
         
         
         # Get the original video file path
@@ -7252,86 +7340,159 @@ def generate_video_slice_ffmpeg(input_path, output_path, mode, count, order):
             return False
         
         import subprocess
-        
-        # First, get video dimensions
+
+        # First, get video dimensions, fps, and whether audio exists
         ffprobe_cmd = FFMPEG_PATH.replace('ffmpeg', 'ffprobe') if 'ffmpeg' in FFMPEG_PATH else 'ffprobe'
         probe_cmd = [
-            ffprobe_cmd, '-v', 'quiet', '-print_format', 'json', 
+            ffprobe_cmd, '-v', 'quiet', '-print_format', 'json',
             '-show_format', '-show_streams', input_path
         ]
-        
+
+        has_audio = False
+        input_width = 0
+        input_height = 0
+        fps = 30
+
         try:
             probe_result = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=30)
             if probe_result.returncode != 0:
                 print(f"ERROR: ffprobe failed: {probe_result.stderr}")
                 return False
-            
+
             import json
             probe_data = json.loads(probe_result.stdout)
-            
-            # Find video stream
+
+            # Find streams
             video_stream = None
             for stream in probe_data.get('streams', []):
-                if stream.get('codec_type') == 'video':
+                ctype = stream.get('codec_type')
+                if ctype == 'video' and video_stream is None:
                     video_stream = stream
-                    break
-            
+                if ctype == 'audio':
+                    has_audio = True
+
             if not video_stream:
                 print("ERROR: No video stream found")
                 return False
-            
-            input_width = int(video_stream.get('width', 0))
-            input_height = int(video_stream.get('height', 0))
-            
-            print(f"DEBUG: Input video dimensions: {input_width}x{input_height}")
-            
+
+            input_width = int(video_stream.get('width', 0) or 0)
+            input_height = int(video_stream.get('height', 0) or 0)
+
+            # Parse FPS from r_frame_rate like "30000/1001" or "30/1"
+            rfr = (video_stream.get('r_frame_rate') or '').strip()
+            try:
+                if rfr and '/' in rfr:
+                    num, den = rfr.split('/')
+                    num = float(num)
+                    den = float(den) if float(den) != 0 else 1.0
+                    if num > 0 and den > 0:
+                        fps_val = num / den
+                        # bound fps to reasonable range
+                        if 10 <= fps_val <= 120:
+                            fps = int(round(fps_val))
+            except Exception:
+                pass
+
+            print(f"DEBUG: Input video dimensions: {input_width}x{input_height}, fps={fps}, has_audio={has_audio}")
+
         except Exception as e:
             print(f"WARNING: Could not probe video, using defaults: {e}")
             # Default for ultra-wide sync videos
             input_width = 5760
             input_height = 1080
+            has_audio = False
+            fps = 30
         
         # Calculate slice dimensions and position
+        # Helpers to enforce even dimensions/offsets for yuv420p safety
+        def _even(x: int) -> int:
+            return x - (x % 2)
+
         if mode == 'split-h':
             # Horizontal split (most common for sync videos)
-            slice_width = input_width // count
+            # Use float widths to avoid cumulative rounding drift, then clamp to frame
+            w_per = input_width / max(1, count)
+            left = int(round(order * w_per))
+            right = int(round((order + 1) * w_per))
+            crop_x = max(0, min(left, input_width - 2))
+            slice_width = max(2, min(right - left, input_width - crop_x))
             slice_height = input_height
-            crop_x = order * slice_width
             crop_y = 0
         elif mode == 'split-v':
             # Vertical split
+            h_per = input_height / max(1, count)
+            top = int(round(order * h_per))
+            bottom = int(round((order + 1) * h_per))
+            crop_y = max(0, min(top, input_height - 2))
+            slice_height = max(2, min(bottom - top, input_height - crop_y))
             slice_width = input_width
-            slice_height = input_height // count
             crop_x = 0
-            crop_y = order * slice_height
         else:
             print(f"ERROR: Unsupported slice mode: {mode}")
             return False
-        
-        print(f"DEBUG: Crop parameters - x={crop_x}, y={crop_y}, w={slice_width}, h={slice_height}")
-        
-        # Build FFmpeg command for cropping with simple, reliable settings
+
+        # Enforce even crop offsets and sizes for yuv420p
+        crop_x = _even(crop_x)
+        crop_y = _even(crop_y)
+        # Ensure width/height are even and within bounds
+        slice_width = _even(min(slice_width, input_width - crop_x))
+        slice_height = _even(min(slice_height, input_height - crop_y))
+        # As a last resort, clamp to minimal even sizes
+        if slice_width < 2:
+            slice_width = 2
+        if slice_height < 2:
+            slice_height = 2
+
+        print(f"DEBUG: Crop parameters (even) - x={crop_x}, y={crop_y}, w={slice_width}, h={slice_height}")
+
+        # Build FFmpeg command for cropping with conservative, widely compatible settings
         # crop=w:h:x:y - width:height:x_offset:y_offset
         crop_filter = f"crop={slice_width}:{slice_height}:{crop_x}:{crop_y}"
-        
+
+        # Keyframe cadence: force exact 1s keyframes and set GOP accordingly for smoother looping
+        # Also enforce constant frame rate to avoid jitter on some decoders
+        gop = max(2, int(round(fps)))  # ~1s GOP
+
         ffmpeg_cmd = [
-            FFMPEG_PATH, '-y',  # -y to overwrite output file
+            FFMPEG_PATH, '-y',  # overwrite output file
             '-i', input_path,
             '-vf', crop_filter,
-            '-c:a', 'copy',  # Copy audio without re-encoding (faster, no quality loss)
-            '-c:v', 'libx264',  # Re-encode video with h264
-            '-profile:v', 'main',  # Use main profile (more compatible than baseline for modern devices)
-            '-preset', 'fast',  # Balanced encoding speed vs quality
-            '-crf', '23',  # Good quality setting
-            '-pix_fmt', 'yuv420p',  # Ensure compatible pixel format
-            '-movflags', '+faststart',  # Optimize for streaming
-            output_path
+            '-c:v', 'libx264',
+            '-pix_fmt', 'yuv420p',
+            '-profile:v', 'main',
+            '-level', '4.0',
+            '-preset', 'veryfast',
+            '-crf', '20',
+            '-g', str(gop),
+            '-keyint_min', str(gop),
+            '-sc_threshold', '0',
+            '-vsync', 'cfr',
+            '-r', str(max(10, fps)),
+            '-force_key_frames', f"expr:gte(t,n_forced*1)",
+            '-movflags', '+faststart',
+            '-map', '0:v:0',
         ]
+
+        if has_audio:
+            ffmpeg_cmd += [
+                '-c:a', 'aac',
+                '-b:a', '128k',
+                '-ac', '2',
+                '-ar', '48000',
+                '-map', '0:a:0?',  # map first audio if present, but don't fail if missing
+            ]
+        else:
+            ffmpeg_cmd += ['-an']
+
+        # Strip metadata/chapters to avoid oddities
+        ffmpeg_cmd += ['-map_metadata', '-1', '-map_chapters', '-1']
+
+        ffmpeg_cmd += [output_path]
         
         print(f"DEBUG: Running FFmpeg: {' '.join(ffmpeg_cmd)}")
         
         # Run FFmpeg with timeout
-        result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, timeout=120)
+        result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, timeout=180)
         
         if result.returncode == 0:
             print(f"DEBUG: FFmpeg succeeded, output file size: {os.path.getsize(output_path) / 1024 / 1024:.2f} MB")
