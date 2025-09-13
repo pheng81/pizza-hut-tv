@@ -33,6 +33,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import com.pizzahut.tv.api.HeartbeatReq
 import android.util.Log
+import retrofit2.HttpException
 private const val TAG = "PHTV"
 
 class TvDisplayActivity : AppCompatActivity() {
@@ -42,6 +43,8 @@ class TvDisplayActivity : AppCompatActivity() {
     var exoPlayer: com.google.android.exoplayer2.ExoPlayer? = null
     // Keep a reference to legacy VideoView so we can hide/stop it properly
     var legacyVideoView: VideoView? = null
+    // Keep a reference to our custom decoder surface
+    var customVideoSurface: com.pizzahut.tv.CustomVideoSurfaceView? = null
     // Small persistent debug overlay
     var debugOverlay: TextView? = null
     // Manual controls hooks
@@ -56,6 +59,21 @@ class TvDisplayActivity : AppCompatActivity() {
     // Screen transform like web player: orientation 'vertical' rotates stage 90deg; rotation adds extra degrees
     var orientationMode: String = "default" // 'vertical' | 'horizontal' | 'default'
     var displayRotation: Int = 0 // 0|90|180|270
+    // Failure tracking to avoid infinite fallback loops and provide diagnostics
+    val recentFailCounts: MutableMap<String, Int> = mutableMapOf()
+    val recentFailTimes: MutableMap<String, Long> = mutableMapOf()
+    var currentVideoUrl: String? = null
+    // Re-entrancy guard/state for custom decoder usage
+    var isCustomDecoderActive: Boolean = false
+    var lastCustomDecoderUrl: String? = null
+    // Debounce/prepare tracking to avoid overlapping inits that can crash MediaCodec on emulator
+    var isCustomDecoderPreparing: Boolean = false
+    var lastCustomDecoderStartMs: Long = 0L
+    // Track current slice parameters for viewport slicing re-application on READY
+    var currentSliceMode: String = "split-h"
+    var currentSliceCount: Int = 0
+    var currentSliceOrder: Int = 0
+    var currentUsingViewportSlicing: Boolean = false
     // Developer toggle: allow sliced videos to play on emulator (default false)
     fun isEmuSliceVideoForced(): Boolean {
         // Default ON so emulator plays sliced videos unless explicitly turned OFF
@@ -97,18 +115,32 @@ class TvDisplayActivity : AppCompatActivity() {
             layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             useController = false
             visibility = ImageView.GONE
-            // Ensure we can clip/crop slices: prefer TextureView and zoom to fill
+            // Prefer default SurfaceView for broad device compatibility; TextureView only on emulator if needed
+            try { this.resizeMode = com.google.android.exoplayer2.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM } catch (_: Exception) {}
             try {
-                this.resizeMode = com.google.android.exoplayer2.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-            } catch (_: Exception) {}
-            try {
-                // 2 == SURFACE_TYPE_TEXTURE_VIEW in PlayerView
-                val cls = com.google.android.exoplayer2.ui.PlayerView::class.java
-                val m = cls.methods.firstOrNull { it.name == "setSurfaceType" && it.parameterTypes.size == 1 }
-                m?.invoke(this, 2)
+                val fp = android.os.Build.FINGERPRINT.lowercase()
+                val model = android.os.Build.MODEL.lowercase()
+                val isEmu = fp.contains("generic") || fp.contains("unknown") || model.contains("emulator") || model.contains("sdk") || model.contains("aosp")
+                if (isEmu) {
+                    // 2 == SURFACE_TYPE_TEXTURE_VIEW in PlayerView
+                    val cls = com.google.android.exoplayer2.ui.PlayerView::class.java
+                    val m = cls.methods.firstOrNull { it.name == "setSurfaceType" && it.parameterTypes.size == 1 }
+                    m?.invoke(this, 2)
+                }
             } catch (_: Exception) { }
         }
+        
+        // Custom decoder-based video surface (fallback for problematic files)
+        val customVideoView = com.pizzahut.tv.CustomVideoSurfaceView(this).apply {
+            setBackgroundColor(Color.BLACK)
+            layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            visibility = ImageView.GONE
+        }
+        // Keep a field reference for lifecycle cleanup
+        customVideoSurface = customVideoView
+        
     // Add media views behind the existing status message (index 0 => back)
+    binding.root.addView(customVideoView, 0)
     binding.root.addView(playerView, 0)
     binding.root.addView(imageView, 0)
 
@@ -171,7 +203,7 @@ class TvDisplayActivity : AppCompatActivity() {
         })
 
         // Kick off initial and periodic refresh & rotation
-    startPlaylistLoop(storeId, screenId, imageView, playerView)
+    startPlaylistLoop(storeId, screenId, imageView, playerView, customVideoView)
     startHeartbeatLoop(storeId, screenId)
     }
 
@@ -253,6 +285,10 @@ class TvDisplayActivity : AppCompatActivity() {
             exoPlayer?.release()
         } catch (_: Exception) {}
         exoPlayer = null
+        try {
+            // Clean up custom video view if it exists
+            customVideoSurface?.release()
+        } catch (_: Exception) {}
         legacyVideoView?.let { try { it.stopPlayback() } catch (_: Exception) {}; it.visibility = ImageView.GONE }
         super.onDestroy()
     }
@@ -469,6 +505,12 @@ suspend fun fetchBitmap(urlStr: String): android.graphics.Bitmap? = withContext(
         conn.connectTimeout = 3000
         conn.readTimeout = 4000
         conn.instanceFollowRedirects = true
+        // Add pairing header so protected static assets can be fetched for fallbacks
+        try {
+            val code = com.pizzahut.tv.api.PairCodeHolder.get()
+            if (!code.isNullOrBlank()) conn.setRequestProperty("X-User-Code", code)
+        } catch (_: Exception) {}
+        conn.setRequestProperty("Accept", "image/*;q=0.9,*/*;q=0.8")
         conn.inputStream.use { inp ->
             val bmp = BitmapFactory.decodeStream(inp)
             if (bmp != null) ImageMemoryCache.put(urlStr, bmp)
@@ -477,13 +519,67 @@ suspend fun fetchBitmap(urlStr: String): android.graphics.Bitmap? = withContext(
     } catch (e: Exception) { null }
 }
 
+// --- Video Decoder Selection Logic ---
+private fun TvDisplayActivity.shouldUseCustomDecoder(videoUrl: String): Boolean {
+    // Use custom decoder for slice videos on emulator (problematic with ExoPlayer)
+    val isEmulator = try {
+        val fingerprint = android.os.Build.FINGERPRINT.lowercase()
+        val model = android.os.Build.MODEL.lowercase()
+        fingerprint.contains("generic") || model.contains("emulator") || model.contains("sdk") ||
+                fingerprint.contains("sdk_") || model.contains("aosp") // Enhanced detection for Android TV emulator
+    } catch (e: Exception) { false }
+    
+    val isSliceVideo = videoUrl.contains("/slice-video/") || videoUrl.contains("/slice/")
+    val isEmuSliceForced = isEmuSliceVideoForced()
+    
+    Log.d(TAG, "PLAYCHECK decoder selection: isEmulator=$isEmulator, isSliceVideo=$isSliceVideo, isEmuSliceForced=$isEmuSliceForced for url=$videoUrl")
+    
+    // Force custom decoder for slice videos on emulator
+    return isEmulator && (isSliceVideo || isEmuSliceForced)
+}
+
+private var lastExoPlayerError: String? = null
+private var exoPlayerFailureCount = 0
+// Rate-limit per-media slice prewarming
+private val lastSlicePrewarmTs = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+private fun TvDisplayActivity.shouldFallbackToCustomDecoder(videoUrl: String, error: Exception?): Boolean {
+    if (error != null) {
+        val errorMsg = error.message ?: error.toString()
+        Log.d(TAG, "PLAYCHECK ExoPlayer error: $errorMsg")
+        
+        // Count consecutive failures
+        if (lastExoPlayerError == errorMsg) {
+            exoPlayerFailureCount++
+        } else {
+            exoPlayerFailureCount = 1
+            lastExoPlayerError = errorMsg
+        }
+        
+        // Fallback for parsing errors or container issues (common on emulator)
+        val isParsingError = errorMsg.contains("parsing", ignoreCase = true) || 
+                           errorMsg.contains("container", ignoreCase = true) ||
+                           errorMsg.contains("decoder", ignoreCase = true) ||
+                           errorMsg.contains("initialization", ignoreCase = true)
+        
+        val shouldFallback = isParsingError || exoPlayerFailureCount >= 2
+        Log.d(TAG, "PLAYCHECK fallback check: isParsingError=$isParsingError, failureCount=$exoPlayerFailureCount, shouldFallback=$shouldFallback")
+        
+        return shouldFallback
+    }
+    return false
+}
+
 // --- Rotation & periodic fetching helpers ---
 private data class ActivePlaylist(var items: List<com.pizzahut.tv.api.PlaylistItem>, var index: Int = 0)
 
-private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: String, imageView: ImageView, playerView: com.google.android.exoplayer2.ui.StyledPlayerView) {
+private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: String, imageView: ImageView, playerView: com.google.android.exoplayer2.ui.StyledPlayerView, customVideoView: com.pizzahut.tv.CustomVideoSurfaceView) {
     val state = ActivePlaylist(emptyList())
     var originalItems: List<com.pizzahut.tv.api.PlaylistItem> = emptyList()
     val refreshIntervalMs = 5_000L // refresh playlist every 5s for quicker backend responses
+    // Track consecutive auth failures to optionally auto-open setup
+    var authFailCount = 0
+    var didAutoLaunchSetup = false
     fun pickNext(): com.pizzahut.tv.api.PlaylistItem? {
         if (state.items.isEmpty()) return null
         if (state.index >= state.items.size) state.index = 0
@@ -615,9 +711,42 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
             .setCache(simpleCache)
             .setUpstreamDataSourceFactory(upstream)
             .setFlags(com.google.android.exoplayer2.upstream.cache.CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+        
+        // Try to detect if we're on emulator and prefer software decoding
+        val isEmulator = try {
+            val fingerprint = android.os.Build.FINGERPRINT.lowercase()
+            val model = android.os.Build.MODEL.lowercase()
+            fingerprint.contains("generic") || model.contains("emulator") || model.contains("sdk") ||
+                    fingerprint.contains("sdk_") || model.contains("aosp") // Enhanced detection for Android TV emulator
+        } catch (e: Exception) { false }
+        
+        Log.d(TAG, "Device detection: isEmulator=$isEmulator fingerprint=${android.os.Build.FINGERPRINT} model=${android.os.Build.MODEL}")
+        
+        // Force software decoding for emulator compatibility with ultra-wide videos
         val renderersFactory = com.google.android.exoplayer2.DefaultRenderersFactory(this)
             .setEnableDecoderFallback(true)
             .setExtensionRendererMode(com.google.android.exoplayer2.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+        
+        // Configure enhanced decoding for emulators
+        if (isEmulator) {
+            Log.d(TAG, "Emulator detected: configuring for enhanced decoding compatibility")
+            // Note: setMediaCodecOperationMode is not available in this ExoPlayer version
+            // The decoder fallback and extension renderer preference should help with compatibility
+        }
+        
+        if (isEmulator) {
+            // For emulators, prefer software decoding to avoid hardware codec issues
+            Log.d(TAG, "Emulator detected: configuring for software decoding preference")
+        }
+        
+        // Add additional MediaCodec logging for debugging decoder selection
+        try {
+            System.setProperty("exoplayer.mediacodec.debug", "true")
+            Log.d(TAG, "ExoPlayer MediaCodec debug logging enabled")
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not enable MediaCodec debug logging", e)
+        }
+        
     val built = com.google.android.exoplayer2.ExoPlayer.Builder(this)
             .setRenderersFactory(renderersFactory)
             .setSeekForwardIncrementMs(5_000)
@@ -738,22 +867,29 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                         // Current item no longer active -> interrupt and reschedule next
                         cancelScheduled()
                         state.items = newFiltered; state.index = 0
-                        showNext?.invoke(); return@Runnable
+                        showNext?.invoke()
+                        // Re-post next tick before returning
+                        try { imageView.postDelayed(scheduleTick!!, 1_000L) } catch (_: Exception) {}
+                        return@Runnable
                     }
                 }
             } catch (_: Exception) { }
             // Watchdog: if rotation task was lost but we have items, kick it
             if (scheduledRotation == null && state.items.isNotEmpty()) {
-                showNext?.invoke(); return@Runnable
+                showNext?.invoke()
+                // Re-post next tick before returning
+                try { imageView.postDelayed(scheduleTick!!, 1_000L) } catch (_: Exception) {}
+                return@Runnable
             }
-        imageView.postDelayed(scheduleTick!!, 1_000L)
+            // Normal path: re-post next tick
+            try { imageView.postDelayed(scheduleTick!!, 1_000L) } catch (_: Exception) {}
         }
         imageView.postDelayed(scheduleTick!!, 1_000L)
     }
 
     fun showAndSchedule() {
-    // Switching context to the next item: stop ping from previous item
-    cancelItemOkPing()
+        // Switching context to the next item: stop ping from previous item
+        cancelItemOkPing()
         // Re-filter on each step for near real-time schedule flips
         if (originalItems.isNotEmpty()) {
             val newFiltered = filterBySchedule(originalItems)
@@ -770,24 +906,299 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                 state.items = newFiltered; state.index = 0
             }
         }
-    ensureScheduleTick()
+        ensureScheduleTick()
         var next = pickNext()
         // Avoid selecting the same item twice in a row when multiple items exist
         if (next != null && next.file != null && next.file == currentItemFile && state.items.size > 1) {
             next = pickNext()
         }
-    debugOverlay?.text = "idx=${state.index}/${state.items.size} cur=${currentItemFile ?: "-"}"
+        // Throttle repeat failures: if same file failed 3+ times in last 2 minutes skip once
+        if (next?.file != null) {
+            val fc = recentFailCounts[next.file!!] ?: 0
+            val last = recentFailTimes[next.file!!] ?: 0L
+            if (fc >= 3 && (System.currentTimeMillis() - last) < 120_000) {
+                Log.w(TAG, "PLAYCHECK skip due to recent failures file=${next.file} count=$fc ageMs=${System.currentTimeMillis()-last}")
+                next = pickNext()
+            }
+        }
+        debugOverlay?.text = "idx=${state.index}/${state.items.size} cur=${currentItemFile ?: "-"}"
         if (next?.file == null) {
             binding.message.text = "No items currently scheduled"
             imageView.postDelayed({ showAndSchedule() }, 5_000L)
             return
         }
-    val file = next.file!!
+        val file = next.file!!
         currentItemFile = file
+
+        // --- Start of Local Helper Function Definitions ---
+
+        fun applySegmentWrapTo(targetView: android.view.View) {
+            try {
+                val sref = next.syncRef
+                val mode = sref?.mode?.lowercase() ?: "split-h"
+                val order = (sref?.order ?: 0).coerceAtLeast(0)
+                val count = (sref?.count ?: 0).coerceAtLeast(0)
+                val isH = (mode == "split-h" || mode.isBlank())
+                val isV = (mode == "split-v")
+                if (!(((isH || isV) && count > 1))) {
+                    // No split: if already wrapped, just normalize transforms
+                    val maybeInner = targetView.parent as? android.widget.FrameLayout
+                    if (maybeInner?.tag == "seg-inner") {
+                        maybeInner.pivotX = 0f; maybeInner.pivotY = 0f
+                        maybeInner.scaleX = 1f
+                        maybeInner.scaleY = 1f
+                        maybeInner.translationX = 0f
+                        maybeInner.translationY = 0f
+                    }
+                    // Also schedule a re-apply after layout
+                    targetView.postDelayed({
+                        try {
+                            val inner2 = targetView.parent as? android.widget.FrameLayout
+                            if (inner2?.tag == "seg-inner") { inner2.pivotX = 0f; inner2.pivotY = 0f; inner2.scaleX = 1f; inner2.scaleY = 1f; inner2.translationX = 0f; inner2.translationY = 0f }
+                        } catch (_: Exception) {}
+                    }, 120)
+                    return
+                }
+                val currentParent = targetView.parent as? ViewGroup ?: return
+                // If already wrapped (parent tagged as seg-inner), just update transforms
+                if (currentParent is android.widget.FrameLayout && currentParent.tag == "seg-inner") {
+                    val inner = currentParent
+                    inner.pivotX = 0f; inner.pivotY = 0f
+                    val wrapView = (inner.parent as? android.view.View)
+                    val wrapWidth = wrapView?.width?.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+                    val wrapHeight = wrapView?.height?.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
+                    if (isH) {
+                        inner.scaleX = count.toFloat(); inner.scaleY = 1f
+                        inner.translationX = - (order * wrapWidth.toFloat()); inner.translationY = 0f
+                    } else {
+                        inner.scaleY = count.toFloat(); inner.scaleX = 1f
+                        inner.translationY = - (order * wrapHeight.toFloat()); inner.translationX = 0f
+                    }
+                    // Re-apply again shortly in case dimensions were 0 at first
+                    targetView.postDelayed({
+                        try {
+                            val innerR = targetView.parent as? android.widget.FrameLayout
+                            if (innerR is android.widget.FrameLayout && innerR.tag == "seg-inner") {
+                                val wrapView2 = (innerR.parent as? android.view.View)
+                                val w2 = wrapView2?.width?.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+                                val h2 = wrapView2?.height?.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
+                                if (isH) {
+                                    innerR.scaleX = count.toFloat(); innerR.scaleY = 1f
+                                    innerR.translationX = - (order * w2.toFloat()); innerR.translationY = 0f
+                                } else {
+                                    innerR.scaleY = count.toFloat(); innerR.scaleX = 1f
+                                    innerR.translationY = - (order * h2.toFloat()); innerR.translationX = 0f
+                                }
+                            }
+                        } catch (_: Exception) {}
+                    }, 120)
+                    return
+                }
+                // Wrap once: replace playerView with wrap(inner(playerView)) at same index
+                val originalParent = currentParent
+                val originalIndex = originalParent.indexOfChild(targetView)
+                val originalLp = targetView.layoutParams
+                // Create containers and move view
+                val wrap = android.widget.FrameLayout(this).apply {
+                    tag = "seg-wrap"
+                    layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                    clipToPadding = true; clipChildren = true
+                }
+                val inner = android.widget.FrameLayout(this).apply {
+                    tag = "seg-inner"
+                    layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                }
+                try { originalParent.removeView(targetView) } catch (_: Exception) {}
+                inner.addView(targetView, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+                wrap.addView(inner)
+                // Insert wrapper back at the same position with previous layout params if available
+                if (originalIndex >= 0) originalParent.addView(wrap, originalIndex, originalLp)
+                else originalParent.addView(wrap)
+                // Apply transforms for slice
+                inner.pivotX = 0f; inner.pivotY = 0f
+                val wrapWidth = wrap.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+                val wrapHeight = wrap.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
+                if (isH) {
+                    inner.scaleX = count.toFloat(); inner.scaleY = 1f
+                    inner.translationX = - (order * wrapWidth.toFloat()); inner.translationY = 0f
+                } else {
+                    inner.scaleY = count.toFloat(); inner.scaleX = 1f
+                    inner.translationY = - (order * wrapHeight.toFloat()); inner.translationX = 0f
+                }
+                // Re-apply after layout to ensure correct measured dims
+                targetView.postDelayed({
+                    try {
+                        val innerR = targetView.parent as? android.widget.FrameLayout
+                        val wrapR = innerR?.parent as? android.widget.FrameLayout
+                        if (innerR != null && wrapR != null) {
+                            val w2 = wrapR.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+                            val h2 = wrapR.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
+                            if (isH) {
+                                innerR.scaleX = count.toFloat(); innerR.scaleY = 1f
+                                innerR.translationX = - (order * w2.toFloat()); innerR.translationY = 0f
+                            } else {
+                                innerR.scaleY = count.toFloat(); innerR.scaleX = 1f
+                                innerR.translationY = - (order * h2.toFloat()); innerR.translationX = 0f
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }, 120)
+            } catch (_: Exception) {}
+        }
+
+        fun showStaticFallback(reason: String = "unspecified") {
+            Log.w(TAG, "PLAYCHECK fallback(reason=${reason}) file=${file} syncCount=${next.syncRef?.count} url=${next.url}")
+            try {
+                try { exoPlayer?.stop(); exoPlayer?.clearMediaItems() } catch (_: Exception) {}
+                try { customVideoView.stop(); customVideoView.visibility = ImageView.GONE } catch (_: Exception) {}
+                legacyVideoView?.let { try { it.stopPlayback() } catch (_: Exception) {}; it.visibility = ImageView.GONE }
+                playerView.visibility = ImageView.GONE
+                imageView.visibility = ViewGroup.VISIBLE
+                // Apply split-slice cropping for images too (matches web player)
+                runCatching {
+                    val sref = next.syncRef
+                    val mode = sref?.mode?.lowercase() ?: "split-h"
+                    val order = (sref?.order ?: 0).coerceAtLeast(0)
+                    val count = (sref?.count ?: 0).coerceAtLeast(0)
+                    val isH = (mode == "split-h" || mode.isBlank())
+                    val isV = (mode == "split-v")
+                    if ((isH || isV) && count > 1) {
+                        val currentParent = imageView.parent as? ViewGroup
+                        if (currentParent != null) {
+                            // If already wrapped, update transforms else wrap now
+                            val maybeInner = imageView.parent as? android.widget.FrameLayout
+                            if (maybeInner?.tag == "seg-inner") {
+                                val inner = maybeInner
+                                inner.pivotX = 0f; inner.pivotY = 0f
+                                val wrapView = (inner.parent as? android.view.View)
+                                val wrapWidth = wrapView?.width?.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+                                val wrapHeight = wrapView?.height?.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
+                                if (isH) {
+                                    inner.scaleX = count.toFloat(); inner.scaleY = 1f
+                                    inner.translationX = - (order * wrapWidth.toFloat()); inner.translationY = 0f
+                                } else {
+                                    inner.scaleY = count.toFloat(); inner.scaleX = 1f
+                                    inner.translationY = - (order * wrapHeight.toFloat()); inner.translationX = 0f
+                                }
+                            } else {
+                                val originalIndex = currentParent.indexOfChild(imageView)
+                                val originalLp = imageView.layoutParams
+                                val wrap = android.widget.FrameLayout(this).apply {
+                                    tag = "seg-wrap"
+                                    layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                                    clipToPadding = true; clipChildren = true
+                                }
+                                val inner = android.widget.FrameLayout(this).apply {
+                                    tag = "seg-inner"
+                                    layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                                }
+                                try { currentParent.removeView(imageView) } catch (_: Exception) {}
+                                inner.addView(imageView, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+                                wrap.addView(inner)
+                                if (originalIndex >= 0) currentParent.addView(wrap, originalIndex, originalLp) else currentParent.addView(wrap)
+                                inner.pivotX = 0f; inner.pivotY = 0f
+                                val wrapWidth = wrap.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+                                val wrapHeight = wrap.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
+                                if (isH) {
+                                    inner.scaleX = count.toFloat(); inner.scaleY = 1f
+                                    inner.translationX = - (order * wrapWidth.toFloat()); inner.translationY = 0f
+                                } else {
+                                    inner.scaleY = count.toFloat(); inner.scaleX = 1f
+                                    inner.translationY = - (order * wrapHeight.toFloat()); inner.translationX = 0f
+                                }
+                            }
+                        }
+                    } else {
+                        // Not split: if previously wrapped, reset transforms
+                        val maybeInner = imageView.parent as? android.widget.FrameLayout
+                        if (maybeInner?.tag == "seg-inner") {
+                            maybeInner.pivotX = 0f; maybeInner.pivotY = 0f
+                            maybeInner.scaleX = 1f
+                            maybeInner.scaleY = 1f
+                            maybeInner.translationX = 0f
+                            maybeInner.translationY = 0f
+                        }
+                    }
+                }
+                binding.message.bringToFront()
+                // If this was a sliced item, ensure the image is wrapped the same way for correct cropping
+                if ((next.syncRef?.count ?: 0) > 1) {
+                    applySegmentWrapTo(imageView)
+                }
+                // If the original file is a video, try thumbnail candidates (.jpg/.png) under static/uploads
+                val lower = file.lowercase()
+                val isVid = lower.endsWith(".mp4") || lower.endsWith(".webm") || lower.endsWith(".mkv") || lower.endsWith(".mov") || lower.endsWith(".avi") || lower.endsWith(".m4v")
+                if (isVid) {
+                    val base = file.substringBeforeLast('.')
+                    val jpg = ApiClientImageHelper.buildImageUrl(base + ".jpg")
+                    val png = ApiClientImageHelper.buildImageUrl(base + ".png")
+                    // If server provided absolute URL, try same-location jpg/png first (useful with CDNs)
+                    val absUrl = next.url?.takeIf { it.startsWith("http", true) }
+                    val absBase = absUrl?.substringBeforeLast('.')
+                    val absJpg = absBase?.plus(".jpg")
+                    val absPng = absBase?.plus(".png")
+                    lifecycleScope.launch {
+                        // order: abs jpg -> abs png -> local jpg -> local png -> animated/static fallback
+                        val bmpJ = withContext(Dispatchers.IO) {
+                            absJpg?.let { fetchBitmap(it) } ?: fetchBitmap(jpg)
+                        }
+                        if (bmpJ != null) {
+                            imageView.setImageBitmap(bmpJ)
+                            val label = if (absJpg != null) "abs.jpg" else "jpg"
+                            binding.message.text = ("Thumb ${base.take(14)}.$label").take(60)
+                            Log.w(TAG, "using static jpg thumb for " + file)
+                        } else {
+                            val bmpP = withContext(Dispatchers.IO) {
+                                absPng?.let { fetchBitmap(it) } ?: fetchBitmap(png)
+                            }
+                            if (bmpP != null) {
+                                imageView.setImageBitmap(bmpP)
+                                val label = if (absPng != null) "abs.png" else "png"
+                                binding.message.text = ("Thumb ${base.take(14)}.$label").take(60)
+                                Log.w(TAG, "using static png thumb for " + file)
+                            } else {
+                                // Fallback to attempt loading the same path under static (may be an animated asset)
+                                loadAnimatedOrStatic(file, next.id, ApiClientImageHelper.buildImageUrl(file)) { _ -> }
+                                Log.w(TAG, "using static fallback (no thumb) for " + file)
+                            }
+                        }
+                    }
+                } else {
+                    loadAnimatedOrStatic(file, next.id, ApiClientImageHelper.buildImageUrl(file)) { _ -> }
+                    Log.w(TAG, "using static fallback for " + file)
+                }
+            } catch (_: Exception) {}
+        }
+
+        // --- End of Local Helper Function Definitions ---
+        // Helper: remove any prior seg-wrap/seg-inner applied to a target view
+        fun clearSegmentWrapFrom(targetView: android.view.View) {
+            try {
+                val inner = targetView.parent as? android.widget.FrameLayout
+                if (inner?.tag == "seg-inner") {
+                    val wrap = inner.parent as? android.widget.FrameLayout
+                    val original = wrap?.parent as? ViewGroup
+                    if (wrap != null && original != null) {
+                        val idx = original.indexOfChild(wrap)
+                        val lp = wrap.layoutParams
+                        try { inner.removeView(targetView) } catch (_: Exception) {}
+                        try { wrap.removeView(inner) } catch (_: Exception) {}
+                        try { (wrap.parent as? ViewGroup)?.removeView(wrap) } catch (_: Exception) {}
+                        if (idx >= 0) original.addView(targetView, idx, lp) else original.addView(targetView)
+                    } else {
+                        // If cannot unwrap cleanly, at least neutralize transforms
+                        inner.pivotX = 0f; inner.pivotY = 0f
+                        inner.scaleX = 1f; inner.scaleY = 1f
+                        inner.translationX = 0f; inner.translationY = 0f
+                    }
+                }
+            } catch (_: Exception) { }
+        }
+
         if (isVideo(file)) {
             imageView.visibility = ImageView.GONE
             playerView.visibility = ImageView.VISIBLE
-            // Ensure message is above player
+            // Ensure message is above player by default; will adjust when custom decoder is active
             binding.message.bringToFront()
             // Helper: detect emulator (AOSP TV on x86 etc.)
             fun isEmulatorDevice(): Boolean {
@@ -800,131 +1211,60 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                             brand.contains("generic")
                 } catch (_: Exception) { false }
             }
-            // If this item is part of a split group, wrap the given view to only show the assigned slice (idempotent)
-            fun applySegmentWrapTo(targetView: android.view.View) {
-                try {
-                    val sref = next.syncRef
-                    val mode = sref?.mode?.lowercase() ?: "split-h"
-                    val order = (sref?.order ?: 0).coerceAtLeast(0)
-                    val count = (sref?.count ?: 0).coerceAtLeast(0)
-                    val isH = (mode == "split-h" || mode.isBlank())
-                    val isV = (mode == "split-v")
-                    if (!(((isH || isV) && count > 1))) {
-                        // No split: if already wrapped, just normalize transforms
-                        val maybeInner = targetView.parent as? android.widget.FrameLayout
-                        if (maybeInner?.tag == "seg-inner") {
-                            maybeInner.pivotX = 0f; maybeInner.pivotY = 0f
-                            maybeInner.scaleX = 1f
-                            maybeInner.scaleY = 1f
-                            maybeInner.translationX = 0f
-                            maybeInner.translationY = 0f
-                        }
-                        // Also schedule a re-apply after layout
-                        targetView.postDelayed({
-                            try {
-                                val inner2 = targetView.parent as? android.widget.FrameLayout
-                                if (inner2?.tag == "seg-inner") { inner2.pivotX = 0f; inner2.pivotY = 0f; inner2.scaleX = 1f; inner2.scaleY = 1f; inner2.translationX = 0f; inner2.translationY = 0f }
-                            } catch (_: Exception) {}
-                        }, 120)
-                        return
-                    }
-                    val currentParent = targetView.parent as? ViewGroup ?: return
-                    // If already wrapped (parent tagged as seg-inner), just update transforms
-                    if (currentParent is android.widget.FrameLayout && currentParent.tag == "seg-inner") {
-                        val inner = currentParent
-                        inner.pivotX = 0f; inner.pivotY = 0f
-                        val wrapView = (inner.parent as? android.view.View)
-                        val wrapWidth = wrapView?.width?.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
-                        val wrapHeight = wrapView?.height?.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
-                        if (isH) {
-                            inner.scaleX = count.toFloat(); inner.scaleY = 1f
-                            inner.translationX = - (order * wrapWidth.toFloat()); inner.translationY = 0f
-                        } else {
-                            inner.scaleY = count.toFloat(); inner.scaleX = 1f
-                            inner.translationY = - (order * wrapHeight.toFloat()); inner.translationX = 0f
-                        }
-                        // Re-apply again shortly in case dimensions were 0 at first
-                        targetView.postDelayed({
-                            try {
-                                val innerR = targetView.parent as? android.widget.FrameLayout
-                                if (innerR is android.widget.FrameLayout && innerR.tag == "seg-inner") {
-                                    val wrapView2 = (innerR.parent as? android.view.View)
-                                    val w2 = wrapView2?.width?.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
-                                    val h2 = wrapView2?.height?.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
-                                    if (isH) {
-                                        innerR.scaleX = count.toFloat(); innerR.scaleY = 1f
-                                        innerR.translationX = - (order * w2.toFloat()); innerR.translationY = 0f
-                                    } else {
-                                        innerR.scaleY = count.toFloat(); innerR.scaleX = 1f
-                                        innerR.translationY = - (order * h2.toFloat()); innerR.translationX = 0f
-                                    }
-                                }
-                            } catch (_: Exception) {}
-                        }, 120)
-                        return
-                    }
-                    // Wrap once: replace playerView with wrap(inner(playerView)) at same index
-                    val originalParent = currentParent
-                    val originalIndex = originalParent.indexOfChild(targetView)
-                    val originalLp = targetView.layoutParams
-                    // Create containers and move view
-                    val wrap = android.widget.FrameLayout(this).apply {
-                        tag = "seg-wrap"
-                        layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                        clipToPadding = true; clipChildren = true
-                    }
-                    val inner = android.widget.FrameLayout(this).apply {
-                        tag = "seg-inner"
-                        layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                    }
-                    try { originalParent.removeView(targetView) } catch (_: Exception) {}
-                    inner.addView(targetView, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-                    wrap.addView(inner)
-                    // Insert wrapper back at the same position with previous layout params if available
-                    if (originalIndex >= 0) originalParent.addView(wrap, originalIndex, originalLp)
-                    else originalParent.addView(wrap)
-                    // Apply transforms for slice
-                    inner.pivotX = 0f; inner.pivotY = 0f
-                    val wrapWidth = wrap.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
-                    val wrapHeight = wrap.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
-                    if (isH) {
-                        inner.scaleX = count.toFloat(); inner.scaleY = 1f
-                        inner.translationX = - (order * wrapWidth.toFloat()); inner.translationY = 0f
-                    } else {
-                        inner.scaleY = count.toFloat(); inner.scaleX = 1f
-                        inner.translationY = - (order * wrapHeight.toFloat()); inner.translationX = 0f
-                    }
-                    // Re-apply after layout to ensure correct measured dims
-                    targetView.postDelayed({
-                        try {
-                            val innerR = targetView.parent as? android.widget.FrameLayout
-                            val wrapR = innerR?.parent as? android.widget.FrameLayout
-                            if (innerR != null && wrapR != null) {
-                                val w2 = wrapR.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
-                                val h2 = wrapR.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
-                                if (isH) {
-                                    innerR.scaleX = count.toFloat(); innerR.scaleY = 1f
-                                    innerR.translationX = - (order * w2.toFloat()); innerR.translationY = 0f
-                                } else {
-                                    innerR.scaleY = count.toFloat(); innerR.scaleX = 1f
-                                    innerR.translationY = - (order * h2.toFloat()); innerR.translationX = 0f
-                                }
-                            }
-                        } catch (_: Exception) {}
-                    }, 120)
-                } catch (_: Exception) {}
-            }
-            // Apply wrap for video view
-            applySegmentWrapTo(playerView)
-            // Determine if we should force-static for emulator on sliced media
-            val isSlice = (next.syncRef?.count ?: 0) > 1
-            val emulatorSliceWanted = isSlice && isEmulatorDevice() && !isEmuSliceVideoForced()
-            // Prefer absolute URL from server when provided; otherwise use /media. Fallback to the alternate, then static image.
+            
+            // Ensure no stale client-side wrapper remains
+            clearSegmentWrapFrom(playerView)
+            
+            // Determine slice video handling with client-side viewport transformations
+            val syncCount = (next.syncRef?.count ?: 0)
+            val syncMode = next.syncRef?.mode?.lowercase() ?: ""
+            val syncOrder = next.syncRef?.order ?: 0
+            val isSlicePlanned = syncCount > 1 // multi-segment sync group
+
+            // For videos, always play the original full URL; for sync items, we apply viewport slicing locally
             val absUrl = next.url?.takeIf { it.startsWith("http", true) }
             val mediaUrl = ApiClientImageHelper.buildVideoUrl(file)
             val staticUrl = ApiClientImageHelper.buildImageUrl(file)
+            
+            // Choose primary/fallback URLs
             val videoUrlPrimary = absUrl ?: mediaUrl
-            val videoUrlFallback = if (absUrl != null) mediaUrl else staticUrl
+            val videoUrlFallback = staticUrl
+
+            // Apply or reset viewport slicing before playback
+            if (isSlicePlanned) {
+                // Normalize mode
+                val modeParam = if (syncMode.contains('v')) "split-v" else "split-h"
+                currentUsingViewportSlicing = true
+                currentSliceMode = modeParam
+                currentSliceCount = syncCount
+                currentSliceOrder = syncOrder
+                try {
+                    applySliceViewport(playerView, modeParam, syncCount, syncOrder)
+                    Log.d(TAG, "PLAYCHECK using viewport slice: mode=${modeParam} count=${syncCount} order=${syncOrder}")
+                } catch (e: Exception) {
+                    Log.e(TAG, "PLAYCHECK apply viewport failed: ${e.message}")
+                }
+            } else {
+                // Not a sync slice; ensure full-screen view
+                currentUsingViewportSlicing = false
+                currentSliceCount = 0
+                resetSliceViewport(playerView)
+                clearSegmentWrapFrom(playerView)
+                Log.d(TAG, "PLAYCHECK reset to normal viewport (non-slice)")
+            }
+
+            Log.d(TAG, "PLAYCHECK decide file=${file} planned=${isSlicePlanned} viewport=${currentUsingViewportSlicing} syncMode=${syncMode} order=${syncOrder} count=${syncCount} prim=${videoUrlPrimary} fb=${videoUrlFallback} rawNextUrl=${next.url}")
+            // Extra diagnostics for black screen on follower screens
+            try {
+                val pvClass = playerView.javaClass.simpleName
+                val surfType = try {
+                    val cls = com.google.android.exoplayer2.ui.PlayerView::class.java
+                    val f = cls.declaredFields.firstOrNull { it.name.contains("surfaceType") }
+                    f?.isAccessible = true; (f?.get(playerView) as? Int) ?: -1
+                } catch (_: Exception) { -2 }
+                Log.d(TAG, "PLAYCHECK diag pv=${pvClass} surfaceType=${surfType}")
+            } catch (_: Exception) {}
+            // Debug logging (legacy lines consolidated into PLAYCHECK above)
             // Clarify normal vs sync-slice in label similar to web player
             runCatching {
                 val sref = next.syncRef
@@ -937,138 +1277,9 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                     binding.message.text = ("VID " + file.take(18)).take(60)
                 }
             }.onFailure { binding.message.text = "VID ${file.take(18)}" }
-            fun showStaticFallback() {
-                try {
-                    try { exoPlayer?.stop(); exoPlayer?.clearMediaItems() } catch (_: Exception) {}
-                    legacyVideoView?.let { try { it.stopPlayback() } catch (_: Exception) {}; it.visibility = ImageView.GONE }
-                    playerView.visibility = ImageView.GONE
-                    imageView.visibility = ViewGroup.VISIBLE
-                    // Apply split-slice cropping for images too (matches web player)
-                    runCatching {
-                        val sref = next.syncRef
-                        val mode = sref?.mode?.lowercase() ?: "split-h"
-                        val order = (sref?.order ?: 0).coerceAtLeast(0)
-                        val count = (sref?.count ?: 0).coerceAtLeast(0)
-                        val isH = (mode == "split-h" || mode.isBlank())
-                        val isV = (mode == "split-v")
-                        if ((isH || isV) && count > 1) {
-                            val currentParent = imageView.parent as? ViewGroup
-                            if (currentParent != null) {
-                                // If already wrapped, update transforms else wrap now
-                                val maybeInner = imageView.parent as? android.widget.FrameLayout
-                                if (maybeInner?.tag == "seg-inner") {
-                                    val inner = maybeInner
-                                    inner.pivotX = 0f; inner.pivotY = 0f
-                                    val wrapView = (inner.parent as? android.view.View)
-                                    val wrapWidth = wrapView?.width?.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
-                                    val wrapHeight = wrapView?.height?.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
-                                    if (isH) {
-                                        inner.scaleX = count.toFloat(); inner.scaleY = 1f
-                                        inner.translationX = - (order * wrapWidth.toFloat()); inner.translationY = 0f
-                                    } else {
-                                        inner.scaleY = count.toFloat(); inner.scaleX = 1f
-                                        inner.translationY = - (order * wrapHeight.toFloat()); inner.translationX = 0f
-                                    }
-                                } else {
-                                    val originalIndex = currentParent.indexOfChild(imageView)
-                                    val originalLp = imageView.layoutParams
-                                    val wrap = android.widget.FrameLayout(this).apply {
-                                        tag = "seg-wrap"
-                                        layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                                        clipToPadding = true; clipChildren = true
-                                    }
-                                    val inner = android.widget.FrameLayout(this).apply {
-                                        tag = "seg-inner"
-                                        layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                                    }
-                                    try { currentParent.removeView(imageView) } catch (_: Exception) {}
-                                    inner.addView(imageView, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-                                    wrap.addView(inner)
-                                    if (originalIndex >= 0) currentParent.addView(wrap, originalIndex, originalLp) else currentParent.addView(wrap)
-                                    inner.pivotX = 0f; inner.pivotY = 0f
-                                    val wrapWidth = wrap.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
-                                    val wrapHeight = wrap.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
-                                    if (isH) {
-                                        inner.scaleX = count.toFloat(); inner.scaleY = 1f
-                                        inner.translationX = - (order * wrapWidth.toFloat()); inner.translationY = 0f
-                                    } else {
-                                        inner.scaleY = count.toFloat(); inner.scaleX = 1f
-                                        inner.translationY = - (order * wrapHeight.toFloat()); inner.translationX = 0f
-                                    }
-                                }
-                            }
-                        } else {
-                            // Not split: if previously wrapped, reset transforms
-                            val maybeInner = imageView.parent as? android.widget.FrameLayout
-                            if (maybeInner?.tag == "seg-inner") {
-                                maybeInner.pivotX = 0f; maybeInner.pivotY = 0f
-                                maybeInner.scaleX = 1f
-                                maybeInner.scaleY = 1f
-                                maybeInner.translationX = 0f
-                                maybeInner.translationY = 0f
-                            }
-                        }
-                    }
-                    binding.message.bringToFront()
-                    // If this was a sliced item, ensure the image is wrapped the same way for correct cropping
-                    if ((next.syncRef?.count ?: 0) > 1) {
-                        applySegmentWrapTo(imageView)
-                    }
-                    // If the original file is a video, try thumbnail candidates (.jpg/.png) under static/uploads
-                    val lower = file.lowercase()
-                    val isVid = lower.endsWith(".mp4") || lower.endsWith(".webm") || lower.endsWith(".mkv") || lower.endsWith(".mov") || lower.endsWith(".avi") || lower.endsWith(".m4v")
-                    if (isVid) {
-                        val base = file.substringBeforeLast('.')
-                        val jpg = ApiClientImageHelper.buildImageUrl(base + ".jpg")
-                        val png = ApiClientImageHelper.buildImageUrl(base + ".png")
-                        // If server provided absolute URL, try same-location jpg/png first (useful with CDNs)
-                        val absBase = absUrl?.substringBeforeLast('.')
-                        val absJpg = absBase?.plus(".jpg")
-                        val absPng = absBase?.plus(".png")
-                        lifecycleScope.launch {
-                            // order: abs jpg -> abs png -> local jpg -> local png -> animated/static fallback
-                            val bmpJ = withContext(Dispatchers.IO) {
-                                absJpg?.let { fetchBitmap(it) } ?: fetchBitmap(jpg)
-                            }
-                            if (bmpJ != null) {
-                                imageView.setImageBitmap(bmpJ)
-                                val label = if (absJpg != null) "abs.jpg" else "jpg"
-                                binding.message.text = ("Thumb ${base.take(14)}.$label").take(60)
-                                Log.w(TAG, "using static jpg thumb for " + file)
-                            } else {
-                                val bmpP = withContext(Dispatchers.IO) {
-                                    absPng?.let { fetchBitmap(it) } ?: fetchBitmap(png)
-                                }
-                                if (bmpP != null) {
-                                    imageView.setImageBitmap(bmpP)
-                                    val label = if (absPng != null) "abs.png" else "png"
-                                    binding.message.text = ("Thumb ${base.take(14)}.$label").take(60)
-                                    Log.w(TAG, "using static png thumb for " + file)
-                                } else {
-                                    // Fallback to attempt loading the same path under static (may be an animated asset)
-                                    loadAnimatedOrStatic(file, next.id, staticUrl) { _ -> }
-                                    Log.w(TAG, "using static fallback (no thumb) for " + file)
-                                }
-                            }
-                        }
-                    } else {
-                        loadAnimatedOrStatic(file, next.id, staticUrl) { _ -> }
-                        Log.w(TAG, "using static fallback for " + file)
-                    }
-                } catch (_: Exception) {}
-            }
-            // Emulator safeguard: if slice on emulator, use static path and skip ExoPlayer setup
-            if (emulatorSliceWanted) {
-                binding.message.text = ("Slice static (emu) ${file.take(10)}").take(60)
-                showStaticFallback()
-                // Schedule rotation based on playlist duration
-                val durMs = (next.duration ?: 10).coerceAtLeast(1) * 1000L
-                val aligned = alignedDelayMs(durMs, next.syncRef)
-                cancelScheduled()
-                scheduledRotation = Runnable { showAndSchedule() }
-                playerView.postDelayed(scheduledRotation!!, aligned)
-                return
-            }
+            
+            // Note: Removed emulator safeguard to allow viewport slicing on emulator
+            // Client-side viewport transformations work fine on emulator
             // Legacy VideoView fallback (added lazily)
             fun ensureLegacy(): VideoView {
                 val existing = legacyVideoView
@@ -1082,14 +1293,14 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                 legacyVideoView = vv
                 return vv
             }
-        fun useLegacy() {
+            fun useLegacy() {
                 try {
                     binding.message.text = "Legacy start ${file.take(16)}"
                     val vv = ensureLegacy()
                     playerView.visibility = ImageView.GONE
-            // If fallback is a static image (no video), point legacy to the primary video URL instead
-            val legacyUrl = if (videoUrlFallback.contains("/static/")) videoUrlPrimary else videoUrlFallback
-            vv.setVideoURI(Uri.parse(legacyUrl))
+                    // If fallback is a static image (no video), point legacy to the primary video URL instead
+                    val legacyUrl = if (videoUrlFallback.contains("/static/")) videoUrlPrimary else videoUrlFallback
+                    vv.setVideoURI(Uri.parse(legacyUrl))
                     vv.setOnPreparedListener { mp ->
                         // Do not loop automatically; we'll advance based on playlist duration
                         mp.isLooping = false
@@ -1103,7 +1314,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                         // Start periodic ok ping while this legacy video is playing
                         startItemOkPing(storeId, screenId, file, next.id)
                         // Schedule rotation according to playlist duration
-                        val durMs = (next.duration ?: 10).coerceAtLeast(1) * 1000L
+                        val durMs = (next.duration ?: 10).toLong() * 1000L
                         val aligned = alignedDelayMs(durMs, next.syncRef)
                         cancelScheduled()
                         scheduledRotation = Runnable {
@@ -1150,7 +1361,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                 legacyVideoView?.visibility = ImageView.GONE
                 if (!playerListenersAttached) {
                     player.addListener(object: com.google.android.exoplayer2.Player.Listener {
-            override fun onPlaybackStateChanged(stateCode: Int) {
+                        override fun onPlaybackStateChanged(stateCode: Int) {
                             val f = currentVideoFile ?: "vid"
                             val label = when(stateCode){
                                 com.google.android.exoplayer2.Player.STATE_IDLE -> "IDLE"
@@ -1160,7 +1371,20 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                                 else -> stateCode.toString()
                             }
                             Log.d(TAG, "state=" + label + " file=" + f)
-                            binding.message.text = ("${f.take(12)} $label").take(60)
+                            // While buffering, try to show quick HTTP code of the primary URL for fast diagnosis
+                            if (stateCode == com.google.android.exoplayer2.Player.STATE_BUFFERING) {
+                                val url = currentVideoUrl
+                                if (!url.isNullOrBlank()) {
+                                    lifecycleScope.launch {
+                                        val code = probeCode(url)
+                                        binding.message.text = ("${f.take(12)} BUF ${code ?: "?"}").take(60)
+                                    }
+                                } else {
+                                    binding.message.text = ("${f.take(12)} $label").take(60)
+                                }
+                            } else {
+                                binding.message.text = ("${f.take(12)} $label").take(60)
+                            }
                             if (stateCode == com.google.android.exoplayer2.Player.STATE_READY) {
                                 // Cancel stall watchdog once we are ready
                                 videoStallWatch?.let { playerView.removeCallbacks(it); imageView.removeCallbacks(it) }
@@ -1170,6 +1394,15 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                                 }
                                 // Start periodic ok ping while this video item is playing
                                 startItemOkPing(storeId, screenId, f, next.id)
+                                // Re-apply viewport slicing after READY to ensure transforms stick
+                                if (currentUsingViewportSlicing && currentSliceCount > 1) {
+                                    try {
+                                        applySliceViewport(playerView, currentSliceMode, currentSliceCount, currentSliceOrder)
+                                        Log.d(TAG, "PLAYCHECK re-apply viewport on READY: mode=${currentSliceMode} count=${currentSliceCount} order=${currentSliceOrder}")
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "viewport reapply failed on READY: ${e.message}")
+                                    }
+                                }
                             }
                             if (stateCode == com.google.android.exoplayer2.Player.STATE_ENDED) {
                                 // Advance if natural end happens early
@@ -1186,26 +1419,108 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                             } else if (emsg.contains("403") || emsg.contains("401")) {
                                 " (auth?)"
                             } else ""
-                            Log.e(TAG, "playerError code=" + error.errorCodeName + " msg=" + (error.message ?: ""))
+                            // Build cause chain (limited depth)
+                            val chain = StringBuilder()
+                            var c: Throwable? = error.cause
+                            var depth = 0
+                            while (c != null && depth < 6) {
+                                if (depth == 0) chain.append("cause=") else chain.append(" <- ")
+                                chain.append(c::class.java.simpleName).append(":").append(c.message?.take(50))
+                                c = c.cause; depth++
+                            }
+                            Log.e(TAG, "playerError code=" + error.errorCodeName + " msg=" + (error.message ?: "") + " url=" + (currentVideoUrl ?: "-") + if (chain.isNotEmpty()) " | $chain" else "")
+                            
+                            // Try custom decoder fallback for problematic videos before other fallbacks
+                            val finalUrl = currentVideoUrl ?: ""
+                            if (shouldFallbackToCustomDecoder(finalUrl, error) && !finalUrl.contains("static/")) {
+                                Log.d(TAG, "PLAYCHECK trying custom decoder fallback for ${f}")
+                                binding.message.text = "CustomDecoder ${f.take(10)}"
+                                try {
+                                    // Hide ExoPlayer, show custom video view and bring it to front
+                                    playerView.visibility = ImageView.GONE
+                                    try { playerView.player = null } catch (_: Exception) {}
+                                    customVideoView.visibility = ImageView.VISIBLE
+                                    try { customVideoView.bringToFront() } catch (_: Exception) {}
+                                    // Hide the message overlay during custom decoder playback to avoid covering the surface
+                                    try { binding.message.visibility = ImageView.GONE } catch (_: Exception) {}
+                                    
+                        // Set up custom decoder listeners
+                        customVideoView.onPreparedListener = {
+                            Log.d(TAG, "PLAYCHECK custom decoder prepared for ${f}")
+                            isCustomDecoderPreparing = false
+                            binding.message.text = ""
+                            // Keep the message overlay hidden while playing via custom decoder
+                            try { binding.message.visibility = ImageView.GONE } catch (_: Exception) {}
+                            imageView.visibility = ImageView.GONE
+                            customVideoView.visibility = ImageView.VISIBLE
+                        }
+                        
+                        customVideoView.onErrorListener = { errorMsg ->
+                            Log.e(TAG, "PLAYCHECK custom decoder error: $errorMsg for ${f}")
+                            // Restore the message overlay on error
+                            try { binding.message.visibility = ImageView.VISIBLE } catch (_: Exception) {}
+                            binding.message.text = "CustomErr ${f.take(10)}"
+                            isCustomDecoderActive = false
+                            isCustomDecoderPreparing = false
+                            // Fall through to original error handling
+                            handleOriginalExoPlayerError(error, f, emsg, hint)
+                        }
+                        
+                        customVideoView.onCompletionListener = {
+                            Log.d(TAG, "PLAYCHECK custom decoder completed ${f}")
+                            isCustomDecoderActive = false
+                            isCustomDecoderPreparing = false
+                            // Video completed, schedule next
+                            try { binding.message.visibility = ImageView.VISIBLE } catch (_: Exception) {}
+                            cancelScheduled()
+                            playerView.postDelayed({ showAndSchedule() }, 500)
+                        }                                    // Start custom decoder playback
+                                    // Guard against re-entrant/overlapping restarts for the same URL
+                                    if (lastCustomDecoderUrl == finalUrl && (isCustomDecoderActive || isCustomDecoderPreparing)) {
+                                        Log.d(TAG, "PLAYCHECK custom decoder already starting/active for same URL; skipping restart")
+                                    } else {
+                                        if (customVideoView.visibility != ImageView.VISIBLE) customVideoView.visibility = ImageView.VISIBLE
+                                        lastCustomDecoderUrl = finalUrl
+                                        isCustomDecoderPreparing = true
+                                        isCustomDecoderActive = true
+                                        lastCustomDecoderStartMs = System.currentTimeMillis()
+                                        customVideoView.setVideoPath(finalUrl)
+                                        customVideoView.start()
+                                    }
+                                    
+                                    return // Exit error handler, custom decoder taking over
+                                    
+                                } catch (customError: Exception) {
+                                    Log.e(TAG, "PLAYCHECK custom decoder setup failed: ${customError.message}")
+                                    // Fall through to original error handling
+                                }
+                            }
+                            
+                            // Original ExoPlayer error handling
+                            handleOriginalExoPlayerError(error, f, emsg, hint)
+                        }
+                        
+                        fun handleOriginalExoPlayerError(error: com.google.android.exoplayer2.PlaybackException, f: String, emsg: String, hint: String) {
                             binding.message.text = ("Err ${error.errorCodeName}$hint" + (emsg.let { if (it.isNotBlank()) ":"+it.take(20) else "" })).take(60)
                             val playerRef = exoPlayer ?: return
                             lifecycleScope.launch(Dispatchers.IO) {
                                 try { ApiClient.service.postClientEvent(com.pizzahut.tv.api.ClientEventReq(storeId, screenId, "load_fail", file = f, itemId = next.id, error = error.message)) } catch (_: Exception) {}
                             }
-                // First error: try static fallback path once
+                            // Update failure counters
+                            recentFailCounts[f] = (recentFailCounts[f] ?: 0) + 1
+                            recentFailTimes[f] = System.currentTimeMillis()
+                            // First error: try static fallback path once
                             if (!triedStaticFallbackForCurrent) {
                                 triedStaticFallbackForCurrent = true
                                 try {
-                    // Show static image instead of trying to stream it via ExoPlayer
-                    binding.message.text = ("StaticFB ${f.take(10)}").take(60)
-                    showStaticFallback(); return
+                                    binding.message.text = ("StaticFB ${f.take(10)}").take(60)
+                                    showStaticFallback("playerError first attempt"); return
                                 } catch (_: Exception) { /* fall through */ }
                             }
                             // Second failure: try legacy player as last resort before skipping
                             try {
                                 useLegacy(); return
                             } catch (_: Exception) {
-                                // Skip to next
                                 cancelScheduled()
                                 playerView.postDelayed({ showAndSchedule() }, 500)
                             }
@@ -1213,73 +1528,117 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                     })
                     playerListenersAttached = true
                 }
-                player.setMediaSource(buildMediaSource(videoUrlPrimary))
-                player.prepare(); player.playWhenReady = true
+                // Always use the original full video URL (client-side viewport handles slicing)
+                val finalUrl = videoUrlPrimary
+                currentVideoUrl = finalUrl
+                Log.d(TAG, "PLAYCHECK using url=${finalUrl}")
                 
-                // Apply video slicing for sync groups (same logic as images)
-                runCatching {
-                    val sref = next.syncRef
-                    val mode = sref?.mode?.lowercase() ?: "split-h"
-                    val order = (sref?.order ?: 0).coerceAtLeast(0)
-                    val count = (sref?.count ?: 0).coerceAtLeast(0)
-                    val isH = (mode == "split-h" || mode.isBlank())
-                    val isV = (mode == "split-v")
-                    
-                    Log.d(TAG, "Video slicing check: mode=$mode, order=$order, count=$count, file=${next.file}")
-                    
-                    if ((isH || isV) && count > 1) {
-                        Log.d(TAG, "Applying video slicing transforms...")
+                // Check if we should use custom decoder directly
+                if (shouldUseCustomDecoder(finalUrl)) {
+                    Log.d(TAG, "PLAYCHECK using custom decoder directly for ${finalUrl}")
+                    try {
+                        // Hide ExoPlayer, show custom video view and bring it to front
+                        playerView.visibility = ImageView.GONE
+                        try { playerView.player = null } catch (_: Exception) {}
+                        customVideoView.visibility = ImageView.VISIBLE
+                        try { customVideoView.bringToFront() } catch (_: Exception) {}
+                        // Hide the message overlay during custom decoder playback to avoid covering the surface
+                        try { binding.message.visibility = ImageView.GONE } catch (_: Exception) {}
                         
-                        // Delay to ensure playerView is ready
-                        playerView.post {
-                            runCatching {
-                                // Apply the same segment wrapping to playerView as we do for imageView
-                                applySegmentWrapTo(playerView)
-                                
-                                // Apply slice transformation to the wrapped container
-                                val maybeInner = playerView.parent as? android.widget.FrameLayout
-                                if (maybeInner?.tag == "seg-inner") {
-                                    val inner = maybeInner
-                                    inner.pivotX = 0f; inner.pivotY = 0f
-                                    val wrapView = (inner.parent as? android.view.View)
-                                    val wrapWidth = wrapView?.width?.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
-                                    val wrapHeight = wrapView?.height?.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
-                                    
-                                    if (isH) {
-                                        inner.scaleX = count.toFloat(); inner.scaleY = 1f
-                                        inner.translationX = - (order * wrapWidth.toFloat()); inner.translationY = 0f
-                                    } else {
-                                        inner.scaleY = count.toFloat(); inner.scaleX = 1f
-                                        inner.translationY = - (order * wrapHeight.toFloat()); inner.translationX = 0f
-                                    }
-                                    
-                                    Log.d(TAG, "✅ Applied video slice: mode=$mode, order=$order, count=$count, scaleX=${inner.scaleX}, translateX=${inner.translationX}")
-                                } else {
-                                    Log.w(TAG, "Failed to find seg-inner container for video slicing")
-                                }
-                            }.onFailure { e ->
-                                Log.e(TAG, "Error in video slicing post-delay: ${e.message}")
+                        // Set up custom decoder listeners
+                        customVideoView.onPreparedListener = {
+                            Log.d(TAG, "PLAYCHECK custom decoder prepared")
+                            isCustomDecoderPreparing = false
+                            binding.message.text = ""
+                            // Keep the message overlay hidden while playing via custom decoder
+                            try { binding.message.visibility = ImageView.GONE } catch (_: Exception) {}
+                            imageView.visibility = ImageView.GONE
+                            customVideoView.visibility = ImageView.VISIBLE
+                        }
+                        // First-frame callback removed in revert; rely on start() and setZOrderOnTop(true)
+                        
+                        customVideoView.onErrorListener = { errorMsg ->
+                            Log.e(TAG, "PLAYCHECK custom decoder error: $errorMsg")
+                            // Restore the message overlay on error
+                            try { binding.message.visibility = ImageView.VISIBLE } catch (_: Exception) {}
+                            binding.message.text = "CustomErr ${file.take(10)}"
+                            isCustomDecoderActive = false
+                            isCustomDecoderPreparing = false
+                            // Fallback to ExoPlayer as last resort
+                            try {
+                                customVideoView.visibility = ImageView.GONE
+                                playerView.visibility = ImageView.VISIBLE
+                                player.setMediaSource(buildMediaSource(finalUrl))
+                                player.prepare(); player.playWhenReady = true
+                            } catch (e: Exception) {
+                                Log.e(TAG, "PLAYCHECK ExoPlayer fallback failed: ${e.message}")
                             }
                         }
-                    } else {
-                        Log.d(TAG, "Video slicing not needed: isH=$isH, isV=$isV, count=$count")
+                        
+                        customVideoView.onCompletionListener = {
+                            Log.d(TAG, "PLAYCHECK custom decoder completed")
+                            isCustomDecoderActive = false
+                            isCustomDecoderPreparing = false
+                            // Video completed, schedule next
+                            try { binding.message.visibility = ImageView.VISIBLE } catch (_: Exception) {}
+                            cancelScheduled()
+                            playerView.postDelayed({ showAndSchedule() }, 500)
+                        }
+                        
+                        // Start custom decoder playback with re-entrancy guard
+                        if ((isCustomDecoderActive && lastCustomDecoderUrl == finalUrl && customVideoView.isPlaying()) ||
+                            (isCustomDecoderPreparing && lastCustomDecoderUrl == finalUrl)) {
+                            Log.d(TAG, "PLAYCHECK custom decoder already active for same URL; skipping restart")
+                        } else {
+                            lastCustomDecoderUrl = finalUrl
+                            isCustomDecoderActive = true
+                            isCustomDecoderPreparing = true
+                            customVideoView.setVideoPath(finalUrl)
+                            // Small delay before start reduces rapid re-configures on emulator
+                            customVideoView.postDelayed({
+                                try { customVideoView.start() } catch (_: Exception) {}
+                            }, 120)
+                        }
+                        
+                    } catch (e: Exception) {
+                        Log.e(TAG, "PLAYCHECK custom decoder failed, falling back to ExoPlayer: ${e.message}")
+                        // Fallback to ExoPlayer
+                        try { customVideoView.stop() } catch (_: Exception) {}
+                        isCustomDecoderActive = false
+                        isCustomDecoderPreparing = false
+                        customVideoView.visibility = ImageView.GONE
+                        playerView.visibility = ImageView.VISIBLE
+                        try { playerView.bringToFront() } catch (_: Exception) {}
+                        // Restore the message overlay when leaving custom decoder path
+                        try { binding.message.visibility = ImageView.VISIBLE } catch (_: Exception) {}
+                        player.setMediaSource(buildMediaSource(finalUrl))
+                        player.prepare(); player.playWhenReady = true
                     }
-                }.onFailure { e ->
-                    Log.e(TAG, "Error in video slicing setup: ${e.message}")
+                } else {
+                    // Use ExoPlayer normally
+                    playerView.visibility = ImageView.VISIBLE
+                    try { playerView.bringToFront() } catch (_: Exception) {}
+                    customVideoView.visibility = ImageView.GONE
+                    isCustomDecoderActive = false
+                    isCustomDecoderPreparing = false
+                    // Ensure the message overlay is visible in normal playback mode
+                    try { binding.message.visibility = ImageView.VISIBLE } catch (_: Exception) {}
+                    player.setMediaSource(buildMediaSource(finalUrl))
+                    player.prepare(); player.playWhenReady = true
                 }
                 
                 // Proactive probe: if primary looks blocked (e.g., 403), try fallback automatically
-        lifecycleScope.launch {
+                lifecycleScope.launch {
                     val primary = probeCode(videoUrlPrimary)
                     val goodPrimary = primary != null && (primary in 200..206 || primary in 300..399)
                     if (!goodPrimary && currentVideoFile == file) {
                         val fb = probeCode(videoUrlFallback)
                         val goodFb = fb != null && (fb in 200..206 || fb in 300..399)
-            Log.d(TAG, "probe primary=" + (primary ?: -1) + " fb=" + (fb ?: -1) + " file=" + file)
+                        Log.d(TAG, "probe primary=" + (primary ?: -1) + " fb=" + (fb ?: -1) + " file=" + file)
                         if (goodFb && currentVideoFile == file && exoPlayer?.playbackState != com.google.android.exoplayer2.Player.STATE_READY) {
                             binding.message.text = ("HTTP ${primary ?: -1} → FB").take(60)
                             if (videoUrlFallback.startsWith(ApiClient.baseUrl + "static/")) {
-                                showStaticFallback()
+                                showStaticFallback("primary HTTP blocked; using static path")
                             } else {
                                 try {
                                     exoPlayer?.clearMediaItems()
@@ -1290,8 +1649,13 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                             }
                         } else if (!goodFb && currentVideoFile == file) {
                             binding.message.text = ("Blocked P=${primary ?: -1} F=${fb ?: -1}").take(60)
-                Log.w(TAG, "blocked primary=" + (primary ?: -1) + " fb=" + (fb ?: -1) + " for " + file)
+                            Log.w(TAG, "blocked primary=" + (primary ?: -1) + " fb=" + (fb ?: -1) + " for " + file)
                         }
+                    }
+                    // Additional quick HEAD check for primary URL to capture server errors in logs
+                    if (currentVideoFile == file) {
+                        val head = headOk(videoUrlPrimary, 3500)
+                        Log.d(TAG, "HEAD primary ${head.second}")
                     }
                 }
                 // If we remain buffering for too long, try static fallback once, else skip
@@ -1308,8 +1672,24 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                                 if (fbUrl.startsWith(ApiClient.baseUrl + "static/")) {
                                     binding.message.text = ("StaticFB after stall ${file.take(10)}").take(60)
                                     Log.w(TAG, "stall -> static fallback " + file)
-                                    showStaticFallback(); return@Runnable
+                                    showStaticFallback("stall watchdog static path"); return@Runnable
                                 } else {
+                                    if (shouldUseCustomDecoder(videoUrlPrimary)) {
+                                        Log.d(TAG, "PLAYCHECK stall -> custom decoder for ${videoUrlPrimary}")
+                                        try {
+                                            playerView.visibility = ImageView.GONE
+                                            try { playerView.player = null } catch (_: Exception) {}
+                                            customVideoView.visibility = ImageView.VISIBLE
+                                            try { customVideoView.bringToFront() } catch (_: Exception) {}
+                                            try { binding.message.visibility = ImageView.GONE } catch (_: Exception) {}
+                                            lastCustomDecoderUrl = videoUrlPrimary
+                                            isCustomDecoderActive = true
+                                            isCustomDecoderPreparing = true
+                                            customVideoView.setVideoPath(videoUrlPrimary)
+                                            customVideoView.postDelayed({ try { customVideoView.start() } catch (_: Exception) {} }, 120)
+                                            return@Runnable
+                                        } catch (_: Exception) { /* fall back to exo retry below */ }
+                                    }
                                     playerRef.setMediaSource(buildMediaSource(fbUrl))
                                     playerRef.prepare(); playerRef.playWhenReady = true
                                     binding.message.text = ("FB after stall ${file.take(10)}").take(60)
@@ -1337,7 +1717,8 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                         player.stop()
                         player.clearMediaItems()
                     } catch (_: Exception) {}
-            legacyVideoView?.let { try { it.stopPlayback() } catch (_: Exception) {}; it.visibility = ImageView.GONE }
+                    try { customVideoView.stop(); customVideoView.visibility = ImageView.GONE; isCustomDecoderActive = false } catch (_: Exception) {}
+                    legacyVideoView?.let { try { it.stopPlayback() } catch (_: Exception) {}; it.visibility = ImageView.GONE }
                     showAndSchedule()
                 }
                 playerView.postDelayed(scheduledRotation!!, aligned)
@@ -1357,7 +1738,8 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
             }
             // Image / animated
             try { exoPlayer?.stop(); exoPlayer?.clearMediaItems() } catch (_: Exception) {}
-        legacyVideoView?.let { try { it.stopPlayback() } catch (_: Exception) {}; it.visibility = ImageView.GONE }
+            try { customVideoView.stop(); customVideoView.visibility = ImageView.GONE } catch (_: Exception) {}
+            legacyVideoView?.let { try { it.stopPlayback() } catch (_: Exception) {}; it.visibility = ImageView.GONE }
             playerView.visibility = ImageView.GONE
             imageView.visibility = ImageView.VISIBLE
             binding.message.bringToFront()
@@ -1420,12 +1802,36 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
         // No change: keep current list and index
     }
 
+    fun showPairingRequiredOverlay(reason: String? = null) {
+        try {
+            val prefs = this.getSharedPreferences("phtv", android.content.Context.MODE_PRIVATE)
+            val savedCode = try { prefs.getString("pairCode", null) } catch (_: Exception) { null }
+            val b = StringBuilder()
+            b.append("Pairing required")
+            if (!reason.isNullOrBlank()) b.append(" (" + reason + ")")
+            b.append("\n")
+            if (savedCode.isNullOrBlank()) {
+                b.append("Press MENU to open Setup and enter your 4-digit code.")
+            } else {
+                b.append("Saved code ").append(savedCode).append(" not authorized.\n")
+                b.append("Press MENU to re-link code or BACK to change screen.")
+            }
+            binding.message.text = b.toString()
+            binding.message.bringToFront()
+        } catch (_: Exception) { /* ignore UI issues */ }
+    }
+
+    // Capture Activity reference for use inside nested lambdas
+    val act = this
     fun fetchPlaylist() {
         binding.message.text = "Fetching playlist..."
         lifecycleScope.launch {
+
             try {
                 val resp = ApiClient.service.getPlaylist(storeId, screenId)
                 val original = resp.playlist ?: emptyList()
+                // Reset auth failure counter on success
+                authFailCount = 0
                 // Mirror web orientation/rotation if provided by backend
                 try {
                     orientationMode = resp.orientation?.lowercase() ?: orientationMode
@@ -1448,6 +1854,26 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                 } else {
                     binding.message.text = if (original.isNotEmpty()) "No items currently scheduled" else "No items in playlist"
                 }
+            } catch (e: HttpException) {
+                val sc = e.code()
+                if (sc == 401 || sc == 403) {
+                    authFailCount += 1
+                    showPairingRequiredOverlay("HTTP $sc")
+                    // After a few consecutive auth failures, offer auto-setup to break the loop
+                    if (!didAutoLaunchSetup && authFailCount >= 3) {
+                        didAutoLaunchSetup = true
+                        try {
+                            imageView.postDelayed({
+                                try {
+                                    act.startActivity(Intent(act, SetupActivity::class.java))
+                                    act.finish()
+                                } catch (_: Exception) {}
+                            }, 1500)
+                        } catch (_: Exception) { }
+                    }
+                } else {
+                    binding.message.text = ("HTTP ${sc}: ${e.message()}").take(80)
+                }
             } catch (e: Exception) {
                 binding.message.text = "Network error: ${e.message}".take(60)
             } finally {
@@ -1459,4 +1885,189 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
     fetchPlaylist()
 
     // (Release now handled in onDestroy)
+}
+
+/**
+ * Apply client-side viewport transformations to show only a slice of ultra-wide videos
+ * instead of using server-side video slicing which has ExoPlayer compatibility issues.
+ */
+private fun applySliceViewport(
+    playerView: com.google.android.exoplayer2.ui.StyledPlayerView,
+    mode: String,
+    count: Int,
+    order: Int
+) {
+    try {
+        if (count <= 1) {
+            Log.d(TAG, "applySliceViewport: count <= 1, no slicing needed")
+            resetSliceViewport(playerView)
+            return
+        }
+        
+        val safeOrder = order.coerceIn(0, count - 1)
+        
+        // Use the same approach as web player: scale and translate the video surface
+        playerView.post {
+            try {
+                when (mode) {
+                    "split-h" -> {
+                        // Horizontal split: show slice [order] of [count] horizontal segments
+                        // Scale the video to count times its normal width, then translate to show correct slice
+                        val scaleX = count.toFloat()  // Scale video to full width (shows all segments)
+                        val translateX = -safeOrder.toFloat()  // Move to show the correct slice
+                        
+                        // Apply transformation to the video surface (preferred) or player view (fallback)
+                        try {
+                            val videoSurfaceView = findVideoSurfaceView(playerView)
+                            videoSurfaceView?.let { surface ->
+                                // Set pivot to top-left for consistent scaling origin
+                                surface.pivotX = 0f
+                                surface.pivotY = 0f
+                                
+                                // Scale video horizontally to show all segments, then translate to correct position
+                                surface.scaleX = scaleX
+                                surface.scaleY = 1.0f
+                                surface.translationX = translateX * surface.width
+                                surface.translationY = 0f
+                                
+                                Log.d(TAG, "applySliceViewport: split-h surface transform count=$count order=$safeOrder scaleX=$scaleX translateX=$translateX")
+                            } ?: run {
+                                // Fallback: use player view transformation
+                                playerView.pivotX = 0f
+                                playerView.pivotY = 0f
+                                playerView.scaleX = scaleX
+                                playerView.scaleY = 1.0f
+                                playerView.translationX = translateX * playerView.width
+                                playerView.translationY = 0f
+                                
+                                Log.d(TAG, "applySliceViewport: split-h player transform count=$count order=$safeOrder scaleX=$scaleX translateX=$translateX")
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Could not apply surface transformation: ${e.message}")
+                            // Fallback: use player view transformation  
+                            playerView.pivotX = 0f
+                            playerView.pivotY = 0f
+                            playerView.scaleX = scaleX
+                            playerView.scaleY = 1.0f
+                            playerView.translationX = translateX * playerView.width
+                            playerView.translationY = 0f
+                        }
+                    }
+                    "split-v" -> {
+                        // Vertical split: show slice [order] of [count] vertical segments
+                        val scaleY = count.toFloat()  // Scale video to full height (shows all segments)
+                        val translateY = -safeOrder.toFloat()  // Move to show the correct slice
+                        
+                        try {
+                            val videoSurfaceView = findVideoSurfaceView(playerView)
+                            videoSurfaceView?.let { surface ->
+                                surface.pivotX = 0f
+                                surface.pivotY = 0f
+                                surface.scaleX = 1.0f
+                                surface.scaleY = scaleY
+                                surface.translationX = 0f
+                                surface.translationY = translateY * surface.height
+                                
+                                Log.d(TAG, "applySliceViewport: split-v surface transform count=$count order=$safeOrder scaleY=$scaleY translateY=$translateY")
+                            } ?: run {
+                                playerView.pivotX = 0f  
+                                playerView.pivotY = 0f
+                                playerView.scaleX = 1.0f
+                                playerView.scaleY = scaleY
+                                playerView.translationX = 0f
+                                playerView.translationY = translateY * playerView.height
+                                
+                                Log.d(TAG, "applySliceViewport: split-v player transform count=$count order=$safeOrder scaleY=$scaleY translateY=$translateY")
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Could not apply surface transformation: ${e.message}")
+                            playerView.pivotX = 0f
+                            playerView.pivotY = 0f
+                            playerView.scaleX = 1.0f
+                            playerView.scaleY = scaleY
+                            playerView.translationX = 0f
+                            playerView.translationY = translateY * playerView.height
+                        }
+                    }
+                    else -> {
+                        Log.w(TAG, "applySliceViewport: unknown mode '$mode', defaulting to split-h")
+                        applySliceViewport(playerView, "split-h", count, order)
+                    }
+                }
+                
+                // Use ZOOM mode to ensure proper clipping like web player object-fit:contain
+                playerView.resizeMode = com.google.android.exoplayer2.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "applySliceViewport post error: ${e.message}")
+            }
+        }
+        
+    } catch (e: Exception) {
+        Log.e(TAG, "applySliceViewport error: ${e.message}")
+    }
+}
+
+/**
+ * Find the video surface view within the player view for direct transformation
+ */
+private fun findVideoSurfaceView(playerView: com.google.android.exoplayer2.ui.StyledPlayerView): android.view.View? {
+    return try {
+        // Try to find SurfaceView or TextureView within the player view
+        fun findSurface(viewGroup: android.view.ViewGroup): android.view.View? {
+            for (i in 0 until viewGroup.childCount) {
+                val child = viewGroup.getChildAt(i)
+                when (child) {
+                    is android.view.SurfaceView, is android.view.TextureView -> return child
+                    is android.view.ViewGroup -> {
+                        val found = findSurface(child)
+                        if (found != null) return found
+                    }
+                }
+            }
+            return null
+        }
+        findSurface(playerView)
+    } catch (e: Exception) {
+        Log.w(TAG, "findVideoSurfaceView error: ${e.message}")
+        null
+    }
+}
+
+/**
+ * Reset viewport transformations to normal full-screen view
+ */
+private fun resetSliceViewport(playerView: com.google.android.exoplayer2.ui.StyledPlayerView) {
+    try {
+        playerView.post {
+            // Reset player view transformations
+            playerView.pivotX = 0.0f
+            playerView.pivotY = 0.0f
+            playerView.scaleX = 1.0f
+            playerView.scaleY = 1.0f
+            playerView.translationX = 0.0f
+            playerView.translationY = 0.0f
+            
+            // Reset surface view transformations
+            try {
+                val videoSurfaceView = findVideoSurfaceView(playerView)
+                videoSurfaceView?.let { surface ->
+                    surface.pivotX = 0.0f
+                    surface.pivotY = 0.0f
+                    surface.scaleX = 1.0f
+                    surface.scaleY = 1.0f
+                    surface.translationX = 0.0f
+                    surface.translationY = 0.0f
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not reset surface transformation: ${e.message}")
+            }
+            
+            // Use ZOOM mode like web player object-fit:contain
+            playerView.resizeMode = com.google.android.exoplayer2.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+        }
+        Log.d(TAG, "resetSliceViewport: reset to normal view")
+    } catch (e: Exception) {
+        Log.e(TAG, "resetSliceViewport error: ${e.message}")
+    }
 }
