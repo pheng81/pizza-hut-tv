@@ -8,18 +8,6 @@
   "master_store_id": "1000",
   "screens": {
     "1000": {
-      "1000_screen3": {
-        "file": null,
-        "vertical": false,
-        "horizontal": true,
-        "rotation": 0,
-        "protected": false,
-        "playlist": [],
-        "rotation_meta": {
-          "last_index": 0,
-          "last_ts": 0
-        }
-      },
       "1000_screen1": {
         "file": null,
         "vertical": false,
@@ -33,16 +21,22 @@
         },
         "events": [
           {
-            "ts": 1757743191,
+            "ts": 1757756647,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1757756652,
             "event": "playlist_reload",
             "file": null,
             "item_id": null,
             "error": null
           }
-        ],
-        "last_seen": 1757743192
+        ]
       },
-      "1000_screen2": {
+      "1000_screen3": {
         "file": null,
         "vertical": false,
         "horizontal": true,
