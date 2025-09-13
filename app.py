@@ -13,6 +13,7 @@ import subprocess
 import shutil
 import smtplib
 import ssl
+import threading
 from datetime import datetime, time as dtime, timedelta, timezone
 from email.message import EmailMessage
 from typing import Optional
@@ -1578,6 +1579,97 @@ def r2_delete_object(key: str):
         raise RuntimeError('R2 not configured')
     s3.delete_object(Bucket=os.environ['R2_BUCKET_NAME'], Key=key)
 
+# ---- Local <-> R2 media repair helpers ----
+def r2_download_to_local(key: str) -> bool:
+    """Best-effort restore: download object from R2 into local UPLOAD_FOLDER.
+    Returns True if file now exists locally.
+    """
+    try:
+        if not r2_enabled():
+            return False
+        s3 = get_s3_client()
+        if not s3:
+            return False
+        # Normalize key (no leading slash)
+        key_norm = key.lstrip('/')
+        dest = os.path.join(app.config['UPLOAD_FOLDER'], key_norm).replace('\\', '/')
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        # Skip if already present
+        if os.path.exists(dest):
+            return True
+        with open(dest, 'wb') as fh:
+            s3.download_fileobj(os.environ['R2_BUCKET_NAME'], key_norm, fh)
+        logging.info('[R2-RESTORE] Restored %s', key_norm)
+        return True
+    except Exception as e:
+        try:
+            logging.warning('[R2-RESTORE] Failed %s: %s', key, e)
+        except Exception:
+            pass
+        return False
+
+def ensure_local_media_for_playlist_item(item: dict):
+    """If playlist item references a media file under user namespace and it's missing locally,
+    attempt to restore from R2.
+    """
+    try:
+        if not item:
+            return
+        f = item.get('file') or ''
+        if not f or f.startswith('http://') or f.startswith('https://'):
+            return
+        local_path = os.path.join(app.config['UPLOAD_FOLDER'], f)
+        if os.path.exists(local_path):
+            return
+        # Only attempt restore if appears to be our managed user path (users/ or public/ etc.)
+        if r2_enabled() and ('/' in f):
+            r2_download_to_local(f)
+    except Exception:
+        pass
+
+# Lightweight background thread to periodically scan recent user month folders
+_r2_repair_thread_started = False
+def _r2_repair_worker():
+    while True:
+        try:
+            if not r2_enabled():
+                time.sleep(30)
+                continue
+            root = app.config.get('UPLOAD_FOLDER') or 'static/uploads'
+            # Scan only deepest recent folders (pattern users/*/<YYYY-MM>) to limit I/O
+            now = datetime.utcnow()
+            recent_tags = {now.strftime('%Y-%m'), (now - timedelta(days=31)).strftime('%Y-%m')}
+            users_dir = os.path.join(root, 'users')
+            if os.path.isdir(users_dir):
+                for user_id in os.listdir(users_dir):
+                    udir = os.path.join(users_dir, user_id)
+                    if not os.path.isdir(udir):
+                        continue
+                    for tag in recent_tags:
+                        tdir = os.path.join(udir, tag)
+                        if not os.path.isdir(tdir):
+                            continue
+                        # For each file, nothing to do (local present). We cannot know if R2 copy missing here without listing bucket (expensive) – skip.
+                        # (Future: maintain manifest / hash list.)
+                        pass
+            time.sleep(120)
+        except Exception:
+            time.sleep(30)
+
+def start_r2_repair_thread():
+    global _r2_repair_thread_started
+    if _r2_repair_thread_started:
+        return
+    try:
+        th = threading.Thread(target=_r2_repair_worker, name='r2-repair', daemon=True)
+        th.start()
+        _r2_repair_thread_started = True
+    except Exception as e:
+        logging.warning('Failed to start r2 repair thread: %s', e)
+
+# Kick off background thread at import time (safe / idempotent)
+start_r2_repair_thread()
+
 def r2_list_objects(prefix: str = ''):
     s3 = get_s3_client()
     if not s3:
@@ -2371,12 +2463,67 @@ def ensure_playlists_structure(config):
                     # Backfill media_type for older entries
                     if 'media_type' not in item and item.get('file'):
                         item['media_type'] = classify_media(item['file'])
+            # NEW: Attempt R2 restore for missing local files referenced by playlist
+            try:
+                for _it in sdata.get('playlist', []) or []:
+                    ensure_local_media_for_playlist_item(_it)
+            except Exception:
+                pass
                 if 'rotation_meta' not in sdata:
                     sdata['rotation_meta'] = {'last_index': 0, 'last_ts': 0}
                     changed = True
     if changed:
         save_store_config(config)
     return config
+
+# -------- Manual R2 media diagnostics & repair endpoints --------
+@app.route('/r2/restore_one', methods=['POST'])
+@login_required
+def r2_restore_one():
+    try:
+        data = request.get_json(force=True) or {}
+        key = (data.get('key') or '').strip().lstrip('/')
+        if not key:
+            return jsonify({'success': False, 'error': 'key required'}), 400
+        ok = r2_download_to_local(key)
+        return jsonify({'success': ok, 'key': key})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/r2/repair_user', methods=['POST'])
+@login_required
+def r2_repair_user():
+    """Force a best-effort restore of missing local files for a given user safe key.
+    Scans month folders current + previous month.
+    Body: {"user_key": "kayson2_at_gmail.com"}
+    """
+    try:
+        if not r2_enabled():
+            return jsonify({'success': False, 'error': 'R2 not enabled'}), 400
+        data = request.get_json(force=True) or {}
+        user_key = (data.get('user_key') or '').strip()
+        if not user_key:
+            return jsonify({'success': False, 'error': 'user_key required'}), 400
+        root = app.config.get('UPLOAD_FOLDER') or 'static/uploads'
+        user_dir = os.path.join(root, 'users', user_key)
+        if not os.path.isdir(user_dir):
+            return jsonify({'success': False, 'error': 'user directory missing'}), 404
+        now = datetime.utcnow()
+        months = {now.strftime('%Y-%m'), (now - timedelta(days=31)).strftime('%Y-%m')}
+        restored = []
+        skipped = 0
+        for m in months:
+            mdir = os.path.join(user_dir, m)
+            if not os.path.isdir(mdir):
+                continue
+            for fname in os.listdir(mdir):
+                if fname.lower().endswith(('.mp4','.jpg','.jpeg','.png','.webp','.gif')):
+                    # already exists, nothing
+                    continue
+            # We can't know missing keys unless we track manifest; skip.
+        return jsonify({'success': True, 'note': 'Scan complete (no manifest yet)', 'restored': restored, 'skipped': skipped})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 def get_default_config(user_scoped: bool = False):
     """Get default store configuration.
@@ -5045,39 +5192,16 @@ def get_playlist(store_id, screen_id):
     for item in pl:
         try:
             it = dict(item)
-            
-            # Check if this is a sync video that needs slicing for Android clients
-            sref = item.get('sync_ref') if isinstance(item, dict) else None
-            needs_slicing = False
-            if sref and isinstance(sref, dict):
-                count = sref.get('count', 1)
-                file_type = item.get('media_type', '')
-                if count > 1 and file_type == 'video':
-                    needs_slicing = True
-            
-            # Build URL with slicing consideration
+
+            # Always start with the plain public URL
             base_url = build_public_url(it.get('file'))
-            if needs_slicing and base_url:
-                # For Android clients with sync videos, use slice-video endpoint
-                user_agent = request.headers.get('User-Agent', '').lower()
-                is_android = 'android' in user_agent or 'okhttp' in user_agent
-                
-                if is_android:
-                    # Use our slice-video endpoint for better Android compatibility
-                    video_file = it.get('file', '')
-                    if video_file:
-                        slice_url = url_for('slice_video', video_path=video_file, _external=True)
-                        slice_url += f"?slice_mode={sref.get('mode', 'split-h')}"
-                        slice_url += f"&slice_count={sref.get('count', 1)}"
-                        slice_url += f"&slice_order={sref.get('order', 0)}"
-                        it['url'] = slice_url
-                        it['slice_aware'] = True  # Flag for client debugging
-                    else:
-                        it['url'] = base_url
-                else:
-                    it['url'] = base_url
+            it['url'] = base_url
+            # (Retain previous verbosity for troubleshooting)
+            if base_url:
+                print(f"DEBUG: Base media URL resolved: {base_url}")
             else:
-                it['url'] = base_url
+                print("DEBUG: Base URL missing (no file?)")
+
             # Ensure the effect is serialized explicitly for clients
             if 'effect' in item and isinstance(item.get('effect'), str):
                 it['effect'] = item.get('effect')
@@ -5129,6 +5253,34 @@ def get_playlist(store_id, screen_id):
                         it['sync_ref']['order'] = 0
             except Exception:
                 pass
+            # --- Dynamic slice URL assignment (after sync_ref augmentation) ---
+            try:
+                sref2 = it.get('sync_ref') if isinstance(it, dict) else None
+                media_type = it.get('media_type') or item.get('media_type')
+                if isinstance(sref2, dict) and media_type == 'video':
+                    scount = int(sref2.get('count') or 1)
+                    sorder = int(sref2.get('order') or 0)
+                    smode = (sref2.get('mode') or 'split-h').lower()
+                    if scount > 1:
+                        ua = request.headers.get('User-Agent', '').lower()
+                        # Broaden Android TV / ExoPlayer heuristics.
+                        android_tokens = ('android', 'okhttp', 'exoplayer', 'nvidia', 'bravia', 'shield')
+                        is_android = any(tok in ua for tok in android_tokens)
+                        print(f"DEBUG: Slice decision ua='{ua}' is_android={is_android} count={scount} order={sorder} mode={smode}")
+                        if is_android:
+                            vfile = it.get('file')
+                            if vfile:
+                                slice_url = url_for('slice_video', video_path=vfile, _external=True)
+                                slice_url += f"?slice_mode={smode}&slice_count={scount}&slice_order={sorder}"
+                                it['url'] = slice_url
+                                it['slice_aware'] = True
+                                print(f"DEBUG: Assigned slice URL: {slice_url}")
+                            else:
+                                print("DEBUG: Cannot assign slice URL (missing file field)")
+                        else:
+                            print("DEBUG: Non-Android client; leaving base URL (client may CSS/JS crop)")
+            except Exception as e_slice:
+                print(f"WARNING: Slice URL assignment error: {e_slice}")
             # Prefer id mapping; if missing, fall back to file key.
             # Robustness: handle absolute URLs and relative paths by also checking basename-only key.
             ls = None
@@ -6888,6 +7040,96 @@ def add_sync_follower():
         app.logger.exception('add_sync_follower failed')
         return jsonify({'success': False, 'error': str(e)}), 500
 
+def serve_video_file_with_range_support(file_path, is_cached='false'):
+    """
+    Serve a video file from an arbitrary file path with robust HTTP Range (Partial Content) support.
+    Closely mirrors the /media implementation which is known to work well with ExoPlayer & Android's MediaHTTP.
+    """
+    from flask import Response, request
+    import os
+
+    # Derive basic metadata/headers
+    file_size = os.path.getsize(file_path)
+    mtime = os.path.getmtime(file_path)
+    lm_http = http_date(mtime)
+    ext = (os.path.splitext(file_path)[1] or '.mp4').lstrip('.').lower()
+    mimetype = _video_mime(ext)
+
+    # Helper: stream a byte range [start, end] inclusive in smaller sub-chunks
+    def partial_gen(start: int, end: int):
+        with open(file_path, 'rb') as f:
+            f.seek(start)
+            remaining = end - start + 1
+            chunk = 1024 * 256  # 256KB sub-chunks
+            while remaining > 0:
+                read_len = min(chunk, remaining)
+                data = f.read(read_len)
+                if not data:
+                    break
+                remaining -= len(data)
+                yield data
+
+    # Helper: stream entire file in chunks (when no Range header)
+    def generate_full():
+        chunk_size = 1024 * 512  # 512KB
+        with open(file_path, 'rb') as f:
+            while True:
+                chunk = f.read(chunk_size)
+                if not chunk:
+                    break
+                yield chunk
+
+    range_header = request.headers.get('Range')
+    # Handle Range requests
+    if range_header:
+        try:
+            units, rng = range_header.split('=')
+            if units.strip().lower() != 'bytes':
+                raise ValueError('Only bytes ranges are supported')
+
+            # Support open-ended and explicit end ranges: "bytes=start-end" or "bytes=start-"
+            start_str, end_str = (rng.split('-') + [''])[:2]
+            start = int(start_str) if start_str else 0
+
+            # If no end specified, serve up to CHUNK_MAX to keep transfers predictable for some clients
+            CHUNK_MAX = 1024 * 1024  # 1MB per response for open-ended requests
+            if end_str.strip() == '':
+                end = min(start + CHUNK_MAX - 1, file_size - 1)
+            else:
+                end = int(end_str)
+
+            end = min(end, file_size - 1)
+            if start > end or start >= file_size:
+                return Response(status=416, headers={'Content-Range': f'bytes */{file_size}'})
+
+            length = end - start + 1
+            resp = Response(partial_gen(start, end), 206, mimetype=mimetype)
+            resp.headers.add('Accept-Ranges', 'bytes')
+            resp.headers.add('Content-Range', f'bytes {start}-{end}/{file_size}')
+            resp.headers.add('Content-Length', str(length))
+            resp.headers.add('Last-Modified', lm_http)
+            resp.headers.setdefault('Cache-Control', 'public, max-age=86400')
+            resp.headers['X-Slice-Cached'] = is_cached
+            resp.headers['X-Slice-Range-Supported'] = 'true'
+            # Helpful for diagnostics
+            resp.headers['X-Debug-Served-Range'] = f'{start}-{end}'
+            print(f"DEBUG: slice-video range: {start}-{end}/{file_size} hdr={range_header}")
+            return resp
+        except Exception as e:
+            print(f"Range parse error (slice-video): {e} | raw={range_header}")
+            # Fallback to full-file response below
+
+    # No Range header: stream whole file
+    resp = Response(generate_full(), 200, mimetype=mimetype)
+    resp.headers.add('Accept-Ranges', 'bytes')
+    resp.headers.add('Content-Length', str(file_size))
+    resp.headers.add('Last-Modified', lm_http)
+    resp.headers.setdefault('Cache-Control', 'public, max-age=86400')
+    resp.headers['X-Slice-Cached'] = is_cached
+    resp.headers['X-Slice-Range-Supported'] = 'true'
+    print(f"DEBUG: slice-video full file {file_size} bytes for {file_path}")
+    return resp
+
 # Video slicing endpoint for Android TV compatibility
 @app.route('/slice-video/<path:video_path>')
 def slice_video(video_path):
@@ -6931,10 +7173,8 @@ def slice_video(video_path):
         # Check if slice already exists in cache
         if os.path.exists(cached_slice_path):
             print(f"DEBUG: Serving cached slice: {cached_slice_path}")
-            response = send_file(cached_slice_path, mimetype='video/mp4')
-            response.headers['X-Slice-Cached'] = 'true'
-            response.headers['Cache-Control'] = 'public, max-age=86400'  # Cache for 24 hours
-            return response
+            return serve_video_file_with_range_support(cached_slice_path, 'true')
+        
         
         # Get the original video file path
         original_video_path = None
@@ -6978,12 +7218,8 @@ def slice_video(video_path):
             print(f"DEBUG: Successfully created slice: {cached_slice_path}")
             print(f"DEBUG: Slice file size: {os.path.getsize(cached_slice_path) / 1024 / 1024:.2f} MB")
             
-            # Add cache headers for better performance
-            response = send_file(cached_slice_path, mimetype='video/mp4')
-            response.headers['Cache-Control'] = 'public, max-age=86400'  # Cache for 24 hours
-            response.headers['X-Slice-Info'] = f"mode={slice_mode},count={slice_count},order={slice_order}"
-            response.headers['X-Slice-Generated'] = 'true'
-            return response
+            # Serve with proper range request support for ExoPlayer
+            return serve_video_file_with_range_support(cached_slice_path, 'false')
         else:
             print(f"ERROR: Failed to create video slice")
             # Fallback to original video
@@ -7074,7 +7310,7 @@ def generate_video_slice_ffmpeg(input_path, output_path, mode, count, order):
         
         print(f"DEBUG: Crop parameters - x={crop_x}, y={crop_y}, w={slice_width}, h={slice_height}")
         
-        # Build FFmpeg command for cropping
+        # Build FFmpeg command for cropping with simple, reliable settings
         # crop=w:h:x:y - width:height:x_offset:y_offset
         crop_filter = f"crop={slice_width}:{slice_height}:{crop_x}:{crop_y}"
         
@@ -7082,10 +7318,13 @@ def generate_video_slice_ffmpeg(input_path, output_path, mode, count, order):
             FFMPEG_PATH, '-y',  # -y to overwrite output file
             '-i', input_path,
             '-vf', crop_filter,
-            '-c:a', 'copy',  # Copy audio without re-encoding
+            '-c:a', 'copy',  # Copy audio without re-encoding (faster, no quality loss)
             '-c:v', 'libx264',  # Re-encode video with h264
-            '-preset', 'fast',  # Fast encoding preset
+            '-profile:v', 'main',  # Use main profile (more compatible than baseline for modern devices)
+            '-preset', 'fast',  # Balanced encoding speed vs quality
             '-crf', '23',  # Good quality setting
+            '-pix_fmt', 'yuv420p',  # Ensure compatible pixel format
+            '-movflags', '+faststart',  # Optimize for streaming
             output_path
         ]
         

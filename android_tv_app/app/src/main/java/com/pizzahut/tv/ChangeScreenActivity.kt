@@ -58,7 +58,32 @@ class ChangeScreenActivity : AppCompatActivity() {
 						container.addView(b, lp)
 					}
 				} catch (e: Exception) {
-					status.text = ("Network error: ${e.message}").take(80)
+					// Try legacy endpoint that accepts X-User-Code header
+					try {
+						val legacy = withContext(Dispatchers.IO) { ApiClient.service.getScreensLegacyList(storeId) }
+						if (legacy.screens.isEmpty()) { status.text = "No screens for $storeId (legacy)"; return@launch }
+						status.text = "Tap a screen to switch (legacy)"
+						val targetPx = (600 * resources.displayMetrics.density).toInt()
+						legacy.screens.forEach { s ->
+							val screenLabel = s.id.removePrefix("${storeId}_")
+							val b = Button(this@ChangeScreenActivity).apply {
+								text = screenLabel; textSize = 22f; isAllCaps = false; setPadding(24)
+								setOnClickListener { pick(storeId, s.id) }
+							}
+							val lp = LinearLayout.LayoutParams(targetPx, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = 16; gravity = Gravity.CENTER_HORIZONTAL }
+							container.addView(b, lp)
+						}
+						return@launch
+					} catch (_: Exception) {
+						// Fallback: fetch raw to detect HTML/login or plain text error
+						try {
+							val raw = withContext(Dispatchers.IO) { ApiClient.service.getScreensRaw(storeId, accept = "text/plain, text/html, application/json") }
+							val snippet = raw.trim().replace("\n", " ")
+							status.text = ("Server returned non-JSON: ${snippet.take(120)}").take(140)
+						} catch (e2: Exception) {
+							status.text = ("Network error: ${e.message}").take(80)
+						}
+					}
 				}
 			}
 		}

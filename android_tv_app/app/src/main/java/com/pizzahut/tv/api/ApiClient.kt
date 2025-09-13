@@ -69,6 +69,10 @@ object ApiClient {
 						b.addHeader("X-User-Code", code)
 					}
 				} catch (_: Exception) {}
+				// Identify client as Android TV so backend can tailor playlist (e.g., slice URLs)
+				if (orig.header("User-Agent").isNullOrBlank()) {
+					b.header("User-Agent", "PHTV-Android/1.0 (Android TV)")
+				}
 				// Prefer JSON responses unless caller explicitly set Accept
 				if (orig.header("Accept") == null) {
 					b.header("Accept", "application/json")

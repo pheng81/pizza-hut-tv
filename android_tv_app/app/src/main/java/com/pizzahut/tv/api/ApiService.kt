@@ -21,6 +21,19 @@ interface ApiService {
 		@Path("storeId") storeId: String
 	): ScreensResponse
 
+	// Raw variant to capture non-JSON/HTML responses for diagnostics
+	@GET("screens/{storeId}")
+	suspend fun getScreensRaw(
+		@Path("storeId") storeId: String,
+		@Header("Accept") accept: String = "text/plain, application/json"
+	): String
+
+	// Legacy array endpoint that accepts X-User-Code and does not require login session
+	@GET("screens_list/{storeId}")
+	suspend fun getScreensLegacyList(
+		@Path("storeId") storeId: String
+	): ScreensResponse
+
 	// Pairing: fetch stores for a user by 4-digit code
 	@GET("api/stores_by_code/{code}")
 	suspend fun getStoresByCode(
