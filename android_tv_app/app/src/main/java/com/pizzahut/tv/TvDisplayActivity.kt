@@ -56,6 +56,8 @@ class TvDisplayActivity : AppCompatActivity() {
     private var itemOkPingJob: Job? = null
     // Reusable HTTP client used by ExoPlayer and media probes
     var mediaHttpClient: okhttp3.OkHttpClient? = null
+    // Separate HTTP client for probes that should NOT follow redirects (so we can see 3xx codes)
+    var probeHttpClient: okhttp3.OkHttpClient? = null
     // Screen transform like web player: orientation 'vertical' rotates stage 90deg; rotation adds extra degrees
     var orientationMode: String = "default" // 'vertical' | 'horizontal' | 'default'
     var displayRotation: Int = 0 // 0|90|180|270
@@ -705,6 +707,21 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
         } catch (_: Exception) {}
         val okClient = okClientBuilder.build()
         mediaHttpClient = okClient
+        // Build a non-redirecting client for probes/HEAD so 3xx is visible
+        try {
+            probeHttpClient = okClient.newBuilder()
+                .followRedirects(false)
+                .followSslRedirects(false)
+                .build()
+        } catch (_: Exception) {
+            // Fallback: basic client without redirects
+            try {
+                probeHttpClient = okhttp3.OkHttpClient.Builder()
+                    .followRedirects(false)
+                    .followSslRedirects(false)
+                    .build()
+            } catch (_: Exception) { probeHttpClient = okClient }
+        }
     val okFactory = com.google.android.exoplayer2.ext.okhttp.OkHttpDataSource.Factory(okClient)
         val upstream = com.google.android.exoplayer2.upstream.DefaultDataSource.Factory(this, okFactory)
         cacheDataSourceFactory = com.google.android.exoplayer2.upstream.cache.CacheDataSource.Factory()
@@ -774,7 +791,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
     }
 
     suspend fun probeMedia(url: String): String = withContext(Dispatchers.IO) {
-        val client = mediaHttpClient ?: return@withContext "no-client"
+        val client = probeHttpClient ?: mediaHttpClient ?: return@withContext "no-client"
         return@withContext try {
             val req = okhttp3.Request.Builder()
                 .url(url)
@@ -791,7 +808,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
     }
 
     suspend fun probeCode(url: String): Int? = withContext(Dispatchers.IO) {
-        val client = mediaHttpClient ?: return@withContext null
+        val client = probeHttpClient ?: mediaHttpClient ?: return@withContext null
         return@withContext try {
             val req = okhttp3.Request.Builder()
                 .url(url)
@@ -803,15 +820,24 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
 
     suspend fun headOk(url: String, timeoutMs: Int = 4000): Pair<Boolean,String?> = withContext(Dispatchers.IO) {
         return@withContext try {
-            val u = URL(url)
-            val c = (u.openConnection() as HttpURLConnection).apply {
-                requestMethod = "HEAD"; connectTimeout = timeoutMs; readTimeout = timeoutMs
+            val client = (probeHttpClient ?: mediaHttpClient)?.newBuilder()
+                ?.followRedirects(false)
+                ?.followSslRedirects(false)
+                ?.callTimeout(timeoutMs.toLong(), java.util.concurrent.TimeUnit.MILLISECONDS)
+                ?.build() ?: return@withContext Pair(false, "no-client")
+            val req = okhttp3.Request.Builder()
+                .url(url)
+                .head()
+                .build()
+            client.newCall(req).execute().use { resp ->
+                val code = resp.code
+                val len = resp.header("Content-Length")
+                Pair(code in 200..299, "HEAD $code len=$len")
             }
-            val code = c.responseCode
-            val len = c.getHeaderField("Content-Length")
-            Pair(code in 200..299, "HEAD $code len=$len")
         } catch (e: Exception) { Pair(false, e.message) }
     }
+
+    
 
     var scheduledRotation: Runnable? = null
     var videoStallWatch: Runnable? = null
@@ -1221,17 +1247,20 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
             val syncOrder = next.syncRef?.order ?: 0
             val isSlicePlanned = syncCount > 1 // multi-segment sync group
 
-            // For videos, always play the original full URL; for sync items, we apply viewport slicing locally
+            // For videos, prefer server-sliced URL for sync items when provided; otherwise use full URL and apply viewport slicing locally
             val absUrl = next.url?.takeIf { it.startsWith("http", true) }
             val mediaUrl = ApiClientImageHelper.buildVideoUrl(file)
             val staticUrl = ApiClientImageHelper.buildImageUrl(file)
             
             // Choose primary/fallback URLs
-            val videoUrlPrimary = absUrl ?: mediaUrl
+            val useServerSlice = isSlicePlanned && (absUrl?.contains("/slice-video/") == true)
+            val videoUrlPrimary = if (useServerSlice) (absUrl ?: mediaUrl) else mediaUrl
             val videoUrlFallback = staticUrl
+            // Alternate: full original video for viewport slicing if server slice is not usable
+            val videoUrlAltFull = mediaUrl
 
             // Apply or reset viewport slicing before playback
-            if (isSlicePlanned) {
+            if (isSlicePlanned && !useServerSlice) {
                 // Normalize mode
                 val modeParam = if (syncMode.contains('v')) "split-v" else "split-h"
                 currentUsingViewportSlicing = true
@@ -1250,10 +1279,14 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                 currentSliceCount = 0
                 resetSliceViewport(playerView)
                 clearSegmentWrapFrom(playerView)
-                Log.d(TAG, "PLAYCHECK reset to normal viewport (non-slice)")
+                if (isSlicePlanned && useServerSlice) {
+                    Log.d(TAG, "PLAYCHECK using server-side slice video (no viewport transform)")
+                } else {
+                    Log.d(TAG, "PLAYCHECK reset to normal viewport (non-slice)")
+                }
             }
 
-            Log.d(TAG, "PLAYCHECK decide file=${file} planned=${isSlicePlanned} viewport=${currentUsingViewportSlicing} syncMode=${syncMode} order=${syncOrder} count=${syncCount} prim=${videoUrlPrimary} fb=${videoUrlFallback} rawNextUrl=${next.url}")
+            Log.d(TAG, "PLAYCHECK decide file=${file} planned=${isSlicePlanned} serverSlice=${useServerSlice} viewport=${currentUsingViewportSlicing} syncMode=${syncMode} order=${syncOrder} count=${syncCount} prim=${videoUrlPrimary} fb=${videoUrlFallback} rawNextUrl=${next.url}")
             // Extra diagnostics for black screen on follower screens
             try {
                 val pvClass = playerView.javaClass.simpleName
@@ -1627,29 +1660,72 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                     player.prepare(); player.playWhenReady = true
                 }
                 
-                // Proactive probe: if primary looks blocked (e.g., 403), try fallback automatically
+                // Proactive probe:
+                // - If server-slice URL redirects (3xx), enable viewport slicing because backend redirected to full video
+                // - If primary blocked (e.g., 4xx/5xx), try full video + viewport (for slice groups), else static fallback
                 lifecycleScope.launch {
                     val primary = probeCode(videoUrlPrimary)
                     val goodPrimary = primary != null && (primary in 200..206 || primary in 300..399)
+                    // If backend redirected the slice to original video, enable viewport slicing live
+                    if (useServerSlice && (primary in 300..399) && currentVideoFile == file) {
+                        val modeParam = if ((syncMode.lowercase()).contains('v')) "split-v" else "split-h"
+                        currentUsingViewportSlicing = true
+                        currentSliceMode = modeParam
+                        currentSliceCount = syncCount
+                        currentSliceOrder = syncOrder
+                        try {
+                            applySliceViewport(playerView, modeParam, syncCount, syncOrder)
+                            Log.d(TAG, "PLAYCHECK slice redirected (${primary}) -> enable viewport slicing")
+                        } catch (e: Exception) {
+                            Log.w(TAG, "viewport enable after redirect failed: ${e.message}")
+                        }
+                    }
                     if (!goodPrimary && currentVideoFile == file) {
-                        val fb = probeCode(videoUrlFallback)
-                        val goodFb = fb != null && (fb in 200..206 || fb in 300..399)
-                        Log.d(TAG, "probe primary=" + (primary ?: -1) + " fb=" + (fb ?: -1) + " file=" + file)
-                        if (goodFb && currentVideoFile == file && exoPlayer?.playbackState != com.google.android.exoplayer2.Player.STATE_READY) {
-                            binding.message.text = ("HTTP ${primary ?: -1} → FB").take(60)
-                            if (videoUrlFallback.startsWith(ApiClient.baseUrl + "static/")) {
-                                showStaticFallback("primary HTTP blocked; using static path")
-                            } else {
+                        // Prefer switching to full video + viewport for slice groups if available
+                        if (useServerSlice) {
+                            val alt = probeCode(videoUrlAltFull)
+                            val goodAlt = alt != null && (alt in 200..206 || alt in 300..399)
+                            if (goodAlt && currentVideoFile == file && exoPlayer?.playbackState != com.google.android.exoplayer2.Player.STATE_READY) {
                                 try {
+                                    // Switch to full video and apply viewport slicing
                                     exoPlayer?.clearMediaItems()
-                                    exoPlayer?.setMediaSource(buildMediaSource(videoUrlFallback))
+                                    exoPlayer?.setMediaSource(buildMediaSource(videoUrlAltFull))
                                     exoPlayer?.prepare(); exoPlayer?.playWhenReady = true
-                                    Log.d(TAG, "switched to fallback for " + file)
-                                } catch (_: Exception) {}
+                                    val modeParam = if ((syncMode.lowercase()).contains('v')) "split-v" else "split-h"
+                                    currentUsingViewportSlicing = true
+                                    currentSliceMode = modeParam
+                                    currentSliceCount = syncCount
+                                    currentSliceOrder = syncOrder
+                                    applySliceViewport(playerView, modeParam, syncCount, syncOrder)
+                                    binding.message.text = ("HTTP ${primary ?: -1} → FULL+VIEW").take(60)
+                                    Log.d(TAG, "switched to full+viewport for " + file)
+                                } catch (_: Exception) {
+                                    Log.w(TAG, "switch to full+viewport failed; trying static fallback")
+                                    // Fall through to static fallback below
+                                }
                             }
-                        } else if (!goodFb && currentVideoFile == file) {
-                            binding.message.text = ("Blocked P=${primary ?: -1} F=${fb ?: -1}").take(60)
-                            Log.w(TAG, "blocked primary=" + (primary ?: -1) + " fb=" + (fb ?: -1) + " for " + file)
+                            // If alt failed or we already READY, continue to static fallback logic
+                        }
+                        if (exoPlayer?.playbackState != com.google.android.exoplayer2.Player.STATE_READY && currentVideoFile == file) {
+                            val fb = probeCode(videoUrlFallback)
+                            val goodFb = fb != null && (fb in 200..206 || fb in 300..399)
+                            Log.d(TAG, "probe primary=" + (primary ?: -1) + " altFull=" + (try { probeCode(videoUrlAltFull) } catch (_: Exception) { null } ?: -1) + " fb=" + (fb ?: -1) + " file=" + file)
+                            if (goodFb) {
+                                binding.message.text = ("HTTP ${primary ?: -1} → FB").take(60)
+                                if (videoUrlFallback.startsWith(ApiClient.baseUrl + "static/")) {
+                                    showStaticFallback("primary HTTP blocked; using static path")
+                                } else {
+                                    try {
+                                        exoPlayer?.clearMediaItems()
+                                        exoPlayer?.setMediaSource(buildMediaSource(videoUrlFallback))
+                                        exoPlayer?.prepare(); exoPlayer?.playWhenReady = true
+                                        Log.d(TAG, "switched to fallback for " + file)
+                                    } catch (_: Exception) {}
+                                }
+                            } else {
+                                binding.message.text = ("Blocked P=${primary ?: -1} F=${fb ?: -1}").take(60)
+                                Log.w(TAG, "blocked primary=" + (primary ?: -1) + " fb=" + (fb ?: -1) + " for " + file)
+                            }
                         }
                     }
                     // Additional quick HEAD check for primary URL to capture server errors in logs
