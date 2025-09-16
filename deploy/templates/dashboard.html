@@ -57,12 +57,12 @@
                     const cur = original || img.currentSrc || img.src || '';
                     const key = _extractKey(cur);
                     const step = parseInt(img.dataset.fallbackStep || '0', 10);
-                    // Debug aid
+                        // Debug aid
                     if (!img.dataset._dbg) { img.dataset._dbg = '1'; console.warn('[img-fallback] start', {cur, key}); }
                     // Step 0: if we have an explicit original relative path (preferred), jump straight to origin path
-                    if (step === 0 && original && !/^https?:\/\//i.test(String(original))) {
-                        const base = '/static/uploads/';
-                        const origKey = _extractKey(original);
+                        if (step === 0 && original && !/^https?:\/\//i.test(String(original))) {
+                            const base = '/static/uploads/';
+                            let origKey = _extractKey(original);
                         img.dataset.fallbackStep = '1';
                         const local1 = base + encodeURIComponent(origKey);
                         console.warn('[img-fallback] use original key to origin', local1);
@@ -81,9 +81,10 @@
                         }
                     }
                     // Step 2: try origin static by key
-                    if (step <= 2) {
-                        if (!key) return; // nothing we can do
-                        const local = '/static/uploads/' + encodeURIComponent(key);
+                        // Step 2: try origin static by key
+                        if (step <= 2) {
+                            if (!key) return; // nothing we can do
+                            const local = '/static/uploads/' + encodeURIComponent(key);
                         img.dataset.fallbackStep = '3';
                         console.warn('[img-fallback] fallback to origin', local);
                         img.src = local;
@@ -136,19 +137,19 @@
                 const rel = String(name).replace(/^\/+/, '');
                 return base + rel;
             }
-            // Build thumbnail URL for images. If input is an absolute URL (e.g. R2/CDN),
-            // fall back to using it directly (no server-side thumb available for remote files).
+            // Build thumbnail URL for images.
+            // Prefer server endpoint /thumb/<w>/<rel> so the server can generate/cache and optionally redirect to CDN.
             function thumbUrl(name, width){
                 if(!name) return '';
-                // Prefer CDN path: <MEDIA_BASE_URL>/thumbs/<width>/<name>.webp (or .jpg)
                 try{
-                    const base = (window.MEDIA_BASE_URL || '/static/uploads/').replace(/\/+$/, '/');
-                    const rel = String(name).replace(/^\/+/, '');
-                    // Default to .webp; server endpoint will handle actual format
-                    return `${base}thumbs/${width}/${rel}.webp`;
+                    if (/^https?:\/\//i.test(String(name))) return String(name);
+                    let rel = String(name).replace(/^\/+/, '');
+                    if (rel.startsWith('static/uploads/')) {
+                        rel = rel.substring('static/uploads/'.length);
+                    }
+                    return `/thumb/${width}/${rel}`;
                 }catch(e){
-                    const safe = encodeURIComponent(String(name));
-                    return `/thumb/${width}/${safe}`;
+                    return `/thumb/${width}/${String(name)}`;
                 }
             }
         // Global IMG error listener: if any image fails (e.g., CDN hotlink/404), auto-fallback to origin
@@ -748,6 +749,7 @@
     .rp-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap:10px; }
     .rp-item { border:1px solid #dcdfe3; border-radius:6px; padding:6px; cursor:pointer; display:flex; align-items:center; justify-content:center; height:90px; background:#fafbfc; position:relative; }
     .rp-item img, .rp-item video { max-width:100%; max-height:100%; object-fit:cover; }
+    .rp-item .rp-name { position:absolute; left:6px; right:6px; bottom:6px; background:rgba(0,0,0,0.6); color:#fff; font-size:11px; line-height:1.2; padding:2px 4px; border-radius:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; pointer-events:none; }
     .rp-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; padding:10px 12px; border-top:1px solid #eef1f4; }
     .rp-help { font-size:12px; color:#6b7280; padding: 2px 2px 10px; }
     .rp-subtitle { font-size:12px; font-weight:700; color:#374151; margin: 8px 2px 6px; text-transform:uppercase; letter-spacing:.04em; }
@@ -4307,84 +4309,18 @@
                     if(sd && typeof sd.rotation === 'number') currentRotation = sd.rotation;
                 } catch {}
                 const rotationClass = `rotate-${currentRotation}`;
-                // Helper to compute sync slicing (horizontal) info if item is part of a sync group
+                // Helper to compute sync slicing (horizontal) info ONLY when the item explicitly declares a multi-screen slice.
+                // We no longer infer membership from other screens/playlists to avoid mislabeling normal videos as "Slice".
                 function getSyncSliceMeta(){
-                    if(!item || !item.sync_ref) return null;
-                    const sr = item.sync_ref;
-                    let count = (typeof sr.count==='number' && sr.count>1) ? sr.count : 0; // prefer server-specified count
-                    let order = (typeof sr.order==='number' && sr.order>=0) ? sr.order : 0;
-                    let orderSource = (count? 'server-meta' : 'inferred');
-                    let groupScreens = [];
-                    // Build/refresh a deterministic order cache per group so slices stay stable while UI updates
-                    if(!window.__syncOrderCache) window.__syncOrderCache = {}; // {groupId:{screenId:order}}
-                    try {
-                        const screenSet = new Set();
-                        // Source 1: aggregated playlists map (if present)
-                        const storePls = allStoresData.playlists && allStoresData.playlists[currentStoreId];
-                        if(storePls){
-                            Object.entries(storePls).forEach(([sid, arr])=>{
-                                if(!Array.isArray(arr)) return;
-                                arr.forEach(it=>{ if(it && it.sync_ref && it.sync_ref.group===sr.group) screenSet.add(sid); });
-                            });
-                        }
-                        // Source 2: individual screen objects (more reliable early after load)
-                        try {
-                            const screenMap = (allStoresData.screens||{})[currentStoreId] || {};
-                            Object.entries(screenMap).forEach(([sid, sdat])=>{
-                                const pls = sdat && Array.isArray(sdat.playlist) ? sdat.playlist : [];
-                                pls.forEach(it=>{ if(it && it.sync_ref && it.sync_ref.group===sr.group) screenSet.add(sid); });
-                            });
-                        } catch{}
-                        groupScreens = Array.from(screenSet);
-                        if(groupScreens.length){
-                            const cached = window.__syncOrderCache[sr.group];
-                            const membershipChanged = !cached || Object.keys(cached).length !== groupScreens.length || groupScreens.some(sid=>!(sid in cached));
-                            if(membershipChanged){
-                                const deriveNum = sid=>{ const m = sid.match(/(_screen|screen)(\d+)/i); return m? parseInt(m[2],10): Number.MAX_SAFE_INTEGER; };
-                                groupScreens.sort((a,b)=>{ const na=deriveNum(a), nb=deriveNum(b); if(na!==nb) return na-nb; return a.localeCompare(b); });
-                                const map = {}; groupScreens.forEach((sid,i)=> map[sid]=i);
-                                window.__syncOrderCache[sr.group] = map;
-                                orderSource = 'rebuilt-membership';
-                            }
-                            const cachedOrder = window.__syncOrderCache[sr.group] && window.__syncOrderCache[sr.group][screenId];
-                            if(typeof cachedOrder === 'number') { order = cachedOrder; orderSource = (orderSource==='rebuilt-membership'?'rebuilt+cache':'cache'); }
-                        }
-                    }catch{}
-                    // Infer count from membership if missing
-                    if(!count && groupScreens.length>1) count = groupScreens.length;
-                    // Fallback: if count>1 but every member's order appears identical (often 0) re-derive order from sorted screen ids.
-                    if(count>1){
-                        try {
-                            // Collect provided orders
-                            const provided = [];
-                            const storePls = allStoresData.playlists && allStoresData.playlists[currentStoreId];
-                            if(storePls){
-                                Object.entries(storePls).forEach(([sid, arr])=>{
-                                    if(!Array.isArray(arr)) return;
-                                    arr.forEach(it=>{ if(it && it.sync_ref && it.sync_ref.group===sr.group){ provided.push(it.sync_ref.order); } });
-                                });
-                            }
-                            const distinctProvided = Array.from(new Set(provided.filter(v=>typeof v==='number')));
-                            const allSame = distinctProvided.length<=1; // 0 or 1 unique values
-                            if(allSame && groupScreens.length){
-                                // Stable sort by natural numeric in screen id (e.g., 1000_screen2 -> 2) then lexicographic
-                                const deriveNum = sid=>{ const m = sid.match(/(\d+)(?=\D*$)/); return m? parseInt(m[1],10): Number.MAX_SAFE_INTEGER; };
-                                groupScreens.sort((a,b)=>{ const na=deriveNum(a), nb=deriveNum(b); if(na!==nb) return na-nb; return a.localeCompare(b); });
-                                const idx = groupScreens.indexOf(screenId);
-                                if(idx>=0){ order = idx; orderSource = 'derived-id'; }
-                                if(!count) count = groupScreens.length;
-                            } else if(allSame && !groupScreens.length){
-                                // Playlists for other screens may not be loaded yet; derive from screenId suffix (_screenN)
-                                const m = screenId.match(/_screen(\d+)/i);
-                                if(m){
-                                    const n = parseInt(m[1],10);
-                                    if(!isNaN(n) && n>0){ order = n-1; orderSource = 'id-suffix'; }
-                                }
-                            }
-                        }catch{}
-                    }
-                    if(count>1) return {count, order, mode: sr.mode||'split-h', orderSource};
-                    return null;
+                    try{
+                        if(!item || !item.sync_ref) return null;
+                        const sr = item.sync_ref;
+                        const count = (typeof sr.count === 'number' && sr.count > 1) ? sr.count : 0;
+                        if(!count) return null; // explicit, opt-in only
+                        let order = (typeof sr.order === 'number' && sr.order >= 0) ? sr.order : 0;
+                        const mode = sr.mode || 'split-h';
+                        return { count, order, mode, orderSource: 'server-meta' };
+                    }catch{ return null; }
                 }
                 const syncMeta = getSyncSliceMeta();
                 if(item && item.sync_ref && !syncMeta){
@@ -4798,7 +4734,11 @@
                             const isAbs = f && f.url && /^https?:\/\//i.test(String(f.url));
                             const bust = Date.now();
                             const src = isAbs ? (f.url + `?t=${bust}`) : (thumbUrl(f.name,220) + `?t=${bust}`);
-                            card.innerHTML = `<img loading=\"lazy\" src=\"${src}\"/><button class=\"rp-del\" title=\"Delete\" aria-label=\"Delete\" onclick=\"event.stopPropagation(); deleteLibraryFile('${f.name}')\">✕</button>`;
+                            card.innerHTML = `<img loading=\"lazy\" src=\"${src}\" alt=\"Image\"/><button class=\"rp-del\" title=\"Delete\" aria-label=\"Delete\" onclick=\"event.stopPropagation(); deleteLibraryFile('${f.name}')\">✕</button>`;
+                            const cap = document.createElement('div');
+                            cap.className='rp-name';
+                            try { cap.textContent = String(f.name).split('/').pop(); } catch(_) { cap.textContent = f.name; }
+                            card.appendChild(cap);
                             card.addEventListener('click',()=> chooseLibraryFile(f.name));
                             gImgs.appendChild(card);
                         });
@@ -4806,14 +4746,15 @@
                             const card=document.createElement('div');
                             card.className='rp-item';
                             card.title=f.name;
-                            const abs = f && f.url && /^https?:\/\//i.test(String(f.url));
                             const bust = Date.now();
-                            const posterCdn = abs ? '' : `${MEDIA_BASE_URL || '/static/uploads/'}vthumbs/220/${encodeURIComponent(f.name)}.jpg?t=${bust}`;
-                            const posterSrv = abs ? '' : `/vthumb/220/${encodeURIComponent(f.name)}?t=${bust}`;
-                            const poster = posterCdn || posterSrv;
-                            const posterAttr = poster ? ` poster="${poster}"` : '';
-                            const src = f.url ? (f.url + `?t=${bust}`) : (mediaUrl(f.name) + `?t=${bust}`);
-                            card.innerHTML = `<video preload=\"metadata\" muted playsinline${posterAttr} src=\"${src}\"></video><button class=\"rp-del\" title=\"Delete\" aria-label=\"Delete\" onclick=\"event.stopPropagation(); deleteLibraryFile('${f.name}')\">✕</button>`;
+                            const rel = (typeof encodePathPreserveSlashes === 'function') ? encodePathPreserveSlashes(f.name) : String(f.name);
+                            const poster = `/vthumb/220/${rel}?t=${bust}`;
+                            const onerr = "this.onerror=null; this.src='/static/video_placeholder.svg'";
+                            card.innerHTML = `<img loading=\"lazy\" src=\"${poster}\" alt=\"Video\" onerror=\"${onerr}\"><button class=\"rp-del\" title=\"Delete\" aria-label=\"Delete\" onclick=\"event.stopPropagation(); deleteLibraryFile('${f.name}')\">✕</button>`;
+                            const cap = document.createElement('div');
+                            cap.className='rp-name';
+                            try { cap.textContent = String(f.name).split('/').pop(); } catch(_) { cap.textContent = f.name; }
+                            card.appendChild(cap);
                             card.addEventListener('click',()=> chooseLibraryFile(f.name));
                             gVids.appendChild(card);
                         });
@@ -5098,13 +5039,13 @@
                     if(!j.success){ cont.innerHTML = '<div style="font-size:12px;color:#c00;">Failed to load library</div>'; return; }
                     const files = j.files||[];
                     cont.innerHTML = '';
-                    files.forEach(f=>{
+                        imgs.forEach(f=>{
                         const card = document.createElement('div');
                         card.style.cssText = 'display:flex;flex-direction:column;gap:6px;border:1px solid #e5e7eb;border-radius:6px;padding:6px;cursor:pointer;';
                         const isVid = (f.media_type === 'video');
-                        const bust = Date.now();
                         const img = isVid ? `<video muted preload=\"metadata\" style=\"width:100%;height:80px;object-fit:cover\" src=\"${f.url}\"></video>` : `<img loading=\"lazy\" style=\"width:100%;height:80px;object-fit:cover\" src=\"${thumbUrl(f.name,220)}?t=${bust}\">`;
-                        card.innerHTML = img + `<div style=\"font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;\" title=\"${f.name}\">${f.name}</div>`;
+                            // Always use server-generated thumbs for images for consistent sizing and caching
+                            const src = (thumbUrl(f.name,220) + `?t=${bust}`);
                         card.addEventListener('click', ()=> chooseSyncFile(f.name));
                         cont.appendChild(card);
                     });

@@ -1,0 +1,113 @@
+{
+  "stores": [
+    {
+      "id": "1000",
+      "name": "My First Store"
+    }
+  ],
+  "screens": {
+    "1000": {
+      "1000_screen1": {
+        "file": "users/kalix2_at_gmail.com/2025-09/215bfff1-ad2f-4909-874a-a5cae917e144.mp4",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "id": "f60da4ac-231e-44a4-b6e0-41cc29547afe",
+            "file": "users/kalix2_at_gmail.com/2025-09/215bfff1-ad2f-4909-874a-a5cae917e144.mp4",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "video",
+            "sync_ref": {
+              "group": "51aa6b89-9860-4998-bb2c-679961201e6c",
+              "role": "master",
+              "order": 0
+            }
+          }
+        ],
+        "fresh": true,
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "cmd_queue": [
+          {
+            "id": "0be15be0-77d1-4120-91c9-ddd4547e29aa",
+            "ts": 1757972073,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ]
+      },
+      "1000_screen2": {
+        "file": "users/kalix2_at_gmail.com/2025-09/215bfff1-ad2f-4909-874a-a5cae917e144.mp4",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "id": "ee9fe929-6f86-4959-863a-1b7a3436a2ca",
+            "file": "users/kalix2_at_gmail.com/2025-09/215bfff1-ad2f-4909-874a-a5cae917e144.mp4",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "video",
+            "sync_ref": {
+              "group": "51aa6b89-9860-4998-bb2c-679961201e6c",
+              "role": "follower",
+              "order": 1
+            }
+          }
+        ],
+        "cmd_queue": [
+          {
+            "id": "7d6e03b1-2725-4cb7-9883-6d417eefdbec",
+            "ts": 1757972073,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ]
+      }
+    }
+  },
+  "master_store_id": "1000",
+  "sync_groups": {
+    "51aa6b89-9860-4998-bb2c-679961201e6c": {
+      "store_id": "1000",
+      "base": "1000_screen1",
+      "count": 2,
+      "filename": "users/kalix2_at_gmail.com/2025-09/215bfff1-ad2f-4909-874a-a5cae917e144.mp4",
+      "members": [
+        {
+          "screen_id": "1000_screen1",
+          "item_id": "f60da4ac-231e-44a4-b6e0-41cc29547afe",
+          "role": "master",
+          "order": 0
+        },
+        {
+          "screen_id": "1000_screen2",
+          "item_id": "ee9fe929-6f86-4959-863a-1b7a3436a2ca",
+          "role": "follower",
+          "order": 1
+        }
+      ],
+      "created_at": 1757972073,
+      "start_epoch": 1757972080,
+      "mode": "split-h"
+    }
+  }
+}
