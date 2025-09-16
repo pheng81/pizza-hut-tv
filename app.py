@@ -5462,6 +5462,58 @@ def get_playlist(store_id, screen_id):
                                     fname = None
                             if fname:
                                 se = ((int(time.time()) // 5) + 2) * 5
+                                # Derive a reasonable group id, count, mode, and order so followers can slice too
+                                try:
+                                    # Try to find an existing declared sync group for these siblings
+                                    sync_groups = (cfg.get('sync_groups') or {})
+                                    derived_gid = None
+                                    derived_count = None
+                                    derived_mode = None
+                                    # Prefer a group that lists the base screen among members
+                                    for gid, grp in sync_groups.items():
+                                        try:
+                                            for mem in (grp.get('members') or []):
+                                                sid = mem.get('screen_id')
+                                                if sid and (sid == f"{store_id}_{base_short}" or sid == base_short):
+                                                    derived_gid = gid
+                                                    try:
+                                                        derived_count = int(grp.get('count') or len(grp.get('members', [])) or 1)
+                                                    except Exception:
+                                                        derived_count = None
+                                                    derived_mode = grp.get('mode') or 'split-h'
+                                                    raise StopIteration
+                                        except StopIteration:
+                                            break
+                                        except Exception:
+                                            continue
+                                    # If no explicit group, estimate count from sibling screens that exist in config
+                                    if derived_count is None:
+                                        try:
+                                            # Count consecutive siblings (prefix1..prefixN) that exist
+                                            n = 1
+                                            while True:
+                                                sid_short = f"{prefix}{n}"
+                                                sid_prefx = f"{store_id}_{sid_short}"
+                                                if (screens or {}).get(sid_prefx) or (screens or {}).get(sid_short):
+                                                    n += 1
+                                                    if n > 20:
+                                                        break  # sanity
+                                                else:
+                                                    break
+                                            # n-1 because we increment after last existing
+                                            derived_count = max(1, n - 1)
+                                        except Exception:
+                                            derived_count = 1
+                                    if not derived_mode:
+                                        derived_mode = 'split-h'
+                                    if not derived_gid:
+                                        derived_gid = f"implicit:{store_id}:{prefix}"
+                                except Exception:
+                                    derived_gid = f"implicit:{store_id}:{prefix}"
+                                    derived_count = 1
+                                    derived_mode = 'split-h'
+                                # Compute this follower's order (0-based)
+                                follower_order = max(0, num - 1)
                                 out.append({
                                     'id': f"virtual:implicit:{store_id}:{screen_id}",
                                     'file': fname,
@@ -5475,13 +5527,14 @@ def get_playlist(store_id, screen_id):
                                     'link_next': False,
                                     'media_type': classify_media(fname),
                                     'sync_ref': {
-                                        'group': f"implicit:{store_id}:{prefix}",
+                                        'group': derived_gid,
                                         'role': 'follower',
-                                        'order': max(0, num-1),
+                                        'order': follower_order,
                                         'virtual': True,
                                         'start_epoch': se,
-                                        'count': 0,
-                                        'mode': 'split-h'
+                                        # Ensure count>=2 to trigger slicing across siblings when applicable
+                                        'count': int(derived_count or 1),
+                                        'mode': derived_mode
                                     }
                                 })
     except Exception:
