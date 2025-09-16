@@ -5304,6 +5304,8 @@ def get_playlist(store_id, screen_id):
                             it['slice_url'] = slice_url
                             it['slice_info'] = {'mode': smode, 'count': scount, 'order': sorder}
                             it['slice_aware'] = True
+                            # Provide a UA-agnostic preferred_url to simplify client logic
+                            it['preferred_url'] = slice_url
                             if is_android:
                                 # For Android, prefer server-sliced URL
                                 it['url'] = slice_url
@@ -5315,6 +5317,15 @@ def get_playlist(store_id, screen_id):
                             print("DEBUG: Cannot assign slice URL (missing file field)")
             except Exception as e_slice:
                 print(f"WARNING: Slice URL assignment error: {e_slice}")
+            # Image display hints for clients (e.g., Android TV): default to fit/contain
+            try:
+                mt_hint = it.get('media_type') or item.get('media_type') or classify_media(it.get('file') or '')
+                if mt_hint == 'image':
+                    # Hints: 'image_fit' is semantic, 'image_scale' mirrors Android ScaleType names
+                    it.setdefault('image_fit', 'contain')            # contain within screen, keep aspect, letterbox if needed
+                    it.setdefault('image_scale', 'fit_center')        # Android ImageView.ScaleType equivalent
+            except Exception:
+                pass
             # Prefer id mapping; if missing, fall back to file key.
             # Robustness: handle absolute URLs and relative paths by also checking basename-only key.
             ls = None
@@ -5502,6 +5513,8 @@ def get_playlist(store_id, screen_id):
                 it['slice_url'] = it.get('slice_url') or slice_url
                 it['slice_info'] = it.get('slice_info') or {'mode': smode, 'count': scount, 'order': sorder}
                 it['slice_aware'] = True
+                # Provide UA-agnostic preferred_url for clients
+                it['preferred_url'] = it.get('preferred_url') or slice_url
                 # For Android UA, prefer server slice URL in main url field if not already set
                 cur_url = it.get('url') or ''
                 if is_android and '/slice-video/' not in cur_url:
