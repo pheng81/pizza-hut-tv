@@ -156,3 +156,11 @@ static/vthumbs/
 static/vpreviews/
 store_config__*.json
 
+# Local cache and generated slices (do not commit)
+static/cache/
+static/cache/**
+
+# Accidental local backup copies of Android templates
+android_tv_app/templates copy*/
+android_tv_app/templates_copy*/
+
