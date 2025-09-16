@@ -5224,21 +5224,12 @@ def get_playlist(store_id, screen_id):
                 it['effect'] = item.get('effect')
             # If part of a sync group, attach group timing info
             try:
+                # Only augment items that explicitly belong to a sync group.
+                # Do NOT infer sync_ref for unrelated items on the same screen to avoid mislabeling normal videos as slices.
                 sref = item.get('sync_ref') if isinstance(item, dict) else None
                 gid = None
                 if isinstance(sref, dict):
                     gid = sref.get('group')
-                # If no sync_ref on item, try to infer group membership from config (screen in group)
-                if not gid:
-                    try:
-                        for ggid, g in (cfg.get('sync_groups') or {}).items():
-                            for mem in (g.get('members') or []):
-                                if mem.get('screen_id') == screen_id:
-                                    gid = ggid; sref = {'group': ggid, 'order': mem.get('order'), 'role': mem.get('role','follower')}
-                                    break
-                            if gid: break
-                    except Exception:
-                        gid = None
                 if gid:
                     grp = (cfg.get('sync_groups') or {}).get(gid) or {}
                     se = grp.get('start_epoch') or grp.get('start') or grp.get('created_at')

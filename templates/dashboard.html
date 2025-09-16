@@ -51,6 +51,27 @@
                     return parts.length ? parts[parts.length-1] : s;
                 } catch { return ''; }
             }
+            // Encode each path segment but keep slashes
+            function encodePathPreserveSlashes(p){
+                try{
+                    return String(p||'')
+                        .split('/')
+                        .map(seg => seg ? encodeURIComponent(seg) : '')
+                        .join('/');
+                }catch{return String(p||'');}
+            }
+            function _extractRelFromThumbUrl(u){
+                try{
+                    const s = String(u||'');
+                    // Match local server thumbnail URL: /thumb/<w>/<relpath>
+                    let m = s.match(/^\/?thumb\/\d+\/(.+)$/);
+                    if (m && m[1]) return decodeURIComponent(m[1]);
+                    // Match CDN-style: .../thumbs/<w>/<relpath>.(webp|jpg)
+                    m = s.match(/thumbs\/\d+\/([^?]+?)\.(?:webp|jpg)(?:[?#].*)?$/i);
+                    if (m && m[1]) return decodeURIComponent(m[1]);
+                }catch{}
+                return null;
+            }
             function fallbackToOrigin(img, original){
                 try{
                     if(!img) return;
@@ -62,10 +83,14 @@
                     // Step 0: if we have an explicit original relative path (preferred), jump straight to origin path
                     if (step === 0 && original && !/^https?:\/\//i.test(String(original))) {
                         const base = '/static/uploads/';
-                        const origKey = _extractKey(original);
+                        // Normalize original: strip any leading slash and any accidental 'static/uploads/' prefix
+                        let rel = String(original).replace(/^\/+/, '');
+                        if (rel.startsWith('static/uploads/')) {
+                            rel = rel.substring('static/uploads/'.length);
+                        }
                         img.dataset.fallbackStep = '1';
-                        const local1 = base + encodeURIComponent(origKey);
-                        console.warn('[img-fallback] use original key to origin', local1);
+                        const local1 = base + encodePathPreserveSlashes(rel);
+                        console.warn('[img-fallback] use original rel to origin', local1);
                         img.src = local1;
                         return;
                     }
@@ -82,8 +107,15 @@
                     }
                     // Step 2: try origin static by key
                     if (step <= 2) {
-                        if (!key) return; // nothing we can do
-                        const local = '/static/uploads/' + encodeURIComponent(key);
+                        // Prefer deriving full rel path from thumb URL patterns
+                        const relFromThumb = _extractRelFromThumbUrl(cur);
+                        let rel = relFromThumb || (original && !/^https?:\/\//i.test(String(original)) ? String(original).replace(/^\/+/, '') : null);
+                        if (rel && rel.startsWith('static/uploads/')) {
+                            rel = rel.substring('static/uploads/'.length);
+                        }
+                        if (!rel && !key) return; // nothing we can do
+                        const path = rel ? encodePathPreserveSlashes(rel) : encodeURIComponent(key);
+                        const local = '/static/uploads/' + path;
                         img.dataset.fallbackStep = '3';
                         console.warn('[img-fallback] fallback to origin', local);
                         img.src = local;
@@ -136,19 +168,23 @@
                 const rel = String(name).replace(/^\/+/, '');
                 return base + rel;
             }
-            // Build thumbnail URL for images. If input is an absolute URL (e.g. R2/CDN),
-            // fall back to using it directly (no server-side thumb available for remote files).
+            // Build thumbnail URL for images.
+            // For local (relative) names, prefer the server endpoint /thumb/<w>/<rel> so the server can generate
+            // and push the thumbnail to CDN. For absolute URLs, return as-is.
             function thumbUrl(name, width){
                 if(!name) return '';
-                // Prefer CDN path: <MEDIA_BASE_URL>/thumbs/<width>/<name>.webp (or .jpg)
                 try{
-                    const base = (window.MEDIA_BASE_URL || '/static/uploads/').replace(/\/+$/, '/');
-                    const rel = String(name).replace(/^\/+/, '');
-                    // Default to .webp; server endpoint will handle actual format
-                    return `${base}thumbs/${width}/${rel}.webp`;
+                    // Absolute http(s) URL? no server-side thumb; use as-is
+                    if (/^https?:\/\//i.test(String(name))) return String(name);
+                    let rel = String(name).replace(/^\/+/, '');
+                    // Normalize away any accidental 'static/uploads/' prefix
+                    if (rel.startsWith('static/uploads/')) {
+                        rel = rel.substring('static/uploads/'.length);
+                    }
+                    // IMPORTANT: do not encode slashes here; the route expects a path
+                    return `/thumb/${width}/${rel}`;
                 }catch(e){
-                    const safe = encodeURIComponent(String(name));
-                    return `/thumb/${width}/${safe}`;
+                    return `/thumb/${width}/${String(name)}`;
                 }
             }
         // Global IMG error listener: if any image fails (e.g., CDN hotlink/404), auto-fallback to origin
@@ -748,6 +784,8 @@
     .rp-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap:10px; }
     .rp-item { border:1px solid #dcdfe3; border-radius:6px; padding:6px; cursor:pointer; display:flex; align-items:center; justify-content:center; height:90px; background:#fafbfc; position:relative; }
     .rp-item img, .rp-item video { max-width:100%; max-height:100%; object-fit:cover; }
+    /* Small filename caption so items are identifiable even without posters */
+    .rp-item .rp-name { position:absolute; left:6px; right:6px; bottom:6px; background:rgba(0,0,0,0.6); color:#fff; font-size:11px; line-height:1.2; padding:2px 4px; border-radius:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; pointer-events:none; }
     .rp-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; padding:10px 12px; border-top:1px solid #eef1f4; }
     .rp-help { font-size:12px; color:#6b7280; padding: 2px 2px 10px; }
     .rp-subtitle { font-size:12px; font-weight:700; color:#374151; margin: 8px 2px 6px; text-transform:uppercase; letter-spacing:.04em; }
@@ -3981,7 +4019,7 @@
         const src220 = thumbUrl(file,220);
         const src300 = thumbUrl(file,300);
         const src600 = thumbUrl(file,600);
-        return `<img loading="lazy" decoding="async" src="${src220}" srcset="${src220} 220w, ${src300} 300w, ${src600} 600w" sizes="(max-width: 480px) 45vw, (max-width: 1024px) 200px, 220px" style="max-width:100%; max-height:100%; object-fit:cover;" onerror="fallbackToOrigin(this, \"${orig}\")" />`;
+    return `<img loading="lazy" decoding="async" src="${src220}" srcset="${src220} 220w, ${src300} 300w, ${src600} 600w" sizes="(max-width: 480px) 45vw, (max-width: 1024px) 200px, 220px" style="max-width:100%; max-height:100%; object-fit:cover;" data-original="${orig}" onerror="fallbackToOrigin(this, \"${orig}\")" />`;
     }
 
     // --- Lightweight item status light refresher (doesn't rebuild DOM) ---
@@ -4307,84 +4345,18 @@
                     if(sd && typeof sd.rotation === 'number') currentRotation = sd.rotation;
                 } catch {}
                 const rotationClass = `rotate-${currentRotation}`;
-                // Helper to compute sync slicing (horizontal) info if item is part of a sync group
+                // Helper to compute sync slicing (horizontal) info ONLY when the item explicitly declares a multi-screen slice.
+                // We no longer infer membership from other screens/playlists to avoid mislabeling normal videos as "Slice".
                 function getSyncSliceMeta(){
-                    if(!item || !item.sync_ref) return null;
-                    const sr = item.sync_ref;
-                    let count = (typeof sr.count==='number' && sr.count>1) ? sr.count : 0; // prefer server-specified count
-                    let order = (typeof sr.order==='number' && sr.order>=0) ? sr.order : 0;
-                    let orderSource = (count? 'server-meta' : 'inferred');
-                    let groupScreens = [];
-                    // Build/refresh a deterministic order cache per group so slices stay stable while UI updates
-                    if(!window.__syncOrderCache) window.__syncOrderCache = {}; // {groupId:{screenId:order}}
-                    try {
-                        const screenSet = new Set();
-                        // Source 1: aggregated playlists map (if present)
-                        const storePls = allStoresData.playlists && allStoresData.playlists[currentStoreId];
-                        if(storePls){
-                            Object.entries(storePls).forEach(([sid, arr])=>{
-                                if(!Array.isArray(arr)) return;
-                                arr.forEach(it=>{ if(it && it.sync_ref && it.sync_ref.group===sr.group) screenSet.add(sid); });
-                            });
-                        }
-                        // Source 2: individual screen objects (more reliable early after load)
-                        try {
-                            const screenMap = (allStoresData.screens||{})[currentStoreId] || {};
-                            Object.entries(screenMap).forEach(([sid, sdat])=>{
-                                const pls = sdat && Array.isArray(sdat.playlist) ? sdat.playlist : [];
-                                pls.forEach(it=>{ if(it && it.sync_ref && it.sync_ref.group===sr.group) screenSet.add(sid); });
-                            });
-                        } catch{}
-                        groupScreens = Array.from(screenSet);
-                        if(groupScreens.length){
-                            const cached = window.__syncOrderCache[sr.group];
-                            const membershipChanged = !cached || Object.keys(cached).length !== groupScreens.length || groupScreens.some(sid=>!(sid in cached));
-                            if(membershipChanged){
-                                const deriveNum = sid=>{ const m = sid.match(/(_screen|screen)(\d+)/i); return m? parseInt(m[2],10): Number.MAX_SAFE_INTEGER; };
-                                groupScreens.sort((a,b)=>{ const na=deriveNum(a), nb=deriveNum(b); if(na!==nb) return na-nb; return a.localeCompare(b); });
-                                const map = {}; groupScreens.forEach((sid,i)=> map[sid]=i);
-                                window.__syncOrderCache[sr.group] = map;
-                                orderSource = 'rebuilt-membership';
-                            }
-                            const cachedOrder = window.__syncOrderCache[sr.group] && window.__syncOrderCache[sr.group][screenId];
-                            if(typeof cachedOrder === 'number') { order = cachedOrder; orderSource = (orderSource==='rebuilt-membership'?'rebuilt+cache':'cache'); }
-                        }
-                    }catch{}
-                    // Infer count from membership if missing
-                    if(!count && groupScreens.length>1) count = groupScreens.length;
-                    // Fallback: if count>1 but every member's order appears identical (often 0) re-derive order from sorted screen ids.
-                    if(count>1){
-                        try {
-                            // Collect provided orders
-                            const provided = [];
-                            const storePls = allStoresData.playlists && allStoresData.playlists[currentStoreId];
-                            if(storePls){
-                                Object.entries(storePls).forEach(([sid, arr])=>{
-                                    if(!Array.isArray(arr)) return;
-                                    arr.forEach(it=>{ if(it && it.sync_ref && it.sync_ref.group===sr.group){ provided.push(it.sync_ref.order); } });
-                                });
-                            }
-                            const distinctProvided = Array.from(new Set(provided.filter(v=>typeof v==='number')));
-                            const allSame = distinctProvided.length<=1; // 0 or 1 unique values
-                            if(allSame && groupScreens.length){
-                                // Stable sort by natural numeric in screen id (e.g., 1000_screen2 -> 2) then lexicographic
-                                const deriveNum = sid=>{ const m = sid.match(/(\d+)(?=\D*$)/); return m? parseInt(m[1],10): Number.MAX_SAFE_INTEGER; };
-                                groupScreens.sort((a,b)=>{ const na=deriveNum(a), nb=deriveNum(b); if(na!==nb) return na-nb; return a.localeCompare(b); });
-                                const idx = groupScreens.indexOf(screenId);
-                                if(idx>=0){ order = idx; orderSource = 'derived-id'; }
-                                if(!count) count = groupScreens.length;
-                            } else if(allSame && !groupScreens.length){
-                                // Playlists for other screens may not be loaded yet; derive from screenId suffix (_screenN)
-                                const m = screenId.match(/_screen(\d+)/i);
-                                if(m){
-                                    const n = parseInt(m[1],10);
-                                    if(!isNaN(n) && n>0){ order = n-1; orderSource = 'id-suffix'; }
-                                }
-                            }
-                        }catch{}
-                    }
-                    if(count>1) return {count, order, mode: sr.mode||'split-h', orderSource};
-                    return null;
+                    try{
+                        if(!item || !item.sync_ref) return null;
+                        const sr = item.sync_ref;
+                        const count = (typeof sr.count === 'number' && sr.count > 1) ? sr.count : 0;
+                        if(!count) return null; // explicit, opt-in only
+                        let order = (typeof sr.order === 'number' && sr.order >= 0) ? sr.order : 0;
+                        const mode = sr.mode || 'split-h';
+                        return { count, order, mode, orderSource: 'server-meta' };
+                    }catch{ return null; }
                 }
                 const syncMeta = getSyncSliceMeta();
                 if(item && item.sync_ref && !syncMeta){
@@ -4409,11 +4381,10 @@
                             if (s.startsWith('/static/uploads/')) return decodeURIComponent(s.slice('/static/uploads/'.length));
                             if (/^https?:\/\//i.test(s)){
                                 const url = new URL(s, location.origin);
-                                // If remote host differs (e.g., CDN), do not attempt local preview endpoints
-                                if(url.host !== location.host) return '';
                                 const pn = url.pathname.replace(/^\/+/, '');
                                 if (pn.startsWith('media/')) return decodeURIComponent(pn.slice('media/'.length));
                                 if (pn.startsWith('static/uploads/')) return decodeURIComponent(pn.slice('static/uploads/'.length));
+                                // If MEDIA_BASE_URL points to a remote host (CDN), allow deriving rel when URL shares that base
                                 const b = new URL(base, location.origin);
                                 if (url.origin === b.origin && pn.startsWith(b.pathname.replace(/^\/+/, ''))){
                                     return decodeURIComponent(pn.slice(b.pathname.replace(/^\/+/, '').length));
@@ -4549,7 +4520,12 @@
                     const usePreview = previewUrl || srcUrl;
                     const useFallback = fallbackVid || srcUrl;
                     preloadVideo(usePreview).then(v=>{ v.autoplay=true; v.loop=true; v.muted=true; v.playsInline=true; v.preload='auto'; if(usePoster){ v.poster = usePoster; } doSwap(v); }).catch(()=>{
-                        preloadVideo(useFallback).then(v=>{ v.autoplay=true; v.loop=true; v.muted=true; v.playsInline=true; v.preload='auto'; if(usePoster){ v.poster = usePoster; } doSwap(v); }).catch(swapFallback);
+                        preloadVideo(useFallback).then(v=>{ v.autoplay=true; v.loop=true; v.muted=true; v.playsInline=true; v.preload='auto'; if(usePoster){ v.poster = usePoster; } doSwap(v); }).catch(()=>{
+                            // Final fallback for video: show a poster or a generic placeholder, not the video URL as an IMG
+                            const ph = usePoster || '/static/video_placeholder.svg';
+                            const img=document.createElement('img'); img.src=ph; img.alt='Video preview unavailable';
+                            doSwap(img);
+                        });
                     });
                 } else {
                     preloadImage(srcUrl).then(img=>{ if (item && item.file && !/^https?:\/\//i.test(String(item.file))) { img.dataset.original = String(item.file); } doSwap(img); }).catch(swapFallback);
@@ -4787,33 +4763,73 @@
                                 gDirs.appendChild(card);
                             });
                         }
-                        const imgs = files.filter(f=> (f.media_type!=='video'));
-                        const vids = files.filter(f=> (f.media_type==='video'));
+                        // Split files into images and videos
+                        const imgs = files.filter(f=> (f.media_type!== 'video'));
+                        const vids = files.filter(f=> (f.media_type=== 'video'));
                         gImgs.innerHTML = imgs.length? '' : '<div class="rp-empty">No images</div>';
                         gVids.innerHTML = vids.length? '' : '<div class="rp-empty">No videos</div>';
+                        // Render images
                         imgs.forEach(f=>{
                             const card=document.createElement('div');
                             card.className='rp-item';
                             card.title=f.name;
-                            const isAbs = f && f.url && /^https?:\/\//i.test(String(f.url));
                             const bust = Date.now();
-                            const src = isAbs ? (f.url + `?t=${bust}`) : (thumbUrl(f.name,220) + `?t=${bust}`);
-                            card.innerHTML = `<img loading=\"lazy\" src=\"${src}\"/><button class=\"rp-del\" title=\"Delete\" aria-label=\"Delete\" onclick=\"event.stopPropagation(); deleteLibraryFile('${f.name}')\">✕</button>`;
+                            // Always prefer server-generated thumbs so we get consistent sizing and CDN/origin fallbacks
+                            const src = (thumbUrl(f.name,220) + `?t=${bust}`);
+                            card.innerHTML = `<img loading=\"lazy\" src=\"${src}\" alt=\"Image\" data-original=\"${f.name}\"/><button class=\"rp-del\" title=\"Delete\" aria-label=\"Delete\" onclick=\"event.stopPropagation(); deleteLibraryFile('${f.name}')\">✕</button>`;
+                            // filename caption
+                            const cap = document.createElement('div');
+                            cap.className = 'rp-name';
+                            try { cap.textContent = String(f.name).split('/').pop(); } catch(_) { cap.textContent = f.name; }
+                            card.appendChild(cap);
                             card.addEventListener('click',()=> chooseLibraryFile(f.name));
                             gImgs.appendChild(card);
                         });
+                        // Render videos with poster; if poster fails, fall back to an autoplaying low-res /vpreview clip
                         vids.forEach(f=>{
                             const card=document.createElement('div');
                             card.className='rp-item';
                             card.title=f.name;
-                            const abs = f && f.url && /^https?:\/\//i.test(String(f.url));
                             const bust = Date.now();
-                            const posterCdn = abs ? '' : `${MEDIA_BASE_URL || '/static/uploads/'}vthumbs/220/${encodeURIComponent(f.name)}.jpg?t=${bust}`;
-                            const posterSrv = abs ? '' : `/vthumb/220/${encodeURIComponent(f.name)}?t=${bust}`;
-                            const poster = posterCdn || posterSrv;
-                            const posterAttr = poster ? ` poster="${poster}"` : '';
-                            const src = f.url ? (f.url + `?t=${bust}`) : (mediaUrl(f.name) + `?t=${bust}`);
-                            card.innerHTML = `<video preload=\"metadata\" muted playsinline${posterAttr} src=\"${src}\"></video><button class=\"rp-del\" title=\"Delete\" aria-label=\"Delete\" onclick=\"event.stopPropagation(); deleteLibraryFile('${f.name}')\">✕</button>`;
+                            const rel = (typeof encodePathPreserveSlashes === 'function') ? encodePathPreserveSlashes(f.name) : String(f.name);
+                            const stem = rel.replace(/\.[^/.]+$/, '');
+                            const mbu = String(window.MEDIA_BASE_URL || '');
+                            const hasCdn = /^https?:\/\//i.test(mbu);
+                            const cdnPoster = hasCdn ? `${mbu}vthumbs/220/${stem}.jpg?t=${bust}` : '';
+                            const serverPoster = `/vthumb/220/${rel}?t=${bust}`;
+                            const vpreview = `/vpreview/220/${rel}?t=${bust}`;
+                            const img = document.createElement('img');
+                            img.loading = 'lazy';
+                            img.alt = 'Video';
+                            img.src = serverPoster; // local first for reliability
+                            img.onerror = function(){
+                                // If poster fails, insert a tiny autoplaying preview clip
+                                try {
+                                    if (!this.dataset._vpf) {
+                                        this.dataset._vpf = '1';
+                                        const v = document.createElement('video');
+                                        v.muted = true; v.autoplay = true; v.loop = true; v.playsInline = true; v.preload = 'metadata';
+                                        v.style.width='100%'; v.style.height='100%'; v.style.objectFit='cover';
+                                        const s = document.createElement('source'); s.src = vpreview; s.type = 'video/mp4'; v.appendChild(s);
+                                        card.insertBefore(v, this);
+                                        this.style.display = 'none';
+                                        return;
+                                    }
+                                } catch {}
+                                // Final fallback
+                                this.onerror = null; this.src = '/static/video_placeholder.svg'; this.style.display = '';
+                            };
+                            // Optional: hint CDN for next time after successful load
+                            if (cdnPoster) {
+                                img.addEventListener('load', ()=>{ try { const p = new Image(); p.src = cdnPoster; } catch {} });
+                            }
+                            card.appendChild(img);
+                            const del = document.createElement('button'); del.className='rp-del'; del.title='Delete'; del.setAttribute('aria-label','Delete'); del.textContent='✕';
+                            del.onclick = (ev)=>{ ev.stopPropagation(); deleteLibraryFile(f.name); };
+                            card.appendChild(del);
+                            const cap = document.createElement('div'); cap.className='rp-name';
+                            try { cap.textContent = String(f.name).split('/').pop(); } catch(_) { cap.textContent = f.name; }
+                            card.appendChild(cap);
                             card.addEventListener('click',()=> chooseLibraryFile(f.name));
                             gVids.appendChild(card);
                         });
@@ -4955,7 +4971,9 @@
                                 xhr.send(fd);
                             }catch(err){ reject(err); }
                         });
-                        const parsed = await (resp.json ? resp.json() : readJsonOrText(resp));
+                        // Parse XHR response text safely; resp.json() in our shim returns the raw object,
+                        // so use unified helper to always get {json, text}
+                        const parsed = await readJsonOrText(resp);
                         const json = parsed.json;
                         if(!resp.ok || !json || json.success === false){
                             if(resp.status === 413){ throw new Error('File too large for server path. Please retry direct upload.'); }
@@ -5017,13 +5035,26 @@
                 }catch{ return 'image'; }
             }
 
-            // Read a Response body exactly once and try to parse JSON; fall back to raw text
+            // Read a Response or XHR-shim body once and try to parse JSON; fall back to raw text
             async function readJsonOrText(resp){
                 try{
-                    const text = await resp.text();
-                    try{ return { json: JSON.parse(text), text }; }
-                    catch{ return { json: null, text } }
-                }catch(e){ return { json: null, text: '' } }
+                    // Our XHR shim provides text() and json() as functions; fetch Response has body stream
+                    const getText = async () => {
+                        try {
+                            if (resp && typeof resp.text === 'function') {
+                                return await resp.text();
+                            }
+                            // Some code paths may pass raw string
+                            if (typeof resp === 'string') return resp;
+                        } catch (e) {}
+                        return '';
+                    };
+                    const text = await getText();
+                    try { return { json: JSON.parse(text), text }; }
+                    catch { return { json: null, text }; }
+                } catch(e){
+                    return { json: null, text: '' };
+                }
             }
 
             function deleteLibraryFile(name){
@@ -5831,7 +5862,24 @@
                 });
             });
         } else {
-            preloadImage(url).then(img=>{ img.decoding='async'; img.setAttribute('fetchpriority','high'); img.style.maxWidth='100%'; img.style.maxHeight='100%'; img.style.objectFit='contain'; if(rotation){ img.className='rotate-'+rotation; } try { const u=new URL(url, location.origin); const last=u.pathname.split('/').filter(Boolean).pop(); if(last){ img.dataset.original = decodeURIComponent(last); } } catch { /* noop */ } show(build(img)); }).catch(()=>{ const img=document.createElement('img'); img.src=url; img.decoding='async'; img.setAttribute('fetchpriority','high'); if(rotation){ img.className='rotate-'+rotation; } try { const u=new URL(url, location.origin); const last=u.pathname.split('/').filter(Boolean).pop(); if(last){ img.dataset.original = decodeURIComponent(last); } } catch {} show(build(img)); });
+            const setOrig = (imgEl, u) => {
+                try{
+                    const s = String(u||'');
+                    const relFromThumb = _extractRelFromThumbUrl(s);
+                    if (relFromThumb){ imgEl.dataset.original = relFromThumb; return; }
+                    const urlObj = new URL(s, location.origin);
+                    const pn = urlObj.pathname.replace(/^\/+/, '');
+                    // If it's already under static/uploads, keep full tail as original
+                    if (pn.toLowerCase().startsWith('static/uploads/')){
+                        imgEl.dataset.original = decodeURIComponent(pn.slice('static/uploads/'.length));
+                        return;
+                    }
+                    // Else keep last segment as best-effort
+                    const last = pn.split('/').filter(Boolean).pop();
+                    if (last){ imgEl.dataset.original = decodeURIComponent(last); }
+                }catch{}
+            };
+            preloadImage(url).then(img=>{ img.decoding='async'; img.setAttribute('fetchpriority','high'); img.style.maxWidth='100%'; img.style.maxHeight='100%'; img.style.objectFit='contain'; if(rotation){ img.className='rotate-'+rotation; } setOrig(img, url); show(build(img)); }).catch(()=>{ const img=document.createElement('img'); img.src=url; img.decoding='async'; img.setAttribute('fetchpriority','high'); if(rotation){ img.className='rotate-'+rotation; } setOrig(img, url); show(build(img)); });
         }
     }
     </script>
