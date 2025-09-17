@@ -83,6 +83,9 @@ object ApiClient {
 			.build()
 	}
 
+	// Expose the raw OkHttp client for advanced callers (custom codec preflight, image loads, etc.)
+	val rawOkHttp: OkHttpClient get() = okHttp
+
 	@Volatile private var retrofit: Retrofit? = null
 	@Volatile private var serviceInst: ApiService? = null
 

@@ -4478,10 +4478,6 @@
                                 media.style.transform = `scaleX(${count}) translateX(-${(order/count*100).toFixed(5)}%)`;
                                 media.style.objectFit = 'cover';
                                 media.style.objectPosition = `${(left + segW/2).toFixed(5)}% 50%`;
-                                media.style.width='100%'; media.style.height='100%'; media.style.maxWidth='100%'; media.style.maxHeight='100%';
-                                // Ensure parent preview hides overflow and has neutral background
-                                preview.style.background = '#000';
-                                preview.style.display='flex'; preview.style.alignItems='center'; preview.style.justifyContent='center';
                                 console.log('[PREVIEW-SYNC][CLIP]', {screenId, order, count, segW, left});
                             }
                             // Add a small slice badge

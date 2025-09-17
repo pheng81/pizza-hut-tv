@@ -2390,6 +2390,10 @@ def stream_media(filename):
             resp.headers.add('Content-Length', str(length))
             resp.headers.add('Last-Modified', lm_http)
             try:
+                resp.headers['ETag'] = f"W/\"{file_size}-{int(mtime)}\""
+            except Exception:
+                pass
+            try:
                 resp.set_etag(etag)
             except Exception:
                 resp.headers['ETag'] = f'"{etag}"'
@@ -7216,6 +7220,7 @@ def serve_video_file_with_range_support(file_path, is_cached='false'):
                 yield chunk
 
     range_header = request.headers.get('Range')
+    method = request.method.upper() if hasattr(request, 'method') else 'GET'
     # Handle Range requests
     if range_header:
         try:
@@ -7239,13 +7244,22 @@ def serve_video_file_with_range_support(file_path, is_cached='false'):
                 return Response(status=416, headers={'Content-Range': f'bytes */{file_size}'})
 
             length = end - start + 1
-            resp = Response(partial_gen(start, end), 206, mimetype=mimetype)
+            # For HEAD with Range: return headers only (no body) but 206 status
+            if method == 'HEAD':
+                resp = Response(status=206, mimetype=mimetype)
+            else:
+                resp = Response(partial_gen(start, end), 206, mimetype=mimetype)
             resp.headers.add('Accept-Ranges', 'bytes')
             resp.headers.add('Content-Range', f'bytes {start}-{end}/{file_size}')
             resp.headers.add('Content-Length', str(length))
             resp.headers.add('Last-Modified', lm_http)
             resp.headers.setdefault('Cache-Control', 'public, max-age=86400')
             resp.headers['X-Slice-Cached'] = is_cached
+            # Advertise slice encoder version for diagnostics
+            try:
+                resp.headers['X-Slice-Encoder-Version'] = SLICE_ENCODER_VERSION
+            except Exception:
+                pass
             resp.headers['X-Slice-Range-Supported'] = 'true'
             # Helpful for diagnostics
             resp.headers['X-Debug-Served-Range'] = f'{start}-{end}'
@@ -7256,17 +7270,31 @@ def serve_video_file_with_range_support(file_path, is_cached='false'):
             # Fallback to full-file response below
 
     # No Range header: stream whole file
-    resp = Response(generate_full(), 200, mimetype=mimetype)
+    if method == 'HEAD':
+        # Return 206 with full Content-Range to satisfy strict clients on HEAD
+        resp = Response(status=206, mimetype=mimetype)
+        resp.headers.add('Content-Range', f'bytes 0-{file_size-1}/{file_size}')
+    else:
+        resp = Response(generate_full(), 200, mimetype=mimetype)
     resp.headers.add('Accept-Ranges', 'bytes')
     resp.headers.add('Content-Length', str(file_size))
     resp.headers.add('Last-Modified', lm_http)
+    try:
+        resp.headers['ETag'] = f"W/\"{file_size}-{int(mtime)}\""
+    except Exception:
+        pass
     resp.headers.setdefault('Cache-Control', 'public, max-age=86400')
     resp.headers['X-Slice-Cached'] = is_cached
+    try:
+        resp.headers['X-Slice-Encoder-Version'] = SLICE_ENCODER_VERSION
+    except Exception:
+        pass
     resp.headers['X-Slice-Range-Supported'] = 'true'
     print(f"DEBUG: slice-video full file {file_size} bytes for {file_path}")
     return resp
 
 # Video slicing endpoint for Android TV compatibility
+SLICE_ENCODER_VERSION = "v3-main-20250918"
 @app.route('/slice-video/<path:video_path>')
 def slice_video(video_path):
     """
@@ -7304,8 +7332,8 @@ def slice_video(video_path):
             response.headers['X-Slice-Info'] = f"mode={slice_mode},count={slice_count},order={slice_order}"
             return response
         
-        # Generate cache key for this specific slice
-        cache_key = f"{video_path.replace('/', '_').replace('\\', '_')}_slice_{slice_mode}_{slice_count}_{slice_order}"
+        # Generate cache key for this specific slice, include encoder version to bust old cache safely
+        cache_key = f"{SLICE_ENCODER_VERSION}__{video_path.replace('/', '_').replace('\\', '_')}_slice_{slice_mode}_{slice_count}_{slice_order}"
         cached_slice_path = os.path.join(SLICE_CACHE_FOLDER, f"{cache_key}.mp4")
         
         # Check if slice already exists in cache (unless force refresh)
@@ -7319,8 +7347,7 @@ def slice_video(video_path):
             else:
                 print(f"DEBUG: Serving cached slice: {cached_slice_path}")
                 return serve_video_file_with_range_support(cached_slice_path, 'true')
-        
-        
+
         # Get the original video file path
         original_video_path = None
         if r2_enabled():
@@ -7328,7 +7355,7 @@ def slice_video(video_path):
             original_url = get_media_base_url() + video_path
             safe_filename = video_path.replace('/', '_').replace('\\', '_')
             temp_video_path = os.path.join(TEMP_CACHE_FOLDER, safe_filename)
-            
+
             # Download video if not already cached
             if not os.path.exists(temp_video_path):
                 print(f"DEBUG: Downloading video from CDN: {original_url}")
@@ -7339,7 +7366,7 @@ def slice_video(video_path):
                     print(f"ERROR: Failed to download video: {e}")
                     base_url = get_media_base_url() + video_path
                     return redirect(base_url)
-            
+
             original_video_path = temp_video_path
         else:
             # For local videos
@@ -7516,17 +7543,19 @@ def generate_video_slice_ffmpeg(input_path, output_path, mode, count, order):
             '-vf', crop_filter,
             '-c:v', 'libx264',
             '-pix_fmt', 'yuv420p',
+            # Use Main profile for better ExoPlayer compatibility with cropped videos
             '-profile:v', 'main',
             '-level', '4.0',
-            '-preset', 'veryfast',
-            '-crf', '20',
+            '-preset', 'medium',  # More careful encoding for stability
+            '-crf', '18',  # Higher quality for better parsing stability
             '-g', str(gop),
             '-keyint_min', str(gop),
             '-sc_threshold', '0',
             '-vsync', 'cfr',
             '-r', str(max(10, fps)),
             '-force_key_frames', f"expr:gte(t,n_forced*1)",
-            '-movflags', '+faststart',
+            '-movflags', '+faststart+frag_keyframe+empty_moov',  # Better streaming compatibility
+            '-frag_duration', '1000000',  # 1s fragments for better seeking
             '-map', '0:v:0',
         ]
 

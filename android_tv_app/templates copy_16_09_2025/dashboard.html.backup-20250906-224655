@@ -3169,7 +3169,6 @@
                             const order = memEntry && typeof memEntry.order==='number' ? memEntry.order : 1;
                             const role = (memEntry && memEntry.role) || 'follower';
                             const itemId = (memEntry && memEntry.item_id) || (self.crypto && crypto.randomUUID ? crypto.randomUUID() : ('itm_'+Math.random().toString(36).slice(2)));
-                            const countVal = (typeof j.count==='number' && j.count>1) ? j.count : undefined;
                             storeScreens[newSid] = {
                                 file: baseFile,
                                 vertical: false,
@@ -3187,41 +3186,10 @@
                                     repeat: true,
                                     link_next: false,
                                     media_type: (typeof guessMediaType==='function') ? guessMediaType(baseFile) : 'video',
-                                    sync_ref: { group: j.group_id, role: role, order: order, count: countVal, mode: 'split-h' }
+                                    sync_ref: { group: j.group_id, role: role, order: order }
                                 }]
                             };
-                            // Seed/update order cache for the group
-                            try {
-                                window.__syncOrderCache = window.__syncOrderCache || {};
-                                const cache = window.__syncOrderCache[j.group_id] || {};
-                                if(typeof order==='number') cache[newSid] = order;
-                                // Also add existing members from response
-                                if(Array.isArray(j.members)){
-                                    j.members.forEach(m=>{ if(typeof m.order==='number') cache[m.screen_id] = m.order; });
-                                }
-                                window.__syncOrderCache[j.group_id] = cache;
-                                console.log('[SYNC][FOLLOWER] seeded order cache', j.group_id, cache);
-                            } catch{}
                             console.log('[SYNC][FOLLOWER] Injected new screen into local model', newSid, storeScreens[newSid]);
-                            // ALSO update existing members with the new count & (authoritative) order from response so slicing adjusts instantly
-                            try {
-                                if(Array.isArray(j.members)){
-                                    const orderMap = {}; j.members.forEach(m=>{ if(m && typeof m.order==='number') orderMap[m.screen_id]=m.order; });
-                                    Object.keys(storeScreens).forEach(sid=>{
-                                        const scr = storeScreens[sid];
-                                        if(!scr || !Array.isArray(scr.playlist)) return;
-                                        scr.playlist.forEach(it=>{
-                                            if(it && it.sync_ref && it.sync_ref.group === j.group_id){
-                                                // Update count if changed
-                                                if(typeof j.count==='number' && j.count>1) it.sync_ref.count = j.count;
-                                                // If server provided an order for this screen, apply it
-                                                if(sid in orderMap) it.sync_ref.order = orderMap[sid];
-                                                if(!it.sync_ref.mode) it.sync_ref.mode = 'split-h';
-                                            }
-                                        });
-                                    });
-                                }
-                            } catch(updateErr){ console.warn('[SYNC][FOLLOWER] member update failed', updateErr); }
                         } else {
                             console.warn('[SYNC][FOLLOWER] Could not determine base file to inject new screen locally; UI may need manual refresh');
                         }
@@ -3230,14 +3198,6 @@
                     }
                 }catch(injectErr){ console.warn('[SYNC][FOLLOWER] Local inject failed', injectErr); }
                 try{ loadScreensForStore(currentStoreId); }catch{}
-                // Force immediate preview update for all known members (if timers already exist)
-                try {
-                    const gid = j.group_id;
-                    const cache = window.__syncOrderCache && window.__syncOrderCache[gid];
-                    if(cache){
-                        Object.keys(cache).forEach(sid=>{ const pt = window.previewTimers && window.previewTimers[sid]; if(pt){ try { runPreview(sid); console.log('[SYNC][FOLLOWER] forced preview rerun', sid); } catch{} } });
-                    }
-                } catch{}
                 try{ refreshSyncAddButton(); }catch{}
                 alert((j.created? 'Created new sync group with follower ' : 'Added follower ') + j.new_screen + ' (total '+ j.count +')');
                 const btn=document.getElementById('add-sync-screen-btn');
@@ -4200,8 +4160,6 @@
             // --- Live Preview Rotation (Dashboard) ---
             (()=>{ // IIFE to avoid globals clashing if script reloaded
              const previewTimers = {}; // screenId -> {timer,index,items,nextAt}
-             // Expose for delayed reslice logic
-             try { window.previewTimers = previewTimers; } catch{}
              // Expose a hard reset to cancel all running preview timers when changing store/views
              window.resetAllPreviews = function(){
                  try{
@@ -4265,10 +4223,6 @@
                 // Remove any leftover placeholder in the preview area
                 try{ const ph = preview.querySelector('.upload-area'); if(ph) ph.remove(); }catch{}
                 const state = previewTimers[screenId] || {timer:null,index:0,items:enabled,nextAt:0};
-                try {
-                    const syncSumm = enabled.filter(it=>it && it.sync_ref).map(it=>({file:it.file, g:it.sync_ref.group, o:it.sync_ref.order, c:it.sync_ref.count, m:it.sync_ref.mode}));
-                    if(syncSumm.length) console.log('[PREVIEW-SYNC][PLAYLIST] screen', screenId, syncSumm);
-                } catch {}
                 // Detect if the currently showing item just became inactive due to schedule
                 let prevKey = '';
                 try{
@@ -4307,89 +4261,6 @@
                     if(sd && typeof sd.rotation === 'number') currentRotation = sd.rotation;
                 } catch {}
                 const rotationClass = `rotate-${currentRotation}`;
-                // Helper to compute sync slicing (horizontal) info if item is part of a sync group
-                function getSyncSliceMeta(){
-                    if(!item || !item.sync_ref) return null;
-                    const sr = item.sync_ref;
-                    let count = (typeof sr.count==='number' && sr.count>1) ? sr.count : 0; // prefer server-specified count
-                    let order = (typeof sr.order==='number' && sr.order>=0) ? sr.order : 0;
-                    let orderSource = (count? 'server-meta' : 'inferred');
-                    let groupScreens = [];
-                    // Build/refresh a deterministic order cache per group so slices stay stable while UI updates
-                    if(!window.__syncOrderCache) window.__syncOrderCache = {}; // {groupId:{screenId:order}}
-                    try {
-                        const screenSet = new Set();
-                        // Source 1: aggregated playlists map (if present)
-                        const storePls = allStoresData.playlists && allStoresData.playlists[currentStoreId];
-                        if(storePls){
-                            Object.entries(storePls).forEach(([sid, arr])=>{
-                                if(!Array.isArray(arr)) return;
-                                arr.forEach(it=>{ if(it && it.sync_ref && it.sync_ref.group===sr.group) screenSet.add(sid); });
-                            });
-                        }
-                        // Source 2: individual screen objects (more reliable early after load)
-                        try {
-                            const screenMap = (allStoresData.screens||{})[currentStoreId] || {};
-                            Object.entries(screenMap).forEach(([sid, sdat])=>{
-                                const pls = sdat && Array.isArray(sdat.playlist) ? sdat.playlist : [];
-                                pls.forEach(it=>{ if(it && it.sync_ref && it.sync_ref.group===sr.group) screenSet.add(sid); });
-                            });
-                        } catch{}
-                        groupScreens = Array.from(screenSet);
-                        if(groupScreens.length){
-                            const cached = window.__syncOrderCache[sr.group];
-                            const membershipChanged = !cached || Object.keys(cached).length !== groupScreens.length || groupScreens.some(sid=>!(sid in cached));
-                            if(membershipChanged){
-                                const deriveNum = sid=>{ const m = sid.match(/(_screen|screen)(\d+)/i); return m? parseInt(m[2],10): Number.MAX_SAFE_INTEGER; };
-                                groupScreens.sort((a,b)=>{ const na=deriveNum(a), nb=deriveNum(b); if(na!==nb) return na-nb; return a.localeCompare(b); });
-                                const map = {}; groupScreens.forEach((sid,i)=> map[sid]=i);
-                                window.__syncOrderCache[sr.group] = map;
-                                orderSource = 'rebuilt-membership';
-                            }
-                            const cachedOrder = window.__syncOrderCache[sr.group] && window.__syncOrderCache[sr.group][screenId];
-                            if(typeof cachedOrder === 'number') { order = cachedOrder; orderSource = (orderSource==='rebuilt-membership'?'rebuilt+cache':'cache'); }
-                        }
-                    }catch{}
-                    // Infer count from membership if missing
-                    if(!count && groupScreens.length>1) count = groupScreens.length;
-                    // Fallback: if count>1 but every member's order appears identical (often 0) re-derive order from sorted screen ids.
-                    if(count>1){
-                        try {
-                            // Collect provided orders
-                            const provided = [];
-                            const storePls = allStoresData.playlists && allStoresData.playlists[currentStoreId];
-                            if(storePls){
-                                Object.entries(storePls).forEach(([sid, arr])=>{
-                                    if(!Array.isArray(arr)) return;
-                                    arr.forEach(it=>{ if(it && it.sync_ref && it.sync_ref.group===sr.group){ provided.push(it.sync_ref.order); } });
-                                });
-                            }
-                            const distinctProvided = Array.from(new Set(provided.filter(v=>typeof v==='number')));
-                            const allSame = distinctProvided.length<=1; // 0 or 1 unique values
-                            if(allSame && groupScreens.length){
-                                // Stable sort by natural numeric in screen id (e.g., 1000_screen2 -> 2) then lexicographic
-                                const deriveNum = sid=>{ const m = sid.match(/(\d+)(?=\D*$)/); return m? parseInt(m[1],10): Number.MAX_SAFE_INTEGER; };
-                                groupScreens.sort((a,b)=>{ const na=deriveNum(a), nb=deriveNum(b); if(na!==nb) return na-nb; return a.localeCompare(b); });
-                                const idx = groupScreens.indexOf(screenId);
-                                if(idx>=0){ order = idx; orderSource = 'derived-id'; }
-                                if(!count) count = groupScreens.length;
-                            } else if(allSame && !groupScreens.length){
-                                // Playlists for other screens may not be loaded yet; derive from screenId suffix (_screenN)
-                                const m = screenId.match(/_screen(\d+)/i);
-                                if(m){
-                                    const n = parseInt(m[1],10);
-                                    if(!isNaN(n) && n>0){ order = n-1; orderSource = 'id-suffix'; }
-                                }
-                            }
-                        }catch{}
-                    }
-                    if(count>1) return {count, order, mode: sr.mode||'split-h', orderSource};
-                    return null;
-                }
-                const syncMeta = getSyncSliceMeta();
-                if(item && item.sync_ref && !syncMeta){
-                    console.log('[PREVIEW-SYNC] no slice meta (count<=1 or inference failed)', {screenId, file:item.file, sync_ref:item.sync_ref});
-                }
                 // Build efficient URLs:
                 // - Images: prefer CDN via mediaUrl()
                 // - Videos: prefer lightweight local /vpreview clip with poster; fallback to /media
@@ -4409,8 +4280,6 @@
                             if (s.startsWith('/static/uploads/')) return decodeURIComponent(s.slice('/static/uploads/'.length));
                             if (/^https?:\/\//i.test(s)){
                                 const url = new URL(s, location.origin);
-                                // If remote host differs (e.g., CDN), do not attempt local preview endpoints
-                                if(url.host !== location.host) return '';
                                 const pn = url.pathname.replace(/^\/+/, '');
                                 if (pn.startsWith('media/')) return decodeURIComponent(pn.slice('media/'.length));
                                 if (pn.startsWith('static/uploads/')) return decodeURIComponent(pn.slice('static/uploads/'.length));
@@ -4439,86 +4308,8 @@
                 }
                 // Crossfade to avoid blank: preload next, then swap
                 const doSwap = (node)=>{
-                    node.style.maxWidth='100%'; node.style.maxHeight='100%';
-                    // Fill container for multi-screen slices; otherwise keep aspect without cropping
-                    try { node.style.objectFit = (syncMeta && syncMeta.count>1) ? 'cover' : 'contain'; } catch {}
+                    node.style.maxWidth='100%'; node.style.maxHeight='100%'; node.style.objectFit='contain';
                     if(rotationClass) node.classList.add(rotationClass);
-                    // Apply horizontal sync slicing if applicable
-                    if(syncMeta && (syncMeta.mode==='split-h' || !syncMeta.mode) && syncMeta.count>1){
-                        try{
-                            let {count, order} = syncMeta;
-                            // Last-resort: if order always 0 across a group but multiple screens exist, derive here
-                            if(order===0 && count>1){
-                                try {
-                                    const groupId = item.sync_ref.group;
-                                    const scrMap = (allStoresData.screens||{})[currentStoreId]||{};
-                                    const members = Object.keys(scrMap).filter(sid=>{
-                                        const pls = scrMap[sid] && Array.isArray(scrMap[sid].playlist)? scrMap[sid].playlist:[];
-                                        return pls.some(it=> it && it.sync_ref && it.sync_ref.group===groupId);
-                                    });
-                                    if(members.length===count){
-                                        const deriveNum = sid=>{ const m=sid.match(/(_screen|screen)(\d+)/i); return m? parseInt(m[2],10):Number.MAX_SAFE_INTEGER; };
-                                        members.sort((a,b)=>{ const na=deriveNum(a), nb=deriveNum(b); if(na!==nb) return na-nb; return a.localeCompare(b); });
-                                        const idx = members.indexOf(screenId);
-                                        if(idx>=0 && idx!==order){ order = idx; console.log('[PREVIEW-SYNC][FALLBACK-FINAL] adjusted order', {screenId, order, count}); }
-                                    }
-                                }catch{}
-                            }
-                            // Ensure container hides overflow & is relative
-                            preview.style.overflow='hidden';
-                            if(getComputedStyle(preview).position==='static'){ preview.style.position='relative'; }
-                            // Remove generic maxWidth restriction so we can expand
-                            try { node.style.maxWidth='none'; }catch{}
-                            if(syncMeta.mode!=='static-slices'){
-                                const media = node;
-                                const count = syncMeta.count; const order = syncMeta.order;
-                                const segW = 100 / count; const left = segW * order;
-                                media.style.clipPath = `inset(0% ${Math.max(0,100-(left+segW)).toFixed(5)}% 0% ${left.toFixed(5)}%)`;
-                                media.style.transformOrigin = 'left center';
-                                media.style.transform = `scaleX(${count}) translateX(-${(order/count*100).toFixed(5)}%)`;
-                                media.style.objectFit = 'cover';
-                                media.style.objectPosition = `${(left + segW/2).toFixed(5)}% 50%`;
-                                media.style.width='100%'; media.style.height='100%'; media.style.maxWidth='100%'; media.style.maxHeight='100%';
-                                // Ensure parent preview hides overflow and has neutral background
-                                preview.style.background = '#000';
-                                preview.style.display='flex'; preview.style.alignItems='center'; preview.style.justifyContent='center';
-                                console.log('[PREVIEW-SYNC][CLIP]', {screenId, order, count, segW, left});
-                            }
-                            // Add a small slice badge
-                            let sb = preview.querySelector('.slice-badge');
-                            if(!sb){
-                                sb = document.createElement('div');
-                                sb.className='slice-badge';
-                                sb.style.cssText='position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,0.55);color:#fff;font-size:10px;padding:2px 6px;border-radius:10px;font-weight:600;z-index:5;pointer-events:none;';
-                                preview.appendChild(sb);
-                            }
-                            sb.textContent = `Slice ${syncMeta.order+1}/${syncMeta.count}`;
-                            try {
-                                const sliceOffsetPx = syncMeta.order * (preview.clientWidth || 0);
-                                console.log('[PREVIEW-SYNC] applied slice', {screenId, order: syncMeta.order, count: syncMeta.count, sliceOffsetPx, source: (syncMeta && syncMeta.orderSource)||'?', file:item && item.file});
-                            } catch(logErr){ console.warn('[PREVIEW-SYNC] log issue', logErr); }
-                            try {
-                                if(window.__SHOW_SLICE_DEBUG){
-                                    let ov = preview.querySelector('.slice-debug-overlay');
-                                    if(!ov){
-                                        ov = document.createElement('div');
-                                        ov.className = 'slice-debug-overlay';
-                                        ov.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:4;font-size:32px;font-weight:700;display:flex;align-items:center;justify-content:center;color:#fff;text-shadow:0 0 4px rgba(0,0,0,0.8);';
-                                        preview.appendChild(ov);
-                                    }
-                                    const colors = ['rgba(255,0,0,0.18)','rgba(0,128,255,0.18)','rgba(0,200,70,0.18)','rgba(255,140,0,0.18)','rgba(160,32,240,0.18)','rgba(255,20,147,0.18)'];
-                                    ov.style.background = colors[order % colors.length];
-                                    ov.textContent = (order+1)+'/'+count;
-                                } else {
-                                    const ov = preview.querySelector('.slice-debug-overlay');
-                                    if(ov) ov.remove();
-                                }
-                            } catch{}
-                        }catch(e){ console.warn('[PREVIEW-SYNC] slice apply failed', e); }
-                    } else {
-                        // Remove any old slice badge if present (non-slice item now showing)
-                        try { const old = preview.querySelector('.slice-badge'); if(old) old.remove(); } catch{}
-                    }
                     const wrap = document.createElement('div'); wrap.className='preview-item fading-in';
                     // Apply selected effect on dashboard preview
                     const eff = String(item && item.effect || '').toLowerCase();
@@ -4561,8 +4352,6 @@
              }
              // Expose update function globally
              window.updatePreviewPlaylist = updatePreviewPlaylist;
-             // Toggle visual slice debug overlays (colored tint + index). Usage from console: toggleSliceDebug(true)
-             window.toggleSliceDebug = function(on){ try { window.__SHOW_SLICE_DEBUG = !!on; console.log('[PREVIEW-SYNC] slice debug overlay', on? 'ENABLED':'disabled'); Object.keys(previewTimers||{}).forEach(sid=>{ try { runPreview(sid); } catch{} }); } catch(e){ console.warn('toggleSliceDebug failed', e); } };
              setInterval(()=>{
                 Object.entries(previewTimers).forEach(([sid,st])=>{
                     if(!st.nextAt) return;
@@ -5135,30 +4924,10 @@
                             if(!Array.isArray(scr.playlist)) scr.playlist = [];
                             const existing = scr.playlist.find(it=> it.sync_ref && it.sync_ref.group === j.group_id && it.sync_ref.role === mem.role);
                             if(!existing){
-                                scr.playlist.push({ id: mem.item_id, file: mediaFile, enabled:true, schedule:[], duration:10, repeat:true, link_next:false, sync_ref:{ group: j.group_id, role: mem.role, order: mem.order, count: j.count, mode: 'split-h' } });
-                            } else {
-                                // Ensure existing item gets updated count/mode too
-                                try {
-                                    existing.sync_ref.count = j.count;
-                                    if(!existing.sync_ref.mode) existing.sync_ref.mode = 'split-h';
-                                } catch {}
+                                scr.playlist.push({ id: mem.item_id, file: mediaFile, enabled:true, schedule:[], duration:10, repeat:true, link_next:false, sync_ref:{ group: j.group_id, role: mem.role, order: mem.order } });
                             }
                             if(!scr.file) scr.file = mediaFile;
                         });
-                        // Populate deterministic order cache directly from server response
-                        try {
-                            window.__syncOrderCache = window.__syncOrderCache || {};
-                            const map = {};
-                            (j.members||[]).forEach(mem=>{ if(typeof mem.order === 'number') map[mem.screen_id] = mem.order; });
-                            if(Object.keys(map).length){ window.__syncOrderCache[j.group_id] = map; console.log('[SYNC][CREATE] order cache seeded', j.group_id, map); }
-                        } catch(e){ console.warn('[SYNC][CREATE] failed to seed order cache', e); }
-                        // Force immediate preview re-run so slicing applies without waiting for rotation
-                        try {
-                            (j.used_screens||[]).forEach(sid=>{
-                                const pt = previewTimers && previewTimers[sid];
-                                if(pt){ pt.index = 0; try { runPreview(sid); console.log('[SYNC][CREATE] forced preview rerun', sid); } catch(err){ console.warn('preview rerun failed', sid, err); } }
-                            });
-                        } catch{}
                         const btn = document.getElementById('add-sync-screen-btn');
                         if(btn){
                             btn.disabled = false; // enable now that a master exists
@@ -5373,21 +5142,6 @@
             }
             // Kick an immediate playlist refresh for all visible screens so previews populate without manual reload
             toInitialRefresh.forEach((sid, i)=>{ setTimeout(()=>{ try{ if(myToken === __currentLoadToken) refreshPlaylist(sid, myToken); }catch(e){ console.warn('initial refresh failed', sid, e); } }, i*80); });
-            // After a short delay, force a re-slice preview pass in case membership inference needed full set
-            try {
-                setTimeout(()=>{
-                    if(myToken !== __currentLoadToken) return;
-                    if(!window.__syncOrderCache) return;
-                    const ptimers = window.previewTimers || previewTimers || {};
-                    Object.keys(window.__syncOrderCache).forEach(gid=>{
-                        const map = window.__syncOrderCache[gid]||{};
-                        Object.keys(map).forEach(sid=>{
-                            const pt = ptimers[sid];
-                            if(pt){ try { runPreview(sid); console.debug('[PREVIEW-SYNC] delayed force reslice', gid, sid); } catch(e){} }
-                        });
-                    });
-                }, 1200);
-            } catch{}
             // After DOM build, ensure auto-refresh timer knows about any new playlist sections
             setupAutoPlaylistRefresh();
             // Start/restart status polling for this store

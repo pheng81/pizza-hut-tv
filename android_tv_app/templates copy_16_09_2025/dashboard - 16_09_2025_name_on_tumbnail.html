@@ -51,6 +51,27 @@
                     return parts.length ? parts[parts.length-1] : s;
                 } catch { return ''; }
             }
+            // Encode each path segment but keep slashes
+            function encodePathPreserveSlashes(p){
+                try{
+                    return String(p||'')
+                        .split('/')
+                        .map(seg => seg ? encodeURIComponent(seg) : '')
+                        .join('/');
+                }catch{return String(p||'');}
+            }
+            function _extractRelFromThumbUrl(u){
+                try{
+                    const s = String(u||'');
+                    // Match local server thumbnail URL: /thumb/<w>/<relpath>
+                    let m = s.match(/^\/?thumb\/\d+\/(.+)$/);
+                    if (m && m[1]) return decodeURIComponent(m[1]);
+                    // Match CDN-style: .../thumbs/<w>/<relpath>.(webp|jpg)
+                    m = s.match(/thumbs\/\d+\/([^?]+?)\.(?:webp|jpg)(?:[?#].*)?$/i);
+                    if (m && m[1]) return decodeURIComponent(m[1]);
+                }catch{}
+                return null;
+            }
             function fallbackToOrigin(img, original){
                 try{
                     if(!img) return;
@@ -62,10 +83,11 @@
                     // Step 0: if we have an explicit original relative path (preferred), jump straight to origin path
                     if (step === 0 && original && !/^https?:\/\//i.test(String(original))) {
                         const base = '/static/uploads/';
-                        const origKey = _extractKey(original);
+                        // Use full original relative path (preserve folders), not just last segment
+                        const rel = String(original).replace(/^\/+/, '');
                         img.dataset.fallbackStep = '1';
-                        const local1 = base + encodeURIComponent(origKey);
-                        console.warn('[img-fallback] use original key to origin', local1);
+                        const local1 = base + encodePathPreserveSlashes(rel);
+                        console.warn('[img-fallback] use original rel to origin', local1);
                         img.src = local1;
                         return;
                     }
@@ -82,8 +104,12 @@
                     }
                     // Step 2: try origin static by key
                     if (step <= 2) {
-                        if (!key) return; // nothing we can do
-                        const local = '/static/uploads/' + encodeURIComponent(key);
+                        // Prefer deriving full rel path from thumb URL patterns
+                        const relFromThumb = _extractRelFromThumbUrl(cur);
+                        const rel = relFromThumb || (original && !/^https?:\/\//i.test(String(original)) ? String(original).replace(/^\/+/, '') : null);
+                        if (!rel && !key) return; // nothing we can do
+                        const path = rel ? encodePathPreserveSlashes(rel) : encodeURIComponent(key);
+                        const local = '/static/uploads/' + path;
                         img.dataset.fallbackStep = '3';
                         console.warn('[img-fallback] fallback to origin', local);
                         img.src = local;
@@ -136,19 +162,19 @@
                 const rel = String(name).replace(/^\/+/, '');
                 return base + rel;
             }
-            // Build thumbnail URL for images. If input is an absolute URL (e.g. R2/CDN),
-            // fall back to using it directly (no server-side thumb available for remote files).
+            // Build thumbnail URL for images.
+            // For local (relative) names, prefer the server endpoint /thumb/<w>/<rel> so the server can generate
+            // and push the thumbnail to CDN. For absolute URLs, return as-is.
             function thumbUrl(name, width){
                 if(!name) return '';
-                // Prefer CDN path: <MEDIA_BASE_URL>/thumbs/<width>/<name>.webp (or .jpg)
                 try{
-                    const base = (window.MEDIA_BASE_URL || '/static/uploads/').replace(/\/+$/, '/');
+                    // Absolute http(s) URL? no server-side thumb; use as-is
+                    if (/^https?:\/\//i.test(String(name))) return String(name);
                     const rel = String(name).replace(/^\/+/, '');
-                    // Default to .webp; server endpoint will handle actual format
-                    return `${base}thumbs/${width}/${rel}.webp`;
+                    // IMPORTANT: do not encode slashes here; the route expects a path
+                    return `/thumb/${width}/${rel}`;
                 }catch(e){
-                    const safe = encodeURIComponent(String(name));
-                    return `/thumb/${width}/${safe}`;
+                    return `/thumb/${width}/${String(name)}`;
                 }
             }
         // Global IMG error listener: if any image fails (e.g., CDN hotlink/404), auto-fallback to origin
@@ -748,6 +774,8 @@
     .rp-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap:10px; }
     .rp-item { border:1px solid #dcdfe3; border-radius:6px; padding:6px; cursor:pointer; display:flex; align-items:center; justify-content:center; height:90px; background:#fafbfc; position:relative; }
     .rp-item img, .rp-item video { max-width:100%; max-height:100%; object-fit:cover; }
+    /* Small filename caption so items are identifiable even without posters */
+    .rp-item .rp-name { position:absolute; left:6px; right:6px; bottom:6px; background:rgba(0,0,0,0.6); color:#fff; font-size:11px; line-height:1.2; padding:2px 4px; border-radius:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; pointer-events:none; }
     .rp-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; padding:10px 12px; border-top:1px solid #eef1f4; }
     .rp-help { font-size:12px; color:#6b7280; padding: 2px 2px 10px; }
     .rp-subtitle { font-size:12px; font-weight:700; color:#374151; margin: 8px 2px 6px; text-transform:uppercase; letter-spacing:.04em; }
@@ -3981,7 +4009,7 @@
         const src220 = thumbUrl(file,220);
         const src300 = thumbUrl(file,300);
         const src600 = thumbUrl(file,600);
-        return `<img loading="lazy" decoding="async" src="${src220}" srcset="${src220} 220w, ${src300} 300w, ${src600} 600w" sizes="(max-width: 480px) 45vw, (max-width: 1024px) 200px, 220px" style="max-width:100%; max-height:100%; object-fit:cover;" onerror="fallbackToOrigin(this, \"${orig}\")" />`;
+    return `<img loading="lazy" decoding="async" src="${src220}" srcset="${src220} 220w, ${src300} 300w, ${src600} 600w" sizes="(max-width: 480px) 45vw, (max-width: 1024px) 200px, 220px" style="max-width:100%; max-height:100%; object-fit:cover;" data-original="${orig}" onerror="fallbackToOrigin(this, \"${orig}\")" />`;
     }
 
     // --- Lightweight item status light refresher (doesn't rebuild DOM) ---
@@ -4409,11 +4437,10 @@
                             if (s.startsWith('/static/uploads/')) return decodeURIComponent(s.slice('/static/uploads/'.length));
                             if (/^https?:\/\//i.test(s)){
                                 const url = new URL(s, location.origin);
-                                // If remote host differs (e.g., CDN), do not attempt local preview endpoints
-                                if(url.host !== location.host) return '';
                                 const pn = url.pathname.replace(/^\/+/, '');
                                 if (pn.startsWith('media/')) return decodeURIComponent(pn.slice('media/'.length));
                                 if (pn.startsWith('static/uploads/')) return decodeURIComponent(pn.slice('static/uploads/'.length));
+                                // If MEDIA_BASE_URL points to a remote host (CDN), allow deriving rel when URL shares that base
                                 const b = new URL(base, location.origin);
                                 if (url.origin === b.origin && pn.startsWith(b.pathname.replace(/^\/+/, ''))){
                                     return decodeURIComponent(pn.slice(b.pathname.replace(/^\/+/, '').length));
@@ -4549,7 +4576,12 @@
                     const usePreview = previewUrl || srcUrl;
                     const useFallback = fallbackVid || srcUrl;
                     preloadVideo(usePreview).then(v=>{ v.autoplay=true; v.loop=true; v.muted=true; v.playsInline=true; v.preload='auto'; if(usePoster){ v.poster = usePoster; } doSwap(v); }).catch(()=>{
-                        preloadVideo(useFallback).then(v=>{ v.autoplay=true; v.loop=true; v.muted=true; v.playsInline=true; v.preload='auto'; if(usePoster){ v.poster = usePoster; } doSwap(v); }).catch(swapFallback);
+                        preloadVideo(useFallback).then(v=>{ v.autoplay=true; v.loop=true; v.muted=true; v.playsInline=true; v.preload='auto'; if(usePoster){ v.poster = usePoster; } doSwap(v); }).catch(()=>{
+                            // Final fallback for video: show a poster or a generic placeholder, not the video URL as an IMG
+                            const ph = usePoster || '/static/video_placeholder.svg';
+                            const img=document.createElement('img'); img.src=ph; img.alt='Video preview unavailable';
+                            doSwap(img);
+                        });
                     });
                 } else {
                     preloadImage(srcUrl).then(img=>{ if (item && item.file && !/^https?:\/\//i.test(String(item.file))) { img.dataset.original = String(item.file); } doSwap(img); }).catch(swapFallback);
@@ -4787,10 +4819,12 @@
                                 gDirs.appendChild(card);
                             });
                         }
-                        const imgs = files.filter(f=> (f.media_type!=='video'));
-                        const vids = files.filter(f=> (f.media_type==='video'));
+                        // Split files into images and videos
+                        const imgs = files.filter(f=> (f.media_type!== 'video'));
+                        const vids = files.filter(f=> (f.media_type=== 'video'));
                         gImgs.innerHTML = imgs.length? '' : '<div class="rp-empty">No images</div>';
                         gVids.innerHTML = vids.length? '' : '<div class="rp-empty">No videos</div>';
+                        // Render images
                         imgs.forEach(f=>{
                             const card=document.createElement('div');
                             card.className='rp-item';
@@ -4798,22 +4832,30 @@
                             const isAbs = f && f.url && /^https?:\/\//i.test(String(f.url));
                             const bust = Date.now();
                             const src = isAbs ? (f.url + `?t=${bust}`) : (thumbUrl(f.name,220) + `?t=${bust}`);
-                            card.innerHTML = `<img loading=\"lazy\" src=\"${src}\"/><button class=\"rp-del\" title=\"Delete\" aria-label=\"Delete\" onclick=\"event.stopPropagation(); deleteLibraryFile('${f.name}')\">✕</button>`;
+                            card.innerHTML = `<img loading=\"lazy\" src=\"${src}\" alt=\"Image\" data-original=\"${f.name}\"/><button class=\"rp-del\" title=\"Delete\" aria-label=\"Delete\" onclick=\"event.stopPropagation(); deleteLibraryFile('${f.name}')\">✕</button>`;
+                            // filename caption
+                            const cap = document.createElement('div');
+                            cap.className = 'rp-name';
+                            try { cap.textContent = String(f.name).split('/').pop(); } catch(_) { cap.textContent = f.name; }
+                            card.appendChild(cap);
                             card.addEventListener('click',()=> chooseLibraryFile(f.name));
                             gImgs.appendChild(card);
                         });
+                        // Render videos as posters
                         vids.forEach(f=>{
                             const card=document.createElement('div');
                             card.className='rp-item';
                             card.title=f.name;
-                            const abs = f && f.url && /^https?:\/\//i.test(String(f.url));
                             const bust = Date.now();
-                            const posterCdn = abs ? '' : `${MEDIA_BASE_URL || '/static/uploads/'}vthumbs/220/${encodeURIComponent(f.name)}.jpg?t=${bust}`;
-                            const posterSrv = abs ? '' : `/vthumb/220/${encodeURIComponent(f.name)}?t=${bust}`;
-                            const poster = posterCdn || posterSrv;
-                            const posterAttr = poster ? ` poster="${poster}"` : '';
-                            const src = f.url ? (f.url + `?t=${bust}`) : (mediaUrl(f.name) + `?t=${bust}`);
-                            card.innerHTML = `<video preload=\"metadata\" muted playsinline${posterAttr} src=\"${src}\"></video><button class=\"rp-del\" title=\"Delete\" aria-label=\"Delete\" onclick=\"event.stopPropagation(); deleteLibraryFile('${f.name}')\">✕</button>`;
+                            const rel = (typeof encodePathPreserveSlashes === 'function') ? encodePathPreserveSlashes(f.name) : String(f.name);
+                            const poster = `/vthumb/220/${rel}?t=${bust}`;
+                            const onerr = "this.onerror=null; this.src='/static/video_placeholder.svg'";
+                            card.innerHTML = `<img loading=\"lazy\" src=\"${poster}\" alt=\"Video\" onerror=\"${onerr}\"><button class=\"rp-del\" title=\"Delete\" aria-label=\"Delete\" onclick=\"event.stopPropagation(); deleteLibraryFile('${f.name}')\">✕</button>`;
+                            // filename caption
+                            const cap = document.createElement('div');
+                            cap.className = 'rp-name';
+                            try { cap.textContent = String(f.name).split('/').pop(); } catch(_) { cap.textContent = f.name; }
+                            card.appendChild(cap);
                             card.addEventListener('click',()=> chooseLibraryFile(f.name));
                             gVids.appendChild(card);
                         });
@@ -4955,7 +4997,9 @@
                                 xhr.send(fd);
                             }catch(err){ reject(err); }
                         });
-                        const parsed = await (resp.json ? resp.json() : readJsonOrText(resp));
+                        // Parse XHR response text safely; resp.json() in our shim returns the raw object,
+                        // so use unified helper to always get {json, text}
+                        const parsed = await readJsonOrText(resp);
                         const json = parsed.json;
                         if(!resp.ok || !json || json.success === false){
                             if(resp.status === 413){ throw new Error('File too large for server path. Please retry direct upload.'); }
@@ -5017,13 +5061,26 @@
                 }catch{ return 'image'; }
             }
 
-            // Read a Response body exactly once and try to parse JSON; fall back to raw text
+            // Read a Response or XHR-shim body once and try to parse JSON; fall back to raw text
             async function readJsonOrText(resp){
                 try{
-                    const text = await resp.text();
-                    try{ return { json: JSON.parse(text), text }; }
-                    catch{ return { json: null, text } }
-                }catch(e){ return { json: null, text: '' } }
+                    // Our XHR shim provides text() and json() as functions; fetch Response has body stream
+                    const getText = async () => {
+                        try {
+                            if (resp && typeof resp.text === 'function') {
+                                return await resp.text();
+                            }
+                            // Some code paths may pass raw string
+                            if (typeof resp === 'string') return resp;
+                        } catch (e) {}
+                        return '';
+                    };
+                    const text = await getText();
+                    try { return { json: JSON.parse(text), text }; }
+                    catch { return { json: null, text }; }
+                } catch(e){
+                    return { json: null, text: '' };
+                }
             }
 
             function deleteLibraryFile(name){
@@ -5831,7 +5888,24 @@
                 });
             });
         } else {
-            preloadImage(url).then(img=>{ img.decoding='async'; img.setAttribute('fetchpriority','high'); img.style.maxWidth='100%'; img.style.maxHeight='100%'; img.style.objectFit='contain'; if(rotation){ img.className='rotate-'+rotation; } try { const u=new URL(url, location.origin); const last=u.pathname.split('/').filter(Boolean).pop(); if(last){ img.dataset.original = decodeURIComponent(last); } } catch { /* noop */ } show(build(img)); }).catch(()=>{ const img=document.createElement('img'); img.src=url; img.decoding='async'; img.setAttribute('fetchpriority','high'); if(rotation){ img.className='rotate-'+rotation; } try { const u=new URL(url, location.origin); const last=u.pathname.split('/').filter(Boolean).pop(); if(last){ img.dataset.original = decodeURIComponent(last); } } catch {} show(build(img)); });
+            const setOrig = (imgEl, u) => {
+                try{
+                    const s = String(u||'');
+                    const relFromThumb = _extractRelFromThumbUrl(s);
+                    if (relFromThumb){ imgEl.dataset.original = relFromThumb; return; }
+                    const urlObj = new URL(s, location.origin);
+                    const pn = urlObj.pathname.replace(/^\/+/, '');
+                    // If it's already under static/uploads, keep full tail as original
+                    if (pn.toLowerCase().startsWith('static/uploads/')){
+                        imgEl.dataset.original = decodeURIComponent(pn.slice('static/uploads/'.length));
+                        return;
+                    }
+                    // Else keep last segment as best-effort
+                    const last = pn.split('/').filter(Boolean).pop();
+                    if (last){ imgEl.dataset.original = decodeURIComponent(last); }
+                }catch{}
+            };
+            preloadImage(url).then(img=>{ img.decoding='async'; img.setAttribute('fetchpriority','high'); img.style.maxWidth='100%'; img.style.maxHeight='100%'; img.style.objectFit='contain'; if(rotation){ img.className='rotate-'+rotation; } setOrig(img, url); show(build(img)); }).catch(()=>{ const img=document.createElement('img'); img.src=url; img.decoding='async'; img.setAttribute('fetchpriority','high'); if(rotation){ img.className='rotate-'+rotation; } setOrig(img, url); show(build(img)); });
         }
     }
     </script>
