@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Forgot password</title>
+  <style>
+    :root{--card-w:420px;--ink:#111;--muted:#6b7280;--ring:#d1d5db;--btn:#1e293b;--btnTxt:#e6edf3}
+    *,*::before,*::after{box-sizing:border-box}
+    body{font-family:Inter,system-ui,Arial,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;color:var(--ink);
+      background:radial-gradient(1200px 600px at 10% 0%,#f6fbff 0,#fff 40%),
+                 linear-gradient(120deg,#f3f9ff,#fff 45%,#f7fff9);
+      background-size:400% 400%,100% 100%;animation:bgshift 18s ease infinite}
+    @keyframes bgshift{0%{background-position:0% 50%,0 0}50%{background-position:100% 50%,0 0}100%{background-position:0% 50%,0 0}}
+    /* Floating subtle shapes */
+    .bg{position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:-1}
+  .bg span{position:absolute;display:block;opacity:.12;filter:blur(.2px);border-radius:8px;background:linear-gradient(180deg,#9bd1ff,#e3f2ff);box-shadow:0 6px 18px rgba(0,0,0,.06)}
+  .bg .logo{position:absolute;opacity:.10;filter:drop-shadow(0 6px 16px rgba(0,0,0,.08));width:110px;height:110px;object-fit:contain;animation:logofly 32s linear infinite}
+  .bg .logo.l1{left:12%;top:88%;animation-duration:36s;animation-delay:-6s}
+  .bg .logo.l2{left:78%;top:92%;width:90px;height:90px;animation-duration:40s;animation-delay:-12s}
+  .bg .logo.l3{left:46%;top:95%;width:100px;height:100px;animation-duration:34s;animation-delay:-18s}
+  @keyframes logofly{0%{transform:translateY(0) translateX(0) rotate(0)}100%{transform:translateY(-120vh) translateX(8vw) rotate(12deg)}}
+    .bg span:nth-child(1){width:120px;height:72px;left:6%;top:70%;animation:fly 24s linear infinite}
+    .bg span:nth-child(2){width:90px;height:54px;left:80%;top:75%;animation:fly 30s linear -6s infinite}
+    .bg span:nth-child(3){width:140px;height:84px;left:20%;top:85%;animation:fly 28s linear -3s infinite}
+    .bg span:nth-child(4){width:60px;height:36px;left:65%;top:88%;animation:fly 22s linear -10s infinite}
+    .bg span:nth-child(5){width:110px;height:66px;left:45%;top:78%;animation:fly 26s linear -14s infinite}
+    .bg span:nth-child(6){width:70px;height:42px;left:10%;top:90%;animation:fly 20s linear -9s infinite}
+    @keyframes fly{0%{transform:translateY(0) translateX(0) rotate(0deg)}100%{transform:translateY(-120vh) translateX(15vw) rotate(10deg)}}
+
+  .card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:28px;width:min(92vw,var(--card-w));box-shadow:0 10px 30px rgba(0,0,0,.06);position:relative}
+  .nav{display:flex;align-items:center;margin:-6px 0 6px}
+  .back{display:inline-flex;align-items:center;gap:6px;color:#1f2937;text-decoration:none;font-size:12px}
+  .back:hover{text-decoration:underline}
+  .back svg{width:16px;height:16px}
+    h1{margin:6px 0 14px;font-size:22px;text-align:center}
+    label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+    input{display:block;width:100%;padding:11px 12px;border-radius:8px;border:1px solid var(--ring);}
+    .btn{display:block;width:100%;padding:11px 12px;border-radius:8px;border:1px solid var(--ring);background:var(--btn);color:var(--btnTxt);cursor:pointer}
+    .btn:disabled{opacity:.7;cursor:wait}
+    .note{margin-top:10px;font-size:12px;color:var(--muted);text-align:center}
+    .alert{font-size:12px;margin:6px 0 10px;text-align:center;padding:8px 10px;border-radius:8px}
+    .alert.success{color:#065f46;background:#ecfdf5;border:1px solid #a7f3d0}
+    .alert.error{color:#b91c1c;background:#fef2f2;border:1px solid #fecaca}
+  </style>
+</head>
+<body>
+  <div class="bg" aria-hidden="true">
+    <span></span><span></span><span></span><span></span><span></span><span></span>
+  <img class="logo l1" src="{{ url_for('static', filename='ea-logo.svg') }}" alt="">
+  <img class="logo l2" src="{{ url_for('static', filename='ea-logo.svg') }}" alt="">
+  <img class="logo l3" src="{{ url_for('static', filename='ea-logo.svg') }}" alt="">
+  </div>
+  <div class="card">
+    <div class="nav">
+      <a class="back" href="{{ url_for('login') }}" onclick="if(history.length>1){history.back();return false;}">
+        <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M12.707 3.293a1 1 0 010 1.414L8.414 9H17a1 1 0 110 2H8.414l4.293 4.293a1 1 0 11-1.414 1.414l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+        <span>Back</span>
+      </a>
+    </div>
+    <h1>Reset your password</h1>
+    <div id="queryNotice" class="alert" style="display:none"></div>
+    <form method="post" id="forgotForm">
+      <label>Email</label>
+      <input type="email" name="email" required autocomplete="email">
+      <div style="margin-top:12px"><button class="btn" id="submitBtn" type="submit">Send reset link</button></div>
+    </form>
+    <div class="note">We'll email you a link to set a new password.</div>
+  </div>
+<script>
+(function(){
+  function getParam(n){ try{ return new URLSearchParams(window.location.search).get(n); }catch(e){ return null; } }
+  var ok = getParam('ok');
+  var err = getParam('err');
+  var qn = document.getElementById('queryNotice');
+  if(qn && (ok||err)){
+    qn.style.display = 'block';
+    qn.className = 'alert ' + (ok? 'success':'error');
+    qn.textContent = ok? 'If that email exists, we sent a reset link.' : 'There was a problem sending the email. Please try again.';
+  }
+  var form = document.getElementById('forgotForm');
+  if(form){
+    form.addEventListener('submit', function(){
+      var btn = document.getElementById('submitBtn');
+      if(btn){ btn.disabled = true; btn.textContent = 'Sending…'; }
+    });
+  }
+})();
+</script>
+</body>
+{% include '_cookie_consent.html' %}
+</html>

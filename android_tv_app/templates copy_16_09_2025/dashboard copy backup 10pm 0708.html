@@ -4439,12 +4439,10 @@
                 }
                 // Crossfade to avoid blank: preload next, then swap
                 const doSwap = (node)=>{
-                    node.style.maxWidth='100%'; node.style.maxHeight='100%';
-                    // Fill container for multi-screen slices; otherwise keep aspect without cropping
-                    try { node.style.objectFit = (syncMeta && syncMeta.count>1) ? 'cover' : 'contain'; } catch {}
+                    node.style.maxWidth='100%'; node.style.maxHeight='100%'; node.style.objectFit='contain';
                     if(rotationClass) node.classList.add(rotationClass);
                     // Apply horizontal sync slicing if applicable
-                    if(syncMeta && (syncMeta.mode==='split-h' || !syncMeta.mode) && syncMeta.count>1){
+                    if(syncMeta && syncMeta.mode==='split-h'){
                         try{
                             let {count, order} = syncMeta;
                             // Last-resort: if order always 0 across a group but multiple screens exist, derive here
@@ -4469,21 +4467,65 @@
                             if(getComputedStyle(preview).position==='static'){ preview.style.position='relative'; }
                             // Remove generic maxWidth restriction so we can expand
                             try { node.style.maxWidth='none'; }catch{}
-                            if(syncMeta.mode!=='static-slices'){
-                                const media = node;
-                                const count = syncMeta.count; const order = syncMeta.order;
-                                const segW = 100 / count; const left = segW * order;
-                                media.style.clipPath = `inset(0% ${Math.max(0,100-(left+segW)).toFixed(5)}% 0% ${left.toFixed(5)}%)`;
-                                media.style.transformOrigin = 'left center';
-                                media.style.transform = `scaleX(${count}) translateX(-${(order/count*100).toFixed(5)}%)`;
-                                media.style.objectFit = 'cover';
-                                media.style.objectPosition = `${(left + segW/2).toFixed(5)}% 50%`;
-                                media.style.width='100%'; media.style.height='100%'; media.style.maxWidth='100%'; media.style.maxHeight='100%';
-                                // Ensure parent preview hides overflow and has neutral background
-                                preview.style.background = '#000';
-                                preview.style.display='flex'; preview.style.alignItems='center'; preview.style.justifyContent='center';
-                                console.log('[PREVIEW-SYNC][CLIP]', {screenId, order, count, segW, left});
+                            // Revised slicing approach: keep a single media element and crop using object-position (images) or a wrapping mask (videos) with pixel translation.
+                            const media = node; // original node (video/img)
+                            media.style.width = 'auto';
+                            media.style.height = '100%';
+                            media.style.maxWidth = 'none';
+                            media.style.objectFit = 'cover';
+                            // Create a wrapper to mask overflow and translate media by pixels for perfect alignment independent of container resizing.
+                            const mask = document.createElement('div');
+                            mask.className = 'slice-mask';
+                            mask.style.cssText = 'position:relative;width:100%;height:100%;overflow:hidden;';
+                            // Insert media inside mask
+                            mask.appendChild(media);
+                            // Determine intrinsic width once metadata is ready (for videos) or immediately for images
+                            const applyPixelCrop = ()=>{
+                                try {
+                                    const cw = preview.clientWidth || mask.clientWidth || 0;
+                                    if(!cw) return;
+                                    // Target displayed slice width = container width
+                                    // We assume the source should span count * cw total logical width.
+                                    // Scale media so its displayed width approximates count * cw, then translate by order * cw.
+                                    // For video, use videoWidth; for image naturalWidth.
+                                    const intrinsic = (media.videoWidth || media.naturalWidth || cw);
+                                    if(intrinsic<=0) return;
+                                    // Scale factor so displayed total width = count * cw
+                                    const scale = (count * cw) / intrinsic;
+                                    media.style.transformOrigin = 'top left';
+                                    // Translate first (pre-scale) so translation is scaled with the content, yielding an effective shift of order * cw.
+                                    const preScaleTx = order * (cw/scale); // amount to translate before scaling
+                                    media.style.transform = `translateX(${-preScaleTx}px) scale(${scale})`;
+                                    // Ensure smoothing
+                                    media.style.imageRendering = 'auto';
+                                    // Defer a bounding box verification after layout
+                                    requestAnimationFrame(()=>{
+                                        try {
+                                            const maskRect = mask.getBoundingClientRect();
+                                            const mediaRect = media.getBoundingClientRect();
+                                            const leftInside = mediaRect.left - maskRect.left;
+                                            console.log('[PREVIEW-SYNC][PIXEL-CROP]', {screenId, order, count, cw, intrinsic, scale, preScaleTx, effectiveLeft: leftInside, displayedTotalW: mediaRect.width, expectedSliceWidth: cw});
+                                        } catch(diagErr){ console.warn('[PREVIEW-SYNC][PIXEL-CROP-DIAG-ERR]', diagErr); }
+                                    });
+                                } catch(err){ console.warn('[PREVIEW-SYNC][PIXEL-CROP-ERR]', err); }
+                            };
+                            if(media.tagName==='VIDEO'){
+                                if(media.readyState>=1){ applyPixelCrop(); }
+                                else {
+                                    media.addEventListener('loadedmetadata', applyPixelCrop, { once:true });
+                                }
+                            } else {
+                                if(media.complete){ applyPixelCrop(); }
+                                else { media.addEventListener('load', applyPixelCrop, { once:true }); }
                             }
+                            // Recalculate on window resize to keep alignment
+                            window.__sliceResizeHandlers = window.__sliceResizeHandlers || [];
+                            window.__sliceResizeHandlers.push(applyPixelCrop);
+                            if(!window.__sliceResizeBound){
+                                window.__sliceResizeBound = true;
+                                window.addEventListener('resize', ()=>{ (window.__sliceResizeHandlers||[]).forEach(fn=>{ try{ fn(); }catch{} }); });
+                            }
+                            node = mask;
                             // Add a small slice badge
                             let sb = preview.querySelector('.slice-badge');
                             if(!sb){
@@ -4492,10 +4534,10 @@
                                 sb.style.cssText='position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,0.55);color:#fff;font-size:10px;padding:2px 6px;border-radius:10px;font-weight:600;z-index:5;pointer-events:none;';
                                 preview.appendChild(sb);
                             }
-                            sb.textContent = `Slice ${syncMeta.order+1}/${syncMeta.count}`;
+                            sb.textContent = `Slice ${order+1}/${count}`;
                             try {
-                                const sliceOffsetPx = syncMeta.order * (preview.clientWidth || 0);
-                                console.log('[PREVIEW-SYNC] applied slice', {screenId, order: syncMeta.order, count: syncMeta.count, sliceOffsetPx, source: (syncMeta && syncMeta.orderSource)||'?', file:item && item.file});
+                                const sliceOffsetPx = order * (preview.clientWidth || 0);
+                                console.log('[PREVIEW-SYNC] applied slice', {screenId, order, count, sliceOffsetPx, source: (syncMeta && syncMeta.orderSource)||'?', file:item && item.file});
                             } catch(logErr){ console.warn('[PREVIEW-SYNC] log issue', logErr); }
                             try {
                                 if(window.__SHOW_SLICE_DEBUG){

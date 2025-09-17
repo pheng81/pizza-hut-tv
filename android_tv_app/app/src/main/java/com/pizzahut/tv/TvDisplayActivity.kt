@@ -7,6 +7,9 @@ import android.widget.VideoView // legacy kept until fully removed
 import android.view.ViewGroup
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.google.android.exoplayer2.Player
+import com.google.android.exoplayer2.video.VideoSize
+import com.google.android.exoplayer2.PlaybackException
 import com.pizzahut.tv.api.ApiClient
 import com.pizzahut.tv.databinding.ActivityTvDisplayBinding
 import kotlinx.coroutines.Dispatchers
@@ -41,6 +44,7 @@ class TvDisplayActivity : AppCompatActivity() {
     lateinit var binding: ActivityTvDisplayBinding
     // ExoPlayer instance (initialized lazily within playlist loop). Not private so extension function can access.
     var exoPlayer: com.google.android.exoplayer2.ExoPlayer? = null
+    var exoDiagListener: Player.Listener? = null
     // Keep a reference to legacy VideoView so we can hide/stop it properly
     var legacyVideoView: VideoView? = null
     // Keep a reference to our custom decoder surface
@@ -76,6 +80,16 @@ class TvDisplayActivity : AppCompatActivity() {
     var currentSliceCount: Int = 0
     var currentSliceOrder: Int = 0
     var currentUsingViewportSlicing: Boolean = false
+    // Track whether current playback used a server-side physical slice file
+    private var currentWasServerSlice: Boolean = false
+    // Store the full/original video URL (for viewport slicing fallback) when a server slice is in use
+    private var currentAltFullVideoUrl: String? = null
+    // Cooldown registry for slice parse failures: sliceUrl -> retryAllowedAfterEpochMs
+    private val sliceParseFailCooldown: MutableMap<String, Long> = mutableMapOf()
+    // Default cooldown after a parsing/container failure (ms)
+    private val sliceParseFailCooldownMs: Long = 2 * 60 * 1000L
+    // Currently playing file name for diagnostics (moved earlier so listeners can access)
+    var currentItemFile: String? = null
     // Developer toggle: allow sliced videos to play on emulator (default false)
     fun isEmuSliceVideoForced(): Boolean {
         // Default ON so emulator plays sliced videos unless explicitly turned OFF
@@ -83,6 +97,14 @@ class TvDisplayActivity : AppCompatActivity() {
     }
     fun setEmuSliceVideoForced(on: Boolean) {
         try { getSharedPreferences("phtv_dev", MODE_PRIVATE).edit().putBoolean("emu_slice_video_force", on).apply() } catch (_: Exception) { }
+    }
+
+    // Developer flag: temporarily disable ALL custom decoder usage to isolate ExoPlayer path
+    fun isCustomDecoderDisabled(): Boolean {
+        return try { getSharedPreferences("phtv_dev", MODE_PRIVATE).getBoolean("disable_custom_decoder", true) } catch (_: Exception) { true }
+    }
+    fun setCustomDecoderDisabled(disable: Boolean) {
+        try { getSharedPreferences("phtv_dev", MODE_PRIVATE).edit().putBoolean("disable_custom_decoder", disable).apply() } catch (_: Exception) { }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -170,7 +192,8 @@ class TvDisplayActivity : AppCompatActivity() {
         // Show current base URL briefly to verify connection target
         try {
             val emuForce = if (isEmuSliceVideoForced()) "ON" else "OFF"
-            debugOverlay?.text = ("Base: " + ApiClient.baseUrl + "\nEmuSliceVideo: " + emuForce).take(80)
+            val custDec = if (isCustomDecoderDisabled()) "DISABLED" else "ENABLED"
+            debugOverlay?.text = ("Base: " + ApiClient.baseUrl + "\nEmuSliceVideo: " + emuForce + "  CustomDec: " + custDec).take(100)
             debugOverlay?.postDelayed({ debugOverlay?.text = "" }, 6000)
         } catch (_: Exception) {}
 
@@ -273,6 +296,16 @@ class TvDisplayActivity : AppCompatActivity() {
             } catch (_: Exception) {}
             return true
         }
+        if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+            val newDisable = !isCustomDecoderDisabled()
+            setCustomDecoderDisabled(newDisable)
+            val msg = if (newDisable) "Custom decoder: DISABLED" else "Custom decoder: ENABLED"
+            try {
+                debugOverlay?.text = msg
+                debugOverlay?.postDelayed({ debugOverlay?.text = "" }, 2500)
+            } catch (_: Exception) {}
+            return true
+        }
         return super.onKeyLongPress(keyCode, event)
     }
 
@@ -282,9 +315,10 @@ class TvDisplayActivity : AppCompatActivity() {
         try { itemOkPingJob?.cancel() } catch (_: Exception) {}
         itemOkPingJob = null
         try {
-            exoPlayer?.stop()
-            exoPlayer?.clearMediaItems()
-            exoPlayer?.release()
+            exoPlayer?.let { p ->
+                try { exoDiagListener?.let { lst -> p.removeListener(lst) } } catch (_: Exception) {}
+                p.stop(); p.clearMediaItems(); p.release()
+            }
         } catch (_: Exception) {}
         exoPlayer = null
         try {
@@ -524,6 +558,10 @@ suspend fun fetchBitmap(urlStr: String): android.graphics.Bitmap? = withContext(
 // --- Video Decoder Selection Logic ---
 private fun TvDisplayActivity.shouldUseCustomDecoder(videoUrl: String): Boolean {
     // Use custom decoder for slice videos on emulator (problematic with ExoPlayer)
+    if (isCustomDecoderDisabled()) {
+        Log.d(TAG, "PLAYCHECK decoder selection: custom decoder globally disabled via dev flag")
+        return false
+    }
     val isEmulator = try {
         val fingerprint = android.os.Build.FINGERPRINT.lowercase()
         val model = android.os.Build.MODEL.lowercase()
@@ -768,7 +806,34 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
             .setRenderersFactory(renderersFactory)
             .setSeekForwardIncrementMs(5_000)
             .setSeekBackIncrementMs(5_000)
-            .build().also { playerView.player = it }
+            .build().also {
+                playerView.player = it
+                // Attach diagnostics listener
+                try { exoDiagListener?.let { lst -> it.removeListener(lst) } } catch (_: Exception) {}
+                val diag = object : Player.Listener {
+                    override fun onPlaybackStateChanged(state: Int) {
+                        val st = when(state){
+                            Player.STATE_IDLE -> "IDLE"
+                            Player.STATE_BUFFERING -> "BUFFERING"
+                            Player.STATE_READY -> "READY"
+                            Player.STATE_ENDED -> "ENDED"
+                            else -> state.toString()
+                        }
+                        Log.d(TAG, "EXO-STATE ${st} playWhenReady=${it.playWhenReady} cur=" + (currentItemFile ?: "<none>"))
+                    }
+                    override fun onPlayerError(error: PlaybackException) {
+                        Log.e(TAG, "EXO-ERROR code=${error.errorCodeName} msg=${error.message} cur=" + (currentItemFile ?: "<none>"), error)
+                    }
+                    override fun onRenderedFirstFrame() {
+                        Log.d(TAG, "EXO-FIRST-FRAME cur=" + (currentItemFile ?: "<none>") + " surf=${playerView.width}x${playerView.height}")
+                    }
+                    override fun onVideoSizeChanged(videoSize: VideoSize) {
+                        Log.d(TAG, "EXO-VIDEO-SIZE ${videoSize.width}x${videoSize.height} rot=${videoSize.unappliedRotationDegrees} ratio=${videoSize.pixelWidthHeightRatio} cur=" + (currentItemFile ?: "<none>"))
+                    }
+                }
+                it.addListener(diag)
+                exoDiagListener = diag
+            }
     // Repeat handled by playlist timing, not ExoPlayer internal repeat
     built.repeatMode = com.google.android.exoplayer2.Player.REPEAT_MODE_OFF
     built.shuffleModeEnabled = false
@@ -843,7 +908,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
     var videoStallWatch: Runnable? = null
     var scheduleTick: Runnable? = null
     var showNext: (() -> Unit)? = null
-    var currentItemFile: String? = null
+    fun currentPlayingItemDesc(): String = currentItemFile ?: "<none>"
     // Align next switch to sync_ref.start_epoch cadence (like web player)
     fun alignedDelayMs(baseDurMs: Long, sref: com.pizzahut.tv.api.SyncRef?): Long {
         if (baseDurMs <= 0L || sref == null) return baseDurMs
@@ -1254,13 +1319,22 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
             
             // Choose primary/fallback URLs
             val useServerSlice = isSlicePlanned && (absUrl?.contains("/slice-video/") == true)
-            val videoUrlPrimary = if (useServerSlice) (absUrl ?: mediaUrl) else mediaUrl
+            // If prior parse failure cooldown active for this slice URL, skip server slice this round
+            val cooledUseServerSlice = if (useServerSlice && absUrl != null) {
+                val cooldownUntil = sliceParseFailCooldown[absUrl]
+                if (cooldownUntil != null && System.currentTimeMillis() < cooldownUntil) {
+                    Log.w(TAG, "PLAYCHECK skip server slice due to recent parse fail cooldown absUrl=${absUrl.take(160)}")
+                    false
+                } else true
+            } else useServerSlice
+            val effectiveUseServerSlice = cooledUseServerSlice
+            val videoUrlPrimary = if (effectiveUseServerSlice) (absUrl ?: mediaUrl) else mediaUrl
             val videoUrlFallback = staticUrl
             // Alternate: full original video for viewport slicing if server slice is not usable
             val videoUrlAltFull = mediaUrl
 
             // Apply or reset viewport slicing before playback
-            if (isSlicePlanned && !useServerSlice) {
+            if (isSlicePlanned && !effectiveUseServerSlice) {
                 // Normalize mode
                 val modeParam = if (syncMode.contains('v')) "split-v" else "split-h"
                 currentUsingViewportSlicing = true
@@ -1270,6 +1344,13 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                 try {
                     applySliceViewport(playerView, modeParam, syncCount, syncOrder)
                     Log.d(TAG, "PLAYCHECK using viewport slice: mode=${modeParam} count=${syncCount} order=${syncOrder}")
+                    // Geometry log after applying initial viewport slice
+                    try {
+                        playerView.post {
+                            val vw = playerView.width; val vh = playerView.height
+                            Log.d(TAG, "VIEWPORT init mode=${modeParam} count=${syncCount} order=${syncOrder} view=${vw}x${vh}")
+                        }
+                    } catch (_: Exception) {}
                 } catch (e: Exception) {
                     Log.e(TAG, "PLAYCHECK apply viewport failed: ${e.message}")
                 }
@@ -1279,14 +1360,16 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                 currentSliceCount = 0
                 resetSliceViewport(playerView)
                 clearSegmentWrapFrom(playerView)
-                if (isSlicePlanned && useServerSlice) {
+                if (isSlicePlanned && effectiveUseServerSlice) {
                     Log.d(TAG, "PLAYCHECK using server-side slice video (no viewport transform)")
                 } else {
                     Log.d(TAG, "PLAYCHECK reset to normal viewport (non-slice)")
                 }
             }
 
-            Log.d(TAG, "PLAYCHECK decide file=${file} planned=${isSlicePlanned} serverSlice=${useServerSlice} viewport=${currentUsingViewportSlicing} syncMode=${syncMode} order=${syncOrder} count=${syncCount} prim=${videoUrlPrimary} fb=${videoUrlFallback} rawNextUrl=${next.url}")
+            currentWasServerSlice = effectiveUseServerSlice
+            currentAltFullVideoUrl = if (effectiveUseServerSlice) videoUrlAltFull else null
+            Log.d(TAG, "PLAYCHECK decide file=${file} planned=${isSlicePlanned} serverSlice=${effectiveUseServerSlice} viewport=${currentUsingViewportSlicing} syncMode=${syncMode} order=${syncOrder} count=${syncCount} prim=${videoUrlPrimary} fb=${videoUrlFallback} rawNextUrl=${next.url}")
             // Extra diagnostics for black screen on follower screens
             try {
                 val pvClass = playerView.javaClass.simpleName
@@ -1462,6 +1545,47 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                                 c = c.cause; depth++
                             }
                             Log.e(TAG, "playerError code=" + error.errorCodeName + " msg=" + (error.message ?: "") + " url=" + (currentVideoUrl ?: "-") + if (chain.isNotEmpty()) " | $chain" else "")
+
+                            // Specialized handling: if this was a server-sliced video and we hit a parsing/container error, immediately pivot to full video + viewport slicing
+                            try {
+                                val wasServerSlice = currentWasServerSlice
+                                val errName = error.errorCodeName ?: ""
+                                val lowerMsg = (error.message ?: "").lowercase()
+                                val isParsing = errName.contains("PARS", true) || lowerMsg.contains("parsing") || lowerMsg.contains("container") || lowerMsg.contains("atom")
+                                if (wasServerSlice && isParsing) {
+                                    val sliceUrl = currentVideoUrl
+                                    val altFull = currentAltFullVideoUrl
+                                    if (!altFull.isNullOrBlank()) {
+                                        // Record cooldown to avoid repeatedly trying the broken slice during this window
+                                        sliceUrl?.let { sliceParseFailCooldown[it] = System.currentTimeMillis() + sliceParseFailCooldownMs }
+                                        Log.w(TAG, "PARSEFAIL slice url=${sliceUrl?.take(160)} switching to full+viewport=${altFull.take(160)}")
+                                        binding.message.text = ("SliceParse -> Full ${f.take(10)}").take(60)
+                                        // Clear player items and prepare alt full video, enabling viewport slicing if part of sync group
+                                        try {
+                                            val playerRef = exoPlayer
+                                            if (playerRef != null) {
+                                                playerRef.clearMediaItems()
+                                                // Apply viewport transform now if needed
+                                                if (currentSliceCount > 1) {
+                                                    try { applySliceViewport(playerView, currentSliceMode, currentSliceCount, currentSliceOrder) } catch (e: Exception) { Log.w(TAG, "viewport apply failed post-parsefail: ${e.message}") }
+                                                    currentUsingViewportSlicing = true
+                                                }
+                                                currentWasServerSlice = false // now using client viewport
+                                                currentVideoUrl = altFull
+                                                playerRef.setMediaSource(buildMediaSource(altFull))
+                                                try {
+                                                    val vw = playerView.width; val vh = playerView.height
+                                                    Log.d(TAG, "VIEWPORT pre-prepare(parsefail) viewSize=${vw}x${vh} slice=${currentUsingViewportSlicing} mode=${currentSliceMode} order=${currentSliceOrder} count=${currentSliceCount}")
+                                                } catch (_: Exception) {}
+                                                playerRef.prepare(); playerRef.playWhenReady = true
+                                            }
+                                            return // Do not proceed to other fallbacks
+                                        } catch (pf: Exception) {
+                                            Log.e(TAG, "PARSEFAIL fallback prep error: ${pf.message}")
+                                        }
+                                    }
+                                }
+                            } catch (spe: Exception) { Log.w(TAG, "parsefail branch error: ${spe.message}") }
                             
                             // Try custom decoder fallback for problematic videos before other fallbacks
                             val finalUrl = currentVideoUrl ?: ""
@@ -1565,6 +1689,31 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                 val finalUrl = videoUrlPrimary
                 currentVideoUrl = finalUrl
                 Log.d(TAG, "PLAYCHECK using url=${finalUrl}")
+                // Pre-play network metadata diagnostics (HEAD + small RANGE) for primary URL (async)
+                lifecycleScope.launch(Dispatchers.IO) {
+                    try {
+                        val headStart = System.currentTimeMillis()
+                        val headPair = headOk(finalUrl, 4000)
+                        val headLatency = System.currentTimeMillis() - headStart
+                        Log.d(TAG, "NETMETA HEAD url=${finalUrl.take(120)} code=${headPair.second} latencyMs=${headLatency}")
+                        // Small range request (first 1024 bytes)
+                        try {
+                            val rangeClient = okhttp3.OkHttpClient.Builder().followRedirects(true).build()
+                            val req = okhttp3.Request.Builder().url(finalUrl).addHeader("Range", "bytes=0-1023").build()
+                            val rangeStart = System.currentTimeMillis()
+                            rangeClient.newCall(req).execute().use { resp ->
+                                val code = resp.code
+                                val got = resp.body?.bytes()?.size ?: -1
+                                val rangeLatency = System.currentTimeMillis() - rangeStart
+                                Log.d(TAG, "NETMETA RANGE url=${finalUrl.take(100)} code=${code} bytes=${got} latencyMs=${rangeLatency}")
+                            }
+                        } catch (re: Exception) {
+                            Log.w(TAG, "NETMETA RANGE fail ${re.message}")
+                        }
+                    } catch (he: Exception) {
+                        Log.w(TAG, "NETMETA HEAD fail ${he.message}")
+                    }
+                }
                 
                 // Check if we should use custom decoder directly
                 if (shouldUseCustomDecoder(finalUrl)) {
@@ -1602,6 +1751,10 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                                 customVideoView.visibility = ImageView.GONE
                                 playerView.visibility = ImageView.VISIBLE
                                 player.setMediaSource(buildMediaSource(finalUrl))
+                                try {
+                                    val vw = playerView.width; val vh = playerView.height
+                                    Log.d(TAG, "VIEWPORT pre-prepare(fallback) viewSize=${vw}x${vh} slice=${currentUsingViewportSlicing} mode=${currentSliceMode} order=${currentSliceOrder} count=${currentSliceCount}")
+                                } catch (_: Exception) {}
                                 player.prepare(); player.playWhenReady = true
                             } catch (e: Exception) {
                                 Log.e(TAG, "PLAYCHECK ExoPlayer fallback failed: ${e.message}")
@@ -1645,6 +1798,10 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                         // Restore the message overlay when leaving custom decoder path
                         try { binding.message.visibility = ImageView.VISIBLE } catch (_: Exception) {}
                         player.setMediaSource(buildMediaSource(finalUrl))
+                        try {
+                            val vw = playerView.width; val vh = playerView.height
+                            Log.d(TAG, "VIEWPORT pre-prepare(cd-fallback) viewSize=${vw}x${vh} slice=${currentUsingViewportSlicing} mode=${currentSliceMode} order=${currentSliceOrder} count=${currentSliceCount}")
+                        } catch (_: Exception) {}
                         player.prepare(); player.playWhenReady = true
                     }
                 } else {
@@ -1657,6 +1814,10 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                     // Ensure the message overlay is visible in normal playback mode
                     try { binding.message.visibility = ImageView.VISIBLE } catch (_: Exception) {}
                     player.setMediaSource(buildMediaSource(finalUrl))
+                    try {
+                        val vw = playerView.width; val vh = playerView.height
+                        Log.d(TAG, "VIEWPORT pre-prepare(normal) viewSize=${vw}x${vh} slice=${currentUsingViewportSlicing} mode=${currentSliceMode} order=${currentSliceOrder} count=${currentSliceCount}")
+                    } catch (_: Exception) {}
                     player.prepare(); player.playWhenReady = true
                 }
                 
@@ -1873,6 +2034,22 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                 val idx = filtered.indexOfFirst { it.file == cur }
                 if (idx >= 0) (idx + 1) % (filtered.size.coerceAtLeast(1)) else 0
             } else 0
+                // IMAGE ITEM HANDLING - normalize to full screen
+                try {
+                    // Clear any previous video slice viewport wrappers so images are not clipped
+                    resetSliceViewport(playerView)
+                    clearSegmentWrapFrom(playerView)
+                } catch (_: Exception) {}
+                try {
+                    // Also ensure the imageView itself has no stale wrapper (in case prior static fallback applied slicing)
+                    clearSegmentWrapFrom(imageView)
+                } catch (_: Exception) {}
+                currentUsingViewportSlicing = false
+                currentSliceCount = 0
+                currentWasServerSlice = false
+                currentAltFullVideoUrl = null
+                imageView.scaleType = ImageView.ScaleType.CENTER_CROP
+                Log.d(TAG, "IMAGE-FS-VERIFY file=${file} view=${imageView.width}x${imageView.height} scale=${imageView.scaleType}")
             return
         }
         // No change: keep current list and index
