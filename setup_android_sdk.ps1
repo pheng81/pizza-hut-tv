@@ -46,8 +46,7 @@ $packages = @(
     "emulator",
     "platforms;android-$ApiLevel",
     "build-tools;$ApiLevel.0.0",
-    # API 34 Android TV commonly provides x86 image
-    "system-images;android-$ApiLevel;$ImageChannel;x86"
+    "system-images;android-$ApiLevel;$ImageChannel;x86_64"
 )
 & "$toolsBin\sdkmanager.bat" $packages *> "$SdkRoot\install.log"
 
@@ -59,7 +58,7 @@ Write-Host "[7] Creating AVD $AvdName (if missing)" -ForegroundColor Cyan
 $avdDir = "$Env:USERPROFILE\.android\avd\$AvdName.avd"
 if (-not (Test-Path $avdDir)) {
     # Avoid interactive hardware profile question
-    (echo no) | & "$toolsBin\avdmanager.bat" create avd -n $AvdName -k "system-images;android-$ApiLevel;$ImageChannel;x86" --device tv_1080p *> "$SdkRoot\avd_create.log"
+    (echo no) | & "$toolsBin\avdmanager.bat" create avd -n $AvdName -k "system-images;android-$ApiLevel;$ImageChannel;x86_64" --device tv_1080p *> "$SdkRoot\avd_create.log"
 } else {
     Write-Host "[Skip] AVD already exists" -ForegroundColor Yellow
 }

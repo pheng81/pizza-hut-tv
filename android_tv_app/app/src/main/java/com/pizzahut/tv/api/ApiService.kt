@@ -10,7 +10,8 @@ interface ApiService {
 	@GET("playlist/{storeId}/{screenId}")
 	suspend fun getPlaylist(
 		@Path("storeId") storeId: String,
-		@Path("screenId") screenId: String
+		@Path("screenId") screenId: String,
+		@Header("X-User-Code") userCode: String? = com.pizzahut.tv.api.PairCodeHolder.codeOrNull()
 	): PlaylistResponse
 
 	@GET("stores")
@@ -21,31 +22,11 @@ interface ApiService {
 		@Path("storeId") storeId: String
 	): ScreensResponse
 
-	// Raw variant to capture non-JSON/HTML responses for diagnostics
-	@GET("screens/{storeId}")
-	suspend fun getScreensRaw(
-		@Path("storeId") storeId: String,
-		@Header("Accept") accept: String = "text/plain, application/json"
-	): String
-
-	// Legacy array endpoint that accepts X-User-Code and does not require login session
-	@GET("screens_list/{storeId}")
-	suspend fun getScreensLegacyList(
-		@Path("storeId") storeId: String
-	): ScreensResponse
-
 	// Pairing: fetch stores for a user by 4-digit code
 	@GET("api/stores_by_code/{code}")
 	suspend fun getStoresByCode(
 		@Path("code") code: String
 	): CodeStoresResponse
-
-	// Raw variant to detect HTML/login when server returns non-JSON
-	@GET("api/stores_by_code/{code}")
-	suspend fun getStoresByCodeRaw(
-		@Path("code") code: String,
-		@Header("Accept") accept: String = "text/plain, application/json"
-	): String
 
 	@POST("api/screen_heartbeat")
 	suspend fun sendHeartbeat(@Body body: HeartbeatReq): HeartbeatResp

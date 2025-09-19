@@ -9,9 +9,9 @@ import android.content.Context
 object PairCodeHolder {
     @Volatile private var appContext: Context? = null
     fun init(ctx: Context) { appContext = ctx.applicationContext }
-    fun appCtx(): Context? = appContext
     fun get(): String? {
         val ctx = appContext ?: return null
         return try { ctx.getSharedPreferences("phtv", Context.MODE_PRIVATE).getString("pairCode", null) } catch (_: Exception) { null }
     }
+    fun codeOrNull(): String? = get()
 }
