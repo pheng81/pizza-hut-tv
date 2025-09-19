@@ -81,13 +81,13 @@ class TvDisplayActivity : AppCompatActivity() {
     var currentSliceOrder: Int = 0
     var currentUsingViewportSlicing: Boolean = false
     // Track whether current playback used a server-side physical slice file
-    private var currentWasServerSlice: Boolean = false
+    var currentWasServerSlice: Boolean = false
     // Store the full/original video URL (for viewport slicing fallback) when a server slice is in use
-    private var currentAltFullVideoUrl: String? = null
+    var currentAltFullVideoUrl: String? = null
     // Cooldown registry for slice parse failures: sliceUrl -> retryAllowedAfterEpochMs
-    private val sliceParseFailCooldown: MutableMap<String, Long> = mutableMapOf()
+    val sliceParseFailCooldown: MutableMap<String, Long> = mutableMapOf()
     // Default cooldown after a parsing/container failure (ms)
-    private val sliceParseFailCooldownMs: Long = 2 * 60 * 1000L
+    val sliceParseFailCooldownMs: Long = 2 * 60 * 1000L
     // Currently playing file name for diagnostics (moved earlier so listeners can access)
     var currentItemFile: String? = null
     // Developer toggle: allow sliced videos to play on emulator (default false)
@@ -130,8 +130,8 @@ class TvDisplayActivity : AppCompatActivity() {
             setBackgroundColor(Color.BLACK)
             adjustViewBounds = true
             layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-            // Match webplayer: fill and crop
-            scaleType = ImageView.ScaleType.CENTER_CROP
+            // Use FIT_CENTER so full image is visible (CENTER_CROP was causing zoom/crop complaints)
+            scaleType = ImageView.ScaleType.FIT_CENTER
         }
         // ExoPlayer-based video surface (replaces VideoView for faster start & caching)
     val playerView = com.google.android.exoplayer2.ui.StyledPlayerView(this).apply {
@@ -2034,22 +2034,13 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                 val idx = filtered.indexOfFirst { it.file == cur }
                 if (idx >= 0) (idx + 1) % (filtered.size.coerceAtLeast(1)) else 0
             } else 0
-                // IMAGE ITEM HANDLING - normalize to full screen
-                try {
-                    // Clear any previous video slice viewport wrappers so images are not clipped
-                    resetSliceViewport(playerView)
-                    clearSegmentWrapFrom(playerView)
-                } catch (_: Exception) {}
-                try {
-                    // Also ensure the imageView itself has no stale wrapper (in case prior static fallback applied slicing)
-                    clearSegmentWrapFrom(imageView)
-                } catch (_: Exception) {}
+                // IMAGE LIST CHANGE HANDLING: reset slice tracking for still images without cropping
                 currentUsingViewportSlicing = false
                 currentSliceCount = 0
-                currentWasServerSlice = false
-                currentAltFullVideoUrl = null
-                imageView.scaleType = ImageView.ScaleType.CENTER_CROP
-                Log.d(TAG, "IMAGE-FS-VERIFY file=${file} view=${imageView.width}x${imageView.height} scale=${imageView.scaleType}")
+                try { currentWasServerSlice = false } catch (_: Exception) {}
+                try { currentAltFullVideoUrl = null } catch (_: Exception) {}
+                try { imageView.scaleType = ImageView.ScaleType.FIT_CENTER } catch (_: Exception) {}
+                Log.d(TAG, "IMAGE-FS-VERIFY listChange view=${imageView.width}x${imageView.height} scale=${imageView.scaleType}")
             return
         }
         // No change: keep current list and index
