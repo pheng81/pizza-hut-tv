@@ -83,6 +83,8 @@ code_sync.tgz
 # Cache / temp
 *.tmp
 ~$*# Python
+static/cache/
+!static/cache/.gitkeep
 __pycache__/
 *.py[cod]
 *$py.class
