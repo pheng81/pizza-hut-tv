@@ -1,0 +1,237 @@
+{
+  "stores": [
+    {
+      "id": "1000",
+      "name": "My First Store"
+    }
+  ],
+  "master_store_id": "1000",
+  "screens": {
+    "1000": {
+      "1000_screen1": {
+        "file": "users/kayson2_at_gmail.com/2025-09/15db47e8-bc16-45ec-85a8-7edf53b5c9fe.mp4",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "id": "9fe605d8-9e93-42d1-881a-97a0ecc020b8",
+            "file": "users/kayson2_at_gmail.com/2025-09/15db47e8-bc16-45ec-85a8-7edf53b5c9fe.mp4",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "video",
+            "sync_ref": {
+              "group": "e853aefa-6925-49fe-adad-feaf0bd636a3",
+              "role": "master",
+              "order": 0
+            }
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "events": [
+          {
+            "ts": 1758178092,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758178097,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758178102,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758178107,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758178112,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758178117,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758178123,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758178128,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758178133,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758178138,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758178143,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          }
+        ],
+        "last_seen": 1758178132,
+        "cmd_queue": [
+          {
+            "id": "f0b71280-dcd8-4ebd-8970-b4f6f5d2be16",
+            "ts": 1758178145,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ]
+      },
+      "1000_screen2": {
+        "file": "users/kayson2_at_gmail.com/2025-09/15db47e8-bc16-45ec-85a8-7edf53b5c9fe.mp4",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "id": "6c940b85-34d6-4763-8af8-b1e9abbf6868",
+            "file": "users/kayson2_at_gmail.com/2025-09/15db47e8-bc16-45ec-85a8-7edf53b5c9fe.mp4",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "video",
+            "sync_ref": {
+              "group": "e853aefa-6925-49fe-adad-feaf0bd636a3",
+              "role": "follower",
+              "order": 1
+            }
+          }
+        ],
+        "cmd_queue": [
+          {
+            "id": "6dce1140-5883-4e70-8492-6371e3afc818",
+            "ts": 1758178145,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1000_screen3": {
+        "file": "users/kayson2_at_gmail.com/2025-09/15db47e8-bc16-45ec-85a8-7edf53b5c9fe.mp4",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "id": "854777b2-ad72-4661-9eb2-7779122746c2",
+            "file": "users/kayson2_at_gmail.com/2025-09/15db47e8-bc16-45ec-85a8-7edf53b5c9fe.mp4",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "video",
+            "sync_ref": {
+              "group": "e853aefa-6925-49fe-adad-feaf0bd636a3",
+              "role": "follower",
+              "order": 2
+            }
+          }
+        ],
+        "cmd_queue": [
+          {
+            "id": "50b04efa-a611-4db7-a90d-ad36df2b14b2",
+            "ts": 1758178147,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ]
+      }
+    }
+  },
+  "sync_groups": {
+    "e853aefa-6925-49fe-adad-feaf0bd636a3": {
+      "store_id": "1000",
+      "base": "1000_screen1",
+      "count": 3,
+      "filename": "users/kayson2_at_gmail.com/2025-09/15db47e8-bc16-45ec-85a8-7edf53b5c9fe.mp4",
+      "members": [
+        {
+          "screen_id": "1000_screen1",
+          "item_id": "9fe605d8-9e93-42d1-881a-97a0ecc020b8",
+          "role": "master",
+          "order": 0
+        },
+        {
+          "screen_id": "1000_screen2",
+          "item_id": "6c940b85-34d6-4763-8af8-b1e9abbf6868",
+          "role": "follower",
+          "order": 1
+        },
+        {
+          "screen_id": "1000_screen3",
+          "item_id": "854777b2-ad72-4661-9eb2-7779122746c2",
+          "role": "follower",
+          "order": 2
+        }
+      ],
+      "created_at": 1758178145,
+      "start_epoch": 1758178155,
+      "mode": "split-h"
+    }
+  }
+}

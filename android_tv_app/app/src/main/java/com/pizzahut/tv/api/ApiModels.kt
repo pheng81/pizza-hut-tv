@@ -5,10 +5,7 @@ import com.google.gson.annotations.SerializedName
 
 data class PlaylistResponse(
 	@SerializedName("success") val success: Boolean,
-	@SerializedName("playlist") val playlist: List<PlaylistItem>?,
-	// Optional screen metadata used by web player; allow TV to mirror orientation behavior
-	@SerializedName("orientation") val orientation: String? = null,
-	@SerializedName("rotation") val rotation: Int? = null
+	@SerializedName("playlist") val playlist: List<PlaylistItem>?
 )
 
 data class PlaylistItem(
@@ -25,7 +22,7 @@ data class PlaylistItem(
 	@SerializedName("schedule") val schedule: List<ScheduleWindow>? = emptyList(),
 	@SerializedName("days") val days: List<String>? = emptyList(),
 	@SerializedName("media_type") val mediaType: String? = null,
-	// Optional synchronized group metadata for split/sliced video
+	// Optional sync metadata when this item is part of a synchronized group
 	@SerializedName("sync_ref") val syncRef: SyncRef? = null
 )
 
@@ -33,6 +30,19 @@ data class ScheduleWindow(
 	@SerializedName("start") val start: String?,
 	@SerializedName("end") val end: String?,
 	@SerializedName("days") val days: List<String>? = null
+)
+
+// Synchronization metadata for items that are part of a multi-screen sync group
+data class SyncRef(
+	@SerializedName("group") val group: String? = null,
+	@SerializedName("role") val role: String? = null, // master | follower
+	@SerializedName("order") val order: Int? = null,
+	// Epoch seconds at which the group cadence starts; align switches to this cadence
+	@SerializedName("start_epoch") val startEpoch: Long? = null,
+	// Number of screens in the group; when >1 and mode=split-h, each screen renders a horizontal slice
+	@SerializedName("count") val count: Int? = null,
+	// Segmentation mode ("split-h" for horizontal slicing)
+	@SerializedName("mode") val mode: String? = null
 )
 
 // Device setup discovery
@@ -80,17 +90,6 @@ data class ClientEventReq(
 data class BasicResp(
 	@SerializedName("success") val success: Boolean,
 	@SerializedName("error") val error: String? = null
-)
-
-// Sync/slice info to render a segment of a larger video/image
-data class SyncRef(
-	@SerializedName("group") val group: String? = null,
-	@SerializedName("role") val role: String? = null,
-	@SerializedName("order") val order: Int? = null,
-	@SerializedName("count") val count: Int? = null,
-	@SerializedName("mode") val mode: String? = null,
-	@SerializedName("start_epoch") val startEpoch: Long? = null,
-	@SerializedName("virtual") val virtual: Boolean? = null
 )
 
 // Pairing (stores by code)

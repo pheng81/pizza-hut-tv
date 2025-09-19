@@ -23,222 +23,46 @@
             if (window.MEDIA_BASE_URL && !window.MEDIA_BASE_URL.endsWith('/')) {
                 window.MEDIA_BASE_URL += '/';
             }
-            // If MEDIA_BASE_URL points to a remote host, add preconnect/dns-prefetch dynamically
             (function(){
-                try{
+                try {
                     const mbu = String(window.MEDIA_BASE_URL||'');
-                    if (/^https?:\/\//i.test(mbu)){
+                    if(/^https?:\/\//i.test(mbu)){
                         const host = new URL(mbu).origin;
-                        const head = document.getElementsByTagName('head')[0];
-                        if (head){
-                            const mk = (rel,href,cross)=>{ const l=document.createElement('link'); l.rel=rel; l.href=href; if(cross) l.crossOrigin='anonymous'; head.appendChild(l); };
-                            mk('preconnect', host, true);
-                            mk('dns-prefetch', host.replace(/^https?:\/\//,'//'));
+                        const head = document.head;
+                        if(head){
+                            const mk=(rel,href,cross)=>{const l=document.createElement('link');l.rel=rel;l.href=href;if(cross)l.crossOrigin='anonymous';head.appendChild(l);};
+                            mk('preconnect',host,true); mk('dns-prefetch',host.replace(/^https?:\/\//,'//'));
                         }
                     }
                 }catch{}
             })();
-            // If a CDN image 404s, fall back to origin /static/uploads/<key>
             function _extractKey(val){
-                try {
-                    const s = String(val||'');
-                    if (/^https?:\/\//i.test(s)) {
-                        const u = new URL(s);
-                        const parts = (u.pathname||'').split('/').filter(Boolean);
-                        return parts.length ? parts[parts.length-1] : '';
+                try{
+                    const s=String(val||'');
+                    if(/^https?:\/\//i.test(s)){
+                        const u=new URL(s); const parts=(u.pathname||'').split('/').filter(Boolean); return parts.at(-1)||'';
                     }
-                    const parts = s.split('/').filter(Boolean);
-                    return parts.length ? parts[parts.length-1] : s;
-                } catch { return ''; }
-            }
-            // Encode each path segment but keep slashes
-            function encodePathPreserveSlashes(p){
-                try{
-                    return String(p||'')
-                        .split('/')
-                        .map(seg => seg ? encodeURIComponent(seg) : '')
-                        .join('/');
-                }catch{return String(p||'');}
-            }
-            function _extractRelFromThumbUrl(u){
-                try{
-                    const s = String(u||'');
-                    // Match local server thumbnail URL: /thumb/<w>/<relpath>
-                    let m = s.match(/^\/?thumb\/\d+\/(.+)$/);
-                    if (m && m[1]) return decodeURIComponent(m[1]);
-                    // Match CDN-style: .../thumbs/<w>/<relpath>.(webp|jpg)
-                    m = s.match(/thumbs\/\d+\/([^?]+?)\.(?:webp|jpg)(?:[?#].*)?$/i);
-                    if (m && m[1]) return decodeURIComponent(m[1]);
-                }catch{}
-                return null;
+                    const parts=s.split('/').filter(Boolean); return parts.at(-1)||s;
+                }catch{ return ''; }
             }
             function fallbackToOrigin(img, original){
                 try{
-                    if(!img) return;
-                    const cur = original || img.currentSrc || img.src || '';
-                    const key = _extractKey(cur);
-                    const step = parseInt(img.dataset.fallbackStep || '0', 10);
-                    // Debug aid
-                    if (!img.dataset._dbg) { img.dataset._dbg = '1'; console.warn('[img-fallback] start', {cur, key}); }
-                    // Step 0: if we have an explicit original relative path (preferred), jump straight to origin path
-                    if (step === 0 && original && !/^https?:\/\//i.test(String(original))) {
-                        const base = '/static/uploads/';
-                        // Normalize original: strip any leading slash and any accidental 'static/uploads/' prefix
-                        let rel = String(original).replace(/^\/+/, '');
-                        if (rel.startsWith('static/uploads/')) {
-                            rel = rel.substring('static/uploads/'.length);
-                        }
-                        img.dataset.fallbackStep = '1';
-                        const local1 = base + encodePathPreserveSlashes(rel);
-                        console.warn('[img-fallback] use original rel to origin', local1);
-                        img.src = local1;
-                        return;
-                    }
-                    // Step 1: if URL has query, retry without query (common CDN quirk)
-                    if (step === 0) {
-                        const u = (()=>{ try { return new URL(cur); } catch { return null; }})();
-                        if (u && u.search) {
-                            u.search = '';
-                            img.dataset.fallbackStep = '2';
-                            console.warn('[img-fallback] retry without query', u.toString());
-                            img.src = u.toString();
-                            return;
-                        }
-                    }
-                    // Step 2: try origin static by key
-                    if (step <= 2) {
-                        // Prefer deriving full rel path from thumb URL patterns
-                        const relFromThumb = _extractRelFromThumbUrl(cur);
-                        let rel = relFromThumb || (original && !/^https?:\/\//i.test(String(original)) ? String(original).replace(/^\/+/, '') : null);
-                        if (rel && rel.startsWith('static/uploads/')) {
-                            rel = rel.substring('static/uploads/'.length);
-                        }
-                        if (!rel && !key) return; // nothing we can do
-                        const path = rel ? encodePathPreserveSlashes(rel) : encodeURIComponent(key);
-                        const local = '/static/uploads/' + path;
-                        img.dataset.fallbackStep = '3';
-                        console.warn('[img-fallback] fallback to origin', local);
-                        img.src = local;
-                        return;
-                    }
-                    // Step 3: absolute origin (belt-and-braces)
-                    if (step === 3) {
-                        if (!key) return;
-                        const abs = (location.origin || '').replace(/\/$/, '') + '/static/uploads/' + encodeURIComponent(key);
-                        img.dataset.fallbackStep = '4';
-                        console.warn('[img-fallback] fallback to absolute origin', abs);
-                        img.src = abs;
-                        return;
-                    }
-                    // Done
-                    img.dataset.fallbackTried = '1';
+                    if(!img) return; const cur=original||img.currentSrc||img.src||''; const key=_extractKey(cur); const step=parseInt(img.dataset.fallbackStep||'0',10);
+                    if(step===0 && original && !/^https?:\/\//i.test(String(original))){
+                        const base='/static/uploads/'; const k=_extractKey(original); img.dataset.fallbackStep='1'; img.src=base+encodeURIComponent(k); return; }
+                    if(step===0){ const u=(()=>{try{return new URL(cur);}catch{return null;}})(); if(u&&u.search){u.search=''; img.dataset.fallbackStep='2'; img.src=u.toString(); return;} }
+                    if(step<=2){ if(!key) return; img.dataset.fallbackStep='3'; img.src='/static/uploads/'+encodeURIComponent(key); return; }
+                    if(step===3){ if(!key) return; const abs=(location.origin||'').replace(/\/$/,'')+'/static/uploads/'+encodeURIComponent(key); img.dataset.fallbackStep='4'; img.src=abs; return; }
+                    img.dataset.fallbackTried='1';
                 }catch{}
             }
-            function mediaUrl(name){
-                if (!name) return '';
-                try {
-                    // Absolute http(s) URL? return as-is
-                    if (/^https?:\/\//i.test(name)) return name;
-                    // Already an absolute path from site root (e.g. "/static/uploads/...")? return as-is
-                    if (name.startsWith('/')) return name;
-                    // Starts with "static/..." (no leading slash)? make it rooted without base
-                    if (name.startsWith('static/')) return '/' + name;
-                } catch(e) {}
-                const base = (window.MEDIA_BASE_URL || '/static/uploads/').replace(/\/+$/, '/');
-                const rel = String(name).replace(/^\/+/, '');
-                return base + rel;
-            }
-            function escapeHtml(s){
-                try {
-                    return String(s).replace(/[&<>\"]/g, function(c){
-                        switch(c){ case '&': return '&amp;'; case '<': return '&lt;'; case '>': return '&gt;'; case '"': return '&quot;'; default: return c; }
-                    });
-                } catch { return s; }
-            }
-            // Build a video URL that prefers CDN (MEDIA_BASE_URL) with server fallback handled elsewhere.
-            function videoUrl(name){
-                if (!name) return '';
-                try {
-                    // Absolute remote URL (e.g., R2/CDN) -> keep
-                    if (/^https?:\/\//i.test(name)) return name;
-                    // Already absolute path -> keep
-                    if (name.startsWith('/')) return name;
-                } catch(e) {}
-                const base = (window.MEDIA_BASE_URL || '/static/uploads/').replace(/\/+$/, '/');
-                const rel = String(name).replace(/^\/+/, '');
-                return base + rel;
-            }
-            // Build thumbnail URL for images.
-            // For local (relative) names, prefer the server endpoint /thumb/<w>/<rel> so the server can generate
-            // and push the thumbnail to CDN. For absolute URLs, return as-is.
-            function thumbUrl(name, width){
-                if(!name) return '';
-                try{
-                    // Absolute http(s) URL? no server-side thumb; use as-is
-                    if (/^https?:\/\//i.test(String(name))) return String(name);
-                    let rel = String(name).replace(/^\/+/, '');
-                    // Normalize away any accidental 'static/uploads/' prefix
-                    if (rel.startsWith('static/uploads/')) {
-                        rel = rel.substring('static/uploads/'.length);
-                    }
-                    // IMPORTANT: do not encode slashes here; the route expects a path
-                    return `/thumb/${width}/${rel}`;
-                }catch(e){
-                    return `/thumb/${width}/${String(name)}`;
-                }
-            }
-        // Global IMG error listener: if any image fails (e.g., CDN hotlink/404), auto-fallback to origin
-        window.addEventListener('error', function(ev){
-                try{
-                    const el = ev && ev.target;
-                    if (!el || el.tagName !== 'IMG') return;
-                    // if already tried fallback, skip
-                    if (el.dataset && el.dataset.fallbackTried) return;
-            // pass along original relative path if provided by caller
-            const orig = (el.dataset && el.dataset.original) ? el.dataset.original : undefined;
-            fallbackToOrigin(el, orig);
-                }catch{}
-            }, true);
+            function mediaUrl(name){ if(!name) return ''; try{ if(/^https?:\/\//i.test(name)||name.startsWith('/')) return name; if(name.startsWith('static/')) return '/'+name; }catch{} const base=(window.MEDIA_BASE_URL||'/static/uploads/').replace(/\/+$/,'/'); return base+String(name).replace(/^\/+/, ''); }
+            function escapeHtml(s){ try { return String(s).replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }catch{return s;} }
+            function videoUrl(name){ if(!name) return ''; try{ if(/^https?:\/\//i.test(name)||name.startsWith('/')) return name; }catch{} const base=(window.MEDIA_BASE_URL||'/static/uploads/').replace(/\/+$/,'/'); return base+String(name).replace(/^\/+/, ''); }
+            function thumbUrl(name,width){ if(!name) return ''; try{ const base=(window.MEDIA_BASE_URL||'/static/uploads/').replace(/\/+$/,'/'); const rel=String(name).replace(/^\/+/, ''); return `${base}thumbs/${width}/${rel}.webp`; }catch{ const safe=encodeURIComponent(String(name)); return `/thumb/${width}/${safe}`; } }
+            window.addEventListener('error', function(ev){ try{ const el=ev&&ev.target; if(!el||el.tagName!=='IMG') return; if(el.dataset&&el.dataset.fallbackTried) return; const orig=el.dataset && el.dataset.original ? el.dataset.original: undefined; fallbackToOrigin(el, orig);}catch{} }, true);
         </script>
         <style>
-    .enable-switch.on::after, .enable-switch.off::after { content: ''; position: absolute; top: 1px; left: 1px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: all .25s; }
-    .enable-switch.on::after { transform: translateX(24px); }
-    .enable-switch.off::after { transform: translateX(0); }
-    
-    body {
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        background-color: #f5f5f5;
-        color: #333;
-        margin: 0;
-        padding: 0;
-        display: flex;
-        flex-direction: column;
-        min-height: 100vh;
-    }
-
-    .app-wrapper {
-        width: 100%;
-        max-width: 1180px; /* narrower overall */
-        margin: 0 auto;
-        padding: 10px 24px 40px;
-        box-sizing: border-box;
-    }
-
-    @media (max-width: 1400px){
-        .app-wrapper { max-width: 1000px; }
-    }
-    @media (max-width: 1100px){
-        .app-wrapper { max-width: 900px; }
-    }
-    @media (max-width: 980px){
-        .app-wrapper { max-width: 100%; padding: 8px 14px 32px; }
-    }
-
-    /* Constrain grids so cards don't stretch too wide */
-    .screens-grid, .promos-grid {
-        grid-template-columns: repeat(auto-fill, minmax(285px, 1fr));
-    }
-
     /* Removed .header styles (header bar deleted) */
         
         .quick-tips {
@@ -784,8 +608,6 @@
     .rp-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap:10px; }
     .rp-item { border:1px solid #dcdfe3; border-radius:6px; padding:6px; cursor:pointer; display:flex; align-items:center; justify-content:center; height:90px; background:#fafbfc; position:relative; }
     .rp-item img, .rp-item video { max-width:100%; max-height:100%; object-fit:cover; }
-    /* Small filename caption so items are identifiable even without posters */
-    .rp-item .rp-name { position:absolute; left:6px; right:6px; bottom:6px; background:rgba(0,0,0,0.6); color:#fff; font-size:11px; line-height:1.2; padding:2px 4px; border-radius:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; pointer-events:none; }
     .rp-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; padding:10px 12px; border-top:1px solid #eef1f4; }
     .rp-help { font-size:12px; color:#6b7280; padding: 2px 2px 10px; }
     .rp-subtitle { font-size:12px; font-weight:700; color:#374151; margin: 8px 2px 6px; text-transform:uppercase; letter-spacing:.04em; }
@@ -1544,6 +1366,18 @@
     .profile-menu .item:hover { background:#f2f2f7; }
     .profile-menu .username { font-weight:600; font-size:13px; color:#111; }
     .profile-menu .sep { height:1px; background:#e5e5ea; margin:6px 0; }
+    /* Multi-screen sync slice preview */
+    .sync-slice-wrapper { position:relative; width:100%; height:100%; overflow:hidden; background:#000; }
+    .sync-slice-wrapper video, .sync-slice-wrapper img { width:100%; height:100%; object-fit:cover; display:block; transform-origin:left center; }
+    .sync-slice-wrapper[data-count] video, .sync-slice-wrapper[data-count] img { 
+        /* Crop horizontally by scaling then translating left for each order. */
+        transform: translateX(calc(-1 * var(--order,0) * 100% / var(--count,1))) scaleX(var(--count,1));
+    }
+    .sync-slice-inner { width:100%; height:100%; position:relative; }
+    .sync-slice-badge { position:absolute; bottom:2px; right:4px; background:rgba(0,0,0,.55); color:#fff; font-size:9px; padding:2px 4px; border-radius:4px; font-weight:600; letter-spacing:.5px; }
+    /* Dashboard rotating preview slice */
+    .sync-preview-slice { position:relative; width:100%; height:100%; overflow:hidden; }
+    .sync-preview-slice > video, .sync-preview-slice > img { width:100%; height:100%; object-fit:cover; transform-origin:left center; }
     </style>
 </head>
 <body>
@@ -3207,7 +3041,6 @@
                             const order = memEntry && typeof memEntry.order==='number' ? memEntry.order : 1;
                             const role = (memEntry && memEntry.role) || 'follower';
                             const itemId = (memEntry && memEntry.item_id) || (self.crypto && crypto.randomUUID ? crypto.randomUUID() : ('itm_'+Math.random().toString(36).slice(2)));
-                            const countVal = (typeof j.count==='number' && j.count>1) ? j.count : undefined;
                             storeScreens[newSid] = {
                                 file: baseFile,
                                 vertical: false,
@@ -3225,41 +3058,10 @@
                                     repeat: true,
                                     link_next: false,
                                     media_type: (typeof guessMediaType==='function') ? guessMediaType(baseFile) : 'video',
-                                    sync_ref: { group: j.group_id, role: role, order: order, count: countVal, mode: 'split-h' }
+                                    sync_ref: { group: j.group_id, role: role, order: order }
                                 }]
                             };
-                            // Seed/update order cache for the group
-                            try {
-                                window.__syncOrderCache = window.__syncOrderCache || {};
-                                const cache = window.__syncOrderCache[j.group_id] || {};
-                                if(typeof order==='number') cache[newSid] = order;
-                                // Also add existing members from response
-                                if(Array.isArray(j.members)){
-                                    j.members.forEach(m=>{ if(typeof m.order==='number') cache[m.screen_id] = m.order; });
-                                }
-                                window.__syncOrderCache[j.group_id] = cache;
-                                console.log('[SYNC][FOLLOWER] seeded order cache', j.group_id, cache);
-                            } catch{}
                             console.log('[SYNC][FOLLOWER] Injected new screen into local model', newSid, storeScreens[newSid]);
-                            // ALSO update existing members with the new count & (authoritative) order from response so slicing adjusts instantly
-                            try {
-                                if(Array.isArray(j.members)){
-                                    const orderMap = {}; j.members.forEach(m=>{ if(m && typeof m.order==='number') orderMap[m.screen_id]=m.order; });
-                                    Object.keys(storeScreens).forEach(sid=>{
-                                        const scr = storeScreens[sid];
-                                        if(!scr || !Array.isArray(scr.playlist)) return;
-                                        scr.playlist.forEach(it=>{
-                                            if(it && it.sync_ref && it.sync_ref.group === j.group_id){
-                                                // Update count if changed
-                                                if(typeof j.count==='number' && j.count>1) it.sync_ref.count = j.count;
-                                                // If server provided an order for this screen, apply it
-                                                if(sid in orderMap) it.sync_ref.order = orderMap[sid];
-                                                if(!it.sync_ref.mode) it.sync_ref.mode = 'split-h';
-                                            }
-                                        });
-                                    });
-                                }
-                            } catch(updateErr){ console.warn('[SYNC][FOLLOWER] member update failed', updateErr); }
                         } else {
                             console.warn('[SYNC][FOLLOWER] Could not determine base file to inject new screen locally; UI may need manual refresh');
                         }
@@ -3268,14 +3070,6 @@
                     }
                 }catch(injectErr){ console.warn('[SYNC][FOLLOWER] Local inject failed', injectErr); }
                 try{ loadScreensForStore(currentStoreId); }catch{}
-                // Force immediate preview update for all known members (if timers already exist)
-                try {
-                    const gid = j.group_id;
-                    const cache = window.__syncOrderCache && window.__syncOrderCache[gid];
-                    if(cache){
-                        Object.keys(cache).forEach(sid=>{ const pt = window.previewTimers && window.previewTimers[sid]; if(pt){ try { runPreview(sid); console.log('[SYNC][FOLLOWER] forced preview rerun', sid); } catch{} } });
-                    }
-                } catch{}
                 try{ refreshSyncAddButton(); }catch{}
                 alert((j.created? 'Created new sync group with follower ' : 'Added follower ') + j.new_screen + ' (total '+ j.count +')');
                 const btn=document.getElementById('add-sync-screen-btn');
@@ -3589,7 +3383,7 @@
                                                                 row.innerHTML = `
                                                                     <div class=\"pl-top\">
                                                                                                         <div class=\"pl-col pl-thumb\"><div class=\"pl-thumb-click\" data-screen="${screenId}" data-item="${item.id}" style="position:relative;">
-                                                                                                            ${thumbForFile(item.url || item.file)}
+                                                                                                            ${buildSyncThumb(item)}
                                                                                                             ${item && item.sync_ref && item.sync_ref.role==='follower' && idx===0 ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5);color:#fff;font-weight:800;font-size:36px;letter-spacing:2px;">Sync</div>` : ''}
                                                                                                             <div class="item-status-dot ${statusClass}" title="${statusTip}"></div>
                                                                                                             <div style=\"position:absolute;inset:auto 4px 4px auto;background:rgba(0,0,0,.6);color:#fff;font-size:10px;padding:2px 4px;border-radius:3px;\">Change</div>\
@@ -3599,7 +3393,7 @@
                                         <div class=\"schedule-section\"> 
                                                                                 <div class=\"schedule-header\">
                                             <div class=\"schedule-title\">Schedule</div>
-                                            <button type="button" class="add-slot-btn" onclick="addScheduleWindow('${screenId}','${item.id}')" title="Add schedule window">+</button>
+                                            ${(item && item.sync_ref && item.sync_ref.role==='follower' && idx===0) ? '<button type="button" class="add-slot-btn" disabled style="opacity:.35;cursor:not-allowed;" title="Controlled by sync base">+</button>' : `<button type="button" class="add-slot-btn" onclick="addScheduleWindow('${screenId}','${item.id}')" title="Add schedule window">+</button>`}
                                                                                 </div>
                                                                                                                                                                 <div style="margin-top:4px;font-size:11px;font-weight:600;color:#555;display:flex;align-items:center;gap:6px;">
                                                                                                                                                                     <span style="letter-spacing:.3px;">Repeat:</span>
@@ -3607,6 +3401,9 @@
                                                                                     ${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((d,i)=>{
                                                                                         const code=d.toLowerCase().slice(0,3);
                                                                                         const active=(item.days||[]).includes(code)?'active':'';
+                                                                                        if(item && item.sync_ref && item.sync_ref.role==='follower' && idx===0){
+                                                                                            return `<div class=\"weekday-btn ${active}\" style=\"pointer-events:none;opacity:.35;\" title=\"Controlled by sync base\">${d[0]}</div>`;
+                                                                                        }
                                                                                         return `<div class=\"weekday-btn ${active}\" data-day=\"${code}\" onclick=\"toggleItemWeekday('${screenId}','${item.id}','${code}',this)\">${d[0]}</div>`;
                                                                                     }).join('')}
                                                                                                                                                                     </div>
@@ -3614,10 +3411,10 @@
                                                                                 <div class="schedule-primary one-row">
                                                                                     <div class="slot-box dual ${inWindow && item.enabled? 'highlight-active':''}">
                                                                                         <div class="dual-col">
-                                                                                            <span class="slot-label">Start</span><div class="slot-inline"><input type="date" id="pstartdate-${screenId}-${item.id}" value="${startDateVal}" onchange="playlistDateTimeChanged('${screenId}','${item.id}')"><input class="tp-input" readonly data-field="start" data-screen="${screenId}" data-item="${item.id}" id="pstart-${screenId}-${item.id}" type="text" value="${startVal}" placeholder="HH:MM:SS" onclick="openTimePicker(this)" oninput="playlistDateTimeChanged('${screenId}','${item.id}')"></div>
+                                                                                            <span class="slot-label">Start</span><div class="slot-inline">${(item && item.sync_ref && item.sync_ref.role==='follower' && idx===0) ? `<input type=\"date\" disabled value=\"${startDateVal}\" style=\"opacity:.35;\"><input class=\"tp-input\" disabled type=\"text\" value=\"${startVal}\" style=\"opacity:.35;\">` : `<input type=\"date\" id=\"pstartdate-${screenId}-${item.id}\" value=\"${startDateVal}\" onchange=\"playlistDateTimeChanged('${screenId}','${item.id}')\"><input class=\"tp-input\" readonly data-field=\"start\" data-screen=\"${screenId}\" data-item=\"${item.id}\" id=\"pstart-${screenId}-${item.id}\" type=\"text\" value=\"${startVal}\" placeholder=\"HH:MM:SS\" onclick=\"openTimePicker(this)\" oninput=\"playlistDateTimeChanged('${screenId}','${item.id}')\">`} </div>
                                                                                         </div>
                                                                                         <div class="dual-col">
-                                                                                            <span class="slot-label">End</span><div class="slot-inline"><input type="date" id="penddate-${screenId}-${item.id}" value="${endDateVal}" onchange="playlistDateTimeChanged('${screenId}','${item.id}')"><input class="tp-input" readonly data-field="end" data-screen="${screenId}" data-item="${item.id}" id="pend-${screenId}-${item.id}" type="text" value="${endVal}" placeholder="HH:MM:SS" onclick="openTimePicker(this)" oninput="playlistDateTimeChanged('${screenId}','${item.id}')"></div>
+                                                                                            <span class="slot-label">End</span><div class="slot-inline">${(item && item.sync_ref && item.sync_ref.role==='follower' && idx===0) ? `<input type=\"date\" disabled value=\"${endDateVal}\" style=\"opacity:.35;\"><input class=\"tp-input\" disabled type=\"text\" value=\"${endVal}\" style=\"opacity:.35;\">` : `<input type=\"date\" id=\"penddate-${screenId}-${item.id}\" value=\"${endDateVal}\" onchange=\"playlistDateTimeChanged('${screenId}','${item.id}')\"><input class=\"tp-input\" readonly data-field=\"end\" data-screen=\"${screenId}\" data-item=\"${item.id}\" id=\"pend-${screenId}-${item.id}\" type=\"text\" value=\"${endVal}\" placeholder=\"HH:MM:SS\" onclick=\"openTimePicker(this)\" oninput=\"playlistDateTimeChanged('${screenId}','${item.id}')\">`} </div>
                                                                                         </div>
                                                                                     </div>
                                                                                 </div>
@@ -3652,6 +3449,8 @@
                           });
                     // Update rotating preview after DOM build
                     updatePreviewPlaylist(screenId, items);
+                    // Refine pixel-accurate slices for thumbnails
+                    refineSyncThumbSlices(screenId);
                     // Kick lightweight status refresh for this screen (avoid duplicate timers)
                     ensureItemLightRefresher(screenId);
                 })
@@ -4019,7 +3818,75 @@
         const src220 = thumbUrl(file,220);
         const src300 = thumbUrl(file,300);
         const src600 = thumbUrl(file,600);
-    return `<img loading="lazy" decoding="async" src="${src220}" srcset="${src220} 220w, ${src300} 300w, ${src600} 600w" sizes="(max-width: 480px) 45vw, (max-width: 1024px) 200px, 220px" style="max-width:100%; max-height:100%; object-fit:cover;" data-original="${orig}" onerror="fallbackToOrigin(this, \"${orig}\")" />`;
+        return `<img loading="lazy" decoding="async" src="${src220}" srcset="${src220} 220w, ${src300} 300w, ${src600} 600w" sizes="(max-width: 480px) 45vw, (max-width: 1024px) 200px, 220px" style="max-width:100%; max-height:100%; object-fit:cover;" onerror="fallbackToOrigin(this, \"${orig}\")" />`;
+    }
+
+    // Build a sync-sliced thumbnail wrapper if item belongs to a multi-screen sync group.
+    function buildSyncThumb(item){
+        try{
+            const sref = item && item.sync_ref;
+            const cnt = sref && parseInt(sref.count||0,10);
+            const order = sref && parseInt(sref.order||0,10);
+            if(!cnt || cnt<2 || order==null) return thumbForFile(item.url || item.file);
+            // Use horizontal split for now (mode split-h). We crop via CSS transform scaleX + translateX.
+            const base = thumbForFile(item.url || item.file);
+            // We allow a later refinement step to replace transform scaling with pixel-accurate clipPath once intrinsic dimensions are known.
+            return `<div class=\"sync-slice-wrapper\" data-count=\"${cnt}\" data-order=\"${order}\" data-needs-refine=\"1\"><div class=\"sync-slice-inner\" style=\"--count:${cnt};--order:${order};\">${base}</div><div class=\"sync-slice-badge\">${order+1}/${cnt}</div></div>`;
+        }catch(e){ return thumbForFile(item && (item.url||item.file)); }
+    }
+
+    // Refine sync slice thumbnails to be pixel-accurate using intrinsic media width instead of pure scaling.
+    function refineSyncThumbSlices(screenId){
+        try{
+            const root = document.getElementById(`playlist-items-${screenId}`);
+            if(!root) return;
+            const wrappers = root.querySelectorAll('.sync-slice-wrapper[data-needs-refine="1"]');
+            if(!wrappers.length) return;
+            wrappers.forEach(w=>{
+                const cnt = parseInt(w.getAttribute('data-count')||'0',10);
+                const ord = parseInt(w.getAttribute('data-order')||'0',10);
+                if(!(cnt>1) || ord<0) { w.removeAttribute('data-needs-refine'); return; }
+                const media = w.querySelector('video, img');
+                if(!media){ w.removeAttribute('data-needs-refine'); return; }
+                const attempt = ()=>{
+                    const vw = media.videoWidth || media.naturalWidth || 0;
+                    if(!vw){ return; }
+                    const TARGET_SLICE = 1920;
+                    const idealComposite = TARGET_SLICE * cnt;
+                    let cropLeft = 0; let effectiveWidth = vw;
+                    if(vw > idealComposite){
+                        const extra = vw - idealComposite;
+                        if(extra / idealComposite < 0.12){
+                            cropLeft = Math.floor(extra/2);
+                            effectiveWidth = idealComposite;
+                        }
+                    }
+                    const base = Math.floor(effectiveWidth / cnt);
+                    let rem = effectiveWidth - base*cnt;
+                    const widths = new Array(cnt).fill(base).map((w,i)=> i<rem ? w+1 : w);
+                    let start = 0; for(let i=0;i<ord;i++) start += widths[i];
+                    const end = start + widths[ord];
+                    const effStart = cropLeft + start; const effEnd = cropLeft + end;
+                    const leftPct = (effStart / vw) * 100; const rightPct = 100 - (effEnd / vw) * 100;
+                    media.style.clipPath = `inset(0% ${rightPct.toFixed(5)}% 0% ${leftPct.toFixed(5)}%)`;
+                    media.style.transform = ''; // remove scaleX translate fallback
+                    media.style.objectFit = 'cover';
+                    media.style.objectPosition = 'center center';
+                    w.removeAttribute('data-needs-refine');
+                };
+                // If metadata already loaded attempt immediately
+                attempt();
+                if(w.hasAttribute('data-needs-refine')){
+                    // Attach listeners; once loaded refine
+                    media.addEventListener('loadeddata', attempt, { once:true });
+                    media.addEventListener('load', attempt, { once:true });
+                    // Safety timeout in case events never fire (e.g., cached image may not trigger) retry a few times
+                    let tries=0;
+                    const retry = ()=>{ if(!w.hasAttribute('data-needs-refine')) return; tries++; attempt(); if(tries<4 && w.hasAttribute('data-needs-refine')) setTimeout(retry, 250*tries); };
+                    setTimeout(retry,120);
+                }
+            });
+        }catch(e){ /* silent */ }
     }
 
     // --- Lightweight item status light refresher (doesn't rebuild DOM) ---
@@ -4238,8 +4105,6 @@
             // --- Live Preview Rotation (Dashboard) ---
             (()=>{ // IIFE to avoid globals clashing if script reloaded
              const previewTimers = {}; // screenId -> {timer,index,items,nextAt}
-             // Expose for delayed reslice logic
-             try { window.previewTimers = previewTimers; } catch{}
              // Expose a hard reset to cancel all running preview timers when changing store/views
              window.resetAllPreviews = function(){
                  try{
@@ -4303,10 +4168,6 @@
                 // Remove any leftover placeholder in the preview area
                 try{ const ph = preview.querySelector('.upload-area'); if(ph) ph.remove(); }catch{}
                 const state = previewTimers[screenId] || {timer:null,index:0,items:enabled,nextAt:0};
-                try {
-                    const syncSumm = enabled.filter(it=>it && it.sync_ref).map(it=>({file:it.file, g:it.sync_ref.group, o:it.sync_ref.order, c:it.sync_ref.count, m:it.sync_ref.mode}));
-                    if(syncSumm.length) console.log('[PREVIEW-SYNC][PLAYLIST] screen', screenId, syncSumm);
-                } catch {}
                 // Detect if the currently showing item just became inactive due to schedule
                 let prevKey = '';
                 try{
@@ -4345,23 +4206,6 @@
                     if(sd && typeof sd.rotation === 'number') currentRotation = sd.rotation;
                 } catch {}
                 const rotationClass = `rotate-${currentRotation}`;
-                // Helper to compute sync slicing (horizontal) info ONLY when the item explicitly declares a multi-screen slice.
-                // We no longer infer membership from other screens/playlists to avoid mislabeling normal videos as "Slice".
-                function getSyncSliceMeta(){
-                    try{
-                        if(!item || !item.sync_ref) return null;
-                        const sr = item.sync_ref;
-                        const count = (typeof sr.count === 'number' && sr.count > 1) ? sr.count : 0;
-                        if(!count) return null; // explicit, opt-in only
-                        let order = (typeof sr.order === 'number' && sr.order >= 0) ? sr.order : 0;
-                        const mode = sr.mode || 'split-h';
-                        return { count, order, mode, orderSource: 'server-meta' };
-                    }catch{ return null; }
-                }
-                const syncMeta = getSyncSliceMeta();
-                if(item && item.sync_ref && !syncMeta){
-                    console.log('[PREVIEW-SYNC] no slice meta (count<=1 or inference failed)', {screenId, file:item.file, sync_ref:item.sync_ref});
-                }
                 // Build efficient URLs:
                 // - Images: prefer CDN via mediaUrl()
                 // - Videos: prefer lightweight local /vpreview clip with poster; fallback to /media
@@ -4384,7 +4228,6 @@
                                 const pn = url.pathname.replace(/^\/+/, '');
                                 if (pn.startsWith('media/')) return decodeURIComponent(pn.slice('media/'.length));
                                 if (pn.startsWith('static/uploads/')) return decodeURIComponent(pn.slice('static/uploads/'.length));
-                                // If MEDIA_BASE_URL points to a remote host (CDN), allow deriving rel when URL shares that base
                                 const b = new URL(base, location.origin);
                                 if (url.origin === b.origin && pn.startsWith(b.pathname.replace(/^\/+/, ''))){
                                     return decodeURIComponent(pn.slice(b.pathname.replace(/^\/+/, '').length));
@@ -4410,92 +4253,85 @@
                 }
                 // Crossfade to avoid blank: preload next, then swap
                 const doSwap = (node)=>{
-                    node.style.maxWidth='100%'; node.style.maxHeight='100%';
-                    // Fill container for multi-screen slices; otherwise keep aspect without cropping
-                    try { node.style.objectFit = (syncMeta && syncMeta.count>1) ? 'cover' : 'contain'; } catch {}
-                    if(rotationClass) node.classList.add(rotationClass);
-                    // Apply horizontal sync slicing if applicable
-                    if(syncMeta && (syncMeta.mode==='split-h' || !syncMeta.mode) && syncMeta.count>1){
-                        try{
-                            let {count, order} = syncMeta;
-                            // Last-resort: if order always 0 across a group but multiple screens exist, derive here
-                            if(order===0 && count>1){
-                                try {
-                                    const groupId = item.sync_ref.group;
-                                    const scrMap = (allStoresData.screens||{})[currentStoreId]||{};
-                                    const members = Object.keys(scrMap).filter(sid=>{
-                                        const pls = scrMap[sid] && Array.isArray(scrMap[sid].playlist)? scrMap[sid].playlist:[];
-                                        return pls.some(it=> it && it.sync_ref && it.sync_ref.group===groupId);
-                                    });
-                                    if(members.length===count){
-                                        const deriveNum = sid=>{ const m=sid.match(/(_screen|screen)(\d+)/i); return m? parseInt(m[2],10):Number.MAX_SAFE_INTEGER; };
-                                        members.sort((a,b)=>{ const na=deriveNum(a), nb=deriveNum(b); if(na!==nb) return na-nb; return a.localeCompare(b); });
-                                        const idx = members.indexOf(screenId);
-                                        if(idx>=0 && idx!==order){ order = idx; console.log('[PREVIEW-SYNC][FALLBACK-FINAL] adjusted order', {screenId, order, count}); }
+                    // Apply multi-screen slice cropping for sync groups (horizontal only for now)
+                    try{
+                        const sref = item && item.sync_ref || {};
+                        const cnt = parseInt(sref.count||0,10);
+                        const ord = parseInt(sref.order||0,10);
+                        const mode = String(sref.mode||'split-h').toLowerCase();
+                        if(cnt>1 && ord>=0){
+                            if(mode==='split-h'){
+                                // Attempt intrinsic width for precise clip
+                                const vw = node.videoWidth || node.naturalWidth || 0;
+                                if(vw>0){
+                                    const TARGET_SLICE = 1920;
+                                    const idealComposite = TARGET_SLICE * cnt;
+                                    let cropLeft = 0; let effectiveWidth = vw;
+                                    if(vw > idealComposite){
+                                        const extra = vw - idealComposite;
+                                        if(extra / idealComposite < 0.12){
+                                            cropLeft = Math.floor(extra/2);
+                                            effectiveWidth = idealComposite;
+                                        }
                                     }
-                                }catch{}
-                            }
-                            // Ensure container hides overflow & is relative
-                            preview.style.overflow='hidden';
-                            if(getComputedStyle(preview).position==='static'){ preview.style.position='relative'; }
-                            // Remove generic maxWidth restriction so we can expand
-                            try { node.style.maxWidth='none'; }catch{}
-                            if(syncMeta.mode!=='static-slices'){
-                                const media = node;
-                                const count = syncMeta.count; const order = syncMeta.order;
-                                const segW = 100 / count; const left = segW * order;
-                                media.style.clipPath = `inset(0% ${Math.max(0,100-(left+segW)).toFixed(5)}% 0% ${left.toFixed(5)}%)`;
-                                media.style.transformOrigin = 'left center';
-                                media.style.transform = `scaleX(${count}) translateX(-${(order/count*100).toFixed(5)}%)`;
-                                media.style.objectFit = 'cover';
-                                media.style.objectPosition = `${(left + segW/2).toFixed(5)}% 50%`;
-                                media.style.width='100%'; media.style.height='100%'; media.style.maxWidth='100%'; media.style.maxHeight='100%';
-                                // Ensure parent preview hides overflow and has neutral background
-                                preview.style.background = '#000';
-                                preview.style.display='flex'; preview.style.alignItems='center'; preview.style.justifyContent='center';
-                                console.log('[PREVIEW-SYNC][CLIP]', {screenId, order, count, segW, left});
-                            }
-                            // Add a small slice badge
-                            let sb = preview.querySelector('.slice-badge');
-                            if(!sb){
-                                sb = document.createElement('div');
-                                sb.className='slice-badge';
-                                sb.style.cssText='position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,0.55);color:#fff;font-size:10px;padding:2px 6px;border-radius:10px;font-weight:600;z-index:5;pointer-events:none;';
-                                preview.appendChild(sb);
-                            }
-                            sb.textContent = `Slice ${syncMeta.order+1}/${syncMeta.count}`;
-                            try {
-                                const sliceOffsetPx = syncMeta.order * (preview.clientWidth || 0);
-                                console.log('[PREVIEW-SYNC] applied slice', {screenId, order: syncMeta.order, count: syncMeta.count, sliceOffsetPx, source: (syncMeta && syncMeta.orderSource)||'?', file:item && item.file});
-                            } catch(logErr){ console.warn('[PREVIEW-SYNC] log issue', logErr); }
-                            try {
-                                if(window.__SHOW_SLICE_DEBUG){
-                                    let ov = preview.querySelector('.slice-debug-overlay');
-                                    if(!ov){
-                                        ov = document.createElement('div');
-                                        ov.className = 'slice-debug-overlay';
-                                        ov.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:4;font-size:32px;font-weight:700;display:flex;align-items:center;justify-content:center;color:#fff;text-shadow:0 0 4px rgba(0,0,0,0.8);';
-                                        preview.appendChild(ov);
-                                    }
-                                    const colors = ['rgba(255,0,0,0.18)','rgba(0,128,255,0.18)','rgba(0,200,70,0.18)','rgba(255,140,0,0.18)','rgba(160,32,240,0.18)','rgba(255,20,147,0.18)'];
-                                    ov.style.background = colors[order % colors.length];
-                                    ov.textContent = (order+1)+'/'+count;
+                                    const base = Math.floor(effectiveWidth / cnt);
+                                    let rem = effectiveWidth - base*cnt;
+                                    const widths = new Array(cnt).fill(base).map((w,i)=> i<rem ? w+1 : w);
+                                    let start=0; for(let i=0;i<ord;i++) start+=widths[i];
+                                    const end = start + widths[ord];
+                                    const effStart = cropLeft + start;
+                                    const effEnd = cropLeft + end;
+                                    const leftPct = (effStart / vw) * 100;
+                                    const rightPct = 100 - (effEnd / vw) * 100;
+                                    node.style.clipPath = `inset(0% ${rightPct.toFixed(5)}% 0% ${leftPct.toFixed(5)}%)`;
+                                    // Scale this slice to fill container width like player does
+                                    const thisW = widths[ord];
+                                    const scale = vw / thisW;
+                                    node.style.transformOrigin='left center';
+                                    node.style.transform = `scaleX(${scale.toFixed(6)}) translateX(-${leftPct.toFixed(6)}%)`;
+                                    node.style.objectFit='cover'; node.style.objectPosition='center center';
                                 } else {
-                                    const ov = preview.querySelector('.slice-debug-overlay');
-                                    if(ov) ov.remove();
+                                    // Fallback to transform method pre-intrinsic-metadata
+                                    node.style.clipPath='';
+                                    node.style.transformOrigin='left center';
+                                    node.style.transform = `scaleX(${cnt}) translateX(-${(ord/cnt*100).toFixed(5)}%)`;
+                                    node.style.objectPosition = `${((ord+0.5)/cnt*100).toFixed(5)}% 50%`;
                                 }
-                            } catch{}
-                        }catch(e){ console.warn('[PREVIEW-SYNC] slice apply failed', e); }
-                    } else {
-                        // Remove any old slice badge if present (non-slice item now showing)
-                        try { const old = preview.querySelector('.slice-badge'); if(old) old.remove(); } catch{}
-                    }
+                            } else if(mode==='split-v'){
+                                const vh = node.videoHeight || node.naturalHeight || 0;
+                                if(vh>0){
+                                    const base = Math.floor(vh / cnt);
+                                    let rem = vh - base*cnt;
+                                    const heights = new Array(cnt).fill(base).map((h,i)=> i<rem ? h+1 : h);
+                                    let start=0; for(let i=0;i<ord;i++) start+=heights[i];
+                                    const end = start + heights[ord];
+                                    const topPct = (start / vh) * 100; const bottomPct = 100 - (end / vh)*100;
+                                    node.style.clipPath = `inset(${topPct.toFixed(5)}% 0% ${bottomPct.toFixed(5)}% 0%)`;
+                                    const thisH = heights[ord];
+                                    const scale = vh / thisH;
+                                    node.style.transformOrigin='center top';
+                                    node.style.transform = `scaleY(${scale.toFixed(6)}) translateY(-${topPct.toFixed(6)}%)`;
+                                    node.style.objectFit='cover'; node.style.objectPosition='center center';
+                                } else {
+                                    node.style.transformOrigin='center top';
+                                    node.style.transform = `scaleY(${cnt}) translateY(-${(ord/cnt*100).toFixed(5)}%)`;
+                                    node.style.objectPosition = `50% ${((ord+0.5)/cnt*100).toFixed(5)}%`;
+                                }
+                            }
+                        }
+                    }catch{}
+                    node.style.maxWidth='100%'; node.style.maxHeight='100%';
+                    const hasSlice = !!( (node.style.clipPath && node.style.clipPath.includes('inset')) || (node.style.transform && /scale[XY]\(/.test(node.style.transform)) );
+                    node.style.objectFit = hasSlice ? 'cover' : 'contain';
+                    if(rotationClass) node.classList.add(rotationClass);
                     const wrap = document.createElement('div'); wrap.className='preview-item fading-in';
-                    // Apply selected effect on dashboard preview
+                    // Wrap in overflow hidden container if sliced so scaling doesn't spill
+                    let contentNode = node;
+                    if(hasSlice){ const outer=document.createElement('div'); outer.className='sync-preview-slice'; outer.appendChild(node); contentNode = outer; }
                     const eff = String(item && item.effect || '').toLowerCase();
                     const map = { 'slide-l':'enter-slide-l', 'slide-r':'enter-slide-r', 'zoom-in':'enter-zoom-in', 'zoom-out':'enter-zoom-out', 'rotate':'enter-rotate' };
                     if(eff && eff!=='fade') { node.classList.add('anim'); const c = map[eff]; if(c) node.classList.add(c); }
-                    wrap.appendChild(node);
+                    wrap.appendChild(contentNode);
                     // Collect all existing preview layers (not just the first) to avoid stacked leftovers
                     const existing = Array.from(preview.querySelectorAll('.preview-item'));
                     preview.appendChild(wrap);
@@ -4520,12 +4356,7 @@
                     const usePreview = previewUrl || srcUrl;
                     const useFallback = fallbackVid || srcUrl;
                     preloadVideo(usePreview).then(v=>{ v.autoplay=true; v.loop=true; v.muted=true; v.playsInline=true; v.preload='auto'; if(usePoster){ v.poster = usePoster; } doSwap(v); }).catch(()=>{
-                        preloadVideo(useFallback).then(v=>{ v.autoplay=true; v.loop=true; v.muted=true; v.playsInline=true; v.preload='auto'; if(usePoster){ v.poster = usePoster; } doSwap(v); }).catch(()=>{
-                            // Final fallback for video: show a poster or a generic placeholder, not the video URL as an IMG
-                            const ph = usePoster || '/static/video_placeholder.svg';
-                            const img=document.createElement('img'); img.src=ph; img.alt='Video preview unavailable';
-                            doSwap(img);
-                        });
+                        preloadVideo(useFallback).then(v=>{ v.autoplay=true; v.loop=true; v.muted=true; v.playsInline=true; v.preload='auto'; if(usePoster){ v.poster = usePoster; } doSwap(v); }).catch(swapFallback);
                     });
                 } else {
                     preloadImage(srcUrl).then(img=>{ if (item && item.file && !/^https?:\/\//i.test(String(item.file))) { img.dataset.original = String(item.file); } doSwap(img); }).catch(swapFallback);
@@ -4537,8 +4368,6 @@
              }
              // Expose update function globally
              window.updatePreviewPlaylist = updatePreviewPlaylist;
-             // Toggle visual slice debug overlays (colored tint + index). Usage from console: toggleSliceDebug(true)
-             window.toggleSliceDebug = function(on){ try { window.__SHOW_SLICE_DEBUG = !!on; console.log('[PREVIEW-SYNC] slice debug overlay', on? 'ENABLED':'disabled'); Object.keys(previewTimers||{}).forEach(sid=>{ try { runPreview(sid); } catch{} }); } catch(e){ console.warn('toggleSliceDebug failed', e); } };
              setInterval(()=>{
                 Object.entries(previewTimers).forEach(([sid,st])=>{
                     if(!st.nextAt) return;
@@ -4763,73 +4592,33 @@
                                 gDirs.appendChild(card);
                             });
                         }
-                        // Split files into images and videos
-                        const imgs = files.filter(f=> (f.media_type!== 'video'));
-                        const vids = files.filter(f=> (f.media_type=== 'video'));
+                        const imgs = files.filter(f=> (f.media_type!=='video'));
+                        const vids = files.filter(f=> (f.media_type==='video'));
                         gImgs.innerHTML = imgs.length? '' : '<div class="rp-empty">No images</div>';
                         gVids.innerHTML = vids.length? '' : '<div class="rp-empty">No videos</div>';
-                        // Render images
                         imgs.forEach(f=>{
                             const card=document.createElement('div');
                             card.className='rp-item';
                             card.title=f.name;
+                            const isAbs = f && f.url && /^https?:\/\//i.test(String(f.url));
                             const bust = Date.now();
-                            // Always prefer server-generated thumbs so we get consistent sizing and CDN/origin fallbacks
-                            const src = (thumbUrl(f.name,220) + `?t=${bust}`);
-                            card.innerHTML = `<img loading=\"lazy\" src=\"${src}\" alt=\"Image\" data-original=\"${f.name}\"/><button class=\"rp-del\" title=\"Delete\" aria-label=\"Delete\" onclick=\"event.stopPropagation(); deleteLibraryFile('${f.name}')\">✕</button>`;
-                            // filename caption
-                            const cap = document.createElement('div');
-                            cap.className = 'rp-name';
-                            try { cap.textContent = String(f.name).split('/').pop(); } catch(_) { cap.textContent = f.name; }
-                            card.appendChild(cap);
+                            const src = isAbs ? (f.url + `?t=${bust}`) : (thumbUrl(f.name,220) + `?t=${bust}`);
+                            card.innerHTML = `<img loading=\"lazy\" src=\"${src}\"/><button class=\"rp-del\" title=\"Delete\" aria-label=\"Delete\" onclick=\"event.stopPropagation(); deleteLibraryFile('${f.name}')\">✕</button>`;
                             card.addEventListener('click',()=> chooseLibraryFile(f.name));
                             gImgs.appendChild(card);
                         });
-                        // Render videos with poster; if poster fails, fall back to an autoplaying low-res /vpreview clip
                         vids.forEach(f=>{
                             const card=document.createElement('div');
                             card.className='rp-item';
                             card.title=f.name;
+                            const abs = f && f.url && /^https?:\/\//i.test(String(f.url));
                             const bust = Date.now();
-                            const rel = (typeof encodePathPreserveSlashes === 'function') ? encodePathPreserveSlashes(f.name) : String(f.name);
-                            const stem = rel.replace(/\.[^/.]+$/, '');
-                            const mbu = String(window.MEDIA_BASE_URL || '');
-                            const hasCdn = /^https?:\/\//i.test(mbu);
-                            const cdnPoster = hasCdn ? `${mbu}vthumbs/220/${stem}.jpg?t=${bust}` : '';
-                            const serverPoster = `/vthumb/220/${rel}?t=${bust}`;
-                            const vpreview = `/vpreview/220/${rel}?t=${bust}`;
-                            const img = document.createElement('img');
-                            img.loading = 'lazy';
-                            img.alt = 'Video';
-                            img.src = serverPoster; // local first for reliability
-                            img.onerror = function(){
-                                // If poster fails, insert a tiny autoplaying preview clip
-                                try {
-                                    if (!this.dataset._vpf) {
-                                        this.dataset._vpf = '1';
-                                        const v = document.createElement('video');
-                                        v.muted = true; v.autoplay = true; v.loop = true; v.playsInline = true; v.preload = 'metadata';
-                                        v.style.width='100%'; v.style.height='100%'; v.style.objectFit='cover';
-                                        const s = document.createElement('source'); s.src = vpreview; s.type = 'video/mp4'; v.appendChild(s);
-                                        card.insertBefore(v, this);
-                                        this.style.display = 'none';
-                                        return;
-                                    }
-                                } catch {}
-                                // Final fallback
-                                this.onerror = null; this.src = '/static/video_placeholder.svg'; this.style.display = '';
-                            };
-                            // Optional: hint CDN for next time after successful load
-                            if (cdnPoster) {
-                                img.addEventListener('load', ()=>{ try { const p = new Image(); p.src = cdnPoster; } catch {} });
-                            }
-                            card.appendChild(img);
-                            const del = document.createElement('button'); del.className='rp-del'; del.title='Delete'; del.setAttribute('aria-label','Delete'); del.textContent='✕';
-                            del.onclick = (ev)=>{ ev.stopPropagation(); deleteLibraryFile(f.name); };
-                            card.appendChild(del);
-                            const cap = document.createElement('div'); cap.className='rp-name';
-                            try { cap.textContent = String(f.name).split('/').pop(); } catch(_) { cap.textContent = f.name; }
-                            card.appendChild(cap);
+                            const posterCdn = abs ? '' : `${MEDIA_BASE_URL || '/static/uploads/'}vthumbs/220/${encodeURIComponent(f.name)}.jpg?t=${bust}`;
+                            const posterSrv = abs ? '' : `/vthumb/220/${encodeURIComponent(f.name)}?t=${bust}`;
+                            const poster = posterCdn || posterSrv;
+                            const posterAttr = poster ? ` poster="${poster}"` : '';
+                            const src = f.url ? (f.url + `?t=${bust}`) : (mediaUrl(f.name) + `?t=${bust}`);
+                            card.innerHTML = `<video preload=\"metadata\" muted playsinline${posterAttr} src=\"${src}\"></video><button class=\"rp-del\" title=\"Delete\" aria-label=\"Delete\" onclick=\"event.stopPropagation(); deleteLibraryFile('${f.name}')\">✕</button>`;
                             card.addEventListener('click',()=> chooseLibraryFile(f.name));
                             gVids.appendChild(card);
                         });
@@ -4971,9 +4760,7 @@
                                 xhr.send(fd);
                             }catch(err){ reject(err); }
                         });
-                        // Parse XHR response text safely; resp.json() in our shim returns the raw object,
-                        // so use unified helper to always get {json, text}
-                        const parsed = await readJsonOrText(resp);
+                        const parsed = await (resp.json ? resp.json() : readJsonOrText(resp));
                         const json = parsed.json;
                         if(!resp.ok || !json || json.success === false){
                             if(resp.status === 413){ throw new Error('File too large for server path. Please retry direct upload.'); }
@@ -5035,26 +4822,13 @@
                 }catch{ return 'image'; }
             }
 
-            // Read a Response or XHR-shim body once and try to parse JSON; fall back to raw text
+            // Read a Response body exactly once and try to parse JSON; fall back to raw text
             async function readJsonOrText(resp){
                 try{
-                    // Our XHR shim provides text() and json() as functions; fetch Response has body stream
-                    const getText = async () => {
-                        try {
-                            if (resp && typeof resp.text === 'function') {
-                                return await resp.text();
-                            }
-                            // Some code paths may pass raw string
-                            if (typeof resp === 'string') return resp;
-                        } catch (e) {}
-                        return '';
-                    };
-                    const text = await getText();
-                    try { return { json: JSON.parse(text), text }; }
-                    catch { return { json: null, text }; }
-                } catch(e){
-                    return { json: null, text: '' };
-                }
+                    const text = await resp.text();
+                    try{ return { json: JSON.parse(text), text }; }
+                    catch{ return { json: null, text } }
+                }catch(e){ return { json: null, text: '' } }
             }
 
             function deleteLibraryFile(name){
@@ -5166,30 +4940,10 @@
                             if(!Array.isArray(scr.playlist)) scr.playlist = [];
                             const existing = scr.playlist.find(it=> it.sync_ref && it.sync_ref.group === j.group_id && it.sync_ref.role === mem.role);
                             if(!existing){
-                                scr.playlist.push({ id: mem.item_id, file: mediaFile, enabled:true, schedule:[], duration:10, repeat:true, link_next:false, sync_ref:{ group: j.group_id, role: mem.role, order: mem.order, count: j.count, mode: 'split-h' } });
-                            } else {
-                                // Ensure existing item gets updated count/mode too
-                                try {
-                                    existing.sync_ref.count = j.count;
-                                    if(!existing.sync_ref.mode) existing.sync_ref.mode = 'split-h';
-                                } catch {}
+                                scr.playlist.push({ id: mem.item_id, file: mediaFile, enabled:true, schedule:[], duration:10, repeat:true, link_next:false, sync_ref:{ group: j.group_id, role: mem.role, order: mem.order } });
                             }
                             if(!scr.file) scr.file = mediaFile;
                         });
-                        // Populate deterministic order cache directly from server response
-                        try {
-                            window.__syncOrderCache = window.__syncOrderCache || {};
-                            const map = {};
-                            (j.members||[]).forEach(mem=>{ if(typeof mem.order === 'number') map[mem.screen_id] = mem.order; });
-                            if(Object.keys(map).length){ window.__syncOrderCache[j.group_id] = map; console.log('[SYNC][CREATE] order cache seeded', j.group_id, map); }
-                        } catch(e){ console.warn('[SYNC][CREATE] failed to seed order cache', e); }
-                        // Force immediate preview re-run so slicing applies without waiting for rotation
-                        try {
-                            (j.used_screens||[]).forEach(sid=>{
-                                const pt = previewTimers && previewTimers[sid];
-                                if(pt){ pt.index = 0; try { runPreview(sid); console.log('[SYNC][CREATE] forced preview rerun', sid); } catch(err){ console.warn('preview rerun failed', sid, err); } }
-                            });
-                        } catch{}
                         const btn = document.getElementById('add-sync-screen-btn');
                         if(btn){
                             btn.disabled = false; // enable now that a master exists
@@ -5404,21 +5158,6 @@
             }
             // Kick an immediate playlist refresh for all visible screens so previews populate without manual reload
             toInitialRefresh.forEach((sid, i)=>{ setTimeout(()=>{ try{ if(myToken === __currentLoadToken) refreshPlaylist(sid, myToken); }catch(e){ console.warn('initial refresh failed', sid, e); } }, i*80); });
-            // After a short delay, force a re-slice preview pass in case membership inference needed full set
-            try {
-                setTimeout(()=>{
-                    if(myToken !== __currentLoadToken) return;
-                    if(!window.__syncOrderCache) return;
-                    const ptimers = window.previewTimers || previewTimers || {};
-                    Object.keys(window.__syncOrderCache).forEach(gid=>{
-                        const map = window.__syncOrderCache[gid]||{};
-                        Object.keys(map).forEach(sid=>{
-                            const pt = ptimers[sid];
-                            if(pt){ try { runPreview(sid); console.debug('[PREVIEW-SYNC] delayed force reslice', gid, sid); } catch(e){} }
-                        });
-                    });
-                }, 1200);
-            } catch{}
             // After DOM build, ensure auto-refresh timer knows about any new playlist sections
             setupAutoPlaylistRefresh();
             // Start/restart status polling for this store
@@ -5862,24 +5601,7 @@
                 });
             });
         } else {
-            const setOrig = (imgEl, u) => {
-                try{
-                    const s = String(u||'');
-                    const relFromThumb = _extractRelFromThumbUrl(s);
-                    if (relFromThumb){ imgEl.dataset.original = relFromThumb; return; }
-                    const urlObj = new URL(s, location.origin);
-                    const pn = urlObj.pathname.replace(/^\/+/, '');
-                    // If it's already under static/uploads, keep full tail as original
-                    if (pn.toLowerCase().startsWith('static/uploads/')){
-                        imgEl.dataset.original = decodeURIComponent(pn.slice('static/uploads/'.length));
-                        return;
-                    }
-                    // Else keep last segment as best-effort
-                    const last = pn.split('/').filter(Boolean).pop();
-                    if (last){ imgEl.dataset.original = decodeURIComponent(last); }
-                }catch{}
-            };
-            preloadImage(url).then(img=>{ img.decoding='async'; img.setAttribute('fetchpriority','high'); img.style.maxWidth='100%'; img.style.maxHeight='100%'; img.style.objectFit='contain'; if(rotation){ img.className='rotate-'+rotation; } setOrig(img, url); show(build(img)); }).catch(()=>{ const img=document.createElement('img'); img.src=url; img.decoding='async'; img.setAttribute('fetchpriority','high'); if(rotation){ img.className='rotate-'+rotation; } setOrig(img, url); show(build(img)); });
+            preloadImage(url).then(img=>{ img.decoding='async'; img.setAttribute('fetchpriority','high'); img.style.maxWidth='100%'; img.style.maxHeight='100%'; img.style.objectFit='contain'; if(rotation){ img.className='rotate-'+rotation; } try { const u=new URL(url, location.origin); const last=u.pathname.split('/').filter(Boolean).pop(); if(last){ img.dataset.original = decodeURIComponent(last); } } catch { /* noop */ } show(build(img)); }).catch(()=>{ const img=document.createElement('img'); img.src=url; img.decoding='async'; img.setAttribute('fetchpriority','high'); if(rotation){ img.className='rotate-'+rotation; } try { const u=new URL(url, location.origin); const last=u.pathname.split('/').filter(Boolean).pop(); if(last){ img.dataset.original = decodeURIComponent(last); } } catch {} show(build(img)); });
         }
     }
     </script>
