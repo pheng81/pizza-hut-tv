@@ -5298,9 +5298,12 @@ def get_playlist(store_id, screen_id):
                     if scount > 1:
                         ua = ua_effective
                         android_tokens = ('android', 'okhttp', 'exoplayer', 'nvidia', 'bravia', 'shield')
+                        pi_tokens = ('raspberrypi', 'raspberry pi', 'phtv-pi')
                         is_android = any(tok in ua for tok in android_tokens)
+                        is_pi = any(tok in ua.lower() for tok in pi_tokens)
+                        is_slice_client = is_android or is_pi  # Both Android and Pi get slice URLs
                         vfile = it.get('file')
-                        print(f"DEBUG: Slice decision ua='{ua}' is_android={is_android} count={scount} order={sorder} mode={smode}")
+                        print(f"DEBUG: Slice decision ua='{ua}' is_android={is_android} is_pi={is_pi} count={scount} order={sorder} mode={smode}")
                         if vfile:
                             slice_url = url_for('slice_video', video_path=vfile, _external=True)
                             slice_url += f"?slice_mode={smode}&slice_count={scount}&slice_order={sorder}"
@@ -5310,13 +5313,14 @@ def get_playlist(store_id, screen_id):
                             it['slice_aware'] = True
                             # Provide a UA-agnostic preferred_url to simplify client logic
                             it['preferred_url'] = slice_url
-                            if is_android:
-                                # For Android, prefer server-sliced URL
+                            if is_slice_client:
+                                # For Android and Pi, prefer server-sliced URL
                                 it['url'] = slice_url
-                                print(f"DEBUG: Assigned slice URL (Android): {slice_url}")
+                                client_type = "Android" if is_android else "Pi" if is_pi else "Slice-client"
+                                print(f"DEBUG: Assigned slice URL ({client_type}): {slice_url}")
                             else:
-                                # Non-Android: leave base URL; client may CSS/JS crop, but can still read slice_url
-                                print(f"DEBUG: Exposed slice_url (non-Android): {slice_url}")
+                                # Non-slice clients: leave base URL; client may CSS/JS crop, but can still read slice_url
+                                print(f"DEBUG: Exposed slice_url (non-slice client): {slice_url}")
                         else:
                             print("DEBUG: Cannot assign slice URL (missing file field)")
             except Exception as e_slice:
@@ -5547,7 +5551,10 @@ def get_playlist(store_id, screen_id):
     try:
         ua = ua_effective
         android_tokens = ('android', 'okhttp', 'exoplayer', 'nvidia', 'bravia', 'shield')
+        pi_tokens = ('raspberrypi', 'raspberry pi', 'phtv-pi')
         is_android = any(tok in ua for tok in android_tokens)
+        is_pi = any(tok in ua.lower() for tok in pi_tokens)
+        is_slice_client = is_android or is_pi  # Both Android and Pi get slice URLs
         for i, it in enumerate(out):
             try:
                 if not isinstance(it, dict):
@@ -5572,11 +5579,12 @@ def get_playlist(store_id, screen_id):
                 it['slice_aware'] = True
                 # Provide UA-agnostic preferred_url for clients
                 it['preferred_url'] = it.get('preferred_url') or slice_url
-                # For Android UA, prefer server slice URL in main url field if not already set
+                # For Android and Pi UA, prefer server slice URL in main url field if not already set
                 cur_url = it.get('url') or ''
-                if is_android and '/slice-video/' not in cur_url:
+                if is_slice_client and '/slice-video/' not in cur_url:
                     it['url'] = slice_url
-                    print(f"DEBUG: Post-assigned slice URL for item[{i}] (Android): {slice_url}")
+                    client_type = "Android" if is_android else "Pi" if is_pi else "Slice-client"
+                    print(f"DEBUG: Post-assigned slice URL for item[{i}] ({client_type}): {slice_url}")
             except Exception as _e_postslice:
                 print(f"WARNING: Post slice assign failed for item[{i}]: {_e_postslice}")
     except Exception:

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Pizza Hut TV
+Comment=Pizza Hut TV Screen Control
+Exec=/home/everydayadvertise/start_pizza_hut_tv.sh
+Icon=application-x-executable
+Terminal=true
+Categories=AudioVideo;Player;

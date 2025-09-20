@@ -1,0 +1,246 @@
+{
+  "stores": [
+    {
+      "id": "1000",
+      "name": "My First Store"
+    }
+  ],
+  "master_store_id": "1000",
+  "screens": {
+    "1000": {
+      "1000_screen1": {
+        "file": "users/heang2_at_gmail.com/2025-09/abb7583a-df23-471f-a704-6ed18693c329.mp4",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "id": "1dd6bbd9-f9bb-4000-a246-12ab6cbc9559",
+            "file": "users/heang2_at_gmail.com/2025-09/abb7583a-df23-471f-a704-6ed18693c329.mp4",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "video",
+            "sync_ref": {
+              "group": "4ae2f9ac-46c3-4b9b-be8f-0d2190958232",
+              "role": "master",
+              "order": 0
+            }
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "events": [
+          {
+            "ts": 1758282974,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758282979,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758282984,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758282989,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758282994,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758282999,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758283004,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758283009,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758283012,
+            "event": "load_fail",
+            "file": "abb7583a-df23-471f-a704-6ed18693c329.mp4",
+            "item_id": "1dd6bbd9-f9bb-4000-a246-12ab6cbc9559",
+            "error": "video error"
+          },
+          {
+            "ts": 1758283013,
+            "event": "load_ok",
+            "file": "abb7583a-df23-471f-a704-6ed18693c329.mp4",
+            "item_id": "1dd6bbd9-f9bb-4000-a246-12ab6cbc9559",
+            "error": null
+          },
+          {
+            "ts": 1758283014,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          }
+        ],
+        "last_seen": 1758283002,
+        "last_item_status": {
+          "id:1dd6bbd9-f9bb-4000-a246-12ab6cbc9559": {
+            "state": "ok",
+            "ts": 1758283013,
+            "error": null,
+            "file": "abb7583a-df23-471f-a704-6ed18693c329.mp4",
+            "item_id": "1dd6bbd9-f9bb-4000-a246-12ab6cbc9559"
+          }
+        },
+        "cmd_queue": [
+          {
+            "id": "7352146d-e5d1-4fbc-8905-1edd8c17d4c4",
+            "ts": 1758283013,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ]
+      },
+      "1000_screen2": {
+        "file": "users/heang2_at_gmail.com/2025-09/abb7583a-df23-471f-a704-6ed18693c329.mp4",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "id": "892e747d-b265-4917-9313-2c64548322c9",
+            "file": "users/heang2_at_gmail.com/2025-09/abb7583a-df23-471f-a704-6ed18693c329.mp4",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "video",
+            "sync_ref": {
+              "group": "4ae2f9ac-46c3-4b9b-be8f-0d2190958232",
+              "role": "follower",
+              "order": 1
+            }
+          }
+        ],
+        "cmd_queue": [
+          {
+            "id": "307fc21e-66a5-4521-a072-dab194b0c7aa",
+            "ts": 1758283013,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1000_screen3": {
+        "file": "users/heang2_at_gmail.com/2025-09/abb7583a-df23-471f-a704-6ed18693c329.mp4",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "id": "bfa473ff-7527-4546-8e11-6cec3f6434e3",
+            "file": "users/heang2_at_gmail.com/2025-09/abb7583a-df23-471f-a704-6ed18693c329.mp4",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "video",
+            "sync_ref": {
+              "group": "4ae2f9ac-46c3-4b9b-be8f-0d2190958232",
+              "role": "follower",
+              "order": 2
+            }
+          }
+        ],
+        "cmd_queue": [
+          {
+            "id": "1e6e3a00-8791-403d-87b6-83f9bba30f68",
+            "ts": 1758283015,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ]
+      }
+    }
+  },
+  "sync_groups": {
+    "4ae2f9ac-46c3-4b9b-be8f-0d2190958232": {
+      "store_id": "1000",
+      "base": "1000_screen1",
+      "count": 3,
+      "filename": "users/heang2_at_gmail.com/2025-09/abb7583a-df23-471f-a704-6ed18693c329.mp4",
+      "members": [
+        {
+          "screen_id": "1000_screen1",
+          "item_id": "1dd6bbd9-f9bb-4000-a246-12ab6cbc9559",
+          "role": "master",
+          "order": 0
+        },
+        {
+          "screen_id": "1000_screen2",
+          "item_id": "892e747d-b265-4917-9313-2c64548322c9",
+          "role": "follower",
+          "order": 1
+        },
+        {
+          "screen_id": "1000_screen3",
+          "item_id": "bfa473ff-7527-4546-8e11-6cec3f6434e3",
+          "role": "follower",
+          "order": 2
+        }
+      ],
+      "created_at": 1758283013,
+      "start_epoch": 1758283020,
+      "mode": "split-h"
+    }
+  }
+}
