@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Pizza Hut TV - Raspberry Pi Client (Terminal Version)
+EA TV - Raspberry Pi Client (Terminal Version)
 Simple command-line interface that works without GUI
 """
 

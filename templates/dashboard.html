@@ -3612,14 +3612,20 @@
                                                                                                                                                                     </div>
                                                                                                                                                                 </div>
                                                                                 <div class="schedule-primary one-row">
-                                                                                    <div class="slot-box dual ${inWindow && item.enabled? 'highlight-active':''}">
-                                                                                        <div class="dual-col">
-                                                                                            <span class="slot-label">Start</span><div class="slot-inline"><input type="date" id="pstartdate-${screenId}-${item.id}" value="${startDateVal}" onchange="playlistDateTimeChanged('${screenId}','${item.id}')"><input class="tp-input" readonly data-field="start" data-screen="${screenId}" data-item="${item.id}" id="pstart-${screenId}-${item.id}" type="text" value="${startVal}" placeholder="HH:MM:SS" onclick="openTimePicker(this)" oninput="playlistDateTimeChanged('${screenId}','${item.id}')"></div>
-                                                                                        </div>
-                                                                                        <div class="dual-col">
-                                                                                            <span class="slot-label">End</span><div class="slot-inline"><input type="date" id="penddate-${screenId}-${item.id}" value="${endDateVal}" onchange="playlistDateTimeChanged('${screenId}','${item.id}')"><input class="tp-input" readonly data-field="end" data-screen="${screenId}" data-item="${item.id}" id="pend-${screenId}-${item.id}" type="text" value="${endVal}" placeholder="HH:MM:SS" onclick="openTimePicker(this)" oninput="playlistDateTimeChanged('${screenId}','${item.id}')"></div>
-                                                                                        </div>
-                                                                                    </div>
+                                                                                    ${item.schedule && item.schedule.some(win => win.sync_master) ? 
+                                                                                        `<div style="padding:12px;background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;text-align:center;color:#666;">
+                                                                                            <div style="font-size:14px;font-weight:600;margin-bottom:4px;">📋 Schedule Synchronized</div>
+                                                                                            <div style="font-size:12px;">This screen follows the master schedule</div>
+                                                                                        </div>` :
+                                                                                        `<div class="slot-box dual ${inWindow && item.enabled? 'highlight-active':''}">
+                                                                                            <div class="dual-col">
+                                                                                                <span class="slot-label">Start</span><div class="slot-inline"><input type="date" id="pstartdate-${screenId}-${item.id}" value="${startDateVal}" onchange="playlistDateTimeChanged('${screenId}','${item.id}')"><input class="tp-input" readonly data-field="start" data-screen="${screenId}" data-item="${item.id}" id="pstart-${screenId}-${item.id}" type="text" value="${startVal}" placeholder="HH:MM:SS" onclick="openTimePicker(this)" oninput="playlistDateTimeChanged('${screenId}','${item.id}')"></div>
+                                                                                            </div>
+                                                                                            <div class="dual-col">
+                                                                                                <span class="slot-label">End</span><div class="slot-inline"><input type="date" id="penddate-${screenId}-${item.id}" value="${endDateVal}" onchange="playlistDateTimeChanged('${screenId}','${item.id}')"><input class="tp-input" readonly data-field="end" data-screen="${screenId}" data-item="${item.id}" id="pend-${screenId}-${item.id}" type="text" value="${endVal}" placeholder="HH:MM:SS" onclick="openTimePicker(this)" oninput="playlistDateTimeChanged('${screenId}','${item.id}')"></div>
+                                                                                            </div>
+                                                                                        </div>`
+                                                                                    }
                                                                                 </div>
                                                                                 <div class="pl-actions inline-actions primary-actions">\
                                                                                         <div class="group left">\
@@ -3744,6 +3750,18 @@
                 // Render additional schedule windows (beyond primary start/end)
                 function renderScheduleWindows(item, screenId){
                     if(!item.schedule || !item.schedule.length) return '';
+                    
+                    // Check if this is a synchronized schedule follower
+                    const hasSyncMaster = item.schedule.some(win => win.sync_master);
+                    if (hasSyncMaster) {
+                        const syncWin = item.schedule.find(win => win.sync_master);
+                        const groupId = syncWin ? syncWin.group_id : 'unknown';
+                        return `<div style="padding:8px;background:#f8f9fa;border-radius:6px;text-align:center;color:#666;font-size:12px;font-style:italic;">
+                            📋 Schedule synced with master screen
+                            <br><small>Group: ${groupId}</small>
+                        </div>`;
+                    }
+                    
                     const now = new Date();
                     const parseISOorTime = v=>{ if(!v) return null; try{ if(v.includes('T')) return new Date(v); if(v.length<=8){ const [H,M,S='00']=v.split(':'); const d=new Date(); d.setHours(+H||0,+M||0,+S||0,0); return d;} if(/^\d{4}-\d{2}-\d{2}$/.test(v)){ return new Date(v+'T00:00:00'); } return new Date(v);}catch(e){return null;}};
                     const activeWindow = (ws,we)=>{ if(!ws && !we) return false; if(ws && we){ if(we < ws){ const wePlus = new Date(we.getTime()+86400000); return now>=ws && now<=wePlus; } return now>=ws && now<=we; } if(ws) return now>=ws; if(we) return now<=we; return false; };
@@ -4621,8 +4639,9 @@
                                     </div>
                                     <div id="rp-view-upload" style="display:none;">
                                         <input type="file" id="rp-file" accept="image/*,video/*" />
-                                        <div style="margin-top:8px;">
+                                        <div style="margin-top:8px; display:flex; gap:8px; align-items:center;">
                                             <button class="btn primary" onclick="doRpUpload()">Upload</button>
+                                            <button class="btn" onclick="showScreenSyncUploadModal()" style="background:#495057; color:white;">Screen Sync Upload</button>
                                         </div>
                                         <div id="rp-progress-wrap" style="margin-top:8px;">
                                             <div class="rp-progress" aria-hidden="true"><div class="bar" style="width:0%"></div></div>
@@ -5199,6 +5218,157 @@
                         console.log('[SYNC][CREATE] Local state updated; sync button enabled');
                     } catch(e){ console.warn('Failed to update local sync state', e); }
                 }catch(e){ alert('Sync create failed: '+ e.message); }
+            }
+
+            // Screen Sync Upload Modal - Creates synchronized schedules across multiple screens
+            function showScreenSyncUploadModal() {
+                // Check if file is selected
+                const fileInput = document.getElementById('rp-file');
+                if (!fileInput || !fileInput.files.length) {
+                    alert('Please select a file first before using Screen Sync Upload');
+                    return;
+                }
+
+                // Create modal overlay
+                let modal = document.getElementById('screen-sync-upload-modal');
+                if (!modal) {
+                    modal = document.createElement('div');
+                    modal.id = 'screen-sync-upload-modal';
+                    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;z-index:1100;';
+                    modal.innerHTML = `
+                        <div style="width:480px;max-width:95vw;background:#fff;border-radius:12px;padding:20px;box-shadow:0 10px 30px rgba(0,0,0,.3);">
+                            <div style="font-weight:700;font-size:18px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">
+                                <span>Screen Sync Upload</span>
+                                <button onclick="closeScreenSyncUploadModal()" style="background:none;border:none;font-size:24px;color:#666;cursor:pointer;padding:0;width:30px;height:30px;">×</button>
+                            </div>
+                            <div style="font-size:14px;color:#555;margin-bottom:16px;line-height:1.4;">
+                                This will upload your selected file and create synchronized schedules across multiple screens. 
+                                The first screen will show the complete schedule details, while subsequent screens will show "sync" to indicate they follow the master schedule.
+                            </div>
+                            <div style="margin-bottom:16px;">
+                                <label for="screen-sync-count" style="font-size:14px;font-weight:600;display:block;margin-bottom:8px;">Number of screens to sync:</label>
+                                <select id="screen-sync-count" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;">
+                                    <option value="2">2 screens</option>
+                                    <option value="3">3 screens</option>
+                                    <option value="4">4 screens</option>
+                                    <option value="5">5 screens</option>
+                                </select>
+                            </div>
+                            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+                                <button onclick="closeScreenSyncUploadModal()" style="padding:10px 20px;border:1px solid #ddd;background:#fff;border-radius:6px;cursor:pointer;">Cancel</button>
+                                <button onclick="doScreenSyncUpload()" style="padding:10px 20px;background:#c8102e;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:600;">Create Sync Schedules</button>
+                            </div>
+                        </div>`;
+                    document.body.appendChild(modal);
+                }
+                modal.style.display = 'flex';
+            }
+
+            function closeScreenSyncUploadModal() {
+                const modal = document.getElementById('screen-sync-upload-modal');
+                if (modal) modal.style.display = 'none';
+            }
+
+            async function doScreenSyncUpload() {
+                try {
+                    // Get the screen count
+                    const countSelect = document.getElementById('screen-sync-count');
+                    const screenCount = parseInt(countSelect.value);
+                    
+                    // Get the file
+                    const fileInput = document.getElementById('rp-file');
+                    if (!fileInput.files.length) {
+                        alert('No file selected');
+                        return;
+                    }
+
+                    // First, upload the file using existing upload logic
+                    closeScreenSyncUploadModal();
+                    
+                    // Show progress
+                    const progressLabel = document.getElementById('rp-progress-label');
+                    if (progressLabel) {
+                        progressLabel.style.display = 'block';
+                        progressLabel.textContent = 'Uploading file...';
+                    }
+
+                    // Use the current screen context from replace modal
+                    if (!rpCtx || !rpCtx.screenId) {
+                        alert('No screen context available');
+                        return;
+                    }
+
+                    // Upload the file first
+                    const file = fileInput.files[0];
+                    const formData = new FormData();
+                    formData.append('file', file);
+
+                    const uploadResponse = await fetch('/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!uploadResponse.ok) {
+                        throw new Error(`Upload failed: ${uploadResponse.status}`);
+                    }
+
+                    const uploadResult = await uploadResponse.json();
+                    if (!uploadResult.success) {
+                        throw new Error(uploadResult.error || 'Upload failed');
+                    }
+
+                    const filename = uploadResult.filename;
+                    
+                    if (progressLabel) {
+                        progressLabel.textContent = 'Creating sync schedules...';
+                    }
+
+                    // Now create the sync group with the uploaded file
+                    const syncPayload = {
+                        store_id: currentStoreId,
+                        base_screen_id: rpCtx.screenId,
+                        count: screenCount,
+                        filename: filename,
+                        create_schedules: true  // New flag to indicate we want schedule sync
+                    };
+
+                    const syncResponse = await fetch('/sync/create', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(syncPayload)
+                    });
+
+                    const syncResult = await syncResponse.json();
+                    if (!syncResult.success) {
+                        throw new Error(syncResult.error || 'Sync creation failed');
+                    }
+
+                    // Close the replace modal
+                    closeReplaceModal();
+                    
+                    // Refresh displays
+                    try {
+                        refreshPlaylist(rpCtx.screenId);
+                        (syncResult.used_screens || []).forEach(screenId => {
+                            if (screenId !== rpCtx.screenId) {
+                                refreshPlaylist(screenId);
+                            }
+                        });
+                    } catch (e) {
+                        console.warn('Failed to refresh playlists:', e);
+                    }
+
+                    showMessage(`Screen Sync Upload completed! Created synchronized schedules across ${syncResult.used_screens.length} screens.`, '#28a745');
+
+                } catch (error) {
+                    console.error('Screen Sync Upload failed:', error);
+                    alert('Screen Sync Upload failed: ' + error.message);
+                } finally {
+                    const progressLabel = document.getElementById('rp-progress-label');
+                    if (progressLabel) {
+                        progressLabel.style.display = 'none';
+                    }
+                }
             }
         
         // Store Management Functions

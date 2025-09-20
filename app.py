@@ -6800,6 +6800,7 @@ def create_sync_group():
         except Exception:
             count = 0
         incoming = str(data.get('filename') or data.get('file') or '').strip()
+        create_schedules = data.get('create_schedules', False)  # New flag for schedule sync
 
         if not store_id or not base_screen_id or count < 2 or count > 5 or not incoming:
             return jsonify({'success': False, 'error': 'store_id, base_screen_id, count (2-5), and filename are required'}), 400
@@ -6900,13 +6901,26 @@ def create_sync_group():
             if existing:
                 item = existing
             else:
+                # Create schedule for sync items - master gets full schedule, followers get sync indicator
+                schedule = []
+                if create_schedules:
+                    if idx == 0:  # Master screen gets the actual schedule
+                        # Create a default schedule - user can modify this later
+                        schedule = [{
+                            'start': '09:00',
+                            'end': '17:00', 
+                            'days': ['mon', 'tue', 'wed', 'thu', 'fri']
+                        }]
+                    else:  # Follower screens get sync indicator
+                        schedule = [{'sync_master': True, 'group_id': group_id}]
+                
                 item = {
                     'id': str(uuid.uuid4()),
                     'file': key,
                     'enabled': True,
                     'start': None,
                     'end': None,
-                    'schedule': [],
+                    'schedule': schedule,
                     'duration': 10,
                     'repeat': True,
                     'link_next': False,

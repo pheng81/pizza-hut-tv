@@ -1,14 +1,14 @@
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=Pizza Hut TV
-Comment=Launch Pizza Hut TV Client with Video Slicing
-Exec=/home/everydayadvertise/pizza_hut_tv_launcher.sh
-Icon=/home/everydayadvertise/pizza_hut_tv_icon.png
+Name=EA TV
+Comment=Launch EA TV Client with Video Slicing
+Exec=/home/everydayadvertise/ea_tv_launcher.sh
+Icon=/home/everydayadvertise/ea_tv_icon.png
 Terminal=false
 Categories=AudioVideo;Player;
 StartupNotify=true
-Keywords=pizza;hut;tv;video;player;
+Keywords=ea;everyday;advertise;tv;video;player;
 MimeType=video/mp4;video/mpeg;
 Actions=Emergency;
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Pizza Hut TV - Pi Client (EXACT WEBPLAYER REPLICA)
+EA TV - Pi Client (EXACT WEBPLAYER REPLICA)
 Uses same flow: Link Code → Store Code → Screen Selection → Play
 With FOOLPROOF EMERGENCY EXIT SYSTEM
 """
@@ -17,10 +17,10 @@ import threading
 import time
 from datetime import datetime
 
-class PizzaHutTVWebplayerClone:
+class EATVWebplayerClone:
     def __init__(self, root):
         self.root = root
-        self.root.title("Pizza Hut TV - Screen Control")
+        self.root.title("EA TV - Screen Control")
         self.root.geometry("600x400")
         self.root.configure(bg='#0b0b0b')
         
@@ -660,7 +660,7 @@ def main():
     print()
     
     root = tk.Tk()
-    app = PizzaHutTVWebplayerClone(root)
+    app = EATVWebplayerClone(root)
     
     try:
         root.mainloop()
