@@ -1719,6 +1719,18 @@ def _normalize_screen_ref(cfg, store_id: str, screen_id: str) -> tuple[str | Non
 # --- Screen heartbeat + status (placed after app initialization) ---
 HEARTBEAT_TIMEOUT = 60  # seconds
 
+@app.route('/api/server_time', methods=['GET'])
+def server_time():
+    """Return precise server time in milliseconds for client synchronization"""
+    import time
+    server_time_ms = time.time() * 1000
+    return jsonify({
+        'server_time_ms': server_time_ms,
+        'server_time_seconds': time.time(),
+        'iso_time': datetime.now(timezone.utc).isoformat(),
+        'timestamp': int(time.time())
+    })
+
 @app.route('/api/screen_heartbeat', methods=['POST', 'GET'])
 def screen_heartbeat():
     """Android TV app should POST here every ~30s with store_id and screen_id.
@@ -5110,8 +5122,16 @@ def get_playlist(store_id, screen_id):
     user_key = _resolve_user_key_by_code(header_code)
     # Prefer per-user config when either a pair code OR a logged-in session user exists
     if not user_key and not _safe_user_key():
-        return {'success': False, 'error': 'pair code required'}, 403
-    ukey = user_key or _safe_user_key()
+        # Public playlist bypass: allow unauthenticated access when explicitly enabled
+        allow_public = os.environ.get('ALLOW_PUBLIC_PLAYLIST', '').lower() in ('1', 'true', 'yes', 'y')
+        # Optional comma-separated allow-list of store ids (e.g. "1000,2000")
+        public_stores = {s.strip() for s in (os.environ.get('PUBLIC_PLAYLIST_STORES') or '').split(',') if s.strip()}
+        if allow_public and (not public_stores or store_id in public_stores):
+            ukey = None  # Use global/shared config path
+        else:
+            return {'success': False, 'error': 'pair code required'}, 403
+    else:
+        ukey = user_key or _safe_user_key()
     cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
     # Legacy mapping: if old store_id like '1881' no longer exists, map to current master store
     try:
@@ -5610,6 +5630,17 @@ def get_playlist(store_id, screen_id):
         200,
         {'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'}
     )
+
+# Legacy query-parameter playlist endpoint for backward compatibility
+@app.route('/playlist')
+@slowlog(300)
+@with_etag_json
+def legacy_playlist_query():
+    store_id = request.args.get('store_id') or request.args.get('store') or ''
+    screen_id = request.args.get('screen_id') or request.args.get('screen') or ''
+    if not store_id or not screen_id:
+        return {'success': False, 'error': 'store_id and screen_id required'}, 400
+    return get_playlist(store_id, screen_id)
 
 # ---- Media library listing (for choosing existing uploads) ----
 @app.route('/library')
@@ -7285,6 +7316,13 @@ def serve_video_file_with_range_support(file_path, is_cached='false'):
             resp.headers['X-Slice-Range-Supported'] = 'true'
             # Helpful for diagnostics
             resp.headers['X-Debug-Served-Range'] = f'{start}-{end}'
+            
+            # Add CORS headers for webplayer compatibility
+            resp.headers['Access-Control-Allow-Origin'] = '*'
+            resp.headers['Access-Control-Allow-Methods'] = 'GET, HEAD, OPTIONS'
+            resp.headers['Access-Control-Allow-Headers'] = 'Range, Content-Type'
+            resp.headers['Access-Control-Expose-Headers'] = 'Content-Range, Accept-Ranges, Content-Length'
+            
             print(f"DEBUG: slice-video range: {start}-{end}/{file_size} hdr={range_header}")
             return resp
         except Exception as e:
@@ -7312,6 +7350,13 @@ def serve_video_file_with_range_support(file_path, is_cached='false'):
     except Exception:
         pass
     resp.headers['X-Slice-Range-Supported'] = 'true'
+    
+    # Add CORS headers for webplayer compatibility
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    resp.headers['Access-Control-Allow-Methods'] = 'GET, HEAD, OPTIONS'
+    resp.headers['Access-Control-Allow-Headers'] = 'Range, Content-Type'
+    resp.headers['Access-Control-Expose-Headers'] = 'Content-Range, Accept-Ranges, Content-Length'
+    
     print(f"DEBUG: slice-video full file {file_size} bytes for {file_path}")
     return resp
 
@@ -7319,71 +7364,74 @@ def serve_video_file_with_range_support(file_path, is_cached='false'):
 SLICE_ENCODER_VERSION = "v3-main-20250918"
 @app.route('/slice-video/<path:video_path>')
 def slice_video(video_path):
-    """
-    FFmpeg-based video slicing endpoint for Android TV.
-    Serves actual cropped video segments instead of ultra-wide videos.
-    Works like webplayer - takes 5760x1080 video and serves 1920x1080 slices.
-    """
+    """Serve a cropped slice of an ultra-wide video for Android TV clients."""
     try:
         # Get slice parameters from query string
         slice_mode = request.args.get('slice_mode', 'split-h')
         slice_count = int(request.args.get('slice_count', 1))
         slice_order = int(request.args.get('slice_order', 0))
 
-        print(f"DEBUG: slice_video request - path={video_path}, mode={slice_mode}, count={slice_count}, order={slice_order}")
-        # Optional: force refresh to regenerate slice with latest encoder settings
-        force_refresh = str(request.args.get('refresh') or '').strip().lower() in ('1', 'true', 'yes')
-        
-        # If no slicing needed, redirect to original
+        print(
+            "DEBUG: slice_video request - path=%s, mode=%s, count=%s, order=%s"
+            % (video_path, slice_mode, slice_count, slice_order)
+        )
+
+        force_refresh = str(request.args.get('refresh') or '').strip().lower() in (
+            '1', 'true', 'yes'
+        )
+
         if slice_count <= 1:
             base_url = get_media_base_url() + video_path
             return redirect(base_url)
-        
-        # Check if FFmpeg is available
+
         if not FFMPEG_AVAILABLE:
             print("WARNING: FFmpeg not available, redirecting to original video")
-            print("INFO: To enable video slicing, install FFmpeg:")
-            print("  - Windows: choco install ffmpeg (or download from https://ffmpeg.org/)")
-            print("  - Add ffmpeg.exe to your PATH")
-            print("  - Restart the Flask server")
-            
-            # Fallback to original video with headers indicating no slicing
+            print("INFO: Install FFmpeg and restart the Flask server to enable slicing")
             base_url = get_media_base_url() + video_path
             response = redirect(base_url)
             response.headers['X-Slice-Fallback'] = 'ffmpeg-unavailable'
-            response.headers['X-Slice-Info'] = f"mode={slice_mode},count={slice_count},order={slice_order}"
+            response.headers['X-Slice-Info'] = (
+                f"mode={slice_mode},count={slice_count},order={slice_order}"
+            )
             return response
-        
-        # Generate cache key for this specific slice, include encoder version to bust old cache safely
-        cache_key = f"{SLICE_ENCODER_VERSION}__{video_path.replace('/', '_').replace('\\', '_')}_slice_{slice_mode}_{slice_count}_{slice_order}"
+
+        cache_key = (
+            f"{SLICE_ENCODER_VERSION}__"
+            f"{video_path.replace('/', '_').replace('\\', '_')}"
+            f"_slice_{slice_mode}_{slice_count}_{slice_order}"
+        )
         cached_slice_path = os.path.join(SLICE_CACHE_FOLDER, f"{cache_key}.mp4")
-        
-        # Check if slice already exists in cache (unless force refresh)
+
         if os.path.exists(cached_slice_path):
             if force_refresh:
                 try:
                     os.remove(cached_slice_path)
-                    print(f"DEBUG: Removed cached slice due to refresh request: {cached_slice_path}")
+                    print(
+                        "DEBUG: Removed cached slice due to refresh request: %s"
+                        % cached_slice_path
+                    )
                 except Exception as _e_del:
-                    print(f"WARNING: Failed to delete cached slice for refresh: {_e_del}")
+                    print(
+                        "WARNING: Failed to delete cached slice for refresh: %s"
+                        % _e_del
+                    )
             else:
                 print(f"DEBUG: Serving cached slice: {cached_slice_path}")
                 return serve_video_file_with_range_support(cached_slice_path, 'true')
 
-        # Get the original video file path
-        original_video_path = None
         if r2_enabled():
-            # For R2/CDN videos, we need to download them first
             original_url = get_media_base_url() + video_path
             safe_filename = video_path.replace('/', '_').replace('\\', '_')
             temp_video_path = os.path.join(TEMP_CACHE_FOLDER, safe_filename)
 
-            # Download video if not already cached
             if not os.path.exists(temp_video_path):
                 print(f"DEBUG: Downloading video from CDN: {original_url}")
                 try:
                     urllib.request.urlretrieve(original_url, temp_video_path)
-                    print(f"DEBUG: Downloaded {os.path.getsize(temp_video_path) / 1024 / 1024:.2f} MB")
+                    print(
+                        "DEBUG: Downloaded %.2f MB"
+                        % (os.path.getsize(temp_video_path) / 1024 / 1024)
+                    )
                 except Exception as e:
                     print(f"ERROR: Failed to download video: {e}")
                     base_url = get_media_base_url() + video_path
@@ -7391,47 +7439,43 @@ def slice_video(video_path):
 
             original_video_path = temp_video_path
         else:
-            # For local videos
             original_video_path = os.path.join(app.config['UPLOAD_FOLDER'], video_path)
-        
-        # Verify original video exists
+
         if not os.path.exists(original_video_path):
             print(f"ERROR: Original video not found: {original_video_path}")
             return jsonify({'error': 'Original video not found'}), 404
-        
-        # Generate FFmpeg command for video slicing
+
         success = generate_video_slice_ffmpeg(
-            original_video_path, 
+            original_video_path,
             cached_slice_path,
-            slice_mode, 
-            slice_count, 
-            slice_order
+            slice_mode,
+            slice_count,
+            slice_order,
         )
-        
+
         if success and os.path.exists(cached_slice_path):
             print(f"DEBUG: Successfully created slice: {cached_slice_path}")
-            print(f"DEBUG: Slice file size: {os.path.getsize(cached_slice_path) / 1024 / 1024:.2f} MB")
-            
-            # Serve with proper range request support for ExoPlayer
+            print(
+                "DEBUG: Slice file size: %.2f MB"
+                % (os.path.getsize(cached_slice_path) / 1024 / 1024)
+            )
             return serve_video_file_with_range_support(cached_slice_path, 'false')
-        else:
-            print(f"ERROR: Failed to create video slice")
-            # Fallback to original video
-            base_url = get_media_base_url() + video_path
-            response = redirect(base_url)
-            response.headers['X-Slice-Fallback'] = 'generation-failed'
-            return response
-        
+
+        print("ERROR: Failed to create video slice")
+        base_url = get_media_base_url() + video_path
+        response = redirect(base_url)
+        response.headers['X-Slice-Fallback'] = 'generation-failed'
+        return response
+
     except Exception as e:
         app.logger.exception('slice_video failed')
         print(f"ERROR: slice_video exception: {e}")
-        # Fallback to original video on any error
         try:
             base_url = get_media_base_url() + video_path
             response = redirect(base_url)
             response.headers['X-Slice-Fallback'] = 'exception'
             return response
-        except:
+        except Exception:
             return jsonify({'error': str(e)}), 500
 
 def generate_video_slice_ffmpeg(input_path, output_path, mode, count, order):
