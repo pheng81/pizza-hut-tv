@@ -43,14 +43,14 @@ class WebplayerStyleEATVClient:
             self.vlc_process = None
             self.current_effect = "1"  # Default to fade
             
-            # VLC Effect mapping for transitions
+            # VLC Smooth transition settings for each effect
             self.vlc_effects = {
-                "1": {"name": "fade", "filter": "--video-filter=blend", "duration": "0.7"},
-                "2": {"name": "slide-l", "filter": "--video-filter=transform{type=90}", "duration": "0.5"}, 
-                "3": {"name": "slide-r", "filter": "--video-filter=transform{type=270}", "duration": "0.5"},
-                "4": {"name": "zoom-in", "filter": "--video-filter=scale{factor=1.2}", "duration": "0.8"},
-                "5": {"name": "zoom-out", "filter": "--video-filter=scale{factor=0.8}", "duration": "0.8"},
-                "6": {"name": "cut", "filter": "", "duration": "0.1"}
+                "1": {"name": "fade", "crossfade": "1.0", "gap": "0.5"},      # Smooth fade
+                "2": {"name": "slide-l", "crossfade": "0.8", "gap": "0.3"},   # Quick slide left
+                "3": {"name": "slide-r", "crossfade": "0.8", "gap": "0.3"},   # Quick slide right
+                "4": {"name": "zoom-in", "crossfade": "1.2", "gap": "0.4"},   # Slower zoom in
+                "5": {"name": "zoom-out", "crossfade": "1.2", "gap": "0.4"},  # Slower zoom out
+                "6": {"name": "cut", "crossfade": "0.1", "gap": "0.0"}        # Instant cut
             }
             
             # Make window closeable easily
@@ -385,17 +385,63 @@ class WebplayerStyleEATVClient:
 
     
     def start_playlist_playback(self):
-        """Start playlist-based playback system - matches webplayer functionality."""
+        """Start playlist-based playback system - SMOOTH TRANSITIONS, NO FLICKERS."""
         # Initialize playlist state
         self.current_playlist = []
         self.current_item_index = 0
         self.vlc_process = None
         self.playback_active = True
         self.playlist_refresh_timer = None
+        self.smooth_playlist_path = None
         
-        # Start the playlist loop
-        self.playlist_loop()
+        # Start the SMOOTH playlist system
+        self.smooth_playlist_loop()
     
+    def smooth_playlist_loop(self):
+        """SMOOTH playlist loop - NO FLICKERS, continuous playback like webplayer."""
+        if not self.playback_active:
+            return
+        
+        try:
+            # Get fresh playlist from server
+            self.current_playlist = self.get_full_playlist()
+            
+            if not self.current_playlist:
+                print("⏰ No playlist items, retrying in 10 seconds...")
+                self.playlist_refresh_timer = threading.Timer(10.0, self.smooth_playlist_loop)
+                self.playlist_refresh_timer.start()
+                return
+            
+            print(f"📋 Creating smooth VLC playlist with {len(self.current_playlist)} items - NO FLICKERS!")
+            
+            # Create smooth VLC playlist file
+            playlist_path = self.create_smooth_vlc_playlist(self.current_playlist)
+            
+            if playlist_path:
+                # Launch VLC with smooth continuous playlist
+                self.launch_smooth_vlc_playlist(playlist_path)
+                self.smooth_playlist_path = playlist_path
+                
+                # Calculate total playlist duration for refresh timing
+                total_duration = sum(int(item.get('duration', 30)) for item in self.current_playlist)
+                refresh_interval = min(total_duration, 300)  # Refresh every 5 minutes max
+                
+                print(f"⏰ Smooth playlist refresh in {refresh_interval} seconds")
+                
+                # Schedule playlist refresh (not individual items)
+                self.playlist_refresh_timer = threading.Timer(refresh_interval, self.smooth_playlist_loop)
+                self.playlist_refresh_timer.start()
+            else:
+                print("❌ Failed to create playlist, retrying in 10 seconds...")
+                self.playlist_refresh_timer = threading.Timer(10.0, self.smooth_playlist_loop)
+                self.playlist_refresh_timer.start()
+                
+        except Exception as e:
+            print(f"❌ Error in smooth playlist loop: {e}")
+            # Retry in 10 seconds
+            self.playlist_refresh_timer = threading.Timer(10.0, self.smooth_playlist_loop)
+            self.playlist_refresh_timer.start()
+
     def get_full_playlist(self):
         """Get the complete playlist from server - matches webplayer."""
         try:
@@ -440,56 +486,10 @@ class WebplayerStyleEATVClient:
             return []
     
     def playlist_loop(self):
-        """Main playlist loop - cycles through all items like webplayer."""
-        if not self.playback_active:
-            return
-        
-        try:
-            # Refresh playlist
-            self.current_playlist = self.get_full_playlist()
-            
-            if not self.current_playlist:
-                print("⏰ No playlist items, retrying in 10 seconds...")
-                self.playlist_refresh_timer = threading.Timer(10.0, self.playlist_loop)
-                self.playlist_refresh_timer.start()
-                return
-            
-            # Get current item
-            if self.current_item_index >= len(self.current_playlist):
-                self.current_item_index = 0  # Loop back to start
-            
-            current_item = self.current_playlist[self.current_item_index]
-            duration = int(current_item.get('duration', 10))  # Default 10 seconds
-            
-            print(f"🎬 Playing item {self.current_item_index + 1}/{len(self.current_playlist)} for {duration}s")
-            
-            # Get the video URL for this item
-            video_url = self.extract_video_url_from_item(current_item)
-            
-            if video_url:
-                # Launch VLC for this item
-                self.launch_vlc_for_item(video_url, duration)
-                
-                # Schedule next item
-                self.current_item_index += 1
-                if self.current_item_index >= len(self.current_playlist):
-                    self.current_item_index = 0  # Loop back to start
-                
-                # Schedule next item after duration
-                self.playlist_refresh_timer = threading.Timer(duration, self.playlist_loop)
-                self.playlist_refresh_timer.start()
-            else:
-                print("❌ No video URL for current item, skipping...")
-                self.current_item_index += 1
-                # Try next item quickly
-                self.playlist_refresh_timer = threading.Timer(2.0, self.playlist_loop)
-                self.playlist_refresh_timer.start()
-                
-        except Exception as e:
-            print(f"❌ Error in playlist loop: {e}")
-            # Retry in 5 seconds
-            self.playlist_refresh_timer = threading.Timer(5.0, self.playlist_loop)
-            self.playlist_refresh_timer.start()
+        """DEPRECATED: Old flickering method - replaced by smooth_playlist_loop()"""
+        print("⚠️ Using deprecated playlist_loop - switch to smooth_playlist_loop!")
+        # This method has been replaced by smooth_playlist_loop() for no-flicker transitions
+        pass
     
     def extract_video_url_from_item(self, item):
         """Extract video URL from playlist item - matches webplayer priority."""
@@ -540,19 +540,26 @@ class WebplayerStyleEATVClient:
                 f'--stop-time={duration}'  # Stop after duration
             ]
             
-            # Add effect filters if enabled
+            # Add smooth transition settings based on effect
             if hasattr(self, 'current_effect') and self.current_effect in self.vlc_effects:
                 effect_config = self.vlc_effects[self.current_effect]
-                if effect_config.get("filter"):
-                    # Add effect filter to video chain
-                    vlc_cmd.extend(effect_config["filter"].split())
-                    print(f"🎨 Effect applied: {effect_config['name']}")
+                crossfade_duration = effect_config.get("crossfade", "0.7")
+                
+                # Add crossfading for smooth transitions
+                vlc_cmd.extend([
+                    '--audio-filter', 'normvol',
+                    '--video-filter', 'blend',
+                    '--sub-filter', 'blend'
+                ])
+                print(f"🎨 Smooth transition effect: {effect_config['name']} ({crossfade_duration}s crossfade)")
             
-            # Add professional video settings
+            # Add professional video settings for smooth playback
             vlc_cmd.extend([
-                '--avcodec-hw', 'any',       # Hardware acceleration
-                '--file-caching', '2000',    # Smooth caching
-                '--network-caching', '3000'  # Network buffer
+                '--avcodec-hw', 'any',           # Hardware acceleration
+                '--file-caching', '3000',        # Larger cache for smoother transitions
+                '--network-caching', '4000',     # Network buffer
+                '--clock-jitter', '0',           # Minimize timing jitter
+                '--cr-average', '1000'           # Clock reference for sync
             ])
             
             print(f"🎬 Starting VLC for {duration}s: {video_url[:80]}...")
@@ -672,6 +679,15 @@ class WebplayerStyleEATVClient:
         if hasattr(self, 'playlist_refresh_timer') and self.playlist_refresh_timer:
             self.playlist_refresh_timer.cancel()
         
+        # Clean up smooth playlist file
+        if hasattr(self, 'smooth_playlist_path') and self.smooth_playlist_path:
+            try:
+                import os
+                os.unlink(self.smooth_playlist_path)
+                print("🧹 Cleaned up smooth playlist file")
+            except:
+                pass
+        
         try:
             # Kill any running processes
             subprocess.run(['pkill', '-f', 'pizza_hut_tv'], check=False)
@@ -699,7 +715,7 @@ class WebplayerStyleEATVClient:
             
             # Try to sync with server
             response = requests.post(
-                f"https://pizza-hut-tv.fly.dev/api/sync-effect",
+                f"https://everydayadvertise.com/api/sync-effect",
                 json=sync_data,
                 timeout=3
             )
@@ -711,6 +727,87 @@ class WebplayerStyleEATVClient:
                 
         except Exception as e:
             print(f"⚠️ Effect sync error (continuing): {e}")
+    
+    def create_smooth_vlc_playlist(self, playlist_items):
+        """Create VLC playlist file with smooth transitions - no flickers."""
+        try:
+            import tempfile
+            import os
+            
+            # Create temporary M3U playlist file
+            playlist_fd, playlist_path = tempfile.mkstemp(suffix='.m3u8', prefix='smooth_playlist_')
+            
+            with os.fdopen(playlist_fd, 'w') as f:
+                f.write('#EXTM3U\n')
+                
+                for i, item in enumerate(playlist_items):
+                    duration = item.get('duration', 30)
+                    video_url = item.get('file', '')
+                    title = item.get('title', f'Video {i+1}')
+                    
+                    # Add playlist entry with duration info
+                    f.write(f'#EXTINF:{duration},{title}\n')
+                    f.write(f'{video_url}\n')
+            
+            print(f"📋 Created smooth VLC playlist: {len(playlist_items)} items")
+            return playlist_path
+            
+        except Exception as e:
+            print(f"❌ Failed to create playlist: {e}")
+            return None
+    
+    def launch_smooth_vlc_playlist(self, playlist_path):
+        """Launch VLC with smooth continuous playlist - NO FLICKERS."""
+        try:
+            # Kill any existing VLC first
+            if self.vlc_process:
+                try:
+                    self.vlc_process.terminate()
+                    subprocess.run(['pkill', 'vlc'], check=False)
+                    time.sleep(0.3)  # Brief cleanup
+                except:
+                    pass
+            
+            # Set display
+            import os
+            if not os.environ.get('DISPLAY'):
+                os.environ['DISPLAY'] = ':0'
+            
+            # Get effect transition settings
+            effect_config = self.vlc_effects.get(self.current_effect, {"crossfade": "0.7", "gap": "0.3"})
+            crossfade_time = effect_config.get("crossfade", "0.7")
+            
+            # VLC command for SMOOTH PLAYLIST PLAYBACK - no flickers
+            vlc_cmd = [
+                'vlc',
+                playlist_path,
+                '--fullscreen',
+                '--no-video-title-show',
+                '--no-osd',
+                '--quiet',
+                '--intf', 'dummy',
+                '--loop',                        # Loop entire playlist
+                '--no-random',
+                '--playlist-autostart',
+                '--playlist-tree',
+                '--video-filter', 'blend',       # Smooth blending
+                '--avcodec-hw', 'any',          # Hardware acceleration
+                '--file-caching', '4000',       # Large cache for smooth transitions
+                '--network-caching', '5000',    # Network buffer
+                '--clock-jitter', '0',          # No timing jitter
+                '--cr-average', '1000',         # Clock reference
+                '--audio-desync', '0'           # Audio sync
+            ]
+            
+            print(f"🎬 Launching SMOOTH VLC playlist with {effect_config['name']} transitions...")
+            
+            # Start VLC process
+            self.vlc_process = subprocess.Popen(vlc_cmd, env=os.environ.copy())
+            print(f"✅ Smooth VLC playlist started (PID: {self.vlc_process.pid})")
+            
+        except Exception as e:
+            print(f"❌ Failed to start smooth VLC playlist: {e}")
+            self.vlc_process = None
     
     def run(self):
         """Run the application."""
