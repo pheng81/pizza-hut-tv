@@ -43,11 +43,19 @@ class EATVWebplayerClone:
         self.screen_id = "" # Screen number
         self.vlc_process = None
         self.emergency_timer = None
+        self.current_item_index = 0  # Track which item we're currently playing for rotation
+        self.playlist_start_time = None  # Track when we started the current playlist cycle
         
         self.current_step = 1
         
         # Start emergency exit daemon
         self.start_emergency_daemon()
+        
+        # Test schedule logic on startup
+        self.root.after(2000, self.test_schedule_logic)
+        
+        # Start schedule monitoring timer - check every 30 seconds for schedule changes
+        self.root.after(5000, self.schedule_monitor)
         
         self.create_widgets()
         self.show_step()
@@ -283,134 +291,49 @@ class EATVWebplayerClone:
             data = response.json()
             playlist = data.get('playlist', [])
             
-            print(f"DEBUG: Got {len(playlist)} playlist items")
+            print(f"DEBUG: ===== INITIAL PLAYLIST LOAD =====")
+            print(f"DEBUG: Got {len(playlist)} playlist items for {self.store_id}/{self.screen_id}")
+            
+            for i, item in enumerate(playlist):
+                print(f"DEBUG: Item {i+1}: {item.get('file')} - Enabled: {item.get('enabled', True)}")
+                print(f"DEBUG:   Duration: {item.get('duration', 10)}s, Start: {item.get('start')}, End: {item.get('end')}")
+                print(f"DEBUG:   Days: {item.get('days', [])}")
+                if item.get('sync_ref'):
+                    print(f"DEBUG:   Sync: {item.get('sync_ref')}")
+                if item.get('schedule'):
+                    print(f"DEBUG:   Extra windows: {len(item.get('schedule', []))}")
+            print(f"DEBUG: ===== END INITIAL LOAD =====")
             
             if not playlist:
                 messagebox.showerror("Error", "No videos in playlist")
                 return
             
-            # Get first video file and sync reference
-            video_item = playlist[0]
-            video_file = video_item.get('file')
-            sync_ref = video_item.get('sync_ref', {})
+            # Find currently scheduled video item instead of just taking first
+            video_item = self.find_current_scheduled_item(playlist)
             
-            if not video_file:
-                messagebox.showerror("Error", "No video file found")
+            if not video_item:
+                print("DEBUG: No video scheduled now, will check again in 30 seconds")
+                if hasattr(self, 'status_label'):
+                    self.status_label.config(text="⏳ Waiting for next scheduled video...", fg='#FFA500')
+                # Auto-retry in 30 seconds
+                self.root.after(30000, self.auto_play_next_scheduled)
                 return
             
-            # EXACT WEBPLAYER LOGIC: Check for slice_url first
-            slice_url = video_item.get('slice_url')
-            if slice_url:
-                # Use server-provided slice URL (already contains correct slice)
-                if 'localhost' not in slice_url and '127.0.0.1' not in slice_url:
-                    video_url = slice_url.replace('http:', 'https:')
-                else:
-                    video_url = slice_url
-                print(f"DEBUG: Using server slice_url: {video_url}")
-            else:
-                # Fallback: Use url or file field with /media/ endpoint
-                video_url = video_item.get('url') or f"{self.server_url}/media/{video_file}"
-                print(f"DEBUG: Using fallback URL: {video_url}")
+            video_file = video_item.get('file')
             
-            # Extract screen order for slicing (SAME AS WEBPLAYER LOGIC)
-            api_order = int(sync_ref.get('order', 0))  # API-provided order
+            if not video_file:
+                messagebox.showerror("Error", "No video file found in scheduled item")
+                return
             
-            # BACKUP: Extract screen number from screen_id if API order seems wrong
-            screen_number = 1  # default
-            if '_screen' in self.screen_id:
-                try:
-                    screen_number = int(self.screen_id.split('_screen')[1])
-                except:
-                    screen_number = 1
-            
-            # Use API order if available, otherwise calculate from screen number
-            if api_order >= 0 and 'order' in sync_ref:
-                order = api_order
-                print(f"DEBUG: Using API order: {order}")
-            else:
-                order = screen_number - 1  # Convert screen 1,2,3 to order 0,1,2
-                print(f"DEBUG: Calculated order from screen {screen_number}: {order}")
-            
-            total_screens = 3  # Pizza Hut TV uses 3 screens
-            
-            print(f"DEBUG: Screen order: {order}, Total screens: {total_screens}")
-            print(f"DEBUG: Video file: {video_file}")
-            print(f"DEBUG: Playing video: {video_url}")
-            
-            # IMPLEMENT PROPER VIDEO SLICING for multi-screen resolutions
-            # Detect video resolution and calculate proper slicing
-            
-            # Get video dimensions from playlist metadata or use defaults
-            horizontal = video_item.get('horizontal', True)
-            
-            if horizontal:
-                # Horizontal videos: 1920x1080, 3840x1080, 5760x1080, 7680x1080, 9600x1080
-                screen_width = 1920
-                screen_height = 1080
-                
-                # Determine total screens based on video width or sync_ref
-                total_width_options = {
-                    1920: 1,   # 1 screen
-                    3840: 2,   # 2 screens
-                    5760: 3,   # 3 screens 
-                    7680: 4,   # 4 screens
-                    9600: 5    # 5 screens
-                }
-                
-                # Default to 3 screens if not specified
-                total_screens = 3
-                
-            else:
-                # Vertical videos: 1080x1920, 1080x3840, 1080x5760, 1080x7680, 1080x9600
-                screen_width = 1080
-                screen_height = 1920
-                
-                # For vertical, screens are stacked vertically
-                total_height_options = {
-                    1920: 1,   # 1 screen
-                    3840: 2,   # 2 screens
-                    5760: 3,   # 3 screens
-                    7680: 4,   # 4 screens 
-                    9600: 5    # 5 screens
-                }
-                
-                total_screens = 3
-            
-            print(f"DEBUG: Video orientation: {'Horizontal' if horizontal else 'Vertical'}")
-            print(f"DEBUG: Screen order: {order}, Total screens: {total_screens}")
-            print(f"DEBUG: Video file: {video_file}")
-            print(f"DEBUG: Using server slice URL: {video_url}")
-            
-            self.status_label.config(text=f"Playing Screen {order+1} - Server handles slicing")
-            
-            # Simple VLC launch - server slice URL handles everything
-            vlc_args = [
-                'vlc',
-                '--intf', 'dummy',
-                '--fullscreen', 
-                '--loop',
-                '--no-osd',
-                '--no-video-title-show',
-                '--no-video-deco',
-                video_url
-            ]
-            
-            print(f"DEBUG: VLC command - using server slice URL:")
-            print(f"DEBUG: {' '.join(vlc_args)}")
-            print(f"DEBUG: EMERGENCY EXIT METHODS:")
-            print(f"DEBUG: - Press X key in GUI window")
-            print(f"DEBUG: - Run: touch /tmp/pizza_hut_emergency_exit") 
-            print(f"DEBUG: - SSH: pkill vlc")
-            
-            self.vlc_process = subprocess.Popen(vlc_args)
-            
-            # Start monitoring and emergency daemon
-            self.root.after(2000, self.monitor_vlc)
-            
-            print(f"DEBUG: VLC started - server slice URL should show correct portion!")
+            # Use the dedicated play_video_item method which handles everything
+            print(f"DEBUG: Playing scheduled item: {video_file}")
+            print(f"DEBUG: About to call play_video_item with duration: {video_item.get('duration', 10)}")
+            self.play_video_item(video_item)
             
         except Exception as e:
-            print(f"DEBUG: Error: {e}")
+            print(f"DEBUG: Error in play_video: {e}")
+            import traceback
+            traceback.print_exc()
             messagebox.showerror("Error", f"Error playing video: {str(e)}")
     
     def start_emergency_daemon(self):
@@ -601,20 +524,224 @@ echo "FULLSCREEN_OFF" > /tmp/pizza_hut_emergency_pipe
         
         print("DEBUG: Returned to screen selection")
     
+    def schedule_monitor(self):
+        """Continuously monitor for schedule changes and trigger smooth transitions when needed"""
+        try:
+            if not hasattr(self, 'current_scheduled_item'):
+                self.current_scheduled_item = None
+                
+            # Get current playlist and determine what should be playing now
+            headers = {
+                'X-User-Code': self.code,
+                'User-Agent': 'EA-TV-Pi-Client/1.0'
+            }
+            
+            playlist_url = f"{self.server_url}/playlist/{self.store_id}/{self.screen_id}"
+            response = requests.get(playlist_url, headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                playlist = data.get('playlist', [])
+                
+                # Find what should be playing now
+                scheduled_item = self.find_current_scheduled_item(playlist)
+                
+                if scheduled_item:
+                    scheduled_file = scheduled_item.get('file')
+                    
+                    # Check if we need to transition to a different item
+                    current_file = getattr(self.current_scheduled_item, 'get', lambda x: None)('file') if self.current_scheduled_item else None
+                    
+                    if scheduled_file != current_file:
+                        print(f"DEBUG: Schedule transition detected!")
+                        print(f"DEBUG: Current: {current_file}")
+                        print(f"DEBUG: Should be: {scheduled_file}")
+                        
+                        # Only transition if it's actually a different video
+                        self.current_scheduled_item = scheduled_item
+                        
+                        # Use smooth crossfade transition instead of abrupt stop-start
+                        print("DEBUG: Using crossfade transition for schedule change")
+                        self.start_crossfade_transition(scheduled_item)
+                        
+                        # Update status
+                        if hasattr(self, 'status_label'):
+                            self.status_label.config(text=f"🔄 Crossfade to: {scheduled_file}", fg='#00BFFF')
+                    else:
+                        # Same item should be playing - check if we need to restart it
+                        if not self.vlc_process or self.vlc_process.poll() is not None:
+                            print(f"DEBUG: VLC not running, starting scheduled item with crossfade: {scheduled_file}")
+                            self.current_scheduled_item = scheduled_item
+                            # Use crossfade even for restarts to ensure smooth startup
+                            self.start_crossfade_transition(scheduled_item)
+                        else:
+                            # VLC is running the correct video - leave it alone
+                            print(f"DEBUG: Correct video playing: {scheduled_file}")
+                            self.current_scheduled_item = scheduled_item
+                            self.play_video_item(scheduled_item)
+                else:
+                    # No item scheduled - only stop if something is playing
+                    if self.vlc_process and self.vlc_process.poll() is None:
+                        print("DEBUG: No item scheduled - stopping current playback")
+                        self.smooth_stop_playback()
+                        
+                    self.current_scheduled_item = None
+                    if hasattr(self, 'status_label'):
+                        self.status_label.config(text="⏳ Waiting for next scheduled video...", fg='#FFA500')
+            
+        except Exception as e:
+            print(f"DEBUG: Schedule monitor error: {e}")
+        
+        # Schedule next check in 30 seconds
+        self.root.after(30000, self.schedule_monitor)
+
+    def smooth_transition_to_item(self, video_item):
+        """Smoothly transition to a new video item using crossfade"""
+        video_file = video_item.get('file')
+        new_content_type = self.detect_content_type(video_item)
+        
+        # Determine current content type if we have something playing
+        current_content_type = 'unknown'
+        if hasattr(self, 'current_scheduled_item') and self.current_scheduled_item:
+            current_content_type = self.detect_content_type(self.current_scheduled_item)
+        
+        print(f"DEBUG: ===== SMOOTH TRANSITION =====")
+        print(f"DEBUG: From: {current_content_type} -> To: {new_content_type}")
+        print(f"DEBUG: New file: {video_file}")
+        print(f"DEBUG: ===========================")
+        
+        # If no VLC is running, just start normally
+        if not self.vlc_process or self.vlc_process.poll() is not None:
+            print("DEBUG: No VLC running, starting new content")
+            self.play_video_item(video_item)
+            return
+        
+        # Use crossfade transition for smooth change
+        self.start_crossfade_transition(video_item)
+    
+    def start_optimized_content(self, video_item):
+        """Start content with optimized VLC settings for minimal startup time"""
+        try:
+            video_file = video_item.get('file')
+            
+            # Get video URL
+            slice_url = video_item.get('slice_url')
+            if slice_url:
+                if 'localhost' not in slice_url and '127.0.0.1' not in slice_url:
+                    video_url = slice_url.replace('http:', 'https:')
+                else:
+                    video_url = slice_url
+            else:
+                video_url = video_item.get('url') or f"{self.server_url}/media/{video_file}"
+            
+            # Get content type and optimized VLC settings
+            content_type = self.detect_content_type(video_item)
+            item_duration = video_item.get('duration', 10)
+            repeat = video_item.get('repeat', False)
+            
+            # Use comprehensive fullscreen VLC settings for all content types  
+            if content_type == 'image':
+                base_args = [
+                    'vlc',
+                    '--intf', 'dummy',
+                    '--image-duration', str(item_duration),
+                    '--loop' if repeat else '--play-and-exit'
+                ]
+            else:  # video
+                if repeat:
+                    # Repeating videos - loop forever
+                    base_args = [
+                        'vlc',
+                        '--intf', 'dummy',
+                        '--loop'
+                    ]
+                else:
+                    # Non-repeating videos - play once and exit after duration
+                    base_args = [
+                        'vlc',
+                        '--intf', 'dummy',
+                        '--run-time', str(item_duration),
+                        '--play-and-exit'
+                    ]
+            
+            # Apply comprehensive fullscreen settings
+            vlc_args = self.get_comprehensive_fullscreen_args(base_args, video_url)
+            
+            # Start VLC immediately with minimal delay
+            self.vlc_process = subprocess.Popen(
+                vlc_args,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                preexec_fn=os.setsid if os.name != 'nt' else None
+            )
+            
+            print(f"DEBUG: Optimized VLC started with PID: {self.vlc_process.pid} ({content_type})")
+            
+            # Update status immediately
+            if hasattr(self, 'status_label'):
+                content_icon = "🖼️" if content_type == 'image' else "🎬"
+                loop_text = f" ({content_type} looping)" if repeat else f" ({content_type} {item_duration}s)"
+                self.status_label.config(text=f"▶️ {content_icon} Playing: {video_file}{loop_text}", fg='#90EE90')
+            
+            # Schedule preemptive transition for non-repeating content to prevent gaps
+            if not repeat:
+                # Start transition 2 seconds before content ends to overlap with next content
+                transition_delay = max(1000, int(item_duration * 1000 - 2000))  # At least 1s, but 2s before end
+                print(f"DEBUG: Scheduling preemptive transition in {transition_delay}ms")
+                self.root.after(transition_delay, self.force_next_item)
+            
+            # Start monitoring immediately
+            self.root.after(1000, self.monitor_vlc)
+            
+        except Exception as e:
+            print(f"DEBUG: Failed to start optimized content: {e}")
+            # Final fallback
+            self.play_video_item(video_item)
+    
+    def play_video_item_with_fade(self, video_item):
+        """Play video/image with optimized startup for smooth transitions"""
+        # Use the same optimized approach as smooth transitions
+        self.start_optimized_content(video_item)
+    
     def monitor_vlc(self):
-        """Monitor VLC process and provide escape options"""
+        """Monitor VLC process and handle natural transitions"""
         if self.vlc_process:
             # Check if VLC is still running
             if self.vlc_process.poll() is not None:
-                # VLC has exited, clean up
-                print("DEBUG: VLC process has exited")
+                # VLC has exited naturally, handle transition
+                print("DEBUG: VLC process has exited naturally")
                 self.vlc_process = None
+                
                 if hasattr(self, 'status_label'):
-                    self.status_label.config(text="✅ Video finished - Ready for next action", fg='#90EE90')
+                    self.status_label.config(text="📺 Content ended, transitioning...", fg='#FFA500')
+                
+                # Check what should play next based on current schedule
+                if hasattr(self, 'current_scheduled_item') and self.current_scheduled_item:
+                    item = self.current_scheduled_item
+                    
+                    # Check if this same item should still be playing
+                    if self.is_item_scheduled_now(item):
+                        if item.get('repeat', False):
+                            print("DEBUG: Restarting repeating content (natural end)")
+                        else:
+                            print("DEBUG: Non-repeating content ended, checking for next scheduled item")
+                        
+                        # Start the same item again (for repeating) or let schedule monitor handle it
+                        self.play_video_item(item)
+                        return
+                
+                # No specific item to restart - let schedule monitor handle what's next
+                if hasattr(self, 'status_label'):
+                    self.status_label.config(text="⏰ Content ended, checking schedule...", fg='#FFA500')
                 return
             
             # VLC is still running, schedule next check
-            self.root.after(2000, self.monitor_vlc)
+            # Skip monitoring if we're in the middle of a crossfade
+            if not hasattr(self, 'previous_vlc_process') or not self.previous_vlc_process:
+                self.root.after(2000, self.monitor_vlc)
+            else:
+                # During crossfade, check more frequently
+                self.root.after(500, self.monitor_vlc)
             
             # Make sure our GUI stays accessible
             try:
@@ -622,6 +749,739 @@ echo "FULLSCREEN_OFF" > /tmp/pizza_hut_emergency_pipe
                 self.root.after(100, lambda: self.root.lower())  # Then send it back
             except:
                 pass
+    
+    def auto_play_next_scheduled(self):
+        """Automatically play the next scheduled item"""
+        try:
+            print("DEBUG: Auto-playing next scheduled item...")
+            
+            # Refresh playlist to get current scheduled items
+            headers = {
+                'X-User-Code': self.code,
+                'User-Agent': 'EA-TV-Pi-Client/1.0'
+            }
+            
+            playlist_url = f"{self.server_url}/playlist/{self.store_id}/{self.screen_id}"
+            response = requests.get(playlist_url, headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                playlist = data.get('playlist', [])
+                
+                print(f"DEBUG: ===== FULL PLAYLIST ANALYSIS =====")
+                print(f"DEBUG: Total playlist items: {len(playlist)}")
+                
+                for i, item in enumerate(playlist):
+                    print(f"DEBUG: --- Item {i+1} ---")
+                    print(f"DEBUG: File: {item.get('file', 'NO FILE')}")
+                    print(f"DEBUG: Enabled: {item.get('enabled', True)}")
+                    print(f"DEBUG: Duration: {item.get('duration', 'NO DURATION')}")
+                    print(f"DEBUG: Start time: {item.get('start', 'NO START')}")
+                    print(f"DEBUG: End time: {item.get('end', 'NO END')}")
+                    print(f"DEBUG: Days: {item.get('days', 'NO DAYS')}")
+                    print(f"DEBUG: URL: {item.get('url', 'NO URL')}")
+                    print(f"DEBUG: Slice URL: {item.get('slice_url', 'NO SLICE_URL')}")
+                    print(f"DEBUG: Sync ref: {item.get('sync_ref', 'NO SYNC_REF')}")
+                    
+                    # Check additional schedule windows
+                    schedule_windows = item.get('schedule', [])
+                    if schedule_windows:
+                        print(f"DEBUG: Additional schedule windows: {len(schedule_windows)}")
+                        for j, window in enumerate(schedule_windows):
+                            print(f"DEBUG:   Window {j+1}: {window}")
+                    else:
+                        print(f"DEBUG: No additional schedule windows")
+                    print(f"DEBUG: ---")
+                
+                print(f"DEBUG: ===== END PLAYLIST ANALYSIS =====")
+                
+                if playlist:
+                    # Find the currently scheduled item
+                    current_item = self.find_current_scheduled_item(playlist)
+                    
+                    if current_item and current_item.get('file'):
+                        print(f"DEBUG: Playing next scheduled item: {current_item.get('file')}")
+                        self.play_video_item(current_item)
+                        return
+                
+            # No scheduled item found - try again in 30 seconds
+            print("DEBUG: No scheduled item found - will retry in 30 seconds")
+            if hasattr(self, 'status_label'):
+                self.status_label.config(text="⏳ Waiting for next scheduled video...", fg='#FFA500')
+            self.root.after(30000, self.auto_play_next_scheduled)
+            
+        except Exception as e:
+            print(f"DEBUG: Error in auto_play_next_scheduled: {e}")
+            # Retry in 30 seconds on error
+            self.root.after(30000, self.auto_play_next_scheduled)
+    
+    def find_current_scheduled_item(self, playlist):
+        """Find the item that should be playing now based on schedule rules"""
+        from datetime import datetime
+        
+        # Rule 1: Enabled switch is required - disabled items are ignored everywhere
+        enabled_items = [item for item in playlist if item.get('enabled', True)]
+        
+        if not enabled_items:
+            print("DEBUG: No enabled items in playlist")
+            return None
+        
+        # Rule 2: Check for items currently in scheduled windows
+        scheduled_items = []
+        for item in enabled_items:
+            if self.is_item_scheduled_now(item):
+                scheduled_items.append(item)
+        
+        # Rule 3: Rotation selection
+        if scheduled_items:
+            # At least one item is in a scheduled window - only rotate among scheduled items
+            print(f"DEBUG: {len(scheduled_items)} items currently in scheduled windows")
+            return self.rotate_through_items(scheduled_items)
+        else:
+            # No items scheduled right now - fall back to enabled items with repeat=true
+            repeat_items = [item for item in enabled_items if item.get('repeat', False)]
+            if repeat_items:
+                print(f"DEBUG: No scheduled items - falling back to {len(repeat_items)} repeat items")
+                return self.rotate_through_items(repeat_items)
+            else:
+                print("DEBUG: No scheduled items and no repeat items available")
+                return None
+    
+    def rotate_through_items(self, items):
+        """Rotate through items based on their durations"""
+        from datetime import datetime
+        
+        if not items:
+            return None
+            
+        if len(items) == 1:
+            print(f"DEBUG: Only one item to rotate: {items[0].get('file')}")
+            return items[0]
+            
+        # Multiple items - rotate based on durations
+        now = datetime.now()
+        
+        # Reset cycle tracking if needed
+        if self.playlist_start_time is None:
+            self.playlist_start_time = now
+            self.current_item_index = 0
+            
+        # Calculate total cycle time (sum of all durations)
+        total_cycle_seconds = sum(item.get('duration', 10) for item in items)
+        
+        # Calculate current position within the cycle
+        elapsed_seconds = (now - self.playlist_start_time).total_seconds()
+        cycle_position = elapsed_seconds % total_cycle_seconds
+        
+        # Find which item should be playing at this cycle position
+        cumulative_time = 0
+        for i, item in enumerate(items):
+            item_duration = item.get('duration', 10)
+            if cycle_position < cumulative_time + item_duration:
+                print(f"DEBUG: Cycle position {cycle_position:.1f}s -> Item {i}: {item.get('file')} (duration: {item_duration}s)")
+                return item
+            cumulative_time += item_duration
+            
+        # Fallback - should not happen, but return first item
+        print(f"DEBUG: Fallback to first item: {items[0].get('file')}")
+        return items[0]
+    
+    def is_item_scheduled_now(self, item):
+        """Check if an item should be playing right now"""
+        from datetime import datetime
+        
+        now = datetime.now()
+        current_time = now.time()
+        current_weekday = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'][now.weekday()]
+        
+        print(f"DEBUG: Checking schedule for {item.get('file')} - Current time: {current_time}, Weekday: {current_weekday}")
+        
+        # Check primary schedule
+        if self.check_time_window(item, current_time, current_weekday):
+            print(f"DEBUG: Item {item.get('file')} matches primary schedule window")
+            return True
+            
+        # Check additional schedule windows
+        schedule_windows = item.get('schedule', [])
+        for window in schedule_windows:
+            if window.get('sync_master'):  # Skip sync indicators
+                continue
+            if self.check_schedule_window(window, current_time, current_weekday):
+                print(f"DEBUG: Item {item.get('file')} matches additional schedule window")
+                return True
+        
+        print(f"DEBUG: Item {item.get('file')} is NOT currently scheduled")
+        return False
+    
+    def check_time_window(self, item, current_time, current_weekday):
+        """Check if current time falls within item's primary time window according to scheduling rules"""
+        from datetime import datetime, date
+        
+        start_time = item.get('start')
+        end_time = item.get('end')
+        days = item.get('days', [])
+        
+        print(f"DEBUG: Time window check - start: {start_time}, end: {end_time}, days: {days}")
+        
+        # If no time restrictions, item is always active
+        if not start_time and not end_time and not days:
+            print("DEBUG: No time restrictions - item is always active")
+            return True
+        
+        # Check if this is a dated interval (contains YYYY-MM-DD)
+        has_date_in_start = start_time and len(start_time) > 8 and '-' in start_time
+        has_date_in_end = end_time and len(end_time) > 8 and '-' in end_time
+        
+        if has_date_in_start or has_date_in_end:
+            print("DEBUG: Detected dated interval - treating as one-off absolute interval")
+            return self.check_dated_interval(start_time, end_time, datetime.now())
+        
+        # Time-only scheduling with weekdays (repeating weekly)
+        print("DEBUG: Time-only scheduling with potential weekday repeats")
+        
+        # Check weekday restrictions first
+        if days and current_weekday not in days:
+            print(f"DEBUG: Current weekday {current_weekday} not in allowed days {days}")
+            return False
+            
+        # If only days are specified but no times, check day only
+        if days and not start_time and not end_time:
+            print(f"DEBUG: Only day restriction - current weekday {current_weekday} {'in' if current_weekday in days else 'not in'} {days}")
+            return current_weekday in days
+        
+        # Parse time-only strings (HH:MM:SS format)
+        return self.check_time_only_range(start_time, end_time, current_time)
+    
+    def check_dated_interval(self, start_time, end_time, current_datetime):
+        """Handle one-off dated intervals (YYYY-MM-DD with or without time)"""
+        from datetime import datetime, time
+        
+        current_date = current_datetime.date()
+        current_time = current_datetime.time()
+        
+        # Parse start datetime
+        start_dt = None
+        if start_time:
+            if 'T' in start_time or ' ' in start_time:
+                # Full datetime
+                try:
+                    start_dt = datetime.fromisoformat(start_time.replace('T', ' '))
+                except:
+                    try:
+                        start_dt = datetime.strptime(start_time, '%Y-%m-%d %H:%M:%S')
+                    except:
+                        start_dt = None
+            else:
+                # Date only - normalize to 00:00:00
+                try:
+                    start_date = datetime.strptime(start_time, '%Y-%m-%d').date()
+                    start_dt = datetime.combine(start_date, time(0, 0, 0))
+                except:
+                    start_dt = None
+        
+        # Parse end datetime
+        end_dt = None
+        if end_time:
+            if 'T' in end_time or ' ' in end_time:
+                # Full datetime
+                try:
+                    end_dt = datetime.fromisoformat(end_time.replace('T', ' '))
+                except:
+                    try:
+                        end_dt = datetime.strptime(end_time, '%Y-%m-%d %H:%M:%S')
+                    except:
+                        end_dt = None
+            else:
+                # Date only - normalize to 23:59:59
+                try:
+                    end_date = datetime.strptime(end_time, '%Y-%m-%d').date()
+                    end_dt = datetime.combine(end_date, time(23, 59, 59))
+                except:
+                    end_dt = None
+        
+        # Date-only normalization rules
+        if start_dt and not end_dt and len(start_time) == 10:  # Date only start
+            # Start=YYYY-MM-DD with no end → active from 00:00 to 23:59:59 on that date
+            end_dt = datetime.combine(start_dt.date(), time(23, 59, 59))
+            
+        if end_dt and not start_dt and len(end_time) == 10:  # Date only end
+            # End=YYYY-MM-DD with no start → active from 00:00 to 23:59:59 on that date  
+            start_dt = datetime.combine(end_dt.date(), time(0, 0, 0))
+        
+        # Handle same date with end < start (spans to next day)
+        if start_dt and end_dt and start_dt.date() == end_dt.date() and end_dt.time() < start_dt.time():
+            print("DEBUG: Same date with end < start - treating as continuous one-off window spanning to next day")
+            # Current implementation: check if we're after start OR before end (next day)
+            return current_datetime >= start_dt or (current_date == start_dt.date() and current_time <= end_dt.time())
+        
+        # Normal datetime range check
+        if start_dt and end_dt:
+            return start_dt <= current_datetime <= end_dt
+        elif start_dt:
+            return current_datetime >= start_dt
+        elif end_dt:
+            return current_datetime <= end_dt
+            
+        return True
+    
+    def check_time_only_range(self, start_time, end_time, current_time):
+        """Check time-only range (HH:MM:SS format) for weekly repeating"""
+        # Parse time strings (HH:MM:SS format)
+        start_time_obj = None
+        if start_time:
+            try:
+                start_parts = start_time.split(':')
+                start_hour, start_min = int(start_parts[0]), int(start_parts[1])
+                start_sec = int(start_parts[2]) if len(start_parts) > 2 else 0
+                start_time_obj = current_time.replace(hour=start_hour, minute=start_min, second=start_sec, microsecond=0)
+            except:
+                start_time_obj = None
+        
+        end_time_obj = None        
+        if end_time:
+            try:
+                end_parts = end_time.split(':')
+                end_hour, end_min = int(end_parts[0]), int(end_parts[1])
+                end_sec = int(end_parts[2]) if len(end_parts) > 2 else 0
+                end_time_obj = current_time.replace(hour=end_hour, minute=end_min, second=end_sec, microsecond=0)
+            except:
+                end_time_obj = None
+        
+        # Check if current time is in window
+        if start_time_obj and end_time_obj:
+            if start_time_obj <= end_time_obj:
+                # Normal time range (e.g., 9:00 to 17:00)
+                return start_time_obj <= current_time <= end_time_obj
+            else:
+                # Overnight time range (e.g., 22:00 to 6:00)
+                return current_time >= start_time_obj or current_time <= end_time_obj
+        elif start_time_obj:
+            # Only start time specified
+            return current_time >= start_time_obj
+        elif end_time_obj:
+            # Only end time specified  
+            return current_time <= end_time_obj
+        
+        return True
+    
+    def check_schedule_window(self, window, current_time, current_weekday):
+        """Check if current time falls within a schedule window using the same rules as primary windows"""
+        from datetime import datetime
+        
+        start_time = window.get('start')
+        end_time = window.get('end')
+        days = window.get('days', [])
+        enabled = window.get('enabled', True)
+        
+        print(f"DEBUG: Checking schedule window - enabled: {enabled}, start: {start_time}, end: {end_time}, days: {days}")
+        
+        if not enabled:
+            print("DEBUG: Schedule window is disabled")
+            return False
+        
+        # Use the same logic as primary time window
+        # Create a temporary item-like object to reuse the logic
+        temp_item = {
+            'start': start_time,
+            'end': end_time, 
+            'days': days
+        }
+        
+        return self.check_time_window(temp_item, current_time, current_weekday)
+    
+    
+    def detect_content_type(self, video_item):
+        """Detect if the item is a video or image based on file extension"""
+        video_file = video_item.get('file', '')
+        
+        # Common image extensions
+        image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']
+        # Common video extensions  
+        video_extensions = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm']
+        
+        file_lower = video_file.lower()
+        
+        for ext in image_extensions:
+            if file_lower.endswith(ext):
+                return 'image'
+                
+        for ext in video_extensions:
+            if file_lower.endswith(ext):
+                return 'video'
+        
+        # Default to video for unknown extensions
+        return 'video'
+    
+    def get_comprehensive_fullscreen_args(self, base_args, video_url):
+        """Get comprehensive fullscreen VLC arguments that work for all content types"""
+        return base_args + [
+            '--fullscreen',
+            '--no-video-title-show',
+            '--no-osd',
+            '--no-video-deco', 
+            '--no-embedded-video',
+            '--video-on-top',
+            '--no-video-title',
+            '--disable-screensaver',
+            '--no-snapshot-preview',
+            '--no-audio',  # Disable audio for TV displays
+            video_url
+        ]
+    
+    def get_vlc_args_for_content(self, video_item, video_url):
+        """Get appropriate VLC arguments based on content type with comprehensive fullscreen"""
+        content_type = self.detect_content_type(video_item)
+        item_duration = video_item.get('duration', 10)
+        repeat = video_item.get('repeat', False)
+        
+        print(f"DEBUG: Content type detected: {content_type}")
+        print(f"DEBUG: Duration: {item_duration}s, Repeat: {repeat}")
+        
+        if content_type == 'image':
+            # Images need special handling with duration
+            if repeat:
+                print("DEBUG: Image will loop indefinitely until schedule changes")
+                base_args = [
+                    'vlc',
+                    '--intf', 'dummy',
+                    '--image-duration', str(item_duration),
+                    '--loop'
+                ]
+            else:
+                print(f"DEBUG: Image will display for {item_duration}s then exit")
+                base_args = [
+                    'vlc', 
+                    '--intf', 'dummy',
+                    '--image-duration', str(item_duration),
+                    '--play-and-exit'
+                ]
+        else:
+            # Videos - respect duration and repeat settings
+            if repeat:
+                print("DEBUG: Video will loop indefinitely until schedule changes")
+                base_args = [
+                    'vlc',
+                    '--intf', 'dummy',
+                    '--loop'
+                ]
+            else:
+                print(f"DEBUG: Video will play for {item_duration}s then stop")
+                base_args = [
+                    'vlc',
+                    '--intf', 'dummy',
+                    '--run-time', str(item_duration),
+                    '--play-and-exit'
+                ]
+        
+        # Apply comprehensive fullscreen settings to all content
+        return self.get_comprehensive_fullscreen_args(base_args, video_url), content_type
+
+    def play_video_item(self, video_item):
+        """Play a specific video item with proper slice URL handling and schedule-aware duration"""
+        video_file = video_item.get('file')
+        item_duration = video_item.get('duration', 10)  # Get item duration
+        repeat = video_item.get('repeat', False)  # Check if item should repeat
+        
+        print(f"DEBUG: ===== PLAYING VIDEO ITEM =====")
+        print(f"DEBUG: File: {video_file}")
+        print(f"DEBUG: Item Duration: {item_duration} seconds")
+        print(f"DEBUG: Repeat: {repeat}")
+        print(f"DEBUG: Item data: {video_item}")
+        print(f"DEBUG: ===== END VIDEO ITEM INFO =====")
+
+        if not video_file:
+            print("DEBUG: No video file found in item")
+            return
+            
+        sync_ref = video_item.get('sync_ref', {})
+        
+        # EXACT WEBPLAYER LOGIC: Check for slice_url first
+        slice_url = video_item.get('slice_url')
+        if slice_url:
+            # Use server-provided slice URL (already contains correct slice)
+            if 'localhost' not in slice_url and '127.0.0.1' not in slice_url:
+                video_url = slice_url.replace('http:', 'https:')
+            else:
+                video_url = slice_url
+            print(f"DEBUG: Using server slice_url: {video_url}")
+        else:
+            # Fallback: Use url or file field with /media/ endpoint
+            video_url = video_item.get('url') or f"{self.server_url}/media/{video_file}"
+            print(f"DEBUG: Using fallback URL: {video_url}")
+        
+        # Get appropriate VLC configuration for the content type
+        vlc_args, content_type = self.get_vlc_args_for_content(video_item, video_url)
+        
+        # Determine force stop timing based on content type
+        if content_type == 'image' and not repeat:
+            # Images should transition after their duration
+            force_stop_delay = int(item_duration * 1000 + 1000)  # +1s buffer for images
+            print(f"DEBUG: Image will display for {item_duration}s + 1s buffer")
+        elif content_type == 'video' and not repeat:
+            # Videos get longer cycles to reduce restarts 
+            force_stop_delay = int(item_duration * 1000 * 3)  # Check every 3 cycles
+            print(f"DEBUG: Video will repeat in cycles to reduce restarts")
+        else:
+            # Repeating content - no forced stop
+            force_stop_delay = None
+            print(f"DEBUG: {content_type.title()} will loop indefinitely until schedule changes")
+        
+        try:
+            self.vlc_process = subprocess.Popen(
+                vlc_args,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                preexec_fn=os.setsid if os.name != 'nt' else None
+            )
+            
+            print(f"DEBUG: VLC started with PID: {self.vlc_process.pid}")
+            print(f"DEBUG: Content type: {content_type}")
+            
+            # Update status with content type info
+            if hasattr(self, 'status_label'):
+                if content_type == 'image':
+                    if repeat:
+                        loop_text = f" (image looping every {item_duration}s)"
+                    else:
+                        loop_text = f" (image {item_duration}s)"
+                else:  # video
+                    if repeat:
+                        loop_text = " (video looping)"
+                    else:
+                        loop_text = f" (video cycles)"
+                
+                content_icon = "🖼️" if content_type == 'image' else "🎬"
+                self.status_label.config(text=f"▶️ {content_icon} Playing: {video_file}{loop_text}", fg='#90EE90')
+            
+            # Schedule checks less frequently to reduce restarts
+            if force_stop_delay:
+                self.root.after(force_stop_delay, self.force_next_item)
+            
+            # Start monitoring
+            self.root.after(2000, self.monitor_vlc)
+            
+        except Exception as e:
+            print(f"DEBUG: Failed to start VLC: {e}")
+            if hasattr(self, 'status_label'):
+                self.status_label.config(text=f"❌ Video failed: {e}", fg='#FF6B6B')
+    
+    def force_next_item(self):
+        """Force transition to next item after duration expires with crossfade transition"""
+        print("DEBUG: Content duration expired, starting crossfade to next item")
+        
+        # Get the next scheduled item immediately instead of waiting
+        try:
+            headers = {
+                'X-User-Code': self.code,
+                'User-Agent': 'EA-TV-Pi-Client/1.0'
+            }
+            
+            playlist_url = f"{self.server_url}/playlist/{self.store_id}/{self.screen_id}"
+            response = requests.get(playlist_url, headers=headers, timeout=5)
+            
+            if response.status_code == 200:
+                data = response.json()
+                playlist = data.get('playlist', [])
+                
+                # Find what should be playing now
+                next_item = self.find_current_scheduled_item(playlist)
+                
+                if next_item:
+                    # Start crossfade transition to next item
+                    print(f"DEBUG: Starting crossfade to: {next_item.get('file')}")
+                    self.start_crossfade_transition(next_item)
+                    return
+                    
+        except Exception as e:
+            print(f"DEBUG: Error getting next item for crossfade: {e}")
+        
+        # Fallback - just stop current and let schedule monitor handle it
+        if self.vlc_process and self.vlc_process.poll() is None:
+            print("DEBUG: Fallback - stopping current VLC")
+            try:
+                self.vlc_process.terminate()
+                self.vlc_process.wait(timeout=2)
+            except:
+                try:
+                    self.vlc_process.kill()
+                except:
+                    pass
+            self.vlc_process = None
+            
+        if hasattr(self, 'status_label'):
+            self.status_label.config(text="⏰ Duration complete, checking schedule...", fg='#FFA500')
+    
+    def start_crossfade_transition(self, next_item):
+        """Start crossfade transition by starting next content while current fades out"""
+        try:
+            video_file = next_item.get('file')
+            print(f"DEBUG: ===== CROSSFADE TRANSITION =====")
+            print(f"DEBUG: Starting next content: {video_file}")
+            
+            # If no VLC is currently running, just start the new content normally
+            if not self.vlc_process or self.vlc_process.poll() is not None:
+                print("DEBUG: No VLC running - starting new content directly")
+                self.play_video_item(next_item)
+                return
+                
+            print(f"DEBUG: Current VLC running - starting crossfade")
+            
+            # Get URL for next content
+            slice_url = next_item.get('slice_url')
+            if slice_url:
+                if 'localhost' not in slice_url and '127.0.0.1' not in slice_url:
+                    video_url = slice_url.replace('http:', 'https:')
+                else:
+                    video_url = slice_url
+            else:
+                video_url = next_item.get('url') or f"{self.server_url}/media/{video_file}"
+            
+            # Get content type and settings
+            content_type = self.detect_content_type(next_item)
+            item_duration = next_item.get('duration', 10)
+            repeat = next_item.get('repeat', False)
+            
+            # Prepare VLC args for next content with fade-in using comprehensive fullscreen settings
+            base_args = self.get_comprehensive_fullscreen_args()
+            
+            if content_type == 'image':
+                vlc_args = [
+                    'vlc',
+                    '--intf', 'dummy'
+                ] + base_args + [
+                    '--image-duration', str(item_duration),
+                    '--video-filter', 'fade',
+                    '--fade-in', '1',  # 1 second fade in
+                    '--loop' if repeat else '--play-and-exit',
+                    video_url
+                ]
+            else:  # video
+                if repeat:
+                    # Repeating videos with crossfade
+                    vlc_args = [
+                        'vlc',
+                        '--intf', 'dummy'
+                    ] + base_args + [
+                        '--video-filter', 'fade',
+                        '--fade-in', '1',  # 1 second fade in
+                        '--loop',
+                        video_url
+                    ]
+                else:
+                    # Non-repeating videos with crossfade - respect duration
+                    vlc_args = [
+                        'vlc',
+                        '--intf', 'dummy'
+                    ] + base_args + [
+                        '--video-filter', 'fade',
+                        '--fade-in', '1',  # 1 second fade in
+                        '--run-time', str(item_duration),
+                        '--play-and-exit',
+                        video_url
+                    ]
+            
+            # Start new VLC process
+            new_vlc_process = subprocess.Popen(
+                vlc_args,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                preexec_fn=os.setsid if os.name != 'nt' else None
+            )
+            
+            print(f"DEBUG: New VLC started with PID: {new_vlc_process.pid} ({content_type})")
+            
+            # Update current item
+            self.current_scheduled_item = next_item
+            
+            # Schedule fade-out of old VLC after brief overlap
+            if self.vlc_process and self.vlc_process.poll() is None:
+                print("DEBUG: Scheduling fade-out of current content")
+                self.root.after(1000, lambda: self.fade_out_previous_content(self.vlc_process))
+            
+            # Switch to new VLC process
+            self.vlc_process = new_vlc_process
+            
+            # Update status
+            if hasattr(self, 'status_label'):
+                content_icon = "🖼️" if content_type == 'image' else "🎬"
+                duration_text = f" ({item_duration}s)" if not repeat else " (looping)"
+                self.status_label.config(text=f"🔄 {content_icon} Crossfade: {video_file}{duration_text}", fg='#00BFFF')
+            
+            # Schedule force transition for non-repeating content
+            if not repeat:
+                force_delay = int(item_duration * 1000 - 2000)  # Start transition 2s before end
+                if force_delay > 0:
+                    self.root.after(force_delay, self.force_next_item)
+            
+            # Start monitoring new VLC
+            self.root.after(1000, self.monitor_vlc)
+            
+        except Exception as e:
+            print(f"DEBUG: Crossfade transition failed: {e}")
+            # Fallback to simple transition
+            self.smooth_transition_to_item(next_item)
+    
+    def fade_out_previous_content(self, old_vlc_process):
+        """Gently terminate the previous VLC process after crossfade"""
+        if old_vlc_process and old_vlc_process.poll() is None:
+            try:
+                print("DEBUG: Fading out previous content")
+                old_vlc_process.terminate()
+                # Give it a moment to terminate gracefully
+                import threading
+                threading.Timer(1.0, lambda: old_vlc_process.kill() if old_vlc_process.poll() is None else None).start()
+            except Exception as e:
+                print(f"DEBUG: Error fading out previous content: {e}")
+                try:
+                    old_vlc_process.kill()
+                except:
+                    pass
+    
+    def test_schedule_logic(self):
+        """Test function to verify schedule logic is working"""
+        from datetime import datetime
+        
+        print("DEBUG: ===== TESTING SCHEDULE LOGIC =====")
+        now = datetime.now()
+        current_time = now.time()
+        current_weekday = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'][now.weekday()]
+        
+        print(f"DEBUG: Current time: {current_time}")
+        print(f"DEBUG: Current weekday: {current_weekday}")
+        
+        # Test different schedule scenarios
+        test_items = [
+            {
+                'file': 'always_active.mp4',
+                'enabled': True,
+                'duration': 10,
+                # No schedule restrictions - should always be active
+            },
+            {
+                'file': 'today_only.mp4', 
+                'enabled': True,
+                'duration': 15,
+                'days': [current_weekday]  # Only today
+            },
+            {
+                'file': 'wrong_day.mp4',
+                'enabled': True, 
+                'duration': 20,
+                'days': ['xyz']  # Invalid day - should never be active
+            },
+            {
+                'file': 'disabled.mp4',
+                'enabled': False,  # Disabled - should never be active
+                'duration': 25
+            }
+        ]
+        
+        print("DEBUG: Testing schedule items:")
+        for i, item in enumerate(test_items):
+            is_scheduled = self.is_item_scheduled_now(item)
+            print(f"DEBUG: Item {i+1} '{item['file']}' -> Scheduled: {is_scheduled}")
+            
+        print("DEBUG: ===== END SCHEDULE TEST =====")
     
     def stop_video(self):
         """Stop video playback"""

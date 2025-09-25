@@ -46,7 +46,17 @@
     var videoExt = ['mp4','webm','ogg','mov','avi','mkv','m4v'];
     function isVideoByName(name){ if(!name) return false; var ext=(name.split('?')[0].split('#')[0].split('.').pop()||'').toLowerCase(); for(var i=0;i<videoExt.length;i++){ if(videoExt[i]===ext) return true; } return false; }
     function fileNameFrom(item){ try{ var f=item&&item.file||item&&item.url||''; if(typeof item==='string') f=item; if(/^[a-z]+:\/\//i.test(f)){ var a=document.createElement('a'); a.href=f; var p=a.pathname||''; return (p.split('/').pop()||''); } return (f.split('/').pop()||''); }catch(e){ return ''; } }
-    function mediaUrl(item){ var u=(typeof item==='string')?item:(item.url||item.file||''); if(/^https?:\/\//i.test(u)){ return u.replace(/^http:/,'https:'); } var fname=(u.charAt(0)==='/'?u.slice(1):u); var isVid=isVideoByName(fname); return ORIGIN + '/' + (isVid? 'media' : 'static/uploads') + '/' + fname; }
+    function mediaUrl(item){ 
+        // For slice-aware videos, prioritize slice_url or preferred_url
+        if (typeof item === 'object' && item && item.slice_aware && (item.slice_url || item.preferred_url)) {
+            return (item.slice_url || item.preferred_url).replace(/^http:/, 'https:');
+        }
+        var u=(typeof item==='string')?item:(item.url||item.file||''); 
+        if(/^https?:\/\//i.test(u)){ return u.replace(/^http:/,'https:'); } 
+        var fname=(u.charAt(0)==='/'?u.slice(1):u); 
+        var isVid=isVideoByName(fname); 
+        return ORIGIN + '/' + (isVid? 'media' : 'static/uploads') + '/' + fname; 
+    }
 
     var stage=document.getElementById('stage'); var layerA=document.getElementById('layerA'); var layerB=document.getElementById('layerB'); var front=layerA, back=layerB;
     var playlist=[]; var idx=0; var timer=null; var lastFetchTs=0;
@@ -115,10 +125,9 @@
     }
 
   window.addEventListener ? window.addEventListener('resize', function(){ applyOrientation(); }) : null;
-  // Try entering fullscreen early; if blocked, wait for a gesture
-  try{ setTimeout(function(){ if(!isFullscreen()) requestFs(document.documentElement); }, 150); }catch(e){}
+  // Prompt user-controlled fullscreen; avoid automatic requests that modern browsers block
   try{ ensureFullscreenOnGesture(); }catch(e){}
-  try{ setTimeout(function(){ if(!isFullscreen()){ var ov=document.getElementById('overlay'); if(ov){ ov.textContent = (ov.textContent||'') + ' • Press Enter to go Fullscreen'; } } }, 900); }catch(e){}
+  try{ setTimeout(function(){ if(!isFullscreen()){ var ov=document.getElementById('overlay'); if(ov){ ov.textContent = (ov.textContent||'') + ' • Press Enter or Click to go Fullscreen'; console.log('Added fullscreen hint to overlay'); } } }, 1000); }catch(e){}
   tick();
   </script>
 </body>

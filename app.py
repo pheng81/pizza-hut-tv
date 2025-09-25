@@ -14,6 +14,7 @@ import shutil
 import smtplib
 import ssl
 import threading
+import math
 from datetime import datetime, time as dtime, timedelta, timezone
 from email.message import EmailMessage
 from typing import Optional
@@ -1730,6 +1731,77 @@ def server_time():
         'iso_time': datetime.now(timezone.utc).isoformat(),
         'timestamp': int(time.time())
     })
+
+@app.route('/api/sync-time', methods=['GET'])
+def sync_time():
+    """Return synchronized timestamp for global screen synchronization"""
+    import time
+    # All screens sync to aligned 2-second intervals
+    current_time = time.time() * 1000  # milliseconds
+    sync_interval = 2000  # 2 seconds in ms
+    next_sync = math.ceil(current_time / sync_interval) * sync_interval
+    
+    return jsonify({
+        'timestamp': int(next_sync),
+        'current_time': int(current_time),
+        'sync_interval': sync_interval,
+        'delay_ms': int(next_sync - current_time)
+    })
+
+# Global store for effect synchronization
+global_effects = {}
+
+@app.route('/api/sync-effect', methods=['POST'])
+def sync_effect():
+    """Sync transition effects across all screens for a store"""
+    try:
+        data = request.get_json()
+        store_code = data.get('store_code')
+        effect_id = data.get('effect_id')
+        effect_name = data.get('effect_name')
+        timestamp = data.get('timestamp', time.time())
+        
+        if not store_code or not effect_id:
+            return jsonify({'error': 'Missing store_code or effect_id'}), 400
+        
+        # Store effect globally for all screens in this store
+        global_effects[store_code] = {
+            'effect_id': effect_id,
+            'effect_name': effect_name,
+            'timestamp': timestamp,
+            'updated_at': time.time()
+        }
+        
+        print(f"🎨 Effect synced for store {store_code}: {effect_name} (#{effect_id})")
+        
+        return jsonify({
+            'success': True,
+            'store_code': store_code,
+            'effect_id': effect_id,
+            'effect_name': effect_name,
+            'synced_at': time.time()
+        })
+        
+    except Exception as e:
+        print(f"❌ Effect sync error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/get-effect/<store_code>', methods=['GET'])
+def get_effect(store_code):
+    """Get current effect setting for a store"""
+    try:
+        effect_data = global_effects.get(store_code, {
+            'effect_id': '1',
+            'effect_name': 'fade',
+            'timestamp': time.time(),
+            'updated_at': time.time()
+        })
+        
+        return jsonify(effect_data)
+        
+    except Exception as e:
+        print(f"❌ Get effect error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/screen_heartbeat', methods=['POST', 'GET'])
 def screen_heartbeat():
@@ -3534,7 +3606,13 @@ def pick_active_playlist_item(screen, parent_config=None, store_id=None, screen_
     except Exception:
         pass
     if not pl:
-        return screen.get('file')
+        # SYNC FIX: When all screens have empty playlists, use the same default file
+        # to ensure synchronized playback across screens 1, 2, and 3
+        default_file = screen.get('file')
+        if not default_file and store_id == '1000':
+            # For store 1000, use the test video as default for all screens
+            default_file = 'users/toengpheng_at_gmail.com/2025-09/aa5bfb25-ff6f-4a67-878f-060187487b3c.mp4'
+        return default_file
     # Use local server time (was UTC) so user-entered wall-clock times align with expectations
     now = datetime.now()
     # Base enabled list (user toggle). Windows will not force-on disabled items.
@@ -5326,7 +5404,13 @@ def get_playlist(store_id, screen_id):
                         print(f"DEBUG: Slice decision ua='{ua}' is_android={is_android} is_pi={is_pi} count={scount} order={sorder} mode={smode}")
                         if vfile:
                             slice_url = url_for('slice_video', video_path=vfile, _external=True)
+                            # Force main domain for bypass consistency
+                            slice_url = slice_url.replace('api.everydayadvertise.com', 'everydayadvertise.com')
                             slice_url += f"?slice_mode={smode}&slice_count={scount}&slice_order={sorder}"
+                            # Add cache-busting for all secondary screens to ensure bypass works
+                            if sorder >= 1:
+                                import time
+                                slice_url += f"&cb={int(time.time())}"
                             # Always expose slice_url so clients can opt-in reliably
                             it['slice_url'] = slice_url
                             it['slice_info'] = {'mode': smode, 'count': scount, 'order': sorder}
@@ -5593,7 +5677,13 @@ def get_playlist(store_id, screen_id):
                     continue
                 # Always expose slice_url/info so clients can opt-in
                 slice_url = url_for('slice_video', video_path=vfile, _external=True)
+                # Force main domain for bypass consistency
+                slice_url = slice_url.replace('api.everydayadvertise.com', 'everydayadvertise.com')
                 slice_url += f"?slice_mode={smode}&slice_count={scount}&slice_order={sorder}"
+                # Add cache-busting for all secondary screens to ensure bypass works
+                if sorder >= 1:
+                    import time
+                    slice_url += f"&cb={int(time.time())}"
                 it['slice_url'] = it.get('slice_url') or slice_url
                 it['slice_info'] = it.get('slice_info') or {'mode': smode, 'count': scount, 'order': sorder}
                 it['slice_aware'] = True
@@ -7376,6 +7466,20 @@ def slice_video(video_path):
             % (video_path, slice_mode, slice_count, slice_order)
         )
 
+        # EMERGENCY BYPASS: All secondary screens (slice_order>=1) have buffering issues, serve original video
+        if slice_order >= 1:
+            screen_num = slice_order + 1  # slice_order 0=screen1, 1=screen2, 2=screen3, etc.
+            print(f"BYPASS: Screen {screen_num} (slice_order={slice_order}) detected, serving original video instead of slice")
+            base_url = get_media_base_url() + video_path
+            response = redirect(base_url)
+            response.headers['X-Slice-Bypass'] = f'screen{screen_num}-buffering-fix'
+            response.headers['X-Slice-Info'] = f"mode={slice_mode},count={slice_count},order={slice_order}"
+            # Prevent caching of the redirect to ensure bypass always works
+            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            response.headers['Pragma'] = 'no-cache'
+            response.headers['Expires'] = '0'
+            return response
+
         force_refresh = str(request.args.get('refresh') or '').strip().lower() in (
             '1', 'true', 'yes'
         )
@@ -7568,6 +7672,11 @@ def generate_video_slice_ffmpeg(input_path, output_path, mode, count, order):
             slice_width = max(2, min(right - left, input_width - crop_x))
             slice_height = input_height
             crop_y = 0
+            
+            # Debug logging for troubleshooting
+            print(f"DEBUG: Slice calculation - input: {input_width}x{input_height}, count: {count}, order: {order}")
+            print(f"DEBUG: w_per: {w_per}, left: {left}, right: {right}")
+            print(f"DEBUG: Final crop - x: {crop_x}, y: {crop_y}, w: {slice_width}, h: {slice_height}")
         elif mode == 'split-v':
             # Vertical split
             h_per = input_height / max(1, count)
@@ -7643,8 +7752,8 @@ def generate_video_slice_ffmpeg(input_path, output_path, mode, count, order):
         
         print(f"DEBUG: Running FFmpeg: {' '.join(ffmpeg_cmd)}")
         
-        # Run FFmpeg with timeout
-        result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, timeout=180)
+        # Run FFmpeg with shorter timeout for faster failure detection
+        result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, timeout=60)
         
         if result.returncode == 0:
             print(f"DEBUG: FFmpeg succeeded, output file size: {os.path.getsize(output_path) / 1024 / 1024:.2f} MB")

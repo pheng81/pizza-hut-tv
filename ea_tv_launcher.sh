@@ -16,6 +16,6 @@ pkill vlc 2>/dev/null
 
 # Start EA TV with proper display
 echo "📺 Launching EA TV GUI..."
-python3 pizza_hut_tv_webplayer_exact.py
+python3 pi_player.py
 
 echo "✅ EA TV session ended."

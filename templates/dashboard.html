@@ -3612,7 +3612,7 @@
                                                                                                                                                                     </div>
                                                                                                                                                                 </div>
                                                                                 <div class="schedule-primary one-row">
-                                                                                    ${item.schedule && item.schedule.some(win => win.sync_master) ? 
+                                                                                    ${item && item.sync_ref && item.sync_ref.role==='follower' && idx===0 ? 
                                                                                         `<div style="padding:12px;background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;text-align:center;color:#666;">
                                                                                             <div style="font-size:14px;font-weight:600;margin-bottom:4px;">📋 Schedule Synchronized</div>
                                                                                             <div style="font-size:12px;">This screen follows the master schedule</div>
@@ -3749,18 +3749,29 @@
                 }
                 // Render additional schedule windows (beyond primary start/end)
                 function renderScheduleWindows(item, screenId){
+                    // For sync followers, don't show schedule windows at all
+                    if (item && item.sync_ref && item.sync_ref.role === 'follower') {
+                        return '';
+                    }
+                    
                     if(!item.schedule || !item.schedule.length) return '';
                     
-                    // Check if this is a synchronized schedule follower
-                    const hasSyncMaster = item.schedule.some(win => win.sync_master);
-                    if (hasSyncMaster) {
-                        const syncWin = item.schedule.find(win => win.sync_master);
-                        const groupId = syncWin ? syncWin.group_id : 'unknown';
-                        return `<div style="padding:8px;background:#f8f9fa;border-radius:6px;text-align:center;color:#666;font-size:12px;font-style:italic;">
-                            📋 Schedule synced with master screen
-                            <br><small>Group: ${groupId}</small>
+                    // Filter out sync indicators from actual schedule windows
+                    const actualScheduleWindows = item.schedule.filter(win => !win.sync_master);
+                    const syncIndicators = item.schedule.filter(win => win.sync_master);
+                    
+                    let result = '';
+                    
+                    // Show sync indicators if present (for normal items that are part of sync groups)
+                    if (syncIndicators.length > 0) {
+                        const groupId = syncIndicators[0].group_id || 'unknown';
+                        result += `<div style="padding:8px;background:#f0f8ff;border:1px solid #cce7ff;border-radius:6px;text-align:center;color:#0066cc;font-size:12px;font-style:italic;margin-bottom:6px;">
+                            📋 Part of sync group: ${groupId}
                         </div>`;
                     }
+                    
+                    // If no actual schedule windows, return just sync indicators (or empty)
+                    if (actualScheduleWindows.length === 0) return result;
                     
                     const now = new Date();
                     const parseISOorTime = v=>{ if(!v) return null; try{ if(v.includes('T')) return new Date(v); if(v.length<=8){ const [H,M,S='00']=v.split(':'); const d=new Date(); d.setHours(+H||0,+M||0,+S||0,0); return d;} if(/^\d{4}-\d{2}-\d{2}$/.test(v)){ return new Date(v+'T00:00:00'); } return new Date(v);}catch(e){return null;}};
@@ -3822,7 +3833,7 @@
                             </div>
                         </div>`;
                     };
-                        return `<div class=\"sched-extra-label\">Extra Windows</div>` + item.schedule.map((w,i)=>makeRow(w,i)).join('');
+                        return result + `<div class=\"sched-extra-label\">Extra Windows</div>` + actualScheduleWindows.map((w,i)=>makeRow(w,i)).join('');
                 }
                 // Toggle a weekday for a specific extra window
                 function toggleWindowWeekday(screenId,itemId,index,code,el){

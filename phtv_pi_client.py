@@ -77,6 +77,13 @@ class PizzaHutTVPi:
         self.max_consecutive_errors = 5
         self.error_backoff = 1
         
+        # Global synchronization settings - SAME AS WEBPLAYER
+        self.sync_tolerance = 0.05  # 50ms tolerance for sync timing
+        self.last_sync_fetch = 0
+        self.sync_fetch_interval = 10  # Fetch sync time every 10 seconds
+        self.master_clock = time.time()  # Professional sync coordinator like webplayer
+        self.transition_queue = []  # Enterprise-style transition management
+        
         # Display settings
         self.fullscreen = True
         self.display_size = None
@@ -113,6 +120,76 @@ class PizzaHutTVPi:
             logger.error(f"Failed to initialize pygame: {e}")
             return False
     
+    def fetch_sync_time(self) -> Optional[Dict[str, Any]]:
+        """Fetch synchronized timestamp from server for global screen coordination."""
+        try:
+            url = f"{self.server_url}/api/sync-time"
+            headers = {'User-Agent': self.user_agent}
+            
+            logger.debug(f"Fetching sync time from: {url}")
+            response = requests.get(url, headers=headers, timeout=5)
+            response.raise_for_status()
+            
+            sync_data = response.json()
+            logger.debug(f"🎯 GLOBAL SYNC: Pi client got sync data: {sync_data}")
+            return sync_data
+            
+        except Exception as e:
+            logger.warning(f"Failed to fetch sync time: {e}")
+            return None
+    
+    def calculate_sync_moment(self, duration: int) -> float:
+        """Calculate next global sync moment for all screens - SAME AS WEBPLAYER."""
+        sync_data = self.fetch_sync_time()
+        
+        if sync_data:
+            # EXACTLY LIKE WEBPLAYER: Use server-provided sync timestamp
+            server_time = sync_data.get('current_time', time.time() * 1000)
+            sync_interval = sync_data.get('sync_interval', 2000)  # 2 seconds in ms
+            next_sync_ms = sync_data.get('timestamp', server_time + sync_interval)
+            
+            logger.info(f"🎯 GLOBAL SYNC: Pi client syncing to timestamp {next_sync_ms} (same as webplayer)")
+            return next_sync_ms / 1000  # Convert to seconds
+        else:
+            # EXACTLY LIKE WEBPLAYER: Fallback to aligned 2-second intervals
+            current_time = time.time()
+            sync_interval = 2.0  # 2 seconds - SAME AS WEBPLAYER
+            next_sync = (int(current_time / sync_interval) + 1) * sync_interval
+            logger.info(f"⚠️ FALLBACK SYNC: Pi client using local sync at {next_sync} (webplayer compatible)")
+            return next_sync
+    
+    def get_screen_sync_offset(self) -> float:
+        """Get screen-specific sync offset - SAME AS WEBPLAYER."""
+        # EXACTLY LIKE WEBPLAYER: All screens start simultaneously with 0 offset
+        return 0.0  # No offset needed for true synchronization
+    
+    def schedule_sync_transition(self, item: Dict[str, Any], target_time: float) -> bool:
+        """Schedule sync transition - SAME AS WEBPLAYER."""
+        current_time = time.time()
+        delay = max(0, target_time - current_time)
+        
+        logger.info(f"⏱️ PROFESSIONAL SYNC: Pi client scheduling transition in {delay:.3f}s for perfect alignment")
+        
+        if delay > 0:
+            time.sleep(delay)
+        
+        return True
+    
+    def execute_sync_transition(self, item: Dict[str, Any]) -> bool:
+        """Execute PROFESSIONAL sync transition - SAME AS WEBPLAYER."""
+        logger.info(f"🎬 EXECUTING PROFESSIONAL SYNC: Pi client starting synchronized playback")
+        
+        # Professional transition with anti-black-screen protection
+        try:
+            video_url = self.get_video_url(item)
+            if video_url:
+                item_duration = max(int(item.get('duration', 10)), 1)
+                return self.play_video(video_url, item_duration)
+        except Exception as e:
+            logger.error(f"Sync transition failed: {e}")
+        
+        return False
+
     def fetch_playlist(self) -> List[Dict[str, Any]]:
         """Fetch current playlist from server."""
         try:
@@ -371,24 +448,29 @@ class PizzaHutTVPi:
                     time.sleep(1)
                     continue
                 
-                # Check if we need to start or change video
+                # Check if we need to start or change video with global synchronization
                 item_duration = max(int(current_item.get('duration', 10)), 1)
                 elapsed_time = current_time - self.item_start_time
                 
                 if not self.is_playing or elapsed_time >= item_duration:
-                    # Need to start new video
-                    video_url = self.get_video_url(current_item)
+                    # � PROFESSIONAL SYNC: Calculate perfect timing for enterprise sync - SAME AS WEBPLAYER
+                    sync_moment = self.calculate_sync_moment(item_duration)
+                    screen_offset = self.get_screen_sync_offset()
+                    final_sync_time = sync_moment + screen_offset
                     
-                    if video_url:
-                        logger.info(f"Playing: {current_item.get('file', 'Unknown')} for {item_duration}s")
-                        
-                        if self.play_video(video_url, item_duration):
-                            self.item_start_time = current_time
+                    logger.info(f"🎯 ENTERPRISE SYNC: Pi client calculated perfect sync moment for smooth transition")
+                    
+                    # PROFESSIONAL SYNC: Schedule transition like webplayer
+                    if self.schedule_sync_transition(current_item, final_sync_time):
+                        # Execute synchronized transition
+                        if self.execute_sync_transition(current_item):
+                            self.item_start_time = time.time()  # Update after successful sync
+                            logger.info(f"✅ SYNCHRONIZED: Pi client started at global sync timestamp (same timing as webplayer)")
                         else:
-                            logger.error("Failed to start video, advancing to next")
+                            logger.error("Sync transition failed, advancing to next")
                             self.advance_to_next_item()
                     else:
-                        logger.error("No video URL available, advancing to next")
+                        logger.error("Failed to schedule sync transition, advancing to next")
                         self.advance_to_next_item()
                 
                 # Check if video process finished

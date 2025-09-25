@@ -54,56 +54,61 @@
 		const videoExt = ['mp4','webm','ogg','mov','avi','mkv','m4v'];
 		function isVideoByName(name){ if(!name) return false; const ext=(name.split('.').pop()||'').toLowerCase(); return videoExt.includes(ext); }
 	function mediaUrl(item){
-			if(!item) return '';
-			if(typeof item === 'string') {
-				if (/^https?:\/\//i.test(item)) {
-					const abs = item.replace(/^http:/, 'https:');
-					// If same-origin absolute like https://api.../FILENAME, rewrite to proper path
-					try{
-						const u = new URL(abs);
-						const same = u.host === (new URL(ORIGIN)).host;
-						if(same && /^\/[A-Za-z0-9._-]+$/.test(u.pathname)){
-							const fname = u.pathname.slice(1);
-							const isVid = isVideoByName(fname);
-							return `${ORIGIN}${isVid?'/media/':'/static/uploads/'}${fname}`;
-						}
-					}catch{}
-					return abs;
-				}
-				const fname = item.startsWith('/') ? item.slice(1) : item;
-				const isVid = isVideoByName(fname);
-				// Prefer CDN base for both images and videos when available
-				if (MEDIA_BASE_URL) {
-					return `${MEDIA_BASE_URL}${fname}`;
-				}
-				const rel = `/${isVid? 'media' : 'static/uploads'}/${fname}`;
-				return `${ORIGIN}${rel}`;
-			}
-			const u = item.url || item.file || '';
-			if (/^https?:\/\//i.test(u)) {
-				const abs = u.replace(/^http:/, 'https:');
+		if(!item) return '';
+		if(typeof item === 'string') {
+			if (/^https?:\/\//i.test(item)) {
+				const abs = item.replace(/^http:/, 'https:');
+				// If same-origin absolute like https://api.../FILENAME, rewrite to proper path
 				try{
-					const uu = new URL(abs);
-					const same = uu.host === (new URL(ORIGIN)).host;
-					if(same && /^\/[A-Za-z0-9._-]+$/.test(uu.pathname)){
-						const fname = uu.pathname.slice(1);
+					const u = new URL(abs);
+					const same = u.host === (new URL(ORIGIN)).host;
+					if(same && /^\/[A-Za-z0-9._-]+$/.test(u.pathname)){
+						const fname = u.pathname.slice(1);
 						const isVid = isVideoByName(fname);
 						return `${ORIGIN}${isVid?'/media/':'/static/uploads/'}${fname}`;
 					}
 				}catch{}
 				return abs;
 			}
-			const fname2 = (u.startsWith('/') ? u.slice(1) : u);
-			// Prefer CDN base when available
+			const fname = item.startsWith('/') ? item.slice(1) : item;
+			const isVid = isVideoByName(fname);
+			// Prefer CDN base for both images and videos when available
 			if (MEDIA_BASE_URL) {
-				return `${MEDIA_BASE_URL}${fname2}`;
+				return `${MEDIA_BASE_URL}${fname}`;
 			}
-			const isVid2 = isVideoByName(fname2);
-			const rel = `/${isVid2? 'media' : 'static/uploads'}/${fname2}`;
+			const rel = `/${isVid? 'media' : 'static/uploads'}/${fname}`;
 			return `${ORIGIN}${rel}`;
 		}
-
-		const stage = document.getElementById('stage');
+		
+		// For slice-aware videos, prioritize slice_url or preferred_url
+		if (item.slice_aware && (item.slice_url || item.preferred_url)) {
+			const sliceUrl = item.slice_url || item.preferred_url;
+			return sliceUrl.replace(/^http:/, 'https:');
+		}
+		
+		const u = item.url || item.file || '';
+		if (/^https?:\/\//i.test(u)) {
+			const abs = u.replace(/^http:/, 'https:');
+			try{
+				const uu = new URL(abs);
+				const same = uu.host === (new URL(ORIGIN)).host;
+				if(same && /^\/[A-Za-z0-9._-]+$/.test(uu.pathname)){
+					const fname = uu.pathname.slice(1);
+					const isVid = isVideoByName(fname);
+					return `${ORIGIN}${isVid?'/media/':'/static/uploads/'}${fname}`;
+				}
+			}catch{}
+			return abs;
+		}
+		const fname2 = (u.startsWith('/') ? u.slice(1) : u);
+		// Prefer CDN base when available
+		if (MEDIA_BASE_URL) {
+			return `${MEDIA_BASE_URL}${fname2}`;
+		}
+		const isVid2 = isVideoByName(fname2);
+		const rel = `/${isVid2? 'media' : 'static/uploads'}/${fname2}`;
+		return `${ORIGIN}${rel}`;
+	}		const stage = document.getElementById('stage');
 		const layerA = document.getElementById('layerA');
 		const layerB = document.getElementById('layerB');
 		let front = layerA, back = layerB;

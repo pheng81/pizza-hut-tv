@@ -16,6 +16,6 @@ pkill vlc 2>/dev/null
 
 # Start Pizza Hut TV with proper display
 echo "📺 Launching Pizza Hut TV GUI..."
-python3 pizza_hut_tv_webplayer_exact.py
+python3 pi_player.py
 
 echo "✅ Pizza Hut TV client started!"

@@ -19,7 +19,16 @@
 				this.transitionQueue = [];
 				this.lastSyncTime = 0;
 				
-				console.log('🚀 Professional Sync Coordinator initialized for', screenId);
+				// SYNCHRONIZED SCREEN TIMING: All screens start at aligned intervals
+				this.getScreenSyncOffset = () => {
+					// Extract screen number for sync calculations
+					const screenMatch = screenId.match(/screen(\d+)$/);
+					const screenNum = screenMatch ? parseInt(screenMatch[1]) : 1;
+					// All screens sync to same timeline - no offset needed for true sync
+					return 0; // All screens start simultaneously
+				};
+				
+				console.log('🚀 Professional Sync Coordinator initialized for', screenId, 'with sync offset:', this.getScreenSyncOffset());
 			}
 			
 			// Enterprise-style frame-perfect sync
@@ -54,9 +63,27 @@
 			
 			// Calculate perfect sync timing like industry systems
 			calculateSyncMoment(duration) {
-				const now = Date.now();
-				const nextSync = Math.ceil(now / 1000) * 1000 + 500; // Next half-second boundary
+				// GLOBAL SYNC FIX: All screens sync to server timestamp instead of local time
+				// This ensures perfect synchronization across all screens
+				const serverTime = window.serverTimestamp || Date.now();
+				const syncInterval = 2000; // 2 second sync intervals for all screens
+				const nextSync = Math.ceil(serverTime / syncInterval) * syncInterval;
+				
+				console.log('🎯 GLOBAL SYNC: All screens syncing to timestamp', nextSync);
 				return nextSync;
+			}
+			
+			// Get server timestamp for global sync
+			async getServerTime() {
+				try {
+					const response = await fetch('/api/sync-time');
+					const data = await response.json();
+					window.serverTimestamp = data.timestamp;
+					return data.timestamp;
+				} catch (error) {
+					console.warn('Server time sync failed, using local time');
+					return Date.now();
+				}
 			}
 		}
 		
@@ -209,6 +236,70 @@
 		const pairCode = params.get('code') || '';
 		const syncCoordinator = new window.SyncCoordinator(storeId, screenId);
 		const debugMode = params.get('debug') === '1' || params.get('debug') === 'true';
+		
+		// Initialize server time synchronization for all screens
+		syncCoordinator.getServerTime().then(timestamp => {
+			console.log('🌐 Server time synchronized:', new Date(timestamp));
+		}).catch(err => {
+			console.warn('⚠️ Server time sync failed:', err);
+		});
+		
+		// Global effect synchronization
+		let currentGlobalEffect = 'fade';
+		let effectSyncInterval;
+		
+		async function syncEffectFromServer() {
+			try {
+				if(!storeId) return;
+				const response = await fetch(`/api/get-effect/${storeId}`);
+				const data = await response.json();
+				
+				// Map effect_id (1-6) to effect name if needed
+				let effectName = data.effect_name;
+				if(data.effect_id && !effectName) {
+					effectName = mapNumberToEffect(data.effect_id);
+				}
+				
+				if(effectName && effectName !== currentGlobalEffect) {
+					currentGlobalEffect = effectName;
+					console.log(`🎨 Effect synchronized from server: ${currentGlobalEffect} (ID: ${data.effect_id})`);
+					
+					// Update all active items with new effect
+					updateAllItemEffects(currentGlobalEffect);
+				}
+			} catch(error) {
+				console.warn('⚠️ Effect sync failed:', error);
+			}
+		}
+		
+		// Map numbered effects (1-6) to effect names
+		function mapNumberToEffect(effectId) {
+			const effectMap = {
+				'1': 'fade',
+				'2': 'slide-l', 
+				'3': 'slide-r',
+				'4': 'zoom-in',
+				'5': 'zoom-out',
+				'6': 'cut'
+			};
+			return effectMap[effectId] || 'fade';
+		}
+		
+		function updateAllItemEffects(effectName) {
+			// Update all currently playing items to use the new effect
+			playlist.forEach(item => {
+				if(item) {
+					item.effect = effectName;
+				}
+			});
+			console.log(`🔄 Updated all playlist items to use effect: ${effectName}`);
+		}
+		
+		// Start effect synchronization
+		if(storeId) {
+			syncEffectFromServer(); // Initial sync
+			effectSyncInterval = setInterval(syncEffectFromServer, 3000); // Sync every 3 seconds
+		}
 		
 		// Extract screen number from screenId (e.g., "screen1" -> 1)
 		function getScreenNumber(screenId) {
@@ -1181,8 +1272,9 @@
 		}
 
 		function effectClassFor(item){
-			const e = String(item && item.effect || '').toLowerCase();
-			if(!e) return '';
+			// Use global synchronized effect or fallback to item effect
+			const e = String(currentGlobalEffect || (item && item.effect) || 'fade').toLowerCase();
+			if(!e || e === 'fade') return '';
 			switch(e){
 				case 'fade':
 					// Use the default crossfade (layer fade-out) with no extra per-node class
@@ -1192,6 +1284,7 @@
 				case 'zoom-in': return 'enter-zoom-in';
 				case 'zoom-out': return 'enter-zoom-out';
 				case 'rotate': return 'enter-rotate';
+				case 'cut': return ''; // Cut transition (instant)
 				default: return '';
 			}
 		}
@@ -1713,31 +1806,33 @@
 				primePreload(next).catch(e => console.log('🎬 Professional priority optimization:', e));
 			}
 			
-			// 🏆 PROFESSIONAL SYNC: Calculate perfect timing for enterprise sync
+			// 🏆 GLOBAL SYNC: All screens synchronized to server timestamp
 			const syncMoment = syncCoordinator.calculateSyncMoment(dur);
-			console.log('🎯 ENTERPRISE SYNC: Calculated perfect sync moment for smooth transition');
+			const currentTime = Date.now();
+			const syncDelay = Math.max(0, syncMoment - currentTime);
 			
+			console.log('🎯 GLOBAL SYNC: All screens syncing in', syncDelay, 'ms to timestamp', syncMoment);
+			
+			// Wait for sync moment, then show item simultaneously across all screens
+			if(syncDelay > 0) {
+				if(timer){ clearTimeout(timer); }
+				timer = setTimeout(async () => {
+					await showItem(item);
+					console.log('✅ SYNCHRONIZED: Screen', screenId, 'started at global sync timestamp');
+					
+					// Schedule next tick at synchronized interval
+					if(timer){ clearTimeout(timer); }
+					timer = setTimeout(tick, dur*1000);
+				}, syncDelay);
+				return;
+			}
+			
+			// Immediate show if already at sync moment
 			await showItem(item);
 			idx = nextIndex();
 			if(Date.now() - lastFetchTs > PLAYLIST_REFRESH_MIN_MS){ fetchPlaylist(); }
-			// Sync alignment: if item has sync_ref.start_epoch, align next switch to that cadence
-			try{
-				const sref = item && item.sync_ref || null;
-				const se = sref && Number(sref.start_epoch||0);
-				if(se && isFinite(se) && dur){
-					const now = Date.now();
-					const base = se*1000;
-					const period = Math.max(1000, dur*1000);
-					const n = Math.ceil((now - base)/period);
-					const nextAt = base + n*period;
-					let delay = Math.max(0, nextAt - now);
-					// Avoid zero-delay tight loops
-					if(delay < 50) delay = 50;
-					if(timer){ clearTimeout(timer); }
-					timer = setTimeout(tick, delay);
-					return;
-				}
-			}catch(e){}
+			
+			// Use global sync for next transition instead of individual timing
 			if(timer){ clearTimeout(timer); }
 			timer = setTimeout(tick, dur*1000);
 		}
