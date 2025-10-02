@@ -3694,15 +3694,6 @@
                         if(ok){ showMessage('🔄 Refresh command sent to TV - playlist will reload', '#2ecc71'); }
                     });
                 }},
-                { icon: '📺', label: 'Open Webplayer', action: () => {
-                    const code = document.getElementById('tv-code')?.textContent || '';
-                    if(!code || code.length !== 4) { 
-                        showMessage('Please link a TV code first', '#e74c3c'); 
-                        return; 
-                    }
-                    const url = `${window.location.origin}/webplayer/play?store_id=${currentStoreId}&screen_id=${screenId}&code=${code}`;
-                    window.open(url, '_blank');
-                }},
                 { icon: '❌', label: 'Cancel', action: null }
             ];
             
