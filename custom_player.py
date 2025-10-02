@@ -769,13 +769,29 @@ class CustomMediaPlayer:
             # Promo screens - no slicing, will auto-detect screen size
             self.crop_x_offset = 0
             self.is_promo = True
+        elif str(screen_id).startswith('screen'):
+            # Parse screen number from "screen1", "screen2", "screen3", etc.
+            try:
+                screen_num_str = str(screen_id).replace('screen', '')
+                screen_num = int(screen_num_str)
+                if screen_num == 0:
+                    # Screen 0 is main/single screen - no slicing
+                    self.crop_x_offset = 0
+                else:
+                    # Screens 1, 2, 3, 4, 5... are horizontal slice screens
+                    self.crop_x_offset = (screen_num - 1) * self.slice_width
+            except ValueError:
+                # If parsing fails, default to no offset
+                self.crop_x_offset = 0
+            self.is_promo = False
         elif str(screen_id).isdigit():
+            # Legacy: pure numeric screen IDs (1, 2, 3, etc.)
             screen_num = int(screen_id)
             if screen_num == 0:
                 # Screen 0 is main/single screen - no slicing
                 self.crop_x_offset = 0
             else:
-                # Screens 1, 2, 3 are horizontal slice screens
+                # Screens 1, 2, 3, 4, 5... are horizontal slice screens
                 self.crop_x_offset = (screen_num - 1) * self.slice_width
             self.is_promo = False
         else:
