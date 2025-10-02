@@ -4976,12 +4976,10 @@
                         } 
                     });
                 } else {
-                    markAsChanged(); // Mark as unsaved before replace
                     fetch(`/playlist/item/${currentStoreId}/${sid}/${iid}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({file:name})})
                     .then(r=>r.json()).then(d=>{ 
                         if(d.success){ 
                             closeReplaceModal(); 
-                            markAsSaved(); // Clear unsaved flag after successful replace
                             refreshPlaylist(sid); 
                         } else { 
                             alert('Replace failed: '+(d.error||'unknown')); 
@@ -5083,7 +5081,6 @@
                     console.log('[RP][UPLOAD] success', data);
 
                     if(iid === 'SINGLE'){
-                        markAsChanged(); // Mark as unsaved before assign
                         const r = await fetch('/assign_to_screen', {
                             method:'POST', headers:{ 'Content-Type':'application/json' },
                             body: JSON.stringify({ store_id: currentStoreId, screen_id: sid, filename: data.filename })
@@ -5094,10 +5091,8 @@
                         // Clear progress and close
                         try{ resetRpUploadUI(); }catch{}
                         closeReplaceModal();
-                        markAsSaved(); // Clear unsaved flag after successful assign
                         refreshPlaylist(sid);
                     } else {
-                        markAsChanged(); // Mark as unsaved before replace
                         const r = await fetch(`/playlist/item/${currentStoreId}/${sid}/${iid}`, {
                             method:'PATCH', headers:{ 'Content-Type':'application/json' },
                             body: JSON.stringify({ file: data.filename })
@@ -5107,7 +5102,6 @@
                         if(!x.success) throw new Error('Replace failed: ' + (x.error || 'unknown'));
                         try{ resetRpUploadUI(); }catch{}
                         closeReplaceModal();
-                        markAsSaved(); // Clear unsaved flag after successful replace
                         refreshPlaylist(sid);
                     }
                 } catch(err){
