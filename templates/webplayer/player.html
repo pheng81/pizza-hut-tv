@@ -260,12 +260,27 @@
 		const syncCoordinator = new window.SyncCoordinator(storeId, screenId);
 		const debugMode = params.get('debug') === '1' || params.get('debug') === 'true';
 		
-		// Initialize server time synchronization for all screens
-		syncCoordinator.getServerTime().then(timestamp => {
-			console.log('🌐 Server time synchronized:', new Date(timestamp));
-		}).catch(err => {
-			console.warn('⚠️ Server time sync failed:', err);
-		});
+		// 🚀 AGGRESSIVE SERVER TIME SYNC: Initialize immediately and re-sync every 5 seconds
+		(async function initializeServerTimeSync() {
+			try {
+				// Initial sync with multiple samples for accuracy
+				await getServerTime();
+				console.log('✅ Initial server time synchronized');
+				
+				// 🚀 CONTINUOUS RE-SYNC: Re-sync every 5 seconds for perfect clock alignment
+				setInterval(async () => {
+					try {
+						await getServerTime();
+						console.log('🔄 Server time re-synchronized, offset:', serverTimeOffset.toFixed(3) + 'ms');
+					} catch(err) {
+						console.warn('⚠️ Background server time sync failed:', err);
+					}
+				}, 5000); // Every 5 seconds for tight sync
+				
+			} catch(err) {
+				console.warn('⚠️ Initial server time sync failed:', err);
+			}
+		})();
 		
 		// Extract screen number from screenId (e.g., "screen1" -> 1)
 		function getScreenNumber(screenId) {
@@ -338,8 +353,9 @@
 		let syncSamples = []; // Store multiple samples for better accuracy
 		let networkLatency = 0; // Estimated network latency
 		
+		// 🚀 AGGRESSIVE SERVER TIME SYNC - Re-sync every 5 seconds for tighter sync
 		async function getServerTime() {
-			const maxRetries = 3;
+			const maxRetries = 5; // More retries for better reliability
 			const samples = [];
 			
 			for(let attempt = 0; attempt < maxRetries; attempt++) {
@@ -428,8 +444,8 @@
 		function getServerSyncedTime() {
 			const clientTime = Date.now();
 			
-			// Check if we need to re-sync (more frequent for better consistency)
-			if(clientTime - lastServerSync > 15000) { // Re-sync every 15 seconds
+			// 🚀 AGGRESSIVE RE-SYNC: Re-sync every 5 seconds instead of 15 for tighter coordination
+			if(clientTime - lastServerSync > 5000) { // Re-sync every 5 seconds
 				getServerTime(); // Async refresh for next time
 			}
 			
@@ -604,9 +620,9 @@
 			if(!videoElement || !item || !item.sync_ref) return;
 			
 			let syncCheckInterval;
-			const SYNC_CHECK_INTERVAL = 250; // Check every 250ms for better consistency
-			const MAX_DRIFT_TOLERANCE = 0.15; // 150ms drift tolerance (tighter)
-			const MINOR_DRIFT_THRESHOLD = 0.05; // 50ms for minor drift detection
+			const SYNC_CHECK_INTERVAL = 100; // 🚀 CHECK EVERY 100ms (was 250ms) for tighter sync
+			const MAX_DRIFT_TOLERANCE = 0.08; // 🚀 80ms tolerance (was 150ms) for better sync
+			const MINOR_DRIFT_THRESHOLD = 0.03; // 🚀 30ms for minor drift (was 50ms)
 			
 				const checkSync = () => {
 					try {
@@ -637,30 +653,23 @@
 							videoElement.currentTime = expectedTime;
 							
 						} else if(drift > MINOR_DRIFT_THRESHOLD) {
-							console.log('🔄 Minor sync drift detected:', {
-								screen: screenId,
-								drift: drift.toFixed(3) + 's',
-								serverOffset: serverTimeOffset.toFixed(3) + 'ms',
-								networkLatency: networkLatency.toFixed(1) + 'ms',
-								monitoring: true
-							});
-							
-							// For minor drift, apply gradual correction to avoid jarring jumps
-							if(drift > 0.1) { // Only correct if drift > 100ms
-								const targetTime = actualTime + ((expectedTime - actualTime) * 0.3); // 30% correction
+							// � MORE AGGRESSIVE CORRECTION: Apply 50% correction (was 30%) for faster convergence
+							if(drift > 0.05) { // Only correct if drift > 50ms
+								const targetTime = actualTime + ((expectedTime - actualTime) * 0.5); // 50% correction
 								videoElement.currentTime = targetTime;
-								console.log('🔄 Applied gradual sync correction:', {
+								console.log('🔄 Applied aggressive sync correction:', {
 									screen: screenId,
 									from: actualTime.toFixed(3),
 									to: targetTime.toFixed(3),
-									target: expectedTime.toFixed(3)
+									target: expectedTime.toFixed(3),
+									drift: drift.toFixed(3) + 's'
 								});
 							}
 							
 						} else {
 							// Excellent sync - log occasionally for confirmation
-							if(Math.random() < 0.05) { // 5% chance to log
-								console.log('🔄 Excellent server sync maintained:', {
+							if(Math.random() < 0.02) { // 2% chance to log (less spam)
+								console.log('✅ Perfect sync maintained:', {
 									screen: screenId,
 									drift: drift.toFixed(3) + 's',
 									serverOffset: serverTimeOffset.toFixed(3) + 'ms',
@@ -865,9 +874,9 @@
 		let playlistSignature = '';
 		let idleMessageVisible = false;
 		let idleMessageNode = null;
-		// INSTANT LOADING: Aggressive prefetch cache for immediate playback
-		const PRELOAD_AHEAD = 4; // prefetch next 4 items for instant switching
-		const MAX_CACHE = 6; // larger cache for smoother experience
+		// 🚀 AGGRESSIVE PRELOADING: Prefetch MORE videos for ZERO loading delays
+		const PRELOAD_AHEAD = 6; // 🚀 Prefetch next 6 items (was 4) for better sync start
+		const MAX_CACHE = 10; // 🚀 Larger cache (was 6) for smoother transitions
 		const preloadCache = new Map(); // url -> { node, type, ts }
 		function cachePut(url, entry){
 			if(!url || !entry) return; preloadCache.set(url, entry); trimCache();
@@ -1049,28 +1058,31 @@
 		}
 
 		function preloadVideo(url){
-			// 🎬 PROFESSIONAL PRELOADER: Enterprise-grade smooth loading
+			// 🎬 ULTRA-OPTIMIZED PRELOADER: Maximum performance for perfect sync
 			return new Promise(function(resolve,reject){
 				var v=document.createElement('video');
 				v.autoplay=false; 
 				v.muted=true; 
 				v.playsInline = true;
 				
-				// 🚀 PROFESSIONAL BUFFERING for sync videos 
-				if(url.includes('/slice-video/')) {
-					v.preload = 'auto'; // Force full preload for instant playback
-					v.crossOrigin = 'anonymous'; // Fix CORS for slice videos
+				// 🚀 AGGRESSIVE PRELOADING: Load entire video for instant sync start
+				v.preload = 'auto'; // Always preload full video
+				v.crossOrigin = 'anonymous'; // Fix CORS issues
+				
+				// 🚀 HARDWARE ACCELERATION: Force GPU rendering for smooth playback
+				v.style.transform = 'translateZ(0)';
+				v.style.willChange = 'transform'; // Hint browser to optimize
+				v.style.backfaceVisibility = 'hidden';
+				v.style.webkitBackfaceVisibility = 'hidden';
+				
+				// 🚀 SYNC VIDEO OPTIMIZATIONS
+				if(url.includes('/slice-video/') || url.includes('cdn.everydayadvertise.com')) {
 					v.setAttribute('data-instant-load', 'true');
 					v.setAttribute('data-sync-video', 'true');
-					// Firefox compatibility fixes
-					v.setAttribute('controls', 'false');
-					v.removeAttribute('controls'); // Firefox needs explicit removal
 					// Professional buffering attributes
-					console.log('🎬 Configuring slice video element for:', url);
+					console.log('🎬 Configuring sync video element for:', url);
 					v.setAttribute('data-setup', '{"fluid": true, "responsive": true}');
-					console.log('🎬 PROFESSIONAL preloading slice video:', url);
-				} else {
-					v.preload = 'auto'; // Full preload for all videos
+					console.log('🎬 ULTRA-OPTIMIZED preloading sync video:', url);
 				}
 				
 				// 🏆 ENTERPRISE VIDEO ATTRIBUTES - Eliminate all black screens
