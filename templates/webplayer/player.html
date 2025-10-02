@@ -172,17 +172,17 @@
 		/* Base fade with cross-browser support - ULTRA SMOOTH TRANSITIONS */
 		.fade { 
 			opacity:0; 
-			-webkit-transition: opacity 0.8s cubic-bezier(0.4, 0.0, 0.2, 1); 
-			-moz-transition: opacity 0.8s cubic-bezier(0.4, 0.0, 0.2, 1); 
-			-o-transition: opacity 0.8s cubic-bezier(0.4, 0.0, 0.2, 1); 
-			transition: opacity 0.8s cubic-bezier(0.4, 0.0, 0.2, 1); 
+			-webkit-transition: opacity 0.5s cubic-bezier(0.4, 0.0, 0.2, 1); 
+			-moz-transition: opacity 0.5s cubic-bezier(0.4, 0.0, 0.2, 1); 
+			-o-transition: opacity 0.5s cubic-bezier(0.4, 0.0, 0.2, 1); 
+			transition: opacity 0.5s cubic-bezier(0.4, 0.0, 0.2, 1); 
 		}
 		.visible { 
 			opacity:1;
-			-webkit-transition: opacity 0.8s cubic-bezier(0.4, 0.0, 0.2, 1); 
-			-moz-transition: opacity 0.8s cubic-bezier(0.4, 0.0, 0.2, 1); 
-			-o-transition: opacity 0.8s cubic-bezier(0.4, 0.0, 0.2, 1); 
-			transition: opacity 0.8s cubic-bezier(0.4, 0.0, 0.2, 1); 
+			-webkit-transition: opacity 0.5s cubic-bezier(0.4, 0.0, 0.2, 1); 
+			-moz-transition: opacity 0.5s cubic-bezier(0.4, 0.0, 0.2, 1); 
+			-o-transition: opacity 0.5s cubic-bezier(0.4, 0.0, 0.2, 1); 
+			transition: opacity 0.5s cubic-bezier(0.4, 0.0, 0.2, 1); 
 		}
 		
 		/* PROFESSIONAL ANTI-BLACK-SCREEN EFFECTS */
@@ -275,7 +275,7 @@
 					} catch(err) {
 						console.warn('⚠️ Background server time sync failed:', err);
 					}
-				}, 5000); // Every 5 seconds for tight sync
+				}, 3000); // Every 3 seconds for tight sync
 				
 			} catch(err) {
 				console.warn('⚠️ Initial server time sync failed:', err);
@@ -445,7 +445,7 @@
 			const clientTime = Date.now();
 			
 			// 🚀 AGGRESSIVE RE-SYNC: Re-sync every 5 seconds instead of 15 for tighter coordination
-			if(clientTime - lastServerSync > 5000) { // Re-sync every 5 seconds
+			if(clientTime - lastServerSync > 3000) { // Re-sync every 5 seconds
 				getServerTime(); // Async refresh for next time
 			}
 			
@@ -621,9 +621,9 @@
 			
 			let syncCheckInterval;
 			let playbackRateAdjusted = false;
-			const SYNC_CHECK_INTERVAL = 50; // � CHECK EVERY 50ms (20x per second) for ULTRA-TIGHT sync
-			const MAX_DRIFT_TOLERANCE = 0.05; // � 50ms max tolerance (was 80ms)
-			const MINOR_DRIFT_THRESHOLD = 0.02; // � 20ms threshold (was 30ms)
+			const SYNC_CHECK_INTERVAL = 33; // � CHECK EVERY 50ms (20x per second) for ULTRA-TIGHT sync
+			const MAX_DRIFT_TOLERANCE = 0.04; // � 50ms max tolerance (was 80ms)
+			const MINOR_DRIFT_THRESHOLD = 0.015; // � 20ms threshold (was 30ms)
 			
 				const checkSync = () => {
 					try {
@@ -656,7 +656,7 @@
 						} else if(drift > MINOR_DRIFT_THRESHOLD) {
 							// Use playback rate for smooth sync without visible jumps
 							if(!playbackRateAdjusted) {
-								const adjustment = isBehind ? 1.12 : 0.88; // 12% faster/slower
+								const adjustment = isBehind ? 1.15 : 0.85; // 12% faster/slower
 								videoElement.playbackRate = adjustment;
 								playbackRateAdjusted = true;
 								console.log('⚡ Playback rate sync:', {
@@ -672,7 +672,7 @@
 										videoElement.playbackRate = 1.0;
 										playbackRateAdjusted = false;
 									}
-								}, 800);
+								}, 600);
 							}
 							
 						} else {
@@ -1695,7 +1695,7 @@
 							front.classList.remove('transitioning');
 							swapLayers();
 							console.log('🎬 PROFESSIONAL transition completed - zero black screens');
-						}, 900); // Slightly longer for ultra-smooth enterprise transitions
+						}, 600); // Faster transitions for snappier feel
 					});
 				};
 				if(isVid){
