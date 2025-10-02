@@ -1,0 +1,6 @@
+2025-09-25 18:33:46,531 DEBUG Logging initialized. Writing to startup_log.txt
+2025-09-25 18:33:46,532 DEBUG App module import start
+2025-09-25 18:33:46,967 DEBUG Flask-Compress enabled
+2025-09-25 18:33:47,051 DEBUG Attempting to start Flask development server on port 5002
+2025-09-25 18:33:47,057 WARNING  * Debugger is active!
+2025-09-25 18:33:47,063 INFO  * Debugger PIN: 622-045-611

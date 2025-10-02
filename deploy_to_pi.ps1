@@ -1,48 +1,69 @@
-# Deploy enhanced Pi client to Raspberry Pi
 param(
-    [Parameter(Mandatory=$true)]
-    [string]$PiPassword
+    [string]$TargetHost = "everydayadvertise@raspberrypi.local",
+    [string]$Dest = "/home/everydayadvertise/pizza-hut-tv",
+    [string]$PlayUrl = "",
+    [switch]$Test,
+    [switch]$Probe,
+    [switch]$SkipRequirements
 )
 
-Write-Host "Deploying enhanced Pi client to Raspberry Pi..." -ForegroundColor Green
+Write-Host "== Pizza Hut TV Deploy (PowerShell) ==" -ForegroundColor Cyan
 
-$PI_USER = "everydayadvertise"
-$PI_HOST = "raspberrypi"
-$SOURCE_FILE = "phtv_pi_client.py"
+$files = @(
+    'slice_kiosk.py',
+    'pizza_hut_tv.py',
+    'mpv_slice_player.py',
+    'standalone_player.py',
+    'requirements.txt',
+    'playlist_probe.py'
+) | Where-Object { Test-Path $_ }
 
-# Check if source file exists
-if (-not (Test-Path $SOURCE_FILE)) {
-    Write-Host "❌ Source file $SOURCE_FILE not found!" -ForegroundColor Red
-    exit 1
+if($files.Count -eq 0){
+    Write-Error "No expected files found in current directory. Run from project root."; exit 1
 }
 
-Write-Host "Transferring enhanced Pi client..." -ForegroundColor Yellow
-
-# Use SCP to transfer the file
-try {
-    # First, try to copy the file
-    $scpCommand = "scp"
-    $scpArgs = @($SOURCE_FILE, "${PI_USER}@${PI_HOST}:/home/everydayadvertise/")
-    
-    Write-Host "Running: $scpCommand $($scpArgs -join ' ')" -ForegroundColor Cyan
-    
-    # Note: This will prompt for password
-    & $scpCommand @scpArgs
-    
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "✅ Pi client updated successfully!" -ForegroundColor Green
-        Write-Host "The EA TV icon on desktop will now use enhanced synchronization" -ForegroundColor Green
-        
-        # Try to restart any running EA TV process
-        Write-Host "Attempting to restart EA TV process if running..." -ForegroundColor Yellow
-        ssh "${PI_USER}@${PI_HOST}" "pkill -f phtv_pi_client.py || true"
-        
-        Write-Host "✅ Deployment complete! You can now click the EA TV icon to test synchronized playback." -ForegroundColor Green
-    } else {
-        Write-Host "❌ Failed to transfer files to Raspberry Pi" -ForegroundColor Red
+Write-Host "Uploading files to ${TargetHost}:${Dest}" -ForegroundColor Yellow
+foreach($f in $files){
+    Write-Host "  -> $f"
+    & scp $f "${TargetHost}:${Dest}/"
+    if($LASTEXITCODE -ne 0){
+        Write-Error "Failed to copy $f (scp exit code $LASTEXITCODE)"
         exit 1
     }
-} catch {
-    Write-Host "❌ Error during deployment: $($_.Exception.Message)" -ForegroundColor Red
-    exit 1
 }
+
+if(-not $SkipRequirements){
+    Write-Host "(Re)installing Python requirements on Pi (if changed)" -ForegroundColor Yellow
+    & ssh $TargetHost "python3 -m pip install --user -r $Dest/requirements.txt"
+    if($LASTEXITCODE -ne 0){
+        Write-Warning "Requirements install failed (exit code $LASTEXITCODE, continuing)"
+    }
+}
+
+if($Test){
+    $diag = if($PlayUrl){
+        "python3 slice_kiosk.py --play-url '" + $PlayUrl + "' --print-only"
+    } else {
+        "python3 slice_kiosk.py --store 1000 --screen 2 --code 4682 --print-only"
+    }
+    Write-Host "Running remote diagnostic: $diag" -ForegroundColor Cyan
+    & ssh $TargetHost "cd $Dest; $diag"
+    if($LASTEXITCODE -ne 0){
+        Write-Warning "Diagnostic command failed (exit code $LASTEXITCODE)"
+    }
+}
+
+if($Probe){
+    $probeCmd = if($PlayUrl){
+        "python3 playlist_probe.py --play-url '" + $PlayUrl + "'"
+    } else {
+        "python3 playlist_probe.py --store 1000 --screen 2 --code 4682"
+    }
+    Write-Host "Running playlist probe: $probeCmd" -ForegroundColor Cyan
+    & ssh $TargetHost "cd $Dest; $probeCmd"
+    if($LASTEXITCODE -ne 0){
+        Write-Warning "Playlist probe failed (exit code $LASTEXITCODE)"
+    }
+}
+
+Write-Host "Deploy complete." -ForegroundColor Green

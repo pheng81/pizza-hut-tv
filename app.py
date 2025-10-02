@@ -63,7 +63,7 @@ _LIB_CACHE: dict = {}
 # --- SQLite user database helpers ---
 def _db_path() -> str:
     # Allow relocating the DB out of the repo so deploys don't overwrite it
-    p = os.environ.get('USERS_DB_PATH') or 'users.sqlite'
+    p = os.environ.get('USERS_DB_PATH') or 'database.db'
     try:
         d = os.path.dirname(p)
         if d:

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Pizza Hut TV - Screen 2
+Comment=Launch Pizza Hut TV Player for Screen 2 (Middle Slice)
+Exec=/usr/bin/python3 /home/everydayadvertise/pizza-hut-tv/slice_kiosk.py --store 1000 --screen 2 --code 5240
+Icon=/home/everydayadvertise/pizza-hut-tv/pizza-hut-icon.png
+Terminal=false
+Categories=AudioVideo;Player;
+StartupNotify=true
+Path=/home/everydayadvertise/pizza-hut-tv

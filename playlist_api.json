@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 	<meta charset="UTF-8" />
@@ -96,8 +96,6 @@
 			/* HARDWARE ACCELERATION for smooth transitions */
 			transform: translateZ(0);
 			-webkit-transform: translateZ(0);
-			transform-origin: center center;
-			-webkit-transform-origin: center center;
 		}
 		.layer { position:absolute; top:0; left:0; right:0; bottom:0; display:block; background:#000; text-align:center;
 			/* SMOOTH TRANSITION OPTIMIZATION */
@@ -109,13 +107,7 @@
 		.layer table { width:100%; height:100%; border-collapse:collapse; margin:0; padding:0; }
 		.layer td { vertical-align:middle; text-align:center; padding:0; margin:0; }
 		.hidden { display:none; }
-		.media { 
-			width: 100%; 
-			height: 100%; 
-			display: block; 
-			margin: 0 auto;
-			object-fit: contain; /* Show entire video - JS handles orientation scaling */
-			object-position: center center;
+		.media { max-width:100%; max-height:100%; display:block; margin:0 auto;
 			/* ELIMINATE BLACK SCREENS - Force hardware rendering */
 			transform: translateZ(0);
 			-webkit-transform: translateZ(0);
@@ -924,31 +916,17 @@
 				// Base rotation from orientation
 				let rot = (orientationMode === 'vertical') ? 90 : 0;
 				let total = ((rot + (Number(displayRotation)||0)) % 360 + 360) % 360;
-				
-				// Get viewport dimensions
+				// Scale to fit when the final rotation is 90 or 270
 				const vw = window.innerWidth || document.documentElement.clientWidth || 1920;
 				const vh = window.innerHeight || document.documentElement.clientHeight || 1080;
-				
-				// Calculate scale to FILL screen (like Pi client - no letterboxing)
 				let scale = 1;
 				if (total % 180 === 90) {
-					// Portrait orientation on landscape screen (or vice versa)
-					// Scale to ensure content fills the screen completely
-					scale = Math.max(vw/vh, vh/vw);
+					scale = Math.max(0.01, Math.min(5, Math.min(vw/Math.max(vh,1), vh/Math.max(vw,1))));
 				}
-				
-				// Apply transforms
 				const parts = [`rotate(${total}deg)`];
-				if (scale !== 1) { 
-					parts.push(`scale(${scale.toFixed(5)})`); 
-				}
+				if (scale !== 1) { parts.push(`scale(${scale.toFixed(5)})`); }
 				stage.style.transform = parts.join(' ');
-				stage.style.transformOrigin = 'center center';
-				
-				console.log(`📐 Orientation applied: mode=${orientationMode}, rotation=${displayRotation}°, total=${total}°, scale=${scale.toFixed(3)}`);
-			}catch(e){
-				console.error('❌ Orientation error:', e);
-			}
+			}catch{}
 		}
 
 		async function fetchPlaylist(forceAdvanceOnChange = false){
@@ -1896,5 +1874,6 @@
 			document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ if(timer){ clearTimeout(timer); timer=null; } } else { if(!timer) tick(); } });
 		})();
 	</script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon='{"version":"2024.11.0","token":"dcfc412063224c51a5a4e45017c73a50","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>

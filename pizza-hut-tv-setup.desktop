@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=🍕 Pizza Hut TV Setup
+Comment=Pizza Hut TV with webplayer-style setup flow
+Exec=/home/everydayadvertise/pizza-hut-tv/launch_setup_flow.sh
+Icon=/home/everydayadvertise/pizza-hut-tv/pizza-hut-icon.png
+Path=/home/everydayadvertise/pizza-hut-tv
+Terminal=false
+StartupNotify=false
+Categories=AudioVideo;Player;
