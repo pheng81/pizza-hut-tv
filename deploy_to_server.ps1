@@ -15,6 +15,7 @@ $coreFiles = @(
 
 # Template files
 $templateFiles = @(
+    'templates/dashboard.html',
     'templates/webplayer/browse.html',
     'templates/webplayer/index.html', 
     'templates/webplayer/store.html',
