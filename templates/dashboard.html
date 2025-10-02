@@ -3372,10 +3372,13 @@
                 return;
             }
             
-            if (!currentData || !currentData.file) {
-                alert('Please upload an image or video first before rotating');
+            if (!currentData) {
+                alert('Screen data not found');
                 return;
             }
+            
+            // Allow rotation even if no file is set (playlist items may exist)
+            // User should be able to rotate the screen configuration at any time
             
             // Get current rotation from configuration
             const currentRotation = currentData.rotation || 0;
