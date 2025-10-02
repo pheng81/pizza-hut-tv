@@ -4270,9 +4270,17 @@
 
         function deletePlaylistItem(screenId, itemId) {
             if(!confirm('Delete this playlist item?')) return;
+            markAsChanged(); // Mark as unsaved before delete
             fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}`, { method:'DELETE' })
                 .then(r=>r.json())
-                .then(data=>{ if(data.success) refreshPlaylist(screenId); else alert('Delete failed'); });
+                .then(data=>{ 
+                    if(data.success) {
+                        markAsSaved(); // Clear unsaved flag after successful delete
+                        refreshPlaylist(screenId);
+                    } else {
+                        alert('Delete failed');
+                    }
+                });
         }
 
         function toLocalInput(isoString) {
@@ -4956,11 +4964,29 @@
                 if(!rpCtx) return;
                 const sid = rpCtx.screenId; const iid = rpCtx.itemId;
                 if(iid === 'SINGLE'){
+                    markAsChanged(); // Mark as unsaved before assign
                     fetch('/assign_to_screen', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({store_id: currentStoreId, screen_id: sid, filename: name})})
-                    .then(r=>r.json()).then(d=>{ if(d.success){ closeReplaceModal(); refreshPlaylist(sid); } else { alert('Assign failed: '+(d.error||'unknown')); } });
+                    .then(r=>r.json()).then(d=>{ 
+                        if(d.success){ 
+                            closeReplaceModal(); 
+                            markAsSaved(); // Clear unsaved flag after successful assign
+                            refreshPlaylist(sid); 
+                        } else { 
+                            alert('Assign failed: '+(d.error||'unknown')); 
+                        } 
+                    });
                 } else {
+                    markAsChanged(); // Mark as unsaved before replace
                     fetch(`/playlist/item/${currentStoreId}/${sid}/${iid}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({file:name})})
-                    .then(r=>r.json()).then(d=>{ if(d.success){ closeReplaceModal(); refreshPlaylist(sid); } else { alert('Replace failed: '+(d.error||'unknown')); } });
+                    .then(r=>r.json()).then(d=>{ 
+                        if(d.success){ 
+                            closeReplaceModal(); 
+                            markAsSaved(); // Clear unsaved flag after successful replace
+                            refreshPlaylist(sid); 
+                        } else { 
+                            alert('Replace failed: '+(d.error||'unknown')); 
+                        } 
+                    });
                 }
             }
     async function doRpUpload(){
@@ -5057,6 +5083,7 @@
                     console.log('[RP][UPLOAD] success', data);
 
                     if(iid === 'SINGLE'){
+                        markAsChanged(); // Mark as unsaved before assign
                         const r = await fetch('/assign_to_screen', {
                             method:'POST', headers:{ 'Content-Type':'application/json' },
                             body: JSON.stringify({ store_id: currentStoreId, screen_id: sid, filename: data.filename })
@@ -5067,8 +5094,10 @@
                         // Clear progress and close
                         try{ resetRpUploadUI(); }catch{}
                         closeReplaceModal();
+                        markAsSaved(); // Clear unsaved flag after successful assign
                         refreshPlaylist(sid);
                     } else {
+                        markAsChanged(); // Mark as unsaved before replace
                         const r = await fetch(`/playlist/item/${currentStoreId}/${sid}/${iid}`, {
                             method:'PATCH', headers:{ 'Content-Type':'application/json' },
                             body: JSON.stringify({ file: data.filename })
@@ -5078,6 +5107,7 @@
                         if(!x.success) throw new Error('Replace failed: ' + (x.error || 'unknown'));
                         try{ resetRpUploadUI(); }catch{}
                         closeReplaceModal();
+                        markAsSaved(); // Clear unsaved flag after successful replace
                         refreshPlaylist(sid);
                     }
                 } catch(err){
@@ -5948,6 +5978,42 @@
         }
 
         // ---- Periodic Auto Refresh of Master Store Playlists ----
+        // Track unsaved changes to prevent data loss during auto-refresh
+        let hasUnsavedChanges = false;
+        let lastSkippedRefreshTime = 0;
+        
+        function markAsChanged() {
+            hasUnsavedChanges = true;
+            console.log('📝 Unsaved changes detected - auto-refresh will be paused');
+        }
+        
+        function markAsSaved() {
+            hasUnsavedChanges = false;
+            console.log('✅ Changes saved - auto-refresh resumed');
+            // Clear any stale data warnings
+            document.querySelectorAll('.stale-data-warning').forEach(el => el.remove());
+        }
+        
+        function showStaleDataWarning(screenId) {
+            const section = document.getElementById(`playlist-${screenId}`);
+            if (!section) return;
+            
+            // Don't duplicate warnings
+            if (section.querySelector('.stale-data-warning')) return;
+            
+            const warning = document.createElement('div');
+            warning.className = 'stale-data-warning';
+            warning.style.cssText = 'background:#fff3cd;border:1px solid #ffc107;color:#856404;padding:8px 12px;margin:8px 0;border-radius:6px;font-size:11px;display:flex;align-items:center;gap:8px;';
+            warning.innerHTML = `
+                <span style="font-size:16px;">⚠️</span>
+                <span style="flex:1;"><strong>Auto-refresh paused:</strong> You have unsaved changes. Data may be stale.</span>
+                <button onclick="this.parentElement.remove()" style="background:transparent;border:1px solid #856404;color:#856404;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:10px;">Dismiss</button>
+            `;
+            
+            const container = section.querySelector('.playlist-items-container') || section;
+            container.insertBefore(warning, container.firstChild);
+        }
+        
         let playlistAutoRefreshHandle = null;
         function setupAutoPlaylistRefresh(){
             if(playlistAutoRefreshHandle){ clearInterval(playlistAutoRefreshHandle); playlistAutoRefreshHandle=null; }
@@ -5956,6 +6022,19 @@
         playlistAutoRefreshHandle = setInterval(()=>{
                 document.querySelectorAll('.playlist-section[id^="playlist-"]').forEach(sec=>{
                     const sid = sec.id.replace('playlist-','');
+                    
+                    // PROTECTION: Skip refresh if user has unsaved changes
+                    if (hasUnsavedChanges) {
+                        const now = Date.now();
+                        // Show warning every 60 seconds (not every 20s to avoid spam)
+                        if (now - lastSkippedRefreshTime > 60000) {
+                            console.warn('⏸️ Auto-refresh skipped - unsaved changes detected for screen:', sid);
+                            showStaleDataWarning(sid);
+                            lastSkippedRefreshTime = now;
+                        }
+                        return;
+                    }
+                    
                     // Only refresh if section currently in DOM (visible)
             if(document.body.contains(sec)) refreshPlaylist(sid, window.__currentLoadToken||0);
                 });
