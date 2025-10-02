@@ -3687,7 +3687,69 @@
             pushScreenCommand(screenId, 'retry_item', { item_id: itemId, file: file||null }).then(ok=>{ if(ok){ showMessage('Retry sent to TV', '#2ecc71'); }});
         }
         function reloadTV(screenId){
-            pushScreenCommand(screenId, 'reload', {}).then(ok=>{ if(ok){ showMessage('Reload sent to TV', '#2ecc71'); }});
+            // Show popup menu with TV control options
+            const options = [
+                { icon: '🔄', label: 'Refresh TV (Force Reload)', action: () => {
+                    pushScreenCommand(screenId, 'reload', {}).then(ok=>{ 
+                        if(ok){ showMessage('🔄 Refresh command sent to TV - playlist will reload', '#2ecc71'); }
+                    });
+                }},
+                { icon: '📺', label: 'Open Webplayer', action: () => {
+                    const code = document.getElementById('tv-code')?.textContent || '';
+                    if(!code || code.length !== 4) { 
+                        showMessage('Please link a TV code first', '#e74c3c'); 
+                        return; 
+                    }
+                    const url = `${window.location.origin}/webplayer/play?store_id=${currentStoreId}&screen_id=${screenId}&code=${code}`;
+                    window.open(url, '_blank');
+                }},
+                { icon: '🎯', label: 'Test Schedule Now', action: () => {
+                    // Show current time and which items should be active
+                    fetch(`/playlist/${currentStoreId}/${screenId}?debug_schedule=1&user_code=${pairCode||''}`)
+                        .then(r => r.json())
+                        .then(data => {
+                            const activeItems = data.items?.filter(i => i.is_active) || [];
+                            const msg = `Store Time: ${data.store_time}\nActive Items: ${activeItems.length}\n${activeItems.map(i => '✓ ' + (i.file||'').split('/').pop()).join('\n')}`;
+                            alert(msg);
+                        })
+                        .catch(err => showMessage('Failed to test schedule: ' + err.message, '#e74c3c'));
+                }},
+                { icon: '❌', label: 'Cancel', action: null }
+            ];
+            
+            showPopupMenu(options);
+        }
+        
+        function showPopupMenu(options) {
+            // Remove any existing popup
+            const existing = document.getElementById('tv-popup-menu');
+            if(existing) existing.remove();
+            
+            // Create popup overlay
+            const overlay = document.createElement('div');
+            overlay.id = 'tv-popup-menu';
+            overlay.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:10000; display:flex; align-items:center; justify-content:center;';
+            
+            // Create menu
+            const menu = document.createElement('div');
+            menu.style.cssText = 'background:white; border-radius:12px; padding:8px; min-width:300px; box-shadow:0 8px 32px rgba(0,0,0,0.3);';
+            
+            options.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.innerHTML = `<span style="font-size:20px; margin-right:12px;">${opt.icon}</span><span>${opt.label}</span>`;
+                btn.style.cssText = 'width:100%; padding:14px 16px; border:none; background:white; text-align:left; cursor:pointer; border-radius:8px; font-size:15px; display:flex; align-items:center; transition:background 0.2s;';
+                btn.onmouseover = () => btn.style.background = '#f5f5f7';
+                btn.onmouseout = () => btn.style.background = 'white';
+                btn.onclick = () => {
+                    overlay.remove();
+                    if(opt.action) opt.action();
+                };
+                menu.appendChild(btn);
+            });
+            
+            overlay.appendChild(menu);
+            overlay.onclick = (e) => { if(e.target === overlay) overlay.remove(); };
+            document.body.appendChild(overlay);
         }
 
         function toLocalTimeHMSS(val){

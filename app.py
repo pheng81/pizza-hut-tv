@@ -5302,31 +5302,22 @@ def is_in_time_window(now, start_str, end_str, days=None, store_tz=None):
     return True
 
 
-def is_item_active_now(item, store_tz=None):
+def is_item_active_now(item, timezone_offset_hours=0):
     """Check if item should play based on schedule - MATCHES DASHBOARD LOGIC
     
     Args:
         item: Playlist item dictionary
-        store_tz: Timezone name (e.g. 'Australia/Sydney') for proper time conversion
+        timezone_offset_hours: Hours to add to UTC (e.g. 11 for Sydney DST)
     """
     # Get current time in store's timezone
-    if store_tz:
-        try:
-            import pytz
-            tz = pytz.timezone(store_tz)
-            now = datetime.now(pytz.utc).astimezone(tz).replace(tzinfo=None)
-            print(f"DEBUG SCHEDULE: Using store timezone '{store_tz}', converted time: {now.strftime('%Y-%m-%d %H:%M:%S')}")
-        except ImportError:
-            print(f"DEBUG SCHEDULE: pytz not installed, assuming store timezone offset +10 hours from UTC")
-            now = datetime.now() + timedelta(hours=10)  # Sydney is UTC+10 (standard) or +11 (DST)
-        except Exception as e:
-            print(f"DEBUG SCHEDULE: Failed to use timezone '{store_tz}': {e}, falling back to server time")
-            now = datetime.now()
+    if timezone_offset_hours:
+        now = datetime.now() + timedelta(hours=timezone_offset_hours)
+        print(f"DEBUG SCHEDULE: Server UTC + {timezone_offset_hours}h = {now.strftime('%Y-%m-%d %H:%M:%S')}")
     else:
         now = datetime.now()
-        print(f"DEBUG SCHEDULE: No timezone configured, using server time")
+        print(f"DEBUG SCHEDULE: Using server time (UTC): {now.strftime('%Y-%m-%d %H:%M:%S')}")
     
-    print(f"DEBUG SCHEDULE: Server time: {now.strftime('%Y-%m-%d %H:%M:%S %A')}")
+    print(f"DEBUG SCHEDULE: Current time: {now.strftime('%Y-%m-%d %H:%M:%S %A')}")
     print(f"DEBUG SCHEDULE: Checking item: {item.get('file', 'unknown')}")
     
     # Check if item itself is enabled
@@ -5344,7 +5335,7 @@ def is_item_active_now(item, store_tz=None):
                 print(f"DEBUG SCHEDULE: Window disabled - skipping")
                 continue
             print(f"DEBUG SCHEDULE: Checking window: start={window.get('start')}, end={window.get('end')}, days={window.get('days')}")
-            if is_in_time_window(now, window.get('start'), window.get('end'), window.get('days'), store_tz):
+            if is_in_time_window(now, window.get('start'), window.get('end'), window.get('days'), f"UTC+{timezone_offset_hours}"):
                 print(f"DEBUG SCHEDULE: Window ACTIVE - item should play")
                 return True  # Active in at least one enabled window
         print(f"DEBUG SCHEDULE: No active windows - BLOCKING")
@@ -5357,7 +5348,7 @@ def is_item_active_now(item, store_tz=None):
     print(f"DEBUG SCHEDULE: Legacy format - start={start}, end={end}, days={days}")
     
     if start or end or days:
-        return is_in_time_window(now, start, end, days, store_tz)
+        return is_in_time_window(now, start, end, days, f"UTC+{timezone_offset_hours}")
     
     # No schedule restrictions = always active
     return True
@@ -5514,27 +5505,23 @@ def get_playlist(store_id, screen_id):
         print(f"DEBUG: UA override in query detected -> using ua='{ua_effective}' (header was '{_ua_header}')")
     
     # Check if schedule filtering should be skipped (for dashboard management)
-    skip_schedule_filter = True  # TEMP: Disable while fixing timezone
-    # skip_schedule_filter = request.args.get('skip_schedule_filter', '').lower() in ('1', 'true', 'yes')
+    skip_schedule_filter = request.args.get('skip_schedule_filter', '').lower() in ('1', 'true', 'yes')
     debug_schedule = request.args.get('debug_schedule', '').lower() in ('1', 'true', 'yes')
     
     # Get store timezone from configuration
-    # TEMPORARY: Hardcode Sydney timezone for testing
+    # For now, hardcode Sydney timezone offset (UTC+10 or UTC+11 for DST)
+    # TODO: Add timezone field to store config in dashboard
     store_tz = 'Australia/Sydney'
-    print(f"DEBUG SCHEDULE: Using timezone: {store_tz}")
+    timezone_offset_hours = 11  # Sydney is currently in DST (UTC+11)
+    print(f"DEBUG SCHEDULE: Using timezone: {store_tz} (UTC+{timezone_offset_hours})")
     
     if debug_schedule:
         # Return debug info about schedule filtering
-        try:
-            import pytz
-            tz = pytz.timezone(store_tz)
-            now = datetime.now(pytz.utc).astimezone(tz).replace(tzinfo=None)
-        except:
-            # Fallback: assume Sydney is UTC+10
-            now = datetime.now() + timedelta(hours=10)
+        now = datetime.now() + timedelta(hours=timezone_offset_hours)
         
         debug_info = {
             'store_timezone': store_tz,
+            'timezone_offset': timezone_offset_hours,
             'server_time_utc': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'store_time': now.strftime('%Y-%m-%d %H:%M:%S'),
             'store_weekday': ['mon','tue','wed','thu','fri','sat','sun'][now.weekday()],
@@ -5547,7 +5534,7 @@ def get_playlist(store_id, screen_id):
                 'start': item.get('start'),
                 'end': item.get('end'),
                 'enabled': item.get('enabled', True),
-                'is_active': is_item_active_now(item, store_tz)
+                'is_active': is_item_active_now(item, timezone_offset_hours)
             })
         return jsonify(debug_info)
     
@@ -5559,11 +5546,13 @@ def get_playlist(store_id, screen_id):
             # SCHEDULE FILTERING: Only include items that should be playing now
             # Skip filtering for dashboard so all items can be managed
             if not skip_schedule_filter:
-                is_active = is_item_active_now(item, store_tz)
+                is_active = is_item_active_now(item, timezone_offset_hours)
                 print(f"DEBUG: Item '{item.get('file', 'unknown')[:60]}' active={is_active}, days={item.get('days')}")
                 if not is_active:
                     print(f"DEBUG: Skipping item - not active based on schedule")
                     continue
+                else:
+                    print(f"DEBUG: ✓ Item PASSED schedule filter - will be included")
             
             it = dict(item)
 
