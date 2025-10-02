@@ -791,14 +791,16 @@
 						filename = filename.split('/').pop();
 					}
 					
-					// Construct slice URL using current screen context
-					const sliceParams = new URLSearchParams({
-						slice_mode: syncRef.mode || 'split-h',
-						slice_count: syncRef.count || 3,
-						slice_order: screenNumber  // Use actual screen number instead of syncRef.order
-					});
-					
-					const sliceUrl = `${ORIGIN}/slice-video/users/toengpheng_at_gmail.com/2025-09/${filename}?${sliceParams}`;
+				// Construct slice URL using current screen context
+				// Use syncRef.order if available, otherwise screenNumber - 1 (0-indexed)
+				const sliceOrder = (syncRef.order !== undefined && syncRef.order !== null) 
+					? syncRef.order 
+					: Math.max(0, screenNumber - 1);
+				const sliceParams = new URLSearchParams({
+					slice_mode: syncRef.mode || 'split-h',
+					slice_count: syncRef.count || 3,
+					slice_order: sliceOrder
+				});					const sliceUrl = `${ORIGIN}/slice-video/users/toengpheng_at_gmail.com/2025-09/${filename}?${sliceParams}`;
 					console.log('Generated client-side slice URL:', sliceUrl);
 					return sliceUrl;
 				}
@@ -1162,8 +1164,39 @@
 						}
 					}, recoveryDelay);
 				};
+				var stallCount = 0;
+				var stallRecoveryTimer = null;
 				var onStall=function(){
 					console.log('Video stalled, readyState:', v.readyState);
+					stallCount++;
+					
+					// If video stalls at readyState 0 (not loading at all), try to force reload
+					if(v.readyState === 0 && stallCount <= 3){
+						console.log('⚠️ Video stuck at readyState 0, attempting recovery #' + stallCount);
+						
+						// Clear any existing recovery timer
+						if(stallRecoveryTimer) clearTimeout(stallRecoveryTimer);
+						
+						// Try to reload after a short delay
+						stallRecoveryTimer = setTimeout(function(){
+							try{
+								console.log('🔄 Forcing video reload...');
+								v.load();
+								// If still not loading after reload, try setting src again
+								setTimeout(function(){
+									if(v.readyState === 0){
+										console.log('🔄 Still stuck, resetting src...');
+										var currentSrc = v.src;
+										v.src = '';
+										v.src = currentSrc;
+										v.load();
+									}
+								}, 2000);
+							}catch(e){
+								console.error('Recovery attempt failed:', e);
+							}
+						}, 1000);
+					}
 					// Don't treat stall as fatal - videos can recover
 				};
 				var onWaiting=function(){
