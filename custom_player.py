@@ -769,29 +769,13 @@ class CustomMediaPlayer:
             # Promo screens - no slicing, will auto-detect screen size
             self.crop_x_offset = 0
             self.is_promo = True
-        elif str(screen_id).startswith('screen'):
-            # Parse screen number from "screen1", "screen2", "screen3", etc.
-            try:
-                screen_num_str = str(screen_id).replace('screen', '')
-                screen_num = int(screen_num_str)
-                if screen_num == 0:
-                    # Screen 0 is main/single screen - no slicing
-                    self.crop_x_offset = 0
-                else:
-                    # Screens 1, 2, 3, 4, 5... are horizontal slice screens
-                    self.crop_x_offset = (screen_num - 1) * self.slice_width
-            except ValueError:
-                # If parsing fails, default to no offset
-                self.crop_x_offset = 0
-            self.is_promo = False
         elif str(screen_id).isdigit():
-            # Legacy: pure numeric screen IDs (1, 2, 3, etc.)
             screen_num = int(screen_id)
             if screen_num == 0:
                 # Screen 0 is main/single screen - no slicing
                 self.crop_x_offset = 0
             else:
-                # Screens 1, 2, 3, 4, 5... are horizontal slice screens
+                # Screens 1, 2, 3 are horizontal slice screens
                 self.crop_x_offset = (screen_num - 1) * self.slice_width
             self.is_promo = False
         else:
@@ -878,10 +862,11 @@ class CustomMediaPlayer:
         
     def get_playlist_from_server(self):
         try:
-            # Use screen_id directly - server expects just "screen1", not "1135_screen1"
+            # Construct full screen ID for API call
             # self.screen_id is already like "screen0", "screen1", "promo1", etc.
+            full_screen_id = f"{self.store_code}_{self.screen_id}"
                 
-            url = f"https://everydayadvertise.com/playlist/{self.store_code}/{self.screen_id}"
+            url = f"https://everydayadvertise.com/playlist/{self.store_code}/{full_screen_id}"
             headers = {}
             if self.android_tv_code:
                 headers['X-User-Code'] = self.android_tv_code
@@ -889,6 +874,7 @@ class CustomMediaPlayer:
             print(f"🔍 Fetching playlist:")
             print(f"   Store: {self.store_code}")
             print(f"   Screen: {self.screen_id}")
+            print(f"   Full Screen ID: {full_screen_id}")
             print(f"   URL: {url}")
             
             response = requests.get(url, headers=headers, timeout=10)
@@ -931,11 +917,7 @@ class CustomMediaPlayer:
         try:
             slice_aware = item.get('slice_aware') or item.get('is_slice') or False
             
-            # IMPORTANT: If this is screen1-5 (not screen0), treat ALL videos as slices
-            # This ensures cropping is applied even if slice_aware flag is missing
-            force_slice = (self.crop_x_offset > 0)
-            
-            if slice_aware or force_slice:
+            if slice_aware:
                 slice_url = item.get('slice_url')
                 if slice_url and 'slice-video' in slice_url:
                     match = re.search(r'/slice-video/(.+?)(?:\?|$)', slice_url)
@@ -949,7 +931,7 @@ class CustomMediaPlayer:
                     match = re.search(r'/slice-video/(.+?)(?:\?|$)', url)
                     if match:
                         return f"https://cdn.everydayadvertise.com/{match.group(1)}", True
-                return url, 'slice-video' in url or slice_aware or force_slice
+                return url, 'slice-video' in url or slice_aware
             return None, False
         except:
             return None, False
@@ -991,10 +973,7 @@ class CustomMediaPlayer:
             if not is_slice:
                 return self.resize_frame(frame)
             h, w = frame.shape[:2]
-            # Calculate minimum required width based on crop offset
-            min_required_width = self.crop_x_offset + self.slice_width
-            # For sliced videos, check if frame is wide enough for our crop region
-            if w >= min_required_width:
+            if w >= 5000:
                 x_start = self.crop_x_offset
                 x_end = x_start + self.slice_width
                 if x_end > w:
