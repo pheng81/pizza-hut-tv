@@ -5431,16 +5431,21 @@ def get_playlist(store_id, screen_id):
     ua_effective = _ua_override or _ua_header
     if _ua_override:
         print(f"DEBUG: UA override in query detected -> using ua='{ua_effective}' (header was '{_ua_header}')")
+    
+    # Check if schedule filtering should be skipped (for dashboard management)
+    skip_schedule_filter = request.args.get('skip_schedule_filter', '').lower() in ('1', 'true', 'yes')
+    
     # Decorate with public URL and last known status for clients/dashboard
     last_status = screen.get('last_item_status') or {}
     out = []
     for item in pl:
         try:
             # SCHEDULE FILTERING: Only include items that should be playing now
-            # This matches the Pi client's behavior in custom_player.py
-            if not is_item_active_now(item):
-                print(f"DEBUG: Skipping item '{item.get('file')}' - not active based on schedule")
-                continue
+            # Skip filtering for dashboard so all items can be managed
+            if not skip_schedule_filter:
+                if not is_item_active_now(item):
+                    print(f"DEBUG: Skipping item '{item.get('file')}' - not active based on schedule")
+                    continue
             
             it = dict(item)
 

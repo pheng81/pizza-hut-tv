@@ -3461,7 +3461,8 @@
             const requestStartedAt = Date.now();
             // Add cache-busting query to avoid any intermediary/proxy caching
             const bust = Date.now();
-            safeFetchJson(`/playlist/${currentStoreId}/${screenId}?_=${bust}`)
+            // Dashboard needs ALL items (regardless of schedule) for management
+            safeFetchJson(`/playlist/${currentStoreId}/${screenId}?skip_schedule_filter=1&_=${bust}`)
                 .then(res=>{
                     // If user switched store since the request started, ignore this response
                     if (loadToken != null && loadToken !== (window.__currentLoadToken||0)) return;
