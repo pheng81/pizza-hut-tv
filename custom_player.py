@@ -931,7 +931,11 @@ class CustomMediaPlayer:
         try:
             slice_aware = item.get('slice_aware') or item.get('is_slice') or False
             
-            if slice_aware:
+            # IMPORTANT: If this is screen1-5 (not screen0), treat ALL videos as slices
+            # This ensures cropping is applied even if slice_aware flag is missing
+            force_slice = (self.crop_x_offset > 0)
+            
+            if slice_aware or force_slice:
                 slice_url = item.get('slice_url')
                 if slice_url and 'slice-video' in slice_url:
                     match = re.search(r'/slice-video/(.+?)(?:\?|$)', slice_url)
@@ -945,7 +949,7 @@ class CustomMediaPlayer:
                     match = re.search(r'/slice-video/(.+?)(?:\?|$)', url)
                     if match:
                         return f"https://cdn.everydayadvertise.com/{match.group(1)}", True
-                return url, 'slice-video' in url or slice_aware
+                return url, 'slice-video' in url or slice_aware or force_slice
             return None, False
         except:
             return None, False
@@ -987,7 +991,10 @@ class CustomMediaPlayer:
             if not is_slice:
                 return self.resize_frame(frame)
             h, w = frame.shape[:2]
-            if w >= 5000:
+            # Calculate minimum required width based on crop offset
+            min_required_width = self.crop_x_offset + self.slice_width
+            # For sliced videos, check if frame is wide enough for our crop region
+            if w >= min_required_width:
                 x_start = self.crop_x_offset
                 x_end = x_start + self.slice_width
                 if x_end > w:
