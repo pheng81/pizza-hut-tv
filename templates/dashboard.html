@@ -3703,17 +3703,6 @@
                     const url = `${window.location.origin}/webplayer/play?store_id=${currentStoreId}&screen_id=${screenId}&code=${code}`;
                     window.open(url, '_blank');
                 }},
-                { icon: '🎯', label: 'Test Schedule Now', action: () => {
-                    // Show current time and which items should be active
-                    fetch(`/playlist/${currentStoreId}/${screenId}?debug_schedule=1&user_code=${pairCode||''}`)
-                        .then(r => r.json())
-                        .then(data => {
-                            const activeItems = data.items?.filter(i => i.is_active) || [];
-                            const msg = `Store Time: ${data.store_time}\nActive Items: ${activeItems.length}\n${activeItems.map(i => '✓ ' + (i.file||'').split('/').pop()).join('\n')}`;
-                            alert(msg);
-                        })
-                        .catch(err => showMessage('Failed to test schedule: ' + err.message, '#e74c3c'));
-                }},
                 { icon: '❌', label: 'Cancel', action: null }
             ];
             
