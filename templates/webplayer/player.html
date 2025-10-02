@@ -757,6 +757,17 @@
 		function mediaUrl(item){
 			if(!item) return '';
 			
+		// For slice-aware videos with sync_ref, use FULL CDN video and apply client-side CSS crop
+		// This matches custom_player.py behavior to avoid double-cropping
+		if (typeof item === 'object' && item.slice_aware && item.sync_ref && item.url) {
+			console.log('🎬 Using FULL CDN URL for client-side CSS cropping (matching custom player)');
+			const fullUrl = item.url;
+			if(!fullUrl.includes('127.0.0.1') && !fullUrl.includes('localhost')){
+				return fullUrl.replace(/^http:/,'https:');
+			}
+			return fullUrl;
+		}
+		
 		// For slice-aware videos, prioritize slice_url or preferred_url
 		if (typeof item === 'object' && item.slice_aware && (item.slice_url || item.preferred_url)) {
 			let sliceUrl = item.slice_url || item.preferred_url;
@@ -1071,11 +1082,25 @@
 					}catch(e){}
 					return resolve(v);
 				}
+				// For slice videos, skip preload bin to avoid abort issues
+				if(url.includes('/slice-video/')){
+					console.log('🎬 Slice video: skipping preload bin, loading directly');
+					try{
+						var srcEl=document.createElement('source');
+						srcEl.src=url; var mt=videoMimeFrom(url); if(mt) srcEl.type=mt;
+						v.appendChild(srcEl);
+						v.src=url; v.load();
+					}catch(e){}
+					// Still wait for video to be ready, but don't put in hidden bin
+					// This prevents abort events from conflicting render logic
+				}
 				// Attach to hidden bin to trigger buffering in strict engines
-				try{
-					var bin = document.getElementById('preload-bin');
-					if(bin) bin.appendChild(v);
-				}catch(e){}
+				else{
+					try{
+						var bin = document.getElementById('preload-bin');
+						if(bin) bin.appendChild(v);
+					}catch(e){}
+				}
 				var settled=false; var to=null; var earlyPrimeDone=false;
 				var cleanup=function(){
 					try{
@@ -1292,12 +1317,21 @@
 				let count = parseInt(sref.count||0, 10);
 				if(!Number.isFinite(count) || count < 0){ count = 0; }
 				let order = determineSliceOrder(item);
+				const orderSource = order !== null ? 'determineSliceOrder' : 'fallback';
 				if(order === null){
 					order = screenNumber > 0 ? screenNumber - 1 : 0;
 				}
 				if(count > 0){
 					order = Math.max(0, Math.min(order, count-1));
 				}
+				console.log('🎯 SLICE ORDER CALCULATION:', {
+					screenId: screenId,
+					screenNumber: screenNumber,
+					syncRef_order: sref.order,
+					calculated_order: order,
+					order_source: orderSource,
+					count: count
+				});
 				const hasSliceUrl = !!(item && item.slice_url);
 				const videoElement = (node && node.tagName === 'VIDEO') ? node : null;
 				const shouldSegment = count > 1 && (mode === 'split-h' || mode === 'split-v');
