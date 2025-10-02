@@ -5190,6 +5190,132 @@ def delete_store():
         print(f"Error deleting store: {e}")
         return jsonify({'error': str(e)}), 500
 
+# ---------------- Schedule Filtering Helpers (match Pi client logic) ----------------
+def parse_time_string(time_str, now):
+    """Parse time string - matches custom_player.py logic + dashboard ISO format"""
+    if not time_str:
+        return None
+    
+    time_str = str(time_str).strip()
+    if not time_str:
+        return None
+    
+    # ISO datetime with T: YYYY-MM-DDTHH:MM:SS or YYYY-MM-DDTHH:MM
+    if 'T' in time_str:
+        try:
+            # Try with seconds
+            return datetime.strptime(time_str, '%Y-%m-%dT%H:%M:%S')
+        except:
+            try:
+                # Try without seconds
+                return datetime.strptime(time_str, '%Y-%m-%dT%H:%M')
+            except:
+                return None
+    
+    # Full datetime with space: YYYY-MM-DD HH:MM:SS
+    if len(time_str) == 19 and time_str.count('-') == 2 and time_str.count(':') == 2:
+        try:
+            return datetime.strptime(time_str, '%Y-%m-%d %H:%M:%S')
+        except:
+            return None
+    
+    # Date only: YYYY-MM-DD
+    if len(time_str) == 10 and time_str.count('-') == 2:
+        try:
+            return datetime.strptime(time_str, '%Y-%m-%d')
+        except:
+            return None
+    
+    # Time only: HH:MM or HH:MM:SS
+    if ':' in time_str:
+        try:
+            parts = time_str.split(':')
+            hour = int(parts[0])
+            minute = int(parts[1])
+            second = int(parts[2]) if len(parts) > 2 else 0
+            return now.replace(hour=hour, minute=minute, second=second, microsecond=0)
+        except:
+            return None
+    
+    return None
+
+
+def is_in_time_window(now, start_str, end_str, days=None):
+    """Check if now is within time window - MATCHES DASHBOARD"""
+    # Check weekday first
+    if days:
+        weekday = ['mon','tue','wed','thu','fri','sat','sun'][now.weekday()]
+        if weekday not in days:
+            return False
+    
+    if not (start_str or end_str):
+        return True
+    
+    # Parse times
+    start_time = parse_time_string(start_str, now) if start_str else None
+    end_time = parse_time_string(end_str, now) if end_str else None
+    
+    # Date-only normalization
+    if end_str and len(end_str) == 10 and end_time:
+        end_time = end_time.replace(hour=23, minute=59, second=59)
+    if start_str and len(start_str) == 10 and not end_str and start_time:
+        end_time = start_time.replace(hour=23, minute=59, second=59)
+    if end_str and len(end_str) == 10 and not start_str and end_time:
+        start_time = end_time.replace(hour=0, minute=0, second=0)
+    
+    # Handle overnight wrap (e.g., 22:00 - 02:00)
+    if start_time and end_time:
+        time_only = (':' in (start_str or '') and len(start_str or '') <= 8)
+        if end_time < start_time:
+            if not time_only and start_time.date() == end_time.date():
+                # Same-date absolute: treat as end + 1 day
+                end_time_plus = end_time + timedelta(days=1)
+                return start_time <= now <= end_time_plus
+            # Overnight: active if after start OR before end
+            return now >= start_time or now <= end_time
+        else:
+            # Normal: active if between start and end
+            return start_time <= now <= end_time
+    
+    # Single boundary
+    if start_time and now < start_time:
+        return False
+    if end_time and now > end_time:
+        return False
+    
+    return True
+
+
+def is_item_active_now(item):
+    """Check if item should play based on schedule - MATCHES DASHBOARD LOGIC"""
+    now = datetime.now()
+    
+    # Check if item itself is enabled
+    if not item.get('enabled', True):
+        return False
+    
+    # Check multiple schedule windows first (priority)
+    schedule_windows = item.get('schedule', [])
+    if schedule_windows:
+        for window in schedule_windows:
+            # Skip disabled windows
+            if not window.get('enabled', True):
+                continue
+            if is_in_time_window(now, window.get('start'), window.get('end'), window.get('days')):
+                return True  # Active in at least one enabled window
+        return False  # No enabled windows are active
+    
+    # Check single start/end window (legacy format)
+    start = item.get('start')
+    end = item.get('end')
+    days = item.get('days', [])
+    
+    if start or end or days:
+        return is_in_time_window(now, start, end, days)
+    
+    # No schedule restrictions = always active
+    return True
+
 # ---------------- Playlist API Endpoints (moved above app.run) ----------------
 @app.route('/playlist/<store_id>/<screen_id>')
 @slowlog(300)
@@ -5310,6 +5436,12 @@ def get_playlist(store_id, screen_id):
     out = []
     for item in pl:
         try:
+            # SCHEDULE FILTERING: Only include items that should be playing now
+            # This matches the Pi client's behavior in custom_player.py
+            if not is_item_active_now(item):
+                print(f"DEBUG: Skipping item '{item.get('file')}' - not active based on schedule")
+                continue
+            
             it = dict(item)
 
             # Always start with the plain public URL
