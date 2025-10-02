@@ -862,11 +862,10 @@ class CustomMediaPlayer:
         
     def get_playlist_from_server(self):
         try:
-            # Construct full screen ID for API call
+            # Use screen_id directly - server expects just "screen1", not "1135_screen1"
             # self.screen_id is already like "screen0", "screen1", "promo1", etc.
-            full_screen_id = f"{self.store_code}_{self.screen_id}"
                 
-            url = f"https://everydayadvertise.com/playlist/{self.store_code}/{full_screen_id}"
+            url = f"https://everydayadvertise.com/playlist/{self.store_code}/{self.screen_id}"
             headers = {}
             if self.android_tv_code:
                 headers['X-User-Code'] = self.android_tv_code
@@ -874,7 +873,6 @@ class CustomMediaPlayer:
             print(f"🔍 Fetching playlist:")
             print(f"   Store: {self.store_code}")
             print(f"   Screen: {self.screen_id}")
-            print(f"   Full Screen ID: {full_screen_id}")
             print(f"   URL: {url}")
             
             response = requests.get(url, headers=headers, timeout=10)

@@ -54,6 +54,12 @@ foreach($file in $templateFiles) {
 }
 
 if(-not $PreserveConfig) {
+    Write-Host "Installing Python dependencies..." -ForegroundColor Yellow
+    & ssh -i $KeyPath "ubuntu@${Server}" "cd /var/www/${RemotePath} && source venv/bin/activate && pip install -q -r requirements.txt"
+    if($LASTEXITCODE -ne 0) {
+        Write-Warning "Pip install had issues (exit code $LASTEXITCODE), continuing anyway..."
+    }
+    
     Write-Host "Restarting Pizza Hut TV service..." -ForegroundColor Yellow
     & ssh -i $KeyPath "ubuntu@${Server}" "cd ${RemotePath} && sudo systemctl restart pizza-hut-tv"
     if($LASTEXITCODE -ne 0) {

@@ -5240,13 +5240,29 @@ def parse_time_string(time_str, now):
     return None
 
 
-def is_in_time_window(now, start_str, end_str, days=None):
-    """Check if now is within time window - MATCHES DASHBOARD"""
+def is_in_time_window(now, start_str, end_str, days=None, store_tz=None):
+    """Check if now is within time window - MATCHES DASHBOARD
+    
+    Args:
+        now: Current time (should be in store's timezone)
+        start_str: Start time string
+        end_str: End time string  
+        days: List or space-separated string of days (mon, tue, etc.)
+        store_tz: Timezone name (e.g. 'Australia/Sydney') - for logging only
+    """
     # Check weekday first
     if days:
         weekday = ['mon','tue','wed','thu','fri','sat','sun'][now.weekday()]
-        if weekday not in days:
+        print(f"DEBUG SCHEDULE: Current weekday='{weekday}' ({now.strftime('%Y-%m-%d %H:%M:%S')} {store_tz or 'UTC'}), Required days={days}, Type={type(days)}")
+        # Handle both string and list formats
+        if isinstance(days, str):
+            days_list = days.split()
+        else:
+            days_list = days if isinstance(days, list) else [days]
+        if weekday not in days_list:
+            print(f"DEBUG SCHEDULE: Weekday '{weekday}' not in {days_list} - BLOCKING")
             return False
+        print(f"DEBUG SCHEDULE: Weekday '{weekday}' found in {days_list} - OK")
     
     if not (start_str or end_str):
         return True
@@ -5286,37 +5302,102 @@ def is_in_time_window(now, start_str, end_str, days=None):
     return True
 
 
-def is_item_active_now(item):
-    """Check if item should play based on schedule - MATCHES DASHBOARD LOGIC"""
-    now = datetime.now()
+def is_item_active_now(item, store_tz=None):
+    """Check if item should play based on schedule - MATCHES DASHBOARD LOGIC
+    
+    Args:
+        item: Playlist item dictionary
+        store_tz: Timezone name (e.g. 'Australia/Sydney') for proper time conversion
+    """
+    # Get current time in store's timezone
+    if store_tz:
+        try:
+            import pytz
+            tz = pytz.timezone(store_tz)
+            now = datetime.now(pytz.utc).astimezone(tz).replace(tzinfo=None)
+            print(f"DEBUG SCHEDULE: Using store timezone '{store_tz}', converted time: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+        except ImportError:
+            print(f"DEBUG SCHEDULE: pytz not installed, assuming store timezone offset +10 hours from UTC")
+            now = datetime.now() + timedelta(hours=10)  # Sydney is UTC+10 (standard) or +11 (DST)
+        except Exception as e:
+            print(f"DEBUG SCHEDULE: Failed to use timezone '{store_tz}': {e}, falling back to server time")
+            now = datetime.now()
+    else:
+        now = datetime.now()
+        print(f"DEBUG SCHEDULE: No timezone configured, using server time")
+    
+    print(f"DEBUG SCHEDULE: Server time: {now.strftime('%Y-%m-%d %H:%M:%S %A')}")
+    print(f"DEBUG SCHEDULE: Checking item: {item.get('file', 'unknown')}")
     
     # Check if item itself is enabled
     if not item.get('enabled', True):
+        print(f"DEBUG SCHEDULE: Item disabled - BLOCKING")
         return False
     
     # Check multiple schedule windows first (priority)
     schedule_windows = item.get('schedule', [])
+    print(f"DEBUG SCHEDULE: Schedule windows: {schedule_windows}")
     if schedule_windows:
         for window in schedule_windows:
             # Skip disabled windows
             if not window.get('enabled', True):
+                print(f"DEBUG SCHEDULE: Window disabled - skipping")
                 continue
-            if is_in_time_window(now, window.get('start'), window.get('end'), window.get('days')):
+            print(f"DEBUG SCHEDULE: Checking window: start={window.get('start')}, end={window.get('end')}, days={window.get('days')}")
+            if is_in_time_window(now, window.get('start'), window.get('end'), window.get('days'), store_tz):
+                print(f"DEBUG SCHEDULE: Window ACTIVE - item should play")
                 return True  # Active in at least one enabled window
+        print(f"DEBUG SCHEDULE: No active windows - BLOCKING")
         return False  # No enabled windows are active
     
     # Check single start/end window (legacy format)
     start = item.get('start')
     end = item.get('end')
     days = item.get('days', [])
+    print(f"DEBUG SCHEDULE: Legacy format - start={start}, end={end}, days={days}")
     
     if start or end or days:
-        return is_in_time_window(now, start, end, days)
+        return is_in_time_window(now, start, end, days, store_tz)
     
     # No schedule restrictions = always active
     return True
 
 # ---------------- Playlist API Endpoints (moved above app.run) ----------------
+@app.route('/debug/schedule/<store_id>/<screen_id>')
+def debug_schedule(store_id, screen_id):
+    """Debug endpoint to see schedule filtering logic"""
+    from datetime import datetime
+    header_code = request.headers.get('X-User-Code') or request.args.get('user_code')
+    user_key = _resolve_user_key_by_code(header_code)
+    if not user_key:
+        return {'error': 'pair code required'}, 403
+    cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(user_key))
+    screens = cfg.get('screens', {}).get(store_id, {})
+    screen = screens.get(screen_id)
+    if not screen:
+        return {'error': 'screen not found'}, 404
+    
+    now = datetime.now()
+    result = {
+        'server_time': now.strftime('%Y-%m-%d %H:%M:%S %A'),
+        'server_weekday': ['mon','tue','wed','thu','fri','sat','sun'][now.weekday()],
+        'playlist_items': []
+    }
+    
+    for item in screen.get('playlist', []):
+        item_debug = {
+            'file': item.get('file'),
+            'enabled': item.get('enabled', True),
+            'start': item.get('start'),
+            'end': item.get('end'),
+            'days': item.get('days'),
+            'schedule': item.get('schedule', []),
+            'is_active': is_item_active_now(item)
+        }
+        result['playlist_items'].append(item_debug)
+    
+    return jsonify(result)
+
 @app.route('/playlist/<store_id>/<screen_id>')
 @slowlog(300)
 @with_etag_json
@@ -5433,7 +5514,42 @@ def get_playlist(store_id, screen_id):
         print(f"DEBUG: UA override in query detected -> using ua='{ua_effective}' (header was '{_ua_header}')")
     
     # Check if schedule filtering should be skipped (for dashboard management)
-    skip_schedule_filter = request.args.get('skip_schedule_filter', '').lower() in ('1', 'true', 'yes')
+    skip_schedule_filter = True  # TEMP: Disable while fixing timezone
+    # skip_schedule_filter = request.args.get('skip_schedule_filter', '').lower() in ('1', 'true', 'yes')
+    debug_schedule = request.args.get('debug_schedule', '').lower() in ('1', 'true', 'yes')
+    
+    # Get store timezone from configuration
+    # TEMPORARY: Hardcode Sydney timezone for testing
+    store_tz = 'Australia/Sydney'
+    print(f"DEBUG SCHEDULE: Using timezone: {store_tz}")
+    
+    if debug_schedule:
+        # Return debug info about schedule filtering
+        try:
+            import pytz
+            tz = pytz.timezone(store_tz)
+            now = datetime.now(pytz.utc).astimezone(tz).replace(tzinfo=None)
+        except:
+            # Fallback: assume Sydney is UTC+10
+            now = datetime.now() + timedelta(hours=10)
+        
+        debug_info = {
+            'store_timezone': store_tz,
+            'server_time_utc': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'store_time': now.strftime('%Y-%m-%d %H:%M:%S'),
+            'store_weekday': ['mon','tue','wed','thu','fri','sat','sun'][now.weekday()],
+            'items': []
+        }
+        for item in pl:
+            debug_info['items'].append({
+                'file': item.get('file', 'unknown')[:60],
+                'days': item.get('days'),
+                'start': item.get('start'),
+                'end': item.get('end'),
+                'enabled': item.get('enabled', True),
+                'is_active': is_item_active_now(item, store_tz)
+            })
+        return jsonify(debug_info)
     
     # Decorate with public URL and last known status for clients/dashboard
     last_status = screen.get('last_item_status') or {}
@@ -5443,8 +5559,10 @@ def get_playlist(store_id, screen_id):
             # SCHEDULE FILTERING: Only include items that should be playing now
             # Skip filtering for dashboard so all items can be managed
             if not skip_schedule_filter:
-                if not is_item_active_now(item):
-                    print(f"DEBUG: Skipping item '{item.get('file')}' - not active based on schedule")
+                is_active = is_item_active_now(item, store_tz)
+                print(f"DEBUG: Item '{item.get('file', 'unknown')[:60]}' active={is_active}, days={item.get('days')}")
+                if not is_active:
+                    print(f"DEBUG: Skipping item - not active based on schedule")
                     continue
             
             it = dict(item)
