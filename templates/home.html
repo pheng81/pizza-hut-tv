@@ -447,11 +447,16 @@
     .logo-intro svg {
       width: min(90vw, 900px);
       height: auto;
+      max-width: 100%;
+      display: block;
     }
     
     @media (max-width: 768px) {
       .logo-text {
         font-size: 40px;
+      }
+      .logo-intro svg {
+        width: 95vw;
       }
     }
   </style>
@@ -459,7 +464,8 @@
 <body>
   <!-- Logo Intro Animation -->
   <div class="logo-intro" id="logoIntro">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 320" width="900" height="280"
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 320"
+         preserveAspectRatio="xMidYMid meet"
          xmlns:xlink="http://www.w3.org/1999/xlink">
       <defs>
         <g id="logoShape">
