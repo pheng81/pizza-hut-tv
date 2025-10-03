@@ -829,7 +829,10 @@ def home():
         asset_bust = 0
     resp = make_response(render_template('home.html', build_stamp=BUILD_STAMP, git_commit=GIT_COMMIT, asset_bust=asset_bust))
     try:
-        resp.headers['Cache-Control'] = 'public, max-age=300'
+        # Force no-cache to show logo animation immediately
+        resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        resp.headers['Pragma'] = 'no-cache'
+        resp.headers['Expires'] = '0'
     except Exception:
         pass
     return resp
