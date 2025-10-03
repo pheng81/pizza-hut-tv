@@ -430,13 +430,13 @@
       left: 0;
       width: 100%;
       height: 100%;
-      background: #000;
+      background: #0b0b0f;
       display: flex;
       align-items: center;
       justify-content: center;
       z-index: 9999;
       opacity: 1;
-      transition: opacity 0.5s ease-out;
+      transition: opacity 0.6s ease-out;
     }
     
     .logo-intro.hidden {
@@ -444,36 +444,9 @@
       pointer-events: none;
     }
     
-    .logo-text {
-      font-size: 72px;
-      font-weight: 700;
-      text-align: center;
-      line-height: 1.2;
-      animation: logoSlideIn 1s ease-out;
-    }
-    
-    .logo-line1 {
-      color: #ff9500;
-      display: block;
-    }
-    
-    .logo-line2 {
-      color: #ff2d55;
-      display: block;
-    }
-    
-    @keyframes logoSlideIn {
-      0% {
-        opacity: 0;
-        transform: scale(0.5) translateY(30px);
-      }
-      50% {
-        transform: scale(1.08);
-      }
-      100% {
-        opacity: 1;
-        transform: scale(1) translateY(0);
-      }
+    .logo-intro svg {
+      width: min(90vw, 900px);
+      height: auto;
     }
     
     @media (max-width: 768px) {
@@ -486,10 +459,91 @@
 <body>
   <!-- Logo Intro Animation -->
   <div class="logo-intro" id="logoIntro">
-    <div class="logo-text">
-      <span class="logo-line1">Everyday</span>
-      <span class="logo-line2">Advertise</span>
-    </div>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 320" width="900" height="280"
+         xmlns:xlink="http://www.w3.org/1999/xlink">
+      <defs>
+        <g id="logoShape">
+          <g transform="translate(32, 160)">
+            <text x="0" y="0" fill="url(#eaGrad)"
+                  font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+                  font-weight="800" font-size="160" letter-spacing="1">
+              <tspan>Everyday</tspan>
+              <tspan x="0" dy="120">Advertise</tspan>
+            </text>
+          </g>
+        </g>
+
+        <filter id="toWhite" color-interpolation-filters="sRGB">
+          <feColorMatrix type="matrix"
+            values="0 0 0 0 1
+                    0 0 0 0 1
+                    0 0 0 0 1
+                    0 0 0 1 0" />
+        </filter>
+
+        <mask id="logoMask" maskUnits="objectBoundingBox">
+          <g filter="url(#toWhite)">
+            <use xlink:href="#logoShape"/>
+          </g>
+        </mask>
+
+        <clipPath id="wipeClip" clipPathUnits="objectBoundingBox">
+          <rect id="wipeRect" x="-0.1" y="-0.05" width="0.0" height="1.1">
+            <animate attributeName="x" values="-0.1;0;0" dur="1.2s" fill="freeze" begin="0.2s" />
+            <animate attributeName="width" values="0;1.2;1.2" dur="1.2s" fill="freeze" begin="0.2s" />
+          </rect>
+        </clipPath>
+
+        <linearGradient id="eaGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#ff2d84"/>
+          <stop offset="50%" stop-color="#b544ff"/>
+          <stop offset="100%" stop-color="#3c6cff"/>
+        </linearGradient>
+
+        <linearGradient id="flowGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%"  stop-color="#ff6a00" />
+          <stop offset="25%" stop-color="#ff00d4" />
+          <stop offset="50%" stop-color="#6a00ff" />
+          <stop offset="75%" stop-color="#00d4ff" />
+          <stop offset="100%" stop-color="#00ff88" />
+          <animateTransform attributeName="gradientTransform" type="translate"
+                            from="-1 0" to="1 0" dur="3.2s" repeatCount="indefinite" />
+        </linearGradient>
+
+        <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="blur"/>
+          <feMerge>
+            <feMergeNode in="blur"/>
+          </feMerge>
+        </filter>
+
+        <style>
+          @keyframes fadeZoom {
+            0%   { opacity: 0; transform: scale(0.90); }
+            60%  { opacity: 1; transform: scale(1.02); }
+            100% { opacity: 1; transform: scale(1.00); }
+          }
+          @keyframes pulse { 
+            0%,100% { filter: saturate(1); }
+            50%     { filter: saturate(1.2); }
+          }
+          .intro { animation: fadeZoom 1.0s ease-out forwards; transform-origin: 50% 50%; }
+          .flow  { animation: pulse 3.2s ease-in-out infinite; }
+        </style>
+      </defs>
+
+      <g class="intro" opacity="0.0">
+        <rect width="100%" height="100%" fill="url(#flowGrad)" filter="url(#softGlow)"
+              mask="url(#logoMask)">
+          <animate attributeName="opacity" values="0;0.6;0.2" dur="1.4s" fill="freeze" begin="0.1s" />
+        </rect>
+      </g>
+
+      <g class="intro flow">
+        <rect width="100%" height="100%" fill="url(#flowGrad)"
+              mask="url(#logoMask)" clip-path="url(#wipeClip)" />
+      </g>
+    </svg>
   </div>
   
   <!-- Header -->
@@ -659,7 +713,7 @@
   <!-- Logo Intro Script -->
   <script>
     // Ensure logo intro is visible on page load
-    console.log('Logo intro initialized');
+    console.log('Animated SVG logo intro initialized');
     
     // Hide logo intro after animation completes
     setTimeout(function() {
@@ -671,9 +725,9 @@
         setTimeout(function() {
           console.log('Logo intro removed');
           logoIntro.remove();
-        }, 600);
+        }, 700);
       }
-    }, 2500); // Show for 2.5 seconds before fading
+    }, 3500); // Show for 3.5 seconds to let the full animation play
   </script>
 
   {% include '_cookie_consent.html' %}
