@@ -100,10 +100,28 @@
     
     /* Hero Section */
     .hero {
-      max-width: 1200px;
+      max-width: 1400px;
       margin: 80px auto;
       padding: 0 40px;
-      text-align: center;
+      display: grid;
+      grid-template-columns: 1fr 1.2fr;
+      gap: 60px;
+      align-items: center;
+    }
+    
+    .hero-content {
+      text-align: left;
+    }
+    
+    .hero-video {
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+    }
+    
+    .hero-video video {
+      width: 100%;
+      display: block;
     }
     
     .hero h1 {
@@ -128,7 +146,7 @@
     .hero-cta {
       display: flex;
       gap: 20px;
-      justify-content: center;
+      justify-content: flex-start;
       margin-bottom: 60px;
     }
     
@@ -183,7 +201,7 @@
     /* Video Demo Section */
     .demo-section {
       background: transparent;
-      padding: 100px 40px;
+      padding: 60px 40px;
     }
     
     .demo-container {
@@ -415,6 +433,29 @@
       .nav-links {
         display: none;
       }
+      
+      /* Hero responsive */
+      .hero {
+        grid-template-columns: 1fr;
+        gap: 40px;
+        margin: 40px auto;
+      }
+      
+      .hero-content {
+        text-align: center;
+      }
+      
+      .hero-cta {
+        justify-content: center;
+      }
+      
+      .hero h1 {
+        font-size: 42px;
+      }
+      
+      .hero .subtitle {
+        font-size: 20px;
+      }
     }
     
     /* Animations */
@@ -598,21 +639,30 @@
 
   <!-- Hero Section -->
   <section class="hero animate-in">
-    <div class="trust-badge">
-      ⭐⭐⭐⭐⭐⭐ Trusted by <strong>hundreds of restaurants</strong> worldwide
+    <div class="hero-content">
+      <div class="trust-badge">
+        ⭐⭐⭐⭐⭐⭐ Trusted by <strong>hundreds of restaurants</strong> worldwide
+      </div>
+      
+      <h1>The Most Advanced<br>Digital Menu System</h1>
+      <p class="subtitle">User-friendly. Powerful. Perfectly synchronized.</p>
+      
+      <div class="hero-cta">
+        <a href="{{ url_for('login') }}" class="btn-primary">Get Started Free</a>
+        <a href="#demo" class="btn-secondary">Watch Demo</a>
+      </div>
+      
+      <p style="color: var(--text-gray); font-size: 14px; margin-top: 20px;">
+        ✓ No credit card required  &nbsp;  ✓ Setup in 5 minutes  &nbsp;  ✓ 24/7 Support
+      </p>
     </div>
     
-    <h1>The Most Advanced<br>Digital Menu System</h1>
-    <p class="subtitle">User-friendly. Powerful. Perfectly synchronized.</p>
-    
-    <div class="hero-cta">
-      <a href="{{ url_for('login') }}" class="btn-primary">Get Started Free</a>
-      <a href="#demo" class="btn-secondary">Watch Demo</a>
+    <div class="hero-video">
+      <video autoplay loop muted playsinline preload="auto">
+        <source src="{{ url_for('static', filename='promo.mp4') }}?v={{ asset_bust or 0 }}" type="video/mp4">
+        Your browser does not support the video tag.
+      </video>
     </div>
-    
-    <p style="color: var(--text-gray); font-size: 14px; margin-top: 20px;">
-      ✓ No credit card required  &nbsp;  ✓ Setup in 5 minutes  &nbsp;  ✓ 24/7 Support
-    </p>
   </section>
 
   <!-- Video Demo Section -->
