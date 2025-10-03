@@ -452,9 +452,6 @@
     }
     
     @media (max-width: 768px) {
-      .logo-text {
-        font-size: 40px;
-      }
       .logo-intro svg {
         width: 95vw;
       }
@@ -462,8 +459,8 @@
   </style>
 </head>
 <body>
-  <!-- Logo Intro Animation -->
-  <div class="logo-intro" id="logoIntro">
+  <!-- Logo Intro Animation v2.0 - SVG Gradient Animation -->
+  <div class="logo-intro" id="logoIntro" data-version="2.0">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 320"
          preserveAspectRatio="xMidYMid meet"
          xmlns:xlink="http://www.w3.org/1999/xlink">
@@ -718,13 +715,26 @@
 
   <!-- Logo Intro Script -->
   <script>
-    // Ensure logo intro is visible on page load
-    console.log('Animated SVG logo intro initialized');
+    // Version check - force reload if old cached version detected
+    var logoIntro = document.getElementById('logoIntro');
+    var version = logoIntro ? logoIntro.getAttribute('data-version') : null;
+    
+    if (version !== '2.0') {
+      console.log('Old version detected, forcing reload...');
+      // Clear cache and reload
+      if ('caches' in window) {
+        caches.keys().then(function(names) {
+          names.forEach(function(name) { caches.delete(name); });
+        });
+      }
+      location.reload(true);
+    }
+    
+    console.log('Animated SVG logo intro v2.0 initialized');
     
     // Hide logo intro after animation completes
     setTimeout(function() {
       console.log('Starting logo fade out');
-      var logoIntro = document.getElementById('logoIntro');
       if (logoIntro) {
         logoIntro.classList.add('hidden');
         // Remove from DOM completely after fade out
