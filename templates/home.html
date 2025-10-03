@@ -422,9 +422,81 @@
     .animate-in {
       animation: fadeInUp 0.8s ease-out;
     }
+    
+    /* Logo Intro Animation */
+    .logo-intro {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      animation: fadeOut 0.5s ease-out 2.5s forwards;
+    }
+    
+    .logo-intro.hidden {
+      display: none;
+    }
+    
+    .logo-text {
+      font-size: 64px;
+      font-weight: 700;
+      text-align: center;
+      line-height: 1.2;
+      animation: logoSlideIn 0.8s ease-out;
+    }
+    
+    .logo-line1 {
+      color: #ff9500;
+      display: block;
+    }
+    
+    .logo-line2 {
+      color: #ff2d55;
+      display: block;
+    }
+    
+    @keyframes logoSlideIn {
+      0% {
+        opacity: 0;
+        transform: scale(0.8) translateY(20px);
+      }
+      60% {
+        transform: scale(1.05);
+      }
+      100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+    }
+    
+    @keyframes fadeOut {
+      to {
+        opacity: 0;
+        visibility: hidden;
+      }
+    }
+    
+    @media (max-width: 768px) {
+      .logo-text {
+        font-size: 40px;
+      }
+    }
   </style>
 </head>
 <body>
+  <!-- Logo Intro Animation -->
+  <div class="logo-intro" id="logoIntro">
+    <div class="logo-text">
+      <span class="logo-line1">Everyday</span>
+      <span class="logo-line2">Advertise</span>
+    </div>
+  </div>
+  
   <!-- Header -->
   <header>
     <nav>
@@ -588,6 +660,21 @@
       </div>
     </div>
   </footer>
+
+  <!-- Logo Intro Script -->
+  <script>
+    // Hide logo intro after animation completes
+    setTimeout(function() {
+      var logoIntro = document.getElementById('logoIntro');
+      if (logoIntro) {
+        logoIntro.classList.add('hidden');
+        // Remove from DOM completely after fade out
+        setTimeout(function() {
+          logoIntro.remove();
+        }, 500);
+      }
+    }, 3000); // 3 seconds total (2.5s animation + 0.5s fade out)
+  </script>
 
   {% include '_cookie_consent.html' %}
 </body>
