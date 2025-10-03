@@ -677,19 +677,19 @@
     
     <div class="platform-grid">
       <div class="platform-item">
-        <div class="icon"><img src="{{ url_for('static', filename='pi_raspberry.png') }}" alt="Raspberry Pi" style="width: 104px; height: 104px; object-fit: contain;"></div>
+        <div class="icon"><img src="{{ url_for('static', filename='pi_raspberry.png') }}?v={{ asset_bust or 0 }}" alt="Raspberry Pi" style="width: 104px; height: 104px; object-fit: contain;"></div>
         <h4>Raspberry Pi</h4>
         <p>Most affordable option. Full features for under $100</p>
       </div>
       
       <div class="platform-item">
-        <div class="icon"><img src="{{ url_for('static', filename='android_tv.webp') }}" alt="Android TV" style="width: 104px; height: 104px; object-fit: contain;" onerror="this.style.display='none'; this.parentElement.innerHTML='📺';"></div>
+        <div class="icon"><img src="{{ url_for('static', filename='android_tv.webp') }}?v={{ asset_bust or 0 }}" alt="Android TV" style="width: 104px; height: 104px; object-fit: contain;" onerror="this.style.display='none'; this.parentElement.innerHTML='📺';"></div>
         <h4>Android TV</h4>
         <p>Premium performance with Android TV boxes</p>
       </div>
       
       <div class="platform-item">
-        <div class="icon"><img src="{{ url_for('static', filename='fire_tv.webp') }}" alt="Fire TV Stick" style="width: 104px; height: 104px; object-fit: contain;"></div>
+        <div class="icon"><img src="{{ url_for('static', filename='fire_tv.webp') }}?v={{ asset_bust or 0 }}" alt="Fire TV Stick" style="width: 104px; height: 104px; object-fit: contain;"></div>
         <h4>Fire TV Stick</h4>
         <p>Easy setup with Amazon Fire devices</p>
       </div>
