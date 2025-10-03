@@ -826,10 +826,10 @@ def home():
         logo_path = os.path.join(os.path.dirname(__file__), 'static', 'ea-logo.svg')
         asset_bust = int(os.path.getmtime(logo_path)) if os.path.exists(logo_path) else int(_t.time())
         # Add page version for animated logo
-        page_version = '2.0'
+        page_version = '3.0'
     except Exception:
         asset_bust = 0
-        page_version = '2.0'
+        page_version = '3.0'
     resp = make_response(render_template('home.html', build_stamp=BUILD_STAMP, git_commit=GIT_COMMIT, asset_bust=asset_bust, page_version=page_version))
     try:
         # Force no-cache to show logo animation immediately

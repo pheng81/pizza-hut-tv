@@ -431,9 +431,8 @@
       width: 100%;
       height: 100%;
       background: #0b0b0f;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      display: grid;
+      place-items: center;
       z-index: 9999;
       opacity: 1;
       transition: opacity 0.6s ease-out;
@@ -446,8 +445,11 @@
     
     .logo-intro svg {
       width: min(90vw, 900px);
+      aspect-ratio: 3 / 1;
       height: auto;
       max-width: 100%;
+      display: block;
+    }
       display: block;
     }
     
@@ -459,8 +461,8 @@
   </style>
 </head>
 <body>
-  <!-- Logo Intro Animation v2.0 - SVG Gradient Animation -->
-  <div class="logo-intro" id="logoIntro" data-version="2.0">
+  <!-- Logo Intro Animation v3.0 - SVG Gradient Animation -->
+  <div class="logo-intro" id="logoIntro" data-version="3.0">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 320"
          preserveAspectRatio="xMidYMid meet"
          xmlns:xlink="http://www.w3.org/1999/xlink">
@@ -732,8 +734,8 @@
     var logoIntro = document.getElementById('logoIntro');
     var version = logoIntro ? logoIntro.getAttribute('data-version') : null;
     
-    if (version !== '2.0') {
-      console.log('Old version detected, forcing reload...');
+    if (version !== '3.0') {
+      console.log('Old version detected (v' + version + '), forcing reload...');
       // Clear cache and reload
       if ('caches' in window) {
         caches.keys().then(function(names) {
@@ -743,7 +745,7 @@
       location.reload(true);
     }
     
-    console.log('Animated SVG logo intro v2.0 initialized');
+    console.log('Animated SVG logo intro v3.0 initialized');
     
     // Hide logo intro after animation completes
     setTimeout(function() {
