@@ -275,7 +275,7 @@
 					} catch(err) {
 						console.warn('⚠️ Background server time sync failed:', err);
 					}
-				}, 3000); // Every 3 seconds for tight sync
+				}, 5000); // Every 5 seconds (optimized for bandwidth)
 				
 			} catch(err) {
 				console.warn('⚠️ Initial server time sync failed:', err);
@@ -445,7 +445,7 @@
 			const clientTime = Date.now();
 			
 			// 🚀 AGGRESSIVE RE-SYNC: Re-sync every 5 seconds instead of 15 for tighter coordination
-			if(clientTime - lastServerSync > 3000) { // Re-sync every 5 seconds
+			if(clientTime - lastServerSync > 5000) { // Re-sync every 5 seconds
 				getServerTime(); // Async refresh for next time
 			}
 			
@@ -622,8 +622,8 @@
 			let syncCheckInterval;
 			let lastCorrectionTime = 0;
 			const SYNC_CHECK_INTERVAL = 33; // � CHECK EVERY 50ms (20x per second) for ULTRA-TIGHT sync
-			const HARD_SYNC_THRESHOLD = 0.2; // � 50ms max tolerance (was 80ms)
-			const PLAYBACK_ADJUST_THRESHOLD = 0.03; const CORRECTION_COOLDOWN = 100; // � 20ms threshold (was 30ms)
+			const HARD_SYNC_THRESHOLD = 0.15; // � 50ms max tolerance (was 80ms)
+			const PLAYBACK_ADJUST_THRESHOLD = 0.025; const CORRECTION_COOLDOWN = 50; // � 20ms threshold (was 30ms)
 			
 				const checkSync = () => {
 					try {
@@ -636,9 +636,7 @@
 						const expectedTime = calculateSyncedVideoTime(item);
 						if(expectedTime === null) return;
 						
-						const actualTime = videoElement.currentTime;
-						const drift = Math.abs(actualTime - expectedTime);
-						const isBehind = actualTime < expectedTime;
+						const actualTime = videoElement.currentTime; const drift = Math.abs(actualTime - expectedTime); const isBehind = actualTime < expectedTime; const now = Date.now(); const timeSinceLastCorrection = now - lastCorrectionTime;
 						
 						if(drift > HARD_SYNC_THRESHOLD) {
 							console.log('🔄 HARD SYNC (>200ms):', {
@@ -649,7 +647,7 @@
 							});
 							
 							// Immediate correction + reset playback rate
-							videoElement.currentTime = expectedTime;
+							videoElement.currentTime = expectedTime; lastCorrectionTime = now;
 							videoElement.playbackRate = 1.0;
 							
 							
@@ -720,8 +718,25 @@
 							status: drift < 0.05 ? 'EXCELLENT' : drift < 0.15 ? 'GOOD' : 'NEEDS_CORRECTION'
 						});
 					}
-				}, 10000); // Health report every 10 seconds
-			}, 1000);
+				}, 5000); // Health report every 5 seconds
+			
+// FORCED HARD SYNC every 30 seconds to prevent drift accumulation
+const forcedSyncInterval = setInterval(() => {
+if(!document.body.contains(videoElement) || videoElement.paused || videoElement.ended) {
+clearInterval(forcedSyncInterval);
+return;
+}
+const expectedTime = calculateSyncedVideoTime(item);
+if(expectedTime !== null) {
+const drift = Math.abs(videoElement.currentTime - expectedTime);
+if(drift > 0.05) {
+console.log(' FORCED PERIODIC SYNC (30s check):', {screen: screenId, drift: drift.toFixed(3)});
+videoElement.currentTime = expectedTime;
+videoElement.playbackRate = 1.0;
+}
+}
+}, 30000); // Force sync every 30 seconds
+}, 1000);
 		}
 
 		function normalizeSliceUrl(rawUrl, item){

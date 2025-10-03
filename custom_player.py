@@ -447,6 +447,22 @@ class CustomPlayerGUI:
             command=self.select_store_by_input
         ).pack(pady=(0, 12))
         
+        # Back button
+        tk.Button(
+            self.panel,
+            text="← Back",
+            font=("Arial", 11),
+            bg="#666666",
+            fg="#ffffff",
+            activebackground="#555555",
+            activeforeground="#ffffff",
+            bd=0,
+            padx=20,
+            pady=8,
+            cursor="hand2",
+            command=self.setup_gui
+        ).pack(pady=(0, 12))
+        
         # Status label
         self.status_label = tk.Label(
             self.panel,
@@ -656,6 +672,22 @@ class CustomPlayerGUI:
                     command=lambda s=screen_id: self.on_screen_selected(s)
                 )
                 btn.pack(fill='x')
+            
+            # Add back button below the screen list
+            tk.Button(
+                self.panel,
+                text="← Back to Store Entry",
+                font=("Arial", 11),
+                bg="#666666",
+                fg="#ffffff",
+                activebackground="#555555",
+                activeforeground="#ffffff",
+                bd=0,
+                padx=20,
+                pady=8,
+                cursor="hand2",
+                command=self.show_store_selection
+            ).pack(pady=12)
                 
         except Exception as e:
             status_label.config(text=f"❌ Error: {str(e)[:50]}", fg="#ff4444")
@@ -765,22 +797,19 @@ class CustomMediaPlayer:
         self.actual_screen_height = None
         
         # Calculate crop offset for slice videos
+        # IMPORTANT: Screen IDs can be ANY user-defined string (not just "screen1", "screen2", etc.)
+        # The slice order comes from playlist metadata (sync_ref.order), NOT from parsing screen ID!
+        # We'll set crop_x_offset dynamically when playlist is loaded, based on sync_ref.order
+        
+        # Detect if this is a promo screen (promo screens don't use slicing)
         if str(screen_id).startswith('promo'):
-            # Promo screens - no slicing, will auto-detect screen size
-            self.crop_x_offset = 0
             self.is_promo = True
-        elif str(screen_id).isdigit():
-            screen_num = int(screen_id)
-            if screen_num == 0:
-                # Screen 0 is main/single screen - no slicing
-                self.crop_x_offset = 0
-            else:
-                # Screens 1, 2, 3 are horizontal slice screens
-                self.crop_x_offset = (screen_num - 1) * self.slice_width
-            self.is_promo = False
         else:
-            self.crop_x_offset = 0
             self.is_promo = False
+        
+        # Initialize crop offset to 0 - will be updated from playlist metadata
+        self.crop_x_offset = 0
+        self.slice_order = 0  # Will be set from sync_ref.order when playlist loads
         
         self.transition_duration = 0.5
         self.fade_enabled = True
@@ -797,10 +826,8 @@ class CustomMediaPlayer:
         
         # Log screen configuration
         screen_type = "Promo" if self.is_promo else f"Screen {screen_id}"
-        if not self.is_promo and str(screen_id).isdigit() and int(screen_id) > 0:
-            screen_type = f"Slice Screen {screen_id} (offset: {self.crop_x_offset}px)"
-        
         print(f"\n🎬 Player Ready - {screen_type} | Store {store_code}")
+        print(f"🔑 Screen ID: {screen_id} (slice order will be loaded from playlist metadata)")
         print(f"🔑 Press ESC or Q to exit\n")
         
     def start(self):
@@ -887,11 +914,38 @@ class CustomMediaPlayer:
                 self.orientation = data.get('orientation', 'default')
                 self.rotation = int(data.get('rotation', 0))
                 
-                if self.orientation != 'default' or self.rotation != 0:
-                    print(f"📐 Screen orientation: {self.orientation}, rotation: {self.rotation}°")
+                # Always log rotation setting for debugging
+                print(f"📐 Screen config - Orientation: {self.orientation}, Rotation: {self.rotation}°")
                 
                 playlist = data.get('playlist', [])
                 print(f"✅ Loaded {len(playlist)} items from playlist")
+                
+                # Extract slice order from sync_ref metadata (correct approach - don't parse screen ID!)
+                # Check first video item for sync_ref.order to determine this screen's slice position
+                print(f"🔍 DEBUG: is_promo={self.is_promo}, playlist items={len(playlist)}")
+                if playlist and not self.is_promo:
+                    for item in playlist:
+                        media_type = item.get('media_type')
+                        print(f"🔍 DEBUG: Checking item - media_type={media_type}")
+                        if media_type == 'video':
+                            sync_ref = item.get('sync_ref', {})
+                            print(f"🔍 DEBUG: Found video item, sync_ref={sync_ref}")
+                            if isinstance(sync_ref, dict) and sync_ref:
+                                # Get slice order from metadata (0 = first slice, 1 = second slice, etc.)
+                                self.slice_order = int(sync_ref.get('order', 0))
+                                self.crop_x_offset = self.slice_order * self.slice_width
+                                slice_count = sync_ref.get('count', 1)
+                                slice_mode = sync_ref.get('mode', 'split-h')
+                                print(f"🎬 Slice configuration from playlist metadata:")
+                                print(f"   Slice order: {self.slice_order} (of {slice_count} screens)")
+                                print(f"   Slice mode: {slice_mode}")
+                                print(f"   Crop X offset: {self.crop_x_offset}px")
+                                break
+                    else:
+                        # No sync_ref found in any video item
+                        print(f"ℹ️ No slice metadata found - displaying full video")
+                        self.slice_order = 0
+                        self.crop_x_offset = 0
                 
                 # Debug: Show first item if available
                 if playlist:
