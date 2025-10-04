@@ -3378,10 +3378,10 @@ def calculate_screen_layout(width, height):
     Returns dict with:
     - screen_count: number of screens (1-7)
     - layout: 'horizontal', 'vertical', or 'single'
-    - base_width: 1920 for horizontal
-    - base_height: 1080 for vertical
+    - base_width: 1920 for horizontal (landscape), 1080 for vertical (portrait)
+    - base_height: 1080 for horizontal (landscape), 1920 for vertical (portrait)
     
-    Horizontal layouts (height=1080, width multiplied):
+    Horizontal layouts - Landscape (height=1080, width multiplied by 1920):
     - 1920x1080 = 1 screen
     - 3840x1080 = 2 screens
     - 5760x1080 = 3 screens
@@ -3390,21 +3390,21 @@ def calculate_screen_layout(width, height):
     - 11520x1080 = 6 screens
     - 13440x1080 = 7 screens
     
-    Vertical layouts (width=1920, height multiplied):
-    - 1920x1080 = 1 screen
-    - 1920x2160 = 2 screens
-    - 1920x3240 = 3 screens
-    - 1920x4320 = 4 screens
-    - 1920x5400 = 5 screens
-    - 1920x6480 = 6 screens
-    - 1920x7560 = 7 screens
+    Vertical layouts - Portrait (width=1080, height multiplied by 1920):
+    - 1080x1920 = 1 screen
+    - 1080x3840 = 2 screens
+    - 1080x5760 = 3 screens
+    - 1080x7680 = 4 screens
+    - 1080x9600 = 5 screens
+    - 1080x11520 = 6 screens
+    - 1080x13440 = 7 screens
     """
     
-    # Check horizontal layout (width-based)
+    # Check horizontal layout (landscape - width-based)
     if height == 1080 and width >= 1920:
         screens = width // 1920
         if width % 1920 == 0 and 1 <= screens <= 7:
-            print(f"[calculate_screen_layout] Detected HORIZONTAL layout: {screens} screens ({width}x{height})")
+            print(f"[calculate_screen_layout] Detected HORIZONTAL (landscape) layout: {screens} screens ({width}x{height})")
             return {
                 'screen_count': screens,
                 'layout': 'horizontal',
@@ -3412,16 +3412,16 @@ def calculate_screen_layout(width, height):
                 'base_height': 1080
             }
     
-    # Check vertical layout (height-based)
-    if width == 1920 and height >= 1080:
-        screens = height // 1080
-        if height % 1080 == 0 and 1 <= screens <= 7:
-            print(f"[calculate_screen_layout] Detected VERTICAL layout: {screens} screens ({width}x{height})")
+    # Check vertical layout (portrait - height-based)
+    if width == 1080 and height >= 1920:
+        screens = height // 1920
+        if height % 1920 == 0 and 1 <= screens <= 7:
+            print(f"[calculate_screen_layout] Detected VERTICAL (portrait) layout: {screens} screens ({width}x{height})")
             return {
                 'screen_count': screens,
                 'layout': 'vertical',
-                'base_width': 1920,
-                'base_height': 1080
+                'base_width': 1080,
+                'base_height': 1920
             }
     
     # Single screen or non-standard resolution
