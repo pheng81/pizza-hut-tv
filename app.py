@@ -141,6 +141,11 @@ except Exception as _log_e:
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-this'
+app.config['TEMPLATES_AUTO_RELOAD'] = True
+
+# Session configuration - make sessions last 30 days
+from datetime import timedelta
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
 
 # Honor X-Forwarded-* from Cloudflare/NGINX and prefer HTTPS for URL generation
 # Safe for local dev; only affects how Flask infers scheme/host/port
@@ -148,7 +153,8 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_
 app.config.update(
     PREFERRED_URL_SCHEME='https',
     SESSION_COOKIE_SECURE=False if os.environ.get('FLASK_ENV') == 'development' else True,
-    SESSION_COOKIE_SAMESITE='Lax',
+    SESSION_COOKIE_SAMESITE='None',  # Allow OAuth redirects (requires SECURE=True)
+    SESSION_COOKIE_HTTPONLY=True,  # Prevent JavaScript access to session cookie
     # Set this in production to share login across subdomains: ".everydayadvertise.com"
     SESSION_COOKIE_DOMAIN=os.environ.get('SESSION_COOKIE_DOMAIN') or None,
 )
@@ -415,6 +421,7 @@ def login():
         try:
             if _check_basic_auth(u, p):
                 session['user'] = {'name': u, 'method': 'password'}
+                session.permanent = True  # Make session persist across browser restarts
                 nxt = request.args.get('next')
                 if not nxt:
                     # Prefer api subdomain for the dashboard after login
@@ -439,6 +446,7 @@ def login():
             ).fetchone()
             if row and check_password_hash(row['password_hash'], p or ''):
                 session['user'] = {'name': row['username'], 'method': 'local'}
+                session.permanent = True  # Make session persist across browser restarts
                 # Ensure this user has a pairing code
                 try:
                     _ensure_user_link_code(row['username'])
@@ -844,6 +852,11 @@ def home():
         pass
     return resp
 
+@app.route('/video-test')
+def video_test():
+    """Test page to verify all videos are loading and playing correctly"""
+    return render_template('video_test.html')
+
 # ---------------------- Email verification routes ----------------------
 @app.route('/verify/<token>')
 def verify_email(token: str):
@@ -912,6 +925,10 @@ def auth_google():
 
 @app.route('/auth/google/callback')
 def auth_google_callback():
+    logging.info('=== Google OAuth Callback Started ===')
+    logging.info(f'Request args: {request.args}')
+    logging.info(f'Session keys before auth: {list(session.keys())}')
+    
     # Ensure google client exists in case of lazy registration need
     try:
         if oauth and not getattr(oauth, 'google', None):
@@ -931,29 +948,44 @@ def auth_google_callback():
                     logging.warning('OAuth: google lazy register failed in callback: %s', _e)
         client = oauth.create_client('google') if oauth else None
         if not client:
+            logging.error('✗ Google client not available in callback')
             flash('Google Sign-In not configured', 'error')
             return redirect(url_for('login'))
     except Exception as _e:
-        logging.warning('Google client prep failed: %s', _e)
+        logging.error(f'✗ Google client prep failed in callback: {_e}')
         flash('Google Sign-In not configured', 'error')
         return redirect(url_for('login'))
+    
     try:
         token = client.authorize_access_token()
+        logging.info(f'✓ Google OAuth token received successfully')
+        
         userinfo = token.get('userinfo') or {}
         # Some providers put userinfo under separate call; fallback
         if not userinfo:
             resp = client.get('userinfo')
             userinfo = resp.json() if resp else {}
+        
         email = userinfo.get('email')
+        logging.info(f'✓ Google userinfo received: email={email}, name={userinfo.get("name")}')
+        
         if not email:
+            logging.error('✗ Google login failed: no email in userinfo')
             flash('Google login failed: no email scope', 'error')
             return redirect(url_for('login'))
+        
         # Optional domain restriction
         allowed_domain = os.environ.get('GOOGLE_ALLOWED_DOMAIN')
         if allowed_domain and not str(email).lower().endswith('@'+allowed_domain.lower()):
+            logging.warning(f'✗ Email domain not allowed: {email}')
             flash('Email domain not allowed', 'error')
             return redirect(url_for('login'))
+        
         session['user'] = {'name': userinfo.get('name') or email, 'email': email, 'method': 'google'}
+        session.permanent = True  # Make session persist across browser restarts
+        logging.info(f'✓ Google OAuth: Session set successfully for {email}, permanent={session.permanent}')
+        logging.info(f'✓ Session keys after auth: {list(session.keys())}')
+        
         # Upsert a local user record so we can store a pairing code
         try:
             db = get_db()
@@ -986,10 +1018,26 @@ def auth_google_callback():
             except Exception:
                 pass
             nxt = url_for('dashboard')
+        
+        logging.info(f'✓ Google OAuth login complete, redirecting to: {nxt}')
         return redirect(nxt)
+        
     except Exception as e:
-        logging.exception('Google auth failed: %s', e)
-        flash('Google login failed', 'error')
+        logging.error(f'✗ Google OAuth callback failed: {e}')
+        logging.error(f'✗ Error type: {type(e).__name__}')
+        logging.exception('✗ Full traceback:')
+        
+        # Check for specific error types
+        error_msg = str(e).lower()
+        if 'state' in error_msg or 'csrf' in error_msg or 'mismatch' in error_msg:
+            logging.error('✗ State mismatch detected - session cookie may not be preserved during OAuth redirect')
+            flash('Login session expired during authentication. Please try again.', 'error')
+        elif 'token' in error_msg:
+            logging.error('✗ Token exchange failed')
+            flash('Failed to obtain login token from Google. Please try again.', 'error')
+        else:
+            flash('Google login failed. Please try again.', 'error')
+        
         return redirect(url_for('login'))
 
 @app.route('/auth/microsoft')
@@ -1180,6 +1228,8 @@ def auth_microsoft_callback():
             flash('Microsoft login failed: no email', 'error')
             return redirect(url_for('login'))
         session['user'] = {'name': name or email, 'email': email, 'method': 'microsoft'}
+        session.permanent = True  # Make session persist across browser restarts
+        
         # Upsert a local user record so we can store a pairing code
         try:
             db = get_db()
@@ -1225,6 +1275,7 @@ def auth_microsoft_callback():
             flash('Microsoft login failed: no email', 'error')
             return redirect(url_for('login'))
         session['user'] = {'name': name or email, 'email': email, 'method': 'microsoft'}
+        session.permanent = True  # Make session persist across browser restarts
         try:
             db = get_db()
             uname = email
@@ -1392,6 +1443,25 @@ def _add_cache_headers(resp):
                 resp.headers.setdefault('Cache-Control', 'public, max-age=15')
             else:
                 resp.headers['Cache-Control'] = 'no-store, max-age=0'
+        elif p.startswith('/static/'):
+            # Static assets (JS, CSS, images)
+            resp.headers['Cache-Control'] = 'public, max-age=31536000'  # 1 year
+        else:
+            # HTML pages - no cache
+            resp.headers.setdefault('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0')
+        
+        # Remove deprecated headers to clean up browser warnings
+        resp.headers.pop('X-Frame-Options', None)  # Use CSP frame-ancestors instead
+        resp.headers.pop('P3P', None)  # Deprecated, IE-only header
+        resp.headers.pop('Pragma', None)  # Deprecated, use Cache-Control
+        resp.headers.pop('Expires', None)  # Use Cache-Control instead
+        resp.headers.pop('X-XSS-Protection', None)  # Deprecated, browser-specific
+        
+        # Remove any CSP headers that might be blocking (let browser defaults handle it)
+        # We don't need CSP for this app - it causes more issues than it solves
+        resp.headers.pop('Content-Security-Policy', None)
+        resp.headers.pop('content-security-policy', None)
+        
         # Attach build metadata for easy troubleshooting across all responses
         resp.headers['X-App-Build'] = BUILD_STAMP
         if GIT_COMMIT:
@@ -2889,14 +2959,35 @@ def api_me():
         full_name = (row['full_name'] if row and 'full_name' in row.keys() else None)
         avatar_rel = (row['avatar'] if row and 'avatar' in row.keys() else None)
         avatar_url = None
-        try:
-            if avatar_rel:
-                avatar_url = url_for('static', filename=avatar_rel)
-        except Exception:
-            avatar_url = None
+        
+        # Build avatar URL with validation
+        if avatar_rel:
+            try:
+                # Normalize path separators
+                avatar_rel = avatar_rel.replace('\\', '/')
+                # Check if file actually exists
+                avatar_full_path = os.path.join('static', avatar_rel) if not avatar_rel.startswith('static') else avatar_rel
+                if os.path.exists(avatar_full_path):
+                    avatar_url = url_for('static', filename=avatar_rel)
+                    # Add cache-buster
+                    try:
+                        ts = int(os.path.getmtime(avatar_full_path))
+                        avatar_url = f"{avatar_url}?t={ts}"
+                    except Exception:
+                        pass
+                else:
+                    logging.warning(f'Avatar file not found for {uname}: {avatar_full_path}')
+                    # Clear invalid avatar from database
+                    db.execute('UPDATE users SET avatar = NULL WHERE username = ?', (uname,))
+                    db.commit()
+            except Exception as e:
+                logging.warning(f'Error building avatar URL for {uname}: {e}')
+                avatar_url = None
+        
         code = _ensure_user_link_code(uname)
         return jsonify({'success': True, 'username': uname, 'full_name': full_name, 'avatar_url': avatar_url, 'link_code': code})
     except Exception as e:
+        logging.error(f'Error in /api/me: {e}', exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/profile/name', methods=['POST'])
@@ -2987,35 +3078,84 @@ def api_profile_delete_account():
 @login_required
 def api_profile_upload_avatar():
     try:
+        # Check if file was uploaded
         if 'avatar' not in request.files:
-            return jsonify({'success': False, 'error': 'no file'}), 400
+            logging.warning('Avatar upload failed: no file in request')
+            return jsonify({'success': False, 'error': 'No file uploaded'}), 400
+        
         f = request.files['avatar']
         if not f or f.filename == '':
-            return jsonify({'success': False, 'error': 'no file'}), 400
+            logging.warning('Avatar upload failed: empty file')
+            return jsonify({'success': False, 'error': 'No file selected'}), 400
+        
+        # Get username before any processing
+        uname = _get_current_username_from_session()
+        if not uname:
+            logging.warning('Avatar upload failed: no username in session')
+            return jsonify({'success': False, 'error': 'Authentication required'}), 403
+        
+        safe_key = _safe_key_from_username(uname) or 'user'
+        logging.info(f'Processing avatar upload for user: {uname} (key: {safe_key})')
+        
         # Process image to square 256x256 PNG
         from PIL import Image, ImageOps  # type: ignore
-        im = Image.open(f.stream)
-        im = ImageOps.exif_transpose(im)
-        im = ImageOps.fit(im, (256, 256), Image.Resampling.LANCZOS)
-        uname = _get_current_username_from_session()
-        safe_key = _safe_key_from_username(uname or '') or 'user'
+        
+        try:
+            im = Image.open(f.stream)
+            im = ImageOps.exif_transpose(im)
+            im = ImageOps.fit(im, (256, 256), Image.Resampling.LANCZOS)
+        except Exception as img_err:
+            logging.error(f'Image processing failed for {uname}: {img_err}')
+            return jsonify({'success': False, 'error': 'Invalid image file'}), 400
+        
+        # Ensure avatar folder exists
+        os.makedirs(AVATAR_FOLDER, exist_ok=True)
+        
         save_path = os.path.join(AVATAR_FOLDER, f'{safe_key}.png')
-        im.save(save_path, format='PNG')
-        # Store relative path for static url building
-        rel = os.path.join('uploads', 'avatars', f'{safe_key}.png')
-        db = get_db()
-        db.execute('UPDATE users SET avatar = ? WHERE username = ?', (rel, uname))
-        db.commit()
+        
+        # Save with error handling
+        try:
+            im.save(save_path, format='PNG', optimize=True)
+            logging.info(f'Avatar saved to: {save_path}')
+        except Exception as save_err:
+            logging.error(f'Failed to save avatar for {uname}: {save_err}')
+            return jsonify({'success': False, 'error': 'Failed to save image'}), 500
+        
+        # Store relative path for static url building (normalize path separators)
+        rel = os.path.join('uploads', 'avatars', f'{safe_key}.png').replace('\\', '/')
+        
+        # Update database with error handling
+        try:
+            db = get_db()
+            db.execute('UPDATE users SET avatar = ? WHERE username = ?', (rel, uname))
+            db.commit()
+            logging.info(f'Database updated with avatar path for {uname}: {rel}')
+        except Exception as db_err:
+            logging.error(f'Database update failed for {uname}: {db_err}')
+            # Try to remove the saved file since DB update failed
+            try:
+                os.remove(save_path)
+            except Exception:
+                pass
+            return jsonify({'success': False, 'error': 'Failed to update profile'}), 500
+        
+        # Build URL with cache-buster
         url = url_for('static', filename=rel)
-        # Add cache-buster so the fresh avatar shows immediately
         try:
             ts = int(os.path.getmtime(save_path))
             sep = '&' if ('?' in url) else '?'
             url = f"{url}{sep}t={ts}"
-        except Exception:
-            pass
+        except Exception as ts_err:
+            logging.warning(f'Could not add timestamp to avatar URL: {ts_err}')
+            # Fallback to current timestamp
+            import time
+            url = f"{url}?t={int(time.time())}"
+        
+        logging.info(f'Avatar upload successful for {uname}: {url}')
         return jsonify({'success': True, 'avatar_url': url})
+        
     except Exception as e:
+        logging.error(f'Avatar upload error: {str(e)}', exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
 def save_store_config(config):
@@ -3156,6 +3296,293 @@ def _guess_mime(filename: str) -> Optional[str]:
         return mt or None
     except Exception:
         return None
+
+# ---- Auto-Slicing Helper Functions ----
+
+def detect_video_resolution(video_path):
+    """
+    Use FFprobe to detect video resolution and other metadata.
+    Returns dict with width, height, fps, has_audio.
+    """
+    if not FFMPEG_AVAILABLE:
+        print("WARNING: FFmpeg not available, cannot detect resolution")
+        return None
+    
+    try:
+        ffprobe_cmd = FFMPEG_PATH.replace('ffmpeg', 'ffprobe') if 'ffmpeg' in FFMPEG_PATH else 'ffprobe'
+        probe_cmd = [
+            ffprobe_cmd, '-v', 'quiet', '-print_format', 'json',
+            '-show_format', '-show_streams', video_path
+        ]
+        
+        probe_result = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=30)
+        if probe_result.returncode != 0:
+            print(f"ERROR: ffprobe failed: {probe_result.stderr}")
+            return None
+        
+        probe_data = json.loads(probe_result.stdout)
+        
+        # Find video and audio streams
+        video_stream = None
+        has_audio = False
+        
+        for stream in probe_data.get('streams', []):
+            codec_type = stream.get('codec_type')
+            if codec_type == 'video' and video_stream is None:
+                video_stream = stream
+            if codec_type == 'audio':
+                has_audio = True
+        
+        if not video_stream:
+            print("ERROR: No video stream found")
+            return None
+        
+        width = int(video_stream.get('width', 0) or 0)
+        height = int(video_stream.get('height', 0) or 0)
+        
+        # Parse FPS from r_frame_rate
+        fps = 30  # default
+        rfr = (video_stream.get('r_frame_rate') or '').strip()
+        try:
+            if rfr and '/' in rfr:
+                num, den = rfr.split('/')
+                num_val = float(num)
+                den_val = float(den) if float(den) != 0 else 1.0
+                if num_val > 0 and den_val > 0:
+                    fps_val = num_val / den_val
+                    if 10 <= fps_val <= 120:
+                        fps = int(round(fps_val))
+        except Exception:
+            pass
+        
+        print(f"[detect_video_resolution] {video_path}: {width}x{height}, fps={fps}, audio={has_audio}")
+        
+        return {
+            'width': width,
+            'height': height,
+            'fps': fps,
+            'has_audio': has_audio
+        }
+    
+    except Exception as e:
+        print(f"ERROR: Failed to detect video resolution: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+def calculate_screen_layout(width, height):
+    """
+    Calculate multi-screen layout based on resolution.
+    
+    Returns dict with:
+    - screen_count: number of screens (1-7)
+    - layout: 'horizontal', 'vertical', or 'single'
+    - base_width: 1920 for horizontal
+    - base_height: 1080 for vertical
+    
+    Horizontal layouts (height=1080, width multiplied):
+    - 1920x1080 = 1 screen
+    - 3840x1080 = 2 screens
+    - 5760x1080 = 3 screens
+    - 7680x1080 = 4 screens
+    - 9600x1080 = 5 screens
+    - 11520x1080 = 6 screens
+    - 13440x1080 = 7 screens
+    
+    Vertical layouts (width=1920, height multiplied):
+    - 1920x1080 = 1 screen
+    - 1920x2160 = 2 screens
+    - 1920x3240 = 3 screens
+    - 1920x4320 = 4 screens
+    - 1920x5400 = 5 screens
+    - 1920x6480 = 6 screens
+    - 1920x7560 = 7 screens
+    """
+    
+    # Check horizontal layout (width-based)
+    if height == 1080 and width >= 1920:
+        screens = width // 1920
+        if width % 1920 == 0 and 1 <= screens <= 7:
+            print(f"[calculate_screen_layout] Detected HORIZONTAL layout: {screens} screens ({width}x{height})")
+            return {
+                'screen_count': screens,
+                'layout': 'horizontal',
+                'base_width': 1920,
+                'base_height': 1080
+            }
+    
+    # Check vertical layout (height-based)
+    if width == 1920 and height >= 1080:
+        screens = height // 1080
+        if height % 1080 == 0 and 1 <= screens <= 7:
+            print(f"[calculate_screen_layout] Detected VERTICAL layout: {screens} screens ({width}x{height})")
+            return {
+                'screen_count': screens,
+                'layout': 'vertical',
+                'base_width': 1920,
+                'base_height': 1080
+            }
+    
+    # Single screen or non-standard resolution
+    print(f"[calculate_screen_layout] Single screen or non-standard resolution: {width}x{height}")
+    return {
+        'screen_count': 1,
+        'layout': 'single',
+        'base_width': width,
+        'base_height': height
+    }
+
+
+def slice_video_for_multi_screen(input_path, output_dir, base_filename, layout_info, video_info):
+    """
+    Slice a multi-screen video into individual screen files using FFmpeg.
+    
+    Args:
+        input_path: Path to original video file
+        output_dir: Directory to save sliced videos
+        base_filename: Base name for output files (without extension)
+        layout_info: Dict from calculate_screen_layout()
+        video_info: Dict from detect_video_resolution()
+    
+    Returns:
+        List of dicts with 'screen_number', 'filename', 'path' for each slice
+    """
+    
+    if not FFMPEG_AVAILABLE:
+        print("ERROR: FFmpeg not available, cannot slice video")
+        return []
+    
+    screen_count = layout_info['screen_count']
+    layout_type = layout_info['layout']
+    
+    if screen_count == 1:
+        print("[slice_video_for_multi_screen] Single screen, no slicing needed")
+        return []
+    
+    width = video_info['width']
+    height = video_info['height']
+    fps = video_info['fps']
+    has_audio = video_info['has_audio']
+    
+    # Helper to enforce even dimensions for yuv420p
+    def _even(x):
+        return x - (x % 2)
+    
+    slices = []
+    gop = max(2, int(round(fps)))  # ~1s GOP
+    
+    print(f"[slice_video_for_multi_screen] Slicing {input_path} into {screen_count} {layout_type} screens")
+    
+    for screen_idx in range(screen_count):
+        screen_number = screen_idx + 1
+        output_filename = f"{base_filename}-screen{screen_number}.mp4"
+        output_path = os.path.join(output_dir, output_filename)
+        
+        # Calculate crop parameters based on layout
+        if layout_type == 'horizontal':
+            # Horizontal split: crop width
+            w_per = width / screen_count
+            left = int(round(screen_idx * w_per))
+            right = int(round((screen_idx + 1) * w_per))
+            crop_x = max(0, min(left, width - 2))
+            slice_width = max(2, min(right - left, width - crop_x))
+            slice_height = height
+            crop_y = 0
+        
+        elif layout_type == 'vertical':
+            # Vertical split: crop height
+            h_per = height / screen_count
+            top = int(round(screen_idx * h_per))
+            bottom = int(round((screen_idx + 1) * h_per))
+            crop_y = max(0, min(top, height - 2))
+            slice_height = max(2, min(bottom - top, height - crop_y))
+            slice_width = width
+            crop_x = 0
+        
+        else:
+            print(f"ERROR: Unknown layout type: {layout_type}")
+            continue
+        
+        # Enforce even dimensions
+        crop_x = _even(crop_x)
+        crop_y = _even(crop_y)
+        slice_width = _even(min(slice_width, width - crop_x))
+        slice_height = _even(min(slice_height, height - crop_y))
+        
+        if slice_width < 2:
+            slice_width = 2
+        if slice_height < 2:
+            slice_height = 2
+        
+        print(f"[slice_video_for_multi_screen] Screen {screen_number}: crop={slice_width}:{slice_height}:{crop_x}:{crop_y}")
+        
+        # Build FFmpeg command
+        crop_filter = f"crop={slice_width}:{slice_height}:{crop_x}:{crop_y}"
+        
+        ffmpeg_cmd = [
+            FFMPEG_PATH, '-y',  # overwrite output file
+            '-i', input_path,
+            '-vf', crop_filter,
+            '-c:v', 'libx264',
+            '-pix_fmt', 'yuv420p',
+            '-profile:v', 'main',
+            '-level', '4.0',
+            '-preset', 'fast',  # Faster encoding for upload
+            '-crf', '23',  # Good quality/size balance
+            '-g', str(gop),
+            '-keyint_min', str(gop),
+            '-sc_threshold', '0',
+            '-vsync', 'cfr',
+            '-r', str(max(10, fps)),
+            '-force_key_frames', f"expr:gte(t,n_forced*1)",
+            '-movflags', '+faststart+frag_keyframe+empty_moov',
+            '-frag_duration', '1000000',
+            '-map', '0:v:0',
+        ]
+        
+        if has_audio:
+            ffmpeg_cmd += [
+                '-c:a', 'aac',
+                '-b:a', '128k',
+                '-ac', '2',
+                '-ar', '48000',
+                '-map', '0:a:0?',
+            ]
+        else:
+            ffmpeg_cmd += ['-an']
+        
+        ffmpeg_cmd += ['-map_metadata', '-1', '-map_chapters', '-1']
+        ffmpeg_cmd.append(output_path)
+        
+        # Run FFmpeg
+        try:
+            print(f"[slice_video_for_multi_screen] Running FFmpeg for screen {screen_number}...")
+            result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, timeout=600)
+            
+            if result.returncode == 0 and os.path.exists(output_path):
+                file_size = os.path.getsize(output_path)
+                print(f"[slice_video_for_multi_screen] Screen {screen_number} created: {output_filename} ({file_size/1024/1024:.2f} MB)")
+                
+                slices.append({
+                    'screen_number': screen_number,
+                    'filename': output_filename,
+                    'path': output_path,
+                    'size': file_size
+                })
+            else:
+                print(f"ERROR: FFmpeg failed for screen {screen_number}")
+                print(f"STDERR: {result.stderr}")
+        
+        except subprocess.TimeoutExpired:
+            print(f"ERROR: FFmpeg timeout for screen {screen_number}")
+        except Exception as e:
+            print(f"ERROR: Failed to create slice for screen {screen_number}: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    print(f"[slice_video_for_multi_screen] Successfully created {len(slices)} slices")
+    return slices
 
 # ---- Thumbnail helpers and endpoint ----
 def _image_ext(filename: str) -> str:
@@ -4935,68 +5362,111 @@ def delete_screen():
         store_id = data.get('store_id')
         screen_id = data.get('screen_id')
         
-        print(f"DEBUG: Delete screen request - store_id: {store_id}, screen_id: {screen_id}")
+        print(f"DEBUG DELETE_SCREEN: Delete screen request - store_id: {store_id}, screen_id: {screen_id}")
+        print(f"DEBUG DELETE_SCREEN: Request data: {data}")
         
         if not store_id or not screen_id:
-            print("DEBUG: Missing store_id or screen_id")
+            print("DEBUG DELETE_SCREEN: Missing store_id or screen_id")
             return jsonify({'error': 'Store ID and Screen ID are required'}), 400
 
         ukey = _safe_user_key()
+        print(f"DEBUG DELETE_SCREEN: User key: {ukey}")
         config = load_store_config_for_user_safe_key(ukey) if ukey else load_store_config()
-        print(f"DEBUG: Available stores: {list(config['screens'].keys())}")
+        print(f"DEBUG DELETE_SCREEN: Config loaded, screens: {config.get('screens', {})}")
+        print(f"DEBUG DELETE_SCREEN: Available stores: {list(config['screens'].keys())}")
         
         if store_id not in config['screens']:
-            print(f"DEBUG: Store {store_id} not found in config")
+            print(f"DEBUG DELETE_SCREEN: Store {store_id} not found in config")
+            print(f"DEBUG DELETE_SCREEN: Available stores in detail: {config.get('screens', {})}")
             return jsonify({'error': 'Store not found'}), 404
+        
+        print(f"DEBUG DELETE_SCREEN: Store {store_id} found, checking screen...")
+        
         # Normalize provided id: accept both prefixed (e.g., "1881_screen1") and unprefixed ("screen1")
         actual_id = screen_id
         store_screens = config['screens'].get(store_id, {})
+        print(f"DEBUG DELETE_SCREEN: Store screens: {list(store_screens.keys())}")
+        print(f"DEBUG DELETE_SCREEN: Looking for screen_id: {screen_id}, actual_id: {actual_id}")
+        
         if actual_id not in store_screens:
-            print(f"DEBUG: Screen {actual_id} not directly in store {store_id}, attempting mapping")
+            print(f"DEBUG DELETE_SCREEN: Screen {actual_id} not directly in store {store_id}, attempting mapping")
             # If given id is prefixed but for a different store, remap suffix to this store
             if '_' in screen_id:
                 short = screen_id.split('_', 1)[1]
                 candidate = f"{store_id}_{short}"
+                print(f"DEBUG DELETE_SCREEN: Trying prefixed variant: {candidate}")
                 if candidate in store_screens:
                     actual_id = candidate
+                    print(f"DEBUG DELETE_SCREEN: Found using prefixed variant: {actual_id}")
                 elif short in store_screens:
                     actual_id = short
+                    print(f"DEBUG DELETE_SCREEN: Found using short name: {actual_id}")
             else:
                 # Unprefixed -> try store-prefixed variant
                 candidate = f"{store_id}_{screen_id}"
+                print(f"DEBUG DELETE_SCREEN: Trying unprefixed -> prefixed: {candidate}")
                 if candidate in store_screens:
                     actual_id = candidate
+                    print(f"DEBUG DELETE_SCREEN: Found using prefixed: {actual_id}")
+        
         if actual_id not in store_screens:
-            print(f"DEBUG: Screen {screen_id} not found (mapped={actual_id}) in store {store_id}")
-            print(f"DEBUG: Available screens in store {store_id}: {list(store_screens.keys())}")
+            print(f"DEBUG DELETE_SCREEN: Screen {screen_id} not found (mapped={actual_id}) in store {store_id}")
+            print(f"DEBUG DELETE_SCREEN: Available screens in store {store_id}: {list(store_screens.keys())}")
             return jsonify({'error': 'Screen not found'}), 404
         
-        print(f"DEBUG: Found screen {actual_id} in store {store_id}")
+        print(f"DEBUG DELETE_SCREEN: Found screen {actual_id} in store {store_id}")
+        print(f"DEBUG DELETE_SCREEN: Screen data: {store_screens[actual_id]}")
         
         # Delete associated file if exists
         screen_data = config['screens'][store_id][actual_id]
+        print(f"DEBUG DELETE_SCREEN: Screen data to delete: {screen_data}")
+        file_deleted = False
+        file_error_message = None
+        
         if screen_data.get('file'):
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], screen_data['file'])
+            print(f"DEBUG DELETE_SCREEN: Checking file: {filepath}")
             if os.path.exists(filepath):
-                os.remove(filepath)
-                print(f"DEBUG: Deleted file: {filepath}")
+                try:
+                    os.remove(filepath)
+                    print(f"✓ DELETE_SCREEN: Successfully deleted file: {filepath}")
+                    file_deleted = True
+                except PermissionError as e:
+                    print(f"⚠ DELETE_SCREEN: Permission denied deleting file {filepath}: {e}")
+                    print(f"⚠ DELETE_SCREEN: File will remain on server but screen will be deleted from config")
+                    file_error_message = f"Screen deleted but file could not be removed due to permissions: {screen_data['file']}"
+                    # Continue execution - don't let this stop the screen deletion
+                except Exception as e:
+                    print(f"⚠ DELETE_SCREEN: Could not delete file {filepath}: {e}")
+                    file_error_message = f"Screen deleted but file could not be removed: {screen_data['file']}"
+                    # Continue execution - don't let this stop the screen deletion
+            else:
+                print(f"DEBUG DELETE_SCREEN: File does not exist: {filepath}")
+                file_deleted = True  # Consider it "deleted" if it doesn't exist
         
         # Remove screen from configuration
+        print(f"DEBUG DELETE_SCREEN: About to delete screen from config...")
         del config['screens'][store_id][actual_id]
-        print(f"DEBUG: Removed screen {actual_id} from config")
+        print(f"DEBUG DELETE_SCREEN: Removed screen {actual_id} from config")
 
         # Clean up any sync groups referencing this screen
+        print(f"DEBUG DELETE_SCREEN: Starting sync group cleanup...")
         try:
             groups = config.get('sync_groups') or {}
+            print(f"DEBUG DELETE_SCREEN: Found {len(groups)} sync groups")
             changed = False
             for gid, grp in list(groups.items()):
+                print(f"DEBUG DELETE_SCREEN: Checking group {gid}: {grp}")
                 if grp.get('store_id') != store_id:
+                    print(f"DEBUG DELETE_SCREEN: Group {gid} belongs to different store, skipping")
                     continue
                 members = grp.get('members') or []
                 if grp.get('base') == actual_id:
+                    print(f"DEBUG DELETE_SCREEN: Group {gid} has deleted screen as base, removing entire group")
                     # Remove entire group; scrub sync_ref items from all member screens
                     for m in members:
                         msid = m.get('screen_id')
+                        print(f"DEBUG DELETE_SCREEN: Cleaning member screen {msid}")
                         scr = config['screens'][store_id].get(msid) if store_id in config['screens'] else None
                         if isinstance(scr, dict):
                             pl = scr.get('playlist') or []
@@ -5029,20 +5499,33 @@ def delete_screen():
             print('WARN: sync group cleanup failed', _sg_clean_err)
         
         if ukey:
+            print(f"DEBUG DELETE_SCREEN: Saving config with user key: {ukey}")
             save_store_config_for_user_safe_key(ukey, config)
         else:
+            print(f"DEBUG DELETE_SCREEN: Saving config (no user key)")
             save_store_config(config)
-        print(f"DEBUG: Configuration saved successfully")
+        print(f"✓ DELETE_SCREEN: Configuration saved successfully")
+        
+        # Create user-friendly response message
+        if file_error_message:
+            # File couldn't be deleted, but screen was removed
+            response_message = f'Screen {actual_id} deleted successfully'
+            warning_message = 'File could not be removed from server (permission issue)'
+        else:
+            # Everything deleted successfully
+            response_message = f'Screen {actual_id} deleted successfully'
+            warning_message = None
         
         return jsonify({
             'success': True,
-            'message': f'Screen {actual_id} deleted successfully'
+            'message': response_message,
+            'warning': warning_message  # Optional warning field
         })
         
     except Exception as e:
-        print(f"ERROR: Error deleting screen: {e}")
+        print(f"ERROR DELETE_SCREEN: Error deleting screen: {e}")
         import traceback
-        print(f"ERROR: Traceback: {traceback.format_exc()}")
+        print(f"ERROR DELETE_SCREEN: Traceback: {traceback.format_exc()}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/add_store', methods=['POST'])
@@ -6291,6 +6774,101 @@ def upload_media():
         except Exception:
             pass
 
+        # AUTO-SLICING: Detect if this is a multi-screen video and auto-slice it
+        sliced_files = []
+        media_type = classify_media(filename)
+        
+        if media_type == 'video' and FFMPEG_AVAILABLE:
+            print("[upload_media] Video detected, checking for multi-screen layout...")
+            
+            # Detect video resolution
+            video_info = detect_video_resolution(dest)
+            
+            if video_info:
+                width = video_info['width']
+                height = video_info['height']
+                
+                # Calculate screen layout
+                layout_info = calculate_screen_layout(width, height)
+                screen_count = layout_info['screen_count']
+                
+                if screen_count > 1:
+                    print(f"[upload_media] Multi-screen video detected: {screen_count} screens ({layout_info['layout']} layout)")
+                    
+                    # Create temporary directory for sliced videos
+                    slice_temp_dir = os.path.join(tempfile.gettempdir(), f"slices_{uuid.uuid4()}")
+                    try:
+                        os.makedirs(slice_temp_dir, exist_ok=True)
+                        
+                        # Get base filename without extension
+                        base_name = filename.rsplit('.', 1)[0]
+                        
+                        # Slice the video
+                        slices = slice_video_for_multi_screen(
+                            dest, 
+                            slice_temp_dir, 
+                            base_name, 
+                            layout_info, 
+                            video_info
+                        )
+                        
+                        if slices:
+                            print(f"[upload_media] Successfully created {len(slices)} slices, uploading to R2/CDN...")
+                            
+                            # Upload each slice to R2
+                            for slice_info in slices:
+                                slice_path = slice_info['path']
+                                slice_filename = slice_info['filename']
+                                slice_key = _join_prefix_key(req_prefix, slice_filename)
+                                
+                                try:
+                                    # Save locally
+                                    local_slice_dest = os.path.join(local_dir, slice_filename)
+                                    shutil.copy2(slice_path, local_slice_dest)
+                                    print(f"[upload_media] Saved slice locally: {local_slice_dest}")
+                                    
+                                    # Upload to R2
+                                    if r2_enabled():
+                                        with open(slice_path, 'rb') as fh:
+                                            data = fh.read()
+                                        r2_put_bytes(slice_key, data, content_type='video/mp4')
+                                        print(f"[upload_media] R2 put ok: {slice_key} ({slice_info['size']/1024/1024:.2f} MB)")
+                                        
+                                        sliced_files.append({
+                                            'screen_number': slice_info['screen_number'],
+                                            'filename': slice_key,
+                                            'url': build_public_url(slice_key),
+                                            'size': slice_info['size']
+                                        })
+                                
+                                except Exception as slice_upload_e:
+                                    print(f"ERROR: Failed to upload slice {slice_filename}: {slice_upload_e}")
+                            
+                            print(f"[upload_media] Successfully uploaded {len(sliced_files)} sliced files to CDN")
+                        
+                        else:
+                            print("[upload_media] Failed to create slices, will upload original video only")
+                    
+                    except Exception as slice_e:
+                        print(f"ERROR: Slicing process failed: {slice_e}")
+                        import traceback
+                        traceback.print_exc()
+                    
+                    finally:
+                        # Cleanup temporary slice directory
+                        try:
+                            if os.path.exists(slice_temp_dir):
+                                shutil.rmtree(slice_temp_dir)
+                                print(f"[upload_media] Cleaned up temp directory: {slice_temp_dir}")
+                        except Exception:
+                            pass
+                
+                else:
+                    print(f"[upload_media] Single screen video ({width}x{height}), no slicing needed")
+            
+            else:
+                print("[upload_media] Could not detect video resolution, skipping auto-slice")
+
         # If R2 is configured, upload the saved file to the bucket using the prefixed key
         try:
             if r2_enabled():
@@ -6302,10 +6880,26 @@ def upload_media():
         except Exception as _r2e:
             # Log but do not fail the upload if R2 copy fails; local copy still exists
             logging.warning('R2 upload failed for %s: %s', filename, _r2e)
+        
         dt = int((time.time()-t0)*1000)
         key = _join_prefix_key(req_prefix, filename)
         print(f"[upload_media] done file={key} ms={dt}")
-        return jsonify({'success': True, 'filename': key, 'media_type': classify_media(filename), 'url': build_public_url(key)})
+        
+        # Return response with slice information if available
+        response_data = {
+            'success': True, 
+            'filename': key, 
+            'media_type': media_type, 
+            'url': build_public_url(key)
+        }
+        
+        if sliced_files:
+            response_data['sliced_files'] = sliced_files
+            response_data['screen_count'] = len(sliced_files)
+            response_data['layout'] = layout_info['layout']
+            print(f"[upload_media] Returning response with {len(sliced_files)} sliced files")
+        
+        return jsonify(response_data)
     except Exception as e:
         print(f"upload_media error: {e}")
         import traceback as _tb
