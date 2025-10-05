@@ -6309,16 +6309,23 @@
                 return;
             }
 
-            // Check file size - if over 95MB, we need special handling for Cloudflare
-            const maxCloudflareSize = 95 * 1024 * 1024; // 95MB (leaving 5MB buffer)
+            // Cloudflare Free has ~100MB POST limit (even for 75MB files, headers push it over)
+            // Solution: Use "Sync Upload" which uploads directly to R2 via presigned URL
+            const maxCloudflareSize = 70 * 1024 * 1024; // 70MB safe limit
             
             if (file.size > maxCloudflareSize) {
-                // File too large for Cloudflare - inform user they need to use presigned R2 upload
                 const useMB = (file.size / 1024 / 1024).toFixed(1);
-                alert(`⚠️ File too large (${useMB}MB)\n\nCloudflare has a 100MB upload limit.\n\nPlease use the "Sync Upload" button instead, which uploads directly to cloud storage.\n\nAfter uploading, you can manually slice the video using the dashboard tools.`);
+                alert(`⚠️ File size: ${useMB}MB\n\n` +
+                      `Cloudflare blocks uploads over ~70MB through the web server.\n\n` +
+                      `✅ SOLUTION: Use "Sync Upload" button instead!\n\n` +
+                      `"Sync Upload" uploads directly to cloud storage (bypasses Cloudflare limit).\n\n` +
+                      `Note: Auto-slicing only works for files under 70MB. For larger files, use Sync Upload then manually slice if needed.`);
                 closeAutoSliceModal();
                 return;
             }
+            
+            // Log file size for debugging
+            console.log(`[AUTO-SLICE] File: ${file.name}, Size: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
 
             const progressDiv = document.getElementById('auto-slice-progress');
             const progressBar = document.getElementById('auto-slice-progress-bar');
@@ -6391,9 +6398,9 @@
                     progressBar.style.background = '#dc3545';
                 });
 
-                // Use upload subdomain to bypass Cloudflare's 100MB limit
-                // upload.everydayadvertise.com is set to DNS-only (gray cloud) in Cloudflare
-                const uploadUrl = 'https://upload.everydayadvertise.com/upload_media';
+                // Try upload subdomain first (bypasses Cloudflare), fallback to regular domain
+                // Note: upload.everydayadvertise.com may not resolve immediately due to DNS propagation
+                let uploadUrl = '/upload_media'; // Use regular domain for now
                 
                 console.log('[AUTO-SLICE] Uploading to:', uploadUrl);
                 xhr.open('POST', uploadUrl, true);
