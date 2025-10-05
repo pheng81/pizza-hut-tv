@@ -6260,11 +6260,12 @@
                 <input type="file" id="auto-slice-file-input" accept="video/*" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
             </div>
             <div id="auto-slice-progress" style="display:none; margin-bottom:15px;">
-                <div style="background:#f0f0f0; border-radius:4px; height:24px; overflow:hidden; position:relative;">
-                    <div id="auto-slice-progress-bar" style="background:#28a745; height:100%; width:0%; transition:width 0.3s;"></div>
-                    <div id="auto-slice-progress-text" style="position:absolute; top:0; left:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600;">0%</div>
+                <div style="background:#f0f0f0; border-radius:4px; height:32px; overflow:hidden; position:relative; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);">
+                    <div id="auto-slice-progress-bar" style="background:linear-gradient(90deg, #ff9800 0%, #ff6f00 100%); height:100%; width:0%; transition:width 0.5s ease-out;"></div>
+                    <div id="auto-slice-progress-text" style="position:absolute; top:0; left:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:#333; text-shadow:0 1px 2px rgba(255,255,255,0.8);">0%</div>
                 </div>
-                <div id="auto-slice-status" style="margin-top:8px; font-size:13px; color:#666;"></div>
+                <div id="auto-slice-status" style="margin-top:12px; font-size:14px; color:#333; font-weight:500;"></div>
+                <div id="auto-slice-time-estimate" style="margin-top:6px; font-size:12px; color:#666; font-style:italic;"></div>
             </div>
             <div style="display:flex; gap:10px; justify-content:flex-end;">
                 <button onclick="closeAutoSliceModal()" style="padding:10px 20px; border:1px solid #ddd; background:white; border-radius:4px; cursor:pointer;">Cancel</button>
@@ -6290,10 +6291,11 @@
             autoSliceTargetScreen = null;
         }
 
-        async function pollSliceJob(jobId, statusDiv, progressBar) {
+        async function pollSliceJob(jobId, statusDiv, progressBar, progressText, timeEstimateDiv) {
             console.log(`[AUTO-SLICE] Polling job: ${jobId}`);
-            const maxAttempts = 120;  // 2 minutes max (120 * 1 second)
+            const maxAttempts = 300;  // 5 minutes max (300 * 1 second)
             let attempts = 0;
+            const startTime = Date.now();
             
             while (attempts < maxAttempts) {
                 try {
@@ -6306,8 +6308,12 @@
                         if (data.status === 'complete') {
                             // Success! Auto-create sync screens with sliced videos
                             const sliceCount = data.result ? data.result.length : 0;
-                            statusDiv.textContent = `✅ Created ${sliceCount} sliced videos! Creating sync screens...`;
-                            progressBar.style.background = '#28a745';
+                            const elapsedMin = ((Date.now() - startTime) / 60000).toFixed(1);
+                            progressBar.style.background = 'linear-gradient(90deg, #28a745 0%, #20c997 100%)';
+                            progressBar.style.width = '100%';
+                            progressText.textContent = '100%';
+                            statusDiv.innerHTML = `✅ <strong>Created ${sliceCount} sliced videos in ${elapsedMin} min!</strong>`;
+                            timeEstimateDiv.textContent = 'Creating synchronized screens...';
                             
                             // Auto-create sync screens and add videos
                             if (data.result && data.result.length > 0) {
@@ -6324,34 +6330,71 @@
                                     
                                     const createData = await createResponse.json();
                                     if (createData.success) {
-                                        statusDiv.textContent = `✅ Success! Created ${sliceCount} sync screens with videos!`;
+                                        statusDiv.innerHTML = `✅ <strong>Success! Created ${sliceCount} sync screens with videos!</strong>`;
+                                        timeEstimateDiv.textContent = `Total time: ${elapsedMin} minutes`;
                                         console.log('[AUTO-SLICE] Auto-created screens:', createData.screens);
                                     } else {
-                                        statusDiv.textContent = `✅ Videos created! (Screens: ${createData.error || 'manual setup needed'})`;
+                                        statusDiv.innerHTML = `✅ <strong>Videos created!</strong> ${createData.error || 'Manual setup needed'}`;
+                                        timeEstimateDiv.textContent = '';
                                     }
                                 } catch (screenError) {
                                     console.error('[AUTO-SLICE] Failed to auto-create screens:', screenError);
-                                    statusDiv.textContent = `✅ Success! ${sliceCount} videos ready (add to screens manually)`;
+                                    statusDiv.innerHTML = `✅ <strong>Success!</strong> ${sliceCount} videos ready (add to screens manually)`;
+                                    timeEstimateDiv.textContent = '';
                                 }
                             }
                             
                             setTimeout(() => {
                                 closeAutoSliceModal();
                                 location.reload();
-                            }, 2000);
+                            }, 3000);
                             return;
                             
                         } else if (data.status === 'error') {
                             // Error
-                            statusDiv.textContent = `❌ Slicing failed: ${data.error}`;
                             progressBar.style.background = '#dc3545';
+                            statusDiv.innerHTML = `❌ <strong>Slicing failed:</strong> ${data.error}`;
+                            timeEstimateDiv.textContent = '';
                             return;
                             
                         } else if (data.status === 'processing') {
-                            // Still processing
+                            // Still processing - show detailed progress
                             const progress = data.progress || 0;
-                            statusDiv.textContent = `Processing video... ${progress}%`;
-                            // Keep progress bar at 100% width but show processing status
+                            const currentScreen = data.current_screen || 0;
+                            const totalScreens = data.screen_count || 0;
+                            
+                            // Update progress bar
+                            progressBar.style.width = progress + '%';
+                            progressText.textContent = progress + '%';
+                            
+                            // Calculate time estimate
+                            const elapsedSec = (Date.now() - startTime) / 1000;
+                            let statusText = '';
+                            let estimateText = '';
+                            
+                            if (progress < 50) {
+                                // Slicing phase (0-50%)
+                                if (currentScreen > 0 && totalScreens > 0) {
+                                    statusText = `🎬 <strong>Slicing screen ${currentScreen} of ${totalScreens}...</strong>`;
+                                    // Estimate: ~80 seconds per screen
+                                    const remainingScreens = totalScreens - currentScreen;
+                                    const estimatedRemainingSec = remainingScreens * 80;
+                                    const estimatedMin = Math.ceil(estimatedRemainingSec / 60);
+                                    estimateText = `⏱️ Estimated ${estimatedMin} minute${estimatedMin !== 1 ? 's' : ''} remaining (slicing takes longest)`;
+                                } else {
+                                    statusText = `🎬 <strong>Analyzing and slicing video...</strong>`;
+                                    estimateText = `⏱️ This may take 3-5 minutes for 4-screen videos`;
+                                }
+                            } else {
+                                // Upload phase (50-100%)
+                                const uploadProgress = Math.round(((progress - 50) / 50) * totalScreens);
+                                statusText = `☁️ <strong>Uploading slices to CDN...</strong> (${uploadProgress}/${totalScreens})`;
+                                const remainingSec = Math.ceil(((100 - progress) / 50) * 30);
+                                estimateText = `⏱️ About ${remainingSec} seconds remaining`;
+                            }
+                            
+                            statusDiv.innerHTML = statusText;
+                            timeEstimateDiv.textContent = estimateText;
                         }
                     }
                     
@@ -6366,7 +6409,8 @@
             }
             
             // Timeout
-            statusDiv.textContent = '⚠️ Processing timeout - check library for sliced videos';
+            statusDiv.innerHTML = '⚠️ <strong>Processing timeout</strong> - check library for sliced videos';
+            timeEstimateDiv.textContent = '';
             setTimeout(() => {
                 closeAutoSliceModal();
                 location.reload();
@@ -6400,9 +6444,11 @@
             const progressBar = document.getElementById('auto-slice-progress-bar');
             const progressText = document.getElementById('auto-slice-progress-text');
             const statusDiv = document.getElementById('auto-slice-status');
+            const timeEstimateDiv = document.getElementById('auto-slice-time-estimate');
             
             progressDiv.style.display = 'block';
-            statusDiv.textContent = 'Uploading video...';
+            statusDiv.innerHTML = '<strong>📤 Uploading video...</strong>';
+            timeEstimateDiv.textContent = '';
 
             try {
                 // Upload using /upload_media (with auto-slicing)
@@ -6416,7 +6462,10 @@
                         const percent = Math.round((e.loaded / e.total) * 100);
                         progressBar.style.width = percent + '%';
                         progressText.textContent = percent + '%';
-                        statusDiv.textContent = `Uploading... ${percent}%`;
+                        statusDiv.innerHTML = `<strong>📤 Uploading... ${percent}%</strong>`;
+                        const mbLoaded = (e.loaded / 1024 / 1024).toFixed(1);
+                        const mbTotal = (e.total / 1024 / 1024).toFixed(1);
+                        timeEstimateDiv.textContent = `${mbLoaded} MB / ${mbTotal} MB`;
                     }
                 });
 
@@ -6429,11 +6478,12 @@
                             if (response.success) {
                                 // Check if this is async slicing (has job_id)
                                 if (response.slice_job_id) {
-                                    statusDiv.textContent = `✅ Upload complete! Processing ${response.screen_count}-screen video...`;
+                                    statusDiv.innerHTML = `<strong>✅ Upload complete! Processing ${response.screen_count}-screen video...</strong>`;
+                                    timeEstimateDiv.textContent = 'Starting video slicing process...';
                                     progressBar.style.width = '100%';
                                     
                                     // Poll for slicing completion
-                                    await pollSliceJob(response.slice_job_id, statusDiv, progressBar);
+                                    await pollSliceJob(response.slice_job_id, statusDiv, progressBar, progressText, timeEstimateDiv);
                                     
                                 } else if (response.sliced_files && response.sliced_files.length > 0) {
                                     // Instant slicing worked (shouldn't happen now, but handle it)

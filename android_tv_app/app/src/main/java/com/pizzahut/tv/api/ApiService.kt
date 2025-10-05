@@ -1,0 +1,38 @@
+package com.pizzahut.tv.api
+
+import retrofit2.http.Body
+import retrofit2.http.Header
+import retrofit2.http.GET
+import retrofit2.http.POST
+import retrofit2.http.Path
+
+interface ApiService {
+	@GET("playlist/{storeId}/{screenId}")
+	suspend fun getPlaylist(
+		@Path("storeId") storeId: String,
+		@Path("screenId") screenId: String,
+		@Header("X-User-Code") userCode: String? = com.pizzahut.tv.api.PairCodeHolder.codeOrNull()
+	): PlaylistResponse
+
+	@GET("stores")
+	suspend fun getStores(): StoresResponse
+
+	@GET("screens/{storeId}")
+	suspend fun getScreens(
+		@Path("storeId") storeId: String
+	): ScreensResponse
+
+	// Pairing: fetch stores for a user by 4-digit code
+	@GET("api/stores_by_code/{code}")
+	suspend fun getStoresByCode(
+		@Path("code") code: String
+	): CodeStoresResponse
+
+	@POST("api/screen_heartbeat")
+	suspend fun sendHeartbeat(@Body body: HeartbeatReq): HeartbeatResp
+
+	// Client events: TV reports per-item load success/failure so dashboard can show status
+	@POST("api/client_event")
+	suspend fun postClientEvent(@Body body: ClientEventReq): BasicResp
+}
+

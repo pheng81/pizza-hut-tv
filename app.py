@@ -3616,25 +3616,152 @@ def _background_slice_and_upload(job_id, input_path, req_prefix, base_filename, 
     Uses filesystem for job status (works across gunicorn workers).
     """
     try:
-        _set_job_status(job_id, {'status': 'processing', 'progress': 0, 'result': []})
+        screen_count = layout_info['screen_count']
+        _set_job_status(job_id, {
+            'status': 'processing', 
+            'progress': 0, 
+            'result': [],
+            'current_screen': 0,
+            'screen_count': screen_count
+        })
         
         slice_temp_dir = os.path.join(os.path.dirname(input_path), 'slices_temp')
         os.makedirs(slice_temp_dir, exist_ok=True)
         
-        # Slice the video
-        slices = slice_video_for_multi_screen(
-            input_path, 
-            slice_temp_dir, 
-            base_filename, 
-            layout_info, 
-            video_info
-        )
+        # Slice the video with progress updates
+        print(f"[background_slice] Starting to slice {screen_count} screens...")
+        
+        if not FFMPEG_AVAILABLE:
+            _set_job_status(job_id, {'status': 'error', 'error': 'FFmpeg not available'})
+            return
+        
+        width = video_info['width']
+        height = video_info['height']
+        fps = video_info['fps']
+        has_audio = video_info['has_audio']
+        
+        def _even(x):
+            return x - (x % 2)
+        
+        slices = []
+        gop = max(2, int(round(fps)))
+        layout_type = layout_info['layout']
+        
+        # Process each screen with progress updates
+        for screen_idx in range(screen_count):
+            screen_number = screen_idx + 1
+            
+            # Update progress: 0-50% for slicing
+            slice_progress = int((screen_idx / screen_count) * 50)
+            _set_job_status(job_id, {
+                'status': 'processing',
+                'progress': slice_progress,
+                'result': slices,
+                'current_screen': screen_number,
+                'screen_count': screen_count
+            })
+            
+            output_filename = f"{base_filename}-screen{screen_number}.mp4"
+            output_path = os.path.join(slice_temp_dir, output_filename)
+            
+            # Calculate crop parameters
+            if layout_type == 'horizontal':
+                w_per = width / screen_count
+                left = int(round(screen_idx * w_per))
+                right = int(round((screen_idx + 1) * w_per))
+                crop_x = max(0, min(left, width - 2))
+                slice_width = max(2, min(right - left, width - crop_x))
+                slice_height = height
+                crop_y = 0
+            elif layout_type == 'vertical':
+                h_per = height / screen_count
+                top = int(round(screen_idx * h_per))
+                bottom = int(round((screen_idx + 1) * h_per))
+                crop_y = max(0, min(top, height - 2))
+                slice_height = max(2, min(bottom - top, height - crop_y))
+                slice_width = width
+                crop_x = 0
+            else:
+                continue
+            
+            crop_x = _even(crop_x)
+            crop_y = _even(crop_y)
+            slice_width = _even(min(slice_width, width - crop_x))
+            slice_height = _even(min(slice_height, height - crop_y))
+            
+            if slice_width < 2:
+                slice_width = 2
+            if slice_height < 2:
+                slice_height = 2
+            
+            crop_filter = f"crop={slice_width}:{slice_height}:{crop_x}:{crop_y}"
+            
+            # Build FFmpeg command - optimized for speed
+            ffmpeg_cmd = [
+                FFMPEG_PATH, '-y',
+                '-i', input_path,
+                '-vf', crop_filter,
+                '-c:v', 'libx264',
+                '-pix_fmt', 'yuv420p',
+                '-profile:v', 'main',
+                '-level', '4.0',
+                '-preset', 'ultrafast',  # Fastest encoding (was 'fast')
+                '-crf', '23',
+                '-g', str(gop),
+                '-keyint_min', str(gop),
+                '-sc_threshold', '0',
+                '-vsync', 'cfr',
+                '-r', str(max(10, fps)),
+                '-force_key_frames', f"expr:gte(t,n_forced*1)",
+                '-movflags', '+faststart+frag_keyframe+empty_moov',
+                '-frag_duration', '1000000',
+                '-map', '0:v:0',
+            ]
+            
+            if has_audio:
+                ffmpeg_cmd += ['-c:a', 'aac', '-b:a', '128k', '-ac', '2', '-ar', '48000', '-map', '0:a:0?']
+            else:
+                ffmpeg_cmd += ['-an']
+            
+            ffmpeg_cmd += ['-map_metadata', '-1', '-map_chapters', '-1', output_path]
+            
+            # Run FFmpeg
+            try:
+                print(f"[background_slice] Processing screen {screen_number}/{screen_count}...")
+                result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, timeout=600)
+                
+                if result.returncode == 0 and os.path.exists(output_path):
+                    file_size = os.path.getsize(output_path)
+                    print(f"[background_slice] Screen {screen_number} created: {file_size/1024/1024:.2f} MB")
+                    
+                    slices.append({
+                        'screen_number': screen_number,
+                        'filename': output_filename,
+                        'path': output_path,
+                        'size': file_size
+                    })
+                else:
+                    print(f"ERROR: FFmpeg failed for screen {screen_number}: {result.stderr}")
+                    _set_job_status(job_id, {'status': 'error', 'error': f'Failed to slice screen {screen_number}'})
+                    return
+            
+            except Exception as e:
+                print(f"ERROR: Failed to create slice for screen {screen_number}: {e}")
+                _set_job_status(job_id, {'status': 'error', 'error': str(e)})
+                return
         
         if not slices:
             _set_job_status(job_id, {'status': 'error', 'error': 'Failed to create slices'})
             return
         
-        _set_job_status(job_id, {'status': 'processing', 'progress': 50, 'result': []})  # Slicing done, now uploading
+        # Update: slicing complete, starting uploads
+        _set_job_status(job_id, {
+            'status': 'processing', 
+            'progress': 50, 
+            'result': [],
+            'current_screen': screen_count,
+            'screen_count': screen_count
+        })
         
         # Upload each slice to R2
         sliced_files = []
@@ -3663,9 +3790,15 @@ def _background_slice_and_upload(job_id, input_path, req_prefix, base_filename, 
                     'size': slice_info['size']
                 })
                 
-                # Update progress
+                # Update progress: 50-100% for uploading
                 progress = 50 + int((i + 1) / len(slices) * 50)
-                _set_job_status(job_id, {'status': 'processing', 'progress': progress, 'result': sliced_files})
+                _set_job_status(job_id, {
+                    'status': 'processing', 
+                    'progress': progress, 
+                    'result': sliced_files,
+                    'current_screen': screen_count,
+                    'screen_count': screen_count
+                })
                 
             except Exception as upload_e:
                 print(f"ERROR: Failed to upload slice {slice_filename}: {upload_e}")

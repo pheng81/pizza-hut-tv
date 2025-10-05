@@ -213,6 +213,9 @@
 			box-sizing: border-box;
 		}
 	</style>
+	
+	<!-- TV Brand Detection and Configuration System -->
+	<script src="{{ url_for('static', filename='tv-brands/tv-detector.js') }}"></script>
 </head>
 <body>
 	<div id="stage">
@@ -344,18 +347,18 @@
 			return null;
 		}
 
-		const SYNC_ALIGNMENT_WINDOW_MS = 20; // Ultra-tight sync window for millisecond precision
-		const SYNC_PRECISION_TOLERANCE = 10; // 10ms precision tolerance for perfect sync
+		const SYNC_ALIGNMENT_WINDOW_MS = 50; // 50ms sync window - reasonable tolerance
+		const SYNC_PRECISION_TOLERANCE = 30; // 30ms precision tolerance for good sync
 		
-		// Enhanced server time synchronization variables
+		// Server time synchronization variables
 		let serverTimeOffset = 0; // Offset between server and client time
 		let lastServerSync = 0;
 		let syncSamples = []; // Store multiple samples for better accuracy
 		let networkLatency = 0; // Estimated network latency
 		
-		// 🚀 AGGRESSIVE SERVER TIME SYNC - Re-sync every 5 seconds for tighter sync
+		// SERVER TIME SYNC - Re-sync every 10 seconds for stable sync
 		async function getServerTime() {
-			const maxRetries = 5; // More retries for better reliability
+			const maxRetries = 3; // Reasonable retry count
 			const samples = [];
 			
 			for(let attempt = 0; attempt < maxRetries; attempt++) {
@@ -444,8 +447,8 @@
 		function getServerSyncedTime() {
 			const clientTime = Date.now();
 			
-			// 🚀 AGGRESSIVE RE-SYNC: Re-sync every 5 seconds instead of 15 for tighter coordination
-			if(clientTime - lastServerSync > 5000) { // Re-sync every 5 seconds
+			// Re-sync every 10 seconds for stable coordination
+			if(clientTime - lastServerSync > 10000) { // Re-sync every 10 seconds
 				getServerTime(); // Async refresh for next time
 			}
 			
@@ -621,122 +624,86 @@
 			
 			let syncCheckInterval;
 			let lastCorrectionTime = 0;
-			const SYNC_CHECK_INTERVAL = 33; // � CHECK EVERY 50ms (20x per second) for ULTRA-TIGHT sync
-			const HARD_SYNC_THRESHOLD = 0.15; // � 50ms max tolerance (was 80ms)
-			const PLAYBACK_ADJUST_THRESHOLD = 0.025; const CORRECTION_COOLDOWN = 50; // � 20ms threshold (was 30ms)
+			const SYNC_CHECK_INTERVAL = 50; // Check every 50ms (20x per second) for tight sync
+			const HARD_SYNC_THRESHOLD = 0.2; // 200ms - hard reset if drift exceeds
+			const PLAYBACK_ADJUST_THRESHOLD = 0.05; // 50ms - playback rate adjustment
+			const CORRECTION_COOLDOWN = 1000; // 1 second cooldown between corrections
 			
-				const checkSync = () => {
-					try {
-						if(!document.body.contains(videoElement) || videoElement.paused || videoElement.ended) {
-							console.log('🔄 Stopping enhanced sync monitoring - video stopped or removed');
-							clearInterval(syncCheckInterval);
-							return;
-						}
-						
-						const expectedTime = calculateSyncedVideoTime(item);
-						if(expectedTime === null) return;
-						
-						const actualTime = videoElement.currentTime; const drift = Math.abs(actualTime - expectedTime); const isBehind = actualTime < expectedTime; const now = Date.now(); const timeSinceLastCorrection = now - lastCorrectionTime;
-						
-						if(drift > HARD_SYNC_THRESHOLD) {
-							console.log('🔄 HARD SYNC (>200ms):', {
-								screen: screenId,
-								expected: expectedTime.toFixed(3),
-								actual: actualTime.toFixed(3),
-								drift: drift.toFixed(3) + 's'
-							});
-							
-							// Immediate correction + reset playback rate
-							videoElement.currentTime = expectedTime; lastCorrectionTime = now;
-							videoElement.playbackRate = 1.0;
-							
-							
-						} else if(drift > PLAYBACK_ADJUST_THRESHOLD && timeSinceLastCorrection > CORRECTION_COOLDOWN) {
-							// Use playback rate for smooth sync without visible jumps
-							const now = Date.now(); const timeSinceLastCorrection = now - lastCorrectionTime; if(timeSinceLastCorrection > CORRECTION_COOLDOWN) {
-								const adjustment = isBehind ? 1.2 : 0.8; // 12% faster/slower
-								videoElement.playbackRate = adjustment;
-								lastCorrectionTime = now;
-								console.log('⚡ Playback adjustment (30-200ms):', {
-									screen: screenId,
-									rate: adjustment,
-									drift: drift.toFixed(3) + 's',
-									direction: isBehind ? 'catching up' : 'slowing'
-								});
-								
-								// Reset after 800ms
-								setTimeout(() => {
-									if(videoElement && document.body.contains(videoElement)) {
-										videoElement.playbackRate = 1.0;
-										
-									}
-								}, 600);
-							}
-							
-						} else {
-							// Perfect sync - ensure normal playback rate
-							if(videoElement.playbackRate !== 1.0) {
-								videoElement.playbackRate = 1.0;
-								
-							}
-							// Log occasionally
-							if(Math.random() < 0.02) {
-								console.log('✅ Perfect sync:', {
-									screen: screenId,
-									drift: drift.toFixed(3) + 's',
-									rate: videoElement.playbackRate
-								});
-							}
-						}
-					} catch(err) {
-						console.warn('Enhanced sync monitoring error:', err);
-					}
-				};			// Start monitoring after a brief delay
-			setTimeout(() => {
-				console.log('🔄 Starting enhanced continuous sync monitoring for', screenId);
-				syncCheckInterval = setInterval(checkSync, SYNC_CHECK_INTERVAL);
-				
-				// Also start periodic sync health reporting
-				const healthCheckInterval = setInterval(() => {
+			const checkSync = () => {
+				try {
 					if(!document.body.contains(videoElement) || videoElement.paused || videoElement.ended) {
-						clearInterval(healthCheckInterval);
+						console.log('🔄 Stopping sync monitoring - video stopped or removed');
+						clearInterval(syncCheckInterval);
 						return;
 					}
 					
 					const expectedTime = calculateSyncedVideoTime(item);
-					if(expectedTime !== null) {
-						const actualTime = videoElement.currentTime;
-						const drift = Math.abs(actualTime - expectedTime);
-						
-						console.log('📊 SYNC HEALTH REPORT:', {
+					if(expectedTime === null) return;
+					
+					const actualTime = videoElement.currentTime;
+					const drift = Math.abs(actualTime - expectedTime);
+					const isBehind = actualTime < expectedTime;
+					const now = Date.now();
+					const timeSinceLastCorrection = now - lastCorrectionTime;
+					
+					// HARD SYNC for large drift (>200ms)
+					if(drift > HARD_SYNC_THRESHOLD) {
+						console.log('🔄 HARD SYNC (>200ms):', {
 							screen: screenId,
-							drift: drift.toFixed(3) + 's',
-							serverOffset: serverTimeOffset.toFixed(3) + 'ms',
-							networkLatency: networkLatency.toFixed(1) + 'ms',
-							syncSamples: syncSamples.length,
-							lastSync: ((Date.now() - lastServerSync) / 1000).toFixed(1) + 's ago',
-							status: drift < 0.05 ? 'EXCELLENT' : drift < 0.15 ? 'GOOD' : 'NEEDS_CORRECTION'
+							expected: expectedTime.toFixed(3),
+							actual: actualTime.toFixed(3),
+							drift: (drift * 1000).toFixed(1) + 'ms'
 						});
+						
+						// Immediate correction + reset playback rate
+						videoElement.currentTime = expectedTime;
+						lastCorrectionTime = now;
+						videoElement.playbackRate = 1.0;
+						
+					// PLAYBACK RATE ADJUSTMENT for medium drift (50-200ms)
+					} else if(drift > PLAYBACK_ADJUST_THRESHOLD && timeSinceLastCorrection > CORRECTION_COOLDOWN) {
+						const adjustment = isBehind ? 1.1 : 0.9; // 10% faster/slower
+						videoElement.playbackRate = adjustment;
+						lastCorrectionTime = now;
+						console.log('⚡ Playback adjustment (50-200ms):', {
+							screen: screenId,
+							rate: adjustment,
+							drift: (drift * 1000).toFixed(1) + 'ms',
+							direction: isBehind ? 'catching up' : 'slowing'
+						});
+						
+						// Reset after 1 second
+						setTimeout(() => {
+							if(videoElement && document.body.contains(videoElement)) {
+								videoElement.playbackRate = 1.0;
+							}
+						}, 1000);
+						
+					// PERFECT SYNC (<50ms)
+					} else {
+						// Ensure normal playback rate
+						if(videoElement.playbackRate !== 1.0) {
+							videoElement.playbackRate = 1.0;
+						}
+						// Log occasionally
+						if(Math.random() < 0.01) {
+							console.log('✅ Good sync:', {
+								screen: screenId,
+								drift: (drift * 1000).toFixed(1) + 'ms',
+								rate: videoElement.playbackRate
+							});
+						}
 					}
-				}, 5000); // Health report every 5 seconds
+				} catch(err) {
+					console.warn('Sync monitoring error:', err);
+				}
+			};
 			
-// FORCED HARD SYNC every 30 seconds to prevent drift accumulation
-const forcedSyncInterval = setInterval(() => {
-if(!document.body.contains(videoElement) || videoElement.paused || videoElement.ended) {
-clearInterval(forcedSyncInterval);
-return;
-}
-const expectedTime = calculateSyncedVideoTime(item);
-if(expectedTime !== null) {
-const drift = Math.abs(videoElement.currentTime - expectedTime);
-if(drift > 0.05) {
-console.log(' FORCED PERIODIC SYNC (30s check):', {screen: screenId, drift: drift.toFixed(3)});
-videoElement.currentTime = expectedTime;
-videoElement.playbackRate = 1.0;
-}
-}
-}, 30000); // Force sync every 30 seconds
-}, 1000);
+			// Start monitoring after 1 second delay
+			setTimeout(() => {
+				syncCheckInterval = setInterval(checkSync, SYNC_CHECK_INTERVAL);
+				console.log('� Sync monitoring started for', screenId);
+			}, 1000);
 		}
 
 		function normalizeSliceUrl(rawUrl, item){
@@ -1085,15 +1052,16 @@ videoElement.playbackRate = 1.0;
 		}
 
 		function preloadVideo(url){
-			// 🎬 ULTRA-OPTIMIZED PRELOADER: Maximum performance for perfect sync
+			// 🎬 OPTIMIZED for MULTIPLE SCREENS: Efficient loading for 4+ screens
 			return new Promise(function(resolve,reject){
 				var v=document.createElement('video');
 				v.autoplay=false; 
 				v.muted=true; 
 				v.playsInline = true;
 				
-				// 🚀 AGGRESSIVE PRELOADING: Load entire video for instant sync start
-				v.preload = 'auto'; // Always preload full video
+				// 🚀 SMART PRELOADING: metadata first for faster startup
+				// For multiple screens, load metadata quickly, then buffer during playback
+				v.preload = 'metadata'; // Start with metadata only - faster initial load
 				v.crossOrigin = 'anonymous'; // Fix CORS issues
 				
 				// 🚀 HARDWARE ACCELERATION: Force GPU rendering for smooth playback
@@ -1102,14 +1070,13 @@ videoElement.playbackRate = 1.0;
 				v.style.backfaceVisibility = 'hidden';
 				v.style.webkitBackfaceVisibility = 'hidden';
 				
-				// 🚀 SYNC VIDEO OPTIMIZATIONS
+				// 🚀 MULTI-SCREEN OPTIMIZATION: Reduce initial buffer requirements
 				if(url.includes('/slice-video/') || url.includes('cdn.everydayadvertise.com')) {
 					v.setAttribute('data-instant-load', 'true');
 					v.setAttribute('data-sync-video', 'true');
-					// Professional buffering attributes
-					console.log('🎬 Configuring sync video element for:', url);
-					v.setAttribute('data-setup', '{"fluid": true, "responsive": true}');
-					console.log('🎬 ULTRA-OPTIMIZED preloading sync video:', url);
+					// Fast startup attributes for multiple screens
+					v.setAttribute('data-setup', '{"preload": "metadata"}');
+					console.log('🎬 MULTI-SCREEN optimized loading:', url);
 				}
 				
 				// 🏆 ENTERPRISE VIDEO ATTRIBUTES - Eliminate all black screens
@@ -1190,16 +1157,18 @@ videoElement.playbackRate = 1.0;
 					console.log('📹 Video metadata loaded, readyState:', v.readyState, 'for URL:', url);
 				};
 				var onReady=function(){
-					// 🎯 FIXED: Ensure video actually has playable data before finishing
+					// 🎯 MULTI-SCREEN OPTIMIZATION: Lower ready state requirement for faster startup
 					try{
 						console.log('📹 Video ready check, readyState:', v.readyState, 'for URL:', url);
-						if(v.readyState >= 2 /* HAVE_CURRENT_DATA */) {
+						// readyState >= 2 (HAVE_CURRENT_DATA) is enough to start
+						// We don't need HAVE_ENOUGH_DATA (4) for initial playback
+						if(v.readyState >= 2) {
 							console.log('✅ Video READY with playable data at state:', v.readyState);
 							return finish(true);
 						}
-						// For slice videos, still need sufficient data
-						if(url.includes('/slice-video/') && v.readyState >= 2) {
-							console.log('✅ Slice video READY at state:', v.readyState);
+						// For metadata-only preload, accept lower ready state
+						if(v.readyState >= 1 && v.preload === 'metadata') {
+							console.log('✅ Video metadata READY (will buffer during playback)');
 							return finish(true);
 						}
 					}catch(e){}
@@ -1558,6 +1527,17 @@ videoElement.playbackRate = 1.0;
 
 		async function showItem(item){
 			hideIdleState();
+			
+			// 🚀 STAGGERED LOADING: Delay based on screen number to prevent simultaneous load
+			// This spreads bandwidth usage when 4 screens start together
+			const screenNum = parseInt((screenId || '').match(/\d+$/)?.[0] || '0');
+			const staggerDelay = screenNum * 300; // 300ms delay per screen (screen1=0ms, screen2=300ms, screen3=600ms, screen4=900ms)
+			
+			if(staggerDelay > 0) {
+				console.log('🕐 STAGGER LOADING: Screen', screenNum, 'waiting', staggerDelay, 'ms to distribute load');
+				await new Promise(resolve => setTimeout(resolve, staggerDelay));
+			}
+			
 			let url = mediaUrl(item);
 			if(!url) return;
 			const isVid = (item.media_type||'').toLowerCase()==='video' || isVideoByName(url) || isVideoByName(fileNameFrom(item));
@@ -1578,34 +1558,43 @@ videoElement.playbackRate = 1.0;
 					node.muted = true; 
 					node.playsInline = true;
 					
-					// 🎬 PROFESSIONAL PLAYBACK: Enterprise-grade video start
+					// 🎬 MULTI-SCREEN PLAYBACK: Optimized for 4+ simultaneous screens
 					node.setAttribute('data-instant-ready', 'true');
 					node.setAttribute('data-professional-sync', 'true');
 					
+					// 🚀 PROGRESSIVE LOADING: Upgrade preload after initial start
+					// Start with metadata, then upgrade to auto after playback begins
+					setTimeout(() => {
+						if(node.preload === 'metadata') {
+							node.preload = 'auto';
+							console.log('📈 Progressive loading: upgraded to auto-buffer for:', url);
+						}
+					}, 2000); // Upgrade after 2 seconds
+					
 					// 🏆 ENTERPRISE ERROR HANDLING: Smooth recovery
 					node.addEventListener('error', function(e) {
-						console.error('🚨 Professional video error:', e, 'URL:', url);
+						console.error('🚨 Video error:', e, 'URL:', url);
 					});
 					
 					node.addEventListener('stalled', function() {
-						console.log('🎬 Professional recovery - video stalled, executing smooth recovery...');
+						console.log('🎬 Video stalled, executing recovery...');
 						setTimeout(() => {
 							try {
 								if (node.paused) {
-									console.log('🚀 PROFESSIONAL instant recovery executing...');
-									node.play().catch(e => console.log('Professional recovery completed:', e));
+									console.log('🚀 Recovery: restarting playback...');
+									node.play().catch(e => console.log('Recovery completed:', e));
 								}
 							} catch(e) {}
-						}, 100); // Ultra-fast recovery - 100ms for enterprise performance
+						}, 100); // Fast recovery
 					});
 					
 					node.addEventListener('waiting', function() {
-						console.log('🎯 PROFESSIONAL buffering - optimizing for smooth playback');
+						console.log('⏳ Video buffering...');
 					});
 					
-					// 🚀 ENTERPRISE READINESS: Force professional sync timing
+					// 🚀 READY NOTIFICATION
 					node.addEventListener('loadeddata', function() {
-						console.log('🎬 PROFESSIONAL VIDEO READY, readyState:', node.readyState);
+						console.log('✅ Video ready, readyState:', node.readyState);
 					});
 				}
 				// Apply split segment cropping if this item is part of a split group
