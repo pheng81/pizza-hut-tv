@@ -6304,10 +6304,36 @@
                         console.log(`[AUTO-SLICE] Job status:`, data);
                         
                         if (data.status === 'complete') {
-                            // Success!
+                            // Success! Auto-create sync screens with sliced videos
                             const sliceCount = data.result ? data.result.length : 0;
-                            statusDiv.textContent = `✅ Success! Created ${sliceCount} sliced videos (${data.layout} layout)`;
+                            statusDiv.textContent = `✅ Created ${sliceCount} sliced videos! Creating sync screens...`;
                             progressBar.style.background = '#28a745';
+                            
+                            // Auto-create sync screens and add videos
+                            if (data.result && data.result.length > 0) {
+                                try {
+                                    const createResponse = await fetch('/auto_create_sync_screens', {
+                                        method: 'POST',
+                                        headers: {'Content-Type': 'application/json'},
+                                        body: JSON.stringify({
+                                            sliced_files: data.result,
+                                            layout: data.layout,
+                                            store_id: currentStoreId
+                                        })
+                                    });
+                                    
+                                    const createData = await createResponse.json();
+                                    if (createData.success) {
+                                        statusDiv.textContent = `✅ Success! Created ${sliceCount} sync screens with videos!`;
+                                        console.log('[AUTO-SLICE] Auto-created screens:', createData.screens);
+                                    } else {
+                                        statusDiv.textContent = `✅ Videos created! (Screens: ${createData.error || 'manual setup needed'})`;
+                                    }
+                                } catch (screenError) {
+                                    console.error('[AUTO-SLICE] Failed to auto-create screens:', screenError);
+                                    statusDiv.textContent = `✅ Success! ${sliceCount} videos ready (add to screens manually)`;
+                                }
+                            }
                             
                             setTimeout(() => {
                                 closeAutoSliceModal();

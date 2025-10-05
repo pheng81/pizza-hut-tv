@@ -6996,6 +6996,83 @@ def slice_job_status(job_id):
         return jsonify({'success': False, 'error': 'Job not found'}), 404
     return jsonify({'success': True, **job_info})
 
+# ---- Auto-create sync screens from sliced videos ----
+@app.route('/auto_create_sync_screens', methods=['POST'])
+@login_required
+def auto_create_sync_screens():
+    """
+    Automatically create sync screens and add pre-sliced videos.
+    Body: {sliced_files: [{screen_number, filename, url, size}], layout: 'horizontal'|'vertical', store_id: int}
+    """
+    try:
+        data = request.get_json()
+        sliced_files = data.get('sliced_files', [])
+        layout = data.get('layout', 'horizontal')
+        store_id = data.get('store_id')
+        
+        if not sliced_files or not store_id:
+            return jsonify({'success': False, 'error': 'Missing sliced_files or store_id'}), 400
+        
+        username = session.get('username')
+        if not username:
+            return jsonify({'success': False, 'error': 'Not authenticated'}), 403
+        
+        cfg = _load_config_for_user(username)
+        if not cfg:
+            return jsonify({'success': False, 'error': 'Could not load config'}), 500
+        
+        ns = str(store_id)
+        if ns not in cfg.get('screens', {}):
+            cfg['screens'][ns] = {}
+        
+        created_screens = []
+        
+        # Create sync screens for each sliced video
+        for slice_info in sliced_files:
+            screen_num = slice_info.get('screen_number', 0)
+            filename = slice_info.get('filename', '')
+            
+            if not screen_num or not filename:
+                continue
+            
+            screen_id = f"{store_id}_screen{screen_num}"
+            
+            # Create or update screen
+            if screen_id not in cfg['screens'][ns]:
+                cfg['screens'][ns][screen_id] = {
+                    'horizontal': (layout == 'horizontal'),
+                    'playlist': [],
+                    'fresh': True
+                }
+                print(f"[auto_create_sync_screens] Created new screen: {screen_id}")
+            
+            # Add sliced video to playlist
+            playlist_item = {
+                'file': filename,
+                'duration': 0,  # Auto-detect
+                'type': 'video'
+            }
+            
+            cfg['screens'][ns][screen_id]['playlist'].append(playlist_item)
+            created_screens.append(screen_id)
+            print(f"[auto_create_sync_screens] Added {filename} to {screen_id}")
+        
+        # Save updated config
+        _save_config_for_user(username, cfg)
+        
+        return jsonify({
+            'success': True,
+            'screens': created_screens,
+            'count': len(created_screens),
+            'message': f'Created {len(created_screens)} sync screens with videos'
+        })
+        
+    except Exception as e:
+        print(f"ERROR: auto_create_sync_screens failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # ---- R2 Presigned direct-upload endpoint (bypasses origin/proxy limits) ----
 @app.route('/r2/presign_upload', methods=['POST', 'GET'])
 @login_required
