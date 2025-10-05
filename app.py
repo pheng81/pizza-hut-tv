@@ -60,6 +60,9 @@ except Exception:
 # Global in-memory cache for library listings
 _LIB_CACHE: dict = {}
 
+# Global job tracking for async operations (auto-slicing, etc.)
+_SLICE_JOBS: dict = {}  # {job_id: {'status': 'processing'|'complete'|'error', 'result': {...}, 'error': str}}
+
 # --- SQLite user database helpers ---
 def _db_path() -> str:
     # Allow relocating the DB out of the repo so deploys don't overwrite it
@@ -3584,6 +3587,91 @@ def slice_video_for_multi_screen(input_path, output_dir, base_filename, layout_i
     print(f"[slice_video_for_multi_screen] Successfully created {len(slices)} slices")
     return slices
 
+
+def _background_slice_and_upload(job_id, input_path, req_prefix, base_filename, layout_info, video_info, local_dir):
+    """
+    Background worker to slice video and upload slices to R2.
+    Updates _SLICE_JOBS with progress/results.
+    """
+    try:
+        _SLICE_JOBS[job_id] = {'status': 'processing', 'progress': 0, 'result': []}
+        
+        slice_temp_dir = os.path.join(os.path.dirname(input_path), 'slices_temp')
+        os.makedirs(slice_temp_dir, exist_ok=True)
+        
+        # Slice the video
+        slices = slice_video_for_multi_screen(
+            input_path, 
+            slice_temp_dir, 
+            base_filename, 
+            layout_info, 
+            video_info
+        )
+        
+        if not slices:
+            _SLICE_JOBS[job_id] = {'status': 'error', 'error': 'Failed to create slices'}
+            return
+        
+        _SLICE_JOBS[job_id]['progress'] = 50  # Slicing done, now uploading
+        
+        # Upload each slice to R2
+        sliced_files = []
+        for i, slice_info in enumerate(slices):
+            slice_path = slice_info['path']
+            slice_filename = slice_info['filename']
+            slice_key = _join_prefix_key(req_prefix, slice_filename)
+            
+            try:
+                # Save locally
+                local_slice_dest = os.path.join(local_dir, slice_filename)
+                shutil.copy2(slice_path, local_slice_dest)
+                print(f"[background_slice] Saved slice locally: {local_slice_dest}")
+                
+                # Upload to R2
+                if r2_enabled():
+                    with open(slice_path, 'rb') as fh:
+                        data = fh.read()
+                    r2_put_bytes(slice_key, data, content_type='video/mp4')
+                    print(f"[background_slice] R2 upload ok: {slice_key}")
+                
+                sliced_files.append({
+                    'screen_number': slice_info['screen_number'],
+                    'filename': slice_key,
+                    'url': build_public_url(slice_key),
+                    'size': slice_info['size']
+                })
+                
+                # Update progress
+                progress = 50 + int((i + 1) / len(slices) * 50)
+                _SLICE_JOBS[job_id]['progress'] = progress
+                
+            except Exception as upload_e:
+                print(f"ERROR: Failed to upload slice {slice_filename}: {upload_e}")
+        
+        # Cleanup temp directory
+        try:
+            if os.path.exists(slice_temp_dir):
+                shutil.rmtree(slice_temp_dir)
+        except Exception:
+            pass
+        
+        # Mark complete
+        _SLICE_JOBS[job_id] = {
+            'status': 'complete',
+            'progress': 100,
+            'result': sliced_files,
+            'layout': layout_info['layout'],
+            'screen_count': len(sliced_files)
+        }
+        print(f"[background_slice] Job {job_id} complete: {len(sliced_files)} slices uploaded")
+        
+    except Exception as e:
+        print(f"ERROR: Background slice job {job_id} failed: {e}")
+        import traceback
+        traceback.print_exc()
+        _SLICE_JOBS[job_id] = {'status': 'error', 'error': str(e)}
+
+
 # ---- Thumbnail helpers and endpoint ----
 def _image_ext(filename: str) -> str:
     return (filename.rsplit('.', 1)[-1].lower() if '.' in filename else '')
@@ -6795,73 +6883,43 @@ def upload_media():
                 if screen_count > 1:
                     print(f"[upload_media] Multi-screen video detected: {screen_count} screens ({layout_info['layout']} layout)")
                     
-                    # Create temporary directory for sliced videos
-                    slice_temp_dir = os.path.join(tempfile.gettempdir(), f"slices_{uuid.uuid4()}")
-                    try:
-                        os.makedirs(slice_temp_dir, exist_ok=True)
-                        
-                        # Get base filename without extension
-                        base_name = filename.rsplit('.', 1)[0]
-                        
-                        # Slice the video
-                        slices = slice_video_for_multi_screen(
-                            dest, 
-                            slice_temp_dir, 
-                            base_name, 
-                            layout_info, 
-                            video_info
-                        )
-                        
-                        if slices:
-                            print(f"[upload_media] Successfully created {len(slices)} slices, uploading to R2/CDN...")
-                            
-                            # Upload each slice to R2
-                            for slice_info in slices:
-                                slice_path = slice_info['path']
-                                slice_filename = slice_info['filename']
-                                slice_key = _join_prefix_key(req_prefix, slice_filename)
-                                
-                                try:
-                                    # Save locally
-                                    local_slice_dest = os.path.join(local_dir, slice_filename)
-                                    shutil.copy2(slice_path, local_slice_dest)
-                                    print(f"[upload_media] Saved slice locally: {local_slice_dest}")
-                                    
-                                    # Upload to R2
-                                    if r2_enabled():
-                                        with open(slice_path, 'rb') as fh:
-                                            data = fh.read()
-                                        r2_put_bytes(slice_key, data, content_type='video/mp4')
-                                        print(f"[upload_media] R2 put ok: {slice_key} ({slice_info['size']/1024/1024:.2f} MB)")
-                                        
-                                        sliced_files.append({
-                                            'screen_number': slice_info['screen_number'],
-                                            'filename': slice_key,
-                                            'url': build_public_url(slice_key),
-                                            'size': slice_info['size']
-                                        })
-                                
-                                except Exception as slice_upload_e:
-                                    print(f"ERROR: Failed to upload slice {slice_filename}: {slice_upload_e}")
-                            
-                            print(f"[upload_media] Successfully uploaded {len(sliced_files)} sliced files to CDN")
-                        
-                        else:
-                            print("[upload_media] Failed to create slices, will upload original video only")
+                    # Start background slicing job instead of blocking
+                    job_id = f"slice_{uuid.uuid4().hex[:12]}"
+                    base_name = filename.rsplit('.', 1)[0]
                     
-                    except Exception as slice_e:
-                        print(f"ERROR: Slicing process failed: {slice_e}")
-                        import traceback
-                        traceback.print_exc()
+                    # Start background thread
+                    slice_thread = threading.Thread(
+                        target=_background_slice_and_upload,
+                        args=(job_id, dest, req_prefix, base_name, layout_info, video_info, local_dir),
+                        daemon=True
+                    )
+                    slice_thread.start()
                     
-                    finally:
-                        # Cleanup temporary slice directory
-                        try:
-                            if os.path.exists(slice_temp_dir):
-                                shutil.rmtree(slice_temp_dir)
-                                print(f"[upload_media] Cleaned up temp directory: {slice_temp_dir}")
-                        except Exception:
-                            pass
+                    print(f"[upload_media] Started background slicing job: {job_id}")
+                    
+                    # Return immediately with job ID
+                    # Upload original file to R2 first
+                    if r2_enabled():
+                        with open(dest, 'rb') as fh:
+                            data = fh.read()
+                        key = _join_prefix_key(req_prefix, filename)
+                        r2_put_bytes(key, data, content_type=_guess_mime(filename))
+                        print(f"[upload_media] R2 put ok key={key}")
+                    
+                    dt = int((time.time()-t0)*1000)
+                    key = _join_prefix_key(req_prefix, filename)
+                    print(f"[upload_media] done (async) file={key} ms={dt}")
+                    
+                    return jsonify({
+                        'success': True,
+                        'filename': key,
+                        'media_type': media_type,
+                        'url': build_public_url(key),
+                        'slice_job_id': job_id,
+                        'screen_count': screen_count,
+                        'layout': layout_info['layout'],
+                        'message': f'Processing {screen_count}-screen video in background...'
+                    })
                 
                 else:
                     print(f"[upload_media] Single screen video ({width}x{height}), no slicing needed")
@@ -6905,6 +6963,16 @@ def upload_media():
         import traceback as _tb
         _tb.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
+
+# ---- Check auto-slice job status ----
+@app.route('/slice_job_status/<job_id>', methods=['GET'])
+@login_required
+def slice_job_status(job_id):
+    """Check the status of a background slicing job."""
+    job_info = _SLICE_JOBS.get(job_id)
+    if not job_info:
+        return jsonify({'success': False, 'error': 'Job not found'}), 404
+    return jsonify({'success': True, **job_info})
 
 # ---- R2 Presigned direct-upload endpoint (bypasses origin/proxy limits) ----
 @app.route('/r2/presign_upload', methods=['POST', 'GET'])

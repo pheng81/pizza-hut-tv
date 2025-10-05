@@ -6290,6 +6290,63 @@
             autoSliceTargetScreen = null;
         }
 
+        async function pollSliceJob(jobId, statusDiv, progressBar) {
+            console.log(`[AUTO-SLICE] Polling job: ${jobId}`);
+            const maxAttempts = 120;  // 2 minutes max (120 * 1 second)
+            let attempts = 0;
+            
+            while (attempts < maxAttempts) {
+                try {
+                    const response = await fetch(`/slice_job_status/${jobId}`);
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        console.log(`[AUTO-SLICE] Job status:`, data);
+                        
+                        if (data.status === 'complete') {
+                            // Success!
+                            const sliceCount = data.result ? data.result.length : 0;
+                            statusDiv.textContent = `✅ Success! Created ${sliceCount} sliced videos (${data.layout} layout)`;
+                            progressBar.style.background = '#28a745';
+                            
+                            setTimeout(() => {
+                                closeAutoSliceModal();
+                                location.reload();
+                            }, 2000);
+                            return;
+                            
+                        } else if (data.status === 'error') {
+                            // Error
+                            statusDiv.textContent = `❌ Slicing failed: ${data.error}`;
+                            progressBar.style.background = '#dc3545';
+                            return;
+                            
+                        } else if (data.status === 'processing') {
+                            // Still processing
+                            const progress = data.progress || 0;
+                            statusDiv.textContent = `Processing video... ${progress}%`;
+                            // Keep progress bar at 100% width but show processing status
+                        }
+                    }
+                    
+                    await new Promise(resolve => setTimeout(resolve, 1000));  // Wait 1 second
+                    attempts++;
+                    
+                } catch (error) {
+                    console.error('[AUTO-SLICE] Poll error:', error);
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    attempts++;
+                }
+            }
+            
+            // Timeout
+            statusDiv.textContent = '⚠️ Processing timeout - check library for sliced videos';
+            setTimeout(() => {
+                closeAutoSliceModal();
+                location.reload();
+            }, 3000);
+        }
+
         async function doAutoSliceUpload() {
             const fileInput = document.getElementById('auto-slice-file-input');
             const file = fileInput.files[0];
@@ -6344,22 +6401,25 @@
                             console.log('[AUTO-SLICE] Upload response:', response);
                             
                             if (response.success) {
-                                if (response.sliced_files && response.sliced_files.length > 0) {
-                                    // Auto-slicing worked!
-                                    statusDiv.textContent = `✅ Success! Created ${response.sliced_files.length} sliced videos (${response.layout} layout)`;
+                                // Check if this is async slicing (has job_id)
+                                if (response.slice_job_id) {
+                                    statusDiv.textContent = `✅ Upload complete! Processing ${response.screen_count}-screen video...`;
+                                    progressBar.style.width = '100%';
+                                    
+                                    // Poll for slicing completion
+                                    await pollSliceJob(response.slice_job_id, statusDiv, progressBar);
+                                    
+                                } else if (response.sliced_files && response.sliced_files.length > 0) {
+                                    // Instant slicing worked (shouldn't happen now, but handle it)
+                                    statusDiv.textContent = `✅ Success! Created ${response.sliced_files.length} sliced videos`;
                                     progressBar.style.background = '#28a745';
-                                    
-                                    console.log('[AUTO-SLICE] Sliced files:', response.sliced_files);
-                                    
-                                    // Show success for 2 seconds then close
                                     setTimeout(() => {
                                         closeAutoSliceModal();
-                                        // Refresh the dashboard
                                         location.reload();
                                     }, 2000);
                                 } else {
                                     // Single screen video (no slicing needed)
-                                    statusDiv.textContent = '✅ Upload complete (single screen, no slicing needed)';
+                                    statusDiv.textContent = '✅ Upload complete (single screen)';
                                     setTimeout(() => {
                                         closeAutoSliceModal();
                                         location.reload();
