@@ -2332,8 +2332,8 @@ ALLOWED_EXTENSIONS = IMAGE_EXTENSIONS | ANIMATED_EXTENSIONS | VIDEO_EXTENSIONS
 
 # Flask config values
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-# Optional: size limit (e.g., 500MB) - adjust as needed
-app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024
+# Increased size limit for large multi-screen videos (1GB)
+app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024
 
 def classify_media(filename: str) -> str:
     """Classify media by extension into image / animated / video.
