@@ -6309,6 +6309,17 @@
                 return;
             }
 
+            // Check file size - if over 95MB, we need special handling for Cloudflare
+            const maxCloudflareSize = 95 * 1024 * 1024; // 95MB (leaving 5MB buffer)
+            
+            if (file.size > maxCloudflareSize) {
+                // File too large for Cloudflare - inform user they need to use presigned R2 upload
+                const useMB = (file.size / 1024 / 1024).toFixed(1);
+                alert(`⚠️ File too large (${useMB}MB)\n\nCloudflare has a 100MB upload limit.\n\nPlease use the "Sync Upload" button instead, which uploads directly to cloud storage.\n\nAfter uploading, you can manually slice the video using the dashboard tools.`);
+                closeAutoSliceModal();
+                return;
+            }
+
             const progressDiv = document.getElementById('auto-slice-progress');
             const progressBar = document.getElementById('auto-slice-progress-bar');
             const progressText = document.getElementById('auto-slice-progress-text');
@@ -6380,10 +6391,11 @@
                     progressBar.style.background = '#dc3545';
                 });
 
-                // Use direct server upload to bypass Cloudflare's 100MB limit
-                // Format: http://[SERVER_IP]/upload_media or create upload.yourdomain.com (DNS only, no proxy)
-                const uploadUrl = 'http://54.252.90.27/upload_media';
+                // Use upload subdomain to bypass Cloudflare's 100MB limit
+                // upload.everydayadvertise.com is set to DNS-only (gray cloud) in Cloudflare
+                const uploadUrl = 'https://upload.everydayadvertise.com/upload_media';
                 
+                console.log('[AUTO-SLICE] Uploading to:', uploadUrl);
                 xhr.open('POST', uploadUrl, true);
                 xhr.send(formData);
 
