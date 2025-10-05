@@ -61,7 +61,29 @@ except Exception:
 _LIB_CACHE: dict = {}
 
 # Global job tracking for async operations (auto-slicing, etc.)
-_SLICE_JOBS: dict = {}  # {job_id: {'status': 'processing'|'complete'|'error', 'result': {...}, 'error': str}}
+# Using filesystem for cross-worker job status sharing
+JOBS_DIR = os.path.join(tempfile.gettempdir(), 'pizza_hut_tv_jobs')
+os.makedirs(JOBS_DIR, exist_ok=True)
+
+def _get_job_status(job_id):
+    """Get job status from filesystem (works across gunicorn workers)."""
+    job_file = os.path.join(JOBS_DIR, f'{job_id}.json')
+    try:
+        if os.path.exists(job_file):
+            with open(job_file, 'r') as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"[get_job_status] Error reading {job_id}: {e}")
+    return None
+
+def _set_job_status(job_id, status_data):
+    """Set job status to filesystem (works across gunicorn workers)."""
+    job_file = os.path.join(JOBS_DIR, f'{job_id}.json')
+    try:
+        with open(job_file, 'w') as f:
+            json.dump(status_data, f)
+    except Exception as e:
+        print(f"[set_job_status] Error writing {job_id}: {e}")
 
 # --- SQLite user database helpers ---
 def _db_path() -> str:
@@ -3591,10 +3613,10 @@ def slice_video_for_multi_screen(input_path, output_dir, base_filename, layout_i
 def _background_slice_and_upload(job_id, input_path, req_prefix, base_filename, layout_info, video_info, local_dir):
     """
     Background worker to slice video and upload slices to R2.
-    Updates _SLICE_JOBS with progress/results.
+    Uses filesystem for job status (works across gunicorn workers).
     """
     try:
-        _SLICE_JOBS[job_id] = {'status': 'processing', 'progress': 0, 'result': []}
+        _set_job_status(job_id, {'status': 'processing', 'progress': 0, 'result': []})
         
         slice_temp_dir = os.path.join(os.path.dirname(input_path), 'slices_temp')
         os.makedirs(slice_temp_dir, exist_ok=True)
@@ -3609,10 +3631,10 @@ def _background_slice_and_upload(job_id, input_path, req_prefix, base_filename, 
         )
         
         if not slices:
-            _SLICE_JOBS[job_id] = {'status': 'error', 'error': 'Failed to create slices'}
+            _set_job_status(job_id, {'status': 'error', 'error': 'Failed to create slices'})
             return
         
-        _SLICE_JOBS[job_id]['progress'] = 50  # Slicing done, now uploading
+        _set_job_status(job_id, {'status': 'processing', 'progress': 50, 'result': []})  # Slicing done, now uploading
         
         # Upload each slice to R2
         sliced_files = []
@@ -3643,7 +3665,7 @@ def _background_slice_and_upload(job_id, input_path, req_prefix, base_filename, 
                 
                 # Update progress
                 progress = 50 + int((i + 1) / len(slices) * 50)
-                _SLICE_JOBS[job_id]['progress'] = progress
+                _set_job_status(job_id, {'status': 'processing', 'progress': progress, 'result': sliced_files})
                 
             except Exception as upload_e:
                 print(f"ERROR: Failed to upload slice {slice_filename}: {upload_e}")
@@ -3656,20 +3678,20 @@ def _background_slice_and_upload(job_id, input_path, req_prefix, base_filename, 
             pass
         
         # Mark complete
-        _SLICE_JOBS[job_id] = {
+        _set_job_status(job_id, {
             'status': 'complete',
             'progress': 100,
             'result': sliced_files,
             'layout': layout_info['layout'],
             'screen_count': len(sliced_files)
-        }
+        })
         print(f"[background_slice] Job {job_id} complete: {len(sliced_files)} slices uploaded")
         
     except Exception as e:
         print(f"ERROR: Background slice job {job_id} failed: {e}")
         import traceback
         traceback.print_exc()
-        _SLICE_JOBS[job_id] = {'status': 'error', 'error': str(e)}
+        _set_job_status(job_id, {'status': 'error', 'error': str(e)})
 
 
 # ---- Thumbnail helpers and endpoint ----
@@ -6969,7 +6991,7 @@ def upload_media():
 @login_required
 def slice_job_status(job_id):
     """Check the status of a background slicing job."""
-    job_info = _SLICE_JOBS.get(job_id)
+    job_info = _get_job_status(job_id)
     if not job_info:
         return jsonify({'success': False, 'error': 'Job not found'}), 404
     return jsonify({'success': True, **job_info})
