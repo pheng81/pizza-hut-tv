@@ -6309,23 +6309,9 @@
                 return;
             }
 
-            // Cloudflare Free has ~100MB POST limit (even for 75MB files, headers push it over)
-            // Solution: Use "Sync Upload" which uploads directly to R2 via presigned URL
-            const maxCloudflareSize = 70 * 1024 * 1024; // 70MB safe limit
-            
-            if (file.size > maxCloudflareSize) {
-                const useMB = (file.size / 1024 / 1024).toFixed(1);
-                alert(`⚠️ File size: ${useMB}MB\n\n` +
-                      `Cloudflare blocks uploads over ~70MB through the web server.\n\n` +
-                      `✅ SOLUTION: Use "Sync Upload" button instead!\n\n` +
-                      `"Sync Upload" uploads directly to cloud storage (bypasses Cloudflare limit).\n\n` +
-                      `Note: Auto-slicing only works for files under 70MB. For larger files, use Sync Upload then manually slice if needed.`);
-                closeAutoSliceModal();
-                return;
-            }
-            
             // Log file size for debugging
-            console.log(`[AUTO-SLICE] File: ${file.name}, Size: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
+            const fileSizeMB = (file.size / 1024 / 1024).toFixed(2);
+            console.log(`[AUTO-SLICE] File: ${file.name}, Size: ${fileSizeMB}MB`);
 
             const progressDiv = document.getElementById('auto-slice-progress');
             const progressBar = document.getElementById('auto-slice-progress-bar');
@@ -6393,15 +6379,83 @@
                     }
                 });
 
+                let retryCount = 0;
+                let uploadUrl = 'https://upload.everydayadvertise.com/upload_media';
+
                 xhr.addEventListener('error', () => {
-                    statusDiv.textContent = '❌ Network error during upload';
-                    progressBar.style.background = '#dc3545';
+                    // If upload subdomain fails (DNS not resolved), retry with regular domain
+                    if (retryCount === 0 && uploadUrl.includes('upload.everydayadvertise.com')) {
+                        retryCount++;
+                        uploadUrl = '/upload_media';
+                        
+                        console.log('[AUTO-SLICE] Upload subdomain failed, retrying with regular domain:', uploadUrl);
+                        statusDiv.textContent = 'Retrying upload via main domain...';
+                        progressBar.style.width = '0%';
+                        progressText.textContent = '0%';
+                        
+                        // Create new XHR request with regular domain
+                        const xhr2 = new XMLHttpRequest();
+                        
+                        xhr2.upload.addEventListener('progress', (e) => {
+                            if (e.lengthComputable) {
+                                const percent = Math.round((e.loaded / e.total) * 100);
+                                progressBar.style.width = percent + '%';
+                                progressText.textContent = percent + '%';
+                                statusDiv.textContent = `Uploading... ${percent}%`;
+                            }
+                        });
+
+                        xhr2.addEventListener('load', async () => {
+                            if (xhr2.status >= 200 && xhr2.status < 300) {
+                                try {
+                                    const response = JSON.parse(xhr2.responseText);
+                                    console.log('[AUTO-SLICE] Upload response:', response);
+                                    
+                                    if (response.success) {
+                                        if (response.sliced_files && response.sliced_files.length > 0) {
+                                            statusDiv.textContent = `✅ Success! Created ${response.sliced_files.length} sliced videos (${response.layout} layout)`;
+                                            progressBar.style.background = '#28a745';
+                                            console.log('[AUTO-SLICE] Sliced files:', response.sliced_files);
+                                            setTimeout(() => {
+                                                closeAutoSliceModal();
+                                                location.reload();
+                                            }, 2000);
+                                        } else {
+                                            statusDiv.textContent = '✅ Upload complete (single screen, no slicing needed)';
+                                            setTimeout(() => {
+                                                closeAutoSliceModal();
+                                                location.reload();
+                                            }, 2000);
+                                        }
+                                    } else {
+                                        throw new Error(response.error || 'Upload failed');
+                                    }
+                                } catch (parseError) {
+                                    console.error('[AUTO-SLICE] Parse error:', parseError);
+                                    statusDiv.textContent = '❌ Error: ' + parseError.message;
+                                    progressBar.style.background = '#dc3545';
+                                }
+                            } else {
+                                statusDiv.textContent = '❌ Upload failed (HTTP ' + xhr2.status + ')';
+                                progressBar.style.background = '#dc3545';
+                            }
+                        });
+
+                        xhr2.addEventListener('error', () => {
+                            statusDiv.textContent = '❌ Network error during upload (both attempts failed)';
+                            progressBar.style.background = '#dc3545';
+                        });
+
+                        xhr2.open('POST', uploadUrl, true);
+                        xhr2.send(formData);
+                    } else {
+                        statusDiv.textContent = '❌ Network error during upload';
+                        progressBar.style.background = '#dc3545';
+                    }
                 });
 
-                // Try upload subdomain first (bypasses Cloudflare), fallback to regular domain
-                // Note: upload.everydayadvertise.com may not resolve immediately due to DNS propagation
-                let uploadUrl = '/upload_media'; // Use regular domain for now
-                
+                // Use upload subdomain to bypass Cloudflare's 100MB limit
+                // upload.everydayadvertise.com is set to DNS-only (gray cloud) in Cloudflare
                 console.log('[AUTO-SLICE] Uploading to:', uploadUrl);
                 xhr.open('POST', uploadUrl, true);
                 xhr.send(formData);
