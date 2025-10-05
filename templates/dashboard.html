@@ -6373,17 +6373,21 @@
                             let estimateText = '';
                             
                             if (progress < 50) {
-                                // Slicing phase (0-50%)
+                                // Slicing phase (PARALLEL PROCESSING!)
                                 if (currentScreen > 0 && totalScreens > 0) {
-                                    statusText = `🎬 <strong>Slicing screen ${currentScreen} of ${totalScreens}...</strong>`;
-                                    // Estimate: ~80 seconds per screen
-                                    const remainingScreens = totalScreens - currentScreen;
-                                    const estimatedRemainingSec = remainingScreens * 80;
+                                    statusText = `🎬 <strong>Slicing ${totalScreens} screens in parallel...</strong> (${currentScreen}/${totalScreens} complete)`;
+                                    // With parallel processing: ~20-30 seconds for 4 screens
+                                    const parallelTimePerScreen = 10;  // Much faster with parallel!
+                                    const estimatedRemainingSec = (totalScreens - currentScreen) * parallelTimePerScreen;
                                     const estimatedMin = Math.ceil(estimatedRemainingSec / 60);
-                                    estimateText = `⏱️ Estimated ${estimatedMin} minute${estimatedMin !== 1 ? 's' : ''} remaining (slicing takes longest)`;
+                                    if (estimatedMin > 0) {
+                                        estimateText = `⚡ Parallel processing! About ${estimatedMin} minute${estimatedMin !== 1 ? 's' : ''} remaining`;
+                                    } else {
+                                        estimateText = `⚡ Parallel processing! About ${estimatedRemainingSec} seconds remaining`;
+                                    }
                                 } else {
-                                    statusText = `🎬 <strong>Analyzing and slicing video...</strong>`;
-                                    estimateText = `⏱️ This may take 3-5 minutes for 4-screen videos`;
+                                    statusText = `🎬 <strong>Analyzing and slicing video in parallel...</strong>`;
+                                    estimateText = `⚡ Parallel processing enabled - 3-4x faster!`;
                                 }
                             } else {
                                 // Upload phase (50-100%)
