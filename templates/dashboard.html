@@ -2695,6 +2695,7 @@
                 <div class="button-row" style="justify-content:center; flex-wrap: nowrap; gap:6px; align-items:center; width:100%;">
                     <button class="upload-btn" onclick="openReplaceModal('${screenId}','SINGLE')" style="flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 10px; font-size:clamp(10px, 2vw, 12px);">Schedule</button>
                     <button class="upload-btn" onclick="openSyncModal('${screenId}')" style="flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 10px; font-size:clamp(10px, 2vw, 12px); background:#495057;">Sync Upload</button>
+                    <button class="upload-btn" onclick="openAutoSliceModal('${screenId}')" style="flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 10px; font-size:clamp(10px, 2vw, 12px); background:#28a745;" title="Auto-slice multi-screen videos">✂️ Auto-Slice</button>
                     ${screenData.file ? 
                         `<button class=\"delete-btn\" onclick=\"deleteFile('${screenId}')\" title=\"Delete current file\" style=\"flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 10px; font-size:clamp(10px, 2vw, 12px);\">🗑️ Delete</button>` : 
                         ''
@@ -3341,18 +3342,24 @@
                 })
                 .then(data => {
                     console.log('Response data:', data);
-                    alert('Server response: ' + JSON.stringify(data));
                     
                     if (data.success) {
                         console.log('Delete successful, reloading...');
-                        window.location.reload();
+                        // Show appropriate message based on whether there was a warning
+                        if (data.warning) {
+                            showMessage('✅ ' + data.message + ' ⚠️ ' + data.warning, '#f39c12');
+                        } else {
+                            showMessage('✅ ' + data.message, '#27ae60');
+                        }
+                        setTimeout(() => window.location.reload(), 1500);
                     } else {
                         console.log('Delete failed:', data.error);
+                        showMessage('❌ Error: ' + data.error, '#e74c3c');
                     }
                 })
                 .catch(error => {
                     console.error('Fetch error:', error);
-                    alert('Fetch error: ' + error.message);
+                    showMessage('❌ Fetch error: ' + error.message, '#e74c3c');
                 });
             } catch (e) {
                 console.error('Try-catch error:', e);
@@ -6228,6 +6235,161 @@
             </div>
         </div>
     </div>
+
+    <!-- Auto-Slice Upload Modal -->
+    <div id="auto-slice-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:10000; align-items:center; justify-content:center;">
+        <div style="background:white; border-radius:8px; padding:20px; max-width:500px; width:90%;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h3 style="margin:0;">✂️ Auto-Slice Multi-Screen Upload</h3>
+                <button onclick="closeAutoSliceModal()" style="background:none; border:none; font-size:24px; cursor:pointer; color:#666;">×</button>
+            </div>
+            <div style="margin-bottom:20px; color:#666; font-size:14px;">
+                <p style="margin:5px 0;">Upload a multi-screen video and it will automatically:</p>
+                <ul style="margin:10px 0; padding-left:20px;">
+                    <li>Detect resolution (e.g., 7680×1080 = 4 horizontal screens)</li>
+                    <li>Slice into separate videos for each screen</li>
+                    <li>Upload all slices to CDN for fast playback</li>
+                    <li>Create synchronized playlist items</li>
+                </ul>
+                <p style="margin:10px 0; padding:10px; background:#fff3cd; border-radius:4px; font-size:13px;">
+                    <strong>Supported:</strong> Horizontal (1920×1080 base) or Vertical (1080×1920 base), 2-7 screens
+                </p>
+            </div>
+            <div style="margin-bottom:20px;">
+                <label style="display:block; margin-bottom:8px; font-weight:600;">Select Video File:</label>
+                <input type="file" id="auto-slice-file-input" accept="video/*" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+            <div id="auto-slice-progress" style="display:none; margin-bottom:15px;">
+                <div style="background:#f0f0f0; border-radius:4px; height:24px; overflow:hidden; position:relative;">
+                    <div id="auto-slice-progress-bar" style="background:#28a745; height:100%; width:0%; transition:width 0.3s;"></div>
+                    <div id="auto-slice-progress-text" style="position:absolute; top:0; left:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600;">0%</div>
+                </div>
+                <div id="auto-slice-status" style="margin-top:8px; font-size:13px; color:#666;"></div>
+            </div>
+            <div style="display:flex; gap:10px; justify-content:flex-end;">
+                <button onclick="closeAutoSliceModal()" style="padding:10px 20px; border:1px solid #ddd; background:white; border-radius:4px; cursor:pointer;">Cancel</button>
+                <button onclick="doAutoSliceUpload()" style="padding:10px 20px; background:#28a745; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:600;">Upload & Auto-Slice</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let autoSliceTargetScreen = null;
+
+        function openAutoSliceModal(screenId) {
+            autoSliceTargetScreen = screenId;
+            document.getElementById('auto-slice-modal').style.display = 'flex';
+            document.getElementById('auto-slice-file-input').value = '';
+            document.getElementById('auto-slice-progress').style.display = 'none';
+            document.getElementById('auto-slice-progress-bar').style.width = '0%';
+            document.getElementById('auto-slice-progress-text').textContent = '0%';
+        }
+
+        function closeAutoSliceModal() {
+            document.getElementById('auto-slice-modal').style.display = 'none';
+            autoSliceTargetScreen = null;
+        }
+
+        async function doAutoSliceUpload() {
+            const fileInput = document.getElementById('auto-slice-file-input');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Please select a video file first');
+                return;
+            }
+
+            if (!file.type.startsWith('video/')) {
+                alert('Please select a video file (not an image)');
+                return;
+            }
+
+            if (!autoSliceTargetScreen) {
+                alert('No screen selected');
+                return;
+            }
+
+            const progressDiv = document.getElementById('auto-slice-progress');
+            const progressBar = document.getElementById('auto-slice-progress-bar');
+            const progressText = document.getElementById('auto-slice-progress-text');
+            const statusDiv = document.getElementById('auto-slice-status');
+            
+            progressDiv.style.display = 'block';
+            statusDiv.textContent = 'Uploading video...';
+
+            try {
+                // Upload using /upload_media (with auto-slicing)
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const xhr = new XMLHttpRequest();
+                
+                xhr.upload.addEventListener('progress', (e) => {
+                    if (e.lengthComputable) {
+                        const percent = Math.round((e.loaded / e.total) * 100);
+                        progressBar.style.width = percent + '%';
+                        progressText.textContent = percent + '%';
+                        statusDiv.textContent = `Uploading... ${percent}%`;
+                    }
+                });
+
+                xhr.addEventListener('load', async () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        try {
+                            const response = JSON.parse(xhr.responseText);
+                            console.log('[AUTO-SLICE] Upload response:', response);
+                            
+                            if (response.success) {
+                                if (response.sliced_files && response.sliced_files.length > 0) {
+                                    // Auto-slicing worked!
+                                    statusDiv.textContent = `✅ Success! Created ${response.sliced_files.length} sliced videos (${response.layout} layout)`;
+                                    progressBar.style.background = '#28a745';
+                                    
+                                    console.log('[AUTO-SLICE] Sliced files:', response.sliced_files);
+                                    
+                                    // Show success for 2 seconds then close
+                                    setTimeout(() => {
+                                        closeAutoSliceModal();
+                                        // Refresh the dashboard
+                                        location.reload();
+                                    }, 2000);
+                                } else {
+                                    // Single screen video (no slicing needed)
+                                    statusDiv.textContent = '✅ Upload complete (single screen, no slicing needed)';
+                                    setTimeout(() => {
+                                        closeAutoSliceModal();
+                                        location.reload();
+                                    }, 2000);
+                                }
+                            } else {
+                                throw new Error(response.error || 'Upload failed');
+                            }
+                        } catch (parseError) {
+                            console.error('[AUTO-SLICE] Parse error:', parseError);
+                            statusDiv.textContent = '❌ Error: ' + parseError.message;
+                            progressBar.style.background = '#dc3545';
+                        }
+                    } else {
+                        statusDiv.textContent = '❌ Upload failed (HTTP ' + xhr.status + ')';
+                        progressBar.style.background = '#dc3545';
+                    }
+                });
+
+                xhr.addEventListener('error', () => {
+                    statusDiv.textContent = '❌ Network error during upload';
+                    progressBar.style.background = '#dc3545';
+                });
+
+                xhr.open('POST', '/upload_media', true);
+                xhr.send(formData);
+
+            } catch (error) {
+                console.error('[AUTO-SLICE] Error:', error);
+                statusDiv.textContent = '❌ Error: ' + error.message;
+                progressBar.style.background = '#dc3545';
+            }
+        }
+    </script>
         
     </body>
     {% include '_cookie_consent.html' %}
