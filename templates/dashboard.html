@@ -6380,7 +6380,11 @@
                     progressBar.style.background = '#dc3545';
                 });
 
-                xhr.open('POST', '/upload_media', true);
+                // Use direct server upload to bypass Cloudflare's 100MB limit
+                // Format: http://[SERVER_IP]/upload_media or create upload.yourdomain.com (DNS only, no proxy)
+                const uploadUrl = 'http://54.252.90.27/upload_media';
+                
+                xhr.open('POST', uploadUrl, true);
                 xhr.send(formData);
 
             } catch (error) {
