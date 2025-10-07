@@ -416,9 +416,21 @@ class CompleteWebplayerClient:
         self.screen_button_rects = {}
         
         # Show available screens (or default TV1-TV4 if fetching)
-        screens = list(self.available_screens.keys()) if self.available_screens else ["tv1", "tv2", "tv3", "tv4"]
+        if self.available_screens:
+            # API returns screens with store prefix like "1000_screen1"
+            # Strip the store prefix for display and use
+            screen_ids = []
+            for full_screen_id in self.available_screens.keys():
+                # Extract just the screen part (e.g., "screen1" from "1000_screen1")
+                if '_' in full_screen_id:
+                    screen_id = full_screen_id.split('_', 1)[1]
+                else:
+                    screen_id = full_screen_id
+                screen_ids.append(screen_id)
+        else:
+            screen_ids = ["tv1", "tv2", "tv3", "tv4"]
         
-        for i, screen_id in enumerate(screens[:4]):  # Max 4 screens
+        for i, screen_id in enumerate(screen_ids[:4]):  # Max 4 screens
             screen_y = start_y + i * 60
             
             button_width = container_width - 60
@@ -434,8 +446,10 @@ class CompleteWebplayerClient:
             
             # Display screen name
             screen_display = f"Screen {screen_id.upper()}"
-            if self.available_screens and screen_id in self.available_screens:
-                screen_info = self.available_screens[screen_id]
+            # Check if we have screen info from API
+            full_screen_id = f"{self.store_id}_{screen_id}"
+            if self.available_screens and full_screen_id in self.available_screens:
+                screen_info = self.available_screens[full_screen_id]
                 if isinstance(screen_info, dict) and 'name' in screen_info:
                     screen_display = screen_info['name']
             
@@ -492,13 +506,16 @@ class CompleteWebplayerClient:
         try:
             url = f"{self.server_url}/playlist/{self.store_id}/{self.screen_id}"
             params = {}
-            headers = {}
+            headers = {
+                'Cache-Control': 'no-store, no-cache, must-revalidate',
+                'Pragma': 'no-cache'
+            }
             
             if self.pair_code:
                 params['user_code'] = self.pair_code
                 headers['X-User-Code'] = self.pair_code
                 
-            response = requests.get(url, params=params, headers=headers, timeout=10, cache_no_store=True)
+            response = requests.get(url, params=params, headers=headers, timeout=10)
             
             if response.status_code == 200:
                 data = response.json()
