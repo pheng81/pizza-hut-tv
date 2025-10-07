@@ -11,6 +11,7 @@ import time
 import logging
 import os
 import tempfile
+import subprocess
 from typing import Optional, Dict, Any, Callable
 from io import BytesIO
 from urllib.parse import urlparse
@@ -40,11 +41,15 @@ class MediaPlayer:
         self.current_surface = None
         self.current_url = ""
         self.is_playing = False
+        self.video_process = None  # For external video player
         
         # Preloader
         self.preload_queue = []
         self.preload_thread = None
         self.preload_running = True
+        
+        # Detect available video player
+        self.video_player = self._detect_video_player()
         
         # Effects
         self.transition_effects = {
@@ -57,7 +62,20 @@ class MediaPlayer:
         }
         
         self.start_preloader()
-        logger.info(f"🎬 Media Player initialized: {self.screen_width}x{self.screen_height}")
+        logger.info(f"🎬 Media Player initialized: {self.screen_width}x{self.screen_height}, Video player: {self.video_player}")
+    
+    def _detect_video_player(self) -> str:
+        """Detect available video player on system."""
+        players = ['mpv', 'omxplayer', 'vlc']
+        for player in players:
+            try:
+                subprocess.run([player, '--version'], capture_output=True, timeout=2)
+                logger.info(f"✅ Detected video player: {player}")
+                return player
+            except:
+                pass
+        logger.warning("⚠️ No video player detected, will use pygame for images only")
+        return None
         
     def start_preloader(self):
         """Start background preloader thread."""
@@ -191,25 +209,11 @@ class MediaPlayer:
             return None
             
     def _load_video_frame(self, file_path: str) -> Optional[pygame.Surface]:
-        """Load first frame of video as pygame surface."""
+        """Load first frame of video as pygame surface - not needed with MPV."""
         try:
-            # For now, create a placeholder surface with video info
-            # In a full implementation, you'd use opencv-python or similar
-            surface = pygame.Surface((1920, 1080))
-            surface.fill((50, 50, 50))
-            
-            # Add video placeholder text
-            font = pygame.font.Font(None, 48)
-            text = font.render("🎬 VIDEO", True, (255, 255, 255))
-            text_rect = text.get_rect(center=(surface.get_width()//2, surface.get_height()//2))
-            surface.blit(text, text_rect)
-            
-            # Show filename
-            filename = os.path.basename(file_path)
-            filename_text = pygame.font.Font(None, 24).render(filename, True, (200, 200, 200))
-            filename_rect = filename_text.get_rect(center=(surface.get_width()//2, surface.get_height()//2 + 60))
-            surface.blit(filename_text, filename_rect)
-            
+            # Create a black surface for video - MPV will render over it
+            surface = pygame.Surface((self.screen_width, self.screen_height))
+            surface.fill((0, 0, 0))
             return surface.convert()
             
         except Exception as e:
@@ -221,28 +225,130 @@ class MediaPlayer:
         try:
             logger.info(f"🎬 Playing media: {url} (effect: {effect}, duration: {duration}s)")
             
-            # Get media surface (from cache or load)
-            surface = self.media_cache.get(url, {}).get('surface')
-            if not surface:
-                surface = self._preload_media(url)
-                
-            if not surface:
-                logger.error(f"Failed to load media: {url}")
-                return False
-                
-            # Apply transition effect
-            transition_func = self.transition_effects.get(effect, self._fade_transition)
-            success = transition_func(surface, duration)
+            # Stop any currently playing video
+            self._stop_video()
             
-            if success:
-                self.current_surface = surface
-                self.current_url = url
-                self.is_playing = True
+            # Download media first
+            local_path = self._download_media(url)
+            if not local_path:
+                logger.error(f"Failed to download media: {url}")
+                return False
+            
+            # Determine media type
+            media_type = self._get_media_type(local_path)
+            
+            if media_type == 'video' and self.video_player:
+                # Play video using external player
+                return self._play_video_external(local_path, duration)
+            elif media_type == 'image':
+                # Get media surface (from cache or load)
+                surface = self.media_cache.get(url, {}).get('surface')
+                if not surface:
+                    surface = self._preload_media(url)
+                    
+                if not surface:
+                    logger.error(f"Failed to load media: {url}")
+                    return False
+                    
+                # Apply transition effect
+                transition_func = self.transition_effects.get(effect, self._fade_transition)
+                success = transition_func(surface, duration)
                 
-            return success
+                if success:
+                    self.current_surface = surface
+                    self.current_url = url
+                    self.is_playing = True
+                    
+                return success
+            else:
+                logger.warning(f"Cannot play media type: {media_type}")
+                return False
             
         except Exception as e:
             logger.error(f"Play media error: {e}")
+            return False
+    
+    def _stop_video(self):
+        """Stop currently playing video."""
+        if self.video_process:
+            try:
+                self.video_process.terminate()
+                self.video_process.wait(timeout=2)
+            except:
+                try:
+                    self.video_process.kill()
+                except:
+                    pass
+            self.video_process = None
+    
+    def _play_video_external(self, video_path: str, duration: float) -> bool:
+        """Play video using MPV with proper hardware acceleration."""
+        try:
+            # Hide Pygame cursor
+            pygame.mouse.set_visible(False)
+            
+            if self.video_player == 'mpv':
+                cmd = [
+                    'mpv',
+                    '--fs',  # Fullscreen
+                    '--no-osc',  # No on-screen controller
+                    '--no-osd-bar',  # No OSD bar
+                    '--really-quiet',  # Suppress output
+                    '--no-input-default-bindings',  # Disable keyboard controls
+                    '--no-terminal',  # Don't attach to terminal
+                    '--hwdec=auto',  # Hardware decoding
+                    '--vo=gpu',  # Use GPU for video output
+                    '--loop=no',  # Don't loop - we'll handle that
+                    f'--length={int(duration)}',  # Play for specified duration
+                    '--ontop',  # Stay on top
+                    '--no-border',  # No window border
+                    video_path
+                ]
+            elif self.video_player == 'omxplayer':
+                cmd = [
+                    'omxplayer',
+                    '--blank',  # Blank other screens
+                    '--no-osd',  # No OSD
+                    '--aspect-mode', 'fill',  # Fill screen
+                    video_path
+                ]
+            else:
+                logger.error("No suitable video player (mpv or omxplayer) available")
+                return False
+            
+            # Start video player
+            self.video_process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+            
+            self.is_playing = True
+            self.current_url = video_path
+            logger.info(f"✅ Video playing with {self.video_player} (PID: {self.video_process.pid})")
+            
+            # Monitor video completion in background
+            def monitor_video():
+                if self.video_process:
+                    try:
+                        # Wait for video to finish or timeout
+                        self.video_process.wait(timeout=duration + 1)
+                    except subprocess.TimeoutExpired:
+                        # Force kill if it exceeds duration
+                        self._stop_video()
+                    
+                    self.is_playing = False
+                    logger.info(f"✅ Video completed: {video_path}")
+            
+            threading.Thread(target=monitor_video, daemon=True).start()
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"External video playback error: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
             return False
             
     def _fade_transition(self, new_surface: pygame.Surface, duration: float) -> bool:
@@ -473,6 +579,7 @@ class MediaPlayer:
             
     def stop(self):
         """Stop media player and cleanup."""
+        self._stop_video()  # Stop external video player
         self.preload_running = False
         if self.preload_thread:
             self.preload_thread.join(timeout=1)
