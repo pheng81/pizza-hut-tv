@@ -814,15 +814,21 @@ class CompleteWebplayerClient:
         logger.info(f"🔍 Validating TV code: {self.input_text}")
         
         def validate_code():
-            is_valid = self.validate_tv_code(self.input_text)
-            
-            if is_valid:
-                self.pair_code = self.input_text
-                self.setup_step = "store"
-                self.input_text = ""  # Clear for store code entry
-                logger.info("✅ Moving to store code entry")
-            else:
-                logger.warning("❌ Invalid code, staying on code input")
+            try:
+                is_valid = self.validate_tv_code(self.input_text)
+                
+                if is_valid:
+                    self.pair_code = self.input_text
+                    self.setup_step = "store"
+                    self.input_text = ""  # Clear for store code entry
+                    logger.info("✅ Moving to store code entry")
+                else:
+                    logger.warning("❌ Invalid code, staying on code input")
+                    self.input_text = ""
+            except Exception as e:
+                logger.error(f"❌ Error validating code: {e}")
+                import traceback
+                traceback.print_exc()
                 self.input_text = ""
                 
         threading.Thread(target=validate_code, daemon=True).start()
@@ -835,10 +841,15 @@ class CompleteWebplayerClient:
             
             # Fetch available screens for this store
             def fetch_screens():
-                screens = self.fetch_available_screens(self.store_id)
-                self.available_screens = screens
-                self.setup_step = "screen"
-                logger.info("✅ Moving to screen selection")
+                try:
+                    screens = self.fetch_available_screens(self.store_id)
+                    self.available_screens = screens
+                    self.setup_step = "screen"
+                    logger.info("✅ Moving to screen selection")
+                except Exception as e:
+                    logger.error(f"❌ Error fetching screens: {e}")
+                    import traceback
+                    traceback.print_exc()
                 
             threading.Thread(target=fetch_screens, daemon=True).start()
             
@@ -929,25 +940,30 @@ class CompleteWebplayerClient:
         except Exception as e:
             logger.warning(f"Initial time sync failed: {e}")
             
-        while self.running:
-            # Handle events
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    self.running = False
-                elif event.type == pygame.KEYDOWN:
-                    self.handle_keydown(event)
-                elif event.type == pygame.MOUSEBUTTONDOWN:
-                    self.handle_mousedown(event)
+        try:
+            while self.running:
+                # Handle events
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        self.running = False
+                    elif event.type == pygame.KEYDOWN:
+                        self.handle_keydown(event)
+                    elif event.type == pygame.MOUSEBUTTONDOWN:
+                        self.handle_mousedown(event)
+                        
+                # Draw current screen
+                if self.current_state == "setup":
+                    self.draw_setup_screen()
+                elif self.current_state == "playing":
+                    self.draw_playing_screen()
                     
-            # Draw current screen
-            if self.current_state == "setup":
-                self.draw_setup_screen()
-            elif self.current_state == "playing":
-                self.draw_playing_screen()
-                
-            # Update display
-            pygame.display.flip()
-            clock.tick(60)  # 60 FPS
+                # Update display
+                pygame.display.flip()
+                clock.tick(60)  # 60 FPS
+        except Exception as e:
+            logger.error(f"❌ CRITICAL ERROR in main loop: {e}")
+            import traceback
+            traceback.print_exc()
             
         logger.info("🛑 Shutting down Complete Pi Client")
         self.media_player.stop()
@@ -965,15 +981,16 @@ def main():
     
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
-        
-    client = CompleteWebplayerClient(server_url=args.server)
     
     try:
+        client = CompleteWebplayerClient(server_url=args.server)
         client.run()
     except KeyboardInterrupt:
         logger.info("🛑 Interrupted by user")
     except Exception as e:
         logger.error(f"💥 Fatal error: {e}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
         
 if __name__ == "__main__":
