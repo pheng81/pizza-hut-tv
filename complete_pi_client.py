@@ -200,6 +200,11 @@ class CompleteWebplayerClient:
         self.selected_store = None
         self.setup_step = "code"  # code, store, screen
         
+        # Button position tracking for mouse clicks
+        self.link_button_rect = None
+        self.store_button_rects = []
+        self.screen_button_rects = {}
+        
         # Playback state like webplayer
         self.playlist = []
         self.current_index = 0
@@ -321,7 +326,11 @@ class CompleteWebplayerClient:
         text_color = self.colors['white']
         
         # Draw button with rounded corners
-        pygame.draw.rect(self.screen, bg_color, (button_x, y_pos, button_width, button_height), border_radius=8)
+        button_rect = pygame.Rect(button_x, y_pos, button_width, button_height)
+        pygame.draw.rect(self.screen, bg_color, button_rect, border_radius=8)
+        
+        # Store button rect for click detection
+        self.link_button_rect = button_rect if enabled else None
         
         button_text = self.font_button.render("Link Code", True, text_color)
         text_rect = button_text.get_rect(center=(button_x + button_width // 2, y_pos + button_height // 2))
@@ -340,7 +349,13 @@ class CompleteWebplayerClient:
         self.screen.blit(subtitle, subtitle_rect)
         
         start_y = container_y + 200
-        for i, store in enumerate(self.available_stores[:5]):
+        # Ensure available_stores is a list before slicing
+        stores_list = list(self.available_stores) if self.available_stores else []
+        
+        # Clear and rebuild store button rects
+        self.store_button_rects = []
+        
+        for i, store in enumerate(stores_list[:5]):
             store_y = start_y + i * 60
             
             button_width = container_width - 100
@@ -352,7 +367,11 @@ class CompleteWebplayerClient:
             text_color = self.colors['white']
             border_color = self.colors['pizza_red'] if i == self.selected_store else self.colors['input_border']
             
-            pygame.draw.rect(self.screen, bg_color, (button_x, store_y, button_width, button_height), border_radius=5)
+            button_rect = pygame.Rect(button_x, store_y, button_width, button_height)
+            pygame.draw.rect(self.screen, bg_color, button_rect, border_radius=5)
+            
+            # Store button rect with store index for click detection
+            self.store_button_rects.append((button_rect, i))
             
             store_name = store.get('store_name', f"Store {store.get('store_id', 'Unknown')}")
             store_text = self.font_button.render(store_name, True, text_color)
@@ -368,6 +387,9 @@ class CompleteWebplayerClient:
         screens = ["tv1", "tv2", "tv3", "tv4"]
         start_y = container_y + 200
         
+        # Clear and rebuild screen button rects
+        self.screen_button_rects = {}
+        
         for i, screen in enumerate(screens):
             screen_y = start_y + i * 50
             
@@ -376,7 +398,11 @@ class CompleteWebplayerClient:
             button_x = container_x + 30
             
             bg_color = (50, 50, 50)
-            pygame.draw.rect(self.screen, bg_color, (button_x, screen_y, button_width, button_height), border_radius=5)
+            button_rect = pygame.Rect(button_x, screen_y, button_width, button_height)
+            pygame.draw.rect(self.screen, bg_color, button_rect, border_radius=5)
+            
+            # Store button rect with screen_id for click detection
+            self.screen_button_rects[screen] = button_rect
             
             screen_text = self.font_button.render(f"Screen {screen.upper()}", True, self.colors['white'])
             text_rect = screen_text.get_rect(center=(button_x + button_width // 2, screen_y + button_height // 2))
@@ -551,9 +577,15 @@ class CompleteWebplayerClient:
             response = requests.get(f"{self.server_url}/api/stores_by_code/{code}", timeout=10)
             
             if response.status_code == 200:
-                stores = response.json()
-                logger.info(f"✅ Valid TV code: {len(stores)} stores available")
-                return stores
+                data = response.json()
+                # API returns {success, user, stores, screens}
+                if data.get('success') and 'stores' in data:
+                    stores = data['stores']
+                    logger.info(f"✅ Valid TV code: {len(stores)} stores available")
+                    return stores
+                else:
+                    logger.warning(f"❌ Invalid response format: {data}")
+                    return []
             else:
                 logger.warning(f"❌ Invalid TV code: {code}")
                 return []
@@ -686,6 +718,34 @@ class CompleteWebplayerClient:
             pygame.display.toggle_fullscreen()
         elif event.key == pygame.K_SPACE and self.current_state == "playing":
             # Manual advance for testing
+            self.current_index = (self.current_index + 1) % len(self.playlist) if self.playlist else 0
+            
+    def handle_mousedown(self, event):
+        """Handle mouse button clicks."""
+        if event.button != 1:  # Only handle left clicks
+            return
+            
+        if self.current_state == "setup":
+            if self.setup_step == "code":
+                # Check Link Code button click
+                if self.link_button_rect and self.link_button_rect.collidepoint(event.pos):
+                    if len(self.input_text) == 4 and self.input_text.isdigit():
+                        self.handle_code_submit()
+                        
+            elif self.setup_step == "store":
+                # Check store button clicks
+                for button_rect, store_index in self.store_button_rects:
+                    if button_rect.collidepoint(event.pos):
+                        self.selected_store = store_index
+                        self.handle_store_select()
+                        break
+                        
+            elif self.setup_step == "screen":
+                # Check screen button clicks
+                for screen_id, button_rect in self.screen_button_rects.items():
+                    if button_rect.collidepoint(event.pos):
+                        self.handle_screen_select(screen_id)
+                        break
             self.advance_to_next_item()
             
     def handle_code_submit(self):
@@ -809,6 +869,8 @@ class CompleteWebplayerClient:
                     self.running = False
                 elif event.type == pygame.KEYDOWN:
                     self.handle_keydown(event)
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    self.handle_mousedown(event)
                     
             # Draw current screen
             if self.current_state == "setup":
