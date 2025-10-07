@@ -20,8 +20,8 @@ from dataclasses import dataclass, asdict
 from urllib.parse import urljoin, urlparse
 import hashlib
 
-# Import our media player
-from media_player import MediaPlayer
+# Import our SEAMLESS media player (no flicker!)
+from seamless_video_player import SeamlessMediaPlayer as MediaPlayer
 
 # Configure logging
 logging.basicConfig(
@@ -402,15 +402,15 @@ class CompleteWebplayerClient:
         """Draw screen selection screen - shows screens available for this store."""
         # Title
         title = self.font_title.render("Select Screen", True, self.colors['white'])
-        title_rect = title.get_rect(center=(self.width // 2, container_y + 100))
+        title_rect = title.get_rect(center=(self.width // 2, container_y + 80))
         self.screen.blit(title, title_rect)
         
         # Subtitle showing store code
         subtitle = self.font_subtitle.render(f"Store: {self.store_id} | TV Code: {self.pair_code}", True, self.colors['gray'])
-        subtitle_rect = subtitle.get_rect(center=(self.width // 2, container_y + 140))
+        subtitle_rect = subtitle.get_rect(center=(self.width // 2, container_y + 120))
         self.screen.blit(subtitle, subtitle_rect)
         
-        start_y = container_y + 200
+        start_y = container_y + 180
         
         # Clear and rebuild screen button rects
         self.screen_button_rects = {}
@@ -430,11 +430,15 @@ class CompleteWebplayerClient:
         else:
             screen_ids = ["tv1", "tv2", "tv3", "tv4"]
         
-        for i, screen_id in enumerate(screen_ids[:4]):  # Max 4 screens
-            screen_y = start_y + i * 60
+        # Show all screens with scrollable layout
+        button_height = 50
+        button_spacing = 10
+        max_visible = min(len(screen_ids), 8)  # Show up to 8 screens at once
+        
+        for i, screen_id in enumerate(screen_ids[:max_visible]):
+            screen_y = start_y + i * (button_height + button_spacing)
             
             button_width = container_width - 60
-            button_height = 50
             button_x = container_x + 30
             
             bg_color = (50, 50, 50)
@@ -456,6 +460,12 @@ class CompleteWebplayerClient:
             screen_text = self.font_button.render(screen_display, True, self.colors['white'])
             text_rect = screen_text.get_rect(center=(button_x + button_width // 2, screen_y + button_height // 2))
             self.screen.blit(screen_text, text_rect)
+        
+        # Show count if more screens available
+        if len(screen_ids) > max_visible:
+            note = self.font_small.render(f"Showing {max_visible} of {len(screen_ids)} screens", True, self.colors['gray'])
+            note_rect = note.get_rect(center=(self.width // 2, start_y + (max_visible * (button_height + button_spacing)) + 20))
+            self.screen.blit(note, note_rect)
             
     def draw_playing_screen(self):
         """Draw playing screen - let media player handle the display."""
