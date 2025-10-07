@@ -162,6 +162,7 @@ class CompleteWebplayerClient:
         # Colors matching custom_player.py dark theme EXACTLY
         self.colors = {
             'background': (13, 13, 13),           # #0d0d0d - main background
+            'black': (0, 0, 0),                   # #000000 - pure black
             'pizza_red': (200, 16, 46),           # #c8102e - primary red (EA TV branding)
             'pizza_red_hover': (160, 13, 36),     # #a00d24 - hover/active state
             'white': (255, 255, 255),             # #ffffff - primary text
