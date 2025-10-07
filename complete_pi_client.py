@@ -196,7 +196,9 @@ class CompleteWebplayerClient:
         # State management
         self.current_state = "setup"  # setup, playing, error
         self.input_text = ""
-        self.available_stores = []
+        self.pair_code = ""  # TV code (4 digits)
+        self.store_id = ""   # Store code (numeric)
+        self.available_screens = {}  # Screen data from API
         self.selected_store = None
         self.setup_step = "code"  # code, store, screen
         
@@ -337,64 +339,89 @@ class CompleteWebplayerClient:
         self.screen.blit(button_text, text_rect)
         
     def draw_store_selection_screen(self, container_x: int, container_y: int, container_width: int):
-        """Draw store selection screen matching custom_player.py."""
+        """Draw store code entry screen matching custom_player.py."""
         # Title
-        title = self.font_title.render("Select Store", True, self.colors['light_gray'])
+        title = self.font_title.render("Enter Store ID", True, self.colors['light_gray'])
         title_rect = title.get_rect(center=(self.width // 2, container_y + 100))
         self.screen.blit(title, title_rect)
         
-        # Subtitle
-        subtitle = self.font_subtitle.render("Choose your store location", True, self.colors['gray'])
+        # Subtitle showing TV code
+        subtitle = self.font_subtitle.render(f"TV Code: {self.pair_code}", True, self.colors['gray'])
         subtitle_rect = subtitle.get_rect(center=(self.width // 2, container_y + 140))
         self.screen.blit(subtitle, subtitle_rect)
         
-        start_y = container_y + 200
-        # Ensure available_stores is a list before slicing
-        stores_list = list(self.available_stores) if self.available_stores else []
+        # Input label
+        input_label = self.font_label.render("Store code", True, self.colors['light_gray'])
+        input_rect_x = (self.width - 400) // 2
+        input_rect_y = container_y + 200
+        self.screen.blit(input_label, (input_rect_x, input_rect_y))
         
-        # Clear and rebuild store button rects
-        self.store_button_rects = []
+        # Input field
+        input_width = 400
+        input_height = 50
+        input_x = (self.width - input_width) // 2
+        input_y = input_rect_y + 35
         
-        for i, store in enumerate(stores_list[:5]):
-            store_y = start_y + i * 60
-            
-            button_width = container_width - 100
-            button_height = 50
-            button_x = container_x + 50
-            
-            # Selected state with EA TV red
-            bg_color = self.colors['pizza_red'] if i == self.selected_store else (30, 30, 30)
-            text_color = self.colors['white']
-            border_color = self.colors['pizza_red'] if i == self.selected_store else self.colors['input_border']
-            
-            button_rect = pygame.Rect(button_x, store_y, button_width, button_height)
-            pygame.draw.rect(self.screen, bg_color, button_rect, border_radius=5)
-            
-            # Store button rect with store index for click detection
-            self.store_button_rects.append((button_rect, i))
-            
-            store_name = store.get('store_name', f"Store {store.get('store_id', 'Unknown')}")
-            store_text = self.font_button.render(store_name, True, text_color)
-            text_rect = store_text.get_rect(center=(button_x + button_width // 2, store_y + button_height // 2))
-            self.screen.blit(store_text, text_rect)
+        pygame.draw.rect(self.screen, self.colors['black'], 
+                        (input_x, input_y, input_width, input_height), border_radius=5)
+        pygame.draw.rect(self.screen, self.colors['input_border'], 
+                        (input_x, input_y, input_width, input_height), 2, border_radius=5)
+        
+        # Display store ID input
+        input_display = self.input_text
+        input_surface = self.font_input.render(input_display, True, self.colors['white'])
+        input_text_rect = input_surface.get_rect(center=(input_x + input_width // 2, input_y + input_height // 2))
+        self.screen.blit(input_surface, input_text_rect)
+        
+        # Continue button
+        button_width = 200
+        button_height = 50
+        button_x = (self.width - button_width) // 2
+        button_y = input_y + 80
+        
+        enabled = len(self.input_text) > 0 and self.input_text.isdigit()
+        bg_color = self.colors['pizza_red'] if enabled else (102, 102, 102)
+        
+        button_rect = pygame.Rect(button_x, button_y, button_width, button_height)
+        pygame.draw.rect(self.screen, bg_color, button_rect, border_radius=8)
+        
+        # Store button rect for click detection
+        self.link_button_rect = button_rect if enabled else None
+        
+        button_text = self.font_button.render("Continue", True, self.colors['white'])
+        text_rect = button_text.get_rect(center=(button_x + button_width // 2, button_y + button_height // 2))
+        self.screen.blit(button_text, text_rect)
+        
+        # Note
+        note = self.font_small.render("You'll choose a screen next", True, self.colors['gray'])
+        note_rect = note.get_rect(center=(self.width // 2, button_y + 70))
+        self.screen.blit(note, note_rect)
             
     def draw_screen_selection_screen(self, container_x: int, container_y: int, container_width: int):
-        """Draw screen selection screen."""
+        """Draw screen selection screen - shows screens available for this store."""
+        # Title
         title = self.font_title.render("Select Screen", True, self.colors['white'])
-        title_rect = title.get_rect(center=(self.width // 2, container_y + 140))
+        title_rect = title.get_rect(center=(self.width // 2, container_y + 100))
         self.screen.blit(title, title_rect)
         
-        screens = ["tv1", "tv2", "tv3", "tv4"]
+        # Subtitle showing store code
+        subtitle = self.font_subtitle.render(f"Store: {self.store_id} | TV Code: {self.pair_code}", True, self.colors['gray'])
+        subtitle_rect = subtitle.get_rect(center=(self.width // 2, container_y + 140))
+        self.screen.blit(subtitle, subtitle_rect)
+        
         start_y = container_y + 200
         
         # Clear and rebuild screen button rects
         self.screen_button_rects = {}
         
-        for i, screen in enumerate(screens):
-            screen_y = start_y + i * 50
+        # Show available screens (or default TV1-TV4 if fetching)
+        screens = list(self.available_screens.keys()) if self.available_screens else ["tv1", "tv2", "tv3", "tv4"]
+        
+        for i, screen_id in enumerate(screens[:4]):  # Max 4 screens
+            screen_y = start_y + i * 60
             
             button_width = container_width - 60
-            button_height = 40
+            button_height = 50
             button_x = container_x + 30
             
             bg_color = (50, 50, 50)
@@ -402,9 +429,16 @@ class CompleteWebplayerClient:
             pygame.draw.rect(self.screen, bg_color, button_rect, border_radius=5)
             
             # Store button rect with screen_id for click detection
-            self.screen_button_rects[screen] = button_rect
+            self.screen_button_rects[screen_id] = button_rect
             
-            screen_text = self.font_button.render(f"Screen {screen.upper()}", True, self.colors['white'])
+            # Display screen name
+            screen_display = f"Screen {screen_id.upper()}"
+            if self.available_screens and screen_id in self.available_screens:
+                screen_info = self.available_screens[screen_id]
+                if isinstance(screen_info, dict) and 'name' in screen_info:
+                    screen_display = screen_info['name']
+            
+            screen_text = self.font_button.render(screen_display, True, self.colors['white'])
             text_rect = screen_text.get_rect(center=(button_x + button_width // 2, screen_y + button_height // 2))
             self.screen.blit(screen_text, text_rect)
             
@@ -571,28 +605,58 @@ class CompleteWebplayerClient:
         except Exception as e:
             logger.debug(f"Commands poll failed: {e}")
             
-    def validate_tv_code(self, code: str) -> List[Dict]:
-        """Validate TV code and get available stores."""
+    def validate_tv_code(self, code: str) -> bool:
+        """Validate TV code with API."""
         try:
             response = requests.get(f"{self.server_url}/api/stores_by_code/{code}", timeout=10)
             
             if response.status_code == 200:
                 data = response.json()
                 # API returns {success, user, stores, screens}
-                if data.get('success') and 'stores' in data:
-                    stores = data['stores']
-                    logger.info(f"✅ Valid TV code: {len(stores)} stores available")
-                    return stores
+                if data.get('success'):
+                    logger.info(f"✅ Valid TV code: {code}")
+                    return True
                 else:
-                    logger.warning(f"❌ Invalid response format: {data}")
-                    return []
+                    logger.warning(f"❌ Invalid TV code response: {data}")
+                    return False
             else:
-                logger.warning(f"❌ Invalid TV code: {code}")
-                return []
+                logger.warning(f"❌ Invalid TV code HTTP {response.status_code}: {code}")
+                return False
                 
         except Exception as e:
             logger.error(f"TV code validation failed: {e}")
-            return []
+            return False
+    
+    def fetch_available_screens(self, store_code: str) -> Dict:
+        """Fetch available screens for a store from API."""
+        try:
+            # Use the same endpoint as webplayer browse page
+            response = requests.get(
+                f"{self.server_url}/api/stores_by_code/{self.pair_code}",
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('success') and 'screens' in data:
+                    # screens format: {store_id: {screen_id: screen_data}}
+                    all_screens = data['screens']
+                    if store_code in all_screens:
+                        logger.info(f"✅ Found {len(all_screens[store_code])} screens for store {store_code}")
+                        return all_screens[store_code]
+                    else:
+                        logger.warning(f"⚠️ Store {store_code} not in screens data")
+                        return {}
+                else:
+                    logger.warning(f"❌ No screens data in response")
+                    return {}
+            else:
+                logger.warning(f"❌ Failed to fetch screens: HTTP {response.status_code}")
+                return {}
+                
+        except Exception as e:
+            logger.error(f"Failed to fetch screens: {e}")
+            return {}
             
     def fetch_and_update_playlist(self, force_advance: bool = False):
         """Fetch playlist and update if changed."""
@@ -693,13 +757,13 @@ class CompleteWebplayerClient:
                     self.input_text += event.unicode
                     
             elif self.setup_step == "store":
-                if event.key == pygame.K_UP:
-                    self.selected_store = max(0, (self.selected_store or 0) - 1)
-                elif event.key == pygame.K_DOWN:
-                    max_store = min(4, len(self.available_stores) - 1)
-                    self.selected_store = min(max_store, (self.selected_store or 0) + 1)
+                if event.key == pygame.K_BACKSPACE:
+                    self.input_text = self.input_text[:-1]
                 elif event.key == pygame.K_RETURN or event.key == pygame.K_KP_ENTER:
-                    self.handle_store_select()
+                    if len(self.input_text) > 0 and self.input_text.isdigit():
+                        self.handle_store_select()
+                elif event.unicode.isdigit() and len(self.input_text) < 8:  # Max 8 digits for store code
+                    self.input_text += event.unicode
                     
             elif self.setup_step == "screen":
                 if event.key in [pygame.K_1, pygame.K_KP1]:
@@ -733,12 +797,10 @@ class CompleteWebplayerClient:
                         self.handle_code_submit()
                         
             elif self.setup_step == "store":
-                # Check store button clicks
-                for button_rect, store_index in self.store_button_rects:
-                    if button_rect.collidepoint(event.pos):
-                        self.selected_store = store_index
+                # Check Continue button click
+                if self.link_button_rect and self.link_button_rect.collidepoint(event.pos):
+                    if len(self.input_text) > 0 and self.input_text.isdigit():
                         self.handle_store_select()
-                        break
                         
             elif self.setup_step == "screen":
                 # Check screen button clicks
@@ -746,21 +808,19 @@ class CompleteWebplayerClient:
                     if button_rect.collidepoint(event.pos):
                         self.handle_screen_select(screen_id)
                         break
-            self.advance_to_next_item()
             
     def handle_code_submit(self):
         """Handle TV code submission."""
         logger.info(f"🔍 Validating TV code: {self.input_text}")
         
         def validate_code():
-            stores = self.validate_tv_code(self.input_text)
+            is_valid = self.validate_tv_code(self.input_text)
             
-            if stores:
-                self.available_stores = stores
+            if is_valid:
                 self.pair_code = self.input_text
                 self.setup_step = "store"
-                self.selected_store = 0
-                logger.info("✅ Moving to store selection")
+                self.input_text = ""  # Clear for store code entry
+                logger.info("✅ Moving to store code entry")
             else:
                 logger.warning("❌ Invalid code, staying on code input")
                 self.input_text = ""
@@ -768,12 +828,19 @@ class CompleteWebplayerClient:
         threading.Thread(target=validate_code, daemon=True).start()
         
     def handle_store_select(self):
-        """Handle store selection."""
-        if self.selected_store is not None and self.selected_store < len(self.available_stores):
-            store = self.available_stores[self.selected_store]
-            self.store_id = store.get('store_id', '')
-            logger.info(f"✅ Selected store: {self.store_id}")
-            self.setup_step = "screen"
+        """Handle store code submission."""
+        if len(self.input_text) > 0 and self.input_text.isdigit():
+            self.store_id = self.input_text
+            logger.info(f"✅ Store code entered: {self.store_id}")
+            
+            # Fetch available screens for this store
+            def fetch_screens():
+                screens = self.fetch_available_screens(self.store_id)
+                self.available_screens = screens
+                self.setup_step = "screen"
+                logger.info("✅ Moving to screen selection")
+                
+            threading.Thread(target=fetch_screens, daemon=True).start()
             
     def handle_screen_select(self, screen_id: str):
         """Handle screen selection."""
