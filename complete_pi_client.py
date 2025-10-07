@@ -159,29 +159,39 @@ class CompleteWebplayerClient:
         pygame.display.set_caption("Pizza Hut TV - Complete Pi Client")
         pygame.mouse.set_visible(False)
         
-        # Colors matching webplayer exactly
+        # Colors matching custom_player.py dark theme EXACTLY
         self.colors = {
-            'pizza_red': (227, 24, 55),      # #e31837
-            'pizza_red_dark': (196, 30, 58), # #c41e3a  
-            'gold': (255, 215, 0),           # #ffd700
-            'white': (255, 255, 255),
-            'black': (0, 0, 0),
-            'container_bg': (0, 0, 0, 76),   # rgba(0,0,0,0.3)
-            'light_gray': (200, 200, 200),
-            'input_bg': (255, 255, 255, 25)  # rgba(255,255,255,0.1)
+            'background': (13, 13, 13),           # #0d0d0d - main background
+            'pizza_red': (200, 16, 46),           # #c8102e - primary red (EA TV branding)
+            'pizza_red_hover': (160, 13, 36),     # #a00d24 - hover/active state
+            'white': (255, 255, 255),             # #ffffff - primary text
+            'light_gray': (244, 244, 244),        # #f4f4f4 - title text
+            'medium_gray': (204, 204, 204),       # #cccccc - label text
+            'gray': (187, 187, 187),              # #bbbbbb - subtitle text
+            'dark_gray': (153, 153, 153),         # #999999 - status text
+            'input_bg': (0, 0, 0),                # #000000 - input background
+            'input_border': (51, 51, 51),         # #333333 - input border
+            'input_border_focus': (200, 16, 46),  # #c8102e - input border on focus
+            'success': (0, 255, 0),               # #00ff00 - success messages
+            'error': (255, 68, 68)                # #ff4444 - error messages
         }
         
-        # Fonts matching webplayer sizes
+        # Fonts matching custom_player.py (Arial, similar sizes)
+        # Tkinter pt to Pygame px conversion: ~1.4x multiplier
         try:
-            self.font_logo = pygame.font.Font(None, 72)      
-            self.font_large = pygame.font.Font(None, 48)     
-            self.font_medium = pygame.font.Font(None, 36)    
-            self.font_small = pygame.font.Font(None, 24)     
+            self.font_title = pygame.font.Font(None, 28)      # Title: 20pt Tkinter → 28px Pygame
+            self.font_subtitle = pygame.font.Font(None, 18)   # Subtitle: 12pt Tkinter → 18px Pygame
+            self.font_label = pygame.font.Font(None, 16)      # Label: 11pt Tkinter → 16px Pygame
+            self.font_input = pygame.font.Font(None, 22)      # Input: 14pt Tkinter → 22px Pygame (bold)
+            self.font_button = pygame.font.Font(None, 18)     # Button: 12pt Tkinter → 18px Pygame (bold)
+            self.font_small = pygame.font.Font(None, 14)      # Small text: 10pt Tkinter → 14px Pygame
         except:
-            self.font_logo = pygame.font.SysFont('arial', 72, bold=True)
-            self.font_large = pygame.font.SysFont('arial', 48)
-            self.font_medium = pygame.font.SysFont('arial', 36)
-            self.font_small = pygame.font.SysFont('arial', 24)
+            self.font_title = pygame.font.SysFont('arial', 28, bold=True)
+            self.font_subtitle = pygame.font.SysFont('arial', 18)
+            self.font_label = pygame.font.SysFont('arial', 16)
+            self.font_input = pygame.font.SysFont('arial', 22, bold=True)
+            self.font_button = pygame.font.SysFont('arial', 18, bold=True)
+            self.font_small = pygame.font.SysFont('arial', 14)
         
         # State management
         self.current_state = "setup"  # setup, playing, error
@@ -217,38 +227,22 @@ class CompleteWebplayerClient:
         logger.info(f"🍕 Complete Pi Webplayer Client initialized: {self.width}x{self.height}")
         
     def create_gradient_background(self) -> pygame.Surface:
-        """Create Pizza Hut gradient background like webplayer."""
+        """Create solid dark background like custom_player.py (#0d0d0d)."""
         background = pygame.Surface((self.width, self.height))
-        
-        # Linear gradient from pizza_red to pizza_red_dark (135deg)
-        for y in range(self.height):
-            for x in range(self.width):
-                progress = (x + y) / (self.width + self.height)
-                progress = max(0.0, min(1.0, progress))
-                
-                r = int(self.colors['pizza_red'][0] * (1 - progress) + self.colors['pizza_red_dark'][0] * progress)
-                g = int(self.colors['pizza_red'][1] * (1 - progress) + self.colors['pizza_red_dark'][1] * progress)
-                b = int(self.colors['pizza_red'][2] * (1 - progress) + self.colors['pizza_red_dark'][2] * progress)
-                
-                background.set_at((x, y), (r, g, b))
-                
+        background.fill(self.colors['background'])  # Solid #0d0d0d
         return background
         
     def create_container_surface(self, width: int, height: int) -> pygame.Surface:
-        """Create container with webplayer styling."""
+        """Create container with custom_player.py dark styling."""
         container = pygame.Surface((width, height), pygame.SRCALPHA)
-        container.fill((0, 0, 0, 76))  # rgba(0,0,0,0.3)
         
-        # Border radius effect
-        corner_radius = 20
-        mask = pygame.Surface((width, height), pygame.SRCALPHA)
-        pygame.draw.rect(mask, (255, 255, 255, 255), (0, 0, width, height), border_radius=corner_radius)
+        # Solid black background with padding (matching Tkinter panel)
+        pygame.draw.rect(container, self.colors['background'], (0, 0, width, height), border_radius=8)
         
-        result = pygame.Surface((width, height), pygame.SRCALPHA)
-        result.blit(container, (0, 0))
-        result.blit(mask, (0, 0), special_flags=pygame.BLEND_ALPHA_SDL2)
+        # Subtle border
+        pygame.draw.rect(container, (30, 30, 30), (0, 0, width, height), 2, border_radius=8)
         
-        return result
+        return container
         
     def draw_setup_screen(self):
         """Draw setup screen matching webplayer design."""
@@ -263,10 +257,10 @@ class CompleteWebplayerClient:
         container = self.create_container_surface(container_width, container_height)
         self.screen.blit(container, (container_x, container_y))
         
-        # Logo
-        logo_text = self.font_logo.render("🍕 PIZZA HUT TV", True, self.colors['white'])
-        logo_rect = logo_text.get_rect(center=(self.width // 2, container_y + 80))
-        self.screen.blit(logo_text, logo_rect)
+        # Title - matching custom_player.py style
+        title_text = self.font_title.render("Enter your Android TV pairing code", True, self.colors['light_gray'])
+        title_rect = title_text.get_rect(center=(self.width // 2, container_y + 60))
+        self.screen.blit(title_text, title_rect)
         
         if self.setup_step == "code":
             self.draw_code_input_screen(container_x, container_y, container_width)
@@ -276,92 +270,98 @@ class CompleteWebplayerClient:
             self.draw_screen_selection_screen(container_x, container_y, container_width)
             
     def draw_code_input_screen(self, container_x: int, container_y: int, container_width: int):
-        """Draw 4-digit code input screen."""
-        subtitle = self.font_medium.render("Connect to Android TV", True, self.colors['white'])
-        subtitle_rect = subtitle.get_rect(center=(self.width // 2, container_y + 140))
+        """Draw 4-digit code input screen matching custom_player.py."""
+        # Subtitle
+        subtitle = self.font_subtitle.render("Type the 4-digit code from dashboard", True, self.colors['gray'])
+        subtitle_rect = subtitle.get_rect(center=(self.width // 2, container_y + 100))
         self.screen.blit(subtitle, subtitle_rect)
         
-        label = self.font_medium.render("Enter 4-Digit TV Link Code:", True, self.colors['white'])
-        label_rect = label.get_rect(center=(self.width // 2, container_y + 200))
+        # Input label - LEFT ALIGNED like custom_player.py
+        label = self.font_label.render("4-digit code", True, self.colors['medium_gray'])
+        label_rect = label.get_rect(topleft=(container_x + 40, container_y + 150))
         self.screen.blit(label, label_rect)
         
-        # Input field with exact webplayer styling
+        # Input field with custom_player.py styling
         input_width = 300
         input_height = 60
         input_x = (self.width - input_width) // 2
-        input_y = container_y + 240
+        input_y = container_y + 180
         
-        input_bg = pygame.Surface((input_width, input_height), pygame.SRCALPHA)
-        input_bg.fill((255, 255, 255, 25))  # rgba(255,255,255,0.1)
-        pygame.draw.rect(input_bg, self.colors['white'], (0, 0, input_width, input_height), 3, border_radius=10)
-        self.screen.blit(input_bg, (input_x, input_y))
+        # Black background with border
+        pygame.draw.rect(self.screen, self.colors['input_bg'], (input_x, input_y, input_width, input_height), border_radius=8)
+        border_color = self.colors['input_border_focus'] if len(self.input_text) > 0 else self.colors['input_border']
+        pygame.draw.rect(self.screen, border_color, (input_x, input_y, input_width, input_height), 2, border_radius=8)
         
-        # Input text with letter spacing
-        display_text = self.input_text.ljust(4, "_")
+        # Input text centered
+        display_text = self.input_text if self.input_text else "____"
         spaced_text = "  ".join(display_text)
         
-        input_text_surface = self.font_large.render(spaced_text, True, self.colors['white'])
+        input_text_surface = self.font_input.render(spaced_text, True, self.colors['white'])
         text_rect = input_text_surface.get_rect(center=(input_x + input_width // 2, input_y + input_height // 2))
         self.screen.blit(input_text_surface, text_rect)
         
-        # Connect button
-        self.draw_connect_button(container_y + 340)
+        # Link Code button
+        self.draw_link_button(container_y + 280)
         
-        # Instructions
-        instructions = [
-            "1. Find the 4-digit code displayed on your Android TV",
-            "2. Enter the code above to connect", 
-            "3. Select your store and screen"
-        ]
-        
-        for i, instruction in enumerate(instructions):
-            inst_text = self.font_small.render(instruction, True, self.colors['light_gray'])
-            inst_rect = inst_text.get_rect(center=(self.width // 2, container_y + 400 + i * 25))
-            self.screen.blit(inst_text, inst_rect)
+        # Status message
+        if hasattr(self, 'status_message'):
+            status_color = self.colors['success'] if 'accepted' in self.status_message else self.colors['error']
+            status_text = self.font_small.render(self.status_message, True, status_color)
+            status_rect = status_text.get_rect(center=(self.width // 2, container_y + 350))
+            self.screen.blit(status_text, status_rect)
             
-    def draw_connect_button(self, y_pos: int):
-        """Draw connect button."""
+    def draw_link_button(self, y_pos: int):
+        """Draw Link Code button matching custom_player.py style."""
         button_width = 200
         button_height = 50
         button_x = (self.width - button_width) // 2
         
         enabled = len(self.input_text) == 4 and self.input_text.isdigit()
-        bg_color = self.colors['gold'] if enabled else (102, 102, 102)
-        text_color = self.colors['pizza_red'] if enabled else (153, 153, 153)
+        bg_color = self.colors['pizza_red'] if enabled else (102, 102, 102)
+        text_color = self.colors['white']
         
-        pygame.draw.rect(self.screen, bg_color, (button_x, y_pos, button_width, button_height), border_radius=10)
+        # Draw button with rounded corners
+        pygame.draw.rect(self.screen, bg_color, (button_x, y_pos, button_width, button_height), border_radius=8)
         
-        button_text = self.font_medium.render("CONNECT TO TV", True, text_color)
+        button_text = self.font_button.render("Link Code", True, text_color)
         text_rect = button_text.get_rect(center=(button_x + button_width // 2, y_pos + button_height // 2))
         self.screen.blit(button_text, text_rect)
         
     def draw_store_selection_screen(self, container_x: int, container_y: int, container_width: int):
-        """Draw store selection screen."""
-        title = self.font_large.render("Select Store", True, self.colors['white'])
-        title_rect = title.get_rect(center=(self.width // 2, container_y + 140))
+        """Draw store selection screen matching custom_player.py."""
+        # Title
+        title = self.font_title.render("Select Store", True, self.colors['light_gray'])
+        title_rect = title.get_rect(center=(self.width // 2, container_y + 100))
         self.screen.blit(title, title_rect)
+        
+        # Subtitle
+        subtitle = self.font_subtitle.render("Choose your store location", True, self.colors['gray'])
+        subtitle_rect = subtitle.get_rect(center=(self.width // 2, container_y + 140))
+        self.screen.blit(subtitle, subtitle_rect)
         
         start_y = container_y + 200
         for i, store in enumerate(self.available_stores[:5]):
-            store_y = start_y + i * 50
+            store_y = start_y + i * 60
             
-            button_width = container_width - 60
-            button_height = 40
-            button_x = container_x + 30
+            button_width = container_width - 100
+            button_height = 50
+            button_x = container_x + 50
             
-            bg_color = self.colors['gold'] if i == self.selected_store else (50, 50, 50)
-            text_color = self.colors['pizza_red'] if i == self.selected_store else self.colors['white']
+            # Selected state with EA TV red
+            bg_color = self.colors['pizza_red'] if i == self.selected_store else (30, 30, 30)
+            text_color = self.colors['white']
+            border_color = self.colors['pizza_red'] if i == self.selected_store else self.colors['input_border']
             
             pygame.draw.rect(self.screen, bg_color, (button_x, store_y, button_width, button_height), border_radius=5)
             
             store_name = store.get('store_name', f"Store {store.get('store_id', 'Unknown')}")
-            store_text = self.font_medium.render(store_name, True, text_color)
+            store_text = self.font_button.render(store_name, True, text_color)
             text_rect = store_text.get_rect(center=(button_x + button_width // 2, store_y + button_height // 2))
             self.screen.blit(store_text, text_rect)
             
     def draw_screen_selection_screen(self, container_x: int, container_y: int, container_width: int):
         """Draw screen selection screen."""
-        title = self.font_large.render("Select Screen", True, self.colors['white'])
+        title = self.font_title.render("Select Screen", True, self.colors['white'])
         title_rect = title.get_rect(center=(self.width // 2, container_y + 140))
         self.screen.blit(title, title_rect)
         
@@ -378,7 +378,7 @@ class CompleteWebplayerClient:
             bg_color = (50, 50, 50)
             pygame.draw.rect(self.screen, bg_color, (button_x, screen_y, button_width, button_height), border_radius=5)
             
-            screen_text = self.font_medium.render(f"Screen {screen.upper()}", True, self.colors['white'])
+            screen_text = self.font_button.render(f"Screen {screen.upper()}", True, self.colors['white'])
             text_rect = screen_text.get_rect(center=(button_x + button_width // 2, screen_y + button_height // 2))
             self.screen.blit(screen_text, text_rect)
             
@@ -387,7 +387,7 @@ class CompleteWebplayerClient:
         if not self.playlist:
             # Show idle message like webplayer
             self.screen.fill(self.colors['black'])
-            idle_text = self.font_large.render("Waiting for schedule...", True, self.colors['white'])
+            idle_text = self.font_subtitle.render("Waiting for schedule...", True, self.colors['white'])
             idle_rect = idle_text.get_rect(center=(self.width // 2, self.height // 2))
             self.screen.blit(idle_text, idle_rect)
             
