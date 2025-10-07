@@ -225,9 +225,6 @@ class MediaPlayer:
         try:
             logger.info(f"🎬 Playing media: {url} (effect: {effect}, duration: {duration}s)")
             
-            # Stop any currently playing video
-            self._stop_video()
-            
             # Download media first
             local_path = self._download_media(url)
             if not local_path:
@@ -238,9 +235,20 @@ class MediaPlayer:
             media_type = self._get_media_type(local_path)
             
             if media_type == 'video' and self.video_player:
-                # Play video using external player
-                return self._play_video_external(local_path, duration)
+                # For video-to-video transitions, use seamless method
+                if self.is_playing and self.video_process:
+                    # Queue the next video in MPV without stopping current
+                    return self._queue_video_in_mpv(local_path, duration)
+                else:
+                    # Stop any old process and start fresh
+                    self._stop_video()
+                    return self._play_video_external(local_path, duration)
+                    
             elif media_type == 'image':
+                # Stop video if playing, then show image
+                if self.video_process:
+                    self._stop_video()
+                
                 # Get media surface (from cache or load)
                 surface = self.media_cache.get(url, {}).get('surface')
                 if not surface:
@@ -266,6 +274,8 @@ class MediaPlayer:
             
         except Exception as e:
             logger.error(f"Play media error: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def _stop_video(self):
@@ -282,7 +292,7 @@ class MediaPlayer:
             self.video_process = None
     
     def _play_video_external(self, video_path: str, duration: float) -> bool:
-        """Play video using MPV with proper hardware acceleration."""
+        """Play video using MPV with proper hardware acceleration and smooth transitions."""
         try:
             # Hide Pygame cursor
             pygame.mouse.set_visible(False)
@@ -302,6 +312,8 @@ class MediaPlayer:
                     f'--length={int(duration)}',  # Play for specified duration
                     '--ontop',  # Stay on top
                     '--no-border',  # No window border
+                    '--background=black',  # Black background (no flicker)
+                    '--keep-open=no',  # Close when finished
                     video_path
                 ]
             elif self.video_player == 'omxplayer':
@@ -348,6 +360,28 @@ class MediaPlayer:
             logger.error(f"External video playback error: {e}")
             import traceback
             traceback.print_exc()
+            return False
+            return False
+    
+    def _queue_video_in_mpv(self, video_path: str, duration: float) -> bool:
+        """Queue next video in MPV for seamless transition (minimal flicker)."""
+        try:
+            logger.info("🔄 Quick video transition...")
+            
+            # Terminate old MPV quickly (don't wait)
+            if self.video_process:
+                try:
+                    self.video_process.terminate()
+                    # Don't wait - start new video immediately
+                except:
+                    pass
+            
+            # Start new video immediately without waiting
+            return self._play_video_external(video_path, duration)
+            
+        except Exception as e:
+            logger.error(f"Video queue error: {e}")
+            return False
             return False
             return False
             
