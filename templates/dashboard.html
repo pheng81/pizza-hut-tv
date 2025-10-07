@@ -4317,13 +4317,27 @@
             // Initialize the store dropdown to match currentStoreId
             const storeSelect = document.getElementById('storeSelect');
             storeSelect.value = currentStoreId;
-            
+
             // Update store display
             const storeData = allStoresData.stores.find(store => store.id === currentStoreId);
             if (storeData) {
                 document.getElementById('current-store-id').textContent = storeData.id;
                 document.getElementById('current-store-name').textContent = storeData.name;
             }
+
+            // Add Auto Sync Upload Video button to dashboard header if not present
+            setTimeout(() => {
+                let btn = document.getElementById('auto-sync-upload-btn');
+                if (!btn) {
+                    btn = document.createElement('button');
+                    btn.id = 'auto-sync-upload-btn';
+                    btn.textContent = 'Auto Sync Upload Video';
+                    btn.style.cssText = 'margin: 0 12px; padding: 8px 18px; background: #c8102e; color: #fff; font-weight: bold; border-radius: 8px; border: none; font-size: 16px; cursor: pointer;';
+                    btn.onclick = showScreenSyncUploadModal;
+                    const header = document.querySelector('.dashboard-header') || document.body;
+                    header.insertBefore(btn, header.firstChild);
+                }
+            }, 400);
 
             // --- Live Preview Rotation (Dashboard) ---
             (()=>{ // IIFE to avoid globals clashing if script reloaded
@@ -4975,11 +4989,18 @@
                 if(iid === 'SINGLE'){
                     markAsChanged(); // Mark as unsaved before assign
                     fetch('/assign_to_screen', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({store_id: currentStoreId, screen_id: sid, filename: name})})
-                    .then(r=>r.json()).then(d=>{ 
+                    .then(r=>r.json()).then(async d=>{ 
                         if(d.success){ 
                             closeReplaceModal(); 
                             markAsSaved(); // Clear unsaved flag after successful assign
                             refreshPlaylist(sid); 
+                            // Auto-add screen after upload if max not reached
+                            if(typeof detectExpandableSyncGroup === 'function') {
+                                const st = detectExpandableSyncGroup();
+                                if(st.has && st.count < 5) {
+                                    await addSyncFollower();
+                                }
+                            }
                         } else { 
                             alert('Assign failed: '+(d.error||'unknown')); 
                         } 
@@ -5252,58 +5273,49 @@
                     const screenId = window.__syncTargetScreen; if(!screenId){ alert('No target screen'); return; }
                     const sel = document.getElementById('sync-count');
                     const count = parseInt(sel && sel.value || '2', 10);
-                    const payload = { store_id: currentStoreId, base_screen_id: screenId, count, filename: name };
-                    const r = await fetch('/sync/create', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+                    // New: trigger backend slicing
+                    const payload = { store_id: currentStoreId, base_screen_id: screenId, count, filename: name, physical_slice: true };
+                    const r = await fetch('/sync/slice_and_create', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
                     const j = await r.json();
                     if(!j.success){ alert('Sync create failed: ' + (j.error||'unknown')); return; }
                     closeSyncModal();
                     // Refresh all involved preview playlists
                     try{ refreshPlaylist(screenId); }catch{}
                     try{ (j.used_screens||[]).forEach(s=>{ if(s!==screenId) refreshPlaylist(s); }); }catch{}
-                    showMessage('Sync group created across '+ (j.used_screens||[]).length +' screen(s)');
-                    // --- NEW: update allStoresData so Add Sync Screen button appears immediately ---
+                    showMessage('Video sliced and synced across '+ (j.used_screens||[]).length +' screen(s)');
+                    // Update allStoresData with unique slice files
                     try {
                         if(!allStoresData.screens[currentStoreId]) allStoresData.screens[currentStoreId] = {};
-                        const mediaFile = j.filename || payload.filename;
                         (j.members||[]).forEach(mem=>{
                             const sid = mem.screen_id;
                             if(!allStoresData.screens[currentStoreId][sid]) allStoresData.screens[currentStoreId][sid] = { playlist: [] };
                             const scr = allStoresData.screens[currentStoreId][sid];
                             if(!Array.isArray(scr.playlist)) scr.playlist = [];
-                            const existing = scr.playlist.find(it=> it.sync_ref && it.sync_ref.group === j.group_id && it.sync_ref.role === mem.role);
-                            if(!existing){
-                                scr.playlist.push({ id: mem.item_id, file: mediaFile, enabled:true, schedule:[], duration:10, repeat:true, link_next:false, sync_ref:{ group: j.group_id, role: mem.role, order: mem.order, count: j.count, mode: 'split-h' } });
-                            } else {
-                                // Ensure existing item gets updated count/mode too
-                                try {
-                                    existing.sync_ref.count = j.count;
-                                    if(!existing.sync_ref.mode) existing.sync_ref.mode = 'split-h';
-                                } catch {}
-                            }
-                            if(!scr.file) scr.file = mediaFile;
+                            // Each member gets its own slice file
+                            scr.playlist.push({ id: mem.item_id, file: mem.slice_file, enabled:true, schedule:[], duration:10, repeat:true, link_next:false, sync_ref:{ group: j.group_id, role: mem.role, order: mem.order, count: j.count, mode: 'split-h' } });
+                            scr.file = mem.slice_file;
                         });
                         // Populate deterministic order cache directly from server response
                         try {
                             window.__syncOrderCache = window.__syncOrderCache || {};
                             const map = {};
                             (j.members||[]).forEach(mem=>{ if(typeof mem.order === 'number') map[mem.screen_id] = mem.order; });
-                            if(Object.keys(map).length){ window.__syncOrderCache[j.group_id] = map; console.log('[SYNC][CREATE] order cache seeded', j.group_id, map); }
-                        } catch(e){ console.warn('[SYNC][CREATE] failed to seed order cache', e); }
+                            if(Object.keys(map).length){ window.__syncOrderCache[j.group_id] = map; }
+                        } catch(e){ }
                         // Force immediate preview re-run so slicing applies without waiting for rotation
                         try {
                             (j.used_screens||[]).forEach(sid=>{
                                 const pt = previewTimers && previewTimers[sid];
-                                if(pt){ pt.index = 0; try { runPreview(sid); console.log('[SYNC][CREATE] forced preview rerun', sid); } catch(err){ console.warn('preview rerun failed', sid, err); } }
+                                if(pt){ pt.index = 0; try { runPreview(sid); } catch(err){ } }
                             });
                         } catch{}
                         const btn = document.getElementById('add-sync-screen-btn');
                         if(btn){
-                            btn.disabled = false; // enable now that a master exists
+                            btn.disabled = false;
                             btn.textContent = '🔗 Add Sync Screen';
                         }
                         try { if(typeof refreshSyncAddButton==='function') refreshSyncAddButton(); } catch {}
-                        console.log('[SYNC][CREATE] Local state updated; sync button enabled');
-                    } catch(e){ console.warn('Failed to update local sync state', e); }
+                    } catch(e){ }
                 }catch(e){ alert('Sync create failed: '+ e.message); }
             }
 
@@ -5455,6 +5467,376 @@
                     if (progressLabel) {
                         progressLabel.style.display = 'none';
                     }
+                }
+            }
+
+            // ============================================
+            // AUTO-SLICE MULTI-SCREEN VIDEO MODAL
+            // ============================================
+            // Automatically detects video resolution and slices it into separate files for multi-screen sync
+            function openAutoSliceModal(screenId) {
+                // Create modal overlay
+                let modal = document.getElementById('auto-slice-modal');
+                if (!modal) {
+                    modal = document.createElement('div');
+                    modal.id = 'auto-slice-modal';
+                    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);display:none;align-items:center;justify-content:center;z-index:1100;';
+                    modal.innerHTML = `
+                        <div style="width:520px;max-width:95vw;background:#fff;border-radius:12px;padding:24px;box-shadow:0 10px 40px rgba(0,0,0,.4);">
+                            <div style="font-weight:700;font-size:20px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;color:#333;">
+                                <span>✂️ Auto-Slice Multi-Screen Video</span>
+                                <button onclick="closeAutoSliceModal()" style="background:none;border:none;font-size:28px;color:#999;cursor:pointer;padding:0;width:32px;height:32px;line-height:1;">×</button>
+                            </div>
+                            
+                            <div style="background:#f8f9fa;border-left:4px solid #28a745;padding:12px 16px;border-radius:6px;margin-bottom:20px;">
+                                <div style="font-size:14px;color:#333;font-weight:600;margin-bottom:6px;">🎯 Smart Resolution Detection</div>
+                                <div style="font-size:13px;color:#666;line-height:1.5;">
+                                    Upload a multi-screen video (e.g., 3840×1080, 7680×1080) and the system will:
+                                    <ul style="margin:8px 0 0 20px;padding:0;">
+                                        <li>Automatically detect the resolution</li>
+                                        <li>Calculate screen layout (horizontal/vertical)</li>
+                                        <li>Slice into individual 1920×1080 videos</li>
+                                        <li>Create synchronized screens</li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <div style="margin-bottom:20px;">
+                                <label style="display:block;font-size:14px;font-weight:600;margin-bottom:10px;color:#333;">Select Multi-Screen Video:</label>
+                                <input type="file" id="auto-slice-file-input" accept="video/*" 
+                                    style="width:100%;padding:12px;border:2px dashed #28a745;border-radius:8px;font-size:14px;cursor:pointer;background:#f8fff8;"
+                                    onchange="handleAutoSliceFileSelect(this)">
+                                <div id="auto-slice-file-info" style="margin-top:10px;font-size:13px;color:#666;min-height:20px;"></div>
+                            </div>
+
+                            <div style="background:#fff3cd;border-left:4px solid #ffc107;padding:10px 14px;border-radius:6px;margin-bottom:20px;font-size:12px;color:#856404;">
+                                <strong>💡 Supported Layouts:</strong><br>
+                                • <strong>Horizontal (side-by-side):</strong> 3840×1080 (2), 5760×1080 (3), 7680×1080 (4), 9600×1080 (5), 11520×1080 (6), 13440×1080 (7)<br>
+                                • <strong>Vertical (stacked):</strong> 1920×2160 (2), 1920×3240 (3), 1920×4320 (4), 1920×5400 (5), 1920×6480 (6), 1920×7560 (7)
+                            </div>
+
+                            <div style="display:flex;gap:12px;justify-content:flex-end;">
+                                <button onclick="closeAutoSliceModal()" 
+                                    style="padding:12px 24px;border:1px solid #ddd;background:#fff;border-radius:8px;cursor:pointer;font-size:14px;font-weight:500;color:#666;">
+                                    Cancel
+                                </button>
+                                <button id="auto-slice-upload-btn" onclick="doAutoSliceUpload()" disabled
+                                    style="padding:12px 24px;background:#28a745;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px;opacity:0.5;">
+                                    ✂️ Slice & Create Screens
+                                </button>
+                                <button id="auto-slice-check-jobs-btn" onclick="checkRecentSliceJobs()" 
+                                    style="padding:12px 24px;background:#17a2b8;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px;">
+                                    📋 Check Recent Jobs
+                                </button>
+                            </div>
+
+                            <div id="auto-slice-progress" style="display:none;margin-top:20px;padding:16px;background:#f8f9fa;border-radius:8px;">
+                                <div style="font-size:14px;font-weight:600;margin-bottom:10px;color:#333;" id="auto-slice-status">Processing...</div>
+                                <div style="width:100%;background:#e9ecef;border-radius:8px;height:8px;overflow:hidden;">
+                                    <div id="auto-slice-progress-bar" style="width:0%;background:#28a745;height:100%;transition:width 0.3s;"></div>
+                                </div>
+                                <div style="font-size:12px;color:#666;margin-top:8px;" id="auto-slice-detail"></div>
+                            </div>
+                        </div>`;
+                    document.body.appendChild(modal);
+                }
+                
+                // Reset modal state
+                document.getElementById('auto-slice-file-input').value = '';
+                document.getElementById('auto-slice-file-info').textContent = '';
+                document.getElementById('auto-slice-upload-btn').disabled = true;
+                document.getElementById('auto-slice-upload-btn').style.opacity = '0.5';
+                document.getElementById('auto-slice-progress').style.display = 'none';
+                
+                // Store the screen ID for context
+                window.__autoSliceScreenId = screenId;
+                
+                modal.style.display = 'flex';
+            }
+
+            function closeAutoSliceModal() {
+                const modal = document.getElementById('auto-slice-modal');
+                if (modal) modal.style.display = 'none';
+            }
+
+            function handleAutoSliceFileSelect(input) {
+                const fileInfo = document.getElementById('auto-slice-file-info');
+                const uploadBtn = document.getElementById('auto-slice-upload-btn');
+                
+                if (input.files && input.files[0]) {
+                    const file = input.files[0];
+                    const sizeMB = (file.size / 1024 / 1024).toFixed(2);
+                    fileInfo.innerHTML = `<strong>Selected:</strong> ${file.name} (${sizeMB} MB)`;
+                    fileInfo.style.color = '#28a745';
+                    uploadBtn.disabled = false;
+                    uploadBtn.style.opacity = '1';
+                } else {
+                    fileInfo.textContent = '';
+                    uploadBtn.disabled = true;
+                    uploadBtn.style.opacity = '0.5';
+                }
+            }
+
+            async function checkRecentSliceJobs() {
+                const progressDiv = document.getElementById('auto-slice-progress');
+                const statusText = document.getElementById('auto-slice-status');
+                const progressBar = document.getElementById('auto-slice-progress-bar');
+                const detailText = document.getElementById('auto-slice-detail');
+                
+                try {
+                    progressDiv.style.display = 'block';
+                    statusText.textContent = '🔍 Checking recent jobs...';
+                    progressBar.style.width = '50%';
+                    detailText.textContent = 'Fetching job history...';
+                    
+                    const response = await fetch('/api/list_slice_jobs');
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch jobs');
+                    }
+                    
+                    const data = await response.json();
+                    const jobs = data.jobs || [];
+                    
+                    if (jobs.length === 0) {
+                        statusText.textContent = '📭 No Recent Jobs';
+                        detailText.textContent = 'No completed slicing jobs found.';
+                        progressBar.style.width = '100%';
+                        return;
+                    }
+                    
+                    // Find the most recent completed job
+                    const completedJob = jobs.find(j => j.status === 'complete');
+                    
+                    if (completedJob && completedJob.result && completedJob.result.length > 0) {
+                        statusText.textContent = `✅ Found completed job! (${completedJob.screen_count} screens)`;
+                        detailText.textContent = `Layout: ${completedJob.layout} | Creating screens...`;
+                        progressBar.style.width = '75%';
+                        
+                        // Auto-create screens from this job
+                        const syncResponse = await fetch('/auto_create_sync_screens', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                sliced_files: completedJob.result,
+                                layout: completedJob.layout || 'horizontal',
+                                store_id: currentStoreId || 1
+                            })
+                        });
+                        
+                        if (syncResponse.ok) {
+                            const syncResult = await syncResponse.json();
+                            if (syncResult.success) {
+                                progressBar.style.width = '100%';
+                                progressBar.style.background = '#28a745';
+                                statusText.textContent = `🎉 Created ${syncResult.count} screens from recent job!`;
+                                detailText.textContent = `Screens: ${syncResult.screens.join(', ')}`;
+                                
+                                setTimeout(() => {
+                                    closeAutoSliceModal();
+                                    fetchScreenData();
+                                    showMessage(`Created ${syncResult.count} screens from completed job!`, '#28a745');
+                                }, 2000);
+                            }
+                        }
+                    } else {
+                        statusText.textContent = '⚠️ No Completed Jobs';
+                        detailText.textContent = 'Found jobs but none are completed yet. Please wait or upload a new video.';
+                        progressBar.style.width = '100%';
+                        progressBar.style.background = '#ffc107';
+                    }
+                    
+                } catch (error) {
+                    console.error('Check jobs error:', error);
+                    statusText.textContent = '❌ Error';
+                    statusText.style.color = '#dc3545';
+                    detailText.textContent = error.message;
+                    progressBar.style.background = '#dc3545';
+                }
+            }
+
+            async function doAutoSliceUpload() {
+                const fileInput = document.getElementById('auto-slice-file-input');
+                const progressDiv = document.getElementById('auto-slice-progress');
+                const statusText = document.getElementById('auto-slice-status');
+                const progressBar = document.getElementById('auto-slice-progress-bar');
+                const detailText = document.getElementById('auto-slice-detail');
+                const uploadBtn = document.getElementById('auto-slice-upload-btn');
+                
+                if (!fileInput.files.length) {
+                    alert('Please select a video file');
+                    return;
+                }
+
+                const file = fileInput.files[0];
+                
+                try {
+                    // Disable upload button
+                    uploadBtn.disabled = true;
+                    uploadBtn.style.opacity = '0.5';
+                    
+                    // Show progress
+                    progressDiv.style.display = 'block';
+                    statusText.textContent = '📤 Uploading video...';
+                    progressBar.style.width = '5%';
+                    detailText.textContent = 'Preparing upload...';
+
+                    // Create form data
+                    const formData = new FormData();
+                    formData.append('file', file);
+
+                    // Upload the file (backend will start background slicing job)
+                    const uploadResponse = await fetch('/upload_media', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!uploadResponse.ok) {
+                        throw new Error(`Upload failed: ${uploadResponse.statusText}`);
+                    }
+
+                    const uploadResult = await uploadResponse.json();
+                    
+                    if (!uploadResult.success) {
+                        throw new Error(uploadResult.error || 'Upload failed');
+                    }
+
+                    // Check if this is a multi-screen video with background job
+                    if (uploadResult.slice_job_id && uploadResult.screen_count > 1) {
+                        const jobId = uploadResult.slice_job_id;
+                        
+                        statusText.textContent = `🔍 Detected ${uploadResult.screen_count}-screen ${uploadResult.layout} layout`;
+                        detailText.textContent = 'Starting video slicing...';
+                        progressBar.style.width = '10%';
+                        
+                        // Poll for job completion
+                        let jobComplete = false;
+                        let jobResult = null;
+                        let pollAttempts = 0;
+                        const maxPolls = 600; // 10 minutes max (1 sec interval) - increased for large videos
+                        
+                        while (!jobComplete && pollAttempts < maxPolls) {
+                            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+                            pollAttempts++;
+                            
+                            try {
+                                const statusResponse = await fetch(`/slice_job_status/${jobId}`);
+                                if (statusResponse.ok) {
+                                    const statusData = await statusResponse.json();
+                                    
+                                    if (statusData.success) {
+                                        const jobStatus = statusData.status;
+                                        const jobProgress = statusData.progress || 0;
+                                        
+                                        // Update progress bar
+                                        progressBar.style.width = `${Math.min(jobProgress, 95)}%`;
+                                        
+                                        if (jobStatus === 'complete') {
+                                            jobComplete = true;
+                                            jobResult = statusData;
+                                            statusText.textContent = '✅ Video sliced successfully!';
+                                            detailText.textContent = `Created ${statusData.result?.length || 0} sliced videos`;
+                                        } else if (jobStatus === 'error') {
+                                            throw new Error(statusData.error || 'Slicing failed');
+                                        } else {
+                                            // Still processing
+                                            const elapsedTime = Math.floor(pollAttempts / 60);
+                                            const timeStr = elapsedTime > 0 ? ` (${elapsedTime}m ${pollAttempts % 60}s)` : ` (${pollAttempts}s)`;
+                                            statusText.textContent = `✂️ Slicing video (${jobProgress}%)${timeStr}`;
+                                            detailText.textContent = statusData.stage || `Processing screen ${statusData.current_screen || 0}/${statusData.screen_count || 0}`;
+                                        }
+                                    }
+                                }
+                            } catch (pollError) {
+                                console.error('Poll error:', pollError);
+                                // Don't throw error, just continue polling
+                            }
+                        }
+                        
+                        if (!jobComplete) {
+                            // Instead of error, show "still processing" message
+                            statusText.textContent = '⏳ Still Processing...';
+                            statusText.style.color = '#ffc107';
+                            detailText.textContent = `Video is taking longer than expected (${Math.floor(pollAttempts/60)} min). You can close this and check the dashboard in a few minutes - screens will appear automatically when complete.`;
+                            progressBar.style.background = '#ffc107';
+                            
+                            // Re-enable button
+                            uploadBtn.disabled = false;
+                            uploadBtn.style.opacity = '1';
+                            uploadBtn.textContent = 'Close';
+                            uploadBtn.onclick = () => {
+                                closeAutoSliceModal();
+                                showMessage(`Video is still processing in background. Job ID: ${jobId}. Check back in a few minutes!`, '#ffc107');
+                            };
+                            return; // Don't throw error
+                        }
+                        
+                        // Job complete! Now create sync screens
+                        const slicedFiles = jobResult.result || [];
+                        if (slicedFiles.length > 0) {
+                            statusText.textContent = '🎬 Creating synchronized screens...';
+                            detailText.textContent = `Creating ${slicedFiles.length} screens...`;
+                            progressBar.style.width = '96%';
+
+                            // Use the auto-create sync screens endpoint
+                            const syncResponse = await fetch('/auto_create_sync_screens', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    sliced_files: slicedFiles,
+                                    layout: jobResult.layout || uploadResult.layout || 'horizontal',
+                                    store_id: currentStoreId || 1
+                                })
+                            });
+
+                            if (!syncResponse.ok) {
+                                throw new Error('Failed to create sync screens');
+                            }
+
+                            const syncResult = await syncResponse.json();
+                            
+                            if (!syncResult.success) {
+                                throw new Error(syncResult.error || 'Failed to create screens');
+                            }
+                            
+                            progressBar.style.width = '100%';
+                            progressBar.style.background = '#28a745';
+                            statusText.textContent = `🎉 Success! Created ${syncResult.count} synchronized screens!`;
+                            detailText.textContent = `Layout: ${jobResult.layout} | Screens: ${syncResult.screens.join(', ')}`;
+
+                            // Wait a moment then close and refresh
+                            setTimeout(() => {
+                                closeAutoSliceModal();
+                                fetchScreenData(); // Refresh dashboard
+                                showMessage(`Auto-Slice Complete! Created ${syncResult.count} synchronized screens from ${jobResult.layout} layout.`, '#28a745');
+                            }, 2000);
+                        } else {
+                            throw new Error('No sliced files created');
+                        }
+
+                    } else if (uploadResult.screen_count === 1) {
+                        // Single screen video - just show message
+                        progressBar.style.width = '100%';
+                        statusText.textContent = '⚠️ Single Screen Detected';
+                        detailText.textContent = 'This is a standard 1920×1080 video. Use "Schedule" button for single screens.';
+                        
+                        setTimeout(() => {
+                            closeAutoSliceModal();
+                            showMessage('This is a single-screen video (1920×1080). Use the Schedule button instead.', '#ffc107');
+                        }, 3000);
+                    } else {
+                        throw new Error('Unexpected upload response format');
+                    }
+
+                } catch (error) {
+                    console.error('Auto-slice failed:', error);
+                    statusText.textContent = '❌ Error';
+                    statusText.style.color = '#dc3545';
+                    detailText.textContent = error.message;
+                    progressBar.style.background = '#dc3545';
+                    
+                    // Re-enable button after error
+                    uploadBtn.disabled = false;
+                    uploadBtn.style.opacity = '1';
                 }
             }
         
@@ -6235,304 +6617,6 @@
             </div>
         </div>
     </div>
-
-    <!-- Auto-Slice Upload Modal -->
-    <div id="auto-slice-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:10000; align-items:center; justify-content:center;">
-        <div style="background:white; border-radius:8px; padding:20px; max-width:500px; width:90%;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                <h3 style="margin:0;">✂️ Auto-Slice Multi-Screen Upload</h3>
-                <button onclick="closeAutoSliceModal()" style="background:none; border:none; font-size:24px; cursor:pointer; color:#666;">×</button>
-            </div>
-            <div style="margin-bottom:20px; color:#666; font-size:14px;">
-                <p style="margin:5px 0;">Upload a multi-screen video and it will automatically:</p>
-                <ul style="margin:10px 0; padding-left:20px;">
-                    <li>Detect resolution (e.g., 7680×1080 = 4 horizontal screens)</li>
-                    <li>Slice into separate videos for each screen</li>
-                    <li>Upload all slices to CDN for fast playback</li>
-                    <li>Create synchronized playlist items</li>
-                </ul>
-                <p style="margin:10px 0; padding:10px; background:#fff3cd; border-radius:4px; font-size:13px;">
-                    <strong>Supported:</strong> Horizontal (1920×1080 base) or Vertical (1080×1920 base), 2-7 screens
-                </p>
-            </div>
-            <div style="margin-bottom:20px;">
-                <label style="display:block; margin-bottom:8px; font-weight:600;">Select Video File:</label>
-                <input type="file" id="auto-slice-file-input" accept="video/*" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
-            </div>
-            <div id="auto-slice-progress" style="display:none; margin-bottom:15px;">
-                <div style="background:#f0f0f0; border-radius:4px; height:32px; overflow:hidden; position:relative; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);">
-                    <div id="auto-slice-progress-bar" style="background:linear-gradient(90deg, #ff9800 0%, #ff6f00 100%); height:100%; width:0%; transition:width 0.5s ease-out;"></div>
-                    <div id="auto-slice-progress-text" style="position:absolute; top:0; left:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:#333; text-shadow:0 1px 2px rgba(255,255,255,0.8);">0%</div>
-                </div>
-                <div id="auto-slice-status" style="margin-top:12px; font-size:14px; color:#333; font-weight:500;"></div>
-                <div id="auto-slice-time-estimate" style="margin-top:6px; font-size:12px; color:#666; font-style:italic;"></div>
-            </div>
-            <div style="display:flex; gap:10px; justify-content:flex-end;">
-                <button onclick="closeAutoSliceModal()" style="padding:10px 20px; border:1px solid #ddd; background:white; border-radius:4px; cursor:pointer;">Cancel</button>
-                <button onclick="doAutoSliceUpload()" style="padding:10px 20px; background:#28a745; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:600;">Upload & Auto-Slice</button>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        let autoSliceTargetScreen = null;
-
-        function openAutoSliceModal(screenId) {
-            autoSliceTargetScreen = screenId;
-            document.getElementById('auto-slice-modal').style.display = 'flex';
-            document.getElementById('auto-slice-file-input').value = '';
-            document.getElementById('auto-slice-progress').style.display = 'none';
-            document.getElementById('auto-slice-progress-bar').style.width = '0%';
-            document.getElementById('auto-slice-progress-text').textContent = '0%';
-        }
-
-        function closeAutoSliceModal() {
-            document.getElementById('auto-slice-modal').style.display = 'none';
-            autoSliceTargetScreen = null;
-        }
-
-        async function pollSliceJob(jobId, statusDiv, progressBar, progressText, timeEstimateDiv) {
-            console.log(`[AUTO-SLICE] Polling job: ${jobId}`);
-            const maxAttempts = 300;  // 5 minutes max (300 * 1 second)
-            let attempts = 0;
-            const startTime = Date.now();
-            
-            while (attempts < maxAttempts) {
-                try {
-                    const response = await fetch(`/slice_job_status/${jobId}`);
-                    const data = await response.json();
-                    
-                    if (data.success) {
-                        console.log(`[AUTO-SLICE] Job status:`, data);
-                        
-                        if (data.status === 'complete') {
-                            // Success! Auto-create sync screens with sliced videos
-                            const sliceCount = data.result ? data.result.length : 0;
-                            const elapsedMin = ((Date.now() - startTime) / 60000).toFixed(1);
-                            progressBar.style.background = 'linear-gradient(90deg, #28a745 0%, #20c997 100%)';
-                            progressBar.style.width = '100%';
-                            progressText.textContent = '100%';
-                            statusDiv.innerHTML = `✅ <strong>Created ${sliceCount} sliced videos in ${elapsedMin} min!</strong>`;
-                            timeEstimateDiv.textContent = 'Creating synchronized screens...';
-                            
-                            // Auto-create sync screens and add videos
-                            if (data.result && data.result.length > 0) {
-                                try {
-                                    const createResponse = await fetch('/auto_create_sync_screens', {
-                                        method: 'POST',
-                                        headers: {'Content-Type': 'application/json'},
-                                        body: JSON.stringify({
-                                            sliced_files: data.result,
-                                            layout: data.layout,
-                                            store_id: currentStoreId
-                                        })
-                                    });
-                                    
-                                    const createData = await createResponse.json();
-                                    if (createData.success) {
-                                        statusDiv.innerHTML = `✅ <strong>Success! Created ${sliceCount} sync screens with videos!</strong>`;
-                                        timeEstimateDiv.textContent = `Total time: ${elapsedMin} minutes`;
-                                        console.log('[AUTO-SLICE] Auto-created screens:', createData.screens);
-                                    } else {
-                                        statusDiv.innerHTML = `✅ <strong>Videos created!</strong> ${createData.error || 'Manual setup needed'}`;
-                                        timeEstimateDiv.textContent = '';
-                                    }
-                                } catch (screenError) {
-                                    console.error('[AUTO-SLICE] Failed to auto-create screens:', screenError);
-                                    statusDiv.innerHTML = `✅ <strong>Success!</strong> ${sliceCount} videos ready (add to screens manually)`;
-                                    timeEstimateDiv.textContent = '';
-                                }
-                            }
-                            
-                            setTimeout(() => {
-                                closeAutoSliceModal();
-                                location.reload();
-                            }, 3000);
-                            return;
-                            
-                        } else if (data.status === 'error') {
-                            // Error
-                            progressBar.style.background = '#dc3545';
-                            statusDiv.innerHTML = `❌ <strong>Slicing failed:</strong> ${data.error}`;
-                            timeEstimateDiv.textContent = '';
-                            return;
-                            
-                        } else if (data.status === 'processing') {
-                            // Still processing - show detailed progress
-                            const progress = data.progress || 0;
-                            const currentScreen = data.current_screen || 0;
-                            const totalScreens = data.screen_count || 0;
-                            
-                            // Update progress bar
-                            progressBar.style.width = progress + '%';
-                            progressText.textContent = progress + '%';
-                            
-                            // Calculate time estimate
-                            const elapsedSec = (Date.now() - startTime) / 1000;
-                            let statusText = '';
-                            let estimateText = '';
-                            
-                            if (progress < 50) {
-                                // Slicing phase (PARALLEL PROCESSING!)
-                                if (currentScreen > 0 && totalScreens > 0) {
-                                    statusText = `🎬 <strong>Slicing ${totalScreens} screens in parallel...</strong> (${currentScreen}/${totalScreens} complete)`;
-                                    // With parallel processing: ~20-30 seconds for 4 screens
-                                    const parallelTimePerScreen = 10;  // Much faster with parallel!
-                                    const estimatedRemainingSec = (totalScreens - currentScreen) * parallelTimePerScreen;
-                                    const estimatedMin = Math.ceil(estimatedRemainingSec / 60);
-                                    if (estimatedMin > 0) {
-                                        estimateText = `⚡ Parallel processing! About ${estimatedMin} minute${estimatedMin !== 1 ? 's' : ''} remaining`;
-                                    } else {
-                                        estimateText = `⚡ Parallel processing! About ${estimatedRemainingSec} seconds remaining`;
-                                    }
-                                } else {
-                                    statusText = `🎬 <strong>Analyzing and slicing video in parallel...</strong>`;
-                                    estimateText = `⚡ Parallel processing enabled - 3-4x faster!`;
-                                }
-                            } else {
-                                // Upload phase (50-100%)
-                                const uploadProgress = Math.round(((progress - 50) / 50) * totalScreens);
-                                statusText = `☁️ <strong>Uploading slices to CDN...</strong> (${uploadProgress}/${totalScreens})`;
-                                const remainingSec = Math.ceil(((100 - progress) / 50) * 30);
-                                estimateText = `⏱️ About ${remainingSec} seconds remaining`;
-                            }
-                            
-                            statusDiv.innerHTML = statusText;
-                            timeEstimateDiv.textContent = estimateText;
-                        }
-                    }
-                    
-                    await new Promise(resolve => setTimeout(resolve, 1000));  // Wait 1 second
-                    attempts++;
-                    
-                } catch (error) {
-                    console.error('[AUTO-SLICE] Poll error:', error);
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                    attempts++;
-                }
-            }
-            
-            // Timeout
-            statusDiv.innerHTML = '⚠️ <strong>Processing timeout</strong> - check library for sliced videos';
-            timeEstimateDiv.textContent = '';
-            setTimeout(() => {
-                closeAutoSliceModal();
-                location.reload();
-            }, 3000);
-        }
-
-        async function doAutoSliceUpload() {
-            const fileInput = document.getElementById('auto-slice-file-input');
-            const file = fileInput.files[0];
-            
-            if (!file) {
-                alert('Please select a video file first');
-                return;
-            }
-
-            if (!file.type.startsWith('video/')) {
-                alert('Please select a video file (not an image)');
-                return;
-            }
-
-            if (!autoSliceTargetScreen) {
-                alert('No screen selected');
-                return;
-            }
-
-            // Log file size for debugging
-            const fileSizeMB = (file.size / 1024 / 1024).toFixed(2);
-            console.log(`[AUTO-SLICE] File: ${file.name}, Size: ${fileSizeMB}MB`);
-
-            const progressDiv = document.getElementById('auto-slice-progress');
-            const progressBar = document.getElementById('auto-slice-progress-bar');
-            const progressText = document.getElementById('auto-slice-progress-text');
-            const statusDiv = document.getElementById('auto-slice-status');
-            const timeEstimateDiv = document.getElementById('auto-slice-time-estimate');
-            
-            progressDiv.style.display = 'block';
-            statusDiv.innerHTML = '<strong>📤 Uploading video...</strong>';
-            timeEstimateDiv.textContent = '';
-
-            try {
-                // Upload using /upload_media (with auto-slicing)
-                const formData = new FormData();
-                formData.append('file', file);
-                
-                const xhr = new XMLHttpRequest();
-                
-                xhr.upload.addEventListener('progress', (e) => {
-                    if (e.lengthComputable) {
-                        const percent = Math.round((e.loaded / e.total) * 100);
-                        progressBar.style.width = percent + '%';
-                        progressText.textContent = percent + '%';
-                        statusDiv.innerHTML = `<strong>📤 Uploading... ${percent}%</strong>`;
-                        const mbLoaded = (e.loaded / 1024 / 1024).toFixed(1);
-                        const mbTotal = (e.total / 1024 / 1024).toFixed(1);
-                        timeEstimateDiv.textContent = `${mbLoaded} MB / ${mbTotal} MB`;
-                    }
-                });
-
-                xhr.addEventListener('load', async () => {
-                    if (xhr.status >= 200 && xhr.status < 300) {
-                        try {
-                            const response = JSON.parse(xhr.responseText);
-                            console.log('[AUTO-SLICE] Upload response:', response);
-                            
-                            if (response.success) {
-                                // Check if this is async slicing (has job_id)
-                                if (response.slice_job_id) {
-                                    statusDiv.innerHTML = `<strong>✅ Upload complete! Processing ${response.screen_count}-screen video...</strong>`;
-                                    timeEstimateDiv.textContent = 'Starting video slicing process...';
-                                    progressBar.style.width = '100%';
-                                    
-                                    // Poll for slicing completion
-                                    await pollSliceJob(response.slice_job_id, statusDiv, progressBar, progressText, timeEstimateDiv);
-                                    
-                                } else if (response.sliced_files && response.sliced_files.length > 0) {
-                                    // Instant slicing worked (shouldn't happen now, but handle it)
-                                    statusDiv.textContent = `✅ Success! Created ${response.sliced_files.length} sliced videos`;
-                                    progressBar.style.background = '#28a745';
-                                    setTimeout(() => {
-                                        closeAutoSliceModal();
-                                        location.reload();
-                                    }, 2000);
-                                } else {
-                                    // Single screen video (no slicing needed)
-                                    statusDiv.textContent = '✅ Upload complete (single screen)';
-                                    setTimeout(() => {
-                                        closeAutoSliceModal();
-                                        location.reload();
-                                    }, 2000);
-                                }
-                            } else {
-                                throw new Error(response.error || 'Upload failed');
-                            }
-                        } catch (parseError) {
-                            console.error('[AUTO-SLICE] Parse error:', parseError);
-                            statusDiv.textContent = '❌ Error: ' + parseError.message;
-                            progressBar.style.background = '#dc3545';
-                        }
-                    } else {
-                        statusDiv.textContent = '❌ Upload failed (HTTP ' + xhr.status + ')';
-                        progressBar.style.background = '#dc3545';
-                    }
-                });
-
-                // Use regular domain endpoint - Cloudflare limits apply (~100MB)
-                const uploadUrl = '/upload_media';
-                
-                console.log('[AUTO-SLICE] Uploading to:', uploadUrl);
-                xhr.open('POST', uploadUrl, true);
-                xhr.send(formData);
-
-            } catch (error) {
-                console.error('[AUTO-SLICE] Error:', error);
-                statusDiv.textContent = '❌ Error: ' + error.message;
-                progressBar.style.background = '#dc3545';
-            }
-        }
-    </script>
         
     </body>
     {% include '_cookie_consent.html' %}

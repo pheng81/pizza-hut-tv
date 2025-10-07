@@ -15,9 +15,6 @@ import smtplib
 import ssl
 import threading
 import math
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from multiprocessing import cpu_count
-import functools
 from datetime import datetime, time as dtime, timedelta, timezone
 from email.message import EmailMessage
 from typing import Optional
@@ -62,31 +59,6 @@ except Exception:
 
 # Global in-memory cache for library listings
 _LIB_CACHE: dict = {}
-
-# Global job tracking for async operations (auto-slicing, etc.)
-# Using filesystem for cross-worker job status sharing
-JOBS_DIR = os.path.join(tempfile.gettempdir(), 'pizza_hut_tv_jobs')
-os.makedirs(JOBS_DIR, exist_ok=True)
-
-def _get_job_status(job_id):
-    """Get job status from filesystem (works across gunicorn workers)."""
-    job_file = os.path.join(JOBS_DIR, f'{job_id}.json')
-    try:
-        if os.path.exists(job_file):
-            with open(job_file, 'r') as f:
-                return json.load(f)
-    except Exception as e:
-        print(f"[get_job_status] Error reading {job_id}: {e}")
-    return None
-
-def _set_job_status(job_id, status_data):
-    """Set job status to filesystem (works across gunicorn workers)."""
-    job_file = os.path.join(JOBS_DIR, f'{job_id}.json')
-    try:
-        with open(job_file, 'w') as f:
-            json.dump(status_data, f)
-    except Exception as e:
-        print(f"[set_job_status] Error writing {job_id}: {e}")
 
 # --- SQLite user database helpers ---
 def _db_path() -> str:
@@ -168,8 +140,7 @@ except Exception as _log_e:
     print(f'Logging setup failed: {_log_e}')
 
 app = Flask(__name__)
-# Use a strong, consistent secret key for session signing
-app.secret_key = os.environ.get('SECRET_KEY') or 'pizza-hut-tv-oauth-session-key-2025-production'
+app.secret_key = 'your-secret-key-change-this'
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 
 # Session configuration - make sessions last 30 days
@@ -181,11 +152,11 @@ app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
 app.config.update(
     PREFERRED_URL_SCHEME='https',
-    SESSION_COOKIE_SECURE=True,  # Required for SAMESITE='None'
-    SESSION_COOKIE_SAMESITE='None',  # Allow OAuth redirects
+    SESSION_COOKIE_SECURE=False if os.environ.get('FLASK_ENV') == 'development' else True,
+    SESSION_COOKIE_SAMESITE='None',  # Allow OAuth redirects (requires SECURE=True)
     SESSION_COOKIE_HTTPONLY=True,  # Prevent JavaScript access to session cookie
-    # Set domain for OAuth to work properly
-    SESSION_COOKIE_DOMAIN=os.environ.get('SESSION_COOKIE_DOMAIN') or '.everydayadvertise.com',
+    # Set this in production to share login across subdomains: ".everydayadvertise.com"
+    SESSION_COOKIE_DOMAIN=os.environ.get('SESSION_COOKIE_DOMAIN') or None,
 )
 print('DEBUG: app.py initialization start', flush=True)
 logging.debug('App module import start')
@@ -453,10 +424,10 @@ def login():
                 session.permanent = True  # Make session persist across browser restarts
                 nxt = request.args.get('next')
                 if not nxt:
-                    # Use consistent domain for the dashboard after login
+                    # Prefer api subdomain for the dashboard after login
                     try:
                         host = request.host or ''
-                        if host.startswith('api.') and 'everydayadvertise.com' in host:
+                        if not host.startswith('api.') and 'everydayadvertise.com' in host:
                             return redirect('https://api.everydayadvertise.com/dashboard')
                     except Exception:
                         pass
@@ -485,7 +456,7 @@ def login():
                 if not nxt:
                     try:
                         host = request.host or ''
-                        if host.startswith('api.') and 'everydayadvertise.com' in host:
+                        if not host.startswith('api.') and 'everydayadvertise.com' in host:
                             return redirect('https://api.everydayadvertise.com/dashboard')
                     except Exception:
                         pass
@@ -849,7 +820,7 @@ def logout():
     try:
         host = request.host or ''
         if 'everydayadvertise.com' in host:
-            return redirect('https://api.everydayadvertise.com/')
+            return redirect('https://everydayadvertise.com/')
     except Exception:
         pass
     return redirect(url_for('home'))
@@ -946,26 +917,6 @@ def auth_google():
         except Exception:
             redirect_uri = 'https://api.everydayadvertise.com/auth/google/callback'
 
-        # CRITICAL: Clean up old OAuth state tokens before starting new flow
-        # This prevents state mismatch from accumulated stale states
-        keys_to_remove = [k for k in session.keys() if k.startswith('_state_google_')]
-        for key in keys_to_remove:
-            session.pop(key, None)
-        logging.info(f'Cleaned up {len(keys_to_remove)} old OAuth state tokens')
-
-        # Force session to be permanent for OAuth persistence
-        session.permanent = True
-        
-        # Log session cookie and keys for debugging
-        import uuid
-        session_id = request.cookies.get('session') or request.cookies.get('sessionid') or 'NO_SESSION_COOKIE'
-        logging.info(f'Google OAuth INIT: Session cookie: {session_id[:50]}...')
-        logging.info(f'Google OAuth INIT: Session domain: {app.config.get("SESSION_COOKIE_DOMAIN")}')
-        logging.info(f'Google OAuth INIT: Session secure: {app.config.get("SESSION_COOKIE_SECURE")}') 
-        logging.info(f'Google OAuth INIT: Session samesite: {app.config.get("SESSION_COOKIE_SAMESITE")}')
-        logging.info(f'Google OAuth INIT: Session keys before redirect: {list(session.keys())}')
-        logging.info(f'Google OAuth INIT: Redirect URI: {redirect_uri}')
-
         return client.authorize_redirect(redirect_uri)
     except Exception as e:
         logging.warning('Google auth init failed: %s', e)
@@ -976,10 +927,7 @@ def auth_google():
 def auth_google_callback():
     logging.info('=== Google OAuth Callback Started ===')
     logging.info(f'Request args: {request.args}')
-    session_id = request.cookies.get('session') or request.cookies.get('sessionid') or 'NO_SESSION_COOKIE'
-    logging.info(f'Google OAuth Callback: Session cookie value: {session_id}')
     logging.info(f'Session keys before auth: {list(session.keys())}')
-    logging.info(f'Request state: {request.args.get("state")}')
     
     # Ensure google client exists in case of lazy registration need
     try:
@@ -1065,7 +1013,7 @@ def auth_google_callback():
         if not nxt:
             try:
                 host = request.host or ''
-                if host.startswith('api.') and 'everydayadvertise.com' in host:
+                if not host.startswith('api.') and 'everydayadvertise.com' in host:
                     return redirect('https://api.everydayadvertise.com/dashboard')
             except Exception:
                 pass
@@ -1308,7 +1256,7 @@ def auth_microsoft_callback():
         if not nxt:
             try:
                 host = request.host or ''
-                if host.startswith('api.') and 'everydayadvertise.com' in host:
+                if not host.startswith('api.') and 'everydayadvertise.com' in host:
                     return redirect('https://api.everydayadvertise.com/dashboard')
             except Exception:
                 pass
@@ -1352,7 +1300,7 @@ def auth_microsoft_callback():
         if not nxt:
             try:
                 host = request.host or ''
-                if host.startswith('api.') and 'everydayadvertise.com' in host:
+                if not host.startswith('api.') and 'everydayadvertise.com' in host:
                     return redirect('https://api.everydayadvertise.com/dashboard')
             except Exception:
                 pass
@@ -2384,8 +2332,8 @@ ALLOWED_EXTENSIONS = IMAGE_EXTENSIONS | ANIMATED_EXTENSIONS | VIDEO_EXTENSIONS
 
 # Flask config values
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-# Increased size limit for large multi-screen videos (1GB)
-app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024
+# Optional: size limit (e.g., 500MB) - adjust as needed
+app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024
 
 def classify_media(filename: str) -> str:
     """Classify media by extension into image / animated / video.
@@ -2455,77 +2403,6 @@ def supported_extensions():
 
 # Simple version endpoint for human/debug consumption
 @app.route('/version')
-@app.route('/sync/slice_and_create', methods=['POST'])
-def slice_and_create():
-    """
-    Physically slice a video for multi-screen sync and update playlists.
-    Expects JSON: {
-        'video_path': str,
-        'store_id': str,
-        'screen_ids': [str],
-        'slice_params': { ... }
-    }
-    """
-    try:
-        data = request.get_json()
-        video_path = data.get('video_path')
-        store_id = data.get('store_id')
-        screen_ids = data.get('screen_ids')
-        slice_params = data.get('slice_params', {})
-        if not video_path or not store_id or not screen_ids:
-            return jsonify({'success': False, 'error': 'Missing required parameters'}), 400
-
-        # Ensure video exists
-        if not os.path.isfile(video_path):
-            return jsonify({'success': False, 'error': f'Video not found: {video_path}'}), 404
-
-        # Example: slice video into N segments (1 per screen)
-        # This demo uses ffmpeg to slice by time; customize as needed
-        slice_dir = os.path.join(SLICE_CACHE_FOLDER, f'{store_id}_{uuid.uuid4().hex}')
-        os.makedirs(slice_dir, exist_ok=True)
-        duration = slice_params.get('duration')
-        num_screens = len(screen_ids)
-        # Get video duration if not provided
-        if not duration:
-            try:
-                import subprocess
-                result = subprocess.run([
-                    'ffprobe', '-v', 'error', '-show_entries', 'format=duration',
-                    '-of', 'default=noprint_wrappers=1:nokey=1', video_path
-                ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                duration = float(result.stdout.strip())
-            except Exception as e:
-                return jsonify({'success': False, 'error': f'Failed to get video duration: {e}'}), 500
-
-        segment_length = duration / num_screens
-        slice_files = []
-        for idx, screen_id in enumerate(screen_ids):
-            start = idx * segment_length
-            out_file = os.path.join(slice_dir, f'slice_{screen_id}.mp4')
-            cmd = [
-                'ffmpeg', '-y', '-i', video_path,
-                '-ss', str(start), '-t', str(segment_length),
-                '-c', 'copy', out_file
-            ]
-            try:
-                subprocess.run(cmd, check=True)
-                slice_files.append({'screen_id': screen_id, 'file': out_file})
-            except Exception as e:
-                return jsonify({'success': False, 'error': f'Failed to slice for screen {screen_id}: {e}'}), 500
-
-        # Update playlist for each screen (demo: update config file)
-        cfg = load_store_config()
-        screens = cfg.get('screens', {}).get(store_id, {})
-        for entry in slice_files:
-            sid = entry['screen_id']
-            file_path = entry['file']
-            if sid in screens:
-                screens[sid]['playlist'] = [file_path]
-        save_store_config(cfg)
-
-        return jsonify({'success': True, 'slices': slice_files})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
 def version():
     return jsonify({
         'build': BUILD_STAMP,
@@ -3501,10 +3378,10 @@ def calculate_screen_layout(width, height):
     Returns dict with:
     - screen_count: number of screens (1-7)
     - layout: 'horizontal', 'vertical', or 'single'
-    - base_width: 1920 for both horizontal and vertical
-    - base_height: 1080 for both horizontal and vertical
+    - base_width: 1920 for horizontal (landscape), 1080 for vertical (portrait)
+    - base_height: 1080 for horizontal (landscape), 1920 for vertical (portrait)
     
-    Horizontal layouts (side-by-side) - width multiplied by 1920:
+    Horizontal layouts - Landscape (height=1080, width multiplied by 1920):
     - 1920x1080 = 1 screen
     - 3840x1080 = 2 screens
     - 5760x1080 = 3 screens
@@ -3513,21 +3390,21 @@ def calculate_screen_layout(width, height):
     - 11520x1080 = 6 screens
     - 13440x1080 = 7 screens
     
-    Vertical layouts (stacked) - width stays 1920, height multiplied by 1080:
-    - 1920x1080 = 1 screen
-    - 1920x2160 = 2 screens
-    - 1920x3240 = 3 screens
-    - 1920x4320 = 4 screens
-    - 1920x5400 = 5 screens
-    - 1920x6480 = 6 screens
-    - 1920x7560 = 7 screens
+    Vertical layouts - Portrait (width=1080, height multiplied by 1920):
+    - 1080x1920 = 1 screen
+    - 1080x3840 = 2 screens
+    - 1080x5760 = 3 screens
+    - 1080x7680 = 4 screens
+    - 1080x9600 = 5 screens
+    - 1080x11520 = 6 screens
+    - 1080x13440 = 7 screens
     """
     
-    # Check horizontal layout (side-by-side - width multiplied)
+    # Check horizontal layout (landscape - width-based)
     if height == 1080 and width >= 1920:
         screens = width // 1920
         if width % 1920 == 0 and 1 <= screens <= 7:
-            print(f"[calculate_screen_layout] Detected HORIZONTAL (side-by-side) layout: {screens} screens ({width}x{height})")
+            print(f"[calculate_screen_layout] Detected HORIZONTAL (landscape) layout: {screens} screens ({width}x{height})")
             return {
                 'screen_count': screens,
                 'layout': 'horizontal',
@@ -3535,16 +3412,16 @@ def calculate_screen_layout(width, height):
                 'base_height': 1080
             }
     
-    # Check vertical layout (stacked - height multiplied)
-    if width == 1920 and height >= 1080:
-        screens = height // 1080
-        if height % 1080 == 0 and 1 <= screens <= 7:
-            print(f"[calculate_screen_layout] Detected VERTICAL (stacked) layout: {screens} screens ({width}x{height})")
+    # Check vertical layout (portrait - height-based)
+    if width == 1080 and height >= 1920:
+        screens = height // 1920
+        if height % 1920 == 0 and 1 <= screens <= 7:
+            print(f"[calculate_screen_layout] Detected VERTICAL (portrait) layout: {screens} screens ({width}x{height})")
             return {
                 'screen_count': screens,
                 'layout': 'vertical',
-                'base_width': 1920,
-                'base_height': 1080
+                'base_width': 1080,
+                'base_height': 1920
             }
     
     # Single screen or non-standard resolution
@@ -3706,328 +3583,6 @@ def slice_video_for_multi_screen(input_path, output_dir, base_filename, layout_i
     
     print(f"[slice_video_for_multi_screen] Successfully created {len(slices)} slices")
     return slices
-
-
-def _process_single_screen_ffmpeg(params):
-    """
-    Process a single screen slice using FFmpeg. 
-    Designed to be called by multiprocessing.Pool for parallel execution.
-    
-    Args:
-        params: Dict with screen_number, input_path, output_path, crop params, etc.
-    
-    Returns:
-        Dict with success status and slice info, or error
-    """
-    try:
-        screen_number = params['screen_number']
-        input_path = params['input_path']
-        output_path = params['output_path']
-        output_filename = params['output_filename']
-        crop_x = params['crop_x']
-        crop_y = params['crop_y']
-        slice_width = params['slice_width']
-        slice_height = params['slice_height']
-        fps = params['fps']
-        gop = params['gop']
-        has_audio = params['has_audio']
-        
-        crop_filter = f"crop={slice_width}:{slice_height}:{crop_x}:{crop_y}"
-        
-        # Build FFmpeg command - optimized for speed
-        ffmpeg_cmd = [
-            FFMPEG_PATH, '-y',
-            '-i', input_path,
-            '-vf', crop_filter,
-            '-c:v', 'libx264',
-            '-pix_fmt', 'yuv420p',
-            '-profile:v', 'main',
-            '-level', '4.0',
-            '-preset', 'ultrafast',  # Fastest encoding
-            '-crf', '23',
-            '-g', str(gop),
-            '-keyint_min', str(gop),
-            '-sc_threshold', '0',
-            '-vsync', 'cfr',
-            '-r', str(max(10, fps)),
-            '-force_key_frames', f"expr:gte(t,n_forced*1)",
-            '-movflags', '+faststart+frag_keyframe+empty_moov',
-            '-frag_duration', '1000000',
-            '-map', '0:v:0',
-        ]
-        
-        if has_audio:
-            ffmpeg_cmd += ['-c:a', 'aac', '-b:a', '128k', '-ac', '2', '-ar', '48000', '-map', '0:a:0?']
-        else:
-            ffmpeg_cmd += ['-an']
-        
-        ffmpeg_cmd += ['-map_metadata', '-1', '-map_chapters', '-1', output_path]
-        
-        # Run FFmpeg
-        print(f"[parallel_slice] Processing screen {screen_number} (PID {os.getpid()})...")
-        result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, timeout=600)
-        
-        if result.returncode == 0 and os.path.exists(output_path):
-            file_size = os.path.getsize(output_path)
-            print(f"[parallel_slice] Screen {screen_number} created: {file_size/1024/1024:.2f} MB")
-            
-            return {
-                'success': True,
-                'screen_number': screen_number,
-                'filename': output_filename,
-                'path': output_path,
-                'size': file_size
-            }
-        else:
-            error_msg = f'FFmpeg failed for screen {screen_number}: {result.stderr[:200]}'
-            print(f"ERROR: {error_msg}")
-            return {
-                'success': False,
-                'screen_number': screen_number,
-                'error': error_msg
-            }
-    
-    except Exception as e:
-        error_msg = f'Exception processing screen {params.get("screen_number", "?")}: {str(e)}'
-        print(f"ERROR: {error_msg}")
-        import traceback
-        traceback.print_exc()
-        return {
-            'success': False,
-            'screen_number': params.get('screen_number', 0),
-            'error': error_msg
-        }
-
-
-def _background_slice_and_upload(job_id, input_path, req_prefix, base_filename, layout_info, video_info, local_dir):
-    """
-    Background worker to slice video and upload slices to R2.
-    Uses filesystem for job status (works across gunicorn workers).
-    NOW WITH PARALLEL PROCESSING for 3-4x speed improvement!
-    """
-    try:
-        screen_count = layout_info['screen_count']
-        _set_job_status(job_id, {
-            'status': 'processing', 
-            'progress': 0, 
-            'result': [],
-            'current_screen': 0,
-            'screen_count': screen_count
-        })
-        
-        slice_temp_dir = os.path.join(os.path.dirname(input_path), 'slices_temp')
-        os.makedirs(slice_temp_dir, exist_ok=True)
-        
-        # Slice the video with PARALLEL PROCESSING
-        print(f"[background_slice] Starting PARALLEL slicing of {screen_count} screens...")
-        
-        if not FFMPEG_AVAILABLE:
-            _set_job_status(job_id, {'status': 'error', 'error': 'FFmpeg not available'})
-            return
-        
-        width = video_info['width']
-        height = video_info['height']
-        fps = video_info['fps']
-        has_audio = video_info['has_audio']
-        
-        def _even(x):
-            return x - (x % 2)
-        
-        gop = max(2, int(round(fps)))
-        layout_type = layout_info['layout']
-        
-        # Prepare parameters for all screens
-        screen_params = []
-        for screen_idx in range(screen_count):
-            screen_number = screen_idx + 1
-            output_filename = f"{base_filename}-screen{screen_number}.mp4"
-            output_path = os.path.join(slice_temp_dir, output_filename)
-            
-            # Calculate crop parameters
-            if layout_type == 'horizontal':
-                w_per = width / screen_count
-                left = int(round(screen_idx * w_per))
-                right = int(round((screen_idx + 1) * w_per))
-                crop_x = max(0, min(left, width - 2))
-                slice_width = max(2, min(right - left, width - crop_x))
-                slice_height = height
-                crop_y = 0
-            elif layout_type == 'vertical':
-                h_per = height / screen_count
-                top = int(round(screen_idx * h_per))
-                bottom = int(round((screen_idx + 1) * h_per))
-                crop_y = max(0, min(top, height - 2))
-                slice_height = max(2, min(bottom - top, height - crop_y))
-                slice_width = width
-                crop_x = 0
-            else:
-                continue
-            
-            crop_x = _even(crop_x)
-            crop_y = _even(crop_y)
-            slice_width = _even(min(slice_width, width - crop_x))
-            slice_height = _even(min(slice_height, height - crop_y))
-            
-            if slice_width < 2:
-                slice_width = 2
-            if slice_height < 2:
-                slice_height = 2
-            
-            screen_params.append({
-                'screen_number': screen_number,
-                'input_path': input_path,
-                'output_path': output_path,
-                'output_filename': output_filename,
-                'crop_x': crop_x,
-                'crop_y': crop_y,
-                'slice_width': slice_width,
-                'slice_height': slice_height,
-                'fps': fps,
-                'gop': gop,
-                'has_audio': has_audio
-            })
-        
-        # Process all screens in PARALLEL using ThreadPoolExecutor (works with gunicorn!)
-        num_workers = min(screen_count, 4)  # Use up to 4 concurrent threads
-        print(f"[background_slice] 🚀 Starting PARALLEL processing with {num_workers} workers for {screen_count} screens")
-        
-        slices = []
-        completed_count = 0
-        
-        try:
-            # Use ThreadPoolExecutor which works perfectly with gunicorn workers
-            with ThreadPoolExecutor(max_workers=num_workers) as executor:
-                # Submit all tasks and track them
-                future_to_screen = {
-                    executor.submit(_process_single_screen_ffmpeg, params): params['screen_number'] 
-                    for params in screen_params
-                }
-                
-                # Process results as they complete (real-time updates!)
-                for future in as_completed(future_to_screen):
-                    screen_num = future_to_screen[future]
-                    try:
-                        result = future.result()
-                        if result and result.get('success'):
-                            completed_count += 1
-                            slices.append({
-                                'screen_number': result['screen_number'],
-                                'filename': result['filename'],
-                                'path': result['path'],
-                                'size': result['size']
-                            })
-                            # Update progress as EACH screen completes in real-time (50-75%)
-                            # Upload takes 0-50%, slicing takes 50-75%, R2 upload takes 75-100%
-                            progress = 50 + int((completed_count / screen_count) * 25)
-                            print(f"[background_slice] ✅ Screen {result['screen_number']} complete! ({completed_count}/{screen_count} = {progress}%)")
-                            _set_job_status(job_id, {
-                                'status': 'processing',
-                                'progress': progress,
-                                'result': slices,
-                                'current_screen': completed_count,
-                                'screen_count': screen_count,
-                                'stage': f'Slicing screen {completed_count}/{screen_count}'
-                            })
-                        else:
-                            error_msg = result.get('error', 'Unknown error') if result else 'Processing failed'
-                            print(f"ERROR: Failed to process screen {screen_num}: {error_msg}")
-                            _set_job_status(job_id, {'status': 'error', 'error': error_msg})
-                            return
-                    except Exception as e:
-                        error_msg = f'Exception getting result for screen {screen_num}: {str(e)}'
-                        print(f"ERROR: {error_msg}")
-                        _set_job_status(job_id, {'status': 'error', 'error': error_msg})
-                        return
-        
-        except Exception as e:
-            print(f"ERROR: Parallel processing failed: {e}")
-            import traceback
-            traceback.print_exc()
-            _set_job_status(job_id, {'status': 'error', 'error': f'Parallel processing error: {str(e)}'})
-            return
-        
-        if not slices or len(slices) != screen_count:
-            _set_job_status(job_id, {'status': 'error', 'error': f'Failed to create all slices (got {len(slices)}/{screen_count})'})
-            return
-        
-        # Sort slices by screen number to ensure correct order
-        slices.sort(key=lambda x: x['screen_number'])
-        
-        print(f"[background_slice] All {len(slices)} screens sliced successfully in parallel!")
-        
-        # Update: slicing complete, starting uploads (75%)
-        _set_job_status(job_id, {
-            'status': 'processing', 
-            'progress': 75, 
-            'result': [],
-            'current_screen': screen_count,
-            'screen_count': screen_count,
-            'stage': 'Uploading sliced videos to CDN...'
-        })
-        
-        # Upload each slice to R2
-        sliced_files = []
-        for i, slice_info in enumerate(slices):
-            slice_path = slice_info['path']
-            slice_filename = slice_info['filename']
-            slice_key = _join_prefix_key(req_prefix, slice_filename)
-            
-            try:
-                # Save locally
-                local_slice_dest = os.path.join(local_dir, slice_filename)
-                shutil.copy2(slice_path, local_slice_dest)
-                print(f"[background_slice] Saved slice locally: {local_slice_dest}")
-                
-                # Upload to R2
-                if r2_enabled():
-                    with open(slice_path, 'rb') as fh:
-                        data = fh.read()
-                    r2_put_bytes(slice_key, data, content_type='video/mp4')
-                    print(f"[background_slice] R2 upload ok: {slice_key}")
-                
-                sliced_files.append({
-                    'screen_number': slice_info['screen_number'],
-                    'filename': slice_key,
-                    'url': build_public_url(slice_key),
-                    'size': slice_info['size']
-                })
-                
-                # Update progress: 75-100% for uploading to CDN
-                progress = 75 + int((i + 1) / len(slices) * 25)
-                _set_job_status(job_id, {
-                    'status': 'processing', 
-                    'progress': progress, 
-                    'result': sliced_files,
-                    'current_screen': screen_count,
-                    'screen_count': screen_count
-                })
-                
-            except Exception as upload_e:
-                print(f"ERROR: Failed to upload slice {slice_filename}: {upload_e}")
-        
-        # Cleanup temp directory
-        try:
-            if os.path.exists(slice_temp_dir):
-                shutil.rmtree(slice_temp_dir)
-        except Exception:
-            pass
-        
-        # Mark complete
-        _set_job_status(job_id, {
-            'status': 'complete',
-            'progress': 100,
-            'result': sliced_files,
-            'layout': layout_info['layout'],
-            'screen_count': len(sliced_files)
-        })
-        print(f"[background_slice] Job {job_id} complete: {len(sliced_files)} slices uploaded")
-        
-    except Exception as e:
-        print(f"ERROR: Background slice job {job_id} failed: {e}")
-        import traceback
-        traceback.print_exc()
-        _set_job_status(job_id, {'status': 'error', 'error': str(e)})
-
 
 # ---- Thumbnail helpers and endpoint ----
 def _image_ext(filename: str) -> str:
@@ -7240,43 +6795,73 @@ def upload_media():
                 if screen_count > 1:
                     print(f"[upload_media] Multi-screen video detected: {screen_count} screens ({layout_info['layout']} layout)")
                     
-                    # Start background slicing job instead of blocking
-                    job_id = f"slice_{uuid.uuid4().hex[:12]}"
-                    base_name = filename.rsplit('.', 1)[0]
+                    # Create temporary directory for sliced videos
+                    slice_temp_dir = os.path.join(tempfile.gettempdir(), f"slices_{uuid.uuid4()}")
+                    try:
+                        os.makedirs(slice_temp_dir, exist_ok=True)
+                        
+                        # Get base filename without extension
+                        base_name = filename.rsplit('.', 1)[0]
+                        
+                        # Slice the video
+                        slices = slice_video_for_multi_screen(
+                            dest, 
+                            slice_temp_dir, 
+                            base_name, 
+                            layout_info, 
+                            video_info
+                        )
+                        
+                        if slices:
+                            print(f"[upload_media] Successfully created {len(slices)} slices, uploading to R2/CDN...")
+                            
+                            # Upload each slice to R2
+                            for slice_info in slices:
+                                slice_path = slice_info['path']
+                                slice_filename = slice_info['filename']
+                                slice_key = _join_prefix_key(req_prefix, slice_filename)
+                                
+                                try:
+                                    # Save locally
+                                    local_slice_dest = os.path.join(local_dir, slice_filename)
+                                    shutil.copy2(slice_path, local_slice_dest)
+                                    print(f"[upload_media] Saved slice locally: {local_slice_dest}")
+                                    
+                                    # Upload to R2
+                                    if r2_enabled():
+                                        with open(slice_path, 'rb') as fh:
+                                            data = fh.read()
+                                        r2_put_bytes(slice_key, data, content_type='video/mp4')
+                                        print(f"[upload_media] R2 put ok: {slice_key} ({slice_info['size']/1024/1024:.2f} MB)")
+                                        
+                                        sliced_files.append({
+                                            'screen_number': slice_info['screen_number'],
+                                            'filename': slice_key,
+                                            'url': build_public_url(slice_key),
+                                            'size': slice_info['size']
+                                        })
+                                
+                                except Exception as slice_upload_e:
+                                    print(f"ERROR: Failed to upload slice {slice_filename}: {slice_upload_e}")
+                            
+                            print(f"[upload_media] Successfully uploaded {len(sliced_files)} sliced files to CDN")
+                        
+                        else:
+                            print("[upload_media] Failed to create slices, will upload original video only")
                     
-                    # Start background thread
-                    slice_thread = threading.Thread(
-                        target=_background_slice_and_upload,
-                        args=(job_id, dest, req_prefix, base_name, layout_info, video_info, local_dir),
-                        daemon=True
-                    )
-                    slice_thread.start()
+                    except Exception as slice_e:
+                        print(f"ERROR: Slicing process failed: {slice_e}")
+                        import traceback
+                        traceback.print_exc()
                     
-                    print(f"[upload_media] Started background slicing job: {job_id}")
-                    
-                    # Return immediately with job ID
-                    # Upload original file to R2 first
-                    if r2_enabled():
-                        with open(dest, 'rb') as fh:
-                            data = fh.read()
-                        key = _join_prefix_key(req_prefix, filename)
-                        r2_put_bytes(key, data, content_type=_guess_mime(filename))
-                        print(f"[upload_media] R2 put ok key={key}")
-                    
-                    dt = int((time.time()-t0)*1000)
-                    key = _join_prefix_key(req_prefix, filename)
-                    print(f"[upload_media] done (async) file={key} ms={dt}")
-                    
-                    return jsonify({
-                        'success': True,
-                        'filename': key,
-                        'media_type': media_type,
-                        'url': build_public_url(key),
-                        'slice_job_id': job_id,
-                        'screen_count': screen_count,
-                        'layout': layout_info['layout'],
-                        'message': f'Processing {screen_count}-screen video in background...'
-                    })
+                    finally:
+                        # Cleanup temporary slice directory
+                        try:
+                            if os.path.exists(slice_temp_dir):
+                                shutil.rmtree(slice_temp_dir)
+                                print(f"[upload_media] Cleaned up temp directory: {slice_temp_dir}")
+                        except Exception:
+                            pass
                 
                 else:
                     print(f"[upload_media] Single screen video ({width}x{height}), no slicing needed")
@@ -7319,181 +6904,6 @@ def upload_media():
         print(f"upload_media error: {e}")
         import traceback as _tb
         _tb.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-# ---- Check auto-slice job status ----
-@app.route('/slice_job_status/<job_id>', methods=['GET'])
-@login_required
-def slice_job_status(job_id):
-    """Check the status of a background slicing job."""
-    job_info = _get_job_status(job_id)
-    if not job_info:
-        return jsonify({'success': False, 'error': 'Job not found'}), 404
-    return jsonify({'success': True, **job_info})
-
-# ---- List all completed slice jobs ----
-@app.route('/api/list_slice_jobs', methods=['GET'])
-@login_required
-def list_slice_jobs():
-    """
-    List all completed slice jobs, sorted by most recent first.
-    Used by the "Auto-Sync Screens" button to find the last job.
-    """
-    try:
-        import os
-        import glob
-        
-        job_dir = '/tmp/pizza_hut_tv_jobs'
-        if not os.path.exists(job_dir):
-            return jsonify({'success': True, 'jobs': []})
-        
-        # Get all job files
-        job_files = glob.glob(os.path.join(job_dir, 'slice_*.json'))
-        
-        # Read and parse each job
-        jobs = []
-        for job_file in job_files:
-            try:
-                # Get file modification time for sorting
-                mtime = os.path.getmtime(job_file)
-                
-                with open(job_file, 'r') as f:
-                    job_data = json.load(f)
-                
-                # Extract job_id from filename
-                job_id = os.path.basename(job_file).replace('.json', '')
-                
-                jobs.append({
-                    'job_id': job_id,
-                    'status': job_data.get('status', 'unknown'),
-                    'progress': job_data.get('progress', 0),
-                    'result': job_data.get('result', []),
-                    'layout': job_data.get('layout', 'horizontal'),
-                    'screen_count': job_data.get('screen_count', 0),
-                    'timestamp': mtime
-                })
-            except Exception as e:
-                print(f"[list_slice_jobs] Error reading {job_file}: {e}")
-                continue
-        
-        # Sort by timestamp (most recent first)
-        jobs.sort(key=lambda x: x['timestamp'], reverse=True)
-        
-        # Only return completed jobs
-        completed_jobs = [j for j in jobs if j['status'] == 'complete']
-        
-        print(f"[list_slice_jobs] Found {len(completed_jobs)} completed jobs out of {len(jobs)} total")
-        
-        return jsonify({
-            'success': True,
-            'jobs': completed_jobs,
-            'total': len(completed_jobs)
-        })
-        
-    except Exception as e:
-        print(f"[list_slice_jobs] Error: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-# ---- Auto-create sync screens from sliced videos ----
-@app.route('/auto_create_sync_screens', methods=['POST'])
-@login_required
-def auto_create_sync_screens():
-    """
-    Automatically create sync screens and add pre-sliced videos.
-    Body: {sliced_files: [{screen_number, filename, url, size}], layout: 'horizontal'|'vertical', store_id: int}
-    """
-    try:
-        print("[auto_create_sync_screens] === ENDPOINT CALLED ===")
-        data = request.get_json()
-        print(f"[auto_create_sync_screens] Received data: {data}")
-        sliced_files = data.get('sliced_files', [])
-        layout = data.get('layout', 'horizontal')
-        store_id = data.get('store_id')
-        
-        print(f"[auto_create_sync_screens] sliced_files count: {len(sliced_files)}, layout: {layout}, store_id: {store_id}")
-        
-        if not sliced_files or not store_id:
-            print(f"[auto_create_sync_screens] ERROR: Missing data - sliced_files: {bool(sliced_files)}, store_id: {bool(store_id)}")
-            return jsonify({'success': False, 'error': 'Missing sliced_files or store_id'}), 400
-        
-        # Get user session info for config loading
-        user_info = session.get('user', {})
-        if not user_info:
-            return jsonify({'success': False, 'error': 'Not authenticated'}), 403
-        
-        # Use the existing config loading system
-        cfg = ensure_playlists_structure(load_store_config())
-        if not cfg:
-            return jsonify({'success': False, 'error': 'Could not load config'}), 500
-        
-        ns = str(store_id)
-        if ns not in cfg.get('screens', {}):
-            cfg['screens'][ns] = {}
-        
-        # Generate a shared start_epoch for all sync screens (aligned to current time)
-        import time
-        start_epoch = int(time.time())
-        sync_group = f"sync_group_{int(time.time())}"
-        
-        print(f"[auto_create_sync_screens] Creating sync group: {sync_group} with start_epoch: {start_epoch}")
-        
-        created_screens = []
-        
-        # Create sync screens for each sliced video (keeping individual files for speed)
-        for slice_info in sliced_files:
-            screen_num = slice_info.get('screen_number', 0)
-            filename = slice_info.get('filename', '')
-            url = slice_info.get('url', '')
-            
-            if not screen_num or not filename:
-                print(f"[auto_create_sync_screens] Skipping incomplete slice: {slice_info}")
-                continue
-            
-            screen_id = f"{store_id}_screen{screen_num}"
-            
-            # Create new screen with ENHANCED sync configuration for individual video files
-            screen_config = {
-                'horizontal': (layout == 'horizontal'),
-                'file': url or filename,  # Set file for dashboard display
-                'playlist': [{
-                    'file': filename,       # Use individual sliced video file for speed
-                    'url': url,            # Individual CDN URL for fast loading
-                    'duration': 0,         # Auto-detect
-                    'type': 'video',
-                    'sync_ref': {
-                        'start_epoch': start_epoch,
-                        'group': sync_group,
-                        'precision_mode': 'high',  # Enable high-precision sync
-                        'preload_buffer': 2000,    # 2s preload for smooth sync start
-                        'sync_tolerance': 10       # 10ms tolerance for perfect sync
-                    }
-                }],
-                'fresh': True
-            }
-            
-            cfg['screens'][ns][screen_id] = screen_config
-            created_screens.append(screen_id)
-            
-            print(f"[auto_create_sync_screens] Created screen {screen_id} with sync_ref: start_epoch={start_epoch}, group={sync_group}")
-        
-        # Save updated config using the existing save system
-        save_store_config(cfg)
-        
-        print(f"[auto_create_sync_screens] === SUCCESS === Created {len(created_screens)} screens: {created_screens}")
-        
-        return jsonify({
-            'success': True,
-            'screens': created_screens,
-            'count': len(created_screens),
-            'message': f'Created {len(created_screens)} sync screens with videos'
-        })
-        
-    except Exception as e:
-        print(f"ERROR: auto_create_sync_screens failed: {e}")
-        import traceback
-        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # ---- R2 Presigned direct-upload endpoint (bypasses origin/proxy limits) ----

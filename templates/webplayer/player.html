@@ -7,6 +7,7 @@
 	<link rel="preconnect" href="https://cdn.everydayadvertise.com" crossorigin>
 	<link rel="dns-prefetch" href="//cdn.everydayadvertise.com">
 	<link rel="dns-prefetch" href="//api.everydayadvertise.com">
+	<script src="/static/webplayer/server_time_sync.js"></script>
 	<script>
 		// 🚀 PROFESSIONAL SYNCHRONIZATION SYSTEM - Enterprise Grade
 		class SyncCoordinator {
@@ -15,7 +16,7 @@
 				this.screenId = screenId;
 				this.syncTargets = new Map(); // Other screens in sync group
 				this.masterClock = Date.now();
-				this.syncTolerance = 50; // 50ms tolerance for perfect sync
+				this.syncTolerance = 10; // 10ms tolerance for ultra-precise sync
 				this.transitionQueue = [];
 				this.lastSyncTime = 0;
 				
@@ -481,26 +482,23 @@
 			return clientTime + adjustedOffset;
 		}
 		
+		// ULTRA-SIMPLE SYNC SYSTEM - Just wait for 5-second boundaries
 		async function computeSyncDelayMs(item, durationSec){
-			try{
-				if(!item || !item.sync_ref) {
-					console.log('🔄 No sync reference - immediate playback');
-					return 0;
-				}
-				const startEpochSec = Number(item.sync_ref.start_epoch || item.sync_ref.startEpoch);
-				if(!Number.isFinite(startEpochSec) || startEpochSec <= 0) {
-					console.log('🔄 Invalid start epoch - immediate playback');
-					return 0;
-				}
-				const durMs = Math.max(500, Math.round(Number(durationSec||0) * 1000));
-				if(!Number.isFinite(durMs) || durMs <= 0) {
-					console.log('🔄 Invalid duration - immediate playback');
-					return 0;
-				}
-				
-				// Use server-synchronized time for perfect cross-screen sync
-				const baseMs = startEpochSec * 1000;
-				const now = getServerSyncedTime();
+			if(!item || !item.sync_ref) {
+				return 0; // No sync needed
+			}
+			
+			const syncGroup = item.sync_ref.group || 'default';
+			const now = Date.now();
+			
+			// Every 2 seconds, all screens sync up (very short interval for perfect sync)
+			const SYNC_INTERVAL = 2000; 
+			const nextSyncMoment = Math.ceil(now / SYNC_INTERVAL) * SYNC_INTERVAL;
+			const waitTime = Math.max(0, nextSyncMoment - now);
+			
+			console.log(`🚀 [${screenId}] SIMPLE SYNC: group=[${syncGroup}] wait=${waitTime}ms next=${new Date(nextSyncMoment).toLocaleString()}`);
+			
+			return waitTime;
 				
 				console.log('🔄 SERVER-SYNCED calculation:', {
 					startEpoch: startEpochSec,
@@ -533,60 +531,12 @@
 					return deltaToNext;
 				}
 				
-				console.log('🔄 Phase too far - immediate playback at offset:', phase.toFixed(3), 'ms');
-			}catch(err){
-				console.warn('computeSyncDelayMs error', err);
-			}
-			return 0;
 		}
 
 		async function alignToSyncWindow(item, durationSec){
-			const waitMs = await computeSyncDelayMs(item, durationSec);
-			if(waitMs > SYNC_PRECISION_TOLERANCE){
-				console.log('⏳ PRECISION SYNC WAIT:', waitMs.toFixed(3), 'ms for ultra-tight alignment on', screenId);
-				
-				// Use high-precision timing with requestAnimationFrame for sub-millisecond accuracy
-				const startWait = performance.now();
-				
-				if(waitMs > 16) {
-					// For longer waits, use setTimeout + RAF for final precision
-					await new Promise(resolve => setTimeout(resolve, waitMs - 16));
-					
-					// Final precision alignment using requestAnimationFrame
-					await new Promise(resolve => {
-						const finalStart = performance.now();
-						const targetEnd = finalStart + 16;
-						
-						function precisionWait() {
-							if(performance.now() >= targetEnd) {
-								resolve();
-							} else {
-								requestAnimationFrame(precisionWait);
-							}
-						}
-						requestAnimationFrame(precisionWait);
-					});
-				} else {
-					// For short waits, use pure RAF for maximum precision
-					await new Promise(resolve => {
-						const targetEnd = performance.now() + waitMs;
-						
-						function precisionWait() {
-							if(performance.now() >= targetEnd) {
-								resolve();
-							} else {
-								requestAnimationFrame(precisionWait);
-							}
-						}
-						requestAnimationFrame(precisionWait);
-					});
-				}
-				
-				const actualWait = performance.now() - startWait;
-				console.log('⏳ PRECISION SYNC COMPLETE: waited', actualWait.toFixed(3), 'ms (target:', waitMs.toFixed(3), 'ms, error:', Math.abs(actualWait - waitMs).toFixed(3), 'ms)');
-			} else {
-				console.log('⏳ PRECISION SYNC IMMEDIATE: no wait needed for', screenId);
-			}
+			const syncGroup = item && item.sync_ref && item.sync_ref.group ? item.sync_ref.group : 'default';
+			await stableSyncWait(syncGroup, screenId);
+			console.log('🚀 SYNC COMPLETE:', screenId, 'starting playback NOW (server time sync)');
 		}
 
 		function calculateSyncedVideoTime(item) {
@@ -1070,13 +1020,15 @@
 				v.style.backfaceVisibility = 'hidden';
 				v.style.webkitBackfaceVisibility = 'hidden';
 				
-				// 🚀 MULTI-SCREEN OPTIMIZATION: Reduce initial buffer requirements
-				if(url.includes('/slice-video/') || url.includes('cdn.everydayadvertise.com')) {
+				// 🚀 MULTI-SCREEN SYNC OPTIMIZATION: Enhanced preloading for synchronized individual files
+				if(url.includes('/slice-video/') || url.includes('cdn.everydayadvertise.com') || url.includes('-screen')) {
 					v.setAttribute('data-instant-load', 'true');
 					v.setAttribute('data-sync-video', 'true');
-					// Fast startup attributes for multiple screens
-					v.setAttribute('data-setup', '{"preload": "metadata"}');
-					console.log('🎬 MULTI-SCREEN optimized loading:', url);
+					v.setAttribute('data-individual-slice', 'true'); // Mark as individual slice file
+					// Enhanced preload for sync groups
+					v.preload = 'auto'; // Load more data for better sync
+					v.setAttribute('data-setup', '{"preload": "auto"}');
+					console.log('🎬 SYNC-OPTIMIZED individual file loading:', url);
 				}
 				
 				// 🏆 ENTERPRISE VIDEO ATTRIBUTES - Eliminate all black screens
@@ -1338,7 +1290,11 @@
 				const sref = item && item.sync_ref || {};
 				const mode = (sref.mode||'').toLowerCase();
 				let count = parseInt(sref.count||0, 10);
-				if(!Number.isFinite(count) || count < 0){ count = 0; }
+				if(!Number.isNaN(count) && count >= 0){
+					count = Math.min(count, 4); // Limit to 4 segments for performance
+				}else{
+					count = 0;
+				}
 				let order = determineSliceOrder(item);
 				const orderSource = order !== null ? 'determineSliceOrder' : 'fallback';
 				if(order === null){
@@ -1626,12 +1582,13 @@
 								
 								// Wait for seek to complete with timeout
 								await new Promise((resolve) => {
+
 									let seekCompleted = false;
 									const seekTimeout = setTimeout(() => {
 										if(!seekCompleted) {
 											console.warn('⚠️ Seek timeout - proceeding with playback');
 											seekCompleted = true;
-											resolve();
+										  resolve();
 										}
 									}, 200);
 									
@@ -2005,6 +1962,32 @@
 			// Pause when tab hidden
 			document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ if(timer){ clearTimeout(timer); timer=null; } } else { if(!timer) tick(); } });
 		})();
+
+		// Preload video and ensure ready before sync
+		async function robustSyncWait(node, item, durationSec, screenId) {
+			// Wait for video metadata and readyState
+			if (node.readyState < 2) {
+				await new Promise((resolve) => {
+					node.addEventListener('loadedmetadata', resolve, { once: true });
+				});
+			}
+			// Wait for enough data to play
+			if (node.readyState < 3) {
+				await new Promise((resolve) => {
+					node.addEventListener('canplay', resolve, { once: true });
+				});
+			}
+			// Fallback: if not ready in 2s, proceed anyway
+			setTimeout(() => {
+				if (node.readyState < 3) {
+					console.warn('⚠️ Video not ready after 2s, starting anyway to avoid black screen');
+				}
+			}, 2000);
+			// Now do sync wait
+			const syncGroup = item && item.sync_ref && item.sync_ref.group ? item.sync_ref.group : 'default';
+			await stableSyncWait(syncGroup, screenId);
+			console.log('🚀 SYNC COMPLETE:', screenId, 'starting playback NOW (server time sync)');
+		}
 	</script>
 </body>
 </html>
