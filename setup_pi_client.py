@@ -74,16 +74,23 @@ def prompt_configuration():
     
     # Show detected identity
     identity = get_pi_identity()
+    
+    # Generate Pi ID (same logic as complete_pi_client.py)
+    hostname = identity['hostname']
+    mac_suffix = identity['mac'].replace(':', '')[-4:]
+    generated_pi_id = f"{hostname}-{mac_suffix}"
+    
     print(f"\n🔍 Detected Pi Information:")
     print(f"   Hostname:      {identity['hostname']}")
     print(f"   MAC Address:   {identity['mac']}")
     print(f"   IP Address:    {identity['ip']}")
     print(f"   Serial:        {identity['serial']}")
+    print(f"\n   📟 Generated Pi ID: {generated_pi_id}")
+    print(f"   (This ID will be displayed on screen)")
     print()
     
-    # Use hostname as default Pi ID
-    default_pi_id = identity['hostname']
-    pi_id = input(f"Pi Identifier [{default_pi_id}]: ").strip() or default_pi_id
+    # Use generated Pi ID as default
+    pi_id = input(f"Pi Identifier [{generated_pi_id}]: ").strip() or generated_pi_id
     
     # Prompt for other settings
     server = input("Server URL [https://everydayadvertise.com]: ").strip() or "https://everydayadvertise.com"

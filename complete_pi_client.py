@@ -141,12 +141,65 @@ class ServerTimeSync:
 class CompleteWebplayerClient:
     """Complete Pi client with full webplayer functionality."""
     
+    def _get_or_create_pi_id(self) -> str:
+        """
+        Generate or load a persistent Pi ID for this device.
+        The ID is stored in ~/.pizza_hut_tv_id and persists across reboots.
+        """
+        id_file = os.path.expanduser('~/.pizza_hut_tv_id')
+        
+        # Try to load existing ID
+        if os.path.exists(id_file):
+            try:
+                with open(id_file, 'r') as f:
+                    pi_id = f.read().strip()
+                    if pi_id:
+                        logger.info(f"📟 Pi ID loaded: {pi_id}")
+                        return pi_id
+            except Exception as e:
+                logger.warning(f"Failed to load Pi ID: {e}")
+        
+        # Generate new ID based on hostname + MAC address
+        import socket
+        import uuid
+        
+        try:
+            hostname = socket.gethostname()
+        except:
+            hostname = "raspberrypi"
+        
+        try:
+            mac = ':'.join(['{:02x}'.format((uuid.getnode() >> elements) & 0xff)
+                           for elements in range(0,2*6,2)][::-1])
+            # Use last 4 characters of MAC for uniqueness
+            mac_suffix = mac.replace(':', '')[-4:]
+        except:
+            # Fallback to random if MAC unavailable
+            import random
+            mac_suffix = ''.join(random.choices('0123456789abcdef', k=4))
+        
+        # Create Pi ID: hostname-XXXX (e.g., raspberrypi-a1b2)
+        pi_id = f"{hostname}-{mac_suffix}"
+        
+        # Save to file for persistence
+        try:
+            with open(id_file, 'w') as f:
+                f.write(pi_id)
+            logger.info(f"📟 New Pi ID generated and saved: {pi_id}")
+        except Exception as e:
+            logger.error(f"Failed to save Pi ID: {e}")
+        
+        return pi_id
+    
     def __init__(self, server_url: str = "https://everydayadvertise.com"):
         # Core settings
         self.server_url = server_url.rstrip('/')
         self.store_id = ""
         self.screen_id = ""
         self.pair_code = ""
+        
+        # Pi ID - unique identifier for this device
+        self.pi_id = self._get_or_create_pi_id()
         
         # Initialize pygame
         pygame.init()
@@ -233,6 +286,7 @@ class CompleteWebplayerClient:
         self.services_started = False
         
         logger.info(f"🍕 Complete Pi Webplayer Client initialized: {self.width}x{self.height}")
+        logger.info(f"📟 Pi ID: {self.pi_id}")  # Log Pi ID on startup
         
     def create_gradient_background(self) -> pygame.Surface:
         """Create solid dark background like custom_player.py (#0d0d0d)."""
@@ -480,7 +534,8 @@ class CompleteWebplayerClient:
         self.draw_overlay_info()
         
     def draw_overlay_info(self):
-        """Draw overlay information like webplayer."""
+        """Draw overlay information like webplayer with Pi ID watermark."""
+        # Top info
         info_text = f"Store {self.store_id} • Screen {self.screen_id}"
         if self.playlist:
             info_text += f" • Item {self.current_index + 1}/{len(self.playlist)}"
@@ -489,11 +544,28 @@ class CompleteWebplayerClient:
         cache_info = self.media_player.get_cache_info()
         debug_text = f"Cache: {cache_info['memory_items']}mem/{cache_info['download_items']}dl/{cache_info['cache_size_mb']:.1f}MB"
         
+        # Top overlay
         overlay = self.font_small.render(info_text, True, (154, 167, 255, 56))
         debug_overlay = self.font_small.render(debug_text, True, (100, 100, 100))
         
         self.screen.blit(overlay, (10, self.height - 50))
         self.screen.blit(debug_overlay, (10, self.height - 25))
+        
+        # Pi ID watermark at bottom right (semi-transparent white)
+        pi_id_text = f"Pi ID: {self.pi_id}"
+        pi_id_surface = self.font_small.render(pi_id_text, True, (255, 255, 255))
+        pi_id_surface.set_alpha(180)  # Semi-transparent
+        pi_id_rect = pi_id_surface.get_rect()
+        pi_id_rect.bottomright = (self.width - 10, self.height - 10)
+        
+        # Optional: Add background for better visibility
+        bg_rect = pi_id_rect.inflate(12, 6)
+        bg_surface = pygame.Surface(bg_rect.size, pygame.SRCALPHA)
+        bg_surface.fill((0, 0, 0, 128))  # Semi-transparent black background
+        self.screen.blit(bg_surface, bg_rect)
+        
+        # Draw Pi ID text
+        self.screen.blit(pi_id_surface, pi_id_rect)
         
     def get_media_url(self, item: PlaylistItem) -> str:
         """Get media URL for playlist item like webplayer."""
