@@ -11,6 +11,7 @@ import time
 import logging
 from pathlib import Path
 from typing import Optional, Callable
+from transition_engine import TransitionEngine
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -288,22 +289,26 @@ class SeamlessMediaPlayer:
         # Use the video player's screen for drawing
         self.screen = self.video_player.screen
         
+        # Initialize transition engine
+        self.transition_engine = TransitionEngine(self.screen)
+        
         # Image cache
         self.image_cache = {}
         
         # State
         self.is_playing = False
         self.current_media_type = None
+        self.last_frame: Optional[pygame.Surface] = None  # For transitions
         
         logger.info("✅ Seamless Media Player initialized")
     
     def play_media(self, url: str, effect: str, duration: float) -> bool:
         """
-        Play media with seamless transitions
+        Play media with beautiful transition effects
         
         Args:
             url: URL or local path to media
-            effect: Transition effect (ignored for seamless playback)
+            effect: Transition effect (fade, slide-l, slide-r, zoom-in, zoom-out, cut)
             duration: Duration in seconds
             
         Returns:
@@ -316,7 +321,7 @@ class SeamlessMediaPlayer:
             else:
                 media_type = 'image'
             
-            logger.info(f"🎬 Playing {media_type}: {url} for {duration}s")
+            logger.info(f"🎬 Playing {media_type}: {url} (effect: {effect}) for {duration}s")
             
             # Get local path (download if URL)
             if url.startswith('http'):
@@ -326,26 +331,51 @@ class SeamlessMediaPlayer:
             else:
                 local_path = url
             
-            # Play based on type
+            # Load the new media as a surface
+            if media_type == 'image':
+                new_surface = self._load_image(local_path)
+            else:
+                # For video, we'll load first frame for transition
+                new_surface = self._get_video_first_frame(local_path)
+            
+            if not new_surface:
+                logger.error(f"❌ Could not load media: {local_path}")
+                return False
+            
+            # Apply transition effect if we have a previous frame
+            if self.last_frame and effect and effect.lower() != 'cut':
+                logger.info(f"🎨 Applying {effect} transition...")
+                self.transition_engine.apply_transition(self.last_frame, new_surface, effect)
+            else:
+                # No transition - just show the new frame
+                self.screen.blit(new_surface, (0, 0))
+                pygame.display.flip()
+            
+            # Now actually play the media
             if media_type == 'video':
+                # Start video playback (MPV will handle the actual playback)
                 success = self.video_player.play_video(local_path, duration)
                 if success:
                     self.current_media_type = 'video'
                     self.is_playing = True
+                    # Capture last frame for next transition
+                    self.last_frame = self.transition_engine.capture_screen()
                 return success
                 
             else:  # image
-                image_surface = self._load_image(local_path)
-                if image_surface:
-                    success = self.video_player.show_image(image_surface, duration)
-                    if success:
-                        self.current_media_type = 'image'
-                        self.is_playing = True
-                    return success
-                return False
+                # Image is already displayed via transition
+                # Just wait for duration
+                time.sleep(duration)
+                self.current_media_type = 'image'
+                self.is_playing = True
+                # Capture for next transition
+                self.last_frame = self.transition_engine.capture_screen()
+                return True
                 
         except Exception as e:
             logger.error(f"❌ Error playing media: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def queue_next(self, url: str) -> bool:
@@ -388,6 +418,22 @@ class SeamlessMediaPlayer:
             
         except Exception as e:
             logger.error(f"❌ Error loading image: {e}")
+            return None
+    
+    def _get_video_first_frame(self, video_path: str) -> Optional[pygame.Surface]:
+        """
+        Get first frame of video as pygame surface for transition
+        For now, return a black surface - full frame extraction would require ffmpeg
+        """
+        try:
+            # TODO: Could use ffmpeg to extract first frame
+            # For now, create a black surface as placeholder
+            surface = pygame.Surface(self.window_size)
+            surface.fill((0, 0, 0))
+            return surface
+            
+        except Exception as e:
+            logger.error(f"❌ Error getting video first frame: {e}")
             return None
     
     def _download_media(self, url: str, media_type: str) -> Optional[str]:
