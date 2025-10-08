@@ -535,26 +535,10 @@ class CompleteWebplayerClient:
             
         # Overlay info
         self.draw_overlay_info()
-        
-    def draw_overlay_info(self):
-        """Draw overlay information like webplayer with Pi ID watermark."""
-        # Top info
-        info_text = f"Store {self.store_id} • Screen {self.screen_id}"
-        if self.playlist:
-            info_text += f" • Item {self.current_index + 1}/{len(self.playlist)}"
-            
-        # Get cache info for debugging
-        cache_info = self.media_player.get_cache_info()
-        debug_text = f"Cache: {cache_info['memory_items']}mem/{cache_info['download_items']}dl/{cache_info['cache_size_mb']:.1f}MB"
-        
-        # Top overlay
-        overlay = self.font_small.render(info_text, True, (154, 167, 255, 56))
-        debug_overlay = self.font_small.render(debug_text, True, (100, 100, 100))
-        
-        self.screen.blit(overlay, (10, self.height - 50))
-        self.screen.blit(debug_overlay, (10, self.height - 25))
-        
-        # Pi ID watermark - check visibility and auto-hide
+    
+    def draw_pi_id_overlay(self):
+        """Draw Pi ID overlay - called separately to ensure it's always on top."""
+        # Check visibility and auto-hide
         should_show_pi_id = self.show_pi_id
         
         # Auto-hide after specified time (if enabled)
@@ -603,6 +587,24 @@ class CompleteWebplayerClient:
             # Draw Pi ID text
             self.screen.blit(pi_id_surface, pi_id_rect)
             self.screen.blit(hint_surface, hint_rect)
+        
+    def draw_overlay_info(self):
+        """Draw overlay information like webplayer."""
+        # Top info
+        info_text = f"Store {self.store_id} • Screen {self.screen_id}"
+        if self.playlist:
+            info_text += f" • Item {self.current_index + 1}/{len(self.playlist)}"
+            
+        # Get cache info for debugging
+        cache_info = self.media_player.get_cache_info()
+        debug_text = f"Cache: {cache_info['memory_items']}mem/{cache_info['download_items']}dl/{cache_info['cache_size_mb']:.1f}MB"
+        
+        # Top overlay
+        overlay = self.font_small.render(info_text, True, (154, 167, 255, 56))
+        debug_overlay = self.font_small.render(debug_text, True, (100, 100, 100))
+        
+        self.screen.blit(overlay, (10, self.height - 50))
+        self.screen.blit(debug_overlay, (10, self.height - 25))
         
     def get_media_url(self, item: PlaylistItem) -> str:
         """Get media URL for playlist item like webplayer."""
@@ -1291,6 +1293,9 @@ class CompleteWebplayerClient:
                     self.draw_setup_screen()
                 elif self.current_state == "playing":
                     self.draw_playing_screen()
+                
+                # ALWAYS draw Pi ID overlay on top (even over video)
+                self.draw_pi_id_overlay()
                     
                 # Update display
                 pygame.display.flip()
