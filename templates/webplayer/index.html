@@ -22,9 +22,6 @@
   .panel{background:#0d0d0d;border:none;border-radius:12px;padding:28px;max-width:560px;width:min(92vw,560px);box-shadow:0 8px 30px rgba(0,0,0,.5);margin:12vh auto}
   h1{margin:0 0 12px;font-size:26px;font-weight:700;text-align:center}
   p{margin:0 0 16px;color:#bbb;font-size:15px;text-align:center}
-  .pi-id-display{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.85);color:#fff;padding:16px 32px;border-radius:12px;border:2px solid #c8102e;font-size:24px;font-weight:700;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,0.6);z-index:100}
-  .pi-id-display .label{font-size:14px;color:#aaa;margin-bottom:4px}
-  .pi-id-display .id{font-size:32px;color:#fff;letter-spacing:1px}
   label{display:block;font-size:14px;color:#ccc;margin:12px 0 8px}
   input{width:100%;padding:16px 18px;background:#000;border:1px solid #333;border-radius:10px;color:#fff;outline:none;text-align:center;letter-spacing:2px;font-weight:700;font-size:18px;box-sizing:border-box}
   input::placeholder{color:#8a8a8a}
@@ -59,48 +56,7 @@
     <div class="note">Next you'll enter the store code and pick a screen.</div>
   </div>
   
-  <!-- Pi ID Display -->
-  <div class="pi-id-display" id="piIdDisplay">
-    <div class="label">Pi ID</div>
-    <div class="id" id="piIdValue">Loading...</div>
-  </div>
-  
   <script>
-    // Fetch and display Pi ID
-    (function fetchPiId(){
-      try{
-        var piIdEl = document.getElementById('piIdValue');
-        if(window.fetch){
-          fetch('/api/pi_id', { cache:'no-store' })
-            .then(function(r){ return r.json(); })
-            .then(function(data){
-              if(data && data.pi_id){ 
-                piIdEl.textContent = data.pi_id; 
-              } else { 
-                piIdEl.textContent = 'Not Available'; 
-              }
-            })
-            .catch(function(){ piIdEl.textContent = 'Error'; });
-        } else {
-          var xhr = new XMLHttpRequest();
-          xhr.open('GET', '/api/pi_id', true);
-          xhr.onreadystatechange = function(){
-            if(xhr.readyState===4){
-              try{
-                var data = JSON.parse(xhr.responseText);
-                if(data && data.pi_id){ 
-                  piIdEl.textContent = data.pi_id; 
-                } else { 
-                  piIdEl.textContent = 'Not Available'; 
-                }
-              }catch(e){ piIdEl.textContent = 'Error'; }
-            }
-          };
-          xhr.send();
-        }
-      }catch(e){ document.getElementById('piIdValue').textContent = 'Error'; }
-    })();
-    
     // Enforce HTTPS on our domain for some TV browsers
     try{ if (location.protocol === 'http:' && /(^|\.)everydayadvertise\.com$/i.test(location.hostname)) { location.replace('https:' + location.href.slice(5)); } }catch(e){}
 
