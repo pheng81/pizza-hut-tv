@@ -451,6 +451,29 @@ class SeamlessMediaPlayer:
         """Resume playback"""
         self.video_player.resume()
     
+    def get_cache_info(self) -> dict:
+        """Get cache statistics for display"""
+        import os
+        
+        cache_size = 0
+        cache_items = 0
+        
+        try:
+            if self.cache_dir.exists():
+                for file in self.cache_dir.iterdir():
+                    if file.is_file():
+                        cache_size += file.stat().st_size
+                        cache_items += 1
+        except:
+            pass
+        
+        return {
+            'memory_items': len(self.image_cache),
+            'download_items': cache_items,
+            'cache_size_mb': cache_size / (1024 * 1024),
+            'preload_queue': 0  # We don't have a preload queue in seamless player
+        }
+    
     def cleanup(self):
         """Clean up resources"""
         self.video_player.cleanup()
