@@ -200,6 +200,9 @@ class CompleteWebplayerClient:
         
         # Pi ID - unique identifier for this device
         self.pi_id = self._get_or_create_pi_id()
+        self.show_pi_id = True  # Toggle visibility (press 'I' to toggle)
+        self.pi_id_last_shown = time.time()  # Track when last shown
+        self.pi_id_auto_hide_seconds = 300  # Auto-hide after 5 minutes (0 = never hide)
         
         # Initialize pygame
         pygame.init()
@@ -551,21 +554,31 @@ class CompleteWebplayerClient:
         self.screen.blit(overlay, (10, self.height - 50))
         self.screen.blit(debug_overlay, (10, self.height - 25))
         
-        # Pi ID watermark at bottom right (semi-transparent white)
-        pi_id_text = f"Pi ID: {self.pi_id}"
-        pi_id_surface = self.font_small.render(pi_id_text, True, (255, 255, 255))
-        pi_id_surface.set_alpha(180)  # Semi-transparent
-        pi_id_rect = pi_id_surface.get_rect()
-        pi_id_rect.bottomright = (self.width - 10, self.height - 10)
+        # Pi ID watermark - check visibility and auto-hide
+        should_show_pi_id = self.show_pi_id
         
-        # Optional: Add background for better visibility
-        bg_rect = pi_id_rect.inflate(12, 6)
-        bg_surface = pygame.Surface(bg_rect.size, pygame.SRCALPHA)
-        bg_surface.fill((0, 0, 0, 128))  # Semi-transparent black background
-        self.screen.blit(bg_surface, bg_rect)
+        # Auto-hide after specified time (if enabled)
+        if self.pi_id_auto_hide_seconds > 0 and self.show_pi_id:
+            elapsed = time.time() - self.pi_id_last_shown
+            if elapsed > self.pi_id_auto_hide_seconds:
+                should_show_pi_id = False
         
-        # Draw Pi ID text
-        self.screen.blit(pi_id_surface, pi_id_rect)
+        if should_show_pi_id:
+            # Pi ID watermark at bottom right (semi-transparent white)
+            pi_id_text = f"Pi ID: {self.pi_id}  [Press 'I' to hide]"
+            pi_id_surface = self.font_small.render(pi_id_text, True, (255, 255, 255))
+            pi_id_surface.set_alpha(180)  # Semi-transparent
+            pi_id_rect = pi_id_surface.get_rect()
+            pi_id_rect.bottomright = (self.width - 10, self.height - 10)
+            
+            # Add background for better visibility
+            bg_rect = pi_id_rect.inflate(12, 6)
+            bg_surface = pygame.Surface(bg_rect.size, pygame.SRCALPHA)
+            bg_surface.fill((0, 0, 0, 128))  # Semi-transparent black background
+            self.screen.blit(bg_surface, bg_rect)
+            
+            # Draw Pi ID text
+            self.screen.blit(pi_id_surface, pi_id_rect)
         
     def get_media_url(self, item: PlaylistItem) -> str:
         """Get media URL for playlist item like webplayer."""
@@ -1071,6 +1084,13 @@ class CompleteWebplayerClient:
             self.running = False
         elif event.key == pygame.K_F11:
             pygame.display.toggle_fullscreen()
+        elif event.key == pygame.K_i:  # Press 'I' to toggle Pi ID visibility
+            self.show_pi_id = not self.show_pi_id
+            if self.show_pi_id:
+                self.pi_id_last_shown = time.time()  # Reset timer
+                logger.info(f"📟 Pi ID visibility: ON (ID: {self.pi_id})")
+            else:
+                logger.info("📟 Pi ID visibility: OFF")
         elif event.key == pygame.K_SPACE and self.current_state == "playing":
             # Manual advance for testing
             self.current_index = (self.current_index + 1) % len(self.playlist) if self.playlist else 0
@@ -1267,6 +1287,10 @@ def main():
                        help="Server URL")
     parser.add_argument("--debug", action="store_true", 
                        help="Enable debug logging")
+    parser.add_argument("--hide-pi-id", action="store_true",
+                       help="Start with Pi ID hidden (press 'I' to show)")
+    parser.add_argument("--pi-id-auto-hide", type=int, default=300,
+                       help="Auto-hide Pi ID after N seconds (0=never, default=300)")
     
     args = parser.parse_args()
     
@@ -1275,6 +1299,18 @@ def main():
     
     try:
         client = CompleteWebplayerClient(server_url=args.server)
+        
+        # Apply Pi ID visibility settings
+        if args.hide_pi_id:
+            client.show_pi_id = False
+            logger.info("📟 Pi ID starts hidden (press 'I' to show)")
+        
+        client.pi_id_auto_hide_seconds = args.pi_id_auto_hide
+        if args.pi_id_auto_hide > 0:
+            logger.info(f"📟 Pi ID will auto-hide after {args.pi_id_auto_hide} seconds")
+        else:
+            logger.info("📟 Pi ID auto-hide disabled")
+        
         client.run()
     except KeyboardInterrupt:
         logger.info("🛑 Interrupted by user")
