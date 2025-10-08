@@ -539,6 +539,183 @@ class CompleteWebplayerClient:
             logger.warning(f"Playlist fetch failed: {e}")
             
         return []
+    
+    def filter_playlist_by_schedule(self, playlist: List[PlaylistItem]) -> List[PlaylistItem]:
+        """
+        Filter playlist items based on schedule settings from dashboard.
+        Respects: enabled flag, start/end times, days of week, schedule windows
+        """
+        if not playlist:
+            return []
+        
+        # Get current server time
+        server_time_ms = self.time_sync.get_server_time()
+        dt = datetime.fromtimestamp(server_time_ms / 1000)
+        current_day = dt.isoweekday()  # 1=Monday, 7=Sunday
+        current_time = dt.time()
+        current_date = dt.date()
+        
+        filtered = []
+        
+        for item in playlist:
+            # Get raw dict data for schedule checking
+            item_dict = asdict(item) if hasattr(item, '__dataclass_fields__') else {}
+            
+            # Check enabled flag (tick checkbox in dashboard)
+            if not item_dict.get('enabled', True):
+                logger.debug(f"⏭️  Skipping disabled item: {item.id}")
+                continue
+            
+            # Check schedule windows
+            if not self.is_within_schedule(item_dict, current_day, current_time, current_date):
+                logger.debug(f"⏰ Item {item.id} not scheduled for current time")
+                continue
+            
+            filtered.append(item)
+        
+        if len(filtered) < len(playlist):
+            logger.info(f"📋 Schedule filtered: {len(filtered)}/{len(playlist)} items active")
+        
+        return filtered
+    
+    def is_within_schedule(self, item_dict: Dict, current_day: int, current_time, current_date) -> bool:
+        """
+        Check if item should play at current time.
+        Handles: schedule array, legacy start/end, days of week
+        """
+        # Get schedule windows from item
+        schedules = item_dict.get('schedule', [])
+        
+        # If no schedule array, check legacy start/end fields
+        if not schedules:
+            return self.check_legacy_schedule(item_dict, current_time, current_date)
+        
+        # Check if ANY schedule window matches
+        for sched in schedules:
+            if self.matches_schedule_window(sched, current_day, current_time, current_date):
+                return True
+        
+        # No windows matched
+        return False
+    
+    def matches_schedule_window(self, sched: Dict, current_day: int, current_time, current_date) -> bool:
+        """Check if current time matches a single schedule window"""
+        
+        # Check days of week (M T W T F S S from dashboard)
+        days = sched.get('days', [])  # [1,2,3,4,5] = Mon-Fri
+        if days and current_day not in days:
+            return False
+        
+        # Check start date/time
+        start_str = sched.get('start', '')
+        if start_str:
+            try:
+                # Parse "mm/dd/yyyy HH:MM:SS" or "HH:MM:SS" or "HH:MM"
+                start_dt = self.parse_datetime(start_str)
+                if start_dt:
+                    if isinstance(start_dt, datetime):
+                        # Full datetime comparison
+                        current_dt = datetime.combine(current_date, current_time)
+                        if current_dt < start_dt:
+                            return False
+                    else:
+                        # Time-only comparison
+                        if current_time < start_dt:
+                            return False
+            except:
+                pass
+        
+        # Check end date/time
+        end_str = sched.get('end', '')
+        if end_str:
+            try:
+                end_dt = self.parse_datetime(end_str)
+                if end_dt:
+                    if isinstance(end_dt, datetime):
+                        # Full datetime comparison
+                        current_dt = datetime.combine(current_date, current_time)
+                        if current_dt > end_dt:
+                            return False
+                    else:
+                        # Time-only comparison
+                        if current_time > end_dt:
+                            return False
+            except:
+                pass
+        
+        # All checks passed!
+        return True
+    
+    def check_legacy_schedule(self, item_dict: Dict, current_time, current_date) -> bool:
+        """Check legacy start/end fields (not in schedule array)"""
+        
+        start_str = item_dict.get('start', '')
+        end_str = item_dict.get('end', '')
+        
+        # If no start/end, item is always active
+        if not start_str and not end_str:
+            return True
+        
+        # Check start time
+        if start_str:
+            try:
+                start_dt = self.parse_datetime(start_str)
+                if start_dt:
+                    if isinstance(start_dt, datetime):
+                        current_dt = datetime.combine(current_date, current_time)
+                        if current_dt < start_dt:
+                            return False
+                    elif current_time < start_dt:
+                        return False
+            except:
+                pass
+        
+        # Check end time
+        if end_str:
+            try:
+                end_dt = self.parse_datetime(end_str)
+                if end_dt:
+                    if isinstance(end_dt, datetime):
+                        current_dt = datetime.combine(current_date, current_time)
+                        if current_dt > end_dt:
+                            return False
+                    elif current_time > end_dt:
+                        return False
+            except:
+                pass
+        
+        return True
+    
+    def parse_datetime(self, time_str: str):
+        """
+        Parse time string from dashboard.
+        Supports: "HH:MM:SS", "HH:MM", "mm/dd/yyyy HH:MM:SS"
+        Returns: datetime, time, or None
+        """
+        if not time_str:
+            return None
+        
+        time_str = time_str.strip()
+        
+        # Try full datetime: "mm/dd/yyyy HH:MM:SS"
+        try:
+            return datetime.strptime(time_str, "%m/%d/%Y %H:%M:%S")
+        except:
+            pass
+        
+        # Try time with seconds: "HH:MM:SS"
+        try:
+            return datetime.strptime(time_str, "%H:%M:%S").time()
+        except:
+            pass
+        
+        # Try time without seconds: "HH:MM"
+        try:
+            return datetime.strptime(time_str, "%H:%M").time()
+        except:
+            pass
+        
+        return None
         
     def sync_effect_from_server(self):
         """Sync global effect from server like webplayer."""
@@ -688,9 +865,19 @@ class CompleteWebplayerClient:
             
     def fetch_and_update_playlist(self, force_advance: bool = False):
         """Fetch playlist and update if changed."""
-        new_playlist = self.fetch_playlist()
+        raw_playlist = self.fetch_playlist()
         
-        if new_playlist:
+        if raw_playlist:
+            # Apply schedule filtering (respects enabled flag, start/end times, days of week)
+            new_playlist = self.filter_playlist_by_schedule(raw_playlist)
+            
+            # Show waiting screen if nothing scheduled
+            if not new_playlist:
+                logger.info("⏰ No items scheduled for current time - showing waiting screen")
+                self.playlist = []
+                self.playlist_signature = ""
+                return
+            
             # Compute signature to detect changes
             new_signature = self.compute_playlist_signature(new_playlist)
             signature_changed = bool(self.playlist_signature) and new_signature != self.playlist_signature
@@ -706,6 +893,10 @@ class CompleteWebplayerClient:
                 logger.info("📋 Playlist changed - advancing to new content")
                 self.current_index = 0
                 self.advance_to_next_item()
+        else:
+            # No playlist from server
+            self.playlist = []
+            self.playlist_signature = ""
                 
     def compute_playlist_signature(self, playlist: List[PlaylistItem]) -> str:
         """Compute playlist signature for change detection."""
