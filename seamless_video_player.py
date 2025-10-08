@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 class SeamlessVideoPlayer:
     """Custom video player with zero-flicker transitions"""
     
-    def __init__(self, window_size=(2560, 1440)):
+    def __init__(self, window_size=(2560, 1440), screen=None):
         self.window_size = window_size
         self.player: Optional[mpv.MPV] = None
         self.current_video: Optional[str] = None
@@ -28,11 +28,15 @@ class SeamlessVideoPlayer:
         self.playback_lock = threading.Lock()
         self.on_video_end: Optional[Callable] = None
         
-        # Initialize pygame display
-        pygame.init()
-        self.screen = pygame.display.set_mode(window_size, pygame.FULLSCREEN | pygame.HWSURFACE | pygame.DOUBLEBUF)
-        pygame.display.set_caption("Pizza Hut TV")
-        pygame.mouse.set_visible(False)
+        # Use existing pygame screen if provided (don't create a new one)
+        if screen:
+            self.screen = screen
+        else:
+            # Only create pygame window if not provided
+            pygame.init()
+            self.screen = pygame.display.set_mode(window_size, pygame.FULLSCREEN | pygame.HWSURFACE | pygame.DOUBLEBUF)
+            pygame.display.set_caption("Pizza Hut TV")
+            pygame.mouse.set_visible(False)
         
         self._init_player()
         
@@ -257,13 +261,24 @@ class SeamlessMediaPlayer:
     Compatible with complete_pi_client.py interface
     """
     
-    def __init__(self, window_size=(2560, 1440), cache_dir="cache"):
-        self.window_size = window_size
+    def __init__(self, screen_or_size=(2560, 1440), cache_dir="cache"):
+        # Handle both pygame screen object and window_size tuple
+        if isinstance(screen_or_size, tuple):
+            self.window_size = screen_or_size
+            self.external_screen = None
+        else:
+            # It's a pygame screen object
+            self.external_screen = screen_or_size
+            self.window_size = screen_or_size.get_size()
+        
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(exist_ok=True)
         
-        # Initialize seamless video player
-        self.video_player = SeamlessVideoPlayer(window_size)
+        # Initialize seamless video player, pass screen if we have one
+        self.video_player = SeamlessVideoPlayer(self.window_size, screen=self.external_screen)
+        
+        # Use the video player's screen for drawing
+        self.screen = self.video_player.screen
         
         # Image cache
         self.image_cache = {}
