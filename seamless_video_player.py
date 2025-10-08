@@ -414,6 +414,29 @@ class SeamlessMediaPlayer:
             logger.error(f"❌ Error downloading media: {e}")
             return None
     
+    def preload_media(self, url: str):
+        """
+        Preload media (download to cache)
+        This is called by complete_pi_client to preload upcoming items
+        """
+        try:
+            if not url or not url.startswith('http'):
+                return  # Only preload remote URLs
+            
+            # Determine media type from URL
+            if url.endswith(('.mp4', '.webm', '.mkv', '.avi', '.mov')):
+                media_type = 'video'
+            else:
+                media_type = 'image'
+            
+            # Download to cache (will be used later when play_media is called)
+            local_path = self._download_media(url, media_type)
+            if local_path:
+                logger.debug(f"📥 Preloaded: {url}")
+            
+        except Exception as e:
+            logger.error(f"❌ Error preloading media: {e}")
+    
     def stop(self):
         """Stop playback"""
         self.video_player.stop()
