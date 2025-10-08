@@ -50,7 +50,6 @@ class SeamlessVideoPlayer:
                 
                 # Window settings - FORCE FULLSCREEN
                 fullscreen=True,
-                fs=True,
                 ontop=True,
                 border=False,
                 
@@ -62,8 +61,6 @@ class SeamlessVideoPlayer:
                 osc=False,
                 osd_level=0,
                 cursor_autohide='always',
-                no_osc=True,
-                no_osd_bar=True,
                 
                 # Audio
                 audio='auto',
@@ -83,7 +80,6 @@ class SeamlessVideoPlayer:
                 
                 # Video scaling to fill screen
                 keepaspect=True,
-                video_aspect_override='no',
                 
                 # Logging
                 msg_level='all=info',
