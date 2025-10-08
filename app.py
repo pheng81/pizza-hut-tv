@@ -2195,6 +2195,138 @@ def pop_commands():
             save_store_config(cfg)
     return jsonify({'success': True, 'commands': out, 'remaining': len(scr.get('cmd_queue', []))})
 
+@app.route('/api/configure_remote_pi', methods=['POST'])
+@login_required
+def configure_remote_pi():
+    """
+    Configure a remote Raspberry Pi with pairing code, store ID, and screen ID.
+    This creates a configuration command that the Pi will fetch and apply.
+    """
+    try:
+        data = request.get_json()
+        pi_id = data.get('pi_id', '').strip()
+        pair_code = data.get('pair_code', '').strip()
+        store_id = data.get('store_id', '').strip()
+        screen_id = data.get('screen_id', '').strip()
+        auto_start = data.get('auto_start', True)
+
+        if not all([pi_id, pair_code, store_id, screen_id]):
+            return jsonify({
+                'success': False,
+                'message': 'Missing required fields: pi_id, pair_code, store_id, screen_id'
+            }), 400
+
+        # Validate pair code format (4 digits)
+        if not pair_code.isdigit() or len(pair_code) != 4:
+            return jsonify({
+                'success': False,
+                'message': 'Pair code must be a 4-digit number'
+            }), 400
+
+        # Load current user's config to validate store exists
+        cfg = ensure_playlists_structure(load_store_config())
+        
+        # Verify store exists
+        store_exists = any(str(s.get('id')) == str(store_id) for s in cfg.get('stores', []))
+        if not store_exists:
+            return jsonify({
+                'success': False,
+                'message': f'Store ID {store_id} not found in your configuration'
+            }), 404
+
+        # Create configuration command for the Pi
+        # Store this in a dedicated pi_configurations collection or commands queue
+        pi_config = {
+            'pi_id': pi_id,
+            'pair_code': pair_code,
+            'store_id': store_id,
+            'screen_id': screen_id,
+            'auto_start': auto_start,
+            'server_url': request.host_url.rstrip('/'),
+            'configured_at': int(time.time()),
+            'configured_by': session.get('user', {}).get('email', 'unknown')
+        }
+
+        # Store in user's config under pi_configurations
+        if 'pi_configurations' not in cfg:
+            cfg['pi_configurations'] = {}
+        
+        cfg['pi_configurations'][pi_id] = pi_config
+        save_store_config(cfg)
+
+        # Also enqueue a configuration command to the screen's command queue
+        # so if the Pi is already running, it can pick up the new config
+        _enqueue_command_in_cfg(
+            cfg,
+            store_id,
+            screen_id,
+            ctype='configure',
+            item_id=pi_id,
+            file=None
+        )
+        save_store_config(cfg)
+
+        return jsonify({
+            'success': True,
+            'message': f'Pi {pi_id} configured successfully',
+            'config': {
+                'pi_id': pi_id,
+                'store_id': store_id,
+                'screen_id': screen_id,
+                'pair_code': pair_code
+            }
+        })
+
+    except Exception as e:
+        print(f"ERROR in configure_remote_pi: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'message': f'Server error: {str(e)}'
+        }), 500
+
+@app.route('/api/get_pi_config/<pi_id>', methods=['GET'])
+def get_pi_config(pi_id):
+    """
+    Allow a Pi to fetch its configuration using its Pi ID.
+    This can be called during Pi setup/boot to auto-configure.
+    """
+    try:
+        # Check for authorization via pair code or user code
+        header_code = request.headers.get('X-User-Code') or request.args.get('user_code')
+        user_key = _resolve_user_key_by_code(header_code)
+        
+        if not user_key:
+            return jsonify({
+                'success': False,
+                'error': 'Authentication required'
+            }), 403
+
+        cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(user_key))
+        
+        # Look up Pi configuration
+        pi_configs = cfg.get('pi_configurations', {})
+        pi_config = pi_configs.get(pi_id)
+        
+        if not pi_config:
+            return jsonify({
+                'success': False,
+                'error': f'No configuration found for Pi ID: {pi_id}'
+            }), 404
+
+        return jsonify({
+            'success': True,
+            'config': pi_config
+        })
+
+    except Exception as e:
+        print(f"ERROR in get_pi_config: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 # Internal helper: enqueue a command into the config object for a given screen
 def _enqueue_command_in_cfg(cfg, store_id, screen_id, ctype='reload', item_id=None, file=None):
     try:

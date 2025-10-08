@@ -1704,9 +1704,9 @@
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c1.5-3.5 5-6 8-6s6.5 2.5 8 6"></path></svg>
                 <span>Profile</span>
             </button>
-            <button class="action-item" onclick="futureAction()" title="Custom action">
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6l6 12H6z"></path></svg>
-                <span>Custom</span>
+            <button class="action-item" onclick="openRemotePiManager()" title="Remote Pi Manager">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2H10a2 2 0 0 0-2 2v16"/></svg>
+                <span>Remote Pi Manager</span>
             </button>
             <a class="action-item" href="{{ url_for('logout') }}" title="Log out">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -1753,6 +1753,83 @@
         renderRpBreadcrumb();
         refreshLibrary();
     }
+
+    // Remote Pi Manager functions
+    function openRemotePiManager() {
+        document.getElementById('remotePiManagerModal').style.display = 'flex';
+        document.getElementById('piId').focus();
+        // Close drawer if open
+        toggleDrawer(false);
+    }
+
+    function closeRemotePiManager() {
+        document.getElementById('remotePiManagerModal').style.display = 'none';
+        document.getElementById('remotePiManagerForm').reset();
+        document.getElementById('piConfigStatus').style.display = 'none';
+    }
+
+    async function configureRemotePi() {
+        const piId = document.getElementById('piId').value.trim();
+        const pairCode = document.getElementById('piPairCode').value.trim();
+        const storeId = document.getElementById('piStoreId').value;
+        const screenId = document.getElementById('piScreenId').value;
+        const autoStart = document.getElementById('piAutoStart').checked;
+        const statusDiv = document.getElementById('piConfigStatus');
+        const submitBtn = document.getElementById('configureRemotePiBtn');
+
+        if (!piId || !pairCode || !storeId || !screenId) {
+            statusDiv.innerHTML = '<div style="color:#d32f2f; padding:10px; background:#ffebee; border-radius:8px;">❌ Please fill in all required fields</div>';
+            statusDiv.style.display = 'block';
+            return;
+        }
+
+        try {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Configuring...';
+            statusDiv.innerHTML = '<div style="color:#0d6efd; padding:10px; background:#e7f3ff; border-radius:8px;">⏳ Sending configuration to Pi...</div>';
+            statusDiv.style.display = 'block';
+
+            const response = await fetch('/api/configure_remote_pi', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    pi_id: piId,
+                    pair_code: pairCode,
+                    store_id: storeId,
+                    screen_id: screenId,
+                    auto_start: autoStart
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                statusDiv.innerHTML = `
+                    <div style="color:#2e7d32; padding:10px; background:#e8f5e9; border-radius:8px;">
+                        ✅ <strong>Configuration successful!</strong><br>
+                        <small style="margin-top:4px; display:block;">
+                            Pi ID: ${piId}<br>
+                            Store: ${storeId} | Screen: ${screenId}<br>
+                            Pair Code: ${pairCode}
+                        </small>
+                    </div>`;
+                
+                // Close modal after 3 seconds
+                setTimeout(() => {
+                    closeRemotePiManager();
+                }, 3000);
+            } else {
+                statusDiv.innerHTML = `<div style="color:#d32f2f; padding:10px; background:#ffebee; border-radius:8px;">❌ ${result.message || 'Configuration failed'}</div>`;
+            }
+        } catch (error) {
+            console.error('Remote Pi configuration error:', error);
+            statusDiv.innerHTML = '<div style="color:#d32f2f; padding:10px; background:#ffebee; border-radius:8px;">❌ Network error. Please check your connection.</div>';
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Configure Pi';
+        }
+    }
+
     async function loadHeaderAvatar(){
         try{
             const r = await fetch('/api/me');
@@ -6615,6 +6692,68 @@
                     <button type="button" class="btn-primary" onclick="addNewStoresBulk()">Add All</button>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Remote Pi Manager Modal -->
+    <div id="remotePiManagerModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="remotePiManagerTitle">
+        <div class="modal-content" role="document" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3 id="remotePiManagerTitle">🖥️ Remote Pi Manager</h3>
+                <button type="button" class="close" aria-label="Close" onclick="closeRemotePiManager()" title="Close">&times;</button>
+            </div>
+            <form id="remotePiManagerForm" onsubmit="event.preventDefault(); configureRemotePi();">
+                <p class="helper" style="padding:0 18px;">Configure a Raspberry Pi remotely by entering its Pi ID and connection settings.</p>
+                
+                <div class="form-group" style="padding: 0 18px;">
+                    <label for="piId">Pi ID *</label>
+                    <input type="text" id="piId" placeholder="e.g., pi-001 or raspberrypi" required autofocus>
+                    <small style="color:#666; font-size:12px;">Unique identifier for this Raspberry Pi</small>
+                </div>
+
+                <div class="form-group" style="padding: 0 18px;">
+                    <label for="piPairCode">Pairing Code *</label>
+                    <input type="text" id="piPairCode" placeholder="e.g., 3835" required pattern="[0-9]{4}" maxlength="4">
+                    <small style="color:#666; font-size:12px;">4-digit Android TV pairing code</small>
+                </div>
+
+                <div class="form-group" style="padding: 0 18px;">
+                    <label for="piStoreId">Store ID *</label>
+                    <select id="piStoreId" required style="width:100%; padding:10px; border-radius:12px; border:1px solid rgba(60,60,67,0.29); font-size:14px;">
+                        <option value="">Select Store...</option>
+                        {% for store in config.stores %}
+                        <option value="{{ store.id }}">{{ store.id }} - {{ store.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <small style="color:#666; font-size:12px;">Which store this Pi belongs to</small>
+                </div>
+
+                <div class="form-group" style="padding: 0 18px;">
+                    <label for="piScreenId">Screen ID *</label>
+                    <select id="piScreenId" required style="width:100%; padding:10px; border-radius:12px; border:1px solid rgba(60,60,67,0.29); font-size:14px;">
+                        <option value="1">Screen 1</option>
+                        <option value="2">Screen 2</option>
+                        <option value="3">Screen 3</option>
+                        <option value="4">Screen 4</option>
+                        <option value="5">Screen 5</option>
+                    </select>
+                    <small style="color:#666; font-size:12px;">Which screen content to display</small>
+                </div>
+
+                <div class="form-group" style="padding: 0 18px;">
+                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                        <input type="checkbox" id="piAutoStart" checked style="width:18px; height:18px;">
+                        <span>Auto-start on boot</span>
+                    </label>
+                </div>
+
+                <div id="piConfigStatus" style="display:none; padding: 0 18px; margin-bottom: 12px;"></div>
+
+                <div class="modal-buttons">
+                    <button type="button" class="btn-secondary" onclick="closeRemotePiManager()">Cancel</button>
+                    <button type="submit" class="btn-primary" id="configureRemotePiBtn">Configure Pi</button>
+                </div>
+            </form>
         </div>
     </div>
         
