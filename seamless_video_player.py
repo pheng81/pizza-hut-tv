@@ -48,14 +48,22 @@ class SeamlessVideoPlayer:
                 vo='gpu',
                 hwdec='auto',
                 
-                # Window settings
+                # Window settings - FORCE FULLSCREEN
                 fullscreen=True,
+                fs=True,
                 ontop=True,
+                border=False,
+                
+                # Force window geometry to match screen size
+                geometry=f'{self.window_size[0]}x{self.window_size[1]}+0+0',
+                autofit_larger=f'{self.window_size[0]}x{self.window_size[1]}',
                 
                 # No UI elements
                 osc=False,
                 osd_level=0,
                 cursor_autohide='always',
+                no_osc=True,
+                no_osd_bar=True,
                 
                 # Audio
                 audio='auto',
@@ -72,6 +80,10 @@ class SeamlessVideoPlayer:
                 # Keep window open between videos
                 keep_open='always',
                 idle='yes',
+                
+                # Video scaling to fill screen
+                keepaspect=True,
+                video_aspect_override='no',
                 
                 # Logging
                 msg_level='all=info',
