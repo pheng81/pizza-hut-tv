@@ -331,11 +331,21 @@ class SeamlessMediaPlayer:
             else:
                 local_path = url
             
+            # For VIDEO-TO-VIDEO: Skip transitions (MPV handles seamless playback)
+            if media_type == 'video' and self.current_media_type == 'video':
+                logger.info("🎬 Video-to-video: Using MPV seamless playback (no transition needed)")
+                success = self.video_player.play_video(local_path, duration)
+                if success:
+                    self.current_media_type = 'video'
+                    self.is_playing = True
+                return success
+            
+            # For IMAGE or VIDEO-FROM-IMAGE: Apply transition
             # Load the new media as a surface
             if media_type == 'image':
                 new_surface = self._load_image(local_path)
             else:
-                # For video, we'll load first frame for transition
+                # For video starting after image, show black frame with transition
                 new_surface = self._get_video_first_frame(local_path)
             
             if not new_surface:
@@ -358,18 +368,16 @@ class SeamlessMediaPlayer:
                 if success:
                     self.current_media_type = 'video'
                     self.is_playing = True
-                    # Capture last frame for next transition
-                    self.last_frame = self.transition_engine.capture_screen()
+                    # Don't capture frame for video (MPV owns the screen)
+                    self.last_frame = None
                 return success
                 
             else:  # image
                 # Image is already displayed via transition
-                # Just wait for duration
-                time.sleep(duration)
-                self.current_media_type = 'image'
-                self.is_playing = True
                 # Capture for next transition
                 self.last_frame = self.transition_engine.capture_screen()
+                self.current_media_type = 'image'
+                self.is_playing = True
                 return True
                 
         except Exception as e:
