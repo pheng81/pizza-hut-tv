@@ -564,21 +564,45 @@ class CompleteWebplayerClient:
                 should_show_pi_id = False
         
         if should_show_pi_id:
-            # Pi ID watermark at bottom right (semi-transparent white)
-            pi_id_text = f"Pi ID: {self.pi_id}  [Press 'I' to hide]"
-            pi_id_surface = self.font_small.render(pi_id_text, True, (255, 255, 255))
-            pi_id_surface.set_alpha(180)  # Semi-transparent
-            pi_id_rect = pi_id_surface.get_rect()
-            pi_id_rect.bottomright = (self.width - 10, self.height - 10)
+            # Pi ID watermark at bottom center (LARGE and visible)
+            try:
+                # Create a large font for Pi ID (36px, bold)
+                pi_id_font = pygame.font.SysFont('arial', 36, bold=True)
+            except:
+                pi_id_font = pygame.font.Font(None, 36)
             
-            # Add background for better visibility
-            bg_rect = pi_id_rect.inflate(12, 6)
-            bg_surface = pygame.Surface(bg_rect.size, pygame.SRCALPHA)
-            bg_surface.fill((0, 0, 0, 128))  # Semi-transparent black background
+            pi_id_text = f"Pi ID: {self.pi_id}"
+            hint_text = "[Press 'I' to hide]"
+            
+            # Render main Pi ID text (white, bold, large)
+            pi_id_surface = pi_id_font.render(pi_id_text, True, (255, 255, 255))
+            pi_id_rect = pi_id_surface.get_rect()
+            pi_id_rect.centerx = self.width // 2
+            pi_id_rect.bottom = self.height - 50
+            
+            # Render hint text (smaller, gray)
+            hint_surface = self.font_small.render(hint_text, True, (170, 170, 170))
+            hint_rect = hint_surface.get_rect()
+            hint_rect.centerx = self.width // 2
+            hint_rect.top = pi_id_rect.bottom + 5
+            
+            # Add background for better visibility (larger padding)
+            bg_width = max(pi_id_rect.width, hint_rect.width) + 40
+            bg_height = (hint_rect.bottom - pi_id_rect.top) + 20
+            bg_rect = pygame.Rect(
+                (self.width - bg_width) // 2,
+                pi_id_rect.top - 10,
+                bg_width,
+                bg_height
+            )
+            bg_surface = pygame.Surface((bg_width, bg_height), pygame.SRCALPHA)
+            bg_surface.fill((0, 0, 0, 200))  # More opaque black background
+            pygame.draw.rect(bg_surface, (200, 16, 46), bg_surface.get_rect(), 2, border_radius=8)  # Red border
             self.screen.blit(bg_surface, bg_rect)
             
             # Draw Pi ID text
             self.screen.blit(pi_id_surface, pi_id_rect)
+            self.screen.blit(hint_surface, hint_rect)
         
     def get_media_url(self, item: PlaylistItem) -> str:
         """Get media URL for playlist item like webplayer."""

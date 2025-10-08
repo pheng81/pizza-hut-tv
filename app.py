@@ -5178,6 +5178,37 @@ def webplayer_index():
     except Exception as e:
         return make_response(f"Webplayer index unavailable: {e}", 500)
 
+@app.route('/api/pi_id')
+def get_pi_id():
+    """Get the Pi ID for display on webplayer."""
+    try:
+        import socket
+        import uuid
+        
+        # Get hostname
+        hostname = socket.gethostname()
+        
+        # Get MAC address
+        mac = uuid.getnode()
+        mac_hex = f"{mac:012x}"
+        mac_suffix = mac_hex[-4:]
+        
+        # Generate Pi ID
+        pi_id = f"{hostname}-{mac_suffix}"
+        
+        return jsonify({
+            'success': True,
+            'pi_id': pi_id,
+            'hostname': hostname
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'pi_id': 'unknown'
+        })
+
+
 
 @app.route('/webplayer/browse')
 @app.route('/webplayer/browse/')
