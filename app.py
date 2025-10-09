@@ -26,6 +26,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, jso
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv, dotenv_values
+from flask_socketio import SocketIO, emit, join_room, leave_room
 
 # Ensure both names available for existing code
 _shutil = shutil
@@ -172,6 +173,21 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY') or 'pizza-hut-tv-oauth-session-key-2025-production'
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 
+# Initialize Socket.IO for WebSocket relay (TeamViewer-style)
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",
+    async_mode='threading',
+    ping_timeout=60,
+    ping_interval=25,
+    logger=True,
+    engineio_logger=True
+)
+
+# Track connected Pis via WebSocket
+connected_pis = {}  # { 'pi_id': {'sid': socket_id, 'connected_at': timestamp, 'ip': ip_address} }
+pi_connection_lock = threading.Lock()
+
 # Session configuration - make sessions last 30 days
 from datetime import timedelta
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
@@ -179,13 +195,18 @@ app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
 # Honor X-Forwarded-* from Cloudflare/NGINX and prefer HTTPS for URL generation
 # Safe for local dev; only affects how Flask infers scheme/host/port
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
+
+# Cookie settings: Allow override for local development
+cookie_secure = os.environ.get('SESSION_COOKIE_SECURE', 'True').lower() == 'true'
+cookie_samesite = os.environ.get('SESSION_COOKIE_SAMESITE', 'None')
+cookie_domain = os.environ.get('SESSION_COOKIE_DOMAIN', '.everydayadvertise.com') if os.environ.get('SESSION_COOKIE_DOMAIN') != '' else None
+
 app.config.update(
     PREFERRED_URL_SCHEME='https',
-    SESSION_COOKIE_SECURE=True,  # Required for SAMESITE='None'
-    SESSION_COOKIE_SAMESITE='None',  # Allow OAuth redirects
+    SESSION_COOKIE_SECURE=cookie_secure,  # Allow HTTP for local dev
+    SESSION_COOKIE_SAMESITE=cookie_samesite,  # 'None' for production, 'Lax' for local
     SESSION_COOKIE_HTTPONLY=True,  # Prevent JavaScript access to session cookie
-    # Set domain for OAuth to work properly
-    SESSION_COOKIE_DOMAIN=os.environ.get('SESSION_COOKIE_DOMAIN') or '.everydayadvertise.com',
+    SESSION_COOKIE_DOMAIN=cookie_domain,  # None for local dev, domain for production
 )
 print('DEBUG: app.py initialization start', flush=True)
 logging.debug('App module import start')
@@ -944,6 +965,7 @@ def auth_google():
             if redirect_uri.startswith('http://'):
                 redirect_uri = redirect_uri.replace('http://', 'https://', 1)
         except Exception:
+            # Fallback to proper domain instead of IP
             redirect_uri = 'https://api.everydayadvertise.com/auth/google/callback'
 
         # CRITICAL: Clean up old OAuth state tokens before starting new flow
@@ -9371,13 +9393,409 @@ def ffmpeg_status():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# Remote Pi Manager API endpoints
+@app.route('/api/configure-pi', methods=['POST'])
+def configure_pi():
+    """Configure a Pi remotely using Pi ID"""
+    try:
+        logging.info(f'Remote Pi Manager API called - Content-Type: {request.content_type}')
+        logging.info(f'Remote Pi Manager API called - Data: {request.data}')
+        
+        data = request.get_json(force=True)  # Force JSON parsing
+        if not data:
+            logging.error('No JSON data received')
+            return jsonify({'success': False, 'message': 'Invalid JSON data'}), 400
+            
+        logging.info(f'Parsed JSON data: {data}')
+        
+        pi_id = data.get('pi_id', '').strip()
+        pair_code = data.get('pair_code', '').strip()
+        store_id = data.get('store_id', '').strip()
+        screen_id = data.get('screen_id', '').strip()
+        pi_ip = data.get('pi_ip', '').strip()
+
+        # Validate required fields (except pi_ip which can be auto-resolved)
+        if not all([pi_id, pair_code, store_id, screen_id]):
+            logging.error(f'Missing fields: pi_id={pi_id}, pair_code={pair_code}, store_id={store_id}, screen_id={screen_id}')
+            return jsonify({'success': False, 'message': 'Missing required fields'}), 400
+
+        # If no IP provided, resolve from mapping file
+        if not pi_ip:
+            import json
+            try:
+                with open('pi_id_ip_map.json', 'r') as f:
+                    pi_map = json.load(f)
+                pi_ip = pi_map.get(pi_id)
+                if pi_ip:
+                    logging.info(f'Resolved Pi IP from mapping: {pi_id} -> {pi_ip}')
+            except Exception as e:
+                logging.error(f'Error loading pi_id_ip_map.json: {e}')
+                return jsonify({'success': False, 'message': 'Could not resolve Pi IP'}), 400
+
+        if not pi_ip:
+            logging.error(f'No IP found for Pi ID: {pi_id}')
+            return jsonify({'success': False, 'message': f'No IP found for Pi ID: {pi_id}. Pi may not be registered.'}), 400
+
+        # POST configuration to Pi's HTTP server
+        try:
+            import requests
+        except ImportError:
+            logging.error('requests module not installed')
+            return jsonify({'success': False, 'message': 'Server missing requests module'}), 500
+
+        pi_url = f'http://{pi_ip}:8080/configure'
+        payload = {
+            'pi_id': pi_id,
+            'pair_code': pair_code,
+            'store_id': store_id,
+            'screen_id': screen_id
+        }
+        try:
+            resp = requests.post(pi_url, json=payload, timeout=5)
+            resp.raise_for_status()
+            pi_response = resp.json()
+            logging.info(f'Pi response: {pi_response}')
+            return jsonify({'success': True, 'message': 'Configuration sent to Pi', 'pi_response': pi_response})
+        except Exception as e:
+            logging.error(f'Error sending config to Pi: {e}')
+            return jsonify({'success': False, 'message': f'Failed to configure Pi: {e}'}), 500
+        
+    except Exception as e:
+        logging.error(f'Remote Pi configuration error: {e}')
+        return jsonify({'success': False, 'message': 'Configuration failed'}), 500
+
+@app.route('/api/register_pi', methods=['POST'])
+def register_pi():
+    """Register Pi identifier and IP address automatically."""
+    try:
+        data = request.get_json(force=True)
+        pi_id = data.get('pi_id', '').strip()
+        pi_ip = data.get('pi_ip', '').strip()
+        if not pi_id or not pi_ip:
+            return jsonify({'success': False, 'message': 'Missing pi_id or pi_ip'}), 400
+        
+        # Thread-safe update
+        def update_map():
+            try:
+                map_path = 'pi_id_ip_map.json'
+                try:
+                    with open(map_path, 'r') as f:
+                        pi_map = json.load(f)
+                except Exception:
+                    pi_map = {}
+                pi_map[pi_id] = pi_ip
+                with open(map_path, 'w') as f:
+                    json.dump(pi_map, f, indent=4)
+                logging.info(f'✅ Pi registered: {pi_id} -> {pi_ip}')
+            except Exception as e:
+                logging.error(f'Error updating pi_id_ip_map.json: {e}')
+        
+        threading.Thread(target=update_map).start()
+        return jsonify({'success': True, 'message': f'Registered {pi_id} with IP {pi_ip}'}), 200
+    except Exception as e:
+        logging.error(f'Pi registration error: {e}')
+        return jsonify({'success': False, 'message': f'Error: {e}'}), 500
+
+@app.route('/api/pi-status/<pi_id>')
+def pi_status(pi_id):
+    """Get status of a specific Pi"""
+    try:
+        logging.info(f'Pi status request for: {pi_id}')
+
+        # Get Pi IP from query parameter
+        pi_ip = request.args.get('pi_ip')
+
+        # If no IP provided, resolve from mapping file
+        if not pi_ip:
+            import json
+            try:
+                with open('pi_id_ip_map.json', 'r') as f:
+                    pi_map = json.load(f)
+                pi_ip = pi_map.get(pi_id)
+            except Exception as e:
+                logging.error(f'Error loading pi_id_ip_map.json: {e}')
+                return jsonify({
+                    'pi_id': pi_id,
+                    'status': 'offline',
+                    'message': 'Could not resolve Pi IP'
+                }), 200
+
+        if not pi_ip:
+            return jsonify({
+                'pi_id': pi_id,
+                'status': 'offline',
+                'message': 'No IP found for Pi ID'
+            }), 200
+
+        # Try to contact Pi's HTTP server
+        try:
+            import requests
+        except ImportError:
+            logging.error('requests module not installed')
+            return jsonify({
+                'pi_id': pi_id,
+                'status': 'unknown',
+                'message': 'Server missing requests module'
+            }), 500
+
+        pi_url = f'http://{pi_ip}:8080/status'
+        try:
+            resp = requests.get(pi_url, timeout=3)
+            resp.raise_for_status()
+            pi_data = resp.json()
+
+            return jsonify({
+                'pi_id': pi_id,
+                'status': 'online',
+                'last_seen': pi_data.get('last_seen', 'Just now'),
+                'version': pi_data.get('version', 'Unknown'),
+                'current_state': pi_data.get('state', 'Unknown')
+            })
+        except Exception as e:
+            logging.warning(f'Pi {pi_id} at {pi_ip} not responding: {e}')
+            return jsonify({
+                'pi_id': pi_id,
+                'status': 'offline',
+                'message': f'Pi not responding: {e}'
+            }), 200
+
+    except Exception as e:
+        logging.error(f'Pi status error: {e}')
+        return jsonify({'success': False, 'message': 'Status check failed'}), 500
+
+# =============================================================================
+# WebSocket Relay System (TeamViewer-Style Architecture)
+# =============================================================================
+# Pis connect TO server (outgoing, always allowed)
+# Dashboard sends commands THROUGH server to connected Pis
+# NO PORT FORWARDING NEEDED!
+# =============================================================================
+
+@socketio.on('connect')
+def handle_connect():
+    """Handle new WebSocket connection"""
+    logging.info(f'🌐 WebSocket connection from {request.sid}')
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    """Handle WebSocket disconnection"""
+    # Find and remove Pi from connected list
+    with pi_connection_lock:
+        for pi_id, pi_info in list(connected_pis.items()):
+            if pi_info['sid'] == request.sid:
+                del connected_pis[pi_id]
+                logging.info(f'❌ Pi disconnected: {pi_id} (was connected for {time.time() - pi_info["connected_at"]:.0f}s)')
+                break
+
+@socketio.on('register_pi')
+def handle_pi_registration(data):
+    """
+    Pi connects and registers itself via WebSocket
+    This is called when Pi boots up and establishes persistent connection
+    """
+    try:
+        pi_id = data.get('pi_id', '').strip()
+        pi_version = data.get('version', 'Unknown')
+        
+        if not pi_id:
+            emit('registration_failed', {'message': 'Missing pi_id'})
+            return
+        
+        # Get Pi's public IP from request headers (real IP behind proxy)
+        pi_ip = request.environ.get('HTTP_X_FORWARDED_FOR', request.remote_addr)
+        if ',' in pi_ip:
+            pi_ip = pi_ip.split(',')[0].strip()  # Take first IP if multiple
+        
+        # Store Pi connection info
+        with pi_connection_lock:
+            connected_pis[pi_id] = {
+                'sid': request.sid,
+                'connected_at': time.time(),
+                'ip': pi_ip,
+                'version': pi_version
+            }
+        
+        # Update IP mapping file (for backward compatibility)
+        def update_map():
+            try:
+                map_path = 'pi_id_ip_map.json'
+                try:
+                    with open(map_path, 'r') as f:
+                        pi_map = json.load(f)
+                except Exception:
+                    pi_map = {}
+                pi_map[pi_id] = pi_ip
+                with open(map_path, 'w') as f:
+                    json.dump(pi_map, f, indent=4)
+            except Exception as e:
+                logging.error(f'Error updating pi_id_ip_map.json: {e}')
+        
+        threading.Thread(target=update_map, daemon=True).start()
+        
+        logging.info(f'✅ Pi registered via WebSocket: {pi_id} ({pi_ip}) - {pi_version}')
+        emit('registered', {
+            'status': 'success',
+            'pi_id': pi_id,
+            'message': f'Registered {pi_id} successfully'
+        })
+        
+    except Exception as e:
+        logging.error(f'Pi registration error: {e}')
+        emit('registration_failed', {'message': f'Registration failed: {e}'})
+
+@socketio.on('pi_heartbeat')
+def handle_pi_heartbeat(data):
+    """
+    Pi sends periodic heartbeat to maintain connection
+    Update last seen timestamp
+    """
+    pi_id = data.get('pi_id')
+    if pi_id and pi_id in connected_pis:
+        connected_pis[pi_id]['last_heartbeat'] = time.time()
+        emit('heartbeat_ack', {'status': 'ok'})
+
+@socketio.on('pi_status_update')
+def handle_pi_status_update(data):
+    """
+    Pi sends status updates (currently playing, errors, etc.)
+    Store for dashboard to query
+    """
+    pi_id = data.get('pi_id')
+    if pi_id and pi_id in connected_pis:
+        connected_pis[pi_id]['status'] = data.get('status', {})
+        logging.debug(f'📊 Status update from {pi_id}: {data.get("status", {})}')
+
+@socketio.on('config_applied')
+def handle_config_applied(data):
+    """
+    Pi confirms configuration was applied successfully
+    Emit to any listening dashboard sessions
+    """
+    pi_id = data.get('pi_id')
+    status = data.get('status')
+    logging.info(f'✅ Configuration applied on {pi_id}: {status}')
+    
+    # Broadcast to all dashboard sessions (they can filter by pi_id)
+    socketio.emit('pi_config_result', {
+        'pi_id': pi_id,
+        'status': status,
+        'timestamp': time.time()
+    }, broadcast=True)
+
+# Update the pi_status endpoint to check WebSocket connections
+@app.route('/api/pi-status-ws/<pi_id>')
+def pi_status_websocket(pi_id):
+    """
+    Check if Pi is online via WebSocket connection
+    PREFERRED method - instant, no network delay
+    """
+    try:
+        with pi_connection_lock:
+            if pi_id in connected_pis:
+                pi_info = connected_pis[pi_id]
+                return jsonify({
+                    'pi_id': pi_id,
+                    'status': 'online',
+                    'connection_type': 'websocket',
+                    'connected_since': pi_info['connected_at'],
+                    'ip_address': pi_info['ip'],
+                    'version': pi_info.get('version', 'Unknown'),
+                    'last_heartbeat': pi_info.get('last_heartbeat', pi_info['connected_at'])
+                })
+            else:
+                return jsonify({
+                    'pi_id': pi_id,
+                    'status': 'offline',
+                    'connection_type': 'none',
+                    'message': 'Pi not connected to WebSocket server'
+                }), 200
+    except Exception as e:
+        logging.error(f'WebSocket status check error: {e}')
+        return jsonify({'success': False, 'message': 'Status check failed'}), 500
+
+# Update configure-pi endpoint to use WebSocket
+@app.route('/api/configure-pi-ws', methods=['POST'])
+def configure_pi_websocket():
+    """
+    Send configuration to Pi via WebSocket (PREFERRED method)
+    No port forwarding needed!
+    """
+    try:
+        data = request.get_json(force=True)
+        pi_id = data.get('pi_id', '').strip()
+        pair_code = data.get('pair_code', '').strip()
+        store_id = data.get('store_id', '').strip()
+        screen_id = data.get('screen_id', '').strip()
+        auto_start = data.get('auto_start', True)
+        
+        if not all([pi_id, pair_code, store_id, screen_id]):
+            return jsonify({
+                'success': False,
+                'message': 'Missing required fields: pi_id, pair_code, store_id, screen_id'
+            }), 400
+        
+        # Check if Pi is connected via WebSocket
+        with pi_connection_lock:
+            if pi_id not in connected_pis:
+                return jsonify({
+                    'success': False,
+                    'message': f'Pi {pi_id} is not connected. Please ensure Pi is online and connected to server.'
+                }), 400
+            
+            pi_sid = connected_pis[pi_id]['sid']
+        
+        # Send configuration to Pi via WebSocket
+        socketio.emit('configure', {
+            'pair_code': pair_code,
+            'store_id': store_id,
+            'screen_id': screen_id,
+            'auto_start': auto_start
+        }, room=pi_sid)
+        
+        logging.info(f'📡 Configuration sent to {pi_id} via WebSocket: store={store_id}, screen={screen_id}')
+        
+        return jsonify({
+            'success': True,
+            'message': f'Configuration sent to Pi {pi_id} via WebSocket',
+            'method': 'websocket'
+        }), 200
+        
+    except Exception as e:
+        logging.error(f'WebSocket configuration error: {e}')
+        return jsonify({'success': False, 'message': f'Configuration failed: {e}'}), 500
+
+# List all connected Pis (useful for admin dashboard)
+@app.route('/api/connected-pis')
+def list_connected_pis():
+    """List all currently connected Pis via WebSocket"""
+    try:
+        with pi_connection_lock:
+            pis = []
+            for pi_id, pi_info in connected_pis.items():
+                pis.append({
+                    'pi_id': pi_id,
+                    'ip': pi_info['ip'],
+                    'version': pi_info.get('version', 'Unknown'),
+                    'connected_since': pi_info['connected_at'],
+                    'uptime_seconds': time.time() - pi_info['connected_at']
+                })
+            return jsonify({
+                'success': True,
+                'count': len(pis),
+                'pis': pis
+            })
+    except Exception as e:
+        logging.error(f'Error listing connected Pis: {e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5002))  # Use 5002 since 5000 seems blocked
-    print(f"DEBUG: Starting Flask on port {port}", flush=True)
-    logging.debug('Attempting to start Flask development server on port %s', port)
+    print(f"DEBUG: Starting Flask with Socket.IO on port {port}", flush=True)
+    logging.debug('Attempting to start Flask+SocketIO development server on port %s', port)
     try:
-        app.run(debug=True, host='0.0.0.0', port=port)
+        # Use socketio.run instead of app.run for WebSocket support
+        socketio.run(app, debug=True, host='0.0.0.0', port=port)
     except Exception as e:
-        logging.exception('Flask failed to start: %s', e)
+        logging.exception('Flask+SocketIO failed to start: %s', e)
         # Ensure a non-zero exit so supervising systems notice
         raise

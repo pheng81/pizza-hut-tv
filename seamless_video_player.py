@@ -358,8 +358,12 @@ class SeamlessMediaPlayer:
                 self.transition_engine.apply_transition(self.last_frame, new_surface, effect)
             else:
                 # No transition - just show the new frame
-                self.screen.blit(new_surface, (0, 0))
-                pygame.display.flip()
+                try:
+                    self.screen.blit(new_surface, (0, 0))
+                    pygame.display.flip()
+                except pygame.error as e:
+                    # GL context error - ignore and let MPV take over
+                    logger.warning(f"⚠️  Pygame display error (MPV will handle display): {e}")
             
             # Now actually play the media
             if media_type == 'video':

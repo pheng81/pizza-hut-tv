@@ -5,6 +5,9 @@ pygame>=2.5.0
 psutil>=5.9.0
 python-vlc>=3.0.0
 
+# WebSocket for relay connection (no port forwarding needed!)
+python-socketio[client]>=5.11.0
+
 # Pi-specific optimizations
 RPi.GPIO>=0.7.1; platform_machine=="armv7l" or platform_machine=="aarch64"
 picamera2>=0.3.0; platform_machine=="armv7l" or platform_machine=="aarch64"

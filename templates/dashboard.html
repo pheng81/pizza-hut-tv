@@ -1859,6 +1859,143 @@
         document.getElementById('remotePiManagerModal').style.display = 'none';
         document.getElementById('remotePiManagerForm').reset();
         document.getElementById('piConfigStatus').style.display = 'none';
+        document.getElementById('piConnectionStatus').style.display = 'none';
+    // Step-based UI: hide all steps initially
+    const steps = ['stepPairCode','stepStoreId','stepScreenId'];
+    steps.forEach(id=>{ const el=document.getElementById(id); if(el){ el.style.display='none'; }});
+        document.getElementById('piNotConnectedButtons').style.display = 'flex';
+        
+        // Reset connect button
+        const connectBtn = document.getElementById('connectPiBtn');
+        connectBtn.disabled = false;
+        connectBtn.textContent = 'Connect';
+        connectBtn.style.background = '#0066cc';
+        connectBtn.style.borderColor = '#0066cc';
+    }
+
+    // Step navigation functions for Remote Pi Manager
+    function showStoreStep() {
+        const pairCode = document.getElementById('piPairCode').value.trim();
+        console.log('showStoreStep called, pair code:', pairCode, 'length:', pairCode.length);
+        if (pairCode && pairCode.length === 4) {
+            console.log('Showing store step');
+            document.getElementById('stepStoreId').style.display = 'block';
+        }
+    }
+
+    function showScreenStep() {
+        const storeId = document.getElementById('piStoreId').value;
+        console.log('showScreenStep called, store ID:', storeId);
+        if (storeId) {
+            // Populate screen dropdown based on selected store
+            const screenSelect = document.getElementById('piScreenId');
+            screenSelect.innerHTML = '<option value="">Select Screen...</option>';
+            
+            // Add screen options for the selected store
+            const screenOptions = [
+                { value: storeId + '_screen1', label: 'Screen 1 (Main Display)' },
+                { value: storeId + '_screen2', label: 'Screen 2 (Secondary)' },
+                { value: storeId + '_screen3', label: 'Screen 3' },
+                { value: storeId + '_screen4', label: 'Screen 4' },
+                { value: storeId + '_promo1', label: 'Promo 1 (Portrait)' },
+                { value: storeId + '_promo2', label: 'Promo 2 (Portrait)' },
+                { value: storeId + '_promo3', label: 'Promo 3 (Portrait)' }
+            ];
+            
+            screenOptions.forEach(option => {
+                const opt = document.createElement('option');
+                opt.value = option.value;
+                opt.textContent = option.label;
+                screenSelect.appendChild(opt);
+            });
+            
+            console.log('Showing screen step with', screenOptions.length, 'options');
+            document.getElementById('stepScreenId').style.display = 'block';
+        }
+    }
+
+
+    async function connectToPi() {
+        const piId = document.getElementById('piId').value.trim();
+        const connectBtn = document.getElementById('connectPiBtn');
+        const statusDiv = document.getElementById('piConnectionStatus');
+        const statusContent = document.getElementById('piStatusContent');
+
+        if (!piId) {
+            statusContent.innerHTML = '<div style="color:#d32f2f;">❌ Please enter a Pi Identifier</div>';
+            statusDiv.style.display = 'block';
+            statusDiv.style.background = '#ffebee';
+            statusDiv.style.border = '1px solid #ffcdd2';
+            return;
+        }
+
+        // No client-side IP resolution; backend will resolve IP from Pi ID
+
+        try {
+            connectBtn.disabled = true;
+            connectBtn.textContent = 'Connecting...';
+            
+            // Show connecting status
+            statusContent.innerHTML = '<div style="color:#ff9800;">🔄 Connecting to Pi: ' + piId + '...</div>';
+            statusDiv.style.display = 'block';
+            statusDiv.style.background = '#fff3e0';
+            statusDiv.style.border = '1px solid #ffcc02';
+
+            // Call the WebSocket-based Pi status API (no port forwarding needed!)
+            const response = await fetch('/api/pi-status-ws/' + encodeURIComponent(piId));
+            const result = await response.json();
+
+            if (response.ok && result.status === 'online') {
+                // Pi is online - show success and enable configuration
+                statusContent.innerHTML = `
+                    <div style="color:#2e7d32;">
+                        ✅ <strong>Pi Online</strong> - ${piId}
+                        <br><small style="color:#666;">Version: ${result.version || 'Unknown'} | Last seen: ${result.last_seen ? new Date(result.last_seen).toLocaleString() : 'Just now'}</small>
+                    </div>
+                `;
+                statusDiv.style.background = '#e8f5e8';
+                statusDiv.style.border = '1px solid #c8e6c9';
+                
+                // Enable configuration section
+                // Show first step (pair code)
+                document.getElementById('stepPairCode').style.display = 'block';
+                document.getElementById('piNotConnectedButtons').style.display = 'none';
+                
+                connectBtn.textContent = 'Connected';
+                connectBtn.style.background = '#4caf50';
+                connectBtn.style.borderColor = '#4caf50';
+                
+            } else {
+                // Pi is offline or not found
+                statusContent.innerHTML = '<div style="color:#d32f2f;">❌ <strong>Pi Offline</strong> - ' + piId + ' is not responding</div>';
+                statusDiv.style.background = '#ffebee';
+                statusDiv.style.border = '1px solid #ffcdd2';
+                document.getElementById('stepPairCode').style.display = 'none';
+                document.getElementById('stepStoreId').style.display = 'none';
+                document.getElementById('stepScreenId').style.display = 'none';
+                document.getElementById('piNotConnectedButtons').style.display = 'flex';
+                
+                connectBtn.disabled = false;
+                connectBtn.textContent = 'Retry';
+                connectBtn.style.background = '#f44336';
+                connectBtn.style.borderColor = '#f44336';
+            }
+
+        } catch (error) {
+            console.error('Connection error:', error);
+            statusContent.innerHTML = '<div style="color:#d32f2f;">❌ <strong>Connection Error</strong> - Unable to reach Pi</div>';
+            statusDiv.style.background = '#ffebee';
+            statusDiv.style.border = '1px solid #ffcdd2';
+            document.getElementById('stepPairCode').style.display = 'none';
+            document.getElementById('stepStoreId').style.display = 'none';
+            document.getElementById('stepScreenId').style.display = 'none';
+            document.getElementById('piNotConnectedButtons').style.display = 'flex';
+            
+            connectBtn.disabled = false;
+            connectBtn.textContent = 'Retry';
+            connectBtn.style.background = '#f44336';
+            connectBtn.style.borderColor = '#f44336';
+        }
     }
 
     async function configureRemotePi() {
@@ -1879,10 +2016,24 @@
         try {
             submitBtn.disabled = true;
             submitBtn.textContent = 'Configuring...';
-            statusDiv.innerHTML = '<div style="color:#0d6efd; padding:10px; background:#e7f3ff; border-radius:8px;">⏳ Sending configuration to Pi...</div>';
+            statusDiv.innerHTML = '<div style="color:#0d6efd; padding:10px; background:#e7f3ff; border-radius:8px;">⏳ Sending configuration via WebSocket...</div>';
             statusDiv.style.display = 'block';
 
-            const response = await fetch('/api/configure_remote_pi', {
+            // Check Pi is online via WebSocket relay
+            const statusResponse = await fetch('/api/pi-status-ws/' + encodeURIComponent(piId));
+            const statusData = await statusResponse.json();
+
+            if (!statusResponse.ok || statusData.status !== 'online') {
+                statusDiv.innerHTML = '<div style="color:#d32f2f; padding:10px; background:#ffebee; border-radius:8px;">❌ Pi is offline or not found. Please check connection.</div>';
+                statusDiv.style.display = 'block';
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Configure Pi';
+                return;
+            }
+
+            // Extract Pi IP from the pi_id_ip_map on backend (we need to pass it)
+            // For now, we'll let the backend resolve it via WebSocket relay
+            const response = await fetch('/api/configure-pi-ws', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -6798,21 +6949,37 @@
             <form id="remotePiManagerForm" onsubmit="event.preventDefault(); configureRemotePi();">
                 <p class="helper" style="padding:0 18px;">Configure a Raspberry Pi remotely by entering its identifier and connection settings.</p>
                 
+
+                <!-- Step 1: Pi Connection -->
                 <div class="form-group" style="padding: 0 18px;">
                     <label for="piId">Pi Identifier *</label>
-                    <input type="text" id="piId" placeholder="e.g., raspberrypi or MAC address" required autofocus>
+                    <div style="display: flex; gap: 8px; align-items: flex-start;">
+                        <input type="text" id="piId" placeholder="e.g., raspberrypi-ce39" required autofocus style="flex: 1;">
+                        <button type="button" id="connectPiBtn" onclick="connectToPi()" style="padding: 10px 16px; border-radius: 8px; border: 1px solid #0066cc; background: #0066cc; color: white; font-size: 14px; cursor: pointer; white-space: nowrap;">
+                            Connect
+                        </button>
+                    </div>
                     <small style="color:#666; font-size:12px;">Use hostname (raspberrypi), MAC address, or custom ID</small>
                 </div>
 
-                <div class="form-group" style="padding: 0 18px;">
-                    <label for="piPairCode">Your Pairing Code *</label>
-                    <input type="text" id="piPairCode" placeholder="e.g., 3835" value="{{ link_code or '' }}" required pattern="[0-9]{4}" maxlength="4">
-                    <small style="color:#666; font-size:12px;">Use your 4-digit pairing code shown above</small>
+                <!-- Removed Pi IP Address field (auto resolution enabled) -->
+
+                <!-- Pi Status Display -->
+                <div id="piConnectionStatus" style="display: none; padding: 8px 18px; margin: 0 18px; border-radius: 8px; font-size: 14px; margin-bottom: 16px;">
+                    <div id="piStatusContent"></div>
                 </div>
 
-                <div class="form-group" style="padding: 0 18px;">
+                <!-- Step 2: Pairing Code -->
+                <div id="stepPairCode" class="form-group" style="padding: 0 18px; display:none;">
+                    <label for="piPairCode">Your Pairing Code *</label>
+                    <input type="text" id="piPairCode" placeholder="e.g., 3835" value="" required pattern="[0-9]{4}" maxlength="4" oninput="showStoreStep()">
+                    <small style="color:#666; font-size:12px;">Enter your 4-digit pairing code to continue</small>
+                </div>
+
+                <!-- Step 3: Store Selection -->
+                <div id="stepStoreId" class="form-group" style="padding: 0 18px; display:none;">
                     <label for="piStoreId">Store ID *</label>
-                    <select id="piStoreId" required style="width:100%; padding:10px; border-radius:12px; border:1px solid rgba(60,60,67,0.29); font-size:14px;">
+                    <select id="piStoreId" style="width:100%; padding:10px; border-radius:12px; border:1px solid rgba(60,60,67,0.29); font-size:14px;" onchange="showScreenStep()">
                         <option value="">Select Store...</option>
                         {% for store in config.stores %}
                         <option value="{{ store.id }}">{{ store.id }} - {{ store.name }}</option>
@@ -6821,14 +6988,11 @@
                     <small style="color:#666; font-size:12px;">Which store this Pi belongs to</small>
                 </div>
 
-                <div class="form-group" style="padding: 0 18px;">
+                <!-- Step 4: Screen Selection -->
+                <div id="stepScreenId" class="form-group" style="padding: 0 18px; display:none;">
                     <label for="piScreenId">Screen ID *</label>
-                    <select id="piScreenId" required style="width:100%; padding:10px; border-radius:12px; border:1px solid rgba(60,60,67,0.29); font-size:14px;">
-                        <option value="1">Screen 1</option>
-                        <option value="2">Screen 2</option>
-                        <option value="3">Screen 3</option>
-                        <option value="4">Screen 4</option>
-                        <option value="5">Screen 5</option>
+                    <select id="piScreenId" style="width:100%; padding:10px; border-radius:12px; border:1px solid rgba(60,60,67,0.29); font-size:14px;">
+                        <option value="">Select Screen...</option>
                     </select>
                     <small style="color:#666; font-size:12px;">Which screen content to display</small>
                 </div>
@@ -6840,11 +7004,17 @@
                     </label>
                 </div>
 
-                <div id="piConfigStatus" style="display:none; padding: 0 18px; margin-bottom: 12px;"></div>
+                    <div id="piConfigStatus" style="display:none; padding: 0 18px; margin-bottom: 12px;"></div>
 
-                <div class="modal-buttons">
+                    <div class="modal-buttons" style="padding: 0 18px;">
+                        <button type="button" class="btn-secondary" onclick="closeRemotePiManager()">Cancel</button>
+                        <button type="submit" class="btn-primary" id="configureRemotePiBtn">Configure Pi</button>
+                    </div>
+                </div>
+
+                <!-- Buttons for when not connected -->
+                <div id="piNotConnectedButtons" class="modal-buttons">
                     <button type="button" class="btn-secondary" onclick="closeRemotePiManager()">Cancel</button>
-                    <button type="submit" class="btn-primary" id="configureRemotePiBtn">Configure Pi</button>
                 </div>
             </form>
         </div>

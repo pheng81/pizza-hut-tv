@@ -14,11 +14,15 @@ import argparse
 import sys
 import os
 import asyncio
+import socket
+import socketio
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, asdict
 from urllib.parse import urljoin, urlparse
 import hashlib
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import urllib.parse
 
 # Import our SEAMLESS media player (no flicker!)
 from seamless_video_player import SeamlessMediaPlayer as MediaPlayer
@@ -29,6 +33,61 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+def get_local_ip():
+    """Get the local IP address of this device."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        # Doesn't need to be reachable
+        s.connect(('8.8.8.8', 80))
+        ip = s.getsockname()[0]
+    except Exception:
+        ip = '127.0.0.1'
+    finally:
+        s.close()
+    return ip
+
+def get_public_ip():
+    """Get the public IP address of this device (what the internet sees)."""
+    try:
+        # Try multiple services for redundancy
+        services = [
+            'https://api.ipify.org',
+            'https://ifconfig.me/ip',
+            'https://icanhazip.com',
+        ]
+        for service in services:
+            try:
+                response = requests.get(service, timeout=5)
+                if response.status_code == 200:
+                    public_ip = response.text.strip()
+                    logger.info(f"🌐 Detected public IP: {public_ip}")
+                    return public_ip
+            except Exception:
+                continue
+        # Fallback to local IP if all services fail
+        logger.warning("⚠️ Could not detect public IP, using local IP as fallback")
+        return get_local_ip()
+    except Exception as e:
+        logger.warning(f"⚠️ Error getting public IP: {e}")
+        return get_local_ip()
+
+def register_pi_with_server(pi_id, server_url):
+    """Register Pi identifier and IP with the server automatically."""
+    try:
+        pi_ip = get_public_ip()  # Changed to use public IP instead of local IP
+        url = f"{server_url}/api/register_pi"
+        payload = {"pi_id": pi_id, "pi_ip": pi_ip}
+        
+        logger.info(f"📡 Registering Pi with server: {pi_id} -> {pi_ip}")
+        resp = requests.post(url, json=payload, timeout=5)
+        
+        if resp.status_code == 200:
+            logger.info(f"✅ Pi registered successfully: {resp.json().get('message', 'OK')}")
+        else:
+            logger.warning(f"⚠️ Pi registration failed: {resp.status_code} - {resp.text}")
+    except Exception as e:
+        logger.warning(f"⚠️ Could not register Pi with server: {e}")
 
 @dataclass
 class PlaylistItem:
@@ -137,6 +196,98 @@ class ServerTimeSync:
             threading.Thread(target=self.sync_time, daemon=True).start()
             
         return client_time + self.server_offset
+
+
+class PiConfigHandler(BaseHTTPRequestHandler):
+    """HTTP request handler for remote Pi configuration."""
+
+    def do_POST(self):
+        """Handle POST requests for Pi configuration."""
+        try:
+            if self.path == '/configure':
+                # Parse JSON body
+                content_length = int(self.headers.get('Content-Length', 0))
+                post_data = self.rfile.read(content_length)
+                config_data = json.loads(post_data.decode('utf-8'))
+    
+                # Get Pi client instance from server
+                pi_client = self.server.pi_client
+    
+                # Apply configuration
+                if 'pair_code' in config_data:
+                    pi_client.pair_code = config_data['pair_code']
+                    logger.info(f"🔧 Remote config: pair_code = {pi_client.pair_code}")
+    
+                if 'store_id' in config_data:
+                    pi_client.store_id = config_data['store_id'] 
+                    logger.info(f"🔧 Remote config: store_id = {pi_client.store_id}")
+    
+                if 'screen_id' in config_data:
+                    pi_client.screen_id = config_data['screen_id']
+                    logger.info(f"🔧 Remote config: screen_id = {pi_client.screen_id}")
+    
+                # If all required fields are set, start playback
+                if pi_client.pair_code and pi_client.store_id and pi_client.screen_id:
+                    logger.info("🚀 All config received, starting playback mode...")
+                    pi_client.current_state = "playing"
+                    pi_client.setup_step = "complete"
+                    
+                    # CRITICAL: Hide Pi ID overlay IMMEDIATELY before starting playback
+                    pi_client.show_pi_id = False
+                    logger.info("👁️  Pi ID hidden for video playback")
+                    
+                    # Force restart playback services (even if already started)
+                    pi_client.services_started = False
+                    threading.Thread(target=pi_client.start_playback_services, daemon=True).start()
+    
+                # Send success response
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                response = {
+                    'success': True,
+                    'message': 'Configuration applied successfully',
+                    'pi_id': pi_client.pi_id,
+                    'state': pi_client.current_state
+                }
+                self.wfile.write(json.dumps(response).encode('utf-8'))
+    
+            elif self.path == '/status':
+                # Return Pi status
+                pi_client = self.server.pi_client
+    
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                response = {
+                    'pi_id': pi_client.pi_id,
+                    'status': 'online',
+                    'current_state': pi_client.current_state,
+                    'pair_code': pi_client.pair_code,
+                    'store_id': pi_client.store_id,
+                    'screen_id': pi_client.screen_id,
+                    'version': 'v2.1.0',
+                    'last_seen': datetime.now().isoformat()
+                }
+                self.wfile.write(json.dumps(response).encode('utf-8'))
+            else:
+                self.send_error(404, "Endpoint not found")
+    
+        except Exception as e:
+            logger.error(f"❌ Config server error: {e}")
+            self.send_error(500, f"Internal server error: {e}")
+
+    def do_GET(self):
+        """Handle GET requests (status only)."""
+        if self.path == '/status':
+            self.do_POST()  # Reuse POST logic for status
+        else:
+            self.send_error(404, "Endpoint not found")
+
+    def log_message(self, format, *args):
+        """Suppress default HTTP server logging."""
+        pass
+
 
 class CompleteWebplayerClient:
     """Complete Pi client with full webplayer functionality."""
@@ -288,8 +439,205 @@ class CompleteWebplayerClient:
         self.running = True
         self.services_started = False
         
+        # Remote configuration server
+        self.config_server = None
+        self.config_port = 8080
+        self.start_config_server()
+        
+        # WebSocket connection for relay (TeamViewer-style)
+        self.sio = socketio.Client(
+            reconnection=True,
+            reconnection_attempts=0,  # Infinite
+            reconnection_delay=5,
+            reconnection_delay_max=30,
+            logger=True,
+            engineio_logger=True,
+            ssl_verify=False  # Disable SSL verification for Cloudflare certificates
+        )
+        self.websocket_connected = False
+        self.setup_websocket()
+        self.start_websocket_connection()
+        
         logger.info(f"🍕 Complete Pi Webplayer Client initialized: {self.width}x{self.height}")
         logger.info(f"📟 Pi ID: {self.pi_id}")  # Log Pi ID on startup
+        
+        # Register Pi with server automatically (legacy HTTP method)
+        threading.Thread(target=register_pi_with_server, args=(self.pi_id, self.server_url), daemon=True).start()
+    
+    def start_config_server(self):
+        """Start HTTP server for remote configuration."""
+        def run_server():
+            try:
+                # Create custom HTTP server with reference to pi client
+                class ConfigServer(HTTPServer):
+                    def __init__(self, server_address, RequestHandlerClass, pi_client):
+                        super().__init__(server_address, RequestHandlerClass)
+                        self.pi_client = pi_client
+                
+                self.config_server = ConfigServer(('0.0.0.0', self.config_port), PiConfigHandler, self)
+                logger.info(f"🌐 Remote configuration server started on port {self.config_port}")
+                self.config_server.serve_forever()
+            except Exception as e:
+                logger.error(f"❌ Failed to start config server: {e}")
+        
+        # Start server in background thread
+        server_thread = threading.Thread(target=run_server, daemon=True)
+        server_thread.start()
+    
+    def save_config(self):
+        """Save current configuration to a file for persistence."""
+        try:
+            config_file = os.path.expanduser('~/.pizza_hut_tv_config.json')
+            config_data = {
+                'pair_code': self.pair_code,
+                'store_id': self.store_id,
+                'screen_id': self.screen_id,
+                'pi_id': self.pi_id,
+                'last_updated': time.time()
+            }
+            with open(config_file, 'w') as f:
+                json.dump(config_data, f, indent=2)
+            logger.info(f"💾 Configuration saved: {config_file}")
+        except Exception as e:
+            logger.error(f"❌ Failed to save config: {e}")
+    
+    def load_config(self):
+        """Load saved configuration from file."""
+        try:
+            config_file = os.path.expanduser('~/.pizza_hut_tv_config.json')
+            if os.path.exists(config_file):
+                with open(config_file, 'r') as f:
+                    config_data = json.load(f)
+                self.pair_code = config_data.get('pair_code', '')
+                self.store_id = config_data.get('store_id', '')
+                self.screen_id = config_data.get('screen_id', '')
+                logger.info(f"📂 Configuration loaded: pair_code={self.pair_code}, store={self.store_id}, screen={self.screen_id}")
+                return True
+        except Exception as e:
+            logger.warning(f"⚠️ Could not load config: {e}")
+        return False
+
+    def setup_websocket(self):
+        """Set up WebSocket event handlers (TeamViewer-style relay)"""
+        
+        @self.sio.on('connect')
+        def on_connect():
+            logger.info(f'🌐 WebSocket connected to {self.server_url}')
+            self.websocket_connected = True
+            # Register this Pi with server
+            self.sio.emit('register_pi', {
+                'pi_id': self.pi_id,
+                'version': 'v2.1.0-websocket'
+            })
+        
+        @self.sio.on('registered')
+        def on_registered(data):
+            logger.info(f'✅ Registered with server via WebSocket: {data}')
+        
+        @self.sio.on('registration_failed')
+        def on_registration_failed(data):
+            logger.error(f'❌ Registration failed: {data.get("message", "Unknown error")}')
+        
+        @self.sio.on('configure')
+        def on_configure(config):
+            """Receive configuration from dashboard via WebSocket relay - EXACT same logic as HTTP handler"""
+            logger.info(f'📡 Configuration received via WebSocket: {config}')
+            
+            try:
+                # Apply configuration - EXACT same as HTTP handler
+                if 'pair_code' in config:
+                    self.pair_code = config['pair_code']
+                    logger.info(f"🔧 Remote config: pair_code = {self.pair_code}")
+                
+                if 'store_id' in config:
+                    self.store_id = config['store_id']
+                    logger.info(f"🔧 Remote config: store_id = {self.store_id}")
+                
+                if 'screen_id' in config:
+                    self.screen_id = config['screen_id']
+                    logger.info(f"🔧 Remote config: screen_id = {self.screen_id}")
+                
+                # Save to config file for persistence
+                self.save_config()
+                
+                # Send acknowledgment back to server
+                self.sio.emit('config_applied', {
+                    'pi_id': self.pi_id,
+                    'status': 'success',
+                    'config': {
+                        'pair_code': self.pair_code,
+                        'store_id': self.store_id,
+                        'screen_id': self.screen_id
+                    }
+                })
+                
+                # If all required fields are set, start playback - EXACT same as HTTP handler
+                if self.pair_code and self.store_id and self.screen_id:
+                    logger.info("🚀 All config received, starting playback mode...")
+                    self.current_state = "playing"
+                    self.setup_step = "complete"
+                    
+                    # CRITICAL: Hide Pi ID overlay IMMEDIATELY before starting playback
+                    self.show_pi_id = False
+                    logger.info("👁️  Pi ID hidden for video playback")
+                    
+                    # Force restart playback services (even if already started)
+                    self.services_started = False
+                    threading.Thread(target=self.start_playback_services, daemon=True).start()
+                
+            except Exception as e:
+                logger.error(f'❌ Configuration error: {e}', exc_info=True)
+                self.sio.emit('config_applied', {
+                    'pi_id': self.pi_id,
+                    'status': 'error',
+                    'error': str(e)
+                })
+        
+        @self.sio.on('disconnect')
+        def on_disconnect():
+            logger.warning('❌ WebSocket disconnected from server')
+            self.websocket_connected = False
+            # Auto-reconnect is handled by Socket.IO client
+        
+        @self.sio.on('heartbeat_ack')
+        def on_heartbeat_ack(data):
+            logger.debug('💓 Heartbeat acknowledged by server')
+    
+    def start_websocket_connection(self):
+        """Start WebSocket connection in background thread"""
+        def connect_loop():
+            while self.running:
+                try:
+                    if not self.websocket_connected:
+                        logger.info(f'🔄 Connecting to WebSocket server: {self.server_url}')
+                        self.sio.connect(
+                            self.server_url,
+                            wait_timeout=10,
+                            transports=['polling', 'websocket']  # Try polling first, then upgrade
+                        )
+                        # Start heartbeat thread
+                        threading.Thread(target=self.websocket_heartbeat, daemon=True).start()
+                    time.sleep(5)  # Check connection every 5 seconds
+                except Exception as e:
+                    logger.error(f'❌ WebSocket connection error: {e}')
+                    time.sleep(10)  # Wait before retry
+        
+        ws_thread = threading.Thread(target=connect_loop, daemon=True)
+        ws_thread.start()
+    
+    def websocket_heartbeat(self):
+        """Send periodic heartbeat to maintain connection"""
+        while self.running and self.websocket_connected:
+            try:
+                self.sio.emit('pi_heartbeat', {
+                    'pi_id': self.pi_id,
+                    'state': self.current_state,
+                    'timestamp': time.time()
+                })
+                time.sleep(30)  # Heartbeat every 30 seconds
+            except Exception as e:
+                logger.error(f'❌ Heartbeat error: {e}')
+                break
         
     def create_gradient_background(self) -> pygame.Surface:
         """Create solid dark background like custom_player.py (#0d0d0d)."""
@@ -533,8 +881,8 @@ class CompleteWebplayerClient:
             idle_rect = idle_text.get_rect(center=(self.width // 2, self.height // 2))
             self.screen.blit(idle_text, idle_rect)
             
-        # Overlay info
-        self.draw_overlay_info()
+        # NOTE: Overlay info removed to prevent flicker during video playback
+        # Only Pi ID overlay is shown occasionally (every 3 seconds)
     
     def draw_pi_id_overlay(self):
         """Draw Pi ID overlay - called separately to ensure it's always on top."""
@@ -635,19 +983,32 @@ class CompleteWebplayerClient:
             if self.pair_code:
                 params['user_code'] = self.pair_code
                 headers['X-User-Code'] = self.pair_code
+            
+            logger.info(f"📡 Fetching playlist: {url}")
+            logger.info(f"   Params: {params}")
                 
             response = requests.get(url, params=params, headers=headers, timeout=10)
             
+            logger.info(f"📡 Playlist response status: {response.status_code}")
+            
             if response.status_code == 200:
                 data = response.json()
+                logger.info(f"📡 Playlist data: success={data.get('success')}, items={len(data.get('playlist', []))}")
+                
                 if data.get('success') and data.get('playlist'):
                     playlist_data = data['playlist']
                     playlist = [PlaylistItem.from_dict(item) for item in playlist_data]
                     logger.info(f"📥 Fetched {len(playlist)} playlist items")
+                    if playlist:
+                        logger.info(f"   First item: {playlist[0].file}")
                     return playlist
+                else:
+                    logger.warning(f"⚠️ Playlist API returned error: {data.get('error', 'unknown')}")
+            else:
+                logger.warning(f"⚠️ Playlist API returned {response.status_code}: {response.text[:200]}")
                     
         except Exception as e:
-            logger.warning(f"Playlist fetch failed: {e}")
+            logger.error(f"❌ Playlist fetch failed: {e}", exc_info=True)
             
         return []
     
@@ -657,7 +1018,10 @@ class CompleteWebplayerClient:
         Respects: enabled flag, start/end times, days of week, schedule windows
         """
         if not playlist:
+            logger.info("📋 No playlist items to filter")
             return []
+        
+        logger.info(f"📋 Filtering {len(playlist)} playlist items by schedule")
         
         # Get current server time
         server_time_ms = self.time_sync.get_server_time()
@@ -666,26 +1030,34 @@ class CompleteWebplayerClient:
         current_time = dt.time()
         current_date = dt.date()
         
+        logger.info(f"📅 Current time: {dt.strftime('%Y-%m-%d %H:%M:%S')} (Day: {current_day})")
+        
         filtered = []
         
         for item in playlist:
             # Get raw dict data for schedule checking
             item_dict = asdict(item) if hasattr(item, '__dataclass_fields__') else {}
             
+            logger.info(f"🔍 Checking item: {item.file}")
+            logger.info(f"   enabled: {item_dict.get('enabled', True)}, schedule: {item_dict.get('schedule', 'none')}")
+            
             # Check enabled flag (tick checkbox in dashboard)
             if not item_dict.get('enabled', True):
-                logger.debug(f"⏭️  Skipping disabled item: {item.id}")
+                logger.info(f"⏭️  Skipping disabled item: {item.file}")
                 continue
             
             # Check schedule windows
             if not self.is_within_schedule(item_dict, current_day, current_time, current_date):
-                logger.debug(f"⏰ Item {item.id} not scheduled for current time")
+                logger.info(f"⏰ Item {item.file} not scheduled for current time")
                 continue
             
+            logger.info(f"✅ Item {item.file} passed schedule check")
             filtered.append(item)
         
         if len(filtered) < len(playlist):
             logger.info(f"📋 Schedule filtered: {len(filtered)}/{len(playlist)} items active")
+        else:
+            logger.info(f"📋 All {len(filtered)} items passed schedule filter")
         
         return filtered
     
@@ -1260,10 +1632,19 @@ class CompleteWebplayerClient:
         
         logger.info("🎬 All playback services started")
         
+        # Hide Pi ID overlay since we're about to start playing
+        self.show_pi_id = False
+        logger.info("👁️  Pi ID hidden - starting content playback")
+        
         # Initial playlist fetch and start playback
+        logger.info("📥 Fetching initial playlist for playback...")
         self.fetch_and_update_playlist()
+        logger.info(f"📋 Playlist has {len(self.playlist)} items after fetch")
         if self.playlist:
+            logger.info("▶️  Starting playback with first item...")
             self.advance_to_next_item()
+        else:
+            logger.warning("⚠️ No playlist items available - waiting for schedule")
             
     def run(self):
         """Main event loop."""
@@ -1291,15 +1672,16 @@ class CompleteWebplayerClient:
                 # Draw current screen
                 if self.current_state == "setup":
                     self.draw_setup_screen()
+                    # Draw Pi ID overlay on setup screen
+                    self.draw_pi_id_overlay()
+                    # Update display for setup screen
+                    pygame.display.flip()
+                    clock.tick(60)  # 60 FPS
                 elif self.current_state == "playing":
-                    self.draw_playing_screen()
-                
-                # ALWAYS draw Pi ID overlay on top (even over video)
-                self.draw_pi_id_overlay()
-                    
-                # Update display
-                pygame.display.flip()
-                clock.tick(60)  # 60 FPS
+                    # In playing mode, let MPV handle the display completely
+                    # Don't update pygame display to avoid covering MPV window
+                    # Just process events and maintain event loop
+                    clock.tick(30)  # 30 FPS event processing
         except Exception as e:
             logger.error(f"❌ CRITICAL ERROR in main loop: {e}")
             import traceback
