@@ -1873,43 +1873,84 @@
         connectBtn.style.borderColor = '#0066cc';
     }
 
+    // Global variable to store user's stores and screens data
+    let userStoresData = null;
+
     // Step navigation functions for Remote Pi Manager
-    function showStoreStep() {
+    async function showStoreStep() {
         const pairCode = document.getElementById('piPairCode').value.trim();
         console.log('showStoreStep called, pair code:', pairCode, 'length:', pairCode.length);
+        
         if (pairCode && pairCode.length === 4) {
-            console.log('Showing store step');
-            document.getElementById('stepStoreId').style.display = 'block';
+            // Fetch stores and screens for this pairing code
+            try {
+                const response = await fetch('/api/stores_by_code/' + pairCode);
+                const data = await response.json();
+                
+                if (data.success) {
+                    console.log('✅ Fetched user data for pair code:', pairCode, data);
+                    userStoresData = data;
+                    
+                    // Populate store dropdown with user's actual stores
+                    const storeSelect = document.getElementById('piStoreId');
+                    storeSelect.innerHTML = '<option value="">Select Store...</option>';
+                    
+                    data.stores.forEach(store => {
+                        const opt = document.createElement('option');
+                        opt.value = store.id;
+                        opt.textContent = store.id + ' - ' + (store.name || 'Store ' + store.id);
+                        storeSelect.appendChild(opt);
+                    });
+                    
+                    console.log('Showing store step with', data.stores.length, 'stores');
+                    document.getElementById('stepStoreId').style.display = 'block';
+                } else {
+                    console.error('❌ Failed to fetch stores:', data.error);
+                    alert('Pairing code not found or invalid: ' + pairCode);
+                }
+            } catch (error) {
+                console.error('❌ Error fetching stores:', error);
+                alert('Failed to verify pairing code. Please check your connection.');
+            }
         }
     }
 
     function showScreenStep() {
         const storeId = document.getElementById('piStoreId').value;
         console.log('showScreenStep called, store ID:', storeId);
-        if (storeId) {
-            // Populate screen dropdown based on selected store
+        
+        if (storeId && userStoresData) {
+            // Populate screen dropdown based on user's actual screens for this store
             const screenSelect = document.getElementById('piScreenId');
             screenSelect.innerHTML = '<option value="">Select Screen...</option>';
             
-            // Add screen options for the selected store
-            const screenOptions = [
-                { value: storeId + '_screen1', label: 'Screen 1 (Main Display)' },
-                { value: storeId + '_screen2', label: 'Screen 2 (Secondary)' },
-                { value: storeId + '_screen3', label: 'Screen 3' },
-                { value: storeId + '_screen4', label: 'Screen 4' },
-                { value: storeId + '_promo1', label: 'Promo 1 (Portrait)' },
-                { value: storeId + '_promo2', label: 'Promo 2 (Portrait)' },
-                { value: storeId + '_promo3', label: 'Promo 3 (Portrait)' }
-            ];
+            // Get screens for this specific store from the API data
+            const storeScreens = userStoresData.screens[storeId] || {};
+            const screenIds = Object.keys(storeScreens);
             
-            screenOptions.forEach(option => {
+            console.log('Available screens for store', storeId, ':', screenIds);
+            
+            if (screenIds.length === 0) {
                 const opt = document.createElement('option');
-                opt.value = option.value;
-                opt.textContent = option.label;
+                opt.value = '';
+                opt.textContent = 'No screens configured for this store';
+                opt.disabled = true;
                 screenSelect.appendChild(opt);
-            });
+            } else {
+                screenIds.forEach(screenId => {
+                    const screenData = storeScreens[screenId];
+                    const opt = document.createElement('option');
+                    opt.value = screenId;
+                    
+                    // Use screen name if available, otherwise use screen ID
+                    const screenName = screenData.name || screenData.screen_name || screenId;
+                    opt.textContent = screenName;
+                    
+                    screenSelect.appendChild(opt);
+                });
+            }
             
-            console.log('Showing screen step with', screenOptions.length, 'options');
+            console.log('Showing screen step with', screenIds.length, 'screens');
             document.getElementById('stepScreenId').style.display = 'block';
         }
     }
