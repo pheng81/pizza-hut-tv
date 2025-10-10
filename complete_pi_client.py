@@ -212,19 +212,78 @@ class PiConfigHandler(BaseHTTPRequestHandler):
     
                 # Get Pi client instance from server
                 pi_client = self.server.pi_client
+                
+                # Extract configuration
+                pair_code = config_data.get('pair_code', '').strip()
+                store_id = config_data.get('store_id', '').strip()
+                screen_id = config_data.get('screen_id', '').strip()
+                
+                # Validate pair code format
+                if not pair_code or len(pair_code) != 4 or not pair_code.isdigit():
+                    self.send_response(400)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    response = {'success': False, 'error': f'Invalid pair code format: {pair_code}'}
+                    self.wfile.write(json.dumps(response).encode('utf-8'))
+                    return
+                
+                # Verify store and screen belong to this pairing code
+                logger.info(f"� Verifying configuration against API...")
+                verify_url = f"{pi_client.server_url}/api/stores_by_code/{pair_code}"
+                response_obj = requests.get(verify_url, timeout=10)
+                
+                if response_obj.status_code != 200:
+                    self.send_response(400)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    response = {'success': False, 'error': f'Pair code not found or invalid: {pair_code}'}
+                    self.wfile.write(json.dumps(response).encode('utf-8'))
+                    return
+                
+                api_data = response_obj.json()
+                if not api_data.get('success'):
+                    self.send_response(400)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    response = {'success': False, 'error': f"API error: {api_data.get('error', 'Unknown error')}"}
+                    self.wfile.write(json.dumps(response).encode('utf-8'))
+                    return
+                
+                # Check if store_id exists in user's stores
+                user_stores = api_data.get('stores', [])
+                store_ids = [str(s.get('id')) for s in user_stores]
+                
+                if store_id not in store_ids:
+                    self.send_response(400)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    response = {'success': False, 'error': f'Store {store_id} not found for pair code {pair_code}'}
+                    self.wfile.write(json.dumps(response).encode('utf-8'))
+                    return
+                
+                # Check if screen_id exists for this store
+                user_screens = api_data.get('screens', {})
+                store_screens = user_screens.get(store_id, {})
+                
+                if screen_id not in store_screens:
+                    available_screens = list(store_screens.keys())
+                    self.send_response(400)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    response = {'success': False, 'error': f'Screen {screen_id} not found for store {store_id}. Available: {available_screens}'}
+                    self.wfile.write(json.dumps(response).encode('utf-8'))
+                    return
+                
+                logger.info(f"✅ Configuration verified successfully!")
+                logger.info(f"   User: {api_data.get('user', {}).get('username', 'Unknown')}")
+                logger.info(f"   Store: {store_id} (from {len(user_stores)} stores)")
+                logger.info(f"   Screen: {screen_id} (from {len(store_screens)} screens)")
     
-                # Apply configuration
-                if 'pair_code' in config_data:
-                    pi_client.pair_code = config_data['pair_code']
-                    logger.info(f"🔧 Remote config: pair_code = {pi_client.pair_code}")
-    
-                if 'store_id' in config_data:
-                    pi_client.store_id = config_data['store_id'] 
-                    logger.info(f"🔧 Remote config: store_id = {pi_client.store_id}")
-    
-                if 'screen_id' in config_data:
-                    pi_client.screen_id = config_data['screen_id']
-                    logger.info(f"🔧 Remote config: screen_id = {pi_client.screen_id}")
+                # Apply validated configuration
+                pi_client.pair_code = pair_code
+                pi_client.store_id = store_id
+                pi_client.screen_id = screen_id
+                logger.info(f"🔧 Remote config applied: pair_code={pi_client.pair_code}, store={pi_client.store_id}, screen={pi_client.screen_id}")
     
                 # If all required fields are set, start playback
                 if pi_client.pair_code and pi_client.store_id and pi_client.screen_id:
@@ -544,18 +603,52 @@ class CompleteWebplayerClient:
             logger.info(f'📡 Configuration received via WebSocket: {config}')
             
             try:
-                # Apply configuration - EXACT same as HTTP handler
-                if 'pair_code' in config:
-                    self.pair_code = config['pair_code']
-                    logger.info(f"🔧 Remote config: pair_code = {self.pair_code}")
+                # Extract configuration
+                pair_code = config.get('pair_code', '').strip()
+                store_id = config.get('store_id', '').strip()
+                screen_id = config.get('screen_id', '').strip()
                 
-                if 'store_id' in config:
-                    self.store_id = config['store_id']
-                    logger.info(f"🔧 Remote config: store_id = {self.store_id}")
+                # Validate pair code format
+                if not pair_code or len(pair_code) != 4 or not pair_code.isdigit():
+                    raise ValueError(f"Invalid pair code format: {pair_code}")
                 
-                if 'screen_id' in config:
-                    self.screen_id = config['screen_id']
-                    logger.info(f"🔧 Remote config: screen_id = {self.screen_id}")
+                # Verify store and screen belong to this pairing code
+                logger.info(f"� Verifying configuration against API...")
+                verify_url = f"{self.server_url}/api/stores_by_code/{pair_code}"
+                response = requests.get(verify_url, timeout=10)
+                
+                if response.status_code != 200:
+                    raise ValueError(f"Pair code not found or invalid: {pair_code}")
+                
+                api_data = response.json()
+                if not api_data.get('success'):
+                    raise ValueError(f"API error: {api_data.get('error', 'Unknown error')}")
+                
+                # Check if store_id exists in user's stores
+                user_stores = api_data.get('stores', [])
+                store_ids = [str(s.get('id')) for s in user_stores]
+                
+                if store_id not in store_ids:
+                    raise ValueError(f"Store {store_id} not found for pair code {pair_code}. Available: {store_ids}")
+                
+                # Check if screen_id exists for this store
+                user_screens = api_data.get('screens', {})
+                store_screens = user_screens.get(store_id, {})
+                
+                if screen_id not in store_screens:
+                    available_screens = list(store_screens.keys())
+                    raise ValueError(f"Screen {screen_id} not found for store {store_id}. Available: {available_screens}")
+                
+                logger.info(f"✅ Configuration verified successfully!")
+                logger.info(f"   User: {api_data.get('user', {}).get('username', 'Unknown')}")
+                logger.info(f"   Store: {store_id} (from {len(user_stores)} stores)")
+                logger.info(f"   Screen: {screen_id} (from {len(store_screens)} screens)")
+                
+                # Apply validated configuration
+                self.pair_code = pair_code
+                self.store_id = store_id
+                self.screen_id = screen_id
+                logger.info(f"🔧 Remote config applied: pair_code={self.pair_code}, store={self.store_id}, screen={self.screen_id}")
                 
                 # Save to config file for persistence
                 self.save_config()
@@ -1638,13 +1731,8 @@ class CompleteWebplayerClient:
         
         # Initial playlist fetch and start playback
         logger.info("📥 Fetching initial playlist for playback...")
-        self.fetch_and_update_playlist()
+        self.fetch_and_update_playlist(force_advance=True)  # Force initial playback
         logger.info(f"📋 Playlist has {len(self.playlist)} items after fetch")
-        if self.playlist:
-            logger.info("▶️  Starting playback with first item...")
-            self.advance_to_next_item()
-        else:
-            logger.warning("⚠️ No playlist items available - waiting for schedule")
             
     def run(self):
         """Main event loop."""
