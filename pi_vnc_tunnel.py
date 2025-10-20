@@ -9,8 +9,16 @@ import threading
 import logging
 import base64
 import time
-from PIL import Image, ImageGrab
 import io
+
+# Lazy/optional PIL import so module still loads when Pillow isn't installed
+try:
+    from PIL import Image, ImageGrab  # type: ignore
+    _PIL_AVAILABLE = True
+except Exception:
+    Image = None  # type: ignore
+    ImageGrab = None  # type: ignore
+    _PIL_AVAILABLE = False
 
 class VNCTunnel:
     """Handles VNC connection tunneling through WebSocket"""
@@ -148,12 +156,15 @@ class VNCTunnel:
         # This is easier than implementing full RFB protocol
         
         try:
-            import mss
+            import mss  # type: ignore
             has_mss = True
             logging.info('✅ Using mss for screen capture')
-        except ImportError:
-            logging.warning('⚠️ mss not installed, using PIL fallback')
+        except Exception:
             has_mss = False
+            if _PIL_AVAILABLE:
+                logging.warning('⚠️ mss not installed, using PIL ImageGrab fallback')
+            else:
+                logging.error('❌ Neither mss nor Pillow are available for capture')
         
         frame_count = 0
         last_frame_time = 0
@@ -175,10 +186,24 @@ class VNCTunnel:
                     with mss.mss() as sct:
                         monitor = sct.monitors[1]  # Primary monitor
                         screenshot = sct.grab(monitor)
-                        img = Image.frombytes('RGB', screenshot.size, screenshot.bgra, 'raw', 'BGRX')
+                        # Build PIL Image if available; else build bytes->JPEG via raw conversion
+                        if _PIL_AVAILABLE:
+                            img = Image.frombytes('RGB', screenshot.size, screenshot.bgra, 'raw', 'BGRX')
+                        else:
+                            # Minimal dependency path: convert BGRA to RGB bytes using Python only
+                            # This is slower; if Pillow missing, emit an error and pause instead
+                            self._send_error('Pillow not installed on Pi. Install python3-pil for streaming.')
+                            time.sleep(2)
+                            continue
                 else:
-                    # Fallback to PIL (slower)
-                    img = ImageGrab.grab()
+                    if _PIL_AVAILABLE:
+                        # Fallback to PIL (slower)
+                        img = ImageGrab.grab()
+                    else:
+                        # No capture path available
+                        self._send_error('Screen capture unavailable (install mss or Pillow)')
+                        time.sleep(2)
+                        continue
                 
                 # Keep original resolution (no downscaling for better quality)
                 # Only resize if screen is larger than 1920x1080

@@ -61,7 +61,7 @@ Write-Host "Ensuring remote directory exists: $RemoteDir" -ForegroundColor Yello
 & ssh @sshArgs $sshTarget "mkdir -p $RemoteDir"
 
 # Upload required files
-$files = @('complete_pi_client.py','pi_mobile_sync_addon.py','seamless_video_player.py')
+$files = @('complete_pi_client.py','pi_mobile_sync_addon.py','seamless_video_player.py','pi_vnc_tunnel.py')
 foreach($f in $files){
     if(-not (Test-Path $f)){
         Write-Host "Skipping missing file: $f" -ForegroundColor DarkYellow
@@ -86,6 +86,13 @@ foreach($f in $files){
     }
 }
 Write-Host "Service path files updated (best-effort)." -ForegroundColor Green
+
+# Ensure capture dependencies are installed (mss, pillow)
+Write-Host "Installing/ensuring capture dependencies (mss, pillow)..." -ForegroundColor Yellow
+# Try pip first (user scope); if blocked, fallback to apt for Pillow
+& ssh @sshArgs $sshTarget "pip3 install --user -q mss pillow || true"
+# Ensure system Pillow available for ImageGrab
+& ssh @sshArgs $sshTarget "sudo apt-get update -y && sudo apt-get install -y python3-pil || true"
 
 # Restart the service (try multiple common names)
 Write-Host "Restarting Pi client service..." -ForegroundColor Yellow
