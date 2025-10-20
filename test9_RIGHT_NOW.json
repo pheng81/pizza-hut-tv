@@ -1,0 +1,1739 @@
+{
+  "stores": [
+    {
+      "id": "1000",
+      "name": "My First Store"
+    },
+    {
+      "id": "1931",
+      "name": "Canley Vale"
+    },
+    {
+      "id": "1887",
+      "name": "Belfield - Pizza Hut"
+    },
+    {
+      "id": "1891",
+      "name": "Belverly Hills - Pizza Hut"
+    },
+    {
+      "id": "1712",
+      "name": "Kippax - Pizza Hut"
+    },
+    {
+      "id": "1787",
+      "name": "Swan View - Pizza Hut"
+    }
+  ],
+  "master_store_id": "1000",
+  "screens": {
+    "1000": {
+      "1000_screen1": {
+        "file": "users/test9_at_gmail.com/2025-10/de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "id": "7ae6ab0c-8cbb-4074-8d61-06f8e288ce44",
+            "file": "users/test9_at_gmail.com/2025-10/de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image"
+          }
+        ],
+        "fresh": true,
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "last_seen": 1760604923
+      },
+      "1000_screen2": {
+        "file": "users/test9_at_gmail.com/2025-10/1aecf5b0-7caf-47f4-9661-fd97351f13ae.png",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "id": "6b449cc1-0aa3-4b5a-8daf-11f87adee791",
+            "file": "users/test9_at_gmail.com/2025-10/1aecf5b0-7caf-47f4-9661-fd97351f13ae.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image"
+          }
+        ],
+        "fresh": true,
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1000_screen3": {
+        "file": "users/test9_at_gmail.com/2025-10/28619d63-c04c-4778-ad52-0155a221c2db.png",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "id": "7e0253bf-3a81-4827-b6a8-0adbd502a468",
+            "file": "users/test9_at_gmail.com/2025-10/28619d63-c04c-4778-ad52-0155a221c2db.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image"
+          }
+        ],
+        "fresh": true,
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1000_promo1": {
+        "file": "users/test9_at_gmail.com/2025-10/86c70b0c-7ef4-47bc-99c2-fadba86b1fd5.jpg",
+        "vertical": true,
+        "horizontal": false,
+        "rotation": 180,
+        "protected": false,
+        "playlist": [
+          {
+            "id": "a12b74c9-88a4-4627-ac30-b675c19e09a2",
+            "file": "users/test9_at_gmail.com/2025-10/86c70b0c-7ef4-47bc-99c2-fadba86b1fd5.jpg",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image"
+          }
+        ],
+        "fresh": true,
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "last_seen": 1760608885,
+        "events": [
+          {
+            "ts": 1760606114,
+            "event": "load_ok",
+            "file": "86c70b0c-7ef4-47bc-99c2-fadba86b1fd5.jpg",
+            "item_id": "a12b74c9-88a4-4627-ac30-b675c19e09a2",
+            "error": null
+          },
+          {
+            "ts": 1760606194,
+            "event": "load_ok",
+            "file": "86c70b0c-7ef4-47bc-99c2-fadba86b1fd5.jpg",
+            "item_id": "a12b74c9-88a4-4627-ac30-b675c19e09a2",
+            "error": null
+          }
+        ],
+        "last_item_status": {
+          "id:a12b74c9-88a4-4627-ac30-b675c19e09a2": {
+            "state": "ok",
+            "ts": 1760606194,
+            "error": null,
+            "file": "86c70b0c-7ef4-47bc-99c2-fadba86b1fd5.jpg",
+            "item_id": "a12b74c9-88a4-4627-ac30-b675c19e09a2"
+          }
+        }
+      }
+    },
+    "1931": {
+      "1931_screen1": {
+        "file": "users/test9_at_gmail.com/2025-10/7c29a95c-342e-4744-b12d-7f86ad6417b1.png",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "file": "users/test9_at_gmail.com/2025-10/de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "id": "0f24a488-4cee-46ce-be2f-fa857cbb4799"
+          },
+          {
+            "id": "61448da1-c7ef-434a-9994-492133da6080",
+            "file": "users/test9_at_gmail.com/2025-10/7c29a95c-342e-4744-b12d-7f86ad6417b1.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image"
+          }
+        ],
+        "fresh": true,
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "cmd_queue": [
+          {
+            "id": "93e2c2f4-88c8-4ff1-96ea-64e6d9c90832",
+            "ts": 1760578376,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          },
+          {
+            "id": "7f603b23-9eac-46ab-a7bc-b5e5bb6cc657",
+            "ts": 1760578529,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ]
+      },
+      "1931_screen2": {
+        "file": "users/test9_at_gmail.com/2025-10/75427f7d-1fdd-44b5-8370-4442d46cad94.png",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "file": "users/test9_at_gmail.com/2025-10/1aecf5b0-7caf-47f4-9661-fd97351f13ae.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "id": "c1a6b33c-8b4e-418a-a3c7-173bb63ac333"
+          },
+          {
+            "id": "ea286d5e-d94e-4ab5-a4f8-601d1bd0e2f8",
+            "file": "users/test9_at_gmail.com/2025-10/75427f7d-1fdd-44b5-8370-4442d46cad94.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image"
+          }
+        ],
+        "cmd_queue": [
+          {
+            "id": "10b96142-fcc7-449e-94d3-94e8343e9116",
+            "ts": 1760578379,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          },
+          {
+            "id": "db67db30-037f-4678-aa37-48615d03daf7",
+            "ts": 1760578530,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      }
+    },
+    "1887": {
+      "1887_screen1": {
+        "file": "users/test9_at_gmail.com/2025-10/de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "file": "users/test9_at_gmail.com/2025-10/de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "id": "c6cae1d2-22f9-404c-bd53-0e56b7d6aff5"
+          }
+        ],
+        "cmd_queue": [
+          {
+            "id": "1f6e7675-c55b-4939-9d09-08dab0174f90",
+            "ts": 1760578529,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          },
+          {
+            "id": "b748844e-359f-4266-a791-ac74fe96ee3a",
+            "ts": 1760581347,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "last_seen": 1760578637
+      },
+      "1887_screen2": {
+        "file": "users/test9_at_gmail.com/2025-10/1aecf5b0-7caf-47f4-9661-fd97351f13ae.png",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "file": "users/test9_at_gmail.com/2025-10/1aecf5b0-7caf-47f4-9661-fd97351f13ae.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "id": "7cf613f1-aabf-4489-8904-32e310553162"
+          }
+        ],
+        "cmd_queue": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "last_seen": 1760607056,
+        "events": [
+          {
+            "ts": 1760580184,
+            "event": "load_ok",
+            "file": "1aecf5b0-7caf-47f4-9661-fd97351f13ae.png",
+            "item_id": "7cf613f1-aabf-4489-8904-32e310553162",
+            "error": null
+          }
+        ],
+        "last_item_status": {
+          "id:7cf613f1-aabf-4489-8904-32e310553162": {
+            "state": "ok",
+            "ts": 1760580184,
+            "error": null,
+            "file": "1aecf5b0-7caf-47f4-9661-fd97351f13ae.png",
+            "item_id": "7cf613f1-aabf-4489-8904-32e310553162"
+          }
+        }
+      },
+      "1887_screen3": {
+        "file": "users/test9_at_gmail.com/2025-10/28619d63-c04c-4778-ad52-0155a221c2db.png",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "file": "users/test9_at_gmail.com/2025-10/28619d63-c04c-4778-ad52-0155a221c2db.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "id": "25330ce4-a2b7-41a1-9b98-22d6ff12c590"
+          }
+        ],
+        "cmd_queue": [
+          {
+            "id": "3379b461-4ef4-490b-b0e3-cae6b177de9a",
+            "ts": 1760578532,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1887_promo1": {
+        "file": "users/test9_at_gmail.com/2025-10/daae16ce-79f0-4528-9e24-8d3d59436cde.png",
+        "vertical": true,
+        "horizontal": false,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "id": "5acfa361-baef-48f9-b220-0059469243f5",
+            "file": "users/test9_at_gmail.com/2025-10/8fa342a1-ceb7-4be0-9b17-993b39e76208.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image"
+          },
+          {
+            "id": "5445b293-5207-4af2-8dff-ba6501d585e4",
+            "file": "users/test9_at_gmail.com/2025-10/daae16ce-79f0-4528-9e24-8d3d59436cde.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "days": [
+              "tue"
+            ]
+          }
+        ],
+        "fresh": true,
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "cmd_queue": [
+          {
+            "id": "15c2f86b-cce5-4530-8143-ec1ed39a8028",
+            "ts": 1760611526,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          },
+          {
+            "id": "4c1be679-1130-4e67-8859-54067877e8d9",
+            "ts": 1760611534,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          },
+          {
+            "id": "c20d76e2-a19f-4db6-9ef1-0c1d7239b267",
+            "ts": 1760611542,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ]
+      },
+      "1887_promo2": {
+        "file": "users/test9_at_gmail.com/2025-10/9f0acfa0-d629-4a12-912f-1ae91d7e3a23.png",
+        "vertical": true,
+        "horizontal": false,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "id": "d3a972cc-8c69-4764-a540-5924cdf91e12",
+            "file": "users/test9_at_gmail.com/2025-10/9f0acfa0-d629-4a12-912f-1ae91d7e3a23.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image"
+          }
+        ],
+        "fresh": true,
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1887_promo3": {
+        "file": "users/test9_at_gmail.com/2025-10/827d90db-29a1-47c2-beec-168ad2c1bb35.png",
+        "vertical": true,
+        "horizontal": false,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "id": "b36013a2-7c38-49dd-ba99-e34e3a144871",
+            "file": "users/test9_at_gmail.com/2025-10/827d90db-29a1-47c2-beec-168ad2c1bb35.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image"
+          }
+        ],
+        "fresh": true,
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      }
+    },
+    "1891": {
+      "1891_screen1": {
+        "file": "users/test9_at_gmail.com/2025-10/de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "file": "users/test9_at_gmail.com/2025-10/de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "id": "79da2d14-cf84-4369-ad29-bee3fab8afb9"
+          }
+        ],
+        "cmd_queue": [
+          {
+            "id": "de71cdfa-50dd-4a66-ba5e-3098e5d3b297",
+            "ts": 1760578529,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          },
+          {
+            "id": "41cc2697-6a26-4c3c-af5b-bf38b04f7df6",
+            "ts": 1760581347,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1891_screen2": {
+        "file": "users/test9_at_gmail.com/2025-10/1aecf5b0-7caf-47f4-9661-fd97351f13ae.png",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "file": "users/test9_at_gmail.com/2025-10/1aecf5b0-7caf-47f4-9661-fd97351f13ae.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "id": "a8bd3300-ae1a-4609-9848-da132caab453"
+          }
+        ],
+        "cmd_queue": [
+          {
+            "id": "582c598a-1985-4c3b-bd6e-fb174a7e8570",
+            "ts": 1760578530,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1891_screen3": {
+        "file": "users/test9_at_gmail.com/2025-10/28619d63-c04c-4778-ad52-0155a221c2db.png",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "file": "users/test9_at_gmail.com/2025-10/28619d63-c04c-4778-ad52-0155a221c2db.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "id": "3da5f46d-a1e0-45d5-8a10-b4c5ca115cff"
+          }
+        ],
+        "cmd_queue": [
+          {
+            "id": "044780e0-ead2-4083-9c44-e8fa65a790c3",
+            "ts": 1760578532,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      }
+    },
+    "1712": {
+      "1712_screen1": {
+        "file": "users/test9_at_gmail.com/2025-10/de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "file": "users/test9_at_gmail.com/2025-10/de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "id": "526d4cd5-1b8d-42d5-a2d8-5d5e784252fe"
+          }
+        ],
+        "cmd_queue": [
+          {
+            "id": "c909f2f8-6f40-4cab-93d7-6c11d0529615",
+            "ts": 1760581347,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1712_screen2": {
+        "file": "users/test9_at_gmail.com/2025-10/1aecf5b0-7caf-47f4-9661-fd97351f13ae.png",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "file": "users/test9_at_gmail.com/2025-10/1aecf5b0-7caf-47f4-9661-fd97351f13ae.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "id": "fb33e75a-4c81-4e0f-b676-22d6a953d27d"
+          }
+        ],
+        "cmd_queue": [
+          {
+            "id": "99297136-f9ec-4e40-8a6e-88279b01df60",
+            "ts": 1760581370,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1712_screen3": {
+        "file": "users/test9_at_gmail.com/2025-10/28619d63-c04c-4778-ad52-0155a221c2db.png",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "file": "users/test9_at_gmail.com/2025-10/28619d63-c04c-4778-ad52-0155a221c2db.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "id": "7f59c083-a2ce-4306-b3a6-763035ec624a"
+          }
+        ],
+        "cmd_queue": [
+          {
+            "id": "029ac4af-7af9-4bb9-8eb7-9c436d34b720",
+            "ts": 1760581387,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      }
+    },
+    "1787": {
+      "1787_screen1": {
+        "file": "users/test9_at_gmail.com/2025-10/bb29f060-1078-4c52-ad5d-fd984030e489.png",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": true,
+        "playlist": [
+          {
+            "file": "users/test9_at_gmail.com/2025-10/de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "id": "d852eae6-2a83-4a3a-a133-3c6557569dfb"
+          }
+        ],
+        "cmd_queue": [
+          {
+            "id": "54fae92c-e3da-4fdf-92aa-71ea6ce8262d",
+            "ts": 1760649130,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "last_seen": 1760606971,
+        "events": [
+          {
+            "ts": 1760606366,
+            "event": "load_ok",
+            "file": "de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+            "item_id": "d852eae6-2a83-4a3a-a133-3c6557569dfb",
+            "error": null
+          }
+        ],
+        "last_item_status": {
+          "id:d852eae6-2a83-4a3a-a133-3c6557569dfb": {
+            "state": "ok",
+            "ts": 1760606366,
+            "error": null,
+            "file": "de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+            "item_id": "d852eae6-2a83-4a3a-a133-3c6557569dfb"
+          }
+        }
+      },
+      "1787_screen2": {
+        "file": "users/test9_at_gmail.com/2025-10/1aecf5b0-7caf-47f4-9661-fd97351f13ae.png",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "file": "users/test9_at_gmail.com/2025-10/1aecf5b0-7caf-47f4-9661-fd97351f13ae.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "id": "06cc366f-af07-4f99-9dba-bbc4e5dc90ea"
+          }
+        ],
+        "cmd_queue": [
+          {
+            "id": "31c48687-6679-4db7-9e62-5a5aac29c642",
+            "ts": 1760605034,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1787_screen3": {
+        "file": "users/test9_at_gmail.com/2025-10/28619d63-c04c-4778-ad52-0155a221c2db.png",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "file": "users/test9_at_gmail.com/2025-10/28619d63-c04c-4778-ad52-0155a221c2db.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "id": "54e7a6a2-3a07-497c-aeaf-aa70b37466b3"
+          }
+        ],
+        "cmd_queue": [
+          {
+            "id": "2afe7320-1c5f-4c10-a1a7-d4e5fee580a1",
+            "ts": 1760605040,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1787_promo1": {
+        "file": "users/test9_at_gmail.com/2025-10/bb29f060-1078-4c52-ad5d-fd984030e489.png",
+        "vertical": false,
+        "horizontal": false,
+        "rotation": 270,
+        "protected": true,
+        "playlist": [
+          {
+            "file": "users/test9_at_gmail.com/2025-10/bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "effect": "zoom-in"
+          },
+          {
+            "id": "ea1227c9-efb5-4ed3-93f3-9e11330a513f",
+            "file": "users/test9_at_gmail.com/2025-10/bb29f060-1078-4c52-ad5d-fd984030e489.png",
+            "enabled": false,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "days": [],
+            "effect": "slide-l"
+          }
+        ],
+        "fresh": true,
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "last_seen": 1760701246,
+        "events": [
+          {
+            "ts": 1760654928,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760654937,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760654949,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760654961,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760654973,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760654985,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760654997,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655009,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655021,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655033,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655045,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655057,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655069,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655081,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655093,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655105,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655117,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655129,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655141,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655153,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655165,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655177,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655189,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655201,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655213,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655225,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655237,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655249,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655261,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655273,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655285,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655297,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655309,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655321,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655333,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655345,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655357,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655369,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655381,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655407,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655419,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655431,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655443,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655455,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655467,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655479,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655491,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655503,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655515,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655527,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655539,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655551,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655563,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655575,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655587,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655599,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655611,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655623,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655635,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655647,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655659,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655671,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655683,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655695,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655707,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655719,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655731,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655743,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655755,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655767,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655779,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655791,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655803,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655815,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655827,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655839,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655851,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655863,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655875,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760655881,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760656120,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760656134,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760656182,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760684582,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760692290,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760692760,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760694826,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760694844,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760695470,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760696232,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760696246,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760696458,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760696686,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760696820,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760697470,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760698526,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760698892,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760700728,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760700740,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          },
+          {
+            "ts": 1760701096,
+            "event": "load_ok",
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396",
+            "error": null
+          }
+        ],
+        "last_item_status": {
+          "id:1ca7af8c-6312-45b9-b254-8f876f105314": {
+            "state": "ok",
+            "ts": 1760605354,
+            "error": null,
+            "file": "4d0bed41-ae1c-42ea-b4cf-d9676ac7b6c1.jpg",
+            "item_id": "1ca7af8c-6312-45b9-b254-8f876f105314"
+          },
+          "id:0dedc79c-88f3-4ece-8aa7-6f480a0de396": {
+            "state": "ok",
+            "ts": 1760701096,
+            "error": null,
+            "file": "bb6e9a9a-8c4f-4e73-a3f2-f31c04220cd7.png",
+            "item_id": "0dedc79c-88f3-4ece-8aa7-6f480a0de396"
+          }
+        },
+        "cmd_queue": []
+      },
+      "1787_promo2": {
+        "file": "users/test9_at_gmail.com/2025-10/4227f115-f78a-4646-9a4b-0b91c0c5fe07.jpg",
+        "vertical": false,
+        "horizontal": false,
+        "rotation": 270,
+        "protected": true,
+        "playlist": [
+          {
+            "id": "7cfc38fb-acdf-4283-bfe9-4ad9f9671f64",
+            "file": "users/test9_at_gmail.com/2025-10/c1ea67dc-9eb1-44b0-816a-4020b3a9e31b.png",
+            "enabled": true,
+            "start": "2025-10-06T00:00:00",
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image"
+          }
+        ],
+        "fresh": true,
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "cmd_queue": [
+          {
+            "id": "73cf4331-5778-4377-b323-75dfdaf9ebfe",
+            "ts": 1760611350,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ],
+        "last_seen": 1760610134,
+        "events": [
+          {
+            "ts": 1760606354,
+            "event": "load_ok",
+            "file": "4227f115-f78a-4646-9a4b-0b91c0c5fe07.jpg",
+            "item_id": "7cfc38fb-acdf-4283-bfe9-4ad9f9671f64",
+            "error": null
+          },
+          {
+            "ts": 1760609676,
+            "event": "load_ok",
+            "file": "ea2c6bde-904b-465f-abc0-f2f71b1a4ea8.png",
+            "item_id": "7cfc38fb-acdf-4283-bfe9-4ad9f9671f64",
+            "error": null
+          },
+          {
+            "ts": 1760609713,
+            "event": "load_ok",
+            "file": "ea2c6bde-904b-465f-abc0-f2f71b1a4ea8.png",
+            "item_id": "7cfc38fb-acdf-4283-bfe9-4ad9f9671f64",
+            "error": null
+          },
+          {
+            "ts": 1760609739,
+            "event": "load_ok",
+            "file": "ea2c6bde-904b-465f-abc0-f2f71b1a4ea8.png",
+            "item_id": "7cfc38fb-acdf-4283-bfe9-4ad9f9671f64",
+            "error": null
+          },
+          {
+            "ts": 1760609822,
+            "event": "load_ok",
+            "file": "ea2c6bde-904b-465f-abc0-f2f71b1a4ea8.png",
+            "item_id": "7cfc38fb-acdf-4283-bfe9-4ad9f9671f64",
+            "error": null
+          },
+          {
+            "ts": 1760610101,
+            "event": "load_ok",
+            "file": "ea2c6bde-904b-465f-abc0-f2f71b1a4ea8.png",
+            "item_id": "7cfc38fb-acdf-4283-bfe9-4ad9f9671f64",
+            "error": null
+          }
+        ],
+        "last_item_status": {
+          "id:7cfc38fb-acdf-4283-bfe9-4ad9f9671f64": {
+            "state": "ok",
+            "ts": 1760610101,
+            "error": null,
+            "file": "ea2c6bde-904b-465f-abc0-f2f71b1a4ea8.png",
+            "item_id": "7cfc38fb-acdf-4283-bfe9-4ad9f9671f64"
+          }
+        }
+      },
+      "1787_promo3": {
+        "file": "users/test9_at_gmail.com/2025-10/33d0d953-35f0-47f6-a372-ccd1a61981cb.png",
+        "vertical": false,
+        "horizontal": false,
+        "rotation": 90,
+        "protected": true,
+        "playlist": [
+          {
+            "id": "be56bc2b-54b1-49fa-b1f1-9896d7cd0292",
+            "file": "users/test9_at_gmail.com/2025-10/00b791af-5bf2-4c1d-9de5-37a13c53464e.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image"
+          },
+          {
+            "id": "989a38d1-e074-40ce-9d72-40216fdcecdc",
+            "file": "users/test9_at_gmail.com/2025-10/33d0d953-35f0-47f6-a372-ccd1a61981cb.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image"
+          }
+        ],
+        "fresh": true,
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "last_seen": 1760609663
+      }
+    }
+  }
+}

@@ -68,7 +68,7 @@ Open: https://console.cloud.google.com/apis/credentials
 ### Step 5: Copy Credentials
 You'll see a popup with:
 - **Client ID**: `something.apps.googleusercontent.com`
-- **Client Secret**: `GOCSPX-...`
+- **Client Secret**: `[REDACTED: store as env GOOGLE_CLIENT_SECRET]`
 
 **IMPORTANT**: Copy both and save them somewhere safe!
 

@@ -1,0 +1,94 @@
+"""
+VNC TUNNEL INTEGRATION FOR complete_pi_client.py
+
+Add these handlers to complete_pi_client.py to enable VNC tunneling.
+
+STEP 1: Add import at the top of the file:
+"""
+from pi_vnc_tunnel import init_vnc_tunnel, get_vnc_tunnel
+
+"""
+STEP 2: Initialize VNC tunnel in the main initialization section (after socketio.connect):
+"""
+# Initialize VNC tunnel
+vnc_tunnel = init_vnc_tunnel(socketio, PI_ID)
+logging.info('✅ VNC tunnel module initialized')
+
+"""
+STEP 3: Add these SocketIO event handlers (add after existing handlers):
+"""
+
+@socketio.on('vnc_connect')
+def handle_vnc_connect(data):
+    """
+    Server requests VNC connection (originated from dashboard)
+    """
+    dashboard_sid = data.get('dashboard_sid')
+    pi_id = data.get('pi_id')
+    
+    logging.info(f'🖥️ VNC connect request from dashboard {dashboard_sid}')
+    
+    if pi_id != PI_ID:
+        logging.warning(f'⚠️ VNC connect for wrong Pi: {pi_id} (I am {PI_ID})')
+        return
+    
+    # Start VNC tunnel
+    tunnel = get_vnc_tunnel()
+    if tunnel:
+        success = tunnel.connect(dashboard_sid)
+        if not success:
+            logging.error('❌ Failed to start VNC tunnel')
+    else:
+        logging.error('❌ VNC tunnel not initialized')
+
+
+@socketio.on('vnc_data')
+def handle_vnc_data_from_dashboard(data):
+    """
+    Receive VNC data from dashboard (mouse/keyboard events)
+    """
+    pi_id = data.get('pi_id')
+    
+    if pi_id != PI_ID:
+        return
+    
+    # Forward to VNC tunnel
+    tunnel = get_vnc_tunnel()
+    if tunnel:
+        tunnel.send_to_vnc(data)
+
+
+@socketio.on('vnc_disconnect')
+def handle_vnc_disconnect(data):
+    """
+    Dashboard disconnects VNC session
+    """
+    pi_id = data.get('pi_id')
+    dashboard_sid = data.get('dashboard_sid')
+    
+    logging.info(f'🖥️ VNC disconnect request from dashboard {dashboard_sid}')
+    
+    if pi_id != PI_ID:
+        return
+    
+    # Stop VNC tunnel
+    tunnel = get_vnc_tunnel()
+    if tunnel:
+        tunnel.disconnect()
+
+"""
+STEP 4: Add cleanup in the disconnect handler:
+Find the existing disconnect handler and add this inside it:
+"""
+# Stop VNC tunnel on disconnect
+tunnel = get_vnc_tunnel()
+if tunnel:
+    tunnel.disconnect()
+
+"""
+DEPLOYMENT:
+1. Upload pi_vnc_tunnel.py to Pi: scp pi_vnc_tunnel.py pi@pi-ip:~/
+2. Edit complete_pi_client.py to add the above code
+3. Install mss for faster screen capture: pip3 install mss
+4. Restart Pi client: sudo systemctl restart pizzahut-tv-pi.service
+"""

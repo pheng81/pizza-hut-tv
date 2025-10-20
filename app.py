@@ -1066,23 +1066,35 @@ def auth_google_callback():
             uname = (email or '').strip().lower()
             if uname:
                 try:
-                    # Try inserting with full_name if column exists
-                    db.execute('INSERT OR IGNORE INTO users (username, full_name) VALUES (?, ?)', (uname, userinfo.get('name') or uname))
-                except Exception:
-                    try:
-                        db.execute('INSERT OR IGNORE INTO users (username) VALUES (?)', (uname,))
-                    except Exception:
-                        pass
-                db.commit()
-                # Mark verified for OAuth sources
-                try:
-                    db.execute('UPDATE users SET email_verified = 1 WHERE username = ?', (uname,))
+                    # Check if user exists
+                    existing = db.execute('SELECT username FROM users WHERE username = ?', (uname,)).fetchone()
+                    
+                    if existing:
+                        # User exists - update full_name and email_verified
+                        logging.info(f'OAuth: User {uname} exists, updating info')
+                        db.execute(
+                            'UPDATE users SET full_name = ?, email_verified = 1 WHERE username = ?',
+                            (userinfo.get('name') or uname, uname)
+                        )
+                    else:
+                        # New user - insert
+                        logging.info(f'OAuth: Creating new user {uname}')
+                        db.execute(
+                            'INSERT INTO users (username, full_name, email_verified) VALUES (?, ?, 1)',
+                            (uname, userinfo.get('name') or uname)
+                        )
+                    
                     db.commit()
-                except Exception:
-                    pass
-                _ensure_user_link_code(uname)
-        except Exception:
-            pass
+                    logging.info(f'✓ OAuth: User {uname} saved successfully')
+                    _ensure_user_link_code(uname)
+                    
+                except Exception as e:
+                    logging.error(f'✗ OAuth: Failed to save user {uname}: {e}')
+                    db.rollback()
+                    # Don't fail the login - user can still use the system
+                    
+        except Exception as e:
+            logging.error(f'✗ OAuth: User creation failed completely: {e}')
         nxt = request.args.get('next')
         if not nxt:
             try:
@@ -1913,15 +1925,33 @@ def sync_effect():
         store_code = data.get('store_code')
         effect_id = data.get('effect_id')
         effect_name = data.get('effect_name')
+        enabled_val = data.get('enabled')
         timestamp = data.get('timestamp', time.time())
         
-        if not store_code or not effect_id:
-            return jsonify({'error': 'Missing store_code or effect_id'}), 400
+        if not store_code:
+            return jsonify({'error': 'Missing store_code'}), 400
+        # Allow updates that only toggle master enabled without effect change
+        if not effect_id and enabled_val is None:
+            return jsonify({'error': 'Nothing to update (need effect_id/effect_name or enabled)'}), 400
         
         # Store effect globally for all screens in this store
+        prev = global_effects.get(store_code, {})
+        # Parse enabled flag if provided
+        def _to_bool(v, default=None):
+            if v is None:
+                return default
+            if isinstance(v, bool):
+                return v
+            if isinstance(v, (int, float)):
+                return bool(v)
+            if isinstance(v, str):
+                return v.strip().lower() in ('1','true','on','enabled','yes')
+            return default
+        enabled_flag = _to_bool(enabled_val, prev.get('enabled', True))
         global_effects[store_code] = {
-            'effect_id': effect_id,
-            'effect_name': effect_name,
+            'effect_id': effect_id or prev.get('effect_id') or '1',
+            'effect_name': effect_name or prev.get('effect_name') or 'fade',
+            'enabled': enabled_flag,
             'timestamp': timestamp,
             'updated_at': time.time()
         }
@@ -1932,7 +1962,8 @@ def sync_effect():
             'success': True,
             'store_code': store_code,
             'effect_id': effect_id,
-            'effect_name': effect_name,
+            'effect_name': effect_name or prev.get('effect_name') or 'fade',
+            'enabled': enabled_flag,
             'synced_at': time.time()
         })
         
@@ -1944,12 +1975,16 @@ def sync_effect():
 def get_effect(store_code):
     """Get current effect setting for a store"""
     try:
-        effect_data = global_effects.get(store_code, {
-            'effect_id': '1',
-            'effect_name': 'fade',
-            'timestamp': time.time(),
-            'updated_at': time.time()
-        })
+        effect_data = global_effects.get(store_code)
+        if not effect_data:
+            effect_data = {
+                'effect_id': '1',
+                'effect_name': 'fade',
+                'enabled': True,
+                'timestamp': time.time(),
+                'updated_at': time.time()
+            }
+            global_effects[store_code] = effect_data
         
         return jsonify(effect_data)
         
@@ -1974,13 +2009,13 @@ def screen_heartbeat():
     logging.debug('HB recv store_id=%s screen_id=%s raw_body=%s', store_id, screen_id, data)
     if not store_id or not screen_id:
         return jsonify({'success': False, 'error': 'Missing store_id or screen_id'}), 400
-    # If a device provides X-User-Code, scope to that user's config
-    header_code = request.headers.get('X-User-Code') or request.args.get('user_code')
-    user_key = _resolve_user_key_by_code(header_code)
-    # Require a pairing code when no dashboard session is present
-    if not user_key and not _safe_user_key():
+    
+    # SECURITY FIX: Use helper to get effective user (session takes priority over pair code)
+    user_key = _resolve_effective_user_key()
+    if not user_key:
         return jsonify({'success': False, 'error': 'pair code required'}), 403
-    cfg = load_store_config_for_user_safe_key(user_key) if user_key else load_store_config()
+    
+    cfg = load_store_config_for_user_safe_key(user_key)
     # Legacy mapping: if store_id changed (e.g., old '1881' -> current master), alias automatically
     try:
         master = cfg.get('master_store_id')
@@ -2274,7 +2309,47 @@ def configure_remote_pi():
             cfg['pi_configurations'] = {}
         
         cfg['pi_configurations'][pi_id] = pi_config
+        
+        # IMPORTANT: Also update the screen's pi_id field so Pi Device Manager can display it
+        if 'screens' not in cfg:
+            cfg['screens'] = {}
+        if store_id not in cfg['screens']:
+            cfg['screens'][store_id] = {}
+        if screen_id not in cfg['screens'][store_id]:
+            cfg['screens'][store_id][screen_id] = {}
+        
+        # Set the pi_id on the screen so it shows up in Pi Device Manager
+        cfg['screens'][store_id][screen_id]['pi_id'] = pi_id
+        
         save_store_config(cfg)
+
+        # Update pi_id_ip_map.json to show the assignment in Pi Device Manager
+        try:
+            import json
+            pi_map_file = 'pi_id_ip_map.json'
+            pi_map = {}
+            try:
+                with open(pi_map_file, 'r') as f:
+                    pi_map = json.load(f)
+            except Exception:
+                pass
+            
+            # Get the IP address from connected_pis if available
+            pi_ip = 'Unknown'
+            if pi_id in connected_pis:
+                pi_ip = connected_pis[pi_id].get('ip', 'Unknown')
+            elif pi_id in pi_map:
+                pi_ip = pi_map[pi_id]
+            
+            # Update the map
+            pi_map[pi_id] = pi_ip
+            
+            with open(pi_map_file, 'w') as f:
+                json.dump(pi_map, f, indent=2)
+            
+            print(f"✅ Updated pi_id_ip_map.json: {pi_id} -> {pi_ip}")
+        except Exception as e:
+            print(f"⚠️ Failed to update pi_id_ip_map.json: {e}")
 
         # Also enqueue a configuration command to the screen's command queue
         # so if the Pi is already running, it can pick up the new config
@@ -2411,12 +2486,12 @@ def migrate_to_r2():
 @with_etag_json
 def screen_status():
     """Return online/offline status for all screens across all stores."""
-    header_code = request.headers.get('X-User-Code') or request.args.get('user_code')
-    user_key = _resolve_user_key_by_code(header_code)
-    # Allow dashboard session without code; otherwise require code
-    if not user_key and not _safe_user_key():
+    # SECURITY FIX: Use helper to get effective user (session takes priority over pair code)
+    user_key = _resolve_effective_user_key()
+    if not user_key:
         return {'success': False, 'error': 'pair code required'}, 403
-    cfg = load_store_config_for_user_safe_key(user_key) if user_key else load_store_config()
+    
+    cfg = load_store_config_for_user_safe_key(user_key)
     now = int(time.time())
     result = {}
     for store_id, screens in cfg.get('screens', {}).items():
@@ -2432,11 +2507,12 @@ def screen_status():
 @with_etag_json
 def screen_status_by_store(store_id):
     """Return status mapping for a specific store (lighter payload for dashboard)."""
-    header_code = request.headers.get('X-User-Code') or request.args.get('user_code')
-    user_key = _resolve_user_key_by_code(header_code)
-    if not user_key and not _safe_user_key():
+    # SECURITY FIX: Use helper to get effective user (session takes priority over pair code)
+    user_key = _resolve_effective_user_key()
+    if not user_key:
         return {'success': False, 'error': 'pair code required'}, 403
-    cfg = load_store_config_for_user_safe_key(user_key) if user_key else load_store_config()
+    
+    cfg = load_store_config_for_user_safe_key(user_key)
     now = int(time.time())
     screens = cfg.get('screens', {}).get(store_id, {}) or {}
     result = {}
@@ -2475,6 +2551,35 @@ def _safe_user_key() -> Optional[str]:
         return safe or None
     except Exception:
         return None
+
+def _resolve_effective_user_key() -> Optional[str]:
+    """SECURITY: Resolve the effective user key for API requests.
+    
+    CRITICAL RULE: Always prioritize the logged-in session user over pair code headers.
+    This prevents cross-user data leakage when an authenticated dashboard user enters
+    another user's pairing code.
+    
+    Priority order:
+    1. Session user (from logged-in dashboard) - HIGHEST PRIORITY
+    2. Pair code from header/query (from TV devices without session)
+    3. None (unauthenticated request)
+    
+    Returns:
+        str: User key for config lookup
+        None: No authenticated user found
+    """
+    # FIRST: Check if user is logged into dashboard
+    session_key = _safe_user_key()
+    if session_key:
+        return session_key
+    
+    # SECOND: Check for pair code from TV device
+    header_code = request.headers.get('X-User-Code') or request.args.get('user_code')
+    if header_code:
+        return _resolve_user_key_by_code(header_code)
+    
+    # No authentication found
+    return None
 
 def _effective_config_path() -> str:
     """Return the path to the active store config file.
@@ -3078,34 +3183,22 @@ def _config_path_for_user_safe_key(safe_key: str) -> str:
 
 def load_store_config_for_user_safe_key(safe_key: str):
     """Load another user's config by safe key (used for code-based listing).
-    Seeds from global master if missing, mirroring load_store_config behavior.
+    SECURITY: Each user starts with EMPTY config - NO cross-user data inheritance.
     """
     path = _config_path_for_user_safe_key(safe_key)
     is_user_scoped = True
     if not os.path.exists(path):
-        # New per-user config: seed from current global config if available,
-        # so existing stores/screens layout is visible to the newly paired user.
-        try:
-            global_cfg = None
-            if os.path.exists(CONFIG_FILE):
-                with open(CONFIG_FILE, 'r') as f:
-                    global_cfg = json.load(f)
-            if isinstance(global_cfg, dict) and global_cfg.get('stores') and global_cfg.get('screens'):
-                # Shallow copy to avoid accidental mutation; per-user edits will diverge afterwards
-                cfg = {
-                    'stores': list(global_cfg.get('stores', [])),
-                    'screens': dict(global_cfg.get('screens', {})),
-                    'master_store_id': global_cfg.get('master_store_id') or (global_cfg.get('stores',[{}])[0].get('id') if global_cfg.get('stores') else None),
-                }
-            else:
-                cfg = get_default_config(user_scoped=True)
-        except Exception:
-            cfg = get_default_config(user_scoped=True)
-        if cfg.get('stores') and 'master_store_id' not in cfg:
-            try:
-                cfg['master_store_id'] = cfg['stores'][0]['id']
-            except Exception:
-                pass
+        # SECURITY FIX: Each user starts with EMPTY config
+        # DO NOT seed from global config - that contains OTHER users' stores/screens!
+        logging.info(f'🔒 Creating new empty config for user: {safe_key}')
+        cfg = get_default_config(user_scoped=True)
+        
+        # Ensure empty stores and screens
+        cfg['stores'] = []
+        cfg['screens'] = {}
+        cfg['master_store_id'] = None
+        
+        logging.info(f'✓ New user {safe_key} starts with empty config (no cross-user data)')
         # Save to user-scoped file
         try:
             tmp = path + '.tmp'
@@ -3164,19 +3257,25 @@ def stores_by_code(code):
     """Return stores and screens for the user identified by a 4-digit code.
     Response: {success, user:{username}, stores:[{id,name}], screens:{store_id:{screen_id:{...}}}}
     """
+    logging.info(f'🔑 /api/stores_by_code/{code} called')
     try:
         raw = (code or '').strip()
         if not (len(raw) == 4 and raw.isdigit()):
+            logging.warning(f'❌ Invalid code format: {raw}')
             return {'success': False, 'error': 'invalid code'}, 400
         db = get_db()
         row = db.execute('SELECT username FROM users WHERE link_code = ?', (raw,)).fetchone()
+        logging.info(f'🔍 Database lookup for code {raw}: {row}')
         if not row:
+            logging.warning(f'❌ Code {raw} not found in database')
             return {'success': False, 'error': 'code not found'}, 404
         uname = (row['username'] or '').strip().lower()
         safe_key = _safe_key_from_username(uname)
+        logging.info(f'✓ Code {raw} → user {uname} (safe_key: {safe_key})')
         if not safe_key:
             return {'success': False, 'error': 'invalid user'}, 404
         cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(safe_key))
+        logging.info(f'📊 Returning {len(cfg.get("stores", []))} stores, {sum(len(s) for s in cfg.get("screens", {}).values())} screens for code {raw}')
         # Return minimal listing to the TV app
         return {
             'success': True,
@@ -3185,6 +3284,7 @@ def stores_by_code(code):
             'screens': cfg.get('screens', {})
         }
     except Exception as e:
+        logging.error(f'❌ stores_by_code error: {e}')
         return {'success': False, 'error': str(e)}, 500
 
 @app.route('/profile', methods=['GET'])
@@ -4776,15 +4876,27 @@ def pick_active_playlist_item(screen, parent_config=None, store_id=None, screen_
 def dashboard():
     """Main dashboard page"""
     print("DEBUG: Dashboard route called")
+    logging.info(f"🏠 DASHBOARD ACCESS - Session keys: {list(session.keys())}, User: {session.get('user', {})}")
     try:
         print("DEBUG: Loading store config...")
-        # load_store_config respects the logged-in session via _effective_config_path
-        config = ensure_playlists_structure(load_store_config())
+        # Load user-specific config to prevent cross-user data leakage
+        ukey = _safe_user_key()
+        print(f"DEBUG: User safe key: {ukey}")
+        print(f"DEBUG: Session user: {session.get('user', {})}")
+        logging.info(f"🔑 Dashboard user_key: {ukey}")
+        
+        if not ukey:
+            logging.error(f"❌ CRITICAL: Dashboard accessed with NO user key! Session: {dict(session)}")
+        
+        config = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
+        print(f"DEBUG: Loaded config for user key: {ukey}, stores: {[s.get('id') for s in config.get('stores', [])]}")
+        logging.info(f"📊 Dashboard showing {len(config.get('stores', []))} stores, {sum(len(s) for s in config.get('screens', {}).values())} total screens for user: {ukey or 'GLOBAL CONFIG'}")
         # Guard: ensure stores/screens keys exist even for new users
         if 'stores' not in config or not isinstance(config.get('stores'), list):
             config['stores'] = []
         if 'screens' not in config or not isinstance(config.get('screens'), dict):
             config['screens'] = {}
+        print(f"DEBUG: Screen IDs in config: {list(config.get('screens', {}).keys())}")
         # Expose media_base_url in config for front-end JS helpers
         try:
             mbu = get_media_base_url()
@@ -4836,6 +4948,223 @@ def dashboard():
         traceback.print_exc()
         return f"Error: {e}", 500
 
+@app.route('/pi-manager')
+@login_required
+def pi_manager():
+    """Pi Device Manager Dashboard"""
+    try:
+        # Load user-specific config
+        ukey = _safe_user_key()
+        config = load_store_config_for_user_safe_key(ukey) if ukey else load_store_config()
+        
+        # Get all Pi devices from connected_pis and pi_id_ip_map
+        import json
+        pi_devices = []
+        
+        # Load pi_id_ip_map.json
+        try:
+            with open('pi_id_ip_map.json', 'r') as f:
+                pi_map = json.load(f)
+        except Exception:
+            pi_map = {}
+        
+        # Combine data from connected_pis and pi_map
+        all_pi_ids = set(list(connected_pis.keys()) + list(pi_map.keys()))
+        
+        # Pi offline timeout: consider offline if no heartbeat for 60 seconds (1 minute)
+        PI_OFFLINE_TIMEOUT = 60
+        import time as time_module
+        current_time = time_module.time()
+        
+        logging.info(f"=== Pi Manager Status Check at {current_time} ===")
+        
+        for pi_id in all_pi_ids:
+            # Get last_seen timestamp from connected_pis or pi_map
+            last_seen_timestamp = None
+            
+            # First try connected_pis (for currently/recently connected Pis)
+            if pi_id in connected_pis:
+                last_seen_timestamp = connected_pis[pi_id].get('last_seen')
+                logging.debug(f"Pi {pi_id}: last_seen from connected_pis = {last_seen_timestamp}")
+            
+            # If not in connected_pis, check pi_map for persisted data
+            if not last_seen_timestamp and pi_id in pi_map:
+                pi_data = pi_map[pi_id]
+                logging.debug(f"Pi {pi_id}: pi_map data = {pi_data}")
+                if isinstance(pi_data, dict):
+                    last_seen_timestamp = pi_data.get('last_seen')
+                    logging.debug(f"Pi {pi_id}: last_seen from pi_map = {last_seen_timestamp}")
+            
+            # Format last_seen and determine online status
+            if last_seen_timestamp and isinstance(last_seen_timestamp, (int, float)):
+                from datetime import datetime
+                last_seen_formatted = datetime.fromtimestamp(last_seen_timestamp).strftime('%Y-%m-%d %I:%M:%S %p')
+                # Check if Pi is online based on last_seen timestamp
+                time_since_last_seen = current_time - last_seen_timestamp
+                is_online = time_since_last_seen < PI_OFFLINE_TIMEOUT
+                logging.info(f"Pi {pi_id}: last_seen={last_seen_formatted}, time_since={time_since_last_seen:.1f}s, is_online={is_online}")
+            else:
+                last_seen_formatted = 'Never'
+                is_online = False
+                logging.info(f"Pi {pi_id}: No valid timestamp, showing 'Never'")
+            
+            # Get IP from pi_map or from connected_pis
+            ip_address = None
+            if pi_id in pi_map:
+                pi_data = pi_map[pi_id]
+                logging.debug(f"pi_id={pi_id}, pi_data type={type(pi_data)}, value={pi_data}")
+                if isinstance(pi_data, dict):
+                    ip_address = pi_data.get('ip')
+                    logging.debug(f"Extracted IP from dict: {ip_address}")
+                elif isinstance(pi_data, str):
+                    ip_address = pi_data  # Legacy format (just IP string)
+                    logging.debug(f"Using legacy IP string: {ip_address}")
+            
+            if not ip_address and pi_id in connected_pis:
+                ip_address = connected_pis[pi_id].get('ip', 'Unknown')
+                logging.debug(f"Got IP from connected_pis: {ip_address}")
+            if not ip_address:
+                ip_address = 'Unknown'
+                logging.debug(f"No IP found, using 'Unknown'")
+            
+            logging.debug(f"Final ip_address before pi_info: type={type(ip_address)}, value={ip_address}")
+            
+            # Ensure IP is always a string (failsafe)
+            if not isinstance(ip_address, str):
+                logging.warning(f"Pi {pi_id}: IP address is not a string: {ip_address}, converting...")
+                ip_address = str(ip_address) if ip_address else 'Unknown'
+            
+            pi_info = {
+                'id': pi_id,
+                'ip': ip_address,
+                'status': 'online' if is_online else 'offline',
+                'connected_at': connected_pis.get(pi_id, {}).get('connected_at', None),
+                'last_seen': last_seen_formatted,
+                'location': '',  # Custom location name
+                'store_id': None,
+                'store_name': 'Not Assigned',
+                'screen_id': None,
+                'screen_name': 'Not Assigned'
+            }
+            
+            # Try to match Pi ID with store/screen from config
+            found = False
+            for store in config.get('stores', []):
+                store_id = store.get('id')
+                for screen_id, screen_data in config.get('screens', {}).get(store_id, {}).items():
+                    if screen_data.get('pi_id') == pi_id:
+                        pi_info['store_id'] = store_id
+                        pi_info['store_name'] = store.get('name', store_id)
+                        pi_info['screen_id'] = screen_id
+                        pi_info['screen_name'] = screen_data.get('name', screen_id)
+                        # Get custom location name if set
+                        pi_info['location'] = screen_data.get('location_name', '')
+                        found = True
+                        break
+                if found:
+                    break
+            
+            pi_devices.append(pi_info)
+        
+        # Calculate statistics
+        total_stores = len(config.get('stores', []))
+        total_screens = sum(len(screens) for screens in config.get('screens', {}).values())
+        online_count = len([p for p in pi_devices if p['status'] == 'online'])
+        offline_count = len(pi_devices) - online_count
+        
+        # Compute user info for header menu
+        try:
+            u = session.get('user') or {}
+            uname = (u.get('email') or u.get('name') or u.get('username') or '').strip()
+            link_code = _ensure_user_link_code(uname) if uname else ''
+        except Exception:
+            uname = ''
+            link_code = ''
+        
+        # Get available Pi IDs (registered but not yet assigned)
+        assigned_pi_ids = set()
+        for store in config.get('stores', []):
+            store_id = store.get('id')
+            for screen_id, screen_data in config.get('screens', {}).get(store_id, {}).items():
+                if screen_data.get('pi_id'):
+                    assigned_pi_ids.add(screen_data.get('pi_id'))
+        
+        available_pi_ids = [pi_id for pi_id in all_pi_ids if pi_id not in assigned_pi_ids]
+        
+        return render_template(
+            'pi_manager.html',
+            pi_devices=pi_devices,
+            available_pi_ids=available_pi_ids,
+            pi_map=pi_map,
+            stores=config.get('stores', []),
+            all_screens=config.get('screens', {}),
+            total_stores=total_stores,
+            total_screens=total_screens,
+            online_count=online_count,
+            offline_count=offline_count,
+            user_email=uname,
+            link_code=link_code,
+            build_stamp=BUILD_STAMP,
+            git_commit=GIT_COMMIT
+        )
+    except Exception as e:
+        logging.error(f"Error in pi_manager route: {e}")
+        import traceback
+        traceback.print_exc()
+        return f"Error: {e}", 500
+
+@app.route('/api/pi_status')
+@login_required
+def get_pi_status():
+    """API endpoint to get current Pi device statuses (for auto-refresh)"""
+    try:
+        import json
+        import time as time_module
+        
+        # Pi offline timeout: consider offline if no heartbeat for 60 seconds
+        PI_OFFLINE_TIMEOUT = 60
+        current_time = time_module.time()
+        logging.info(f"=== API Pi Status Check at {current_time} ===")
+        
+        statuses = {}
+        for pi_id, pi_data in connected_pis.items():
+            last_seen_timestamp = pi_data.get('last_seen')
+            if last_seen_timestamp and isinstance(last_seen_timestamp, (int, float)):
+                from datetime import datetime
+                last_seen_formatted = datetime.fromtimestamp(last_seen_timestamp).strftime('%Y-%m-%d %I:%M:%S %p')
+                time_since_last_seen = current_time - last_seen_timestamp
+                is_online = time_since_last_seen < PI_OFFLINE_TIMEOUT
+                logging.info(f"API: Pi {pi_id}: last_seen={last_seen_formatted}, time_since={time_since_last_seen:.1f}s, is_online={is_online}")
+            else:
+                last_seen_formatted = 'Never'
+                is_online = False
+                logging.info(f"API: Pi {pi_id}: No valid timestamp, showing 'Never'")
+            
+            statuses[pi_id] = {
+                'status': 'online' if is_online else 'offline',
+                'last_seen': last_seen_formatted,
+                'ip': pi_data.get('ip', 'Unknown')
+            }
+        
+        # Also check pi_id_ip_map for devices not in connected_pis
+        try:
+            with open('pi_id_ip_map.json', 'r') as f:
+                pi_map = json.load(f)
+            for pi_id in pi_map.keys():
+                if pi_id not in statuses:
+                    statuses[pi_id] = {
+                        'status': 'offline',
+                        'last_seen': 'Never',
+                        'ip': pi_map.get(pi_id, 'Unknown')
+                    }
+        except Exception:
+            pass
+        
+        return jsonify(statuses)
+    except Exception as e:
+        logging.error(f"Error in get_pi_status: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/upload_to_screen', methods=['POST'])
 @login_required
 def upload_to_screen():
@@ -4844,10 +5173,13 @@ def upload_to_screen():
     screen_id = request.form.get('screen_id')
     apply_to_all = request.form.get('apply_to_all', '').lower() == 'true'
 
+    # Load user-specific config
+    ukey = _safe_user_key()
+    
     # Normalize screen_id: accept legacy short form (e.g. 'screen1') by expanding to '<store_id>_screen1' if needed
     try:
-        if store_id and screen_id and store_id in load_store_config().get('screens', {}):
-            cfg = load_store_config()
+        cfg = load_store_config_for_user_safe_key(ukey) if ukey else load_store_config()
+        if store_id and screen_id and store_id in cfg.get('screens', {}):
             if screen_id not in cfg['screens'][store_id]:
                 candidate = f"{store_id}_{screen_id}"
                 if candidate in cfg['screens'][store_id]:
@@ -4938,8 +5270,9 @@ def upload_to_screen():
                 file.save(filepath)
             print(f"[upload_to_screen] Saved as {key} -> {filepath}")
 
-        # Update configuration
-        config = ensure_playlists_structure(load_store_config())
+        # Update configuration with user-specific config
+        ukey = _safe_user_key()
+        config = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
     else:
         print(f"[upload_to_screen] Invalid file type: {file.filename}")
         return jsonify({'error': 'Invalid file type'}), 400
@@ -5046,20 +5379,98 @@ def update_rotation():
         store_id = data.get('store_id')
         screen_id = data.get('screen_id')
         rotation = data.get('rotation', 0)
+        
+        print(f"🔄🔄🔄 UPDATE_ROTATION CALLED: store={store_id}, screen={screen_id}, rotation={rotation}", flush=True)
+        app.logger.info(f"UPDATE_ROTATION: store={store_id}, screen={screen_id}, rotation={rotation}")
 
         if not store_id or not screen_id:
             return jsonify({'error': 'Store ID and Screen ID are required'}), 400
 
-        config = load_store_config()
-        if store_id not in config['screens'] or screen_id not in config['screens'][store_id]:
+        ukey = _safe_user_key()
+        print(f"🔄 User key: {ukey}", flush=True)
+        config = load_store_config_for_user_safe_key(ukey) if ukey else load_store_config()
+        # Normalize to canonical store/screen IDs present in config
+        ns, nid = _normalize_screen_ref(config, str(store_id), str(screen_id))
+        if not ns or not nid:
             return jsonify({'error': 'Screen not found'}), 404
 
         if rotation not in [0, 90, 180, 270]:
             return jsonify({'error': 'Invalid rotation value'}), 400
 
-        config['screens'][store_id][screen_id]['rotation'] = rotation
-        save_store_config(config)
-        return jsonify({'success': True, 'rotation': rotation})
+        # Persist rotation
+        config['screens'][ns][nid]['rotation'] = rotation
+
+        # Mirror into GLOBAL config so devices without user_code see the change
+        try:
+            global_cfg = load_store_config()
+            gscreens = global_cfg.setdefault('screens', {}).setdefault(ns, {})
+            if nid not in gscreens:
+                gscreens[nid] = {}
+            gscreens[nid]['rotation'] = rotation
+            save_store_config(global_cfg)
+        except Exception as e:
+            app.logger.debug(f"mirror rotation to global failed (non-fatal): {e}")
+
+        # Push a lightweight command so Pi updates immediately (client polls /api/commands ~1.5s)
+        enqueued = False
+        try:
+            if _enqueue_command_in_cfg(config, ns, nid, ctype='reload'):
+                enqueued = True
+        except Exception as e:
+            app.logger.debug(f"enqueue reload (user cfg) failed (non-fatal): {e}")
+
+        # Also enqueue into global cfg to cover devices not sending user_code
+        try:
+            gcfg2 = load_store_config()
+            if _enqueue_command_in_cfg(gcfg2, ns, nid, ctype='reload'):
+                # Save global cfg immediately
+                save_store_config(gcfg2)
+                enqueued = True
+        except Exception as e:
+            app.logger.debug(f"enqueue reload (global cfg) failed (non-fatal): {e}")
+
+        # Attempt to notify the assigned Pi via WebSocket for instant apply
+        try:
+            # Prefer current config's mapping, else fallback to global
+            pi_id = (config.get('screens', {})
+                          .get(ns, {})
+                          .get(nid, {})
+                          .get('pi_id'))
+            if not pi_id:
+                gc = load_store_config()
+                pi_id = (gc.get('screens', {})
+                            .get(ns, {})
+                            .get(nid, {})
+                            .get('pi_id'))
+            payload = {
+                'store_id': ns,
+                'screen_id': nid,
+                'reason': 'rotation_changed'
+            }
+            if pi_id and pi_id in connected_pis:
+                pi_session = connected_pis[pi_id]['sid']
+                try:
+                    logging.info('WS push: reload_client (targeted) pi_id=%s store=%s screen=%s reason=%s', pi_id, ns, nid, payload.get('reason'))
+                except Exception:
+                    pass
+                socketio.emit('reload_client', payload, room=pi_session)
+            else:
+                try:
+                    logging.info('WS push: reload_client (broadcast) store=%s screen=%s reason=%s', ns, nid, payload.get('reason'))
+                except Exception:
+                    pass
+                # Fallback: broadcast with store/screen for client-side filtering
+                socketio.emit('reload_client', payload, namespace='/')
+        except Exception as e:
+            app.logger.debug(f"reload_client emit failed (non-fatal): {e}")
+
+        # Save user-specific config (if applicable)
+        if ukey:
+            save_store_config_for_user_safe_key(ukey, config)
+        else:
+            save_store_config(config)
+
+        return jsonify({'success': True, 'rotation': rotation, 'pushed': enqueued})
     except Exception as e:
         print(f"Error updating rotation: {e}")
         return jsonify({'error': str(e)}), 500
@@ -5074,11 +5485,83 @@ def update_orientation():
     orientation = data.get('orientation')
     value = data.get('value')
     
-    config = load_store_config()
-    if store_id in config['screens'] and screen_id in config['screens'][store_id]:
-        config['screens'][store_id][screen_id][orientation] = value
-        save_store_config(config)
-        return jsonify({'success': True})
+    ukey = _safe_user_key()
+    config = load_store_config_for_user_safe_key(ukey) if ukey else load_store_config()
+    # Normalize to canonical ids
+    ns, nid = _normalize_screen_ref(config, str(store_id), str(screen_id))
+    if ns and nid:
+        # Persist orientation-related setting
+        config['screens'][ns][nid][orientation] = value
+
+        # Mirror into GLOBAL config so devices without user_code see the change
+        try:
+            global_cfg = load_store_config()
+            gscreens = global_cfg.setdefault('screens', {}).setdefault(ns, {})
+            if nid not in gscreens:
+                gscreens[nid] = {}
+            gscreens[nid][orientation] = value
+            save_store_config(global_cfg)
+        except Exception as e:
+            app.logger.debug(f"mirror orientation to global failed (non-fatal): {e}")
+
+        # Queue a reload so Pi applies orientation without waiting for playlist poll interval
+        enqueued = False
+        try:
+            if _enqueue_command_in_cfg(config, ns, nid, ctype='reload'):
+                enqueued = True
+        except Exception as e:
+            app.logger.debug(f"enqueue reload (user cfg) failed (non-fatal): {e}")
+
+        # Also enqueue into global cfg to cover devices not sending user_code
+        try:
+            gcfg2 = load_store_config()
+            if _enqueue_command_in_cfg(gcfg2, ns, nid, ctype='reload'):
+                save_store_config(gcfg2)
+                enqueued = True
+        except Exception as e:
+            app.logger.debug(f"enqueue reload (global cfg) failed (non-fatal): {e}")
+
+        # Attempt to notify the assigned Pi via WebSocket for instant apply
+        try:
+            pi_id = (config.get('screens', {})
+                          .get(ns, {})
+                          .get(nid, {})
+                          .get('pi_id'))
+            if not pi_id:
+                gc = load_store_config()
+                pi_id = (gc.get('screens', {})
+                            .get(ns, {})
+                            .get(nid, {})
+                            .get('pi_id'))
+            payload = {
+                'store_id': ns,
+                'screen_id': nid,
+                'reason': 'orientation_changed',
+                'orientation': orientation,
+                'value': value
+            }
+            if pi_id and pi_id in connected_pis:
+                pi_session = connected_pis[pi_id]['sid']
+                try:
+                    logging.info('WS push: reload_client (targeted) pi_id=%s store=%s screen=%s reason=%s', pi_id, ns, nid, payload.get('reason'))
+                except Exception:
+                    pass
+                socketio.emit('reload_client', payload, room=pi_session)
+            else:
+                try:
+                    logging.info('WS push: reload_client (broadcast) store=%s screen=%s reason=%s', ns, nid, payload.get('reason'))
+                except Exception:
+                    pass
+                socketio.emit('reload_client', payload, namespace='/')
+        except Exception as e:
+            app.logger.debug(f"reload_client emit failed (non-fatal): {e}")
+
+        # Save config including queued command
+        if ukey:
+            save_store_config_for_user_safe_key(ukey, config)
+        else:
+            save_store_config(config)
+        return jsonify({'success': True, 'pushed': enqueued})
     
     return jsonify({'error': 'Invalid screen'}), 400
 
@@ -5093,20 +5576,84 @@ def set_orientation_mode():
         mode = (data.get('mode') or '').lower()
         if not store_id or not screen_id or mode not in ['vertical','horizontal','default']:
             return jsonify({'error': 'store_id, screen_id and valid mode required'}), 400
-        config = load_store_config()
-        if store_id not in config['screens'] or screen_id not in config['screens'][store_id]:
+        ukey = _safe_user_key()
+        config = load_store_config_for_user_safe_key(ukey) if ukey else load_store_config()
+        ns, nid = _normalize_screen_ref(config, str(store_id), str(screen_id))
+        if not ns or not nid:
             return jsonify({'error': 'Screen not found'}), 404
         if mode == 'vertical':
-            config['screens'][store_id][screen_id]['vertical'] = True
-            config['screens'][store_id][screen_id]['horizontal'] = False
+            config['screens'][ns][nid]['vertical'] = True
+            config['screens'][ns][nid]['horizontal'] = False
         elif mode == 'horizontal':
-            config['screens'][store_id][screen_id]['vertical'] = False
-            config['screens'][store_id][screen_id]['horizontal'] = True
+            config['screens'][ns][nid]['vertical'] = False
+            config['screens'][ns][nid]['horizontal'] = True
         else:  # default
-            config['screens'][store_id][screen_id]['vertical'] = False
-            config['screens'][store_id][screen_id]['horizontal'] = False
-        save_store_config(config)
-        return jsonify({'success': True, 'mode': mode})
+            config['screens'][ns][nid]['vertical'] = False
+            config['screens'][ns][nid]['horizontal'] = False
+
+        # Mirror orientation mode into GLOBAL config
+        try:
+            global_cfg = load_store_config()
+            gscreens = global_cfg.setdefault('screens', {}).setdefault(ns, {})
+            if nid not in gscreens:
+                gscreens[nid] = {}
+            if mode == 'vertical':
+                gscreens[nid]['vertical'] = True
+                gscreens[nid]['horizontal'] = False
+            elif mode == 'horizontal':
+                gscreens[nid]['vertical'] = False
+                gscreens[nid]['horizontal'] = True
+            else:
+                gscreens[nid]['vertical'] = False
+                gscreens[nid]['horizontal'] = False
+            save_store_config(global_cfg)
+        except Exception as e:
+            app.logger.debug(f"mirror orientation mode to global failed (non-fatal): {e}")
+        # Queue a reload so the Pi applies the change instantly
+        try:
+            _enqueue_command_in_cfg(config, ns, nid, ctype='reload')
+        except Exception as e:
+            app.logger.debug(f"enqueue reload failed (non-fatal): {e}")
+
+        # Attempt to notify the assigned Pi via WebSocket for instant apply
+        try:
+            pi_id = (config.get('screens', {})
+                          .get(ns, {})
+                          .get(nid, {})
+                          .get('pi_id'))
+            if not pi_id:
+                gc = load_store_config()
+                pi_id = (gc.get('screens', {})
+                            .get(ns, {})
+                            .get(nid, {})
+                            .get('pi_id'))
+            payload = {
+                'store_id': ns,
+                'screen_id': nid,
+                'reason': 'orientation_mode',
+                'mode': mode
+            }
+            if pi_id and pi_id in connected_pis:
+                pi_session = connected_pis[pi_id]['sid']
+                try:
+                    logging.info('WS push: reload_client (targeted) pi_id=%s store=%s screen=%s reason=%s', pi_id, ns, nid, payload.get('reason'))
+                except Exception:
+                    pass
+                socketio.emit('reload_client', payload, room=pi_session)
+            else:
+                try:
+                    logging.info('WS push: reload_client (broadcast) store=%s screen=%s reason=%s', ns, nid, payload.get('reason'))
+                except Exception:
+                    pass
+                socketio.emit('reload_client', payload, namespace='/')
+        except Exception as e:
+            app.logger.debug(f"reload_client emit failed (non-fatal): {e}")
+
+        if ukey:
+            save_store_config_for_user_safe_key(ukey, config)
+        else:
+            save_store_config(config)
+        return jsonify({'success': True, 'mode': mode, 'pushed': True})
     except Exception as e:
         print(f"Error setting orientation mode: {e}")
         return jsonify({'error': str(e)}), 500
@@ -5124,10 +5671,14 @@ def update_protection():
         if not store_id or not screen_id:
             return jsonify({'error': 'Store ID and Screen ID are required'}), 400
             
-        config = load_store_config()
+        ukey = _safe_user_key()
+        config = load_store_config_for_user_safe_key(ukey) if ukey else load_store_config()
         if store_id in config['screens'] and screen_id in config['screens'][store_id]:
             config['screens'][store_id][screen_id]['protected'] = protected
-            save_store_config(config)
+            if ukey:
+                save_store_config_for_user_safe_key(ukey, config)
+            else:
+                save_store_config(config)
             return jsonify({'success': True, 'protected': protected})
         
         return jsonify({'error': 'Store or screen not found'}), 404
@@ -5151,7 +5702,8 @@ def update_screen_name():
         if not store_id or not screen_id:
             return jsonify({'success': False, 'error': 'store_id and screen_id required'}), 400
 
-        cfg = ensure_playlists_structure(load_store_config())
+        ukey = _safe_user_key()
+        cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
         ns, nid = _normalize_screen_ref(cfg, store_id, screen_id)
         if not ns or not nid:
             return jsonify({'success': False, 'error': 'screen not found'}), 404
@@ -5169,7 +5721,10 @@ def update_screen_name():
             # Clear custom name to fall back to derived label
             scr.pop('name', None)
 
-        save_store_config(cfg)
+        if ukey:
+            save_store_config_for_user_safe_key(ukey, cfg)
+        else:
+            save_store_config(cfg)
         return jsonify({'success': True, 'name': scr.get('name', '')})
     except Exception as e:
         app.logger.exception('update_screen_name failed')
@@ -5242,10 +5797,23 @@ def webplayer_play():
     code = (request.args.get('code') or '').strip()
     if not store_id or not screen_id:
         return redirect(url_for('webplayer_index'))
+    
+    # SECURITY FIX: Use user-scoped config based on pair code
     try:
-        config = load_store_config()
+        if code and len(code) == 4 and code.isdigit():
+            user_key = _resolve_user_key_by_code(code)
+            if user_key:
+                config = load_store_config_for_user_safe_key(user_key)
+                logging.info(f'🔒 Webplayer using user-scoped config for code {code} → {user_key}')
+            else:
+                logging.warning(f'⚠ Invalid webplayer code: {code}')
+                config = load_store_config()
+        else:
+            logging.info('⚠ Webplayer accessed without valid code - using global config')
+            config = load_store_config()
         screen_config = ensure_playlists_structure(config).get('screens', {}).get(store_id, {}).get(screen_id, {})
-    except Exception:
+    except Exception as e:
+        logging.error(f'❌ Webplayer config load error: {e}')
         screen_config = {}
     try:
         active_file = pick_active_playlist_item(screen_config, load_store_config(), store_id, screen_id)
@@ -6485,20 +7053,35 @@ def debug_schedule(store_id, screen_id):
 @with_etag_json
 def get_playlist(store_id, screen_id):
     print(f"DEBUG: GET /playlist {store_id} {screen_id}")
-    header_code = request.headers.get('X-User-Code') or request.args.get('user_code')
-    user_key = _resolve_user_key_by_code(header_code)
-    # Prefer per-user config when either a pair code OR a logged-in session user exists
-    if not user_key and not _safe_user_key():
-        # Public playlist bypass: allow unauthenticated access when explicitly enabled
-        allow_public = os.environ.get('ALLOW_PUBLIC_PLAYLIST', '').lower() in ('1', 'true', 'yes', 'y')
-        # Optional comma-separated allow-list of store ids (e.g. "1000,2000")
-        public_stores = {s.strip() for s in (os.environ.get('PUBLIC_PLAYLIST_STORES') or '').split(',') if s.strip()}
-        if allow_public and (not public_stores or store_id in public_stores):
-            ukey = None  # Use global/shared config path
-        else:
-            return {'success': False, 'error': 'pair code required'}, 403
+    
+    # SECURITY FIX: Always prefer logged-in session user over pair code header
+    # This prevents cross-user data leakage when authenticated user enters another user's pairing code
+    session_ukey = _safe_user_key()
+    
+    if session_ukey:
+        # User is logged in - ALWAYS use their session, IGNORE any pair code in header
+        ukey = session_ukey
+        print(f"DEBUG: Using session user key: {ukey}")
     else:
-        ukey = user_key or _safe_user_key()
+        # No logged-in session - try pair code from header
+        header_code = request.headers.get('X-User-Code') or request.args.get('user_code')
+        user_key = _resolve_user_key_by_code(header_code)
+        
+        if user_key:
+            # Valid pair code provided
+            ukey = user_key
+            print(f"DEBUG: Using pair code user key: {ukey}")
+        else:
+            # No session and no valid pair code - check if public access allowed
+            allow_public = os.environ.get('ALLOW_PUBLIC_PLAYLIST', '').lower() in ('1', 'true', 'yes', 'y')
+            public_stores = {s.strip() for s in (os.environ.get('PUBLIC_PLAYLIST_STORES') or '').split(',') if s.strip()}
+            
+            if allow_public and (not public_stores or store_id in public_stores):
+                ukey = None  # Use global/shared config path
+                print(f"DEBUG: Using public/global config for store {store_id}")
+            else:
+                print(f"DEBUG: Access denied - no session, no pair code, public access not allowed")
+                return {'success': False, 'error': 'pair code required'}, 403
     cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
     # Legacy mapping: if old store_id like '1881' no longer exists, map to current master store
     try:
@@ -6542,10 +7125,10 @@ def get_playlist(store_id, screen_id):
                 'playlist': []
             }
             screens[screen_id] = sdata
-            # Persist in whichever config space we're using
+            # Persist in whichever config space we're using (use ukey from above)
             try:
-                if user_key:
-                    save_store_config_for_user_safe_key(user_key, cfg)
+                if ukey:
+                    save_store_config_for_user_safe_key(ukey, cfg)
                 else:
                     save_store_config(cfg)
             except Exception:
@@ -6572,12 +7155,12 @@ def get_playlist(store_id, screen_id):
                         print(f"DEBUG: Removing local missing file: {f}")
                         continue
             cleaned.append(item)
-        if removed:
-            screen['playlist'] = cleaned
-            if user_key:
-                save_store_config_for_user_safe_key(user_key, cfg)
-            else:
-                save_store_config(cfg)
+            if removed:
+                screen['playlist'] = cleaned
+                if ukey:
+                    save_store_config_for_user_safe_key(ukey, cfg)
+                else:
+                    save_store_config(cfg)
             print(f"DEBUG: Auto-removed {removed} missing LOCAL file playlist items")
     else:
         print("DEBUG: R2 enabled - skipping local file existence check to preserve CDN-based playlists")
@@ -7988,12 +8571,23 @@ def debug_assign_recent():
 @app.route('/stores')
 @with_etag_json
 def list_stores():
-    header_code = request.headers.get('X-User-Code') or request.args.get('user_code')
-    user_key = _resolve_user_key_by_code(header_code)
-    if not user_key and not _safe_user_key():
-        return {'success': False, 'error': 'pair code required'}, 403
-    ukey = user_key or _safe_user_key()
+    # SECURITY FIX: Always prefer logged-in session user over pair code header
+    session_ukey = _safe_user_key()
+    logging.info(f'🔍 /stores called - session_ukey={session_ukey}')
+    if session_ukey:
+        ukey = session_ukey
+        logging.info(f'✓ Using session user: {ukey}')
+    else:
+        header_code = request.headers.get('X-User-Code') or request.args.get('user_code')
+        user_key = _resolve_user_key_by_code(header_code)
+        logging.info(f'⚠ No session user, trying pair code: {header_code} → {user_key}')
+        if not user_key:
+            return {'success': False, 'error': 'pair code required'}, 403
+        ukey = user_key
+    
     cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
+    stores_count = len(cfg.get('stores', []))
+    logging.info(f'📊 Returning {stores_count} stores for user: {ukey}')
     return {'success': True, 'stores': cfg.get('stores', [])}
 
 @app.route('/screens_list/<store_id>')
@@ -8004,15 +8598,25 @@ def list_screens_legacy_array(store_id):
     NOTE: The dashboard now uses /screens/<store_id> which returns a mapping
     of screen_id -> screen_object. This endpoint retained for older TV clients.
     """
-    header_code = request.headers.get('X-User-Code') or request.args.get('user_code')
-    user_key = _resolve_user_key_by_code(header_code)
-    if not user_key and not _safe_user_key():
-        return {'success': False, 'error': 'pair code required'}, 403
-    ukey = user_key or _safe_user_key()
+    # SECURITY FIX: Always prefer logged-in session user over pair code header
+    session_ukey = _safe_user_key()
+    logging.info(f'🔍 /screens_list/{store_id} called - session_ukey={session_ukey}')
+    if session_ukey:
+        ukey = session_ukey
+        logging.info(f'✓ Using session user: {ukey}')
+    else:
+        header_code = request.headers.get('X-User-Code') or request.args.get('user_code')
+        user_key = _resolve_user_key_by_code(header_code)
+        logging.info(f'⚠ No session user, trying pair code: {header_code} → {user_key}')
+        if not user_key:
+            return {'success': False, 'error': 'pair code required'}, 403
+        ukey = user_key
     cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
     if store_id not in (cfg.get('screens') or {}):
+        logging.warning(f'❌ Store {store_id} not found in config for user: {ukey}')
         return {'success': False, 'error': 'store not found'}, 404
     screens = cfg.get('screens', {}).get(store_id, {})
+    logging.info(f'📊 Returning {len(screens)} screens for store {store_id}, user: {ukey}')
     arr = [{'id': sid} for sid in screens.keys()]
     return {'success': True, 'screens': arr, 'legacy': True}
 
@@ -8027,7 +8631,41 @@ def update_playlist_item(store_id, screen_id, item_id):
     if not screen:
         return jsonify({'success': False, 'error': 'screen not found'}), 404
     updated = False
-    allowed_effects = {'fade','slide-l','slide-r','zoom-in','zoom-out','rotate'}
+
+    # Canonicalize an effect name to the 10-effect set (hyphen form)
+    def _normalize_effect_value(val):
+        if val is None:
+            return None
+        v = str(val).strip().lower()
+        if v == '' or v in ('none', 'default'):
+            return None
+        # Accept numbers (button mapping / legacy ids)
+        try:
+            n = int(v)
+        except Exception:
+            n = None
+        if n is not None:
+            num_map = {
+                1: 'cut', 2: 'fade', 3: 'dissolve', 4: 'slide-l', 5: 'slide-r',
+                6: 'slide-up', 7: 'slide-down', 8: 'zoom-in', 9: 'zoom-out', 10: 'wipe-lr'
+            }
+            return num_map.get(n)
+        aliases = {
+            'cut': 'cut',
+            'fade': 'fade',
+            'dissolve': 'dissolve', 'crossfade': 'dissolve', 'cross-fade': 'dissolve',
+            'slide_left': 'slide-l', 'slide-left': 'slide-l', 'slide-l': 'slide-l', 'left': 'slide-l',
+            'slide_right': 'slide-r', 'slide-right': 'slide-r', 'slide-r': 'slide-r', 'right': 'slide-r',
+            'slide_up': 'slide-up', 'slide-up': 'slide-up', 'up': 'slide-up',
+            'slide_down': 'slide-down', 'slide-down': 'slide-down', 'down': 'slide-down',
+            'zoom_in': 'zoom-in', 'zoom-in': 'zoom-in', 'zoomin': 'zoom-in',
+            'zoom_out': 'zoom-out', 'zoom-out': 'zoom-out', 'zoomout': 'zoom-out',
+            'wipe': 'wipe-lr', 'wipe-lr': 'wipe-lr', 'wipe_l_r': 'wipe-lr', 'wipe-left-right': 'wipe-lr',
+            # Legacy dashboard extras -> nearest mapping in 10
+            'rotate': 'slide-r', 'zoom-cross': 'dissolve', 'whip-pan': 'slide-r', 'center-split': 'wipe-lr',
+            'glitch': 'dissolve', 'ripple': 'dissolve'
+        }
+        return aliases.get(v)
     for item in screen.get('playlist', []):
         if item['id'] == item_id:
             payload = request.get_json() or {}
@@ -8059,16 +8697,16 @@ def update_playlist_item(store_id, screen_id, item_id):
                     else:
                         item[k] = payload[k]
                     updated = True
-            # Transition effect for item playback
-            if 'effect' in payload:
-                val = str(payload.get('effect') or '').strip().lower()
-                if val in allowed_effects:
-                    item['effect'] = val
-                elif val == '' or val == 'default' or val == 'none':
-                    item.pop('effect', None)
+            # Transition effect for item playback (persist canonically)
+            if 'effect' in payload or 'effect_id' in payload:
+                raw = payload.get('effect') if 'effect' in payload else payload.get('effect_id')
+                norm = _normalize_effect_value(raw)
+                if norm:
+                    item['effect'] = norm
                 else:
-                    # ignore invalid values
-                    pass
+                    # clear if explicitly empty/default/none
+                    if str(raw).strip().lower() in ('', 'none', 'default', '0', 'false'):
+                        item.pop('effect', None)
                 updated = True
             # Days-of-week for primary interval
             if 'days' in payload:
@@ -8081,13 +8719,18 @@ def update_playlist_item(store_id, screen_id, item_id):
                     updated = True
             # Schedule management: replace whole schedule array if provided
             if 'schedule' in payload and isinstance(payload['schedule'], list):
-                # Sanitize entries to dicts with start/end only
+                # Sanitize entries; preserve optional per-window 'effect' canonically
                 new_sched = []
                 for win in payload['schedule']:
                     if isinstance(win, dict):
                         w = {'start': win.get('start'), 'end': win.get('end')}
                         if 'days' in win and isinstance(win.get('days'), list):
                             w['days'] = [str(d).lower()[:3] for d in win.get('days') if d]
+                        if 'effect' in win or 'effect_id' in win:
+                            raw_e = win.get('effect') if 'effect' in win else win.get('effect_id')
+                            norm_e = _normalize_effect_value(raw_e)
+                            if norm_e:
+                                w['effect'] = norm_e
                         new_sched.append(w)
                 item['schedule'] = new_sched
                 updated = True
@@ -8141,12 +8784,12 @@ def update_playlist_item(store_id, screen_id, item_id):
                                                         pass
                                                 else:
                                                     it2[k] = payload.get(k)
-                                        if 'effect' in prop_keys:
-                                            val = str(payload.get('effect') or '').strip().lower()
-                                            allowed_effects = {'fade','slide-l','slide-r','zoom-in','zoom-out','rotate'}
-                                            if val in allowed_effects:
-                                                it2['effect'] = val
-                                            elif val in ('', 'default', 'none'):
+                                        if 'effect' in prop_keys or 'effect_id' in prop_keys:
+                                            raw = payload.get('effect') if 'effect' in payload else payload.get('effect_id')
+                                            norm = _normalize_effect_value(raw)
+                                            if norm:
+                                                it2['effect'] = norm
+                                            elif str(raw).strip().lower() in ('', 'default', 'none', '0', 'false'):
                                                 it2.pop('effect', None)
                                         if 'days' in prop_keys:
                                             dv = payload.get('days')
@@ -8161,6 +8804,11 @@ def update_playlist_item(store_id, screen_id, item_id):
                                                     w = {'start': win.get('start'), 'end': win.get('end')}
                                                     if 'days' in win and isinstance(win.get('days'), list):
                                                         w['days'] = [str(d).lower()[:3] for d in win.get('days') if d]
+                                                    if 'effect' in win or 'effect_id' in win:
+                                                        raw_e = win.get('effect') if 'effect' in win else win.get('effect_id')
+                                                        norm_e = _normalize_effect_value(raw_e)
+                                                        if norm_e:
+                                                            w['effect'] = norm_e
                                                     new_sched.append(w)
                                             it2['schedule'] = new_sched
                                         # Enqueue reload for that screen
@@ -8187,8 +8835,10 @@ def get_screens_for_store(store_id: str):
     """Return authoritative screen map for a single store (used by dashboard to purge phantom client entries)."""
     try:
         ukey = _safe_user_key()
+        logging.info(f'🔍 /screens/{store_id} called - user: {ukey}')
         cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
         screens_all = cfg.get('screens') or {}
+        logging.info(f'📊 User {ukey} has {len(screens_all)} stores, store {store_id} has {len(screens_all.get(store_id, {}))} screens')
         if store_id not in screens_all:
             return jsonify({'success': False, 'error': 'store not found'}), 404
         store_map = screens_all.get(store_id) or {}
@@ -9571,23 +10221,79 @@ def pi_status(pi_id):
 # NO PORT FORWARDING NEEDED!
 # =============================================================================
 
+# Decorator to wrap all SocketIO handlers with error handling
+def socketio_error_handler(func):
+    """Wrap SocketIO handlers to catch and log exceptions without crashing"""
+    from functools import wraps
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            logging.error(f'❌ SocketIO handler {func.__name__} error: {e}', exc_info=True)
+            # Optionally emit error back to client
+            try:
+                from flask_socketio import emit
+                emit('error', {'message': f'Server error in {func.__name__}', 'error': str(e)})
+            except:
+                pass
+    return wrapper
+
 @socketio.on('connect')
+@socketio_error_handler
 def handle_connect():
     """Handle new WebSocket connection"""
     logging.info(f'🌐 WebSocket connection from {request.sid}')
 
 @socketio.on('disconnect')
+@socketio_error_handler
 def handle_disconnect():
     """Handle WebSocket disconnection"""
-    # Find and remove Pi from connected list
+    # Find Pi and update last_seen timestamp instead of deleting
     with pi_connection_lock:
         for pi_id, pi_info in list(connected_pis.items()):
             if pi_info['sid'] == request.sid:
-                del connected_pis[pi_id]
-                logging.info(f'❌ Pi disconnected: {pi_id} (was connected for {time.time() - pi_info["connected_at"]:.0f}s)')
+                # Update last_seen to current time when disconnecting
+                disconnect_time = time.time()
+                connected_pis[pi_id]['last_seen'] = disconnect_time
+                connected_pis[pi_id]['connected'] = False
+                logging.info(f'❌ Pi disconnected: {pi_id} (was connected for {disconnect_time - pi_info["connected_at"]:.0f}s)')
+                
+                # Save last_seen to persistent storage
+                def save_disconnect():
+                    try:
+                        map_path = 'pi_id_ip_map.json'
+                        try:
+                            with open(map_path, 'r') as f:
+                                pi_map = json.load(f)
+                        except Exception:
+                            pi_map = {}
+                        
+                        if pi_id in pi_map:
+                            if isinstance(pi_map[pi_id], dict):
+                                pi_map[pi_id]['last_seen'] = disconnect_time
+                            else:
+                                # Convert legacy format to new format
+                                pi_map[pi_id] = {
+                                    'ip': pi_map[pi_id],
+                                    'last_seen': disconnect_time
+                                }
+                        else:
+                            pi_map[pi_id] = {
+                                'ip': pi_info.get('ip', 'Unknown'),
+                                'last_seen': disconnect_time
+                            }
+                        
+                        with open(map_path, 'w') as f:
+                            json.dump(pi_map, f, indent=4)
+                    except Exception as e:
+                        logging.error(f'Error saving disconnect time: {e}')
+                
+                threading.Thread(target=save_disconnect, daemon=True).start()
                 break
 
 @socketio.on('register_pi')
+@socketio_error_handler
 def handle_pi_registration(data):
     """
     Pi connects and registers itself via WebSocket
@@ -9611,6 +10317,8 @@ def handle_pi_registration(data):
             connected_pis[pi_id] = {
                 'sid': request.sid,
                 'connected_at': time.time(),
+                'last_seen': time.time(),
+                'connected': True,
                 'ip': pi_ip,
                 'version': pi_version
             }
@@ -9624,7 +10332,13 @@ def handle_pi_registration(data):
                         pi_map = json.load(f)
                 except Exception:
                     pi_map = {}
-                pi_map[pi_id] = pi_ip
+                
+                # Store both IP and last_seen timestamp
+                pi_map[pi_id] = {
+                    'ip': pi_ip,
+                    'last_seen': time.time()
+                }
+                
                 with open(map_path, 'w') as f:
                     json.dump(pi_map, f, indent=4)
             except Exception as e:
@@ -9644,6 +10358,7 @@ def handle_pi_registration(data):
         emit('registration_failed', {'message': f'Registration failed: {e}'})
 
 @socketio.on('pi_heartbeat')
+@socketio_error_handler
 def handle_pi_heartbeat(data):
     """
     Pi sends periodic heartbeat to maintain connection
@@ -9652,9 +10367,12 @@ def handle_pi_heartbeat(data):
     pi_id = data.get('pi_id')
     if pi_id and pi_id in connected_pis:
         connected_pis[pi_id]['last_heartbeat'] = time.time()
+        connected_pis[pi_id]['last_seen'] = time.time()
+        connected_pis[pi_id]['connected'] = True
         emit('heartbeat_ack', {'status': 'ok'})
 
 @socketio.on('pi_status_update')
+@socketio_error_handler
 def handle_pi_status_update(data):
     """
     Pi sends status updates (currently playing, errors, etc.)
@@ -9666,21 +10384,297 @@ def handle_pi_status_update(data):
         logging.debug(f'📊 Status update from {pi_id}: {data.get("status", {})}')
 
 @socketio.on('config_applied')
+@socketio_error_handler
 def handle_config_applied(data):
     """
     Pi confirms configuration was applied successfully
     Emit to any listening dashboard sessions
     """
     pi_id = data.get('pi_id')
-    status = data.get('status')
+    status = data.get('status') or data.get('message') or 'ok'
     logging.info(f'✅ Configuration applied on {pi_id}: {status}')
-    
+
     # Broadcast to all dashboard sessions (they can filter by pi_id)
     socketio.emit('pi_config_result', {
         'pi_id': pi_id,
         'status': status,
         'timestamp': time.time()
     }, broadcast=True)
+
+# ===== WebPlayer Mobile-to-TV Code Sharing =====
+webplayer_sessions = {}  # Store active webplayer sessions
+
+@socketio.on('join_session')
+@socketio_error_handler
+def handle_join_session(data):
+    """TV/Desktop joins a session to receive codes from mobile"""
+    session_id = data.get('session_id')
+    if session_id:
+        webplayer_sessions[session_id] = request.sid
+        logging.info(f'📺 WebPlayer session joined: {session_id} (sid: {request.sid})')
+
+@socketio.on('send_code')
+@socketio_error_handler
+def handle_send_code(data):
+    """Mobile sends code to TV via session ID"""
+    session_id = data.get('session_id')
+    code = data.get('code')
+    
+    if session_id and code and session_id in webplayer_sessions:
+        target_sid = webplayer_sessions[session_id]
+        emit('code_entered', {'session_id': session_id, 'code': code}, room=target_sid)
+        logging.info(f'📱 Code {code} sent from mobile to TV session {session_id}')
+        # Acknowledge to mobile
+        emit('code_sent_ack', {'status': 'success'})
+    else:
+        emit('code_sent_ack', {'status': 'error', 'message': 'Session not found'})
+
+@socketio.on('send_store_code')
+@socketio_error_handler
+def handle_send_store_code(data):
+    """Mobile sends store code to TV via session ID"""
+    session_id = data.get('session_id')
+    store_code = data.get('store_code')
+    
+    if session_id and store_code and session_id in webplayer_sessions:
+        target_sid = webplayer_sessions[session_id]
+        emit('store_code_entered', {'session_id': session_id, 'store_code': store_code}, room=target_sid)
+        logging.info(f'📱 Store code {store_code} sent from mobile to TV session {session_id}')
+        # Acknowledge to mobile
+        emit('store_code_sent_ack', {'status': 'success'})
+    else:
+        emit('store_code_sent_ack', {'status': 'error', 'message': 'Session not found'})
+
+@socketio.on('send_screen_selection')
+@socketio_error_handler
+def handle_send_screen_selection(data):
+    """Mobile sends screen selection to TV via session ID"""
+    session_id = data.get('session_id')
+    screen_id = data.get('screen_id')
+    store_id = data.get('store_id')
+    
+    if session_id and screen_id and session_id in webplayer_sessions:
+        target_sid = webplayer_sessions[session_id]
+        emit('screen_selected', {
+            'session_id': session_id, 
+            'screen_id': screen_id,
+            'store_id': store_id
+        }, room=target_sid)
+        logging.info(f'📱 Screen {screen_id} selected from mobile to TV session {session_id}')
+        # Acknowledge to mobile
+        emit('screen_sent_ack', {'status': 'success'})
+    else:
+        emit('screen_sent_ack', {'status': 'error', 'message': 'Session not found'})
+
+@socketio.on('leave_session')
+@socketio_error_handler
+def handle_leave_session(data):
+    """Clean up session when TV/Desktop leaves"""
+    session_id = data.get('session_id')
+    if session_id and session_id in webplayer_sessions:
+        del webplayer_sessions[session_id]
+        logging.info(f'📺 WebPlayer session left: {session_id}')
+
+@socketio.on('request_screenshot')
+@socketio_error_handler
+def handle_screenshot_request(data):
+    """
+    Dashboard requests screenshot from a Pi (legacy/fallback)
+    Relay the request to the target Pi
+    """
+    pi_id = data.get('pi_id')
+    logging.info(f'📸 Screenshot request for Pi: {pi_id}')
+    
+    if pi_id and pi_id in connected_pis:
+        pi_session = connected_pis[pi_id]['sid']
+        # Emit to the specific Pi's session
+        socketio.emit('request_screenshot', data, room=pi_session)
+        logging.info(f'📸 Screenshot request forwarded to {pi_id}')
+    else:
+        # Pi not connected, send error back to requester
+        emit('screenshot_data', {
+            'pi_id': pi_id,
+            'error': 'Pi not connected',
+            'timestamp': time.time()
+        })
+        logging.warning(f'❌ Screenshot request failed - Pi {pi_id} not connected')
+
+@socketio.on('start_live_stream')
+@socketio_error_handler
+def handle_start_live_stream(data):
+    """
+    Dashboard requests to start live streaming from a Pi
+    Forward request to Pi to start continuous frame capture
+    """
+    pi_id = data.get('pi_id')
+    logging.info(f'📺 Live stream START request for Pi: {pi_id}')
+    
+    if pi_id and pi_id in connected_pis:
+        pi_session = connected_pis[pi_id]['sid']
+        # Emit to the specific Pi's session
+        socketio.emit('start_live_stream', data, room=pi_session)
+        logging.info(f'📺 Live stream start forwarded to {pi_id}')
+    else:
+        # Pi not connected, send error back
+        emit('stream_error', {
+            'pi_id': pi_id,
+            'error': 'Pi not connected',
+            'timestamp': time.time()
+        })
+        logging.warning(f'❌ Live stream start failed - Pi {pi_id} not connected')
+
+@socketio.on('stop_live_stream')
+@socketio_error_handler
+def handle_stop_live_stream(data):
+    """
+    Dashboard requests to stop live streaming from a Pi
+    """
+    pi_id = data.get('pi_id')
+    logging.info(f'📺 Live stream STOP request for Pi: {pi_id}')
+    
+    if pi_id and pi_id in connected_pis:
+        pi_session = connected_pis[pi_id]['sid']
+        socketio.emit('stop_live_stream', data, room=pi_session)
+        logging.info(f'📺 Live stream stop forwarded to {pi_id}')
+
+@socketio.on('live_frame')
+@socketio_error_handler
+def handle_live_frame(data):
+    """
+    Pi sends live frame data
+    Relay to all dashboard sessions viewing this Pi
+    """
+    pi_id = data.get('pi_id')
+    frame_number = data.get('frame_number', 0)
+    
+    # Log every 30th frame to avoid spam
+    if frame_number % 30 == 0:
+        frame_size = len(data.get('frame', ''))
+        logging.debug(f'📺 Frame #{frame_number} from {pi_id} ({frame_size} bytes)')
+    
+    # Emit to ALL clients (including sender) instead of broadcast=True
+    # broadcast=True excludes the sender, but we want dashboards to receive it
+    socketio.emit('live_frame', data, namespace='/')
+
+@socketio.on('screenshot_data')
+@socketio_error_handler
+def handle_screenshot_data(data):
+    """
+    Pi sends screenshot data back (legacy/fallback)
+    Relay to all dashboard sessions (they filter by pi_id)
+    """
+    pi_id = data.get('pi_id')
+    has_screenshot = 'screenshot' in data
+    has_error = 'error' in data
+    
+    if has_screenshot:
+        # Calculate approximate size for logging
+        screenshot_size = len(data['screenshot']) if data['screenshot'] else 0
+        logging.info(f'📸 Screenshot received from {pi_id} ({screenshot_size} bytes)')
+    elif has_error:
+        logging.warning(f'❌ Screenshot error from {pi_id}: {data["error"]}')
+    
+    # Broadcast to all dashboard sessions
+    socketio.emit('screenshot_data', data, broadcast=True)
+
+# VNC-over-WebSocket proxy handlers
+@socketio.on('vnc_connect')
+@socketio_error_handler
+def handle_vnc_connect(data):
+    """
+    Dashboard requests to connect to Pi's VNC via WebSocket tunnel
+    """
+    pi_id = data.get('pi_id')
+    dashboard_sid = request.sid
+    
+    logging.info(f'🖥️ VNC connect request from dashboard {dashboard_sid} to Pi: {pi_id}')
+    
+    if pi_id and pi_id in connected_pis:
+        pi_session = connected_pis[pi_id]['sid']
+        # Forward connect request to Pi, include dashboard sid for routing back
+        socketio.emit('vnc_connect', {
+            'pi_id': pi_id,
+            'dashboard_sid': dashboard_sid
+        }, room=pi_session)
+        logging.info(f'🖥️ VNC connect forwarded to {pi_id}')
+    else:
+        # Pi not connected
+        emit('vnc_error', {'message': f'Pi {pi_id} not connected'})
+
+@socketio.on('vnc_data')
+@socketio_error_handler
+def handle_vnc_data(data):
+    """
+    Relay VNC data between dashboard and Pi
+    Data can flow both ways: dashboard->Pi or Pi->dashboard
+    """
+    target_sid = data.get('target_sid')
+    pi_id = data.get('pi_id')
+    
+    if target_sid:
+        # Forward VNC data to specific session (could be dashboard or Pi)
+        socketio.emit('vnc_data', data, room=target_sid)
+    elif pi_id and pi_id in connected_pis:
+        # If no target_sid but has pi_id, send to Pi
+        pi_session = connected_pis[pi_id]['sid']
+        socketio.emit('vnc_data', data, room=pi_session)
+
+@socketio.on('vnc_disconnect')
+@socketio_error_handler
+def handle_vnc_disconnect(data):
+    """
+    Dashboard or Pi disconnects VNC session
+    """
+    pi_id = data.get('pi_id')
+    dashboard_sid = data.get('dashboard_sid')
+    
+    logging.info(f'🖥️ VNC disconnect request for Pi: {pi_id}')
+    
+    if pi_id and pi_id in connected_pis:
+        pi_session = connected_pis[pi_id]['sid']
+        socketio.emit('vnc_disconnect', {
+            'pi_id': pi_id,
+            'dashboard_sid': dashboard_sid
+        }, room=pi_session)
+        logging.info(f'🖥️ VNC disconnect forwarded to {pi_id}')
+
+@socketio.on('restart_client')
+@socketio_error_handler
+def handle_restart_client(data):
+    """
+    Dashboard requests to restart the complete_pi_client software on Pi
+    Forward request to Pi
+    """
+    pi_id = data.get('pi_id')
+    logging.info(f'🔄 Client restart request for Pi: {pi_id}')
+    
+    if pi_id and pi_id in connected_pis:
+        pi_session = connected_pis[pi_id]['sid']
+        # Emit to the specific Pi's session
+        socketio.emit('restart_client', data, room=pi_session)
+        logging.info(f'🔄 Client restart command forwarded to {pi_id}')
+    else:
+        # Pi not connected, send error back
+        emit('client_restart_error', {
+            'pi_id': pi_id,
+            'error': 'Pi not connected',
+            'timestamp': time.time()
+        })
+        logging.warning(f'❌ Client restart failed - Pi {pi_id} not connected')
+
+@socketio.on('client_restarting')
+@socketio_error_handler
+def handle_client_restarting(data):
+    """
+    Pi confirms it's restarting the client
+    Relay to dashboard
+    """
+    pi_id = data.get('pi_id')
+    status = data.get('status')
+    logging.info(f'🔄 Client restart status from {pi_id}: {status}')
+    
+    # Broadcast to all dashboard sessions
+    socketio.emit('client_restarting', data, broadcast=True)
 
 # Update the pi_status endpoint to check WebSocket connections
 @app.route('/api/pi-status-ws/<pi_id>')
@@ -9744,15 +10738,17 @@ def configure_pi_websocket():
             
             pi_sid = connected_pis[pi_id]['sid']
         
-        # Send configuration to Pi via WebSocket
+        # Send configuration to Pi via WebSocket - BROADCAST with PI_ID so client can filter
+        logging.info(f'📡 Broadcasting configuration to all clients (target: {pi_id}, sid: {pi_sid}): store={store_id}, screen={screen_id}')
         socketio.emit('configure', {
+            'target_pi_id': pi_id,  # Add target so Pi can filter
             'pair_code': pair_code,
             'store_id': store_id,
             'screen_id': screen_id,
             'auto_start': auto_start
-        }, room=pi_sid)
+        })
         
-        logging.info(f'📡 Configuration sent to {pi_id} via WebSocket: store={store_id}, screen={screen_id}')
+        logging.info(f'✅ Configuration broadcast sent (target PI: {pi_id})')
         
         return jsonify({
             'success': True,
@@ -9763,6 +10759,90 @@ def configure_pi_websocket():
     except Exception as e:
         logging.error(f'WebSocket configuration error: {e}')
         return jsonify({'success': False, 'message': f'Configuration failed: {e}'}), 500
+
+@app.route('/api/pi-close-screen', methods=['POST'])
+def pi_close_screen():
+    """Send close screen command to Pi via WebSocket"""
+    try:
+        data = request.get_json()
+        pi_id = data.get('pi_id', '').strip()
+        
+        if not pi_id:
+            return jsonify({'success': False, 'message': 'Pi ID required'}), 400
+        
+        logging.info(f'[v2.0] Close screen request for Pi: {pi_id}')
+        
+        # Check if Pi is connected
+        with pi_connection_lock:
+            if pi_id not in connected_pis:
+                logging.warning(f'[v2.0] Pi {pi_id} not connected')
+                return jsonify({
+                    'success': False,
+                    'message': f'Pi {pi_id} is not currently connected'
+                }), 404
+            
+            pi_sid = connected_pis[pi_id]['sid']
+        
+        # Send close_screen event to Pi
+        logging.info(f'[v2.0] Sending close_screen event to Pi {pi_id} (sid: {pi_sid})')
+        socketio.emit('close_screen', {
+            'timestamp': time.time()
+        }, room=pi_sid)
+        
+        logging.info(f'[v2.0] Close screen command sent to Pi {pi_id}')
+        
+        return jsonify({
+            'success': True,
+            'message': f'Close screen command sent to Pi {pi_id}'
+        }), 200
+        
+    except Exception as e:
+        logging.error(f'Close screen error: {e}')
+        return jsonify({'success': False, 'message': f'Close screen failed: {e}'}), 500
+
+@app.route('/api/pi-restart', methods=['POST'])
+def pi_restart():
+    """Send restart command to Pi via WebSocket"""
+    try:
+        data = request.get_json()
+        pi_id = data.get('pi_id', '').strip()
+        
+        if not pi_id:
+            return jsonify({'success': False, 'message': 'Pi ID required'}), 400
+        
+        logging.info(f'[v2.0] Restart request for Pi: {pi_id}')
+        
+        # Check if Pi is connected
+        with pi_connection_lock:
+            if pi_id not in connected_pis:
+                logging.warning(f'[v2.0] Pi {pi_id} not connected')
+                return jsonify({
+                    'success': False,
+                    'message': f'Pi {pi_id} is not currently connected'
+                }), 404
+            
+            pi_sid = connected_pis[pi_id]['sid']
+        
+        # Send restart_pi event to Pi
+        logging.info(f'[v2.0] Sending restart_pi event to Pi {pi_id} (sid: {pi_sid})')
+        logging.info(f'[v2.0] Event data: timestamp={time.time()}')
+        logging.info(f'[v2.0] Emitting to room: {pi_sid}')
+        
+        socketio.emit('restart_pi', {
+            'pi_id': pi_id,
+            'timestamp': time.time()
+        }, room=pi_sid)
+        
+        logging.info(f'[v2.0] Restart command sent to Pi {pi_id}')
+        
+        return jsonify({
+            'success': True,
+            'message': f'Restart command sent to Pi {pi_id}'
+        }), 200
+        
+    except Exception as e:
+        logging.error(f'Restart Pi error: {e}')
+        return jsonify({'success': False, 'message': f'Restart failed: {e}'}), 500
 
 # List all connected Pis (useful for admin dashboard)
 @app.route('/api/connected-pis')
@@ -9787,6 +10867,274 @@ def list_connected_pis():
     except Exception as e:
         logging.error(f'Error listing connected Pis: {e}')
         return jsonify({'success': False, 'message': str(e)}), 500
+
+# VNC WebSocket Proxy (solves HTTPS mixed content issue)
+@app.route('/api/vnc-proxy/<pi_id>')
+def vnc_proxy_info(pi_id):
+    """Get VNC proxy information for a Pi"""
+    try:
+        with pi_connection_lock:
+            if pi_id not in connected_pis:
+                return jsonify({
+                    'success': False,
+                    'message': 'Pi not connected'
+                }), 404
+            
+            pi_info = connected_pis[pi_id]
+            pi_ip = pi_info['ip']
+            
+            # Return info about how to connect via noVNC
+            # Client will use: https://your-domain/vnc/<pi_id>
+            return jsonify({
+                'success': True,
+                'pi_id': pi_id,
+                'pi_ip': pi_ip,
+                'vnc_url': f'/vnc/{pi_id}',  # Relative URL for iframe
+                'websocket_port': 6080,
+                'vnc_port': 5900
+            })
+    except Exception as e:
+        logging.error(f'VNC proxy info error: {e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+# Serve VNC viewer page via HTTPS (WebSocket tunnel)
+@app.route('/vnc/<pi_id>')
+def vnc_viewer(pi_id):
+    """
+    Serve VNC viewer page for specific Pi
+    Uses WebSocket tunnel to avoid mixed content and NAT issues
+    """
+    try:
+        with pi_connection_lock:
+            if pi_id not in connected_pis:
+                return "Pi not connected", 404
+        
+        # Render our custom VNC viewer that uses WebSocket proxy
+        return render_template('vnc_viewer.html', pi_id=pi_id)
+    
+    except Exception as e:
+        logging.error(f'VNC viewer error: {e}')
+        return f"Error loading VNC viewer: {str(e)}", 500
+    except Exception as e:
+        logging.error(f'VNC viewer error: {e}')
+        return f"Error loading VNC viewer: {e}", 500
+
+# ============================================================================
+# Pi Device Manager API Endpoints
+# ============================================================================
+
+@app.route('/api/add-pi-device', methods=['POST'])
+@login_required
+def add_pi_device():
+    """Add a new Pi device to the system"""
+    try:
+        data = request.get_json()
+        pi_id = data.get('pi_id', '').strip()
+        ip_address = data.get('ip_address', '').strip()
+        store_id = data.get('store_id', '').strip()
+        screen_id = data.get('screen_id', '').strip()
+        
+        if not all([pi_id, ip_address, store_id, screen_id]):
+            return jsonify({
+                'success': False,
+                'message': 'All fields are required'
+            }), 400
+        
+        # Load user-specific config
+        ukey = _safe_user_key()
+        config = load_store_config_for_user_safe_key(ukey) if ukey else load_store_config()
+        
+        # Update pi_id_ip_map.json
+        import json
+        map_path = 'pi_id_ip_map.json'
+        try:
+            with open(map_path, 'r') as f:
+                pi_map = json.load(f)
+        except FileNotFoundError:
+            pi_map = {}
+        
+        pi_map[pi_id] = ip_address
+        
+        with open(map_path, 'w') as f:
+            json.dump(pi_map, f, indent=2)
+        
+        # Update screen configuration with Pi ID
+        if store_id not in config.get('screens', {}):
+            config['screens'][store_id] = {}
+        
+        if screen_id in config['screens'][store_id]:
+            config['screens'][store_id][screen_id]['pi_id'] = pi_id
+            save_store_config_for_user_safe_key(config, ukey)
+            
+            logging.info(f'Added Pi device: {pi_id} -> {ip_address} for {store_id}/{screen_id}')
+            
+            return jsonify({
+                'success': True,
+                'message': f'Pi device {pi_id} added successfully'
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'message': f'Screen {screen_id} not found in store {store_id}'
+            }), 400
+        
+    except Exception as e:
+        logging.error(f'Error adding Pi device: {e}')
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }), 500
+
+@app.route('/api/restart-pi/<pi_id>', methods=['POST'])
+@login_required
+def restart_pi(pi_id):
+    """Send restart command to Pi device"""
+    try:
+        logging.info(f'Restart request for Pi: {pi_id}')
+        
+        # Check if Pi is connected via WebSocket
+        with pi_connection_lock:
+            if pi_id not in connected_pis:
+                return jsonify({
+                    'success': False,
+                    'message': f'Pi {pi_id} is not currently connected'
+                }), 404
+            
+            pi_sid = connected_pis[pi_id]['sid']
+        
+        # Send restart command via WebSocket
+        socketio.emit('restart_pi', {
+            'pi_id': pi_id,
+            'timestamp': time.time()
+        }, room=pi_sid)
+        
+        logging.info(f'Restart command sent to Pi {pi_id}')
+        
+        return jsonify({
+            'success': True,
+            'message': f'Restart command sent to Pi {pi_id}'
+        }), 200
+        
+    except Exception as e:
+        logging.error(f'Error restarting Pi: {e}')
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }), 500
+
+@app.route('/api/update-pi-location', methods=['POST'])
+@login_required
+def update_pi_location():
+    """Update custom location name and coordinates for a Pi device"""
+    try:
+        data = request.get_json()
+        pi_id = data.get('pi_id', '').strip()
+        location_name = data.get('location_name', '').strip()
+        latitude = data.get('latitude')
+        longitude = data.get('longitude')
+        address = data.get('address', '').strip()
+        
+        if not pi_id:
+            return jsonify({
+                'success': False,
+                'message': 'Pi ID is required'
+            }), 400
+        
+        # Load user-specific config
+        ukey = _safe_user_key()
+        config = load_store_config_for_user_safe_key(ukey) if ukey else load_store_config()
+        
+        # Find the screen with this pi_id
+        found = False
+        for store in config.get('stores', []):
+            store_id = store.get('id')
+            for screen_id, screen_data in config.get('screens', {}).get(store_id, {}).items():
+                if screen_data.get('pi_id') == pi_id:
+                    # Update location data
+                    config['screens'][store_id][screen_id]['location_name'] = location_name
+                    if latitude is not None and longitude is not None:
+                        config['screens'][store_id][screen_id]['latitude'] = latitude
+                        config['screens'][store_id][screen_id]['longitude'] = longitude
+                    if address:
+                        config['screens'][store_id][screen_id]['address'] = address
+                    found = True
+                    break
+            if found:
+                break
+        
+        if not found:
+            return jsonify({
+                'success': False,
+                'message': f'Pi {pi_id} not found in any screen configuration'
+            }), 404
+        
+        # Save config (correct parameter order: safe_key first, then config)
+        if ukey:
+            save_store_config_for_user_safe_key(ukey, config)
+        else:
+            save_store_config(config)
+        
+        logging.info(f'Updated location for Pi {pi_id}: {location_name} ({latitude}, {longitude})')
+        
+        return jsonify({
+            'success': True,
+            'message': 'Location updated successfully',
+            'location_name': location_name,
+            'latitude': latitude,
+            'longitude': longitude,
+            'address': address
+        }), 200
+        
+    except Exception as e:
+        logging.error(f'Error updating Pi location: {e}')
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }), 500
+
+@app.route('/api/get-pi-location', methods=['GET'])
+@login_required
+def get_pi_location():
+    """Get location data for a specific Pi device"""
+    try:
+        pi_id = request.args.get('pi_id', '').strip()
+        
+        if not pi_id:
+            return jsonify({
+                'success': False,
+                'message': 'Pi ID is required'
+            }), 400
+        
+        # Load user-specific config
+        ukey = _safe_user_key()
+        config = load_store_config_for_user_safe_key(ukey) if ukey else load_store_config()
+        
+        # Find the screen with this pi_id
+        for store in config.get('stores', []):
+            store_id = store.get('id')
+            for screen_id, screen_data in config.get('screens', {}).get(store_id, {}).items():
+                if screen_data.get('pi_id') == pi_id:
+                    return jsonify({
+                        'success': True,
+                        'location_name': screen_data.get('location_name', ''),
+                        'latitude': screen_data.get('latitude'),
+                        'longitude': screen_data.get('longitude'),
+                        'address': screen_data.get('address', ''),
+                        'label': screen_data.get('location_name', '')
+                    }), 200
+        
+        # Pi not found
+        return jsonify({
+            'success': False,
+            'message': f'Pi {pi_id} not found'
+        }), 404
+        
+    except Exception as e:
+        logging.error(f'Error getting Pi location: {e}')
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5002))  # Use 5002 since 5000 seems blocked

@@ -1,0 +1,916 @@
+{
+  "stores": [
+    {
+      "id": "1000",
+      "name": "My First Store"
+    }
+  ],
+  "master_store_id": "1000",
+  "screens": {
+    "1000": {
+      "1000_screen1": {
+        "file": "users/test9_at_gmail.com/2025-09/329c4379-e4d6-4939-8209-991962c0e1e3.png",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "id": "03ccce7e-3bff-44da-8921-db1adf4987f2",
+            "file": "users/test9_at_gmail.com/2025-09/4f25125d-d46f-4ba8-9bff-968d5dbefa94.mp4",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "video",
+            "sync_ref": {
+              "group": "4e06dfa9-1710-4dc2-9232-a5d89b634246",
+              "role": "master",
+              "order": 0
+            }
+          },
+          {
+            "id": "951ad662-304f-4c72-acfb-b6fede134ced",
+            "file": "users/test9_at_gmail.com/2025-09/329c4379-e4d6-4939-8209-991962c0e1e3.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image"
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "events": [
+          {
+            "ts": 1758276463,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758276468,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758276473,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758276478,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758276479,
+            "event": "load_fail",
+            "file": "users/test9_at_gmail.com/2025-09/4f25125d-d46f-4ba8-9bff-968d5dbefa94.mp4",
+            "item_id": "03ccce7e-3bff-44da-8921-db1adf4987f2",
+            "error": "MediaCodecVideoRenderer error, index=0, format=Format(1, null, null, video/avc, avc1.640033, -1, null, [5760, 1080, 29.999653, ColorInfo(BT709, Limited range, SDR SMPTE 170M, false)], [-1, -1]), format_supported=YES"
+          },
+          {
+            "ts": 1758276479,
+            "event": "load_fail",
+            "file": "users/test9_at_gmail.com/2025-09/4f25125d-d46f-4ba8-9bff-968d5dbefa94.mp4",
+            "item_id": "03ccce7e-3bff-44da-8921-db1adf4987f2",
+            "error": "image fetch failed"
+          },
+          {
+            "ts": 1758276483,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758276487,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-09/329c4379-e4d6-4939-8209-991962c0e1e3.png",
+            "item_id": "951ad662-304f-4c72-acfb-b6fede134ced",
+            "error": null
+          },
+          {
+            "ts": 1758276488,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758276493,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758276498,
+            "event": "load_fail",
+            "file": "users/test9_at_gmail.com/2025-09/4f25125d-d46f-4ba8-9bff-968d5dbefa94.mp4",
+            "item_id": "03ccce7e-3bff-44da-8921-db1adf4987f2",
+            "error": "MediaCodecVideoRenderer error, index=0, format=Format(1, null, null, video/avc, avc1.640033, -1, null, [5760, 1080, 29.999653, ColorInfo(BT709, Limited range, SDR SMPTE 170M, false)], [-1, -1]), format_supported=YES"
+          },
+          {
+            "ts": 1758276498,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758276498,
+            "event": "load_fail",
+            "file": "users/test9_at_gmail.com/2025-09/4f25125d-d46f-4ba8-9bff-968d5dbefa94.mp4",
+            "item_id": "03ccce7e-3bff-44da-8921-db1adf4987f2",
+            "error": "image fetch failed"
+          },
+          {
+            "ts": 1758276503,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758276508,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-09/329c4379-e4d6-4939-8209-991962c0e1e3.png",
+            "item_id": "951ad662-304f-4c72-acfb-b6fede134ced",
+            "error": null
+          },
+          {
+            "ts": 1758276513,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758276519,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758276519,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-09/329c4379-e4d6-4939-8209-991962c0e1e3.png",
+            "item_id": "951ad662-304f-4c72-acfb-b6fede134ced",
+            "error": null
+          },
+          {
+            "ts": 1758276524,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758276529,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758276529,
+            "event": "load_fail",
+            "file": "users/test9_at_gmail.com/2025-09/329c4379-e4d6-4939-8209-991962c0e1e3.png",
+            "item_id": "951ad662-304f-4c72-acfb-b6fede134ced",
+            "error": "image fetch failed"
+          },
+          {
+            "ts": 1758276534,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758276539,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758276540,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-09/329c4379-e4d6-4939-8209-991962c0e1e3.png",
+            "item_id": "951ad662-304f-4c72-acfb-b6fede134ced",
+            "error": null
+          },
+          {
+            "ts": 1758276544,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758276549,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758276552,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-09/329c4379-e4d6-4939-8209-991962c0e1e3.png",
+            "item_id": "951ad662-304f-4c72-acfb-b6fede134ced",
+            "error": null
+          },
+          {
+            "ts": 1758276554,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758276560,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758276564,
+            "event": "load_fail",
+            "file": "users/test9_at_gmail.com/2025-09/329c4379-e4d6-4939-8209-991962c0e1e3.png",
+            "item_id": "951ad662-304f-4c72-acfb-b6fede134ced",
+            "error": "image fetch failed"
+          },
+          {
+            "ts": 1758276565,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758276570,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758276575,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758276575,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-09/329c4379-e4d6-4939-8209-991962c0e1e3.png",
+            "item_id": "951ad662-304f-4c72-acfb-b6fede134ced",
+            "error": null
+          },
+          {
+            "ts": 1758276580,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758276590,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758276595,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758276600,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277155,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277156,
+            "event": "load_fail",
+            "file": "users/test9_at_gmail.com/2025-09/4f25125d-d46f-4ba8-9bff-968d5dbefa94.mp4",
+            "item_id": "03ccce7e-3bff-44da-8921-db1adf4987f2",
+            "error": "MediaCodecVideoRenderer error, index=0, format=Format(1, null, null, video/avc, avc1.640033, -1, null, [5760, 1080, 29.999653, ColorInfo(BT709, Limited range, SDR SMPTE 170M, false)], [-1, -1]), format_supported=YES"
+          },
+          {
+            "ts": 1758277156,
+            "event": "load_fail",
+            "file": "users/test9_at_gmail.com/2025-09/4f25125d-d46f-4ba8-9bff-968d5dbefa94.mp4",
+            "item_id": "03ccce7e-3bff-44da-8921-db1adf4987f2",
+            "error": "image fetch failed"
+          },
+          {
+            "ts": 1758277160,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277160,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-09/329c4379-e4d6-4939-8209-991962c0e1e3.png",
+            "item_id": "951ad662-304f-4c72-acfb-b6fede134ced",
+            "error": null
+          },
+          {
+            "ts": 1758277165,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277170,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277171,
+            "event": "load_fail",
+            "file": "users/test9_at_gmail.com/2025-09/4f25125d-d46f-4ba8-9bff-968d5dbefa94.mp4",
+            "item_id": "03ccce7e-3bff-44da-8921-db1adf4987f2",
+            "error": "MediaCodecVideoRenderer error, index=0, format=Format(1, null, null, video/avc, avc1.640033, -1, null, [5760, 1080, 29.999653, ColorInfo(BT709, Limited range, SDR SMPTE 170M, false)], [-1, -1]), format_supported=YES"
+          },
+          {
+            "ts": 1758277171,
+            "event": "load_fail",
+            "file": "users/test9_at_gmail.com/2025-09/4f25125d-d46f-4ba8-9bff-968d5dbefa94.mp4",
+            "item_id": "03ccce7e-3bff-44da-8921-db1adf4987f2",
+            "error": "image fetch failed"
+          },
+          {
+            "ts": 1758277175,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-09/329c4379-e4d6-4939-8209-991962c0e1e3.png",
+            "item_id": "951ad662-304f-4c72-acfb-b6fede134ced",
+            "error": null
+          },
+          {
+            "ts": 1758277175,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277180,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277185,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277185,
+            "event": "load_fail",
+            "file": "users/test9_at_gmail.com/2025-09/4f25125d-d46f-4ba8-9bff-968d5dbefa94.mp4",
+            "item_id": "03ccce7e-3bff-44da-8921-db1adf4987f2",
+            "error": "MediaCodecVideoRenderer error, index=0, format=Format(1, null, null, video/avc, avc1.640033, -1, null, [5760, 1080, 29.999653, ColorInfo(BT709, Limited range, SDR SMPTE 170M, false)], [-1, -1]), format_supported=YES"
+          },
+          {
+            "ts": 1758277186,
+            "event": "load_fail",
+            "file": "users/test9_at_gmail.com/2025-09/4f25125d-d46f-4ba8-9bff-968d5dbefa94.mp4",
+            "item_id": "03ccce7e-3bff-44da-8921-db1adf4987f2",
+            "error": "image fetch failed"
+          },
+          {
+            "ts": 1758277190,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277195,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277195,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-09/329c4379-e4d6-4939-8209-991962c0e1e3.png",
+            "item_id": "951ad662-304f-4c72-acfb-b6fede134ced",
+            "error": null
+          },
+          {
+            "ts": 1758277200,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277205,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277206,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-09/329c4379-e4d6-4939-8209-991962c0e1e3.png",
+            "item_id": "951ad662-304f-4c72-acfb-b6fede134ced",
+            "error": null
+          },
+          {
+            "ts": 1758277210,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277215,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277216,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-09/329c4379-e4d6-4939-8209-991962c0e1e3.png",
+            "item_id": "951ad662-304f-4c72-acfb-b6fede134ced",
+            "error": null
+          },
+          {
+            "ts": 1758277220,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277225,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277227,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-09/329c4379-e4d6-4939-8209-991962c0e1e3.png",
+            "item_id": "951ad662-304f-4c72-acfb-b6fede134ced",
+            "error": null
+          },
+          {
+            "ts": 1758277230,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277236,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277238,
+            "event": "load_fail",
+            "file": "users/test9_at_gmail.com/2025-09/329c4379-e4d6-4939-8209-991962c0e1e3.png",
+            "item_id": "951ad662-304f-4c72-acfb-b6fede134ced",
+            "error": "image fetch failed"
+          },
+          {
+            "ts": 1758277241,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277246,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277248,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-09/329c4379-e4d6-4939-8209-991962c0e1e3.png",
+            "item_id": "951ad662-304f-4c72-acfb-b6fede134ced",
+            "error": null
+          },
+          {
+            "ts": 1758277251,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277256,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277259,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-09/329c4379-e4d6-4939-8209-991962c0e1e3.png",
+            "item_id": "951ad662-304f-4c72-acfb-b6fede134ced",
+            "error": null
+          },
+          {
+            "ts": 1758277261,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277266,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277269,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-09/329c4379-e4d6-4939-8209-991962c0e1e3.png",
+            "item_id": "951ad662-304f-4c72-acfb-b6fede134ced",
+            "error": null
+          },
+          {
+            "ts": 1758277271,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277276,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277280,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-09/329c4379-e4d6-4939-8209-991962c0e1e3.png",
+            "item_id": "951ad662-304f-4c72-acfb-b6fede134ced",
+            "error": null
+          },
+          {
+            "ts": 1758277281,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277286,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277290,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-09/329c4379-e4d6-4939-8209-991962c0e1e3.png",
+            "item_id": "951ad662-304f-4c72-acfb-b6fede134ced",
+            "error": null
+          },
+          {
+            "ts": 1758277291,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277296,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277300,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-09/329c4379-e4d6-4939-8209-991962c0e1e3.png",
+            "item_id": "951ad662-304f-4c72-acfb-b6fede134ced",
+            "error": null
+          },
+          {
+            "ts": 1758277301,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277307,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277312,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277312,
+            "event": "load_fail",
+            "file": "users/test9_at_gmail.com/2025-09/4f25125d-d46f-4ba8-9bff-968d5dbefa94.mp4",
+            "item_id": "03ccce7e-3bff-44da-8921-db1adf4987f2",
+            "error": "MediaCodecVideoRenderer error, index=0, format=Format(1, null, null, video/avc, avc1.640033, -1, null, [5760, 1080, 29.999653, ColorInfo(BT709, Limited range, SDR SMPTE 170M, false)], [-1, -1]), format_supported=YES"
+          },
+          {
+            "ts": 1758277313,
+            "event": "load_fail",
+            "file": "users/test9_at_gmail.com/2025-09/4f25125d-d46f-4ba8-9bff-968d5dbefa94.mp4",
+            "item_id": "03ccce7e-3bff-44da-8921-db1adf4987f2",
+            "error": "image fetch failed"
+          },
+          {
+            "ts": 1758277315,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-09/329c4379-e4d6-4939-8209-991962c0e1e3.png",
+            "item_id": "951ad662-304f-4c72-acfb-b6fede134ced",
+            "error": null
+          },
+          {
+            "ts": 1758277317,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277322,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277326,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-09/329c4379-e4d6-4939-8209-991962c0e1e3.png",
+            "item_id": "951ad662-304f-4c72-acfb-b6fede134ced",
+            "error": null
+          },
+          {
+            "ts": 1758277327,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277332,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277337,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-09/329c4379-e4d6-4939-8209-991962c0e1e3.png",
+            "item_id": "951ad662-304f-4c72-acfb-b6fede134ced",
+            "error": null
+          },
+          {
+            "ts": 1758277337,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758277342,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          }
+        ],
+        "last_seen": 1758277335,
+        "cmd_queue": [
+          {
+            "id": "bf670ac8-2540-477a-ae0c-6381e103ffee",
+            "ts": 1758275929,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ],
+        "last_item_status": {
+          "id:951ad662-304f-4c72-acfb-b6fede134ced": {
+            "state": "ok",
+            "ts": 1758277337,
+            "error": null,
+            "file": "users/test9_at_gmail.com/2025-09/329c4379-e4d6-4939-8209-991962c0e1e3.png",
+            "item_id": "951ad662-304f-4c72-acfb-b6fede134ced"
+          },
+          "id:8ecf396d-bf09-4246-b94d-24541db51cfc": {
+            "state": "fail",
+            "ts": 1758275989,
+            "error": "image fetch failed",
+            "file": "users/test9_at_gmail.com/2025-09/d79281bb-9498-4f90-b7f9-5f259b74ea11.mp4",
+            "item_id": "8ecf396d-bf09-4246-b94d-24541db51cfc"
+          },
+          "id:03ccce7e-3bff-44da-8921-db1adf4987f2": {
+            "state": "fail",
+            "ts": 1758277313,
+            "error": "image fetch failed",
+            "file": "users/test9_at_gmail.com/2025-09/4f25125d-d46f-4ba8-9bff-968d5dbefa94.mp4",
+            "item_id": "03ccce7e-3bff-44da-8921-db1adf4987f2"
+          }
+        }
+      },
+      "1000_screen2": {
+        "file": "users/test9_at_gmail.com/2025-09/4f25125d-d46f-4ba8-9bff-968d5dbefa94.mp4",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "id": "2f30bf27-3766-47bb-b42d-daf0b77ce4e1",
+            "file": "users/test9_at_gmail.com/2025-09/4f25125d-d46f-4ba8-9bff-968d5dbefa94.mp4",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "video",
+            "sync_ref": {
+              "group": "4e06dfa9-1710-4dc2-9232-a5d89b634246",
+              "role": "follower",
+              "order": 1
+            }
+          }
+        ],
+        "cmd_queue": [
+          {
+            "id": "4b6947c7-91aa-4240-86f6-1c4d82733d44",
+            "ts": 1758275929,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "last_seen": 1758276288,
+        "events": [
+          {
+            "ts": 1758276288,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          },
+          {
+            "ts": 1758276294,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
+          }
+        ]
+      },
+      "1000_screen3": {
+        "file": "users/test9_at_gmail.com/2025-09/4f25125d-d46f-4ba8-9bff-968d5dbefa94.mp4",
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [
+          {
+            "id": "9e5709fd-fd04-418e-9606-faa3ffd3ee1c",
+            "file": "users/test9_at_gmail.com/2025-09/4f25125d-d46f-4ba8-9bff-968d5dbefa94.mp4",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "video",
+            "sync_ref": {
+              "group": "4e06dfa9-1710-4dc2-9232-a5d89b634246",
+              "role": "follower",
+              "order": 2
+            }
+          }
+        ],
+        "cmd_queue": [
+          {
+            "id": "69732f40-c2be-4cb0-9985-a28912ca2e82",
+            "ts": 1758275931,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      }
+    }
+  },
+  "sync_groups": {
+    "4e06dfa9-1710-4dc2-9232-a5d89b634246": {
+      "store_id": "1000",
+      "base": "1000_screen1",
+      "count": 3,
+      "filename": "users/test9_at_gmail.com/2025-09/4f25125d-d46f-4ba8-9bff-968d5dbefa94.mp4",
+      "members": [
+        {
+          "screen_id": "1000_screen1",
+          "item_id": "03ccce7e-3bff-44da-8921-db1adf4987f2",
+          "role": "master",
+          "order": 0
+        },
+        {
+          "screen_id": "1000_screen2",
+          "item_id": "2f30bf27-3766-47bb-b42d-daf0b77ce4e1",
+          "role": "follower",
+          "order": 1
+        },
+        {
+          "screen_id": "1000_screen3",
+          "item_id": "9e5709fd-fd04-418e-9606-faa3ffd3ee1c",
+          "role": "follower",
+          "order": 2
+        }
+      ],
+      "created_at": 1758275929,
+      "start_epoch": 1758275935,
+      "mode": "split-h"
+    }
+  }
+}

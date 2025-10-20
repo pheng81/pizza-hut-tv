@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>VNC Remote Desktop</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            background: #000; 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            overflow: hidden;
+        }
+        #status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 6px;
+            font-size: 12px;
+            z-index: 1000;
+        }
+        #screen {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #1a1a1a;
+        }
+        #canvas {
+            border: 1px solid #333;
+            background: #000;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+        }
+        #error {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            text-align: center;
+            max-width: 500px;
+        }
+        #error h2 { color: #d32f2f; margin-bottom: 10px; }
+        #error p { color: #666; line-height: 1.6; }
+    </style>
+</head>
+<body>
+    <div id="status">Connecting...</div>
+    <div id="screen">
+        <canvas id="canvas"></canvas>
+    </div>
+    <div id="error">
+        <h2>Connection Failed</h2>
+        <p id="errorMsg"></p>
+    </div>
+
+    <!-- Load Socket.IO from CDN with local fallback -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js" 
+            integrity="sha384-/KNQL8Nu5gCHLqwqfQjA689Hhoqgi2S84SNUxC3roTe4EhJ9AfLkp8QiQcU8AMzI" 
+            crossorigin="anonymous"
+            onerror="this.onerror=null; this.src='/socket.io/socket.io.js'"></script>
+    <script>
+        // Define error handler first
+        function showError(msg) {
+            document.getElementById('errorMsg').textContent = msg;
+            document.getElementById('error').style.display = 'block';
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = '❌ Error';
+            statusEl.style.background = 'rgba(211, 47, 47, 0.9)';
+        }
+        
+        // Wait for Socket.IO to load
+        if (typeof io === 'undefined') {
+            console.error('Socket.IO failed to load');
+            showError('Failed to load Socket.IO library. Please refresh the page.');
+        }
+        
+        // Get Pi ID from Flask template variable (passed from URL path)
+        const piId = '{{ pi_id }}';
+        
+        if (!piId || piId === '') {
+            showError('No Pi ID specified');
+        }
+
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const statusEl = document.getElementById('status');
+
+        // Connect to server WebSocket
+        const socket = io({
+            transports: ['polling', 'websocket'],
+            upgrade: true
+        });
+
+        let vncConnected = false;
+
+        socket.on('connect', () => {
+            console.log('✅ Connected to server');
+            statusEl.textContent = 'Connecting to Pi...';
+            statusEl.style.background = 'rgba(255, 152, 0, 0.9)';
+            
+            // Request VNC connection to Pi
+            socket.emit('vnc_connect', { pi_id: piId });
+        });
+
+        socket.on('vnc_connected', (data) => {
+            console.log('🖥️ VNC connected to Pi:', data);
+            vncConnected = true;
+            statusEl.textContent = '✅ Connected';
+            statusEl.style.background = 'rgba(76, 175, 80, 0.9)';
+            
+            // Set canvas size to match Pi screen
+            if (data.width && data.height) {
+                canvas.width = data.width;
+                canvas.height = data.height;
+            } else {
+                canvas.width = 1920;
+                canvas.height = 1080;
+            }
+            
+            // Scale canvas to fit window
+            resizeCanvas();
+        });
+
+        // Function to resize canvas to fit window while maintaining aspect ratio
+        function resizeCanvas() {
+            const container = document.getElementById('screen');
+            const containerWidth = container.clientWidth;
+            const containerHeight = container.clientHeight;
+            const aspectRatio = canvas.width / canvas.height;
+            
+            let newWidth = containerWidth;
+            let newHeight = containerWidth / aspectRatio;
+            
+            if (newHeight > containerHeight) {
+                newHeight = containerHeight;
+                newWidth = containerHeight * aspectRatio;
+            }
+            
+            canvas.style.width = newWidth + 'px';
+            canvas.style.height = newHeight + 'px';
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (vncConnected) {
+                resizeCanvas();
+            }
+        });
+
+        socket.on('vnc_data', (data) => {
+            // Receive VNC frame data from Pi (via server proxy)
+            if (data.frame) {
+                const img = new Image();
+                img.onload = () => {
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                };
+                img.src = 'data:image/jpeg;base64,' + data.frame;
+            }
+        });
+
+        socket.on('vnc_error', (data) => {
+            console.error('❌ VNC error:', data);
+            showError(data.message || 'VNC connection failed');
+        });
+
+        socket.on('disconnect', () => {
+            console.log('❌ Disconnected from server');
+            statusEl.textContent = '❌ Disconnected';
+            statusEl.style.background = 'rgba(211, 47, 47, 0.9)';
+            vncConnected = false;
+        });
+
+        // Mouse and keyboard events
+        canvas.addEventListener('mousemove', (e) => {
+            if (!vncConnected) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = Math.floor((e.clientX - rect.left) * (canvas.width / rect.width));
+            const y = Math.floor((e.clientY - rect.top) * (canvas.height / rect.height));
+            
+            socket.emit('vnc_data', {
+                pi_id: piId,
+                type: 'mouse_move',
+                x: x,
+                y: y
+            });
+        });
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (!vncConnected) return;
+            socket.emit('vnc_data', {
+                pi_id: piId,
+                type: 'mouse_down',
+                button: e.button
+            });
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            if (!vncConnected) return;
+            socket.emit('vnc_data', {
+                pi_id: piId,
+                type: 'mouse_up',
+                button: e.button
+            });
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (!vncConnected) return;
+            e.preventDefault();
+            socket.emit('vnc_data', {
+                pi_id: piId,
+                type: 'key_down',
+                key: e.key,
+                code: e.code
+            });
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (!vncConnected) return;
+            e.preventDefault();
+            socket.emit('vnc_data', {
+                pi_id: piId,
+                type: 'key_up',
+                key: e.key,
+                code: e.code
+            });
+        });
+    </script>
+</body>
+</html>

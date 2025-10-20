@@ -17,7 +17,7 @@ import asyncio
 import socket
 import socketio
 import subprocess
-from datetime import datetime, timedelta, time as dtime
+from datetime import datetime
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, asdict
 from urllib.parse import urljoin, urlparse
@@ -562,14 +562,6 @@ class CompleteWebplayerClient:
         except Exception:
             self.MIN_ITEM_DURATION = 5.0
         
-        # Scheduling strategy: default to server-side filtering unless opt-in override
-        try:
-            self.use_local_schedule_filter = bool(
-                str(os.getenv('PHTV_LOCAL_SCHEDULE_FILTER', '')).strip().lower() in ('1', 'true', 'yes', 'on')
-            )
-        except Exception:
-            self.use_local_schedule_filter = False
-
         # Global effect synchronization
         self.current_global_effect = 'fade'
         # Transitions master toggle from server (dashboard button)
@@ -592,7 +584,6 @@ class CompleteWebplayerClient:
             str(env_enable).lower() in ('1', 'true', 'yes', 'on')
         )
         self._transitions_faulted = False  # Set to True if we detect a transition failure and auto-disable
-        self._stop_video_on_timer = False  # Track when we need to cut a video because a schedule window ended
         
         # Components
         self.time_sync = ServerTimeSync(self.server_url)
@@ -1808,9 +1799,7 @@ class CompleteWebplayerClient:
         """Fetch playlist from server like webplayer."""
         try:
             url = f"{self.server_url}/playlist/{self.store_id}/{self.screen_id}"
-            params = {}
-            if self.use_local_schedule_filter:
-                params['skip_schedule_filter'] = '1'
+            params = {'skip_schedule_filter': '1'}  # Get all items, filter client-side
             headers = {
                 'Cache-Control': 'no-store, no-cache, must-revalidate',
                 'Pragma': 'no-cache'
@@ -2062,86 +2051,6 @@ class CompleteWebplayerClient:
         # All checks passed!
         return True
     
-    def get_time_until_schedule_end(self, item: PlaylistItem) -> Optional[float]:
-        """Return seconds remaining in the active schedule window for this item, if any."""
-        try:
-            item_dict = asdict(item) if hasattr(item, '__dataclass_fields__') else dict(item or {})
-        except Exception:
-            item_dict = {}
-
-        if not item_dict:
-            return None
-
-        server_ms = self.time_sync.get_server_time()
-        current_dt = datetime.fromtimestamp(server_ms / 1000.0)
-        current_day = current_dt.isoweekday()
-        current_time = current_dt.time()
-        current_date = current_dt.date()
-
-        def _delta_from_window(start_raw: Optional[str], end_raw: Optional[str]) -> Optional[float]:
-            if not end_raw:
-                return None
-
-            try:
-                end_val = self.parse_datetime(end_raw)
-            except Exception:
-                return None
-
-            try:
-                start_val = self.parse_datetime(start_raw) if start_raw else None
-            except Exception:
-                start_val = None
-
-            target_dt = None
-            if isinstance(end_val, datetime):
-                target_dt = end_val
-            elif isinstance(end_val, dtime):
-                ref_date = current_date
-                start_time = None
-                if isinstance(start_val, datetime):
-                    start_time = start_val.time()
-                elif isinstance(start_val, dtime):
-                    start_time = start_val
-
-                if start_time and start_time > end_val:
-                    if current_time >= start_time:
-                        ref_date = current_date + timedelta(days=1)
-                elif not start_time and end_val <= current_time:
-                    ref_date = current_date + timedelta(days=1)
-
-                target_dt = datetime.combine(ref_date, end_val)
-
-            if not target_dt:
-                return None
-
-            delta = (target_dt - current_dt).total_seconds()
-            return max(delta, 0.0)
-
-        best_delta = None
-        schedules = item_dict.get('schedule') or []
-        if schedules:
-            for sched in schedules:
-                if not isinstance(sched, dict):
-                    continue
-                if not self.matches_schedule_window(sched, current_day, current_time, current_date):
-                    continue
-                delta = _delta_from_window(sched.get('start'), sched.get('end'))
-                if delta is None:
-                    continue
-                if best_delta is None or delta < best_delta:
-                    best_delta = delta
-            if best_delta is not None:
-                return best_delta
-
-        # Legacy start/end fields
-        legacy_start = item_dict.get('start')
-        legacy_end = item_dict.get('end')
-        if legacy_end:
-            # Legacy schedule assumes always active if item passed filtering, so just compute delta
-            return _delta_from_window(legacy_start, legacy_end)
-
-        return None
-
     def check_legacy_schedule(self, item_dict: Dict, current_time, current_date) -> bool:
         """Check legacy start/end fields (not in schedule array)"""
         
@@ -2563,23 +2472,6 @@ class CompleteWebplayerClient:
                 
             current_item = self.playlist[self.current_index]
             media_url = self.get_media_url(current_item)
-            self._stop_video_on_timer = False
-
-            is_video_item = False
-            try:
-                is_video_item = str(getattr(current_item, 'media_type', '')).lower() == 'video'
-            except Exception:
-                is_video_item = False
-
-            if not is_video_item and media_url:
-                try:
-                    parsed_path = urlparse(media_url)
-                    candidate_path = parsed_path.path or ''
-                except Exception:
-                    candidate_path = media_url
-                lower_candidate = (candidate_path or '').lower()
-                if lower_candidate.endswith(('.mp4', '.webm', '.mkv', '.avi', '.mov')):
-                    is_video_item = True
             
             # DEBUG: Log the raw item data to see what effect we got from server
             try:
@@ -2588,34 +2480,14 @@ class CompleteWebplayerClient:
                 logger.debug(f"Debug log failed: {e_dbg}")
             
             if media_url:
+                duration = current_item.duration or 10.0
+                # Clamp to minimum to avoid rapid switching on tiny durations
                 try:
-                    duration = float(getattr(current_item, 'duration', 10.0) or 10.0)
-                except Exception:
-                    duration = 10.0
-
-                schedule_remaining = self.get_time_until_schedule_end(current_item)
-                stop_video_early = is_video_item
-
-                if schedule_remaining is not None:
-                    if schedule_remaining < duration:
-                        logger.info(
-                            f"⏰ Schedule window ends in {schedule_remaining:.2f}s; overriding duration {duration:.2f}s"
-                        )
-                        duration = max(schedule_remaining, 0.1)
-                        if is_video_item:
-                            stop_video_early = True
-                try:
-                    if (schedule_remaining is None or schedule_remaining >= self.MIN_ITEM_DURATION) and duration < self.MIN_ITEM_DURATION:
+                    if duration < self.MIN_ITEM_DURATION:
                         logger.info(f"⏱️ Requested duration {duration}s < min {self.MIN_ITEM_DURATION}s; clamping")
                         duration = self.MIN_ITEM_DURATION
                 except Exception:
                     pass
-
-                if is_video_item:
-                    stop_video_early = True
-                self._stop_video_on_timer = stop_video_early
-                if duration <= 0:
-                    duration = 0.1
 
                 # Determine the effect to use: item effect > global effect > default 'fade'
                 # Item effect is the PRIMARY source (set per-item in dashboard)
@@ -2635,8 +2507,6 @@ class CompleteWebplayerClient:
                     _path = media_url
                 _lower = _path.lower()
                 next_is_video = _lower.endswith(('.mp4', '.webm', '.mkv', '.avi', '.mov'))
-                if next_is_video and not is_video_item:
-                    is_video_item = True
                 try:
                     prev_media_type = getattr(self.media_player, 'current_media_type', None)
                     boundary = f"{prev_media_type or 'none'} -> {'video' if next_is_video else 'image'}"
@@ -2714,14 +2584,6 @@ class CompleteWebplayerClient:
         logger.info(f"⏰ Item duration expired, advancing to next item (was at index {self.current_index})")
         with self._timer_lock:
             self._current_item_timer = None  # Timer has fired, clear reference
-        if getattr(self, '_stop_video_on_timer', False):
-            try:
-                if str(getattr(self.media_player, 'current_media_type', '')).lower() == 'video':
-                    logger.info("⏹️  Stopping video early due to schedule change")
-                    self.media_player.stop()
-            except Exception as stop_err:
-                logger.debug(f"Video stop after schedule boundary failed: {stop_err}")
-        self._stop_video_on_timer = False
         self.current_index = (self.current_index + 1) % len(self.playlist)
         self.advance_to_next_item()
     
