@@ -1138,11 +1138,14 @@ class CompleteWebplayerClient:
         @self.sio.on('vnc_connect')
         def on_vnc_connect(data):
             """Start VNC capture/tunnel to dashboard"""
+            logger.info(f'🖥️ VNC CONNECT EVENT RECEIVED: {data}')
             try:
                 target_pi = (data or {}).get('pi_id')
                 dashboard_sid = (data or {}).get('dashboard_sid')
+                logger.info(f'🖥️ VNC: target_pi={target_pi}, self.pi_id={self.pi_id}, dashboard_sid={dashboard_sid}, enable_vnc={self.enable_vnc}')
                 if target_pi and str(target_pi) != str(self.pi_id):
                     # Not for this device
+                    logger.info(f'🖥️ VNC: Ignoring, not for this Pi')
                     return
                 if not self.enable_vnc:
                     logger.warning('🛑 VNC disabled on this Pi (PHTV_ENABLE_VNC=false)')
@@ -1152,6 +1155,7 @@ class CompleteWebplayerClient:
                         'message': 'VNC disabled on this Pi'
                     })
                     return
+                logger.info(f'🖥️ VNC: Starting tunnel for dashboard {dashboard_sid}')
                 # Start/replace tunnel
                 if self.vnc_tunnel:
                     try:
@@ -1160,7 +1164,9 @@ class CompleteWebplayerClient:
                         pass
                     self.vnc_tunnel = None
                 self.vnc_tunnel = init_vnc_tunnel(self.sio, self.pi_id)
+                logger.info(f'🖥️ VNC: Calling tunnel.connect()')
                 ok = self.vnc_tunnel.connect(dashboard_sid)
+                logger.info(f'🖥️ VNC: Tunnel connect returned: {ok}')
                 if not ok:
                     logger.error('❌ VNC tunnel failed to start')
             except Exception as e:

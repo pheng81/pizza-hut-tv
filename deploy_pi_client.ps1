@@ -89,10 +89,12 @@ Write-Host "Service path files updated (best-effort)." -ForegroundColor Green
 
 # Ensure capture dependencies are installed (mss, pillow)
 Write-Host "Installing/ensuring capture dependencies (mss, pillow)..." -ForegroundColor Yellow
-# Try pip first (user scope); if blocked, fallback to apt for Pillow
+# Try pip first (user scope); if blocked (PEP 668), apt installs will cover
 & ssh @sshArgs $sshTarget "pip3 install --user -q mss pillow || true"
-# Ensure system Pillow available for ImageGrab
+# Ensure system packages available for capture backends
 & ssh @sshArgs $sshTarget "sudo apt-get update -y && sudo apt-get install -y python3-pil || true"
+# Try installing mss despite PEP 668 restrictions (user site, allow break-system-packages)
+& ssh @sshArgs $sshTarget "pip3 install --user --break-system-packages -q mss || true"
 
 # Restart the service (try multiple common names)
 Write-Host "Restarting Pi client service..." -ForegroundColor Yellow
@@ -123,6 +125,20 @@ if ($usedUserService) {
 } else {
     & ssh @sshArgs $sshTarget "sudo systemctl status $ServiceName --no-pager -l | head -20"
 }
+
+# Show recent VNC/capture logs to help diagnose viewer issues
+Write-Host ""; Write-Host "Recent VNC/capture logs (last 120 lines):" -ForegroundColor Cyan
+if ($usedUserService) {
+    & ssh @sshArgs $sshTarget "journalctl --user -u $ServiceName -n 120 --no-pager | grep -E 'VNC|mss|ImageGrab|tunnel|capture|DISPLAY' || true"
+} else {
+    & ssh @sshArgs $sshTarget "sudo journalctl -u $ServiceName -n 120 --no-pager | grep -E 'VNC|mss|ImageGrab|tunnel|capture|DISPLAY' || true"
+}
+
+# Also tail the client debug log file if present (first with filters, then raw)
+Write-Host ""; Write-Host "Tail of ~/pi_client_debug.log (filtered, last 120 lines):" -ForegroundColor Cyan
+& ssh @sshArgs $sshTarget "test -f ~/pi_client_debug.log && tail -n 120 ~/pi_client_debug.log | grep -E 'VNC|mss|ImageGrab|tunnel|capture|DISPLAY|connect' || echo 'No pi_client_debug.log or no matching lines'"
+Write-Host ""; Write-Host "Tail of ~/pi_client_debug.log (raw, last 80 lines):" -ForegroundColor Cyan
+& ssh @sshArgs $sshTarget "test -f ~/pi_client_debug.log && tail -n 80 ~/pi_client_debug.log || echo 'No pi_client_debug.log'"
 
 Write-Host ""
 Write-Host "Deployment complete!" -ForegroundColor Green
