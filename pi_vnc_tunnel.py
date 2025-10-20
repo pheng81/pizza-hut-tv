@@ -165,10 +165,14 @@ class VNCTunnel:
                 logging.warning('⚠️ mss not installed, using PIL ImageGrab fallback')
             else:
                 logging.error('❌ Neither mss nor Pillow are available for capture')
+                # Immediately notify dashboard to avoid silent black screen
+                self._send_error('Screen capture unavailable (install mss or Pillow)')
         
         frame_count = 0
         last_frame_time = 0
         fps_limit = 30  # 30 FPS for smooth real-time VNC
+        last_error_time = 0.0
+        error_backoff_sec = 5.0
         
         while self.running:
             try:
@@ -186,22 +190,33 @@ class VNCTunnel:
                     with mss.mss() as sct:
                         monitor = sct.monitors[1]  # Primary monitor
                         screenshot = sct.grab(monitor)
-                        # Build PIL Image if available; else build bytes->JPEG via raw conversion
+                        # Build PIL Image if available; else no fast path
                         if _PIL_AVAILABLE:
                             img = Image.frombytes('RGB', screenshot.size, screenshot.bgra, 'raw', 'BGRX')
                         else:
-                            # Minimal dependency path: convert BGRA to RGB bytes using Python only
-                            # This is slower; if Pillow missing, emit an error and pause instead
-                            self._send_error('Pillow not installed on Pi. Install python3-pil for streaming.')
+                            # Without Pillow, cannot JPEG-encode efficiently
+                            if (time.time() - last_error_time) > error_backoff_sec:
+                                self._send_error('Pillow not installed on Pi. Install python3-pil for streaming.')
+                                last_error_time = time.time()
                             time.sleep(2)
                             continue
                 else:
                     if _PIL_AVAILABLE:
-                        # Fallback to PIL (slower)
-                        img = ImageGrab.grab()
+                        # Fallback to PIL (may fail on Wayland)
+                        try:
+                            img = ImageGrab.grab()
+                        except Exception as e:
+                            logging.error(f'❌ PIL ImageGrab failed: {e}')
+                            if (time.time() - last_error_time) > error_backoff_sec:
+                                self._send_error(f'ImageGrab failed: {e}. Install mss (preferred) or use X11 session.')
+                                last_error_time = time.time()
+                            time.sleep(2)
+                            continue
                     else:
                         # No capture path available
-                        self._send_error('Screen capture unavailable (install mss or Pillow)')
+                        if (time.time() - last_error_time) > error_backoff_sec:
+                            self._send_error('Screen capture unavailable (install mss or Pillow)')
+                            last_error_time = time.time()
                         time.sleep(2)
                         continue
                 
@@ -235,6 +250,9 @@ class VNCTunnel:
                 
             except Exception as e:
                 logging.error(f'❌ VNC tunnel loop error: {e}')
+                if (time.time() - last_error_time) > error_backoff_sec:
+                    self._send_error(f'Capture loop error: {e}')
+                    last_error_time = time.time()
                 time.sleep(1)
         
         logging.info('🛑 VNC tunnel loop stopped')
