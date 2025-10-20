@@ -1,273 +1,432 @@
-#!/usr/bin/env python3
-"""
-Transition Effects Engine for Pizza Hut TV
-Handles smooth visual transitions between media items
-"""
-
-import pygame
-import logging
-import time
-from typing import Optional, Tuple
-import math
+import pygame, logging, os, math
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-
 class TransitionEngine:
-    """Handles visual transitions between media items"""
-    
-    def __init__(self, screen: pygame.Surface):
+    def __init__(self, screen):
         self.screen = screen
         self.width, self.height = screen.get_size()
-        
-        # Transition settings
-        self.transition_duration = 0.8  # seconds
-        self.fps = 60
-        
-        logger.info("🎨 Transition Engine initialized")
-    
-    def apply_transition(self, from_surface: Optional[pygame.Surface], 
-                        to_surface: pygame.Surface, 
-                        effect: str) -> bool:
-        """
-        Apply transition effect between two surfaces
-        
-        Args:
-            from_surface: Current image/video frame (None for first item)
-            to_surface: Next image/video frame
-            effect: Transition type (fade, slide-l, slide-r, zoom-in, zoom-out, cut)
-            
-        Returns:
-            True if transition completed successfully
-        """
+        self.clock = pygame.time.Clock()
         try:
-            # If no previous surface, just show the new one (first item)
-            if from_surface is None:
-                self.screen.blit(to_surface, (0, 0))
+            self.duration = float(os.getenv("PHTV_TRANSITION_SEC", "0.6"))
+        except:
+            self.duration = 0.5
+        try:
+            self.fps = int(os.getenv("PHTV_TRANSITION_FPS", "24"))
+        except:
+            self.fps = 30
+        # Offscreen render scale for performance (0.4 - 1.0)
+        try:
+            scale = float(os.getenv("PHTV_TRANSITION_SCALE", "0.5"))
+        except:
+            scale = 0.6
+        self.scale = max(0.4, min(1.0, scale))
+        self.test_flash_enabled = os.getenv("PHTV_TEST_FLASH", "0").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+
+    # Offscreen helpers
+    def _offscreen_size(self):
+        if self.scale >= 0.999:
+            return self.width, self.height
+        return max(1, int(self.width * self.scale)), max(1, int(self.height * self.scale))
+
+    def _new_offscreen(self) -> pygame.Surface:
+        w, h = self._offscreen_size()
+        return pygame.Surface((w, h), flags=pygame.SRCALPHA).convert_alpha()
+
+    # Helpers for smoother, time-based animations
+    def _ease(self, t: float) -> float:
+        """Smoothstep easing for less choppy motion."""
+        t = max(0.0, min(1.0, t))
+        return t * t * (3 - 2 * t)
+
+    def _prep_surface(self, surface: Optional[pygame.Surface]) -> Optional[pygame.Surface]:
+        if not surface:
+            return None
+        try:
+            if surface.get_size() != (self.width, self.height):
+                surface = pygame.transform.scale(surface, (self.width, self.height))
+            # convert_alpha matches display format for faster blits with alpha
+            return surface.convert_alpha()
+        except Exception:
+            return surface
+
+    def _downscale(self, surface: Optional[pygame.Surface]) -> Optional[pygame.Surface]:
+        if not surface:
+            return None
+        try:
+            w, h = self._offscreen_size()
+            if (w, h) != surface.get_size():
+                surface = pygame.transform.scale(surface, (w, h))
+            return surface.convert_alpha()
+        except Exception:
+            return surface
+
+    def _present(self, offscreen: pygame.Surface):
+        if self.scale >= 0.999:
+            # Offscreen is full-res; draw directly
+            self.screen.blit(offscreen, (0, 0))
+        else:
+            try:
+                # Optional smoother upscale (slower). Enable via PHTV_TRANSITION_SMOOTH_UPSCALE=1
+                if os.getenv("PHTV_TRANSITION_SMOOTH_UPSCALE", "0").strip() in ("1","true","yes","on"):
+                    scaled = pygame.transform.smoothscale(offscreen, (self.width, self.height))
+                else:
+                    scaled = pygame.transform.scale(offscreen, (self.width, self.height))
+            except Exception:
+                scaled = offscreen
+            self.screen.blit(scaled, (0, 0))
+
+    def _animate(self, render_fn, fps: Optional[int] = None):
+        """Run a time-based animation for self.duration seconds at ~fps (default self.fps).
+        render_fn receives (offscreen_surface, t) with t in [0,1]."""
+        duration_ms = max(1, int(self.duration * 1000))
+        start = pygame.time.get_ticks()
+        off = self._new_offscreen()
+        target_fps = int(fps or self.fps)
+        while True:
+            now = pygame.time.get_ticks()
+            elapsed = now - start
+            t = min(1.0, elapsed / duration_ms)
+            # Keep the OS event queue from freezing (esp. under X11/VNC)
+            try:
+                pygame.event.pump()
+            except Exception:
+                pass
+            try:
+                render_fn(off, t)
+                self._present(off)
                 pygame.display.flip()
-                return True
-            
-            # Scale surfaces to screen size if needed
-            from_surface = self._ensure_screen_size(from_surface)
-            to_surface = self._ensure_screen_size(to_surface)
-            
-            # Apply the specified effect
-            effect = effect.lower() if effect else 'fade'
-            
-            if effect == 'fade':
-                return self._fade_transition(from_surface, to_surface)
-            elif effect in ['slide-l', 'slide-left']:
-                return self._slide_transition(from_surface, to_surface, 'left')
-            elif effect in ['slide-r', 'slide-right']:
-                return self._slide_transition(from_surface, to_surface, 'right')
-            elif effect in ['slide-u', 'slide-up']:
-                return self._slide_transition(from_surface, to_surface, 'up')
-            elif effect in ['slide-d', 'slide-down']:
-                return self._slide_transition(from_surface, to_surface, 'down')
-            elif effect in ['zoom-in', 'zoom_in']:
-                return self._zoom_transition(from_surface, to_surface, 'in')
-            elif effect in ['zoom-out', 'zoom_out']:
-                return self._zoom_transition(from_surface, to_surface, 'out')
-            elif effect == 'cut':
-                # Instant cut - no transition
-                self.screen.blit(to_surface, (0, 0))
-                pygame.display.flip()
-                return True
-            else:
-                # Unknown effect - default to fade
-                logger.warning(f"Unknown effect '{effect}', using fade")
-                return self._fade_transition(from_surface, to_surface)
-                
-        except Exception as e:
-            logger.error(f"❌ Transition error: {e}")
-            # Fallback: just show new surface
-            self.screen.blit(to_surface, (0, 0))
-            pygame.display.flip()
+            except Exception:
+                # Best-effort: continue frames even if one blit fails
+                pass
+            if t >= 1.0:
+                break
+            # Pace to target FPS
+            self.clock.tick(target_fps)
+
+    def apply_transition(self, from_surface, to_surface, effect):
+        if not to_surface:
             return False
-    
-    def _ensure_screen_size(self, surface: pygame.Surface) -> pygame.Surface:
-        """Scale surface to screen size if needed"""
-        if surface.get_size() != (self.width, self.height):
-            return pygame.transform.scale(surface, (self.width, self.height))
-        return surface
-    
-    def _fade_transition(self, from_surface: pygame.Surface, 
-                        to_surface: pygame.Surface) -> bool:
-        """
-        Fade transition - alpha blend from old to new
-        """
-        logger.debug("🎨 Applying fade transition")
+        if to_surface.get_size() != (self.width, self.height):
+            to_surface = pygame.transform.scale(to_surface, (self.width, self.height))
         
-        steps = int(self.transition_duration * self.fps)
+        if self.test_flash_enabled:
+            try:
+                import time as _debug_t
+
+                logger.info(f"🎬 TRANSITION START: Showing bright test pattern for {effect}")
+                for color, name in [((0, 255, 0), "GREEN"), ((0, 0, 255), "BLUE"), ((255, 255, 0), "YELLOW")]:
+                    try:
+                        self.screen.fill(color)
+                        pygame.display.flip()
+                        logger.info(f"   ⚡ Flashing {name}")
+                        _debug_t.sleep(0.3)
+                    except Exception as flip_err:
+                        logger.warning(f"   ⚠️  Flash {name} failed: {flip_err}, continuing anyway...")
+                        break
+            except Exception as e:
+                logger.warning(f"   ⚠️  Test pattern partially failed: {e}, continuing with transition...")
         
-        for i in range(steps + 1):
-            # Calculate alpha (0 to 255)
-            alpha = int((i / steps) * 255)
-            
-            # Start with old surface
-            self.screen.blit(from_surface, (0, 0))
-            
-            # Blend new surface on top with increasing alpha
-            temp_surface = to_surface.copy()
-            temp_surface.set_alpha(alpha)
-            self.screen.blit(temp_surface, (0, 0))
-            
-            pygame.display.flip()
-            
-            # Control frame rate
-            pygame.time.Clock().tick(self.fps)
-        
-        return True
-    
-    def _slide_transition(self, from_surface: pygame.Surface, 
-                         to_surface: pygame.Surface, 
-                         direction: str) -> bool:
-        """
-        Slide transition - new surface slides in from direction
-        """
-        logger.debug(f"🎨 Applying slide-{direction} transition")
-        
-        steps = int(self.transition_duration * self.fps)
-        
-        for i in range(steps + 1):
-            # Calculate progress (0.0 to 1.0)
-            progress = i / steps
-            
-            # Ease out cubic for smooth deceleration
-            eased_progress = 1 - pow(1 - progress, 3)
-            
-            # Calculate positions based on direction
-            if direction == 'left':
-                old_x = -int(self.width * eased_progress)
-                new_x = self.width - int(self.width * eased_progress)
-                old_y = new_y = 0
-            elif direction == 'right':
-                old_x = int(self.width * eased_progress)
-                new_x = -self.width + int(self.width * eased_progress)
-                old_y = new_y = 0
-            elif direction == 'up':
-                old_y = -int(self.height * eased_progress)
-                new_y = self.height - int(self.height * eased_progress)
-                old_x = new_x = 0
-            else:  # down
-                old_y = int(self.height * eased_progress)
-                new_y = -self.height + int(self.height * eased_progress)
-                old_x = new_x = 0
-            
-            # Draw both surfaces
-            self.screen.fill((0, 0, 0))  # Black background
-            self.screen.blit(from_surface, (old_x, old_y))
-            self.screen.blit(to_surface, (new_x, new_y))
-            
-            pygame.display.flip()
-            pygame.time.Clock().tick(self.fps)
-        
-        return True
-    
-    def _zoom_transition(self, from_surface: pygame.Surface, 
-                        to_surface: pygame.Surface, 
-                        zoom_type: str) -> bool:
-        """
-        Zoom transition - zoom in or out
-        """
-        logger.debug(f"🎨 Applying zoom-{zoom_type} transition")
-        
-        steps = int(self.transition_duration * self.fps)
-        
-        for i in range(steps + 1):
-            # Calculate progress (0.0 to 1.0)
-            progress = i / steps
-            
-            # Ease in-out cubic
-            if progress < 0.5:
-                eased_progress = 4 * progress * progress * progress
-            else:
-                eased_progress = 1 - pow(-2 * progress + 2, 3) / 2
-            
-            if zoom_type == 'in':
-                # Old surface stays, new zooms in from center
-                # Alpha blend with increasing alpha on new
-                alpha = int(eased_progress * 255)
-                
-                # Scale factor (0.5 to 1.0)
-                scale = 0.5 + (eased_progress * 0.5)
-                
-                # Scale new surface
-                scaled_width = int(self.width * scale)
-                scaled_height = int(self.height * scale)
-                scaled_new = pygame.transform.scale(to_surface, (scaled_width, scaled_height))
-                
-                # Center position
-                x = (self.width - scaled_width) // 2
-                y = (self.height - scaled_height) // 2
-                
-                # Draw old surface
-                self.screen.blit(from_surface, (0, 0))
-                
-                # Draw scaled new surface with alpha
-                scaled_new.set_alpha(alpha)
-                self.screen.blit(scaled_new, (x, y))
-                
-            else:  # zoom out
-                # Old surface zooms out, new fades in
-                alpha_old = int((1 - eased_progress) * 255)
-                alpha_new = int(eased_progress * 255)
-                
-                # Scale factor (1.0 to 1.5)
-                scale = 1.0 + (eased_progress * 0.5)
-                
-                # Scale old surface
-                scaled_width = int(self.width * scale)
-                scaled_height = int(self.height * scale)
-                scaled_old = pygame.transform.scale(from_surface, (scaled_width, scaled_height))
-                
-                # Center position
-                x = (self.width - scaled_width) // 2
-                y = (self.height - scaled_height) // 2
-                
-                # Draw new surface
+        try:
+            e = effect.lower().strip() if effect else "cut"
+            if e in ("cut", "none", ""): self._cut(to_surface)
+            elif e == "fade": self._fade(from_surface, to_surface)
+            elif e == "dissolve": self._dissolve(from_surface, to_surface)
+            elif e == "slide_left": self._slide_left(from_surface, to_surface)
+            elif e == "slide_right": self._slide_right(from_surface, to_surface)
+            elif e == "slide_up": self._slide_up(from_surface, to_surface)
+            elif e == "slide_down": self._slide_down(from_surface, to_surface)
+            elif e == "zoom_in": self._zoom_in(from_surface, to_surface)
+            elif e == "zoom_out": self._zoom_out(from_surface, to_surface)
+            elif e == "wipe": self._wipe(from_surface, to_surface)
+            else: self._cut(to_surface)
+            return True
+        except Exception as ex:
+            logger.error(str(ex))
+            try:
+                self.screen.fill((0, 0, 0))
                 self.screen.blit(to_surface, (0, 0))
-                
-                # Draw scaled old surface with alpha on top
-                scaled_old.set_alpha(alpha_old)
-                self.screen.blit(scaled_old, (x, y))
-            
+                pygame.display.flip()
+            except:
+                pass
+            return True
+
+    def _cut(self, to_surface):
+        self.screen.fill((0, 0, 0))
+        self.screen.blit(to_surface, (0, 0))
+        try:
             pygame.display.flip()
-            pygame.time.Clock().tick(self.fps)
-        
-        return True
-    
-    def capture_screen(self) -> pygame.Surface:
-        """Capture current screen as surface for transition"""
-        return self.screen.copy()
+        except:
+            pass
 
+    def _fade(self, from_surface, to_surface):
+        from_scaled = self._prep_surface(from_surface)
+        to_scaled = self._prep_surface(to_surface)
+        from_small = self._downscale(from_scaled) if from_scaled else None
+        to_small = self._downscale(to_scaled)
 
-# Quick test if run directly
-if __name__ == "__main__":
-    pygame.init()
-    screen = pygame.display.set_mode((1920, 1080))
-    
-    # Create test surfaces
-    surface1 = pygame.Surface((1920, 1080))
-    surface1.fill((255, 0, 0))  # Red
-    
-    surface2 = pygame.Surface((1920, 1080))
-    surface2.fill((0, 0, 255))  # Blue
-    
-    engine = TransitionEngine(screen)
-    
-    # Test transitions
-    print("Testing fade...")
-    engine.apply_transition(surface1, surface2, 'fade')
-    time.sleep(1)
-    
-    print("Testing slide-left...")
-    engine.apply_transition(surface2, surface1, 'slide-l')
-    time.sleep(1)
-    
-    print("Testing zoom-in...")
-    engine.apply_transition(surface1, surface2, 'zoom-in')
-    time.sleep(1)
-    
-    print("Done!")
-    pygame.quit()
+        def render(off, t: float):
+            off.fill((0, 0, 0, 255))
+            if from_small:
+                if t < 0.5:
+                    a = self._ease(t * 2.0)
+                    from_small.set_alpha(int(255 * (1.0 - a)))
+                    off.blit(from_small, (0, 0))
+            if t >= 0.5 and to_small:
+                a = self._ease((t - 0.5) * 2.0)
+                to_small.set_alpha(int(255 * a))
+                off.blit(to_small, (0, 0))
+
+        self._animate(render)
+        # Final frame: ensure destination fully visible
+        self.screen.fill((0, 0, 0))
+        self.screen.blit(to_surface, (0, 0))
+        try:
+            pygame.display.flip()
+        except:
+            pass
+
+    def _dissolve(self, from_surface, to_surface):
+        from_scaled = self._prep_surface(from_surface)
+        to_scaled = self._prep_surface(to_surface)
+        from_small = self._downscale(from_scaled) if from_scaled else None
+        to_small = self._downscale(to_scaled)
+
+        def render(off, t: float):
+            a = self._ease(t)
+            off.fill((0, 0, 0, 255))
+            if from_small:
+                from_small.set_alpha(int(255 * (1.0 - a)))
+                off.blit(from_small, (0, 0))
+            if to_small:
+                to_small.set_alpha(int(255 * a))
+                off.blit(to_small, (0, 0))
+
+        self._animate(render)
+        self.screen.fill((0, 0, 0))
+        self.screen.blit(to_surface, (0, 0))
+        try:
+            pygame.display.flip()
+        except:
+            pass
+
+    def _slide_left(self, from_surface, to_surface):
+        bg = self._downscale(self._prep_surface(from_surface)) if from_surface else None
+        to_small = self._downscale(self._prep_surface(to_surface))
+        off_w, off_h = self._offscreen_size()
+
+        def render(off, t: float):
+            e = self._ease(t)
+            x_offset = int(off_w * (1.0 - e))
+            off.fill((0, 0, 0, 255))
+            if bg:
+                off.blit(bg, (0, 0))
+            if to_small:
+                off.blit(to_small, (x_offset, 0))
+
+        self._animate(render)
+        self.screen.fill((0, 0, 0))
+        self.screen.blit(to_surface, (0, 0))
+        try:
+            pygame.display.flip()
+        except:
+            pass
+
+    def _slide_right(self, from_surface, to_surface):
+        bg = self._downscale(self._prep_surface(from_surface)) if from_surface else None
+        to_small = self._downscale(self._prep_surface(to_surface))
+        off_w, off_h = self._offscreen_size()
+
+        def render(off, t: float):
+            e = self._ease(t)
+            x_offset = int(-off_w * (1.0 - e))
+            off.fill((0, 0, 0, 255))
+            if bg:
+                off.blit(bg, (0, 0))
+            if to_small:
+                off.blit(to_small, (x_offset, 0))
+
+        self._animate(render)
+        self.screen.fill((0, 0, 0))
+        self.screen.blit(to_surface, (0, 0))
+        try:
+            pygame.display.flip()
+        except:
+            pass
+
+    def _slide_up(self, from_surface, to_surface):
+        bg = self._downscale(self._prep_surface(from_surface)) if from_surface else None
+        to_small = self._downscale(self._prep_surface(to_surface))
+        off_w, off_h = self._offscreen_size()
+
+        def render(off, t: float):
+            e = self._ease(t)
+            y_offset = int(off_h * (1.0 - e))
+            off.fill((0, 0, 0, 255))
+            if bg:
+                off.blit(bg, (0, 0))
+            if to_small:
+                off.blit(to_small, (0, y_offset))
+
+        self._animate(render)
+        self.screen.fill((0, 0, 0))
+        self.screen.blit(to_surface, (0, 0))
+        try:
+            pygame.display.flip()
+        except:
+            pass
+
+    def _slide_down(self, from_surface, to_surface):
+        bg = self._downscale(self._prep_surface(from_surface)) if from_surface else None
+        to_small = self._downscale(self._prep_surface(to_surface))
+        off_w, off_h = self._offscreen_size()
+
+        def render(off, t: float):
+            e = self._ease(t)
+            y_offset = int(-off_h * (1.0 - e))
+            off.fill((0, 0, 0, 255))
+            if bg:
+                off.blit(bg, (0, 0))
+            if to_small:
+                off.blit(to_small, (0, y_offset))
+
+        self._animate(render)
+        self.screen.fill((0, 0, 0))
+        self.screen.blit(to_surface, (0, 0))
+        try:
+            pygame.display.flip()
+        except:
+            pass
+
+    def _zoom_in(self, from_surface, to_surface):
+        # New: crossfade from old to new while new zooms in from 80% -> 100%
+        from_small = self._downscale(self._prep_surface(from_surface)) if from_surface else None
+        to_small_full = self._downscale(self._prep_surface(to_surface))
+        off_w, off_h = self._offscreen_size()
+
+        def render(off, t: float):
+            e = self._ease(t)
+            off.fill((0, 0, 0, 255))
+            # Fade out old
+            if from_small:
+                a_from = int(255 * (1.0 - e))
+                from_small.set_alpha(a_from)
+                off.blit(from_small, (0, 0))
+            # Zoom in new
+            scale = 0.8 + 0.2 * e
+            w = max(1, int(off_w * scale))
+            h = max(1, int(off_h * scale))
+            x = (off_w - w) // 2
+            y = (off_h - h) // 2
+            try:
+                scaled = pygame.transform.scale(to_small_full, (w, h))
+            except Exception:
+                scaled = to_small_full
+            if scaled:
+                # Fade in new slightly to mask aliasing at start
+                a_to = int(200 + 55 * e)
+                try:
+                    scaled.set_alpha(a_to)
+                except Exception:
+                    pass
+                off.blit(scaled, (x, y))
+
+        # Cap zoom transitions at 24 FPS for performance
+        self._animate(render, fps=min(self.fps, 24))
+        # Final frame
+        self.screen.fill((0, 0, 0))
+        self.screen.blit(to_surface, (0, 0))
+        try:
+            pygame.display.flip()
+        except:
+            pass
+
+    def _zoom_out(self, from_surface, to_surface):
+        # New: new starts full size, zooms out to 90% while old fades out
+        from_small = self._downscale(self._prep_surface(from_surface)) if from_surface else None
+        to_small_full = self._downscale(self._prep_surface(to_surface))
+        off_w, off_h = self._offscreen_size()
+
+        def render(off, t: float):
+            e = self._ease(t)
+            off.fill((0, 0, 0, 255))
+            # Fade out old
+            if from_small:
+                a_from = int(255 * (1.0 - e))
+                from_small.set_alpha(a_from)
+                off.blit(from_small, (0, 0))
+            # Zoom out new
+            scale = 1.0 - 0.1 * e
+            w = max(1, int(off_w * scale))
+            h = max(1, int(off_h * scale))
+            x = (off_w - w) // 2
+            y = (off_h - h) // 2
+            try:
+                scaled = pygame.transform.scale(to_small_full, (w, h))
+            except Exception:
+                scaled = to_small_full
+            if scaled:
+                a_to = int(220 + 35 * e)
+                try:
+                    scaled.set_alpha(a_to)
+                except Exception:
+                    pass
+                off.blit(scaled, (x, y))
+
+        self._animate(render, fps=min(self.fps, 24))
+        self.screen.fill((0, 0, 0))
+        self.screen.blit(to_surface, (0, 0))
+        try:
+            pygame.display.flip()
+        except:
+            pass
+
+    def _wipe(self, from_surface, to_surface):
+        # Wipe with soft edge to reduce harshness
+        bg = self._downscale(self._prep_surface(from_surface)) if from_surface else None
+        to_small = self._downscale(self._prep_surface(to_surface))
+        off_w, off_h = self._offscreen_size()
+        feather = max(2, int(off_w * 0.02))  # ~2% soft edge
+
+        def render(off, t: float):
+            e = self._ease(t)
+            wipe_width = int(off_w * e)
+            off.fill((0, 0, 0, 255))
+            if bg:
+                off.blit(bg, (0, 0))
+            if to_small and wipe_width > 0:
+                # Main reveal area
+                area = pygame.Rect(0, 0, min(max(0, wipe_width - feather), off_w), off_h)
+                if area.width > 0:
+                    off.blit(to_small, (0, 0), area=area)
+                # Feathered edge
+                edge_w = min(feather, max(0, wipe_width - area.width))
+                if edge_w > 0:
+                    edge_area = pygame.Rect(area.width, 0, edge_w, off_h)
+                    slice_surf = to_small.subsurface(edge_area).copy()
+                    # Alpha gradient across feather width
+                    alpha = int(255 * (edge_w / max(1, feather)))
+                    slice_surf.set_alpha(alpha)
+                    off.blit(slice_surf, (area.width, 0))
+
+        self._animate(render)
+        self.screen.fill((0, 0, 0))
+        self.screen.blit(to_surface, (0, 0))
+        try:
+            pygame.display.flip()
+        except:
+            pass
+
+    def capture_screen(self):
+        """Capture current screen content as a surface for next transition"""
+        try:
+            return self.screen.copy()
+        except Exception as e:
+            logger.error(f"Failed to capture screen: {e}")
+            return None

@@ -52,7 +52,12 @@
 			const MEDIA_BASE_URL = (function(){ try{ let b = __tvCfg.media_base_url || ''; if(b && !/\/$/.test(b)) b += '/'; return b; }catch{return '';} })();
 
 		const videoExt = ['mp4','webm','ogg','mov','avi','mkv','m4v'];
-		function isVideoByName(name){ if(!name) return false; const ext=(name.split('.').pop()||'').toLowerCase(); return videoExt.includes(ext); }
+		function isVideoByName(name){
+			if(!name) return false;
+			const base = String(name).split('?')[0].split('#')[0];
+			const ext = (base.split('.').pop()||'').toLowerCase();
+			return videoExt.includes(ext);
+		}
 	function mediaUrl(item){
 		if(!item) return '';
 		if(typeof item === 'string') {
@@ -316,8 +321,12 @@
 		async function showItem(item){
 			const url = mediaUrl(item);
 			if(!url){ return; }
+			// Prefer extension-based detection; only trust media_type if URL doesn't look like an image
 			const type = (item.media_type || '').toLowerCase();
-			const isVid = type === 'video' || isVideoByName(url);
+			const isVid = (
+				isVideoByName(url) ||
+				(type === 'video' && !/\.(png|jpe?g|gif|webp|svg)(\?|#|$)/i.test(String(url)))
+			);
 			const thisHost = hostOf(url);
 			const ourHost = hostOf(ORIGIN);
 			// Build a local fallback if primary URL is external and fails

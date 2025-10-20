@@ -228,6 +228,16 @@
 	<div id="preload-bin" style="position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;overflow:hidden;opacity:0;"></div>
 
 	<script>
+		// Wait for TV brand configuration to load (non-blocking fallback in 1s)
+		let __tvReady = false;
+		(function(){
+			try{
+				Promise.race([
+					(window.tvBrandReady||Promise.resolve(true)),
+					new Promise(res=>setTimeout(res, 1000))
+				]).then(()=>{ __tvReady = true; });
+			}catch(e){ __tvReady = true; }
+		})();
 		function isTizenTV(){ try{ return /Tizen|TizenBrowser|SamsungBrowser|SMART-TV|SmartTV|Maple/i.test(navigator.userAgent||''); }catch(e){ return false; } }
 		function isLowEndTV(){
 			try{
@@ -569,87 +579,88 @@
 			}
 		}
 
-		function startSyncMonitoring(videoElement, item) {
-			if(!videoElement || !item || !item.sync_ref) return;
-			
-			let syncCheckInterval;
-			let lastCorrectionTime = 0;
-			const SYNC_CHECK_INTERVAL = 50; // Check every 50ms (20x per second) for tight sync
-			const HARD_SYNC_THRESHOLD = 0.2; // 200ms - hard reset if drift exceeds
-			const PLAYBACK_ADJUST_THRESHOLD = 0.05; // 50ms - playback rate adjustment
-			const CORRECTION_COOLDOWN = 1000; // 1 second cooldown between corrections
-			
-			const checkSync = () => {
-				try {
-					if(!document.body.contains(videoElement) || videoElement.paused || videoElement.ended) {
-						console.log('🔄 Stopping sync monitoring - video stopped or removed');
-						clearInterval(syncCheckInterval);
-						return;
-					}
+	function startSyncMonitoring(videoElement, item) {
+		if(!videoElement || !item || !item.sync_ref) return;
+		
+		let syncCheckInterval;
+		let lastCorrectionTime = 0;
+		const SYNC_CHECK_INTERVAL = 250; // Check every 250ms (4x per second) - more frequent
+		const HARD_SYNC_THRESHOLD = 0.3; // Hard sync if >300ms drift (tighter)
+		const MICRO_ADJUST_THRESHOLD = 0.1; // Gentle correction if >100ms drift (more responsive)
+		const CORRECTION_COOLDOWN = 2000; // 2 seconds between corrections (faster)
+		
+		// 🎯 TIGHTER SYNC: More aggressive corrections for perfect synchronization
+		// Uses TINY playback rate changes (1.03x/0.97x) for faster correction
+		
+		const checkSync = () => {
+			try {
+				if(!document.body.contains(videoElement) || videoElement.paused || videoElement.ended) {
+					console.log('🔄 Stopping sync monitoring - video stopped or removed');
+					clearInterval(syncCheckInterval);
+					return;
+				}
+				
+				const expectedTime = calculateSyncedVideoTime(item);
+				if(expectedTime === null) return;
+				
+				const actualTime = videoElement.currentTime;
+				const drift = Math.abs(actualTime - expectedTime);
+				const isBehind = actualTime < expectedTime;
+				const now = Date.now();
+				const timeSinceLastCorrection = now - lastCorrectionTime;
+				
+				// HARD SYNC for major drift (>300ms)
+				if(drift > HARD_SYNC_THRESHOLD && timeSinceLastCorrection > CORRECTION_COOLDOWN) {
+					console.log('🔄 HARD SYNC (>300ms):', {
+						screen: screenId,
+						expected: expectedTime.toFixed(3),
+						actual: actualTime.toFixed(3),
+						drift: (drift * 1000).toFixed(0) + 'ms'
+					});
 					
-					const expectedTime = calculateSyncedVideoTime(item);
-					if(expectedTime === null) return;
+					videoElement.currentTime = expectedTime;
+					videoElement.playbackRate = 1.0;
+					lastCorrectionTime = now;
 					
-					const actualTime = videoElement.currentTime;
-					const drift = Math.abs(actualTime - expectedTime);
-					const isBehind = actualTime < expectedTime;
-					const now = Date.now();
-					const timeSinceLastCorrection = now - lastCorrectionTime;
+				// MICRO-ADJUSTMENT for medium drift (100-300ms)
+				// Uses 3% speed change for faster correction
+				} else if(drift > MICRO_ADJUST_THRESHOLD && timeSinceLastCorrection > CORRECTION_COOLDOWN) {
+					const adjustment = isBehind ? 1.03 : 0.97; // 3% change (faster correction)
+					videoElement.playbackRate = adjustment;
+					lastCorrectionTime = now;
 					
-					// HARD SYNC for large drift (>200ms)
-					if(drift > HARD_SYNC_THRESHOLD) {
-						console.log('🔄 HARD SYNC (>200ms):', {
-							screen: screenId,
-							expected: expectedTime.toFixed(3),
-							actual: actualTime.toFixed(3),
-							drift: (drift * 1000).toFixed(1) + 'ms'
-						});
-						
-						// Immediate correction + reset playback rate
-						videoElement.currentTime = expectedTime;
-						lastCorrectionTime = now;
-						videoElement.playbackRate = 1.0;
-						
-					// PLAYBACK RATE ADJUSTMENT for medium drift (50-200ms)
-					} else if(drift > PLAYBACK_ADJUST_THRESHOLD && timeSinceLastCorrection > CORRECTION_COOLDOWN) {
-						const adjustment = isBehind ? 1.1 : 0.9; // 10% faster/slower
-						videoElement.playbackRate = adjustment;
-						lastCorrectionTime = now;
-						console.log('⚡ Playback adjustment (50-200ms):', {
-							screen: screenId,
-							rate: adjustment,
-							drift: (drift * 1000).toFixed(1) + 'ms',
-							direction: isBehind ? 'catching up' : 'slowing'
-						});
-						
-						// Reset after 1 second
-						setTimeout(() => {
-							if(videoElement && document.body.contains(videoElement)) {
-								videoElement.playbackRate = 1.0;
-							}
-						}, 1000);
-						
-					// PERFECT SYNC (<50ms)
-					} else {
-						// Ensure normal playback rate
-						if(videoElement.playbackRate !== 1.0) {
+					console.log('⚡ Micro-adjustment (100-300ms):', {
+						screen: screenId,
+						rate: adjustment,
+						drift: (drift * 1000).toFixed(0) + 'ms',
+						direction: isBehind ? 'catch up' : 'slow down'
+					});
+					
+					// Reset to 1.0 after 1.5 seconds (faster reset)
+					setTimeout(() => {
+						if(videoElement && document.body.contains(videoElement)) {
 							videoElement.playbackRate = 1.0;
 						}
-						// Log occasionally
-						if(Math.random() < 0.01) {
-							console.log('✅ Good sync:', {
-								screen: screenId,
-								drift: (drift * 1000).toFixed(1) + 'ms',
-								rate: videoElement.playbackRate
-							});
-						}
+					}, 1500);
+					
+				// GOOD SYNC (<100ms) - maintain normal speed
+				} else {
+					if(videoElement.playbackRate !== 1.0) {
+						videoElement.playbackRate = 1.0;
 					}
-				} catch(err) {
-					console.warn('Sync monitoring error:', err);
+					// Log occasionally
+					if(Math.random() < 0.02) {
+						console.log('📊 Sync status:', {
+							screen: screenId,
+							drift: (drift * 1000).toFixed(0) + 'ms',
+							status: drift < 0.05 ? '✅ Perfect' : drift < 0.1 ? '✔️ Good' : '⚠️ Adjusting'
+						});
+					}
 				}
-			};
-			
-			// Start monitoring after 1 second delay
+			} catch(err) {
+				console.warn('Sync monitoring error:', err);
+			}
+		};			// Start monitoring after 1 second delay
 			setTimeout(() => {
 				syncCheckInterval = setInterval(checkSync, SYNC_CHECK_INTERVAL);
 				console.log('� Sync monitoring started for', screenId);
@@ -845,6 +856,103 @@
 				return `sig:${Date.now()}`;
 			}
 		}
+		
+		// Client-side schedule filtering (matches server logic)
+		function isItemActiveNow(item){
+			try{
+				// Check if item is enabled
+				if(item.enabled === false){
+					console.log('🔍 Item DISABLED:', item.name || item.id);
+					return false;
+				}
+				
+				// Get current local time
+				const now = new Date();
+				const currentDay = ['sun','mon','tue','wed','thu','fri','sat'][now.getDay()];
+				const currentTime = now.getHours() * 100 + now.getMinutes(); // e.g. 14:30 = 1430
+				
+				console.log('🔍 Checking item:', item.name || item.id, {
+					currentDay,
+					currentTime,
+					hasSchedule: !!item.schedule,
+					scheduleLength: (item.schedule || []).length,
+					hasLegacy: !!(item.start || item.end || (item.days && item.days.length))
+				});
+				
+				// Check multiple schedule windows (priority)
+				const scheduleWindows = item.schedule || [];
+				if(scheduleWindows.length > 0){
+					console.log('🔍 Checking', scheduleWindows.length, 'schedule windows for:', item.name || item.id);
+					for(const window of scheduleWindows){
+						if(window.enabled === false){
+							console.log('  ❌ Window disabled');
+							continue;
+						}
+						
+						// Check days
+						const days = window.days || [];
+						console.log('  🗓️ Window days:', days, 'current:', currentDay);
+						if(days.length > 0 && !days.includes(currentDay)){
+							console.log('  ❌ Day mismatch');
+							continue;
+						}
+						
+						// Check time range
+						const start = window.start; // "HH:MM:SS" format
+						const end = window.end;
+						if(start || end){
+							const startNum = start ? parseInt(start.replace(/:/g,'').substring(0,4)) : 0;
+							const endNum = end ? parseInt(end.replace(/:/g,'').substring(0,4)) : 2359;
+							console.log('  ⏰ Time range:', start, '-', end, '(', startNum, '-', endNum, ') current:', currentTime);
+							if(currentTime < startNum || currentTime > endNum){
+								console.log('  ❌ Time out of range');
+								continue;
+							}
+						}
+						
+						// This window is active
+						console.log('  ✅ WINDOW ACTIVE!');
+						return true;
+					}
+					// No active windows
+					console.log('❌ NO ACTIVE WINDOWS for:', item.name || item.id);
+					return false;
+				}
+				
+				// Check legacy single start/end window
+				const start = item.start;
+				const end = item.end;
+				const days = item.days || [];
+				
+				if(start || end || days.length > 0){
+					console.log('🔍 Legacy schedule:', {start, end, days});
+					// Check days
+					if(days.length > 0 && !days.includes(currentDay)){
+						console.log('❌ Legacy day mismatch');
+						return false;
+					}
+					
+					// Check time range
+					if(start || end){
+						const startNum = start ? parseInt(start.replace(/:/g,'').substring(0,4)) : 0;
+						const endNum = end ? parseInt(end.replace(/:/g,'').substring(0,4)) : 2359;
+						console.log('⏰ Legacy time:', startNum, '-', endNum, 'current:', currentTime);
+						if(currentTime < startNum || currentTime > endNum){
+							console.log('❌ Legacy time out of range');
+							return false;
+						}
+					}
+				}
+				
+				// No schedule restrictions or within active window
+				console.log('✅ ACTIVE (no restrictions or legacy match):', item.name || item.id);
+				return true;
+			}catch(err){
+				console.warn('Schedule check error:', err);
+				return true; // Default to active if check fails
+			}
+		}
+		
 		function showIdleState(message){
 			try{
 				const text = message || 'Waiting for schedule…';
@@ -882,7 +990,12 @@
 			try{
 				if(!item) return; const url = mediaUrl(item); if(!url) return;
 				if(cacheGet(url)) return; // already primed
-				const isVid = (item.media_type||'').toLowerCase()==='video' || isVideoByName(url) || isVideoByName(fileNameFrom(item));
+				// Prefer extension-based detection; only trust media_type as a last resort when URL doesn't look like an image
+				const isVid = (
+					isVideoByName(url) ||
+					isVideoByName(fileNameFrom(item)) ||
+					(((item.media_type||'').toLowerCase()==='video') && !/\.(png|jpe?g|gif|webp|svg)(\?|#|$)/i.test(String(url)))
+				);
 				const node = isVid ? await preloadVideo(url) : await preloadImage(url);
 				cachePut(url, { node, type: isVid?'video':'image', ts: Date.now() });
 			}catch{}
@@ -936,6 +1049,9 @@
 			try{
 				const qs = new URLSearchParams();
 				if(pairCode) qs.set('user_code', pairCode);
+				// Skip server-side schedule filtering so playlist stays stable
+				// Client will filter by schedule in real-time without reloading
+				qs.set('skip_schedule_filter', '1');
 				const r = await fetch(`${ORIGIN}/playlist/${encodeURIComponent(storeId)}/${encodeURIComponent(screenId)}?`+qs.toString(), { cache:'no-store', headers: pairCode?{'X-User-Code': pairCode}:{}});
 				const j = await r.json();
 				if(j && j.success && Array.isArray(j.playlist)){
@@ -1009,9 +1125,11 @@
 				v.muted=true; 
 				v.playsInline = true;
 				
-				// 🚀 SMART PRELOADING: metadata first for faster startup
+				// 🚀 SMART PRELOADING: Use brand config if available, fallback to metadata
 				// For multiple screens, load metadata quickly, then buffer during playback
-				v.preload = 'metadata'; // Start with metadata only - faster initial load
+				try{
+					v.preload = (window.TVConfig && window.TVConfig.video && window.TVConfig.video.preload) ? window.TVConfig.video.preload : 'metadata';
+				}catch(e){ v.preload = 'metadata'; }
 				v.crossOrigin = 'anonymous'; // Fix CORS issues
 				
 				// 🚀 HARDWARE ACCELERATION: Force GPU rendering for smooth playback
@@ -1025,8 +1143,10 @@
 					v.setAttribute('data-instant-load', 'true');
 					v.setAttribute('data-sync-video', 'true');
 					v.setAttribute('data-individual-slice', 'true'); // Mark as individual slice file
-					// Enhanced preload for sync groups
-					v.preload = 'auto'; // Load more data for better sync
+					// Enhanced preload for sync groups (brand-configurable)
+					try{
+						v.preload = (window.TVConfig && window.TVConfig.video && window.TVConfig.video.preload) ? window.TVConfig.video.preload : 'auto';
+					}catch(e){ v.preload = 'auto'; }
 					v.setAttribute('data-setup', '{"preload": "auto"}');
 					console.log('🎬 SYNC-OPTIMIZED individual file loading:', url);
 				}
@@ -1496,12 +1616,30 @@
 			
 			let url = mediaUrl(item);
 			if(!url) return;
-			const isVid = (item.media_type||'').toLowerCase()==='video' || isVideoByName(url) || isVideoByName(fileNameFrom(item));
+			// Prefer extension-based detection; only trust media_type as a last resort when URL doesn't look like an image
+			const isVid = (
+				isVideoByName(url) ||
+				isVideoByName(fileNameFrom(item)) ||
+				(((item.media_type||'').toLowerCase()==='video') && !/\.(png|jpe?g|gif|webp|svg)(\?|#|$)/i.test(String(url)))
+			);
 			// Prefer origin URL on Vewd/OperaTV to avoid CORS/CDN quirks
 			if(isVid && isVewdTV()){
 				const rel = relKeyFrom(item);
 				if(rel){ url = `${ORIGIN}/media/${rel}`; }
 			}
+
+			// Build same-origin fallback (helps some Sony/other TV browsers with CDN/TLS/CORS quirks)
+			let fallbackUrl = '';
+			try{
+				const thisHost = (new URL(url)).host;
+				const ourHost = (new URL(ORIGIN)).host;
+				if(thisHost && ourHost && thisHost !== ourHost){
+					const fname = fileNameFrom(item);
+					if(fname){
+						fallbackUrl = isVid ? `${ORIGIN}/media/${encodeURIComponent(fname)}` : `${ORIGIN}/static/uploads/${encodeURIComponent(fname)}`;
+					}
+				}
+			}catch{}
 			try{
 				let cached = cacheTake(url);
 				const node = cached?.node || (isVid ? await preloadVideo(url) : await preloadImage(url));
@@ -1716,6 +1854,27 @@
 				try{ sendClientEvent('load_ok', item, null).catch(()=>{}); }catch{}
 			}catch(e){
 				console.error('Primary video load failed:', url, e);
+				// If image failed and we have a same-origin fallback, try that first
+				if(!isVid && fallbackUrl){
+					try{
+						const node = await preloadImage(fallbackUrl);
+						node.className = 'media';
+						const eff = effectClassFor(item);
+						if(eff){ node.classList.add('anim'); node.classList.add(eff); }
+						clearNode(back); back.appendChild(node);
+						back.classList.add('fade'); back.classList.remove('hidden');
+						requestAnimationFrame(()=>{
+							back.classList.add('visible'); back.classList.remove('fade');
+							front.classList.add('fade'); front.classList.remove('visible');
+							requestAnimationFrame(()=>{
+								if(eff){ node.classList.remove('enter-slide-l','enter-slide-r','enter-zoom-in','enter-zoom-out'); node.style.opacity=''; }
+							});
+							setTimeout(()=>{ front.classList.add('hidden'); front.classList.remove('fade'); swapLayers(); }, 1100);
+						});
+						try{ sendClientEvent('load_ok', item, null).catch(()=>{}); }catch{}
+						return;
+					}catch(_imgFallbackErr){ /* proceed to video-specific fallbacks */ }
+				}
 				
 				// Enhanced fallback for slice videos
 				try{
@@ -1794,23 +1953,67 @@
 			}
 		}
 
-		function nextIndex(){ if(!playlist.length) return 0; return (idx + 1) % playlist.length; }
+		function nextIndex(){ 
+			if(!playlist.length) return 0; 
+			// Filter to only active items based on schedule
+			const activePlaylist = playlist.filter(isItemActiveNow);
+			if(!activePlaylist.length) return 0;
+			
+			// Find current item in active playlist
+			const currentKey = currentItemKey;
+			let currentActiveIdx = -1;
+			if(currentKey){
+				currentActiveIdx = activePlaylist.findIndex(item => keyFrom(item) === currentKey);
+			}
+			
+			// Return next active item index in original playlist
+			const nextActiveIdx = (currentActiveIdx + 1) % activePlaylist.length;
+			const nextItem = activePlaylist[nextActiveIdx];
+			return playlist.findIndex(item => keyFrom(item) === keyFrom(nextItem));
+		}
 
 		async function tick(){
 			if(!playlist.length){ await fetchPlaylist(true); }
-			if(!playlist.length){
-				showIdleState('Waiting for schedule…');
+			
+			// TEMPORARY: Disable schedule filtering until dashboard saves slot data properly
+			const activePlaylist = playlist; // Use full playlist without filtering
+			
+			console.log('🔍 PLAYLIST DEBUG: Using all', activePlaylist.length, 'items (schedule filtering disabled)');
+			
+			if(!activePlaylist.length){
+				console.warn('⚠️ NO ITEMS - waiting...');
+				showIdleState('Waiting for content…');
 				timer = setTimeout(tick, 3000);
 				return;
 			}
 			hideIdleState();
-			// On forced schedule switch, jump to first item to show transition immediately
-			if(forceAdvanceNow){ forceAdvanceNow = false; idx = 0; }
-			const item = playlist[idx];
+			
+			// Find current item in active playlist, or start from first active item
+			let activeIdx = 0;
+			if(currentItemKey){
+				const foundIdx = activePlaylist.findIndex(item => keyFrom(item) === currentItemKey);
+				if(foundIdx >= 0){
+					// Found the last played item, advance to NEXT item
+					activeIdx = (foundIdx + 1) % activePlaylist.length;
+				}
+			}
+			
+			// On forced schedule switch, jump to first active item
+			if(forceAdvanceNow){ forceAdvanceNow = false; activeIdx = 0; }
+			
+			const item = activePlaylist[activeIdx];
+			const next = activePlaylist[(activeIdx + 1) % activePlaylist.length];
 			const dur = Math.max(1, parseInt(item.duration||10));
-			const next = playlist[nextIndex()];
+			
+			console.log('🔍 DURATION DEBUG:', {
+				item_id: item.id,
+				raw_duration: item.duration,
+				parsed_dur: dur,
+				item_name: item.name
+			});
+			
 			const currentKey = keyFrom(item);
-			const singleItemLoop = playlist.length === 1 && currentItemKey && currentItemKey === currentKey;
+			const singleItemLoop = activePlaylist.length === 1 && currentItemKey && currentItemKey === currentKey;
 
 			if(singleItemLoop){
 				const hosts = [front, back];
@@ -1840,12 +2043,14 @@
 				}
 			}
 			await primePreload(item);
-			await alignToSyncWindow(item, dur);
+			
+			// TEMPORARY: Skip sync waiting (causes NaN delay) - just play immediately
+			console.log('🚀 SKIPPING SYNC: Starting playback immediately');
 			
 			// 🚀 PROFESSIONAL PRELOADING: Enterprise-grade background preparation
 			console.log('🎬 PROFESSIONAL PRELOADING: Preparing', PRELOAD_AHEAD, 'items for smooth transitions...');
 			for(let i=1;i<=PRELOAD_AHEAD;i++){
-				const it = playlist[(idx + i) % playlist.length];
+				const it = activePlaylist[(activeIdx + i) % activePlaylist.length];
 				primePreload(it).catch(e => console.log('🚨 Professional preload optimizing for item', i, ':', e));
 			}
 			
@@ -1866,8 +2071,16 @@
 			if(syncDelay > 0) {
 				if(timer){ clearTimeout(timer); }
 				timer = setTimeout(async () => {
-					await showItem(item);
-					console.log('✅ SYNCHRONIZED: Screen', screenId, 'started at global sync timestamp');
+					try{
+						await showItem(item);
+						console.log('✅ SYNCHRONIZED: Screen', screenId, 'started at global sync timestamp');
+					}catch(err){
+						console.error('❌ Failed to show item:', err);
+						// Continue to next item even if this one fails
+					}
+					
+					// Update current item tracking
+					currentItemKey = keyFrom(item);
 					
 					// Schedule next tick at synchronized interval
 					if(timer){ clearTimeout(timer); }
@@ -1877,8 +2090,16 @@
 			}
 			
 			// Immediate show if already at sync moment
-			await showItem(item);
-			idx = nextIndex();
+			try{
+				await showItem(item);
+			}catch(err){
+				console.error('❌ Failed to show item:', err);
+				// Continue to next item even if this one fails
+			}
+			
+			// Update current item tracking
+			currentItemKey = keyFrom(item);
+			
 			if(Date.now() - lastFetchTs > PLAYLIST_REFRESH_MIN_MS){ fetchPlaylist(); }
 			
 			// Use global sync for next transition instead of individual timing

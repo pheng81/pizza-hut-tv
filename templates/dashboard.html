@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Pizza Hut TV - Store Management Dashboard</title>
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
     <link rel="preconnect" href="https://cdn.everydayadvertise.com" crossorigin>
@@ -1296,18 +1299,53 @@
             cursor: pointer;
         }
         
-        /* Remote Pi Manager Modal Specific Styles */
+        /* Remote Pi Manager Full-Page Styles */
+        #remotePiManagerModal {
+            padding: 0 !important;
+        }
+        
         #remotePiManagerModal .modal-content {
-            background: #ffffff;
-            border-radius: 12px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 700px !important;
+            width: 90vw !important;
+            max-height: 85vh !important;
+            margin: auto !important;
+            border-radius: 16px !important;
+            background: #f5f5f7;
+            overflow-y: auto;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.3);
+        }
+        
+        #remotePiManagerModal .modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 16px 24px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        #remotePiManagerModal .modal-header h3 {
+            color: white !important;
+            margin: 0;
+            font-size: 24px;
+        }
+        
+        #remotePiManagerModal .close {
+            color: white !important;
+            font-size: 36px;
+            opacity: 0.9;
+        }
+        
+        #remotePiManagerModal .close:hover {
+            opacity: 1;
         }
         
         #remotePiManagerModal .helper {
             color: #666;
-            font-size: 14px;
+            font-size: 16px;
             margin-bottom: 20px;
-            line-height: 1.5;
+            line-height: 1.6;
         }
         
         #remotePiManagerModal .form-group {
@@ -1319,16 +1357,16 @@
             margin-bottom: 8px;
             font-weight: 600;
             color: #1d1d1f;
-            font-size: 14px;
+            font-size: 15px;
         }
         
         #remotePiManagerModal .form-group input,
         #remotePiManagerModal .form-group select {
             width: 100%;
-            padding: 12px;
+            padding: 12px 16px;
             border: 1px solid rgba(60,60,67,0.29);
             border-radius: 10px;
-            font-size: 14px;
+            font-size: 15px;
             background: #fff;
             color: #1d1d1f;
             box-sizing: border-box;
@@ -1337,8 +1375,8 @@
         #remotePiManagerModal .form-group input:focus,
         #remotePiManagerModal .form-group select:focus {
             outline: none;
-            border-color: #007aff;
-            box-shadow: 0 0 0 3px rgba(0,122,255,0.15);
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
         }
         
         #remotePiManagerModal small {
@@ -1770,7 +1808,12 @@
     <!-- Mobile drawer (hamburger menu) -->
     <div id="drawerBackdrop" class="drawer-backdrop" onclick="toggleDrawer(false)"></div>
     <div id="mobileDrawer" class="mobile-drawer" role="dialog" aria-label="Menu" aria-modal="true">
-        <h4>Menu</h4>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <h4 style="margin:0;">Menu</h4>
+            <button onclick="toggleDrawer(false)" style="background:none;border:none;cursor:pointer;font-size:28px;padding:0;width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:#666;" title="Close menu">
+                ✕
+            </button>
+        </div>
         <div style="font-size:12px;color:#555;margin:4px 0 10px 0;">Username<br><strong>{{ user_email or '—' }}</strong></div>
         <div style="font-size:12px;color:#555;">Android TV pairing code</div>
         <div style="font-size:26px;font-weight:800;letter-spacing:3px;margin:2px 0 8px 0;">{{ link_code or '----' }}</div>
@@ -1797,6 +1840,10 @@
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2H10a2 2 0 0 0-2 2v16"/></svg>
                 <span>Remote Pi Manager</span>
             </button>
+            <button class="action-item" onclick="openPiDeviceManager()" title="Pi Device Manager">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                <span>Pi Device Manager</span>
+            </button>
             <button class="action-item" onclick="futureAction()" title="Custom action">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6l6 12H6z"></path></svg>
                 <span>Custom</span>
@@ -1819,6 +1866,13 @@
             <div class="modal-header" id="applyAllTitle">Apply to ALL</div>
             <div class="modal-body">
                 <div class="modal-desc" id="applyAllDesc">This will impact the stores below:</div>
+                <!-- Apply-All tools: search and clear selection -->
+                <div id="applyAllTools" style="display:flex; gap:8px; align-items:center; margin:8px 0 12px; flex-wrap:wrap;">
+                    <input id="applyStoreSearch" type="text" placeholder="Search stores (name or ID)" 
+                           style="flex:1 1 220px; min-width:220px; padding:6px 10px; border:1px solid #dcdfe3; border-radius:8px;">
+                    <button class="btn" type="button" onclick="searchAndTickApplyStores()">Search & tick</button>
+                    <button class="btn" type="button" onclick="clearApplyStoreSelection()">Clear all</button>
+                </div>
                 <ol class="impact-list" id="applyAllList"></ol>
                 <div id="applySelHint" style="margin-top:8px;font-size:11px;color:#555;display:none;">Only the ticked playlist items from the master store will be applied.</div>
             </div>
@@ -1847,12 +1901,23 @@
         refreshLibrary();
     }
 
-    // Remote Pi Manager functions
+    // Remote Pi Manager functions - v2.2.0-FINAL (Build: {{ build_stamp }})
+    // CRITICAL CACHE BUST - If you see this, new code loaded successfully!
+    console.log('🔧 Remote Pi Manager loaded - v2.2.0-FINAL - Build: {{ build_stamp }}');
+    console.log('✅ CACHE CLEARED - You are running the NEW code!');
+    
     function openRemotePiManager() {
+        console.log('🚀 openRemotePiManager v2.2.0 called');
         document.getElementById('remotePiManagerModal').style.display = 'flex';
         document.getElementById('piId').focus();
         // Close drawer if open
         toggleDrawer(false);
+    }
+    
+    // NEW Pi Device Manager Dashboard
+    function openPiDeviceManager() {
+        console.log('🚀 Opening Pi Device Manager Dashboard');
+        window.location.href = '/pi-manager';
     }
 
     function closeRemotePiManager() {
@@ -1875,20 +1940,39 @@
 
     // Global variable to store user's stores and screens data
     let userStoresData = null;
+    
+    // Store the logged-in user's pairing code for validation
+    const MY_PAIRING_CODE = '{{ link_code or "" }}';
+    console.log('🔐 Dashboard JS Version: 2.0 - MY_PAIRING_CODE:', MY_PAIRING_CODE);
 
     // Step navigation functions for Remote Pi Manager
     async function showStoreStep() {
         const pairCode = document.getElementById('piPairCode').value.trim();
-        console.log('showStoreStep called, pair code:', pairCode, 'length:', pairCode.length);
+        console.log('✨ [v2.0] showStoreStep called, pair code:', pairCode, 'length:', pairCode.length);
+        console.log('🔐 Comparing with MY_PAIRING_CODE:', MY_PAIRING_CODE, 'Match:', pairCode === MY_PAIRING_CODE);
         
         if (pairCode && pairCode.length === 4) {
+            // Security check: Only allow users to configure Pi devices with their own pairing code
+            if (MY_PAIRING_CODE && pairCode !== MY_PAIRING_CODE) {
+                console.warn('❌ Pairing code mismatch - entered:', pairCode, 'expected:', MY_PAIRING_CODE);
+                alert('⚠️ Security: You can only configure devices using your own pairing code (' + MY_PAIRING_CODE + ').\n\nThe code you entered (' + pairCode + ') belongs to a different user.');
+                // Clear the input
+                document.getElementById('piPairCode').value = '';
+                document.getElementById('stepStoreId').style.display = 'none';
+                return;
+            }
+            
             // Fetch stores and screens for this pairing code
             try {
-                const response = await fetch('/api/stores_by_code/' + pairCode);
+                console.log('🔍 [v2.0] Fetching from /api/stores_by_code/' + pairCode);
+                const response = await fetch('/api/stores_by_code/' + pairCode, { cache: 'no-store' });
                 const data = await response.json();
+                console.log('📦 [v2.0] API Response:', data);
                 
                 if (data.success) {
-                    console.log('✅ Fetched user data for pair code:', pairCode, data);
+                    console.log('✅ [v2.0] Fetched user data for pair code:', pairCode, data);
+                    console.log('📊 [v2.0] Screens in response:', data.screens);
+                    console.log('📊 [v2.0] Number of screens for store 1000:', Object.keys(data.screens['1000'] || {}).length);
                     userStoresData = data;
                     
                     // Populate store dropdown with user's actual stores
@@ -1902,7 +1986,7 @@
                         storeSelect.appendChild(opt);
                     });
                     
-                    console.log('Showing store step with', data.stores.length, 'stores');
+                    console.log('✨ [v2.0] Showing store step with', data.stores.length, 'stores');
                     document.getElementById('stepStoreId').style.display = 'block';
                 } else {
                     console.error('❌ Failed to fetch stores:', data.error);
@@ -1917,7 +2001,8 @@
 
     function showScreenStep() {
         const storeId = document.getElementById('piStoreId').value;
-        console.log('showScreenStep called, store ID:', storeId);
+        console.log('✨ [v2.0] showScreenStep called, store ID:', storeId);
+        console.log('🔍 [v2.0] userStoresData:', userStoresData);
         
         if (storeId && userStoresData) {
             // Populate screen dropdown based on user's actual screens for this store
@@ -1928,7 +2013,9 @@
             const storeScreens = userStoresData.screens[storeId] || {};
             const screenIds = Object.keys(storeScreens);
             
-            console.log('Available screens for store', storeId, ':', screenIds);
+            console.log('🎯 [v2.0] Store screens from userStoresData:', storeScreens);
+            console.log('✨ [v2.0] Available screens for store', storeId, ':', screenIds);
+            console.log('Screens data structure:', storeScreens);
             
             if (screenIds.length === 0) {
                 const opt = document.createElement('option');
@@ -1937,20 +2024,38 @@
                 opt.disabled = true;
                 screenSelect.appendChild(opt);
             } else {
-                screenIds.forEach(screenId => {
-                    const screenData = storeScreens[screenId];
+                screenIds.forEach(fullScreenId => {
+                    const screenData = storeScreens[fullScreenId];
                     const opt = document.createElement('option');
-                    opt.value = screenId;
                     
-                    // Use screen name if available, otherwise use screen ID
-                    const screenName = screenData.name || screenData.screen_name || screenId;
-                    opt.textContent = screenName;
+                    // Full screen ID includes store prefix (e.g., "1000_screen1")
+                    // We need to send this full ID to the Pi
+                    opt.value = fullScreenId;
                     
+                    // For display, create a friendly name
+                    // Strip store prefix for cleaner display: "1000_screen1" -> "Screen 1"
+                    let displayName;
+                    if (screenData.name) {
+                        displayName = screenData.name;
+                    } else if (screenData.screen_name) {
+                        displayName = screenData.screen_name;
+                    } else {
+                        // Extract just the screen part: "1000_screen1" -> "screen1"
+                        const screenPart = fullScreenId.includes('_') ? fullScreenId.split('_')[1] : fullScreenId;
+                        // Format nicely: "screen1" -> "Screen 1", "promo1" -> "Promo 1"
+                        displayName = screenPart.replace(/([a-z]+)(\d+)/i, (match, p1, p2) => {
+                            return p1.charAt(0).toUpperCase() + p1.slice(1) + ' ' + p2;
+                        });
+                    }
+                    
+                    opt.textContent = displayName;
                     screenSelect.appendChild(opt);
+                    
+                    console.log(`Added screen option: ${displayName} (value: ${fullScreenId})`);
                 });
             }
             
-            console.log('Showing screen step with', screenIds.length, 'screens');
+            console.log('✨ [v2.0] Showing screen step with', screenIds.length, 'screens');
             document.getElementById('stepScreenId').style.display = 'block';
         }
     }
@@ -2002,19 +2107,52 @@
                 document.getElementById('stepPairCode').style.display = 'block';
                 document.getElementById('piNotConnectedButtons').style.display = 'none';
                 
+                // Show control buttons for online Pi
+                document.getElementById('closeScreenBtn').style.display = 'inline-block';
+                document.getElementById('restartClientBtn').style.display = 'inline-block';
+                document.getElementById('restartPiBtn').style.display = 'inline-block';
+                
+                // Show screen preview section
+                document.getElementById('piScreenPreview').style.display = 'block';
+                
+                // Store Pi IP address for VNC connection
+                piIpAddress = result.ip_address || '192.168.1.131';  // Use detected IP or fallback
+                
                 connectBtn.textContent = 'Connected';
                 connectBtn.style.background = '#4caf50';
                 connectBtn.style.borderColor = '#4caf50';
                 
             } else {
                 // Pi is offline or not found
-                statusContent.innerHTML = '<div style="color:#d32f2f;">❌ <strong>Pi Offline</strong> - ' + piId + ' is not responding</div>';
+                statusContent.innerHTML = `
+                    <div style="color:#d32f2f;">
+                        ❌ <strong>Pi Offline</strong> - ${piId} is not responding
+                        <div style="margin-top: 12px; padding: 12px; background: #fff; border: 1px solid #ffcdd2; border-radius: 8px; font-size: 13px; color: #333;">
+                            <strong style="color:#d32f2f;">Troubleshooting Steps:</strong>
+                            <ol style="margin: 8px 0 0 0; padding-left: 20px; line-height: 1.6;">
+                                <li><strong>Check Pi is powered on</strong> - Verify the device has power and LEDs are lit</li>
+                                <li><strong>Check network connection</strong> - Ensure Pi is connected to WiFi or Ethernet</li>
+                                <li><strong>Restart the Pi</strong> - Unplug power for 10 seconds, then reconnect</li>
+                                <li><strong>Wait 30-60 seconds</strong> - Pi needs time to boot and connect to server</li>
+                                <li><strong>Check Pi client is running</strong>:
+                                    <code style="display:block; margin:4px 0; padding:4px; background:#f5f5f5; border-radius:4px;">
+                                        ssh pi@${piId}.local<br>
+                                        sudo systemctl status phtv-client
+                                    </code>
+                                </li>
+                            </ol>
+                            <div style="margin-top: 12px; padding: 8px; background: #fff3e0; border: 1px solid #ffcc02; border-radius: 6px;">
+                                💡 <strong>Note:</strong> The Pi must be running and connected to the internet to appear online. 
+                                If the Pi was recently restarted or lost internet connection, it may take 1-2 minutes to reconnect.
+                            </div>
+                        </div>
+                    </div>
+                `;
                 statusDiv.style.background = '#ffebee';
                 statusDiv.style.border = '1px solid #ffcdd2';
                 document.getElementById('stepPairCode').style.display = 'none';
                 document.getElementById('stepStoreId').style.display = 'none';
                 document.getElementById('stepScreenId').style.display = 'none';
-                document.getElementById('piNotConnectedButtons').style.display = 'flex';
                 
                 connectBtn.disabled = false;
                 connectBtn.textContent = 'Retry';
@@ -2024,13 +2162,26 @@
 
         } catch (error) {
             console.error('Connection error:', error);
-            statusContent.innerHTML = '<div style="color:#d32f2f;">❌ <strong>Connection Error</strong> - Unable to reach Pi</div>';
+            statusContent.innerHTML = `
+                <div style="color:#d32f2f;">
+                    ❌ <strong>Connection Error</strong> - Unable to check Pi status
+                    <div style="margin-top: 8px; padding: 8px; background: #fff; border: 1px solid #ffcdd2; border-radius: 6px; font-size: 12px; color: #666;">
+                        Error: ${error.message || 'Network error'}
+                        <br><br>
+                        This could mean:
+                        <ul style="margin: 4px 0 0 0; padding-left: 20px;">
+                            <li>Network connection issues</li>
+                            <li>Server is unreachable</li>
+                            <li>Firewall blocking the connection</li>
+                        </ul>
+                    </div>
+                </div>
+            `;
             statusDiv.style.background = '#ffebee';
             statusDiv.style.border = '1px solid #ffcdd2';
             document.getElementById('stepPairCode').style.display = 'none';
             document.getElementById('stepStoreId').style.display = 'none';
             document.getElementById('stepScreenId').style.display = 'none';
-            document.getElementById('piNotConnectedButtons').style.display = 'flex';
             
             connectBtn.disabled = false;
             connectBtn.textContent = 'Retry';
@@ -2040,6 +2191,7 @@
     }
 
     async function configureRemotePi() {
+        console.log('🔧 configureRemotePi() function called');
         const piId = document.getElementById('piId').value.trim();
         const pairCode = document.getElementById('piPairCode').value.trim();
         const storeId = document.getElementById('piStoreId').value;
@@ -2048,11 +2200,16 @@
         const statusDiv = document.getElementById('piConfigStatus');
         const submitBtn = document.getElementById('configureRemotePiBtn');
 
+        console.log('📋 Configuration data:', { piId, pairCode, storeId, screenId, autoStart });
+
         if (!piId || !pairCode || !storeId || !screenId) {
+            console.log('❌ Validation failed - missing fields');
             statusDiv.innerHTML = '<div style="color:#d32f2f; padding:10px; background:#ffebee; border-radius:8px;">❌ Please fill in all required fields</div>';
             statusDiv.style.display = 'block';
             return;
         }
+
+        console.log('✅ All fields validated');
 
         try {
             submitBtn.disabled = true;
@@ -2060,17 +2217,24 @@
             statusDiv.innerHTML = '<div style="color:#0d6efd; padding:10px; background:#e7f3ff; border-radius:8px;">⏳ Sending configuration via WebSocket...</div>';
             statusDiv.style.display = 'block';
 
+            console.log('📡 Checking Pi status at /api/pi-status-ws/' + piId);
+
             // Check Pi is online via WebSocket relay
             const statusResponse = await fetch('/api/pi-status-ws/' + encodeURIComponent(piId));
             const statusData = await statusResponse.json();
 
+            console.log('📥 Pi status response:', statusData);
+
             if (!statusResponse.ok || statusData.status !== 'online') {
+                console.log('❌ Pi is offline or not found');
                 statusDiv.innerHTML = '<div style="color:#d32f2f; padding:10px; background:#ffebee; border-radius:8px;">❌ Pi is offline or not found. Please check connection.</div>';
                 statusDiv.style.display = 'block';
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Configure Pi';
                 return;
             }
+
+            console.log('✅ Pi is online, sending configuration...');
 
             // Extract Pi IP from the pi_id_ip_map on backend (we need to pass it)
             // For now, we'll let the backend resolve it via WebSocket relay
@@ -2086,9 +2250,14 @@
                 })
             });
 
+            console.log('📥 Configuration response status:', response.status);
+
             const result = await response.json();
 
+            console.log('📦 Configuration result:', result);
+
             if (result.success) {
+                console.log('✅ Configuration successful!');
                 statusDiv.innerHTML = `
                     <div style="color:#2e7d32; padding:10px; background:#e8f5e9; border-radius:8px;">
                         ✅ <strong>Configuration successful!</strong><br>
@@ -2097,21 +2266,190 @@
                             Store: ${storeId} | Screen: ${screenId}<br>
                             Pair Code: ${pairCode}
                         </small>
+                        <button type="button" class="btn-secondary" onclick="closeRemotePiManager()" style="margin-top:10px; width:100%; padding:8px;">
+                            ✖️ Close
+                        </button>
                     </div>`;
                 
-                // Close modal after 3 seconds
-                setTimeout(() => {
-                    closeRemotePiManager();
-                }, 3000);
+                // Don't auto-close - let user close manually with the Close button
             } else {
+                console.log('❌ Configuration failed:', result.message);
                 statusDiv.innerHTML = `<div style="color:#d32f2f; padding:10px; background:#ffebee; border-radius:8px;">❌ ${result.message || 'Configuration failed'}</div>`;
             }
         } catch (error) {
-            console.error('Remote Pi configuration error:', error);
+            console.error('❌ Remote Pi configuration error:', error);
             statusDiv.innerHTML = '<div style="color:#d32f2f; padding:10px; background:#ffebee; border-radius:8px;">❌ Network error. Please check your connection.</div>';
         } finally {
             submitBtn.disabled = false;
             submitBtn.textContent = 'Configure Pi';
+        }
+    }
+
+    async function closeScreen() {
+        const piId = document.getElementById('piId').value.trim();
+        const closeBtn = document.getElementById('closeScreenBtn');
+        const statusDiv = document.getElementById('piConfigStatus');
+        
+        if (!piId) {
+            alert('Please enter a Pi Identifier first');
+            return;
+        }
+        
+        if (!confirm(`Stop playback and close screen on ${piId}?`)) {
+            return;
+        }
+        
+        try {
+            closeBtn.disabled = true;
+            closeBtn.textContent = '⏹️ Closing...';
+            statusDiv.innerHTML = '<div style="color:#0d6efd; padding:10px; background:#e7f3ff; border-radius:8px;">⏳ Sending close command...</div>';
+            statusDiv.style.display = 'block';
+            
+            const response = await fetch('/api/pi-close-screen', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pi_id: piId })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                statusDiv.innerHTML = '<div style="color:#2e7d32; padding:10px; background:#e8f5e9; border-radius:8px;">✅ Screen closed successfully!</div>';
+            } else {
+                statusDiv.innerHTML = `<div style="color:#d32f2f; padding:10px; background:#ffebee; border-radius:8px;">❌ ${result.message || 'Failed to close screen'}</div>`;
+            }
+        } catch (error) {
+            console.error('Close screen error:', error);
+            statusDiv.innerHTML = '<div style="color:#d32f2f; padding:10px; background:#ffebee; border-radius:8px;">❌ Network error</div>';
+        } finally {
+            closeBtn.disabled = false;
+            closeBtn.textContent = '⏹️ Close Screen';
+        }
+    }
+    
+    async function restartPi() {
+        console.log('🔄 restartPi() function called');
+        const piId = document.getElementById('piId').value.trim();
+        const restartBtn = document.getElementById('restartPiBtn');
+        const statusDiv = document.getElementById('piConfigStatus');
+        
+        console.log('🔍 Pi ID:', piId);
+        
+        if (!piId) {
+            console.log('❌ No Pi ID entered');
+            alert('Please enter a Pi Identifier first');
+            return;
+        }
+        
+        console.log('⚠️ Showing confirmation dialog...');
+        if (!confirm(`⚠️ WARNING: This will restart ${piId}!\n\nThe Pi will reboot and may take 1-2 minutes to come back online.\n\nContinue?`)) {
+            console.log('❌ User cancelled restart');
+            return;
+        }
+        
+        console.log('✅ User confirmed restart');
+        
+        try {
+            restartBtn.disabled = true;
+            restartBtn.textContent = '🔄 Restarting...';
+            statusDiv.innerHTML = '<div style="color:#ff9800; padding:10px; background:#fff3e0; border-radius:8px;">⚠️ Sending restart command... Pi will reboot shortly.</div>';
+            statusDiv.style.display = 'block';
+            
+            console.log('📤 Sending POST to /api/pi-restart with:', { pi_id: piId });
+            
+            const response = await fetch('/api/pi-restart', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pi_id: piId })
+            });
+            
+            console.log('📥 Response status:', response.status);
+            
+            const result = await response.json();
+            
+            console.log('📦 Response data:', result);
+            
+            if (result.success) {
+                console.log('✅ Restart command sent successfully');
+                statusDiv.innerHTML = '<div style="color:#ff9800; padding:10px; background:#fff3e0; border-radius:8px;">🔄 Restart command sent! Pi is rebooting... <br><small>Please wait 1-2 minutes for Pi to come back online.</small></div>';
+                
+                // Hide control buttons temporarily
+                document.getElementById('closeScreenBtn').style.display = 'none';
+                document.getElementById('restartPiBtn').style.display = 'none';
+                document.getElementById('connectPiBtn').textContent = 'Reconnect';
+                document.getElementById('connectPiBtn').style.background = '#0066cc';
+                document.getElementById('connectPiBtn').style.borderColor = '#0066cc';
+            } else {
+                console.error('❌ Restart failed:', result.message);
+                statusDiv.innerHTML = `<div style="color:#d32f2f; padding:10px; background:#ffebee; border-radius:8px;">❌ ${result.message || 'Failed to restart Pi'}</div>`;
+            }
+        } catch (error) {
+            console.error('❌ Restart Pi error:', error);
+            statusDiv.innerHTML = '<div style="color:#d32f2f; padding:10px; background:#ffebee; border-radius:8px;">❌ Network error</div>';
+        } finally {
+            restartBtn.disabled = false;
+            restartBtn.textContent = '🔄 Restart Pi';
+        }
+    }
+
+    async function restartClient() {
+        const piId = document.getElementById('piId').value.trim();
+        if (!piId) {
+            alert('Please enter a Pi identifier first');
+            return;
+        }
+        
+        if (!confirm('⚠️ This will restart the complete_pi_client software on the Pi. The screen will briefly go blank. Continue?')) {
+            return;
+        }
+        
+        const restartBtn = document.getElementById('restartClientBtn');
+        const statusDiv = document.getElementById('piConfigStatus');
+        
+        try {
+            restartBtn.disabled = true;
+            restartBtn.textContent = '🔄 Restarting...';
+            statusDiv.innerHTML = '<div style="color:#2196F3; padding:10px; background:#E3F2FD; border-radius:8px;">🔄 Restarting client software...</div>';
+            statusDiv.style.display = 'block';
+            
+            // Send WebSocket command to restart client
+            if (socket && socket.connected) {
+                socket.emit('restart_client', { pi_id: piId });
+                console.log('🔄 Restart client command sent via WebSocket');
+                
+                // Listen for restart confirmation
+                socket.once('client_restarting', function(data) {
+                    if (data.pi_id === piId) {
+                        if (data.status === 'restarting') {
+                            statusDiv.innerHTML = '<div style="color:#4caf50; padding:10px; background:#E8F5E9; border-radius:8px;">✅ Client is restarting... <br><small>Screen will reconnect in 5-10 seconds.</small></div>';
+                            
+                            // Try to reconnect after 8 seconds
+                            setTimeout(() => {
+                                statusDiv.innerHTML = '<div style="color:#2196F3; padding:10px; background:#E3F2FD; border-radius:8px;">🔄 Reconnecting...</div>';
+                            }, 8000);
+                        } else if (data.status === 'error') {
+                            statusDiv.innerHTML = `<div style="color:#d32f2f; padding:10px; background:#ffebee; border-radius:8px;">❌ Error: ${data.error}</div>`;
+                        }
+                    }
+                });
+                
+                // Timeout if no response
+                setTimeout(() => {
+                    if (statusDiv.innerHTML.includes('Restarting client')) {
+                        statusDiv.innerHTML = '<div style="color:#ff9800; padding:10px; background:#fff3e0; border-radius:8px;">⚠️ Command sent but no confirmation received. Client may be restarting...</div>';
+                    }
+                }, 5000);
+                
+            } else {
+                statusDiv.innerHTML = '<div style="color:#d32f2f; padding:10px; background:#ffebee; border-radius:8px;">❌ Not connected to server</div>';
+            }
+            
+        } catch (error) {
+            console.error('❌ Restart client error:', error);
+            statusDiv.innerHTML = '<div style="color:#d32f2f; padding:10px; background:#ffebee; border-radius:8px;">❌ Error: ' + error.message + '</div>';
+        } finally {
+            restartBtn.disabled = false;
+            restartBtn.textContent = '🔄 Restart Client';
         }
     }
 
@@ -2351,7 +2689,7 @@
     // Initialize store search once stores data is available and selection resolved
     try { initStoreSearch(); } catch {}
 
-        // --- Effect setter ---
+    // --- Effect setter ---
         async function setItemEffect(screenId, itemId, effect, btn){
             try{
                 const body = (effect && effect.length) ? { effect } : { effect: '' };
@@ -2365,6 +2703,8 @@
                 try { safeFetchJson(`/playlist/${currentStoreId}/${screenId}`).then(res=>{ const d = res.json||{}; if(res.ok && d.success) updatePreviewPlaylist(screenId, d.playlist||[]); }); } catch {}
             }catch(e){ console.warn('setItemEffect failed', e); alert('Failed to update effect'); }
         }
+
+        // (Removed global Transitions toggle; per-item effects remain)
 
         // --- Store Search Setup ---
         function initStoreSearch(){
@@ -3211,10 +3551,67 @@
             if (hint) hint.style.display = (selectedIds && selectedIds.length) ? 'block' : 'none';
             modal.classList.add('show');
             backdrop.classList.add('show');
+            // Wire Enter key on search and focus it
+            try {
+                const inp = document.getElementById('applyStoreSearch');
+                if (inp) {
+                    inp.value = '';
+                    inp.onkeydown = function(e){ if(e.key === 'Enter'){ e.preventDefault(); searchAndTickApplyStores(); } };
+                    setTimeout(()=> inp.focus(), 50);
+                }
+            } catch {}
         }
         function closeApplyAllModal(){
             document.getElementById('applyAllModal').classList.remove('show');
             document.getElementById('applyAllModalBackdrop').classList.remove('show');
+        }
+
+        // --- Apply-All modal helpers: search & clear ---
+        function clearApplyStoreSelection(){
+            try{
+                const cbs = document.querySelectorAll('#applyAllList input.apply-store');
+                cbs.forEach(cb=> cb.checked = false);
+            }catch{}
+        }
+        function searchAndTickApplyStores(){
+            try{
+                const input = document.getElementById('applyStoreSearch');
+                const qraw = (input && input.value || '').trim();
+                if(!qraw){ showMessage('Enter store name or ID to search', '#e67e22'); return; }
+                // Tokenize on comma or space; use OR matching across tokens
+                const tokens = qraw.split(/[\s,]+/).map(s=>s.trim()).filter(Boolean);
+                const norm = (s)=> String(s||'').toLowerCase().normalize('NFKD').replace(/\p{Diacritic}+/gu,'');
+                const list = document.getElementById('applyAllList');
+                const rows = Array.from(list ? list.querySelectorAll('li') : []);
+                let matchCount = 0;
+                rows.forEach(li=>{
+                    const label = li.querySelector('label');
+                    const cb = li.querySelector('input.apply-store');
+                    if(!label || !cb) return;
+                    const sid = (cb.getAttribute('data-store-id')||'').toString();
+                    const nameText = (label.textContent||'').toString();
+                    const hayName = norm(nameText);
+                    const hayId = sid;
+                    const isMatch = tokens.some(tok=>{
+                        const tnorm = norm(tok);
+                        const tdigs = /^\d+$/.test(tok);
+                        if(tdigs){
+                            return hayId.startsWith(tok) || hayId.includes(tok);
+                        }
+                        return hayName.includes(tnorm) || hayId.includes(tok);
+                    });
+                    if(isMatch){
+                        if(!cb.checked){ cb.checked = true; }
+                        matchCount++;
+                        // brief highlight
+                        label.style.background = '#fff8e1';
+                        label.style.borderRadius = '6px';
+                        setTimeout(()=>{ label.style.background=''; }, 900);
+                    }
+                });
+                if(matchCount===0){ showMessage('No matching stores found', '#e67e22'); }
+                else { showMessage(`Ticked ${matchCount} matching store${matchCount>1?'s':''}`); }
+            }catch(e){ console.warn('searchAndTickApplyStores error', e); }
         }
         function confirmApplyAll(){
             const { screenId, mode, selectedIds } = applyAllModalState;
@@ -3735,14 +4132,17 @@
             // Get current screen data to find current rotation
             const screensData = allStoresData.screens[currentStoreId] || {};
             const currentData = screensData[screenId];
-            const master = isMasterStore(currentStoreId);
-            if(!master && !(currentData && currentData.protected)){
-                showMessage('🔒 Protect this screen first ("Protect from Apply All") to rotate here. Master store or protected screens only.', '#e67e22');
-                return;
-            }
             
             if (!currentData) {
                 alert('Screen data not found');
+                return;
+            }
+            
+            // Allow rotation on master store OR if screen is protected
+            const master = isMasterStore(currentStoreId);
+            const isProtected = currentData && currentData.protected === true;
+            if(!master && !isProtected){
+                showMessage('🔒 Please enable "Protect from Apply All" first to rotate this screen.', '#e67e22');
                 return;
             }
             
@@ -4014,7 +4414,19 @@
                                                                                         </div>
                                                                                 </div>
                                                                                 <div class="effect-row" data-screen="${screenId}" data-item="${item.id}">
-                                                                                    ${(true && !(item && item.sync_ref && item.sync_ref.role==='follower' && idx===0)) ? [ ['', ''], ['1','fade'], ['2','slide-l'], ['3','slide-r'], ['4','zoom-in'], ['5','zoom-out'], ['6','rotate'] ].map(([num,val])=>{
+                                                                                    ${(true && !(item && item.sync_ref && item.sync_ref.role==='follower' && idx===0)) ? [
+                                                                                        ['', ''],
+                                                                                        ['1','cut'],
+                                                                                        ['2','fade'],
+                                                                                        ['3','dissolve'],
+                                                                                        ['4','slide-l'],
+                                                                                        ['5','slide-r'],
+                                                                                        ['6','slide-up'],
+                                                                                        ['7','slide-down'],
+                                                                                        ['8','zoom-in'],
+                        													['9','zoom-out'],
+                                                                                        ['10','wipe-lr']
+                                                                                    ].map(([num,val])=>{
                                                                                         const active = (String(item.effect||'')===val) || (!item.effect && val==='');
                                                                                         const text = num || '·';
                                                                                         return `<button type="button" class="effect-btn ${active?'active':''}" title="${val||'none'}" data-effect="${val}" onclick="setItemEffect('${screenId}','${item.id}','${val}', this)">${text}</button>`;
@@ -4722,6 +5134,43 @@
                     if(f) return `f:${f.split('?')[0]}`;
                     return (item && item.file) ? `n:${String(item.file).split('/').pop()}` : '';
                 }catch{ return ''; }
+             }
+
+             // ---- Preview stability helpers (must be before runPreview) ----
+             function preloadImage(url, timeoutMs=1800){
+                return new Promise((resolve,reject)=>{
+                    const img = new Image();
+                    let done = false;
+                    const finish = (ok, val)=>{ if(done) return; done = true; clearTimeout(tid); ok? resolve(val): reject(val); };
+                    const tid = setTimeout(()=>{
+                        // Timeout: resolve with the element anyway so caller can swap and let error fallback kick in
+                        resolve(img);
+                    }, timeoutMs);
+                    img.onload = ()=> finish(true, img);
+                    img.onerror = (e)=> finish(false, e);
+                    img.src = url;
+                });
+             }
+             function preloadVideo(url, timeoutMs=2200){
+                return new Promise((resolve,reject)=>{
+                    const v = document.createElement('video');
+                    // Set attributes that maximize autoplay compatibility across browsers
+                    v.muted = true; v.setAttribute('muted','');
+                    v.autoplay = true; v.setAttribute('autoplay','');
+                    v.playsInline = true; v.setAttribute('playsinline','');
+                    v.preload = 'auto';
+                    let done = false;
+                    const finish = (ok, val)=>{ if(done) return; done = true; clearTimeout(tid); v.removeEventListener('canplay', onReady); v.removeEventListener('error', onErr); ok? resolve(val): reject(val); };
+                    const onReady = ()=> finish(true, v);
+                    const onErr = (e)=> finish(false, e);
+                    const tid = setTimeout(()=>{
+                        // Timeout: resolve with the element so caller can display it; browser will continue loading
+                        finish(true, v);
+                    }, timeoutMs);
+                    v.addEventListener('canplay', onReady);
+                    v.addEventListener('error', onErr);
+                    v.src = url;
+                });
              }
 
              function updatePreviewPlaylist(screenId, items){
@@ -6789,42 +7238,7 @@
         }
     </script>
     <script>
-    // ---- Preview stability helpers ----
-    function preloadImage(url, timeoutMs=1800){
-        return new Promise((resolve,reject)=>{
-            const img = new Image();
-            let done = false;
-            const finish = (ok, val)=>{ if(done) return; done = true; clearTimeout(tid); ok? resolve(val): reject(val); };
-            const tid = setTimeout(()=>{
-                // Timeout: resolve with the element anyway so caller can swap and let error fallback kick in
-                resolve(img);
-            }, timeoutMs);
-            img.onload = ()=> finish(true, img);
-            img.onerror = (e)=> finish(false, e);
-            img.src = url;
-        });
-    }
-    function preloadVideo(url, timeoutMs=2200){
-        return new Promise((resolve,reject)=>{
-            const v = document.createElement('video');
-            // Set attributes that maximize autoplay compatibility across browsers
-            v.muted = true; v.setAttribute('muted','');
-            v.autoplay = true; v.setAttribute('autoplay','');
-            v.playsInline = true; v.setAttribute('playsinline','');
-            v.preload = 'auto';
-            let done = false;
-            const finish = (ok, val)=>{ if(done) return; done = true; clearTimeout(tid); v.removeEventListener('canplay', onReady); v.removeEventListener('error', onErr); ok? resolve(val): reject(val); };
-            const onReady = ()=> finish(true, v);
-            const onErr = (e)=> finish(false, e);
-            const tid = setTimeout(()=>{
-                // Timeout: resolve with the element so caller can display it; browser will continue loading
-                finish(true, v);
-            }, timeoutMs);
-            v.addEventListener('canplay', onReady);
-            v.addEventListener('error', onErr);
-            v.src = url; v.load();
-        });
-    }
+    // ---- Video playback and preview swapping helpers ----
     // Attempt to start playback; ignore rejections (autoplay policy differences)
     function tryPlay(videoEl){
         try{
@@ -6932,6 +7346,315 @@
             preloadImage(url).then(img=>{ img.decoding='async'; img.setAttribute('fetchpriority','high'); img.style.maxWidth='100%'; img.style.maxHeight='100%'; img.style.objectFit='contain'; if(rotation){ img.className='rotate-'+rotation; } setOrig(img, url); show(build(img)); }).catch(()=>{ const img=document.createElement('img'); img.src=url; img.decoding='async'; img.setAttribute('fetchpriority','high'); if(rotation){ img.className='rotate-'+rotation; } setOrig(img, url); show(build(img)); });
         }
     }
+
+    // ========================================
+    // Socket.IO Initialization (Must be before screen preview functions)
+    // ========================================
+    let socket = null;
+    
+    // Load Socket.IO dynamically
+    (function() {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.socket.io/4.5.4/socket.io.min.js';
+        script.onload = function() {
+            // Initialize Socket.IO connection with polling only (Cloudflare compatible)
+            socket = io({
+                transports: ['polling'],  // Use polling only, no WebSocket upgrade
+                upgrade: false,            // Disable WebSocket upgrade
+                reconnection: true,
+                reconnectionDelay: 1000,
+                reconnectionAttempts: 5
+            });
+            
+            socket.on('connect', function() {
+                console.log('✅ Connected for live remote viewing (polling mode)');
+                console.log('📡 Transport:', socket.io.engine.transport.name);
+            });
+            
+            socket.on('disconnect', function() {
+                console.log('❌ Disconnected');
+            });
+            
+            socket.on('connect_error', function(error) {
+                console.error('❌ Connection error:', error);
+            });
+            
+            // Listen for LIVE FRAMES from Pi (continuous streaming)
+            socket.on('live_frame', function(data) {
+                if (!previewActive) return;
+
+                const imgEl = document.getElementById('piScreenImage');
+                const loadingEl = document.getElementById('piScreenLoading');
+                const infoEl = document.getElementById('piScreenInfo');
+                const fpsEl = document.getElementById('piScreenFps');
+
+                // data.frame contains base64 encoded JPEG frame
+                if (data.frame) {
+                    imgEl.src = 'data:image/jpeg;base64,' + data.frame;
+                    imgEl.style.display = 'block';
+                    loadingEl.style.display = 'none';
+
+                    // Update frame counter and calculate FPS
+                    frameCount++;
+                    const now = Date.now();
+                    const elapsed = (now - lastFrameTime) / 1000;
+                    if (elapsed > 0) {
+                        const fps = (1 / elapsed);
+                        
+                        // Track FPS history for smoothing
+                        fpsHistory.push(fps);
+                        if (fpsHistory.length > 10) fpsHistory.shift();
+                        
+                        // Calculate average FPS
+                        const avgFps = (fpsHistory.reduce((a, b) => a + b, 0) / fpsHistory.length).toFixed(1);
+                        fpsEl.textContent = avgFps + ' fps';
+                    }
+                    lastFrameTime = now;
+
+                    infoEl.textContent = '🔴 LIVE • Frame ' + frameCount;
+                    infoEl.style.color = '#4caf50';
+                    
+                    // CRITICAL: Reset disconnect timeout
+                    // If no frames arrive for 3 seconds, show disconnected state
+                    if (disconnectTimeout) {
+                        clearTimeout(disconnectTimeout);
+                    }
+                    disconnectTimeout = setTimeout(function() {
+                        // No frames received for 3 seconds - Pi is disconnected
+                        imgEl.style.display = 'none';
+                        loadingEl.style.display = 'block';
+                        loadingEl.textContent = '❌ Pi Disconnected';
+                        loadingEl.style.color = '#d32f2f';
+                        infoEl.textContent = '❌ Connection Lost';
+                        infoEl.style.color = '#d32f2f';
+                        fpsEl.textContent = '0 fps';
+                        fpsHistory = [];
+                        console.log('⚠️ No frames received for 3 seconds - Pi disconnected');
+                    }, 3000);  // 3 second timeout
+                } else if (data.error) {
+                    loadingEl.style.display = 'none';
+                    infoEl.textContent = 'Error: ' + data.error;
+                    infoEl.style.color = '#d32f2f';
+                }
+            });
+            
+            // Legacy screenshot handler (fallback)
+            socket.on('screenshot_data', function(data) {
+                if (!previewActive) return;
+
+                const imgEl = document.getElementById('piScreenImage');
+                const loadingEl = document.getElementById('piScreenLoading');
+                const infoEl = document.getElementById('piScreenInfo');
+                const fpsEl = document.getElementById('piScreenFps');
+
+                if (data.screenshot) {
+                    imgEl.src = 'data:image/jpeg;base64,' + data.screenshot;
+                    imgEl.style.display = 'block';
+                    loadingEl.style.display = 'none';
+                    frameCount++;
+                    infoEl.textContent = 'Frame ' + frameCount;
+                } else if (data.error) {
+                    loadingEl.style.display = 'none';                    infoEl.textContent = 'Error: ' + data.error;
+                    infoEl.style.color = '#d32f2f';
+                }
+            });
+        };
+        document.head.appendChild(script);
+    })();
+
+    // ========================================
+    // Pi Live Remote Viewing Functions (VNC-style)
+    // ========================================
+    let vncActive = false;
+    let vncSocket = null;
+    let vncCanvas = null;
+    let vncContext = null;
+
+    function toggleVncViewer() {
+        if (vncActive) {
+            stopVncViewer();
+        } else {
+            startVncViewer();
+        }
+    }
+
+    function startVncViewer() {
+        const piId = document.getElementById('piId').value.trim();
+        if (!piId) {
+            alert('Please connect to a Pi first');
+            return;
+        }
+
+        // Hide placeholder, show loading
+        document.getElementById('piScreenPlaceholder').style.display = 'none';
+        document.getElementById('piScreenLoading').style.display = 'block';
+        document.getElementById('piScreenLoading').textContent = 'Connecting to Pi...';
+        
+        // Create canvas for VNC rendering
+        const container = document.getElementById('piScreenContainer');
+        vncCanvas = document.createElement('canvas');
+        vncCanvas.id = 'vncCanvas';
+        vncCanvas.style.width = '100%';
+        vncCanvas.style.height = '100%';
+        vncCanvas.style.objectFit = 'cover';
+        vncCanvas.style.borderRadius = '8px';
+        vncCanvas.style.imageRendering = 'auto'; // Better quality
+        vncCanvas.style.display = 'block';
+        container.appendChild(vncCanvas);
+        vncContext = vncCanvas.getContext('2d', { alpha: false }); // Optimize for performance
+        
+        // Function to resize canvas to fill container completely
+        function resizeCanvas() {
+            if (!vncCanvas) return;
+            
+            const rect = container.getBoundingClientRect();
+            vncCanvas.style.width = '100%';
+            vncCanvas.style.height = '100%';
+            
+            console.log('📐 Canvas resized to fill container:', {
+                container: `${rect.width}x${rect.height}`,
+                canvas: `${vncCanvas.width}x${vncCanvas.height}`
+            });
+        }
+        
+        // Initial resize and add resize listener
+        resizeCanvas();
+        const resizeObserver = new ResizeObserver(resizeCanvas);
+        resizeObserver.observe(container);
+        
+        // Wait for main socket connection (reuse existing socket, don't create new one)
+        if (!socket || !socket.connected) {
+            document.getElementById('piScreenLoading').textContent = 'Waiting for connection...';
+            // Wait for main socket to connect
+            const checkSocket = setInterval(() => {
+                if (socket && socket.connected) {
+                    clearInterval(checkSocket);
+                    initVncConnection();
+                }
+            }, 100);
+        } else {
+            initVncConnection();
+        }
+        
+        function initVncConnection() {
+            console.log('✅ Using existing socket for VNC');
+            document.getElementById('piScreenInfo').textContent = 'Connecting to Pi...';
+            
+            // Use the existing main socket connection
+            vncSocket = socket;
+            
+            // Request VNC connection
+            socket.emit('vnc_connect', { pi_id: piId });
+            
+            // Set up VNC event listeners (use 'once' to avoid duplicate listeners)
+            socket.off('vnc_connected'); // Remove old listeners
+            socket.off('vnc_data');
+            socket.off('vnc_error');
+            socket.off('vnc_disconnected');
+            
+            socket.on('vnc_connected', (data) => {
+                console.log('🖥️ VNC connected:', data);
+                vncActive = true;
+                document.getElementById('vncToggleText').textContent = '⏹ Stop VNC';
+                document.getElementById('piScreenLoading').style.display = 'none';
+                document.getElementById('piScreenInfo').textContent = `✅ Connected (${data.width || 1920}x${data.height || 1080})`;
+                
+                // Set canvas actual pixel dimensions
+                if (data.width && data.height) {
+                    vncCanvas.width = data.width;
+                    vncCanvas.height = data.height;
+                } else {
+                    vncCanvas.width = 1920;
+                    vncCanvas.height = 1080;
+                }
+                
+                // Force resize to update display dimensions
+                resizeCanvas();
+                
+                console.log('📺 Canvas configured:', {
+                    actualSize: `${vncCanvas.width}x${vncCanvas.height}`,
+                    displaySize: `${vncCanvas.style.width} x ${vncCanvas.style.height}`
+                });
+            });
+
+            socket.on('vnc_data', (data) => {
+                // Receive and render VNC frames
+                if (data.frame && vncCanvas && vncContext) {
+                    const img = new Image();
+                    img.onload = () => {
+                        // Clear canvas and draw new frame
+                        vncContext.clearRect(0, 0, vncCanvas.width, vncCanvas.height);
+                        vncContext.drawImage(img, 0, 0, vncCanvas.width, vncCanvas.height);
+                        
+                        // Update FPS display
+                        const now = Date.now();
+                        if (window.lastVncFrame) {
+                            const fps = Math.round(1000 / (now - window.lastVncFrame));
+                            document.getElementById('piScreenFps').textContent = fps + ' fps';
+                        }
+                        window.lastVncFrame = now;
+                    };
+                    img.onerror = () => {
+                        console.error('❌ Failed to load VNC frame');
+                    };
+                    img.src = 'data:image/jpeg;base64,' + data.frame;
+                }
+            });
+
+            socket.on('vnc_error', (data) => {
+                console.error('❌ VNC error:', data);
+                document.getElementById('piScreenLoading').textContent = 'Error: ' + (data.message || 'Connection failed');
+                document.getElementById('piScreenInfo').textContent = '❌ Error';
+                stopVncViewer();
+            });
+
+            socket.on('vnc_disconnected', () => {
+                console.log('❌ VNC disconnected');
+                if (vncActive) {
+                    document.getElementById('piScreenInfo').textContent = '❌ Disconnected';
+                    stopVncViewer();
+                }
+            });
+        }
+    }
+
+    function stopVncViewer() {
+        vncActive = false;
+        
+        // Send disconnect signal (but don't disconnect the main socket!)
+        if (socket && socket.connected) {
+            socket.emit('vnc_disconnect', { pi_id: document.getElementById('piId').value.trim() });
+            
+            // Remove VNC event listeners
+            socket.off('vnc_connected');
+            socket.off('vnc_data');
+            socket.off('vnc_error');
+            socket.off('vnc_disconnected');
+        }
+        
+        vncSocket = null;
+        
+        // Remove canvas
+        if (vncCanvas) {
+            vncCanvas.remove();
+            vncCanvas = null;
+            vncContext = null;
+        }
+        
+        // Reset UI
+        document.getElementById('piScreenPlaceholder').style.display = 'block';
+        document.getElementById('piScreenLoading').style.display = 'none';
+        document.getElementById('vncToggleText').textContent = '▶ Start VNC';
+        document.getElementById('piScreenInfo').textContent = 'Ready';
+        console.log('🖥️ VNC viewer stopped');
+    }
+
+    // copyVncAddress function removed - VNC section no longer displayed
+
+    // Explicitly expose VNC functions to global scope for inline onclick handlers
+    window.toggleVncViewer = toggleVncViewer;
+    window.startVncViewer = startVncViewer;
+    window.stopVncViewer = stopVncViewer;
     </script>
     
     <!-- Add Store Modal -->
@@ -6982,85 +7705,168 @@
 
     <!-- Remote Pi Manager Modal -->
     <div id="remotePiManagerModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="remotePiManagerTitle">
-        <div class="modal-content" role="document" style="max-width: 500px;">
+        <div class="modal-content" role="document">
             <div class="modal-header">
                 <h3 id="remotePiManagerTitle">🖥️ Remote Pi Manager</h3>
                 <button type="button" class="close" aria-label="Close" onclick="closeRemotePiManager()" title="Close">&times;</button>
             </div>
-            <form id="remotePiManagerForm" onsubmit="event.preventDefault(); configureRemotePi();">
-                <p class="helper" style="padding:0 18px;">Configure a Raspberry Pi remotely by entering its identifier and connection settings.</p>
-                
+            
+            <!-- Main Content Container -->
+            <div style="max-width: 100%; margin: 0 auto; padding: 16px;">
+                <!-- Single Column Layout -->
+                <div style="background: white; border-radius: 12px; padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+                    <form id="remotePiManagerForm" onsubmit="event.preventDefault(); configureRemotePi();">
+                        <p class="helper" style="font-size: 13px; margin-bottom: 16px;">Configure a Raspberry Pi remotely by entering its identifier and connection settings.</p>
 
-                <!-- Step 1: Pi Connection -->
-                <div class="form-group" style="padding: 0 18px;">
-                    <label for="piId">Pi Identifier *</label>
-                    <div style="display: flex; gap: 8px; align-items: flex-start;">
-                        <input type="text" id="piId" placeholder="e.g., raspberrypi-ce39" required autofocus style="flex: 1;">
-                        <button type="button" id="connectPiBtn" onclick="connectToPi()" style="padding: 10px 16px; border-radius: 8px; border: 1px solid #0066cc; background: #0066cc; color: white; font-size: 14px; cursor: pointer; white-space: nowrap;">
-                            Connect
-                        </button>
-                    </div>
-                    <small style="color:#666; font-size:12px;">Use hostname (raspberrypi), MAC address, or custom ID</small>
-                </div>
+                        <!-- Step 1: Pi Connection -->
+                        <div class="form-group">
+                            <label for="piId">Pi Identifier *</label>
+                            <div style="display: flex; gap: 8px; align-items: flex-start;">
+                                <input type="text" id="piId" placeholder="e.g., raspberrypi-ce39" required autofocus style="flex: 1;">
+                                <button type="button" id="connectPiBtn" onclick="connectToPi()" style="padding: 10px 20px; border-radius: 8px; border: none; background: #667eea; color: white; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.2s;">
+                                    Connect
+                                </button>
+                            </div>
+                            <small style="color:#666; font-size:13px;">Use hostname (raspberrypi), MAC address, or custom ID</small>
+                        </div>
 
-                <!-- Removed Pi IP Address field (auto resolution enabled) -->
+                        <!-- Pi Status Display -->
+                        <div id="piConnectionStatus" style="display: none; padding: 12px; border-radius: 10px; font-size: 14px; margin-bottom: 16px;">
+                            <div id="piStatusContent"></div>
+                        </div>
 
-                <!-- Pi Status Display -->
-                <div id="piConnectionStatus" style="display: none; padding: 8px 18px; margin: 0 18px; border-radius: 8px; font-size: 14px; margin-bottom: 16px;">
-                    <div id="piStatusContent"></div>
-                </div>
+                        <!-- Live Preview Section (Under Pi Online Status) -->
+                        <div id="piScreenPreview" style="display: none; margin-top: 20px;">
+                            <div style="border-top: 1px solid #e5e5ea; padding-top: 20px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                    <div>
+                                        <h3 style="margin: 0 0 2px 0; font-size: 15px; color: #1d1d1f; font-weight: 600;">🖥️ Live Preview</h3>
+                                        <p style="margin: 0; font-size: 11px; color: #86868b;">Real-time screen view</p>
+                                    </div>
+                                    <button type="button" onclick="toggleVncViewer()" style="padding: 6px 14px; border-radius: 6px; border: none; background: #667eea; color: white; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                                        <span id="vncToggleText">▶ Start</span>
+                                    </button>
+                                </div>
+                                
+                                <!-- Compact VNC Display Area -->
+                                <div id="piScreenContainer" style="background: #000; border-radius: 8px; height: 280px; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; box-shadow: inset 0 2px 6px rgba(0,0,0,0.2);">
+                                    <!-- Canvas will be inserted here dynamically -->
+                                    <div id="piScreenPlaceholder" style="color: #999; font-size: 13px; text-align: center; padding: 16px;">
+                                        <div style="font-size: 40px; margin-bottom: 10px; opacity: 0.5;">🖥️</div>
+                                        <div style="font-size: 14px; font-weight: 600; margin-bottom: 4px;">VNC Preview</div>
+                                        <small style="display: block; font-size: 11px; color: #666;">Click "Start" to view</small>
+                                    </div>
+                                    <div id="piScreenLoading" style="display: none; color: #999; font-size: 13px; text-align: center;">
+                                        <div style="font-size: 32px; margin-bottom: 8px;">⏳</div>
+                                        <div>Connecting...</div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Compact Status Bar -->
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; padding: 6px 10px; background: #f5f5f7; border-radius: 6px;">
+                                    <span id="piScreenInfo" style="font-size: 10px; color: #666; font-weight: 500;">Ready</span>
+                                    <span id="piScreenFps" style="font-size: 10px; color: #667eea; font-weight: 600;"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- form continues with other fields -->
 
                 <!-- Step 2: Pairing Code -->
-                <div id="stepPairCode" class="form-group" style="padding: 0 18px; display:none;">
+                <div id="stepPairCode" class="form-group" style="display:none;">
                     <label for="piPairCode">Your Pairing Code *</label>
-                    <input type="text" id="piPairCode" placeholder="e.g., 3835" value="" required pattern="[0-9]{4}" maxlength="4" oninput="showStoreStep()">
-                    <small style="color:#666; font-size:12px;">Enter your 4-digit pairing code to continue</small>
+                    <input type="text" id="piPairCode" placeholder="{{ link_code or '----' }}" value="{{ link_code or '' }}" required pattern="[0-9]{4}" maxlength="4" oninput="showStoreStep()">
+                    <small style="color:#666; font-size:13px;">
+                        Your pairing code: <strong>{{ link_code or '----' }}</strong> • Use this code to link your devices
+                    </small>
                 </div>
 
                 <!-- Step 3: Store Selection -->
-                <div id="stepStoreId" class="form-group" style="padding: 0 18px; display:none;">
+                <div id="stepStoreId" class="form-group" style="display:none;">
                     <label for="piStoreId">Store ID *</label>
-                    <select id="piStoreId" style="width:100%; padding:10px; border-radius:12px; border:1px solid rgba(60,60,67,0.29); font-size:14px;" onchange="showScreenStep()">
+                    <select id="piStoreId" style="width:100%; padding:10px; border-radius:10px; border:1px solid rgba(60,60,67,0.29); font-size:14px;" onchange="showScreenStep()">
                         <option value="">Select Store...</option>
                         {% for store in config.stores %}
                         <option value="{{ store.id }}">{{ store.id }} - {{ store.name }}</option>
                         {% endfor %}
                     </select>
-                    <small style="color:#666; font-size:12px;">Which store this Pi belongs to</small>
+                    <small style="color:#666; font-size:13px;">Which store this Pi belongs to</small>
                 </div>
 
                 <!-- Step 4: Screen Selection -->
-                <div id="stepScreenId" class="form-group" style="padding: 0 18px; display:none;">
+                <div id="stepScreenId" class="form-group" style="display:none;">
                     <label for="piScreenId">Screen ID *</label>
-                    <select id="piScreenId" style="width:100%; padding:10px; border-radius:12px; border:1px solid rgba(60,60,67,0.29); font-size:14px;">
+                    <select id="piScreenId" style="width:100%; padding:10px; border-radius:10px; border:1px solid rgba(60,60,67,0.29); font-size:14px;">
                         <option value="">Select Screen...</option>
                     </select>
-                    <small style="color:#666; font-size:12px;">Which screen content to display</small>
+                    <small style="color:#666; font-size:13px;">Which screen content to display</small>
                 </div>
 
-                <div class="form-group" style="padding: 0 18px;">
+                <div class="form-group">
                     <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
                         <input type="checkbox" id="piAutoStart" checked style="width:18px; height:18px;">
                         <span>Auto-start on boot</span>
                     </label>
                 </div>
 
-                    <div id="piConfigStatus" style="display:none; padding: 0 18px; margin-bottom: 12px;"></div>
+                <div id="piConfigStatus" style="display:none; margin-bottom: 12px;"></div>
 
-                    <div class="modal-buttons" style="padding: 0 18px;">
-                        <button type="button" class="btn-secondary" onclick="closeRemotePiManager()">Cancel</button>
-                        <button type="submit" class="btn-primary" id="configureRemotePiBtn">Configure Pi</button>
-                    </div>
+                <div class="modal-buttons" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button type="button" class="btn-secondary" onclick="closeRemotePiManager()" style="padding: 10px 20px; border-radius: 8px;">Cancel</button>
+                    <button type="submit" class="btn-primary" id="configureRemotePiBtn" style="padding: 10px 20px; border-radius: 8px; background: #667eea; border: none; color: white; font-weight: 600;">Configure Pi</button>
+                    <button type="button" class="btn-secondary" id="closeScreenBtn" onclick="closeScreen()" style="background: #ff9800; border: none; color: white; display: none; padding: 10px 20px; border-radius: 8px; font-weight: 600;">⏹️ Close Screen</button>
+                    <button type="button" class="btn-secondary" id="restartClientBtn" onclick="restartClient()" style="background: #2196F3; border: none; color: white; display: none; padding: 10px 20px; border-radius: 8px; font-weight: 600;">🔄 Restart Client</button>
+                    <button type="button" class="btn-secondary" id="restartPiBtn" onclick="restartPi()" style="background: #f44336; border: none; color: white; display: none; padding: 10px 20px; border-radius: 8px; font-weight: 600;">🔄 Restart Pi</button>
                 </div>
 
                 <!-- Buttons for when not connected -->
-                <div id="piNotConnectedButtons" class="modal-buttons">
-                    <button type="button" class="btn-secondary" onclick="closeRemotePiManager()">Cancel</button>
+                <div id="piNotConnectedButtons" class="modal-buttons" style="display: none;">
+                    <button type="button" class="btn-secondary" onclick="closeRemotePiManager()" style="padding: 10px 20px; border-radius: 8px;">Close</button>
                 </div>
-            </form>
+                    </form>
+                </div>
+            </div>
         </div>
     </div>
+    
+    <!-- External Remote Pi Manager JS - v3.0.0 - Bypasses browser cache -->
+    <script src="{{ url_for('static', filename='js/remote-pi-manager.js') }}?v={{ build_stamp }}"></script>
+    
+    <!-- Auto-open Remote Pi Manager if coming from Pi Device Manager -->
+    <script>
+        // Check if we should auto-open Remote Pi Manager with a specific Pi ID
+        (function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const piId = urlParams.get('open_pi_manager');
+            
+            if (piId) {
+                // Wait for page to fully load
+                setTimeout(() => {
+                    console.log('🔧 Auto-opening Remote Pi Manager for Pi:', piId);
+                    openRemotePiManager();
+                    
+                    // Pre-fill the Pi ID
+                    const piIdInput = document.getElementById('piId');
+                    if (piIdInput) {
+                        piIdInput.value = piId;
+                        // Optionally auto-connect
+                        setTimeout(() => {
+                            const connectBtn = document.getElementById('connectPiBtn');
+                            if (connectBtn) {
+                                connectBtn.click();
+                            }
+                        }, 300);
+                    }
+                    
+                    // Clean up URL
+                    const newUrl = window.location.pathname;
+                    window.history.replaceState({}, document.title, newUrl);
+                }, 500);
+            }
+        })();
+    </script>
         
     </body>
     {% include '_cookie_consent.html' %}
 </html>
+```

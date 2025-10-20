@@ -1578,7 +1578,12 @@
 			hideIdleState();
 			let url = mediaUrl(item);
 			if(!url) return;
-			const isVid = (item.media_type||'').toLowerCase()==='video' || isVideoByName(url) || isVideoByName(fileNameFrom(item));
+			// Prefer extension-based detection; only trust media_type as a last resort when URL doesn't look like an image
+			const isVid = (
+				isVideoByName(url) ||
+				isVideoByName(fileNameFrom(item)) ||
+				(((item.media_type||'').toLowerCase()==='video') && !/\.(png|jpe?g|gif|webp|svg)(\?|#|$)/i.test(String(url)))
+			);
 			// Prefer origin URL on Vewd/OperaTV to avoid CORS/CDN quirks
 			if(isVid && isVewdTV()){
 				const rel = relKeyFrom(item);

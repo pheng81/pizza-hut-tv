@@ -10,6 +10,8 @@ class TVBrandDetector {
     this.browserEngine = 'unknown';
     this.capabilities = {};
     this.detect();
+    // Apply brand/engine classes early
+    this.applyBrandClasses();
   }
 
   detect() {
@@ -68,6 +70,16 @@ class TVBrandDetector {
     console.log(`🔧 Browser Engine: ${this.browserEngine}`);
     console.log(`📱 Model: ${this.model}`);
     console.log(`✨ Capabilities:`, this.capabilities);
+  }
+
+  applyBrandClasses(){
+    try{
+      const root = document.documentElement;
+      const b = `tv-brand-${this.brand}`;
+      const e = `tv-engine-${this.browserEngine}`;
+      if(!root.classList.contains(b)) root.classList.add(b);
+      if(!root.classList.contains(e)) root.classList.add(e);
+    }catch(e){}
   }
 
   detectSamsungModel(ua) {
@@ -200,33 +212,46 @@ class TVBrandDetector {
   }
 
   async loadBrandConfig() {
+    const path = this.getConfigPath();
     try {
-      const response = await fetch(this.getConfigPath());
-      if (response.ok) {
-        const script = document.createElement('script');
-        script.src = this.getConfigPath();
-        document.head.appendChild(script);
-        console.log(`✅ Loaded ${this.brand} configuration`);
-      } else {
-        console.log(`ℹ️ Using generic configuration for ${this.brand}`);
+      const res = await fetch(path, { cache: 'no-store' });
+      if (!res.ok) {
+        console.log(`ℹ️ No brand config at ${path}, will use fallback`);
+        return false;
       }
+      await new Promise((resolve) => {
+        const script = document.createElement('script');
+        script.src = path;
+        script.onload = () => resolve(true);
+        script.onerror = () => resolve(false);
+        document.head.appendChild(script);
+      });
+      console.log(`✅ Loaded ${this.brand} configuration`);
+      return true;
     } catch (e) {
       console.log(`ℹ️ No specific configuration for ${this.brand}`);
+      return false;
     }
   }
 
   async loadBrandStyles() {
+    const path = this.getStylePath();
     try {
-      const response = await fetch(this.getStylePath());
-      if (response.ok) {
+      const res = await fetch(path, { cache: 'no-store' });
+      if (!res.ok) return false;
+      await new Promise((resolve)=>{
         const link = document.createElement('link');
         link.rel = 'stylesheet';
-        link.href = this.getStylePath();
+        link.href = path;
+        link.onload = () => resolve(true);
+        link.onerror = () => resolve(false);
         document.head.appendChild(link);
-        console.log(`✅ Loaded ${this.brand} styles`);
-      }
+      });
+      console.log(`✅ Loaded ${this.brand} styles`);
+      return true;
     } catch (e) {
       console.log(`ℹ️ No specific styles for ${this.brand}`);
+      return false;
     }
   }
 
@@ -243,8 +268,36 @@ class TVBrandDetector {
 // Create global instance
 window.tvDetector = new TVBrandDetector();
 
-// Auto-load brand-specific configs
-window.addEventListener('DOMContentLoaded', () => {
-  window.tvDetector.loadBrandConfig();
-  window.tvDetector.loadBrandStyles();
+// Expose readiness promise to coordinate with player
+window.tvBrandReady = new Promise((resolve) => {
+  window.addEventListener('DOMContentLoaded', async () => {
+    const cfgLoaded = await window.tvDetector.loadBrandConfig();
+    await window.tvDetector.loadBrandStyles();
+
+    // Fallback TVConfig if brand config didn't define it
+    if (typeof window.TVConfig === 'undefined') {
+      // Minimal safe defaults; brand-specific generic config will still be fetched if present elsewhere
+      window.TVConfig = {
+        brand: window.tvDetector.brand || 'generic',
+        video: { preferredCodec: 'h264', maxBitrate: 12000000, bufferSize: 15, preload: 'metadata', hardwareAcceleration: false },
+        performance: { enableGPU: false, useWebGL: false, reducedMotion: true, lazyLoad: true },
+        ui: { fontSize: 'large', margin: '6%', remoteControl: { enabled: true } },
+        network: { retryAttempts: 6, timeout: 35000, keepAlive: true }
+      };
+      console.log('ℹ️ Using inline generic TVConfig fallback');
+    }
+
+    // Apply UI hints from config
+    try{
+      const root = document.documentElement;
+      if (window.TVConfig && window.TVConfig.performance && window.TVConfig.performance.reducedMotion) {
+        root.classList.add('reduced-motion');
+      }
+      // Safe area CSS var for brand-specific margins (used optionally by player)
+      const margin = (window.TVConfig && window.TVConfig.ui && window.TVConfig.ui.margin) ? window.TVConfig.ui.margin : '0';
+      root.style.setProperty('--tv-safe-margin', margin);
+    }catch(e){}
+
+    resolve(true);
+  }, { once: true });
 });

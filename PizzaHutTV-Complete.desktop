@@ -1,9 +1,0 @@
-[Desktop Entry]
-Name=Pizza Hut TV
-Comment=Complete Pi Client for Pizza Hut TV Digital Signage
-Exec=python3 /home/everydayadvertise/pizza-hut-tv/complete_pi_client.py
-Icon=applications-multimedia
-Terminal=false
-Type=Application
-Categories=AudioVideo;Player;
-StartupNotify=true

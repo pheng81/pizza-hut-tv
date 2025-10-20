@@ -4,6 +4,7 @@ Seamless Video Player using python-mpv bindings
 NO FLICKER - videos transition smoothly using internal playlist
 """
 
+import os
 import mpv
 import pygame
 import threading
@@ -28,14 +29,22 @@ class SeamlessVideoPlayer:
         self.is_playing = False
         self.playback_lock = threading.Lock()
         self.on_video_end: Optional[Callable] = None
+        self.display_rotation = 0
+        self._duration_timer: Optional[threading.Timer] = None
+        self._timer_lock = threading.Lock()
         
         # Use existing pygame screen if provided (don't create a new one)
         if screen:
             self.screen = screen
         else:
             # Only create pygame window if not provided
+            if not os.environ.get("SDL_VIDEODRIVER"):
+                os.environ["SDL_VIDEODRIVER"] = "x11"
+            os.environ.setdefault("SDL_RENDER_DRIVER", "software")
+            os.environ.setdefault("SDL_VIDEO_X11_NODIRECTCOLOR", "1")
+            os.environ.setdefault("SDL_VIDEO_CENTERED", "1")
             pygame.init()
-            self.screen = pygame.display.set_mode(window_size, pygame.FULLSCREEN | pygame.HWSURFACE | pygame.DOUBLEBUF)
+            self.screen = pygame.display.set_mode(window_size, pygame.FULLSCREEN | pygame.SWSURFACE, 32)
             pygame.display.set_caption("Pizza Hut TV")
             pygame.mouse.set_visible(False)
         
@@ -46,8 +55,8 @@ class SeamlessVideoPlayer:
         try:
             self.player = mpv.MPV(
                 # Video output
-                vo='gpu',
-                hwdec='auto',
+                vo='x11',
+                hwdec='auto',  # Enable hardware decoding for better performance
                 
                 # Window settings - FORCE FULLSCREEN
                 fullscreen=True,
@@ -67,10 +76,15 @@ class SeamlessVideoPlayer:
                 audio='auto',
                 volume=100,
                 
-                # Performance
-                video_sync='display-resample',
-                interpolation=True,
-                tscale='oversample',
+                # Performance - Optimized for smooth Pi playback
+                video_sync='audio',  # Sync to audio for smooth playback
+                speed=1.0,  # Ensure normal playback speed
+                framedrop='vo',  # Drop frames if needed to maintain smooth playback
+                
+                # Cache for smooth streaming
+                cache='yes',
+                demuxer_max_bytes='50M',
+                demuxer_max_back_bytes='20M',
                 
                 # Background
                 background='#000000',
@@ -103,6 +117,44 @@ class SeamlessVideoPlayer:
         except Exception as e:
             logger.error(f"❌ Failed to initialize MPV player: {e}")
             raise
+
+    def set_display_rotation(self, angle: int):
+        """Update the preferred display rotation for MPV playback."""
+        try:
+            angle = int(angle) % 360
+        except Exception:
+            angle = 0
+
+        if angle not in (0, 90, 180, 270):
+            angle = (round(angle / 90) * 90) % 360
+
+        if angle == self.display_rotation:
+            return
+
+        self.display_rotation = angle
+        if not self.player:
+            return
+
+        applied = False
+        try:
+            self.player.set_property('video-rotate', angle)
+            applied = True
+        except Exception:
+            try:
+                self.player['video_rotate'] = angle
+                applied = True
+            except Exception:
+                pass
+
+        if not applied:
+            try:
+                self.player.command('set', 'video-rotate', str(angle))
+                applied = True
+            except Exception as mpv_err:
+                logger.warning(f"⚠️  Unable to update MPV rotation: {mpv_err}")
+
+        if applied:
+            logger.info(f"↻ MPV rotation set to {angle}°")
     
     def play_video(self, video_path: str, duration: Optional[float] = None):
         """
@@ -114,6 +166,13 @@ class SeamlessVideoPlayer:
         """
         with self.playback_lock:
             try:
+                # Cancel any existing duration timer
+                with self._timer_lock:
+                    if self._duration_timer is not None:
+                        logger.debug("⏰ Cancelling previous video duration timer")
+                        self._duration_timer.cancel()
+                        self._duration_timer = None
+                
                 if not Path(video_path).exists():
                     logger.error(f"❌ Video file not found: {video_path}")
                     return False
@@ -130,9 +189,29 @@ class SeamlessVideoPlayer:
                     logger.info("🎬 Starting first video...")
                     self.player.play(video_path)
                 
-                # Set duration limit if specified
-                if duration:
-                    self.player.length = duration
+                # Set up duration timer to force-stop if specified
+                if duration and duration > 0:
+                    logger.info(f"⏱️  Setting video duration timer for {duration}s")
+                    
+                    def stop_on_timer():
+                        logger.info(f"⏰ Video duration timer expired ({duration}s) - stopping playback")
+                        try:
+                            with self.playback_lock:
+                                if self.player and self.is_playing:
+                                    self.player.stop()
+                                    self.is_playing = False
+                                    logger.info("⏹️  Video stopped by duration timer")
+                                    # Trigger callback if set
+                                    if self.on_video_end:
+                                        self.on_video_end()
+                        except Exception as e:
+                            logger.error(f"❌ Error stopping video on timer: {e}")
+                    
+                    with self._timer_lock:
+                        self._duration_timer = threading.Timer(duration, stop_on_timer)
+                        self._duration_timer.daemon = True
+                        self._duration_timer.start()
+                        logger.debug(f"⏰ Duration timer started: {duration}s")
                 
                 self.current_video = video_path
                 self.is_playing = True
@@ -214,6 +293,13 @@ class SeamlessVideoPlayer:
     def stop(self):
         """Stop playback and show black screen"""
         with self.playback_lock:
+            # Cancel duration timer if active
+            with self._timer_lock:
+                if self._duration_timer is not None:
+                    logger.debug("⏰ Cancelling duration timer on stop")
+                    self._duration_timer.cancel()
+                    self._duration_timer = None
+            
             if self.player:
                 try:
                     self.player.stop()
@@ -252,6 +338,13 @@ class SeamlessVideoPlayer:
     def cleanup(self):
         """Clean up resources"""
         logger.info("🧹 Cleaning up player...")
+        
+        # Cancel any active timer
+        with self._timer_lock:
+            if self._duration_timer is not None:
+                self._duration_timer.cancel()
+                self._duration_timer = None
+        
         self.stop()
         
         if self.player:
@@ -299,10 +392,34 @@ class SeamlessMediaPlayer:
         self.is_playing = False
         self.current_media_type = None
         self.last_frame: Optional[pygame.Surface] = None  # For transitions
+        self.display_rotation = 0
         
         logger.info("✅ Seamless Media Player initialized")
+
+    def set_display_rotation(self, angle: int):
+        """Persist and apply rotation for both images and videos."""
+        try:
+            angle = int(angle) % 360
+        except Exception:
+            angle = 0
+
+        if angle not in (0, 90, 180, 270):
+            angle = (round(angle / 90) * 90) % 360
+
+        if angle == self.display_rotation:
+            return
+
+        logger.info(f"↻ Updating media player rotation to {angle}°")
+        self.display_rotation = angle
+        self.image_cache.clear()
+        self.last_frame = None
+
+        try:
+            self.video_player.set_display_rotation(angle)
+        except Exception as err:
+            logger.warning(f"⚠️  Could not update video player rotation: {err}")
     
-    def play_media(self, url: str, effect: str, duration: float) -> bool:
+    def play_media(self, url: str, effect: str, duration: float, item: Optional[dict] = None, **_ignored) -> bool:
         """
         Play media with beautiful transition effects
         
@@ -310,11 +427,20 @@ class SeamlessMediaPlayer:
             url: URL or local path to media
             effect: Transition effect (fade, slide-l, slide-r, zoom-in, zoom-out, cut)
             duration: Duration in seconds
+            item: Optional playlist item payload (used for logging/metadata)
             
         Returns:
             True if successful
         """
         try:
+            if item:
+                try:
+                    item_id = item.get('id') if isinstance(item, dict) else getattr(item, 'id', None)
+                    item_effect = item.get('effect') if isinstance(item, dict) else getattr(item, 'effect', None)
+                    item_duration = item.get('duration') if isinstance(item, dict) else getattr(item, 'duration', None)
+                    logger.debug(f"📝 Playlist item metadata: {item_id} effect={item_effect} duration={item_duration}")
+                except Exception as meta_err:
+                    logger.debug(f"📝 Playlist item metadata unavailable: {meta_err}")
             # Determine media type
             if url.endswith(('.mp4', '.webm', '.mkv', '.avi', '.mov')):
                 media_type = 'video'
@@ -338,6 +464,16 @@ class SeamlessMediaPlayer:
                 if success:
                     self.current_media_type = 'video'
                     self.is_playing = True
+                return success
+            
+            # For IMAGE-TO-VIDEO: Skip transitions (instant cut to video)
+            if media_type == 'video' and self.current_media_type == 'image':
+                logger.info("🎬 Image-to-video: Direct cut (no transition)")
+                success = self.video_player.play_video(local_path, duration)
+                if success:
+                    self.current_media_type = 'video'
+                    self.is_playing = True
+                    self.last_frame = None  # Clear last frame
                 return success
             
             # For IMAGE or VIDEO-FROM-IMAGE: Apply transition
@@ -416,17 +552,26 @@ class SeamlessMediaPlayer:
     def _load_image(self, image_path: str) -> Optional[pygame.Surface]:
         """Load and cache image"""
         try:
-            if image_path in self.image_cache:
-                return self.image_cache[image_path]
+            cache_key = (image_path, self.display_rotation)
+            if cache_key in self.image_cache:
+                return self.image_cache[cache_key].copy()
             
             # Load and scale image
             image = pygame.image.load(image_path)
-            image = pygame.transform.scale(image, self.window_size)
+            try:
+                if image.get_alpha():
+                    image = image.convert_alpha()
+                else:
+                    image = image.convert()
+            except pygame.error:
+                pass
+
+            image = self._prepare_surface_for_display(image)
             
             # Cache it
-            self.image_cache[image_path] = image
-            
+            self.image_cache[cache_key] = image.copy()
             return image
+            
             
         except Exception as e:
             logger.error(f"❌ Error loading image: {e}")
@@ -442,18 +587,49 @@ class SeamlessMediaPlayer:
             # For now, create a black surface as placeholder
             surface = pygame.Surface(self.window_size)
             surface.fill((0, 0, 0))
-            return surface
+            return self._prepare_surface_for_display(surface)
             
         except Exception as e:
             logger.error(f"❌ Error getting video first frame: {e}")
             return None
+
+    def _prepare_surface_for_display(self, surface: pygame.Surface) -> pygame.Surface:
+        """Scale and rotate the surface according to current display rotation."""
+        angle = self.display_rotation % 360
+        rotated_axis = bool(angle % 180)
+        target_size = self.window_size if not rotated_axis else (self.window_size[1], self.window_size[0])
+
+        try:
+            if surface.get_size() != target_size:
+                surface = pygame.transform.scale(surface, target_size)
+        except Exception:
+            pass
+
+        if angle:
+            try:
+                surface = pygame.transform.rotate(surface, -angle)
+            except Exception:
+                pass
+
+        if surface.get_size() != self.window_size:
+            try:
+                surface = pygame.transform.scale(surface, self.window_size)
+            except Exception:
+                pass
+
+        try:
+            surface = surface.convert()
+        except Exception:
+            pass
+
+        return surface
     
     def _download_media(self, url: str, media_type: str) -> Optional[str]:
         """Download media to cache"""
         try:
             import hashlib
             import requests
-            
+
             # Create cache filename
             url_hash = hashlib.md5(url.encode()).hexdigest()
             ext = Path(url).suffix or ('.mp4' if media_type == 'video' else '.jpg')
