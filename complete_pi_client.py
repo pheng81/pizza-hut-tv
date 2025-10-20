@@ -34,6 +34,7 @@ os.environ.setdefault('DISPLAY', ':0')  # Ensure DISPLAY is set
 
 # Import our SEAMLESS media player (no flicker!)
 from seamless_video_player import SeamlessMediaPlayer as MediaPlayer
+from pi_vnc_tunnel import init_vnc_tunnel
 
 # Client version identifier for logs, status, and WebSocket registration
 VERSION = "v2.1.2"  # Timer deduplication fix - prevent multiple overlapping timers
@@ -635,6 +636,7 @@ class CompleteWebplayerClient:
         )
         self.websocket_connected = False
         self.streaming_active = False  # Flag for live streaming
+        self.vnc_tunnel = None  # Active VNCTunnel when remote session is on
         
         # MOBILE SYNC ADDON: Initialize BEFORE WebSocket setup so handlers are registered first
         self.mobile_sync = None  # Initialize to None first
@@ -1131,6 +1133,71 @@ class CompleteWebplayerClient:
         @self.sio.on('heartbeat_ack')
         def on_heartbeat_ack(data):
             logger.debug('💓 Heartbeat acknowledged by server')
+
+        # ---------------- VNC Relay Handlers ----------------
+        @self.sio.on('vnc_connect')
+        def on_vnc_connect(data):
+            """Start VNC capture/tunnel to dashboard"""
+            try:
+                target_pi = (data or {}).get('pi_id')
+                dashboard_sid = (data or {}).get('dashboard_sid')
+                if target_pi and str(target_pi) != str(self.pi_id):
+                    # Not for this device
+                    return
+                if not self.enable_vnc:
+                    logger.warning('🛑 VNC disabled on this Pi (PHTV_ENABLE_VNC=false)')
+                    self.sio.emit('vnc_error', {
+                        'pi_id': self.pi_id,
+                        'target_sid': dashboard_sid,
+                        'message': 'VNC disabled on this Pi'
+                    })
+                    return
+                # Start/replace tunnel
+                if self.vnc_tunnel:
+                    try:
+                        self.vnc_tunnel.disconnect()
+                    except Exception:
+                        pass
+                    self.vnc_tunnel = None
+                self.vnc_tunnel = init_vnc_tunnel(self.sio, self.pi_id)
+                ok = self.vnc_tunnel.connect(dashboard_sid)
+                if not ok:
+                    logger.error('❌ VNC tunnel failed to start')
+            except Exception as e:
+                logger.error(f'❌ vnc_connect handler error: {e}', exc_info=True)
+                try:
+                    self.sio.emit('vnc_error', {
+                        'pi_id': self.pi_id,
+                        'target_sid': (data or {}).get('dashboard_sid'),
+                        'message': f'VNC connect error: {e}'
+                    })
+                except Exception:
+                    pass
+
+        @self.sio.on('vnc_disconnect')
+        def on_vnc_disconnect(data):
+            try:
+                target_pi = (data or {}).get('pi_id')
+                if target_pi and str(target_pi) != str(self.pi_id):
+                    return
+                if self.vnc_tunnel:
+                    self.vnc_tunnel.disconnect()
+                    self.vnc_tunnel = None
+                    logger.info('🛑 VNC tunnel stopped by dashboard request')
+            except Exception as e:
+                logger.error(f'❌ vnc_disconnect handler error: {e}')
+
+        @self.sio.on('vnc_data')
+        def on_vnc_data(data):
+            """Forward input/control events from dashboard to local VNC server"""
+            try:
+                target_pi = (data or {}).get('pi_id')
+                if target_pi and str(target_pi) != str(self.pi_id):
+                    return
+                if self.vnc_tunnel:
+                    self.vnc_tunnel.send_to_vnc(data or {})
+            except Exception as e:
+                logger.error(f'❌ vnc_data handler error: {e}')
     
     def start_websocket_connection(self):
         """Start WebSocket connection in background thread"""

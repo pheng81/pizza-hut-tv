@@ -56,9 +56,21 @@ class VNCTunnel:
             return True
             
         except ConnectionRefusedError:
-            logging.error('❌ VNC server not running on localhost:5900')
-            self._send_error('VNC server not running. Please enable VNC on Pi.')
-            return False
+            # Fallback to capture-only mode (no x11vnc). Still stream frames.
+            logging.warning('⚠️ VNC server not running on localhost:5900 — starting capture-only mode')
+            self.vnc_socket = None
+            self.running = True
+            self.tunnel_thread = threading.Thread(target=self._tunnel_loop, daemon=True)
+            self.tunnel_thread.start()
+            # Notify dashboard as "connected" so viewer sizes canvas and shows frames
+            self.socketio.emit('vnc_connected', {
+                'pi_id': self.pi_id,
+                'target_sid': dashboard_sid,
+                'width': 1280,
+                'height': 720,
+                'message': 'Capture-only mode (no VNC server)'
+            })
+            return True
             
         except Exception as e:
             logging.error(f'❌ VNC connection error: {e}')
