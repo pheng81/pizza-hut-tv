@@ -10,6 +10,7 @@ import json
 import time
 import threading
 import logging
+from logging.handlers import RotatingFileHandler
 import argparse
 import sys
 import os
@@ -24,6 +25,7 @@ from urllib.parse import urljoin, urlparse
 import hashlib
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import urllib.parse
+import queue
 
 # Set SDL environment variables BEFORE pygame.init() for proper display handling on Pi
 # Force software renderer instead of GL to avoid context issues
@@ -35,6 +37,8 @@ os.environ.setdefault('DISPLAY', ':0')  # Ensure DISPLAY is set
 # Import our SEAMLESS media player (no flicker!)
 from seamless_video_player import SeamlessMediaPlayer as MediaPlayer
 from pi_vnc_tunnel import init_vnc_tunnel
+
+MAIN_THREAD_TASK_EVENT = pygame.USEREVENT + 42
 
 # Client version identifier for logs, status, and WebSocket registration
 VERSION = "v2.1.2"  # Timer deduplication fix - prevent multiple overlapping timers
@@ -57,7 +61,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler(log_file),
+        RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=3),
         logging.StreamHandler()
     ]
 )
@@ -119,6 +123,33 @@ def register_pi_with_server(pi_id, server_url):
     except Exception as e:
         logger.warning(f"⚠️ Could not register Pi with server: {e}")
 
+def _extract_effect_value(raw: Any) -> Optional[str]:
+    """Normalize effect payloads that may arrive as dicts or numeric IDs."""
+    try:
+        if raw is None:
+            return None
+        # If already simple string or numeric
+        if isinstance(raw, (int, float)):
+            return str(int(raw))
+        if isinstance(raw, str):
+            return raw
+        if isinstance(raw, dict):
+            # Prefer explicit name/label keys
+            for key in ('effect', 'name', 'effect_name', 'effectName', 'label', 'value', 'slug', 'code', 'key'):
+                val = raw.get(key)
+                if val:
+                    return str(val)
+            for key in ('id', 'effect_id', 'effectId'):
+                val = raw.get(key)
+                if val not in (None, ''):
+                    return str(val)
+            return None
+        # Fallback to string representation
+        return str(raw)
+    except Exception:
+        return None
+
+
 @dataclass
 class PlaylistItem:
     """Playlist item matching webplayer structure."""
@@ -134,6 +165,7 @@ class PlaylistItem:
     rotation: int = 0  # NEW: Media rotation (0, 90, 180, 270)
     enabled: bool = True  # NEW: Item enable/disable flag
     schedule: Optional[List[Dict]] = None  # NEW: Schedule windows
+    days: Optional[List] = None  # NEW: Days of week filter
     
     @classmethod
     def from_dict(cls, data: Dict) -> 'PlaylistItem':
@@ -141,19 +173,26 @@ class PlaylistItem:
         # DEBUG: Log the raw data we're parsing
         logger.debug(f"🔍 Parsing item from_dict: id={data.get('id')}, file={data.get('file')}, effect={data.get('effect', 'NOT IN DATA')}")
         
+        effect_value = _extract_effect_value(data.get('effect'))
+        if effect_value is None:
+            effect_value = _extract_effect_value(data.get('effect_name') or data.get('effectName'))
+        if effect_value is None:
+            effect_value = _extract_effect_value(data.get('effect_id') or data.get('effectId'))
+
         return cls(
             id=str(data.get('id', '')),
             url=data.get('url', ''),
             file=data.get('file', ''),
             duration=float(data.get('duration', 10.0)),
-            effect=data.get('effect'),  # Don't use default here - None means not set
+            effect=effect_value,  # Preserve server-provided effect (may be id or name)
             media_type=data.get('media_type', 'video'),
             slice_aware=bool(data.get('slice_aware', False)),
             slice_url=data.get('slice_url'),
             sync_ref=data.get('sync_ref'),
             rotation=int(data.get('rotation', 0)),
             enabled=bool(data.get('enabled', True)),
-            schedule=data.get('schedule', [])
+            schedule=data.get('schedule', []),
+            days=data.get('days', [])
         )
 
 class ServerTimeSync:
@@ -449,6 +488,10 @@ class CompleteWebplayerClient:
         
         # Pi ID - unique identifier for this device
         self.pi_id = self._get_or_create_pi_id()
+        
+        # Try to load saved configuration
+        self.load_config()
+        
         self.show_pi_id = True  # Toggle visibility (press 'I' to toggle)
         self.pi_id_last_shown = time.time()  # Track when last shown
         self.pi_id_auto_hide_seconds = 300  # Auto-hide after 5 minutes (0 = never hide)
@@ -515,8 +558,7 @@ class CompleteWebplayerClient:
         # State management
         self.current_state = "setup"  # setup, playing, error
         self.input_text = ""
-        self.pair_code = ""  # TV code (4 digits)
-        self.store_id = ""   # Store code (numeric)
+        # pair_code, store_id, screen_id loaded by load_config() - don't reset them here
         self.available_screens = {}  # Screen data from API
         self.selected_store = None
         self.setup_step = "code"  # code, store, screen
@@ -539,12 +581,15 @@ class CompleteWebplayerClient:
         # Screen orientation and rotation (from dashboard)
         self.screen_orientation = None  # 'vertical', 'horizontal', or 'default' (None = not fetched yet)
         self.screen_rotation = None  # 0, 90, 180, 270 degrees (None = not fetched yet)
+
         # Concurrency + change-tracking helpers
         import threading as _thr
         self._playlist_lock = _thr.Lock()  # Serialize fetch/update to avoid races masking rotation changes
         self._last_rotation_seen = None    # Separate tracker for rotation change detection
         self.current_item_key = ""
         self._advance_lock = _thr.Lock()   # Serialize advancing to next item to prevent double-triggers
+        self._main_thread_thread_id = threading.get_ident()
+        self._main_thread_actions = queue.Queue()
         
         # Timing constants like webplayer
         self.PLAYLIST_REFRESH_MIN_MS = 3000
@@ -558,6 +603,11 @@ class CompleteWebplayerClient:
         except Exception:
             self.MIN_ADVANCE_GAP = 5.0
         self._last_advance_time = 0.0
+        # Track current item timing for watchdog
+        self._last_item_duration = 0.0
+        self._last_play_start_time = 0.0
+        self._last_video_pos = None
+        self._last_video_pos_time = 0.0
         try:
             self.MIN_ITEM_DURATION = float(_os.getenv('PHTV_MIN_ITEM_SEC', '5'))
         except Exception:
@@ -584,7 +634,6 @@ class CompleteWebplayerClient:
         self.disable_transitions = str(env_disable).lower() in ('1', 'true', 'yes', 'on') and not (
             str(env_enable).lower() in ('1', 'true', 'yes', 'on')
         )
-        self._transitions_faulted = False  # Set to True if we detect a transition failure and auto-disable
         
         # Components
         self.time_sync = ServerTimeSync(self.server_url)
@@ -625,6 +674,11 @@ class CompleteWebplayerClient:
         self.start_config_server()
         
         # WebSocket connection for relay (TeamViewer-style)
+        # SSL verification for WebSocket (engine.io uses requests during handshake)
+        # Default to verifying SSL; allow override via env PHTV_SSL_VERIFY=false for rare cases
+        ssl_verify_env = os.getenv('PHTV_SSL_VERIFY', '1')
+        sio_ssl_verify = not (ssl_verify_env.lower() in ['0', 'false', 'no'])
+
         self.sio = socketio.Client(
             reconnection=True,
             reconnection_attempts=0,  # Infinite
@@ -632,7 +686,7 @@ class CompleteWebplayerClient:
             reconnection_delay_max=30,
             logger=True,
             engineio_logger=True,
-            ssl_verify=False  # Disable SSL verification for Cloudflare certificates
+            ssl_verify=sio_ssl_verify  # Verify SSL by default; override with PHTV_SSL_VERIFY
         )
         self.websocket_connected = False
         self.streaming_active = False  # Flag for live streaming
@@ -675,6 +729,44 @@ class CompleteWebplayerClient:
         # Register Pi with server automatically (legacy HTTP method)
         threading.Thread(target=register_pi_with_server, args=(self.pi_id, self.server_url), daemon=True).start()
     
+    def _call_on_main_thread(self, func, *args, **kwargs):
+        """Ensure pygame rendering calls run on the main thread."""
+        target_thread = getattr(self, '_main_thread_thread_id', None)
+        if target_thread is None or threading.get_ident() == target_thread:
+            return func(*args, **kwargs)
+
+        done = threading.Event()
+        result_holder = {}
+        self._main_thread_actions.put((func, args, kwargs, done, result_holder))
+
+        try:
+            pygame.event.post(pygame.event.Event(MAIN_THREAD_TASK_EVENT))
+        except Exception:
+            pass
+
+        done.wait()
+        if result_holder.get('exc') is not None:
+            raise result_holder['exc']
+        return result_holder.get('result')
+
+    def _process_main_thread_actions(self):
+        """Drain pending main-thread actions. Call from the pygame loop."""
+        while True:
+            try:
+                func, args, kwargs, done, result_holder = self._main_thread_actions.get_nowait()
+            except queue.Empty:
+                break
+
+            try:
+                result_holder['result'] = func(*args, **kwargs)
+                result_holder['exc'] = None
+            except Exception as exc:
+                result_holder['result'] = None
+                result_holder['exc'] = exc
+                logger.error(f"❌ Main-thread task raised {exc.__class__.__name__}: {exc}", exc_info=True)
+            finally:
+                done.set()
+
     def start_config_server(self):
         """Start HTTP server for remote configuration."""
         def run_server():
@@ -982,7 +1074,7 @@ class CompleteWebplayerClient:
                 })
                 
                 # Stop media player
-                self.media_player.stop()
+                self._call_on_main_thread(self.media_player.stop)
                 
                 # Clear any saved configuration
                 config_file = os.path.expanduser('~/.pizza_hut_tv_config.json')
@@ -1012,7 +1104,7 @@ class CompleteWebplayerClient:
                 logger.warning('🔄 RESTART PI command received from dashboard')
                 
                 # Stop playback first
-                self.media_player.stop()
+                self._call_on_main_thread(self.media_player.stop)
                 
                 # Send acknowledgment before restarting
                 self.sio.emit('pi_restarting', {
@@ -1130,6 +1222,19 @@ class CompleteWebplayerClient:
             self.websocket_connected = False
             # Auto-reconnect is handled by Socket.IO client
         
+        @self.sio.on('force_disconnect')
+        def on_force_disconnect(data):
+            """Handle server-initiated disconnect (e.g., when Pi is deleted from dashboard)"""
+            reason = (data or {}).get('reason', 'Unknown reason')
+            logger.warning(f'🔌 Server requested disconnect: {reason}')
+            self.websocket_connected = False
+            # Disconnect and reconnect to refresh server-side state
+            try:
+                self.sio.disconnect()
+                logger.info('⏳ Disconnected, will auto-reconnect in 5 seconds...')
+            except Exception as e:
+                logger.error(f'Error during forced disconnect: {e}')
+        
         @self.sio.on('heartbeat_ack')
         def on_heartbeat_ack(data):
             logger.debug('💓 Heartbeat acknowledged by server')
@@ -1234,7 +1339,10 @@ class CompleteWebplayerClient:
                 self.sio.emit('pi_heartbeat', {
                     'pi_id': self.pi_id,
                     'state': self.current_state,
-                    'timestamp': time.time()
+                    'timestamp': time.time(),
+                    'store_id': self.store_id,
+                    'screen_id': self.screen_id,
+                    'pair_code': self.pair_code
                 })
                 time.sleep(30)  # Heartbeat every 30 seconds
             except Exception as e:
@@ -1858,6 +1966,112 @@ class CompleteWebplayerClient:
             return item.slice_url
             
         url = item.url or item.file or ""
+        
+        # 🎬 YOUTUBE: Handle YouTube format - download video to temp file
+        import re
+        youtube_match = re.search(r'youtube:([a-zA-Z0-9_-]{11})', url)
+        if youtube_match:
+            video_id = youtube_match.group(1)
+            logger.info(f"▶️ YouTube video detected: {video_id} from URL: {url}")
+            
+            # Get duration from item (for clipping long videos)
+            duration = getattr(item, 'duration', None) or 30  # Default 30 seconds
+            try:
+                duration = int(float(duration))
+            except:
+                duration = 30
+            
+            # Download YouTube video to temp file using yt-dlp
+            try:
+                import subprocess
+                import tempfile
+                import os
+                import time
+                
+                youtube_url = f"https://www.youtube.com/watch?v={video_id}"
+                
+                # Create temp directory for YouTube videos
+                temp_dir = os.path.join(tempfile.gettempdir(), 'pizza_hut_youtube')
+                os.makedirs(temp_dir, exist_ok=True)
+                
+                # 🧹 AUTO CLEANUP: Remove cache files older than 2 days
+                try:
+                    current_time = time.time()
+                    two_days_ago = current_time - (2 * 24 * 60 * 60)  # 2 days in seconds
+                    cleaned_count = 0
+                    
+                    for filename in os.listdir(temp_dir):
+                        file_path = os.path.join(temp_dir, filename)
+                        if os.path.isfile(file_path):
+                            file_age = os.path.getmtime(file_path)
+                            if file_age < two_days_ago:
+                                try:
+                                    os.remove(file_path)
+                                    cleaned_count += 1
+                                    logger.info(f"🧹 Removed old YouTube cache: {filename}")
+                                except Exception as e:
+                                    logger.warning(f"⚠️ Could not remove old cache file {filename}: {e}")
+                    
+                    if cleaned_count > 0:
+                        logger.info(f"🧹 Cleaned up {cleaned_count} old YouTube cache file(s)")
+                except Exception as e:
+                    logger.warning(f"⚠️ Cache cleanup error: {e}")
+                
+                logger.info(f"📁 YouTube cache directory: {temp_dir}")
+                
+                # Use video ID + duration as filename for caching different clips
+                temp_file = os.path.join(temp_dir, f"{video_id}_{duration}s.mp4")
+                
+                # Check if already downloaded
+                if os.path.exists(temp_file) and os.path.getsize(temp_file) > 1024:
+                    logger.info(f"✅ Using cached YouTube clip: {temp_file} ({os.path.getsize(temp_file)} bytes)")
+                    return temp_file
+                
+                logger.info(f"⬇️ Downloading YouTube video clip: {video_id} (first {duration} seconds)")
+                logger.info(f"⬇️ Download target: {temp_file}")
+                
+                # Download with yt-dlp - download only the specified duration
+                # This dramatically reduces download time and file size for long videos
+                cmd = [
+                    'yt-dlp', 
+                    '-f', 'best[height<=480][ext=mp4]/best[height<=480]/bestvideo[height<=480]+bestaudio/best',
+                    '--download-sections', f'*0-{duration}',  # Download only first N seconds
+                    '-o', temp_file, 
+                    youtube_url
+                ]
+                logger.info(f"⬇️ Running command: {' '.join(cmd)}")
+                
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=120  # 2 minutes should be enough for short clips
+                )
+                
+                if result.returncode == 0 and os.path.exists(temp_file):
+                    file_size = os.path.getsize(temp_file)
+                    logger.info(f"✅ YouTube clip downloaded successfully: {temp_file} ({file_size} bytes, {duration}s)")
+                    return temp_file
+                else:
+                    logger.error(f"❌ yt-dlp download failed!")
+                    logger.error(f"❌ Return code: {result.returncode}")
+                    logger.error(f"❌ stdout: {result.stdout}")
+                    logger.error(f"❌ stderr: {result.stderr}")
+                    # Return empty - don't try to play
+                    return ""
+                    
+            except subprocess.TimeoutExpired:
+                logger.error(f"❌ YouTube download timeout (120s) for video {video_id}")
+                return ""
+            except FileNotFoundError:
+                logger.error("❌ yt-dlp not installed! Install with: sudo apt-get install yt-dlp")
+                return ""
+            except Exception as e:
+                logger.error(f"❌ Error downloading YouTube video: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+                return ""
+        
         if url.startswith('http'):
             return url
             
@@ -1872,7 +2086,7 @@ class CompleteWebplayerClient:
         """Fetch playlist from server like webplayer."""
         try:
             url = f"{self.server_url}/playlist/{self.store_id}/{self.screen_id}"
-            params = {'skip_schedule_filter': '1'}  # Get all items, filter client-side
+            params = {}  # Server will filter by schedule
             headers = {
                 'Cache-Control': 'no-store, no-cache, must-revalidate',
                 'Pragma': 'no-cache'
@@ -1926,7 +2140,7 @@ class CompleteWebplayerClient:
                             base = 90 if str(new_orientation or 'default') == 'vertical' else 0
                             total = ((base + (new_rotation or 0)) % 360 + 360) % 360
                             if hasattr(self.media_player, 'set_display_rotation'):
-                                self.media_player.set_display_rotation(total)
+                                self._call_on_main_thread(self.media_player.set_display_rotation, total)
                                 logger.info(f"📐 Applied display rotation before reload: total={total}°")
                         except Exception as e_apply_first:
                             logger.warning(f"⚠️ Could not apply rotation pre-reload: {e_apply_first}")
@@ -1940,7 +2154,7 @@ class CompleteWebplayerClient:
                             logger.warning(f"⚠️ Could not clear image cache: {e_cache}")
 
                         # Stop everything
-                        self.media_player.stop()
+                        self._call_on_main_thread(self.media_player.stop)
                         logger.info("✋ Stopped media player")
                         
                         # Reset current state
@@ -1968,7 +2182,7 @@ class CompleteWebplayerClient:
                     base = 90 if str(self.screen_orientation or 'default') == 'vertical' else 0
                     total = ((base + (self.screen_rotation or 0)) % 360 + 360) % 360
                     if hasattr(self.media_player, 'set_display_rotation'):
-                        self.media_player.set_display_rotation(total)
+                        self._call_on_main_thread(self.media_player.set_display_rotation, total)
                         logger.info(f"📐 Applied display rotation: total={total}°")
                 except Exception as e:
                     logger.error(f"❌ Rotation apply failed: {e}", exc_info=True)
@@ -2017,7 +2231,7 @@ class CompleteWebplayerClient:
             item_dict = asdict(item) if hasattr(item, '__dataclass_fields__') else {}
             
             logger.info(f"🔍 Checking item: {item.file}")
-            logger.info(f"   enabled: {item_dict.get('enabled', True)}, schedule: {item_dict.get('schedule', 'none')}")
+            logger.info(f"   enabled: {item_dict.get('enabled', True)}, schedule: {item_dict.get('schedule', 'none')}, days: {item_dict.get('days', [])}")
             
             # Check enabled flag (tick checkbox in dashboard)
             if not item_dict.get('enabled', True):
@@ -2049,7 +2263,7 @@ class CompleteWebplayerClient:
         
         # If no schedule array, check legacy start/end fields
         if not schedules:
-            return self.check_legacy_schedule(item_dict, current_time, current_date)
+            return self.check_legacy_schedule(item_dict, current_day, current_time, current_date)
         
         # Check if ANY schedule window matches
         for sched in schedules:
@@ -2063,9 +2277,18 @@ class CompleteWebplayerClient:
         """Check if current time matches a single schedule window"""
         
         # Check days of week (M T W T F S S from dashboard)
-        days = sched.get('days', [])  # [1,2,3,4,5] = Mon-Fri
-        if days and current_day not in days:
-            return False
+        days = sched.get('days', [])  # Can be [1,2,3,4,5] or ['mon','tue','wed']
+        if days:
+            # Convert string days to integers if needed
+            day_map = {'mon': 1, 'tue': 2, 'wed': 3, 'thu': 4, 'fri': 5, 'sat': 6, 'sun': 7}
+            normalized_days = []
+            for d in days:
+                if isinstance(d, str):
+                    normalized_days.append(day_map.get(d.lower()[:3], 0))
+                else:
+                    normalized_days.append(int(d))
+            if current_day not in normalized_days:
+                return False
         
         # Check start date/time
         start_str = sched.get('start', '')
@@ -2091,12 +2314,17 @@ class CompleteWebplayerClient:
         if end_str:
             try:
                 end_dt = self.parse_datetime(end_str)
+                logger.info(f"🔍 DEBUG: end_str='{end_str}', parsed end_dt={end_dt}, type={type(end_dt)}")
                 if end_dt:
                     if isinstance(end_dt, datetime):
                         # Full datetime comparison
                         current_dt = datetime.combine(current_date, current_time)
+                        logger.info(f"🔍 DEBUG: current_dt={current_dt}, end_dt={end_dt}")
                         if current_dt > end_dt:
+                            logger.info(f"⏰ BLOCKING: Current time {current_dt} is AFTER end time {end_dt}")
                             return False
+                        else:
+                            logger.info(f"✅ Time check passed: {current_dt} <= {end_dt}")
                     else:
                         # Time-only comparison with optional overnight handling when start is also time-only
                         if isinstance(start_dt, datetime):
@@ -2124,8 +2352,23 @@ class CompleteWebplayerClient:
         # All checks passed!
         return True
     
-    def check_legacy_schedule(self, item_dict: Dict, current_time, current_date) -> bool:
+    def check_legacy_schedule(self, item_dict: Dict, current_day: int, current_time, current_date) -> bool:
         """Check legacy start/end fields (not in schedule array)"""
+        
+        # Check days field (from dashboard day toggles)
+        days = item_dict.get('days', [])
+        if days:
+            # Convert string days to integers if needed
+            day_map = {'mon': 1, 'tue': 2, 'wed': 3, 'thu': 4, 'fri': 5, 'sat': 6, 'sun': 7}
+            normalized_days = []
+            for d in days:
+                if isinstance(d, str):
+                    normalized_days.append(day_map.get(d.lower()[:3], 0))
+                else:
+                    normalized_days.append(int(d))
+            if current_day not in normalized_days:
+                logger.info(f"⏭️  Item blocked: current day {current_day} not in {normalized_days}")
+                return False
         
         start_str = item_dict.get('start', '')
         end_str = item_dict.get('end', '')
@@ -2212,58 +2455,73 @@ class CompleteWebplayerClient:
             
             if response.status_code == 200:
                 data = response.json()
-                effect_name = data.get('effect_name')
-                # Master toggle detection: only respect explicit 'transitions_enabled' unless forced ON via env
+
+                def _coerce_bool(value):
+                    if isinstance(value, bool):
+                        return value
+                    if isinstance(value, (int, float)):
+                        return value != 0
+                    if isinstance(value, str):
+                        return value.strip().lower() in ('1', 'true', 'on', 'enabled', 'yes')
+                    return None
+
+                raw_effect = _extract_effect_value(
+                    data.get('effect_name')
+                    or data.get('effectName')
+                    or data.get('effect')
+                )
+                if raw_effect in (None, ''):
+                    raw_effect = _extract_effect_value(data.get('effect_id') or data.get('effectId'))
+
+                canonical_effect = None
+                if raw_effect not in (None, ''):
+                    try:
+                        canonical_effect = self._normalize_effect(raw_effect)
+                    except Exception as norm_err:
+                        logger.debug(f"Effect normalization failed for {raw_effect}: {norm_err}")
+                        canonical_effect = None
+
                 master_flag = None
                 if not getattr(self, 'force_transitions_on', False):
-                    # Prefer explicit 'transitions_enabled', fallback to 'enabled' if present
-                    if 'transitions_enabled' in data or 'enabled' in data:
-                        val = data.get('transitions_enabled') if 'transitions_enabled' in data else data.get('enabled')
-                        if isinstance(val, bool):
-                            master_flag = val
-                        elif isinstance(val, (int, float)):
-                            master_flag = bool(val)
-                        elif isinstance(val, str):
-                            master_flag = val.strip().lower() in ('1','true','on','enabled','yes')
-                    # If server explicitly returns 'cut' and provides no transitions_enabled flag, leave master as-is
+                    for key in ('transitions_enabled', 'transitionsEnabled', 'enabled'):
+                        if key in data:
+                            master_flag = _coerce_bool(data.get(key))
+                            break
                 else:
                     if not self.transitions_master_enabled:
                         self.transitions_master_enabled = True
-                    if data.get('transitions_enabled') is False:
-                        logger.info("🎛️ Server transitions_enabled=False ignored due to PHTV_FORCE_TRANSITIONS")
-                # Update master flag if found
+                    raw_master = None
+                    if 'transitions_enabled' in data:
+                        raw_master = data.get('transitions_enabled')
+                    elif 'transitionsEnabled' in data:
+                        raw_master = data.get('transitionsEnabled')
+                    if _coerce_bool(raw_master) is False:
+                        logger.info("🎛️ Server transitionsEnabled=False ignored due to PHTV_FORCE_TRANSITIONS")
+
                 if master_flag is not None and master_flag != self.transitions_master_enabled:
                     self.transitions_master_enabled = master_flag
-                    logger.info(f"🎛️  Transitions master toggle set to: {'ON' if self.transitions_master_enabled else 'OFF'} (from server)")
-                
-                if not effect_name and data.get('effect_id'):
-                    # Map effect_id to our new 10-effect canonical names
-                    # 1..10 correspond to: cut, fade, dissolve, slide-l, slide-r, slide-up, slide-down, zoom-in, zoom-out, wipe-lr
-                    effect_map = {
-                        '1': 'cut',
-                        '2': 'fade',
-                        '3': 'dissolve',
-                        '4': 'slide-l',
-                        '5': 'slide-r',
-                        '6': 'slide-up',
-                        '7': 'slide-down',
-                        '8': 'zoom-in',
-                        '9': 'zoom-out',
-                        '10': 'wipe-lr',
-                    }
-                    effect_name = effect_map.get(str(data['effect_id']), 'fade')
-                    
-                # Detect change and hot-apply like rotation
-                if effect_name and effect_name != self.current_global_effect:
-                    prev = self.current_global_effect
-                    self.current_global_effect = effect_name
-                    logger.info(f"🎨 Effect synchronized from server: {prev} -> {self.current_global_effect}")
-                    # If we're actively playing and transitions are enabled (or forced), advance once to show effect now
-                    try:
-                        if self.current_state == 'playing' and (self.transitions_master_enabled or self.force_transitions_on):
-                            self._force_advance(reason="effect_change")
-                    except Exception as e_adv:
-                        logger.debug(f"Effect change advance skipped: {e_adv}")
+                    logger.info(
+                        f"🎛️  Transitions master toggle set to: {'ON' if self.transitions_master_enabled else 'OFF'} (from server)"
+                    )
+
+                if canonical_effect:
+                    prev_effect = self.current_global_effect
+                    prev_normalized = None
+                    if prev_effect not in (None, ''):
+                        try:
+                            prev_normalized = self._normalize_effect(prev_effect)
+                        except Exception:
+                            prev_normalized = prev_effect
+                    if canonical_effect != prev_normalized:
+                        self.current_global_effect = canonical_effect
+                        logger.info(
+                            f"🎨 Effect synchronized from server: {prev_effect} -> {self.current_global_effect}"
+                        )
+                        try:
+                            if self.current_state == 'playing' and (self.transitions_master_enabled or self.force_transitions_on):
+                                self._force_advance(reason="effect_change")
+                        except Exception as e_adv:
+                            logger.debug(f"Effect change advance skipped: {e_adv}")
                     
         except Exception as e:
             logger.debug(f"Effect sync failed: {e}")
@@ -2339,20 +2597,99 @@ class CompleteWebplayerClient:
                 if data.get('success') and data.get('commands'):
                     commands = data['commands']
                     
-                    # Check for reload command
-                    has_reload = any(
-                        cmd and cmd.get('type', '').lower() == 'reload' 
-                        for cmd in commands
-                    )
-                    
-                    if has_reload:
-                        logger.info("🔄 Reload command received - fetching playlist")
-                        # Sync effect first so it applies immediately like rotation hot-apply
+                    # Handle commands in order
+                    for cmd in commands:
                         try:
-                            self.sync_effect_from_server()
-                        except Exception as e_sync:
-                            logger.debug(f"Effect sync before reload failed: {e_sync}")
-                        self.fetch_and_update_playlist(force_advance=True)
+                            ctype = str(cmd.get('type', '')).lower()
+                        except Exception:
+                            ctype = ''
+                        if ctype == 'reload':
+                            logger.info("🔄 Reload command received - fetching playlist")
+                            # Sync effect first so it applies immediately like rotation hot-apply
+                            try:
+                                self.sync_effect_from_server()
+                            except Exception as e_sync:
+                                logger.debug(f"Effect sync before reload failed: {e_sync}")
+                            self.fetch_and_update_playlist(force_advance=True)
+                        elif ctype in ('play_now', 'cast_play_now', 'cast'):
+                            # On-demand play a specific URL with optional duration/effect
+                            url = cmd.get('url') or cmd.get('media_url')
+                            duration = cmd.get('duration') or cmd.get('seconds') or 10
+                            effect = _extract_effect_value(cmd.get('effect'))
+                            if effect is None:
+                                effect = _extract_effect_value(cmd.get('effect_name') or cmd.get('effectName'))
+                            if effect is None:
+                                effect = _extract_effect_value(cmd.get('effect_id') or cmd.get('effectId'))
+                            if effect is None:
+                                effect = self.current_global_effect or 'fade'
+                            try:
+                                duration = float(duration)
+                            except Exception:
+                                duration = self.MIN_ITEM_DURATION
+                            effect_norm = self._normalize_effect(effect)
+                            if url:
+                                logger.info(f"📡 Cast/PlayNow received: url={url} duration={duration}s effect={effect_norm}")
+                                # Cancel any existing timer and start a new one for this ad-hoc item
+                                with self._timer_lock:
+                                    if self._current_item_timer is not None:
+                                        try:
+                                            self._current_item_timer.cancel()
+                                        except Exception:
+                                            pass
+                                        self._current_item_timer = None
+                                try:
+                                    success = self._call_on_main_thread(
+                                        self.media_player.play_media,
+                                        url,
+                                        effect_norm,
+                                        duration,
+                                        item={'id': 'cast', 'url': url, 'duration': duration, 'effect': effect_norm},
+                                    )
+                                except Exception as e_play:
+                                    logger.error(f"❌ Cast play failed: {e_play}")
+                                    success = False
+                                if success:
+                                    # Track as current item for watchdog and on-finish advance
+                                    self.current_item_key = f"url:{url}"
+                                    try:
+                                        self._last_item_duration = float(duration)
+                                    except Exception:
+                                        self._last_item_duration = self.MIN_ITEM_DURATION
+                                    self._last_play_start_time = time.time()
+                                    self._last_advance_time = self._last_play_start_time
+                                    with self._timer_lock:
+                                        self._current_item_timer = threading.Timer(duration, self.on_item_finished)
+                                        self._current_item_timer.start()
+                                        logger.debug(f"[⏰ TIMER] Started cast timer for {duration}s")
+                            else:
+                                logger.warning("⚠️ Cast/PlayNow command missing 'url'")
+                        elif ctype in ('queue_next', 'cast_queue_next'):
+                            url = cmd.get('url') or cmd.get('media_url')
+                            if url:
+                                try:
+                                    queued = self.media_player.queue_next(url)
+                                    logger.info(f"📋 Queue next ({'ok' if queued else 'fail'}): {url}")
+                                except Exception as e_q:
+                                    logger.debug(f"Queue next failed: {e_q}")
+                        elif ctype in ('pause', 'cast_pause'):
+                            try:
+                                self._call_on_main_thread(self.media_player.pause)
+                                logger.info("⏸️  Pause command applied")
+                            except Exception:
+                                pass
+                        elif ctype in ('resume', 'cast_resume', 'play'):
+                            try:
+                                self._call_on_main_thread(self.media_player.resume)
+                                logger.info("▶️  Resume command applied")
+                            except Exception:
+                                pass
+                        elif ctype in ('stop', 'cast_stop'):
+                            try:
+                                self._call_on_main_thread(self.media_player.stop)
+                                logger.info("⏹️  Stop command applied")
+                            except Exception:
+                                pass
+                        # Unknown command types are safely ignored
                         
         except Exception as e:
             logger.debug(f"Commands poll failed: {e}")
@@ -2421,7 +2758,8 @@ class CompleteWebplayerClient:
             raw_playlist = self.fetch_playlist()
             
             if raw_playlist:
-                # Apply schedule filtering (respects enabled flag, start/end times, days of week)
+                # Apply schedule filtering client-side
+                # Server already filtered, but we double-check for safety
                 new_playlist = self.filter_playlist_by_schedule(raw_playlist)
                 
                 # Show waiting screen if nothing scheduled
@@ -2456,6 +2794,12 @@ class CompleteWebplayerClient:
                 # current item still valid, keep playing to avoid rapid switching.
                 should_advance = bool(force_advance)
                 advance_reason = "forced" if force_advance else ""
+
+                # If the schedule membership changed, prefer to align immediately with the new window
+                # even if the current item is still valid. We respect a minimum gap to prevent thrash.
+                if signature_changed and not should_advance:
+                    should_advance = True
+                    advance_reason = "schedule_changed"
 
                 # If the currently playing item is no longer scheduled, advance
                 if self.current_item_key and self.current_item_key not in new_keys:
@@ -2565,6 +2909,7 @@ class CompleteWebplayerClient:
                 # Determine the effect to use: item effect > global effect > default 'fade'
                 # Item effect is the PRIMARY source (set per-item in dashboard)
                 item_effect = getattr(current_item, 'effect', None)
+                item_effect = _extract_effect_value(item_effect)
                 if item_effect:
                     desired_effect_raw = item_effect
                 else:
@@ -2592,12 +2937,14 @@ class CompleteWebplayerClient:
                 effect = desired_effect
                 # Respect forced transitions override for debugging/validation
                 if not self.force_transitions_on:
-                    if not self.transitions_master_enabled:
+                    if not self.transitions_master_enabled and effect != 'cut':
+                        logger.info("🎛️ Master toggle OFF -> forcing cut transition")
                         effect = 'cut'
-                    elif self.disable_transitions or self._transitions_faulted:
+                    elif self.disable_transitions and effect != 'cut':
+                        logger.info("🎛️ Local disable flag set -> forcing cut transition")
                         effect = 'cut'
                 else:
-                    if (self.disable_transitions or self._transitions_faulted) and effect == 'cut':
+                    if self.disable_transitions and effect == 'cut':
                         logger.info("🎛️ PHTV_FORCE_TRANSITIONS overriding disabled/faulted state; using requested effect")
 
                 logger.info(f"🎬 Playing item {self.current_index + 1}/{len(self.playlist)}: {media_url}")
@@ -2610,17 +2957,28 @@ class CompleteWebplayerClient:
                 # 🎯 Pass item to player for sync monitoring
                 success = False
                 try:
-                    success = self.media_player.play_media(media_url, effect, duration, item=current_item)
+                    success = self._call_on_main_thread(
+                        self.media_player.play_media,
+                        media_url,
+                        effect,
+                        duration,
+                        item=current_item,
+                    )
                 except Exception as e:
                     logger.error(f"❌ play_media raised exception with effect='{effect}': {e}", exc_info=True)
                     success = False
 
                 # Fallback: if transition failed and we weren't using cut, retry once with cut and disable transitions for session
                 if not success and effect != 'cut':
-                    logger.warning("⚠️ Transition playback failed, retrying with 'cut' and disabling transitions for this session")
+                    logger.warning("⚠️ Transition playback failed, retrying with 'cut'")
                     try:
-                        success = self.media_player.play_media(media_url, 'cut', duration, item=current_item)
-                        self._transitions_faulted = True
+                        success = self._call_on_main_thread(
+                            self.media_player.play_media,
+                            media_url,
+                            'cut',
+                            duration,
+                            item=current_item,
+                        )
                     except Exception as e2:
                         logger.error(f"❌ Fallback 'cut' playback also failed: {e2}", exc_info=True)
                         success = False
@@ -2641,9 +2999,52 @@ class CompleteWebplayerClient:
                         if self._current_item_timer is not None:
                             logger.debug(f"[⏰ TIMER] Cancelling previous timer")
                             self._current_item_timer.cancel()
-                        self._current_item_timer = threading.Timer(duration, self.on_item_finished)
+                        # For sync videos, align the timer to the end of the CURRENT cycle so all screens advance together
+                        schedule_seconds = float(duration)
+                        try:
+                            sref = None
+                            item_dict = None
+                            try:
+                                # current_item may be a dataclass-like object or dict
+                                if isinstance(current_item, dict):
+                                    item_dict = current_item
+                                else:
+                                    item_dict = getattr(current_item, '__dict__', None) or {}
+                            except Exception:
+                                item_dict = {}
+                            sref = (item_dict or {}).get('sync_ref')
+                            if sref and isinstance(sref, dict):
+                                cycle_ms = max(1, int(float(duration) * 1000.0))
+                                # Use server-synchronized time if available
+                                try:
+                                    server_now_ms = int(float(self.time_sync.get_server_time()))
+                                except Exception:
+                                    server_now_ms = int(time.time() * 1000)
+                                start_epoch_val = sref.get('start_epoch')
+                                if start_epoch_val is not None:
+                                    start_ms = int(float(start_epoch_val) * 1000.0)
+                                    phase = (server_now_ms - start_ms) % cycle_ms
+                                else:
+                                    # Fallback: align by current server phase of the duration
+                                    phase = server_now_ms % cycle_ms
+                                remaining_ms = cycle_ms - phase
+                                if remaining_ms < 50:
+                                    remaining_ms += cycle_ms
+                                schedule_seconds = remaining_ms / 1000.0
+                                logger.info(f"⏰ Sync item timer aligned: phase={phase}ms remaining={remaining_ms}ms duration={cycle_ms}ms start_epoch_present={start_epoch_val is not None}")
+                        except Exception as _sync_timer_err:
+                            logger.debug(f"[⏰ TIMER] Sync alignment compute failed: {_sync_timer_err}")
+                            schedule_seconds = float(duration)
+                        self._current_item_timer = threading.Timer(schedule_seconds, self.on_item_finished)
                         self._current_item_timer.start()
-                        logger.debug(f"[⏰ TIMER] Started new timer for {duration}s")
+                        logger.debug(f"[⏰ TIMER] Started new timer for {schedule_seconds}s")
+                    # Update timing trackers for watchdog/liveness
+                    try:
+                        self._last_item_duration = float(duration) if duration else self.MIN_ITEM_DURATION
+                    except Exception:
+                        self._last_item_duration = self.MIN_ITEM_DURATION
+                    self._last_play_start_time = time.time()
+                    self._last_advance_time = self._last_play_start_time
                     
                     # Preload upcoming items
                     self.preload_upcoming_items()
@@ -2670,13 +3071,13 @@ class CompleteWebplayerClient:
                     'cut': 'cut', 'none': 'cut', '': 'cut',
                     'fade': 'fade',
                     'dissolve': 'dissolve', 'crossfade': 'dissolve',
-                    'slide_left': 'slide_left', 'slide-left': 'slide_left', 'slide-l': 'slide_left', 'left': 'slide_left',
-                    'slide_right': 'slide_right', 'slide-right': 'slide_right', 'slide-r': 'slide_right', 'right': 'slide_right',
-                    'slide_up': 'slide_up', 'slide-up': 'slide_up', 'up': 'slide_up',
-                    'slide_down': 'slide_down', 'slide-down': 'slide_down', 'down': 'slide_down',
+                    'slide_left': 'slide_left', 'slide-left': 'slide_left', 'slide-l': 'slide_left', 'slideleft': 'slide_left', 'left': 'slide_left',
+                    'slide_right': 'slide_right', 'slide-right': 'slide_right', 'slide-r': 'slide_right', 'slideright': 'slide_right', 'right': 'slide_right',
+                    'slide_up': 'slide_up', 'slide-up': 'slide_up', 'slideup': 'slide_up', 'up': 'slide_up',
+                    'slide_down': 'slide_down', 'slide-down': 'slide_down', 'slidedown': 'slide_down', 'down': 'slide_down',
                     'zoom_in': 'zoom_in', 'zoom-in': 'zoom_in', 'zoomin': 'zoom_in',
                     'zoom_out': 'zoom_out', 'zoom-out': 'zoom_out', 'zoomout': 'zoom_out',
-                    'wipe': 'wipe', 'wipe-lr': 'wipe', 'wipe_l_r': 'wipe', 'wipe-left-right': 'wipe',
+                    'wipe': 'wipe', 'wipe-lr': 'wipe', 'wipe_l_r': 'wipe', 'wipe-left-right': 'wipe', 'wipeleftright': 'wipe', 'wipelefttoright': 'wipe', 'wipelr': 'wipe',
                     'button-1': 'cut', 'button-2': 'fade', 'button-3': 'dissolve',
                     'button-4': 'slide_left', 'button-5': 'slide_right', 'button-6': 'slide_up',
                     'button-7': 'slide_down', 'button-8': 'zoom_in', 'button-9': 'zoom_out',
@@ -2887,6 +3288,133 @@ class CompleteWebplayerClient:
                 except Exception as e:
                     logger.debug(f"Commands poll error: {e}")
                 time.sleep(self.COMMANDS_POLL_MS / 1000)  # 1.5 seconds
+
+        # Resource monitoring and cleanup loop
+        def resource_loop():
+            import gc
+            SOFT_MB = int(os.getenv('PHTV_MEM_SOFT_MB', '450'))
+            HARD_MB = int(os.getenv('PHTV_MEM_HARD_MB', '700'))
+            DL_CACHE_MB = int(os.getenv('PHTV_DOWNLOAD_CACHE_MB', '1024'))
+            TRIM_TO_ITEMS = int(os.getenv('PHTV_TRIM_IMAGE_ITEMS', '30'))
+
+            def _rss_mb():
+                # Try psutil first
+                try:
+                    import psutil
+                    p = psutil.Process()
+                    return int(p.memory_info().rss / (1024 * 1024))
+                except Exception:
+                    pass
+                # /proc/self/statm on Linux
+                try:
+                    with open('/proc/self/statm', 'r') as f:
+                        parts = f.readline().split()
+                        pages = int(parts[1]) if len(parts) > 1 else 0
+                        import resource
+                        page_size = resource.getpagesize()
+                        return int((pages * page_size) / (1024 * 1024))
+                except Exception:
+                    pass
+                return 0
+
+            last_disk_enforce = 0
+            while self.running:
+                try:
+                    rss = _rss_mb()
+                    cache_info = {}
+                    try:
+                        cache_info = self.media_player.get_cache_info() if hasattr(self, 'media_player') else {}
+                    except Exception:
+                        cache_info = {}
+
+                    if rss and rss >= SOFT_MB:
+                        logger.info(f"🧹 Memory high ({rss}MB >= {SOFT_MB}MB). Running GC and trimming caches...")
+                        try:
+                            gc.collect()
+                        except Exception:
+                            pass
+                        try:
+                            if hasattr(self, 'media_player') and hasattr(self.media_player, 'trim_image_cache'):
+                                self.media_player.trim_image_cache(TRIM_TO_ITEMS)
+                        except Exception:
+                            pass
+
+                    if rss and rss >= HARD_MB:
+                        logger.warning(f"🧯 Memory very high ({rss}MB >= {HARD_MB}MB). Clearing image cache aggressively.")
+                        try:
+                            if hasattr(self, 'media_player') and hasattr(self.media_player, 'image_cache'):
+                                self.media_player.image_cache.clear()
+                            if hasattr(self, 'media_player'):
+                                self.media_player.last_frame = None
+                        except Exception:
+                            pass
+
+                    # Periodically enforce disk cache cap (every 5 minutes)
+                    now = time.time()
+                    if now - last_disk_enforce > 300:
+                        last_disk_enforce = now
+                        try:
+                            if hasattr(self, 'media_player') and hasattr(self.media_player, 'enforce_download_cache_limit'):
+                                self.media_player.enforce_download_cache_limit(DL_CACHE_MB)
+                        except Exception:
+                            pass
+                except Exception as e:
+                    logger.debug(f"Resource loop error: {e}")
+                finally:
+                    time.sleep(30)
+
+        # Liveness watchdog: detect timers that didn't fire or stalled video playback
+        def watchdog_loop():
+            GRACE_SEC = 15  # grace beyond duration before forcing advance
+            STALL_WINDOW_SEC = 20  # how long video time_pos can freeze before we react
+            CHECK_EVERY_SEC = 5
+            while self.running:
+                try:
+                    now = time.time()
+                    # Overdue item check (timer not firing or lost)
+                    if self.playlist and self.current_item_key and self._last_play_start_time > 0:
+                        expected_end = self._last_play_start_time + max(self._last_item_duration or 0, self.MIN_ITEM_DURATION)
+                        if now > (expected_end + GRACE_SEC):
+                            logger.warning("🕒 Watchdog: current item overdue — forcing advance")
+                            self._force_advance(reason="watchdog_overdue")
+                            # Reset expected start to avoid repeated triggers
+                            self._last_play_start_time = now
+                    # MPV video stall check
+                    try:
+                        if hasattr(self, 'media_player') and getattr(self.media_player, 'current_media_type', None) == 'video':
+                            pos = None
+                            # Prefer SeamlessMediaPlayer.video_player.get_playback_time()
+                            try:
+                                if hasattr(self.media_player, 'get_playback_time'):
+                                    pos = float(self.media_player.get_playback_time())
+                                elif hasattr(self.media_player, 'video_player') and hasattr(self.media_player.video_player, 'get_playback_time'):
+                                    pos = float(self.media_player.video_player.get_playback_time())
+                            except Exception:
+                                pos = None
+                            if pos is not None:
+                                if self._last_video_pos is not None and abs(pos - float(self._last_video_pos)) < 0.5:
+                                    # Not moving
+                                    if (now - float(self._last_video_pos_time or 0)) > STALL_WINDOW_SEC:
+                                        logger.warning("🧊 Watchdog: video playback appears stalled — restarting media and advancing")
+                                        try:
+                                            self._call_on_main_thread(self.media_player.stop)
+                                        except Exception:
+                                            pass
+                                        time.sleep(1)
+                                        self._force_advance(reason="watchdog_video_stall")
+                                        # Reset trackers
+                                        self._last_video_pos = None
+                                        self._last_video_pos_time = now
+                                else:
+                                    # Progressing
+                                    self._last_video_pos = pos
+                                    self._last_video_pos_time = now
+                    except Exception as e:
+                        logger.debug(f"Watchdog MPV check error: {e}")
+                except Exception as e:
+                    logger.debug(f"Watchdog loop error: {e}")
+                finally:
+                    time.sleep(CHECK_EVERY_SEC)
                 
         # Start all service threads
         threading.Thread(target=sync_loop, daemon=True).start()
@@ -2894,6 +3422,8 @@ class CompleteWebplayerClient:
         threading.Thread(target=playlist_loop, daemon=True).start()
         threading.Thread(target=effect_loop, daemon=True).start()
         threading.Thread(target=commands_loop, daemon=True).start()
+        threading.Thread(target=resource_loop, daemon=True).start()
+        threading.Thread(target=watchdog_loop, daemon=True).start()
         
         logger.info("🎬 All playback services started")
         
@@ -2924,8 +3454,17 @@ class CompleteWebplayerClient:
             
         try:
             while self.running:
+                # Drain any tasks queued by worker threads before handling events
+                try:
+                    self._process_main_thread_actions()
+                except Exception as e:
+                    logger.error(f"❌ Failed processing queued main-thread actions: {e}")
+
                 # Handle events
                 for event in pygame.event.get():
+                    if event.type == MAIN_THREAD_TASK_EVENT:
+                        # Synthetic wake-up event for queued tasks; already handled via _process_main_thread_actions
+                        continue
                     if event.type == pygame.QUIT:
                         self.running = False
                     elif event.type == pygame.KEYDOWN:
@@ -2960,26 +3499,41 @@ class CompleteWebplayerClient:
                         self._pygame_cleared = True
                         logger.info("✅ Pygame UI cleared - displaying media")
                     
-                    # Avoid background flips while a transition is in progress to prevent contention
+                    # Avoid background flips while a transition is in progress or when video is playing
                     in_transition = False
                     try:
                         if hasattr(self, 'media_player') and self.media_player and hasattr(self.media_player, 'is_in_transition'):
-                            in_transition = self.media_player.is_in_transition()
+                            in_transition = bool(self.media_player.is_in_transition())
                     except Exception:
-                        pass
-                    if not in_transition:
-                        # Update display for static images at a steady pace
+                        in_transition = False
+
+                    current_media_type = None
+                    try:
+                        if hasattr(self, 'media_player') and self.media_player:
+                            current_media_type = getattr(self.media_player, 'current_media_type', None)
+                    except Exception:
+                        current_media_type = None
+
+                    # Only flip the pygame surface when we're actively showing images.
+                    # MPV owns the window during video playback and handles its own vsync.
+                    if not in_transition and current_media_type == 'image':
                         try:
                             pygame.display.flip()
                             display_flip_count += 1
                             if time.time() - last_flip_log > 5:  # Log every 5 seconds
-                                logger.info(f"📺 Display updates: {display_flip_count} flips (120 FPS main loop)")
+                                logger.info(f"📺 Display updates: {display_flip_count} flips (image mode)")
                                 last_flip_log = time.time()
                         except Exception as e:
                             logger.error(f"❌ Display.flip() ERROR: {type(e).__name__}: {e}")
-                    
-                    # 120 FPS for ultra-smooth video playback
-                    clock.tick(120 if not in_transition else 60)
+
+                    # Run the loop fast for responsiveness, but don't fight MPV during transitions
+                    if in_transition:
+                        clock.tick(60)
+                    elif current_media_type == 'image':
+                        clock.tick(120)
+                    else:
+                        # Video mode: MPV handles its own timing, keep loop light
+                        clock.tick(30)
         except Exception as e:
             logger.error(f"❌ CRITICAL ERROR in main loop: {e}")
             import traceback

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Android TV Rotation Test</title>
+    <style>
+        body { margin: 0; padding: 20px; background: #000; color: #fff; font-family: Arial; }
+        .test-container { text-align: center; padding: 50px; }
+        .rotation-test { 
+            width: 200px; 
+            height: 100px; 
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            margin: 20px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            transition: transform 1s ease;
+            transform-origin: center center;
+        }
+        .controls { margin: 20px 0; }
+        button { 
+            margin: 5px; 
+            padding: 10px 20px; 
+            background: #4CAF50; 
+            color: white; 
+            border: none; 
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover { background: #45a049; }
+        .info { 
+            background: #333; 
+            padding: 15px; 
+            margin: 20px 0; 
+            border-radius: 5px; 
+            text-align: left;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🔄 Android TV Rotation Test</h1>
+        
+        <div class="rotation-test" id="testElement">
+            TEST ROTATION
+        </div>
+        
+        <div class="controls">
+            <button onclick="rotate(0)">0° (Normal)</button>
+            <button onclick="rotate(90)">90° (Portrait)</button>
+            <button onclick="rotate(180)">180° (Upside Down)</button>
+            <button onclick="rotate(270)">270° (Landscape Flip)</button>
+        </div>
+        
+        <div class="controls">
+            <button onclick="testAutoRotation()">🔄 Test Auto Rotation</button>
+            <button onclick="testScaling()">📏 Test Scaling</button>
+            <button onclick="resetTest()">🔄 Reset</button>
+        </div>
+        
+        <div class="info" id="info">
+            Screen: <span id="screenSize">Loading...</span><br>
+            Current Rotation: <span id="currentRot">0°</span><br>
+            Transform Applied: <span id="transformInfo">none</span><br>
+            Scale Factor: <span id="scaleInfo">1</span><br>
+            WebView Info: <span id="webviewInfo">Loading...</span>
+        </div>
+        
+        <div class="controls">
+            <h3>Quick URL Tests:</h3>
+            <button onclick="testUrl('?orientation=vertical')">Test Vertical</button>
+            <button onclick="testUrl('?orientation=horizontal')">Test Horizontal</button>
+            <button onclick="testUrl('?rot=90')">Test Rot=90</button>
+            <button onclick="testUrl('?norotate=1')">Test No Rotate</button>
+            <button onclick="testUrl('?debug=1')">Enable Debug</button>
+        </div>
+    </div>
+
+    <script>
+        let currentRotation = 0;
+        
+        function updateInfo() {
+            const screenWidth = window.innerWidth || document.documentElement.clientWidth;
+            const screenHeight = window.innerHeight || document.documentElement.clientHeight;
+            
+            document.getElementById('screenSize').textContent = `${screenWidth}x${screenHeight}`;
+            document.getElementById('currentRot').textContent = `${currentRotation}°`;
+            document.getElementById('webviewInfo').textContent = navigator.userAgent.includes('Android') ? 'Android WebView' : 'Desktop Browser';
+            
+            // Show actual transform applied
+            const testEl = document.getElementById('testElement');
+            const computedStyle = window.getComputedStyle(testEl);
+            document.getElementById('transformInfo').textContent = computedStyle.transform || 'none';
+        }
+        
+        function rotate(degrees) {
+            currentRotation = degrees;
+            const testEl = document.getElementById('testElement');
+            
+            // Calculate scale like the actual app does
+            const vw = Math.max(100, window.innerWidth || 1920);
+            const vh = Math.max(100, window.innerHeight || 1080);
+            let scale = 1;
+            
+            if (degrees % 180 === 90) {
+                const minDim = Math.min(vw, vh);
+                const maxDim = Math.max(vw, vh);
+                if (minDim > 0) {
+                    scale = maxDim / minDim;
+                    scale = Math.max(0.1, Math.min(10, scale));
+                }
+            }
+            
+            document.getElementById('scaleInfo').textContent = scale.toFixed(3);
+            
+            const transform = `rotate(${degrees}deg)${scale !== 1 ? ` scale(${scale.toFixed(5)})` : ''}`;
+            testEl.style.transform = transform;
+            
+            updateInfo();
+            console.log(`Rotation applied: ${degrees}°, Scale: ${scale.toFixed(3)}, Transform: ${transform}`);
+        }
+        
+        function testAutoRotation() {
+            const rotations = [0, 90, 180, 270, 0];
+            let i = 0;
+            
+            function nextRotation() {
+                if (i < rotations.length) {
+                    rotate(rotations[i]);
+                    i++;
+                    setTimeout(nextRotation, 1500);
+                }
+            }
+            
+            nextRotation();
+        }
+        
+        function testScaling() {
+            // Test different screen dimensions
+            const tests = [
+                { w: 1920, h: 1080, name: "1920x1080 (Landscape)" },
+                { w: 1080, h: 1920, name: "1080x1920 (Portrait)" },
+                { w: 1280, h: 720, name: "1280x720 (HD)" },
+                { w: 720, h: 1280, name: "720x1280 (Portrait HD)" }
+            ];
+            
+            tests.forEach((test, i) => {
+                setTimeout(() => {
+                    console.log(`Testing ${test.name}:`);
+                    
+                    // Simulate different screen sizes
+                    const minDim = Math.min(test.w, test.h);
+                    const maxDim = Math.max(test.w, test.h);
+                    const scale90 = maxDim / minDim;
+                    
+                    console.log(`  90° Scale: ${scale90.toFixed(3)}`);
+                    document.getElementById('scaleInfo').textContent = `${test.name}: ${scale90.toFixed(3)}`;
+                }, i * 1000);
+            });
+        }
+        
+        function resetTest() {
+            rotate(0);
+        }
+        
+        function testUrl(params) {
+            const newUrl = window.location.href.split('?')[0] + params;
+            console.log(`Would test URL: ${newUrl}`);
+            alert(`Test URL parameter: ${params}\n\nIn the actual app, this would be:\n${newUrl}`);
+        }
+        
+        // Initialize
+        updateInfo();
+        setInterval(updateInfo, 1000);
+        
+        // Test basic rotation on load
+        setTimeout(() => {
+            console.log('🔄 Testing basic rotation...');
+            rotate(90);
+            setTimeout(() => rotate(0), 2000);
+        }, 1000);
+        
+        // Window resize handler
+        window.addEventListener('resize', updateInfo);
+        
+        console.log('🚀 Android TV Rotation Test loaded successfully!');
+        console.log('Use the buttons to test different rotation scenarios.');
+    </script>
+</body>
+</html>

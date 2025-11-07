@@ -1,0 +1,32 @@
+/* Samsung Tizen TV Specific Styles */
+
+/* Samsung remote focus styling */
+*:focus {
+  outline: 3px solid #1428A0 !important; /* Samsung blue */
+  outline-offset: 2px;
+  box-shadow: 0 0 15px rgba(20, 40, 160, 0.5);
+}
+
+/* Optimize for Samsung 4K displays */
+body {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Samsung safe area margins */
+.container {
+  padding: 5% !important;
+}
+
+/* Samsung-optimized video element */
+video {
+  image-rendering: -webkit-optimize-contrast;
+  transform: translateZ(0); /* Hardware acceleration */
+}
+
+/* Samsung button styling */
+button, .btn {
+  min-height: 60px;
+  min-width: 150px;
+  font-size: 20px;
+}

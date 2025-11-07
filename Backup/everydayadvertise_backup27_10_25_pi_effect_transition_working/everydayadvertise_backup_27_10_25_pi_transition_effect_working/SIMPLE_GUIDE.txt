@@ -1,0 +1,214 @@
+================================================================================
+                    SUPER SIMPLE STEP-BY-STEP GUIDE
+================================================================================
+
+DON'T PANIC! I'll walk you through this step by step.
+
+================================================================================
+                    STEP 1: DOWNLOAD WINSCP (EASIEST WAY)
+================================================================================
+
+1. Open your web browser
+2. Go to: https://winscp.net/eng/download.php
+3. Click the big green "DOWNLOAD WINSCP" button
+4. Run the installer (it's safe and free)
+5. Click "Next" through the installation
+
+✅ WinSCP installed? Continue to Step 2.
+
+================================================================================
+                    STEP 2: OPEN WINSCP AND CONNECT
+================================================================================
+
+1. Open WinSCP (you'll see it on your desktop or start menu)
+
+2. You'll see a "Login" window. Fill in:
+
+   File protocol: SFTP  <-- Make sure it says SFTP!
+   Host name: everydayadvertise.com
+   Port number: 22
+   User name: ubuntu
+   Password: [YOUR SERVER PASSWORD - the one you use to SSH]
+
+3. Click "Login" button
+
+What might happen:
+   A) ✅ It connects! → Go to Step 3
+   B) ❌ "Connection timeout" → Go to PLAN B below
+   C) ❌ "Access denied" → Check your password
+
+================================================================================
+                    STEP 3: UPLOAD THE FILES (IF WINSCP CONNECTED)
+================================================================================
+
+You'll see TWO panels:
+- LEFT panel = Your computer (Windows)
+- RIGHT panel = The server (Linux)
+
+LEFT PANEL (Your Computer):
+1. Navigate to: c:\Users\toeng\Pizza Hut TV\
+2. You'll see lots of files
+
+RIGHT PANEL (Server):
+1. Navigate to: /home/ubuntu/Pizza-Hut-TV/
+2. Look for "templates" folder
+
+NOW UPLOAD:
+
+FILE #1: dashboard.html
+-----------------------
+1. In LEFT panel: Go to "templates" folder
+2. Find "dashboard.html"
+3. In RIGHT panel: Go to "templates" folder  
+4. DRAG the file from left to right
+5. If asked "Overwrite?", click YES
+
+FILE #2: app.py
+---------------
+1. In LEFT panel: Go back up to "Pizza Hut TV" folder
+2. Find "app.py"
+3. In RIGHT panel: Go back up to "Pizza-Hut-TV" folder
+4. DRAG the file from left to right
+5. If asked "Overwrite?", click YES
+
+✅ Both files uploaded? Go to Step 4!
+
+================================================================================
+                    STEP 4: RESTART THE SERVER (VERY IMPORTANT!)
+================================================================================
+
+In WinSCP:
+1. Press Ctrl+T (opens a terminal at the bottom)
+2. Type this EXACTLY:
+   sudo systemctl restart pizza-hut-tv
+
+3. Press Enter
+4. Wait 5 seconds
+5. Close WinSCP
+
+✅ Done! Go to Step 5 to test!
+
+================================================================================
+                    STEP 5: TEST IT WORKS!
+================================================================================
+
+1. Open your web browser
+2. Go to: https://everydayadvertise.com/dashboard
+3. Press Ctrl+Shift+R (hard refresh - clears cache)
+4. Click "Remote Pi Manager" (should be visible on page)
+5. Enter: raspberrypi-ce39
+6. Click "Connect"
+
+YOU SHOULD NOW SEE:
+✅ "Pi Online" message (green)
+✅ NEW: "📺 Screen Preview" section with a black box
+✅ NEW: "▶ Start" button
+
+7. Click the "▶ Start" button
+8. Wait 2-3 seconds
+9. You'll see a screenshot of the Pi screen appear!
+10. It updates every 2 seconds automatically!
+
+🎉 SUCCESS! You can now see what's on the Pi screen remotely!
+
+================================================================================
+                    PLAN B: IF WINSCP DOESN'T CONNECT
+================================================================================
+
+If WinSCP shows "Connection timeout" or won't connect, try this:
+
+OPTION 1: Try from mobile phone hotspot
+----------------------------------------
+1. On your phone, turn on "Mobile Hotspot"
+2. Connect your computer to phone's WiFi
+3. Try WinSCP again (Step 2 above)
+4. Your phone's network might not block SSH
+
+OPTION 2: Try from different computer
+--------------------------------------
+1. Go to a friend's house or office
+2. Try from their network
+3. Your home network might be blocking it
+
+OPTION 3: Contact your internet provider
+-----------------------------------------
+Call your ISP and say:
+"My work requires SSH access (port 22) but it's being blocked.
+Can you unblock outgoing connections to port 22?"
+
+OPTION 4: Ask me for alternative methods
+-----------------------------------------
+Tell me: "WinSCP doesn't work, what else can I try?"
+I'll give you more options.
+
+================================================================================
+                    PLAN C: IF YOU DON'T KNOW SERVER PASSWORD
+================================================================================
+
+If you don't have the server password:
+
+1. Check your email for:
+   - "Server credentials"
+   - "Login information"  
+   - "SSH access"
+   - From AWS, DigitalOcean, Vultr, etc.
+
+2. Check your password manager
+
+3. Ask whoever set up the server
+
+4. Login to your hosting provider:
+   - AWS: https://lightsail.aws.amazon.com/
+   - DigitalOcean: https://cloud.digitalocean.com/
+   - They can reset password or provide access
+
+================================================================================
+                    TROUBLESHOOTING
+================================================================================
+
+ERROR: "Network error: Connection refused"
+→ Try different network (mobile hotspot)
+
+ERROR: "Access denied"
+→ Check username is "ubuntu" and password is correct
+
+ERROR: "Host does not exist"
+→ Check you typed everydayadvertise.com correctly
+
+ERROR: "Cannot overwrite file"
+→ That's okay, it means file uploaded successfully!
+
+WINSCP won't start:
+→ Restart computer and try again
+→ Make sure Windows firewall allows it
+
+================================================================================
+                    VISUAL CHECKLIST
+================================================================================
+
+□ Step 1: Downloaded and installed WinSCP
+□ Step 2: Connected to server (entered host, username, password)
+□ Step 3: Uploaded dashboard.html to templates/ folder
+□ Step 4: Uploaded app.py to main folder
+□ Step 5: Opened terminal (Ctrl+T) and ran restart command
+□ Step 6: Opened browser and refreshed dashboard
+□ Step 7: Connected to Pi in Remote Pi Manager
+□ Step 8: Saw "📺 Screen Preview" section appear
+□ Step 9: Clicked "▶ Start" button
+□ Step 10: Screenshots appearing! 🎉
+
+================================================================================
+                    THAT'S IT!
+================================================================================
+
+This is THE SIMPLEST way to do it. Just:
+1. Install WinSCP
+2. Connect to server
+3. Drag 2 files
+4. Restart service
+5. Test in browser
+
+If you get stuck at ANY step, tell me exactly which step and what error you
+see, and I'll help you!
+
+================================================================================

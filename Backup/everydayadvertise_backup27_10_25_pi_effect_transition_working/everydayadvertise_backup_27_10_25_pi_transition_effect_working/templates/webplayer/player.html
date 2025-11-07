@@ -1,0 +1,2476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Web Player</title>
+	<link rel="preconnect" href="https://cdn.everydayadvertise.com" crossorigin>
+	<link rel="dns-prefetch" href="//cdn.everydayadvertise.com">
+	<link rel="dns-prefetch" href="//api.everydayadvertise.com">
+	<!-- Removed duplicate include to avoid redeclaration of serverTimeOffset -->
+	<script>
+		// 🚀 PROFESSIONAL SYNCHRONIZATION SYSTEM - Enterprise Grade
+		class SyncCoordinator {
+			constructor(storeId, screenId) {
+				this.storeId = storeId;
+				this.screenId = screenId;
+				this.syncTargets = new Map(); // Other screens in sync group
+				this.masterClock = Date.now();
+				this.syncTolerance = 10; // 10ms tolerance for ultra-precise sync
+				this.transitionQueue = [];
+				this.lastSyncTime = 0;
+				
+				// SYNCHRONIZED SCREEN TIMING: All screens start at aligned intervals
+				this.getScreenSyncOffset = () => {
+					// Extract screen number for sync calculations
+					const screenMatch = screenId.match(/screen(\d+)$/);
+					const screenNum = screenMatch ? parseInt(screenMatch[1]) : 1;
+					// All screens sync to same timeline - no offset needed for true sync
+					return 0; // All screens start simultaneously
+				};
+				
+				console.log('🚀 Professional Sync Coordinator initialized for', screenId, 'with sync offset:', this.getScreenSyncOffset());
+			}
+			
+			// Enterprise-style frame-perfect sync
+			scheduleSync(item, targetTime) {
+				const now = Date.now();
+				const delay = Math.max(0, targetTime - now);
+				
+				console.log('⏱️ Scheduling sync transition in', delay, 'ms for perfect alignment');
+				
+				return new Promise(resolve => {
+					setTimeout(() => {
+						this.executeSyncTransition(item);
+						resolve();
+					}, delay);
+				});
+			}
+			
+			// Professional black-screen elimination
+			executeSyncTransition(item) {
+				console.log('🎬 Executing PROFESSIONAL sync transition - NO BLACK SCREENS');
+				
+				// Add transitioning class for anti-black-screen effect
+				front.classList.add('transitioning');
+				back.classList.add('transitioning');
+				
+				// Immediate transition with professional timing
+				setTimeout(() => {
+					front.classList.remove('transitioning');
+					back.classList.remove('transitioning');
+				}, 100); // Brief anti-black-screen protection
+			}
+			
+			// Calculate perfect sync timing like industry systems
+			calculateSyncMoment(duration) {
+				// GLOBAL SYNC FIX: All screens sync to server timestamp instead of local time
+				// This ensures perfect synchronization across all screens
+				const serverTime = window.serverTimestamp || Date.now();
+				const syncInterval = 2000; // 2 second sync intervals for all screens
+				const nextSync = Math.ceil(serverTime / syncInterval) * syncInterval;
+				
+				console.log('🎯 GLOBAL SYNC: All screens syncing to timestamp', nextSync);
+				return nextSync;
+			}
+			
+			// Get server timestamp for global sync
+			async getServerTime() {
+				try {
+					const response = await fetch('/api/sync-time');
+					const data = await response.json();
+					window.serverTimestamp = data.timestamp;
+					return data.timestamp;
+				} catch (error) {
+					console.warn('Server time sync failed, using local time');
+					return Date.now();
+				}
+			}
+		}
+		
+		// Expose globally so later scripts can instantiate after params resolved
+		window.SyncCoordinator = SyncCoordinator;
+	</script>
+	<style>
+		html, body { height:100%; margin:0; background:#000; color:#fff; cursor:none; overflow:hidden; }
+		#stage { position:fixed; top:0; left:0; right:0; bottom:0; width:100%; height:100%; overflow:hidden; background:#000; 
+			/* HARDWARE ACCELERATION for smooth transitions */
+			transform: translateZ(0);
+			-webkit-transform: translateZ(0);
+			transform-origin: center center;
+			-webkit-transform-origin: center center;
+		}
+		.layer { position:absolute; top:0; left:0; right:0; bottom:0; display:block; background:transparent; text-align:center;
+			/* SMOOTH TRANSITION OPTIMIZATION */
+			transform: translateZ(0);
+			-webkit-transform: translateZ(0);
+			backface-visibility: hidden;
+			-webkit-backface-visibility: hidden;
+		}
+		.layer table { width:100%; height:100%; border-collapse:collapse; margin:0; padding:0; }
+		.layer td { vertical-align:middle; text-align:center; padding:0; margin:0; }
+		.hidden { display:none; }
+		.media { 
+			width: 100%; 
+			height: 100%; 
+			display: block; 
+			margin: 0 auto;
+			object-fit: cover; /* Fill screen like Pi client; crop if needed to avoid letterboxing */
+			object-position: center center;
+			/* ELIMINATE BLACK SCREENS - Force hardware rendering */
+			transform: translateZ(0);
+			-webkit-transform: translateZ(0);
+			backface-visibility: hidden;
+			-webkit-backface-visibility: hidden;
+			/* Ensure media itself provides a solid backdrop to avoid transparency flash */
+			background-color: #000;
+		}
+		.idle-message {
+			position: absolute;
+			top: 50%;
+			left: 50%;
+			transform: translate(-50%, -50%);
+			padding: 24px 36px;
+			color: #d6dcff;
+			font: 600 30px/1.24 "Segoe UI", Roboto, system-ui, sans-serif;
+			text-align: center;
+			letter-spacing: 0.04em;
+			background: rgba(12, 18, 38, 0.82);
+			border: 1px solid rgba(118, 139, 255, 0.55);
+			border-radius: 20px;
+			box-shadow: 0 24px 65px rgba(0, 0, 0, 0.55);
+			max-width: 80vw;
+		}
+		/* TV-compatible segment styling with fallbacks */
+		.media.segment {
+			width: 100vw;
+			height: 100vh;
+			max-width: none;
+			max-height: none;
+			position: absolute;
+			top: 0;
+			left: 0;
+			object-fit: fill; /* Force full screen coverage */
+		}
+		/* Wrapper used on TVs to avoid transforms on <video> rendering */
+		.segment-wrap {
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 100vw;
+			height: 100vh;
+			overflow: hidden;
+			/* Keep transparent so outgoing layer remains visible until new media paints */
+			background: transparent;
+		}
+		/* Inner container that actually receives transforms; keeps video itself untransformed */
+		.segment-inner {
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 100vw;
+			height: 100vh;
+			overflow: visible;
+		}
+		/* Fallback clip utility updated dynamically via style */
+		/* Base fade with cross-browser support - ULTRA SMOOTH TRANSITIONS */
+		.fade { 
+			opacity:0; 
+			-webkit-transition: opacity 0.5s cubic-bezier(0.4, 0.0, 0.2, 1); 
+			-moz-transition: opacity 0.5s cubic-bezier(0.4, 0.0, 0.2, 1); 
+			-o-transition: opacity 0.5s cubic-bezier(0.4, 0.0, 0.2, 1); 
+			transition: opacity 0.5s cubic-bezier(0.4, 0.0, 0.2, 1); 
+		}
+		.visible { 
+			opacity:1;
+			-webkit-transition: opacity 0.5s cubic-bezier(0.4, 0.0, 0.2, 1); 
+			-moz-transition: opacity 0.5s cubic-bezier(0.4, 0.0, 0.2, 1); 
+			-o-transition: opacity 0.5s cubic-bezier(0.4, 0.0, 0.2, 1); 
+			transition: opacity 0.5s cubic-bezier(0.4, 0.0, 0.2, 1); 
+		}
+		
+		/* PROFESSIONAL ANTI-BLACK-SCREEN EFFECTS */
+		/* IMPORTANT: Do NOT force opacity here; let .fade/.visible drive crossfade.
+		   Keep backgrounds transparent so the outgoing layer remains visible until the incoming
+		   media has drawn its first frame. This eliminates the black flash during swaps. */
+		.layer.transitioning { background: transparent; will-change: opacity, transform; }
+		/* Slide and zoom helpers applied on entering layer */
+		.enter-slide-l { transform: translateX(8%); opacity:0; }
+		.enter-slide-r { transform: translateX(-8%); opacity:0; }
+		.enter-zoom-in { transform: scale(1.08); opacity:0; }
+		.enter-zoom-out { transform: scale(0.92); opacity:0; }
+		/* Continuous rotation effect */
+		.enter-rotate { animation: spin 10s linear infinite; }
+		@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+		.anim { transition: transform var(--motion-dur) ease, opacity var(--motion-dur) ease; will-change: transform, opacity; }
+		#overlay { position:fixed; left:10px; bottom:10px; color:#9aa7ff; font:12px/1.4 system-ui,Segoe UI,Roboto,Ubuntu,Arial; opacity:.22; }
+		
+		/* Idle state message - perfectly centered */
+		.idle-message {
+			position: absolute;
+			top: 50%;
+			left: 50%;
+			transform: translate(-50%, -50%);
+			text-align: center;
+			color: #fff;
+			font-size: 24px;
+			font-family: system-ui, -apple-system, sans-serif;
+			width: 100%;
+			padding: 20px;
+			box-sizing: border-box;
+		}
+	</style>
+	
+	<!-- TV Brand Detection and Configuration System -->
+	<script src="{{ url_for('static', filename='tv-brands/tv-detector.js') }}"></script>
+</head>
+<body>
+	<div id="stage">
+		<div class="layer" id="layerA"></div>
+		<div class="layer" id="layerB"></div>
+	</div>
+	<div id="overlay"></div>
+	<!-- Hidden preloader bin (TV-friendly: avoid display:none) -->
+	<div id="preload-bin" style="position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;overflow:hidden;opacity:0;"></div>
+
+	<script>
+		// Wait for TV brand configuration to load (non-blocking fallback in 1s)
+		let __tvReady = false;
+		(function(){
+			try{
+				Promise.race([
+					(window.tvBrandReady||Promise.resolve(true)),
+					new Promise(res=>setTimeout(res, 1000))
+				]).then(()=>{ __tvReady = true; });
+			}catch(e){ __tvReady = true; }
+		})();
+		function isTizenTV(){ try{ return /Tizen|TizenBrowser|SamsungBrowser|SMART-TV|SmartTV|Maple/i.test(navigator.userAgent||''); }catch(e){ return false; } }
+		function isLowEndTV(){
+			try{
+				var ua = (navigator.userAgent||'');
+				// Heuristics for older TV stacks (Vewd/Opera TV, HbbTV, legacy WebKit, generic AOSP)
+				return /HbbTV|Maple|InettvBrowser|Vewd|Opera TV|AOSP TV|Amlogic|MStar|Hisilicon|ChangHong|Coocaa|MiTV|HiBrowser/i.test(ua);
+			}catch(e){ return false; }
+		}
+		function isVewdTV(){
+			try{ return /Vewd|Opera TV|OIPF|HbbTV/i.test(navigator.userAgent||''); }catch(e){ return false; }
+		}
+		function supportsTransform(){
+			try{
+				var s = document.body && document.body.style ? document.body.style : null;
+				if(!s) return false;
+				return ('transform' in s) || ('webkitTransform' in s) || ('mozTransform' in s) || ('oTransform' in s) || ('msTransform' in s);
+			}catch(e){ return true; }
+		}
+		function isFullscreen(){ return !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement); }
+		function requestFs(el){ try{ var e=el||document.documentElement; var r=e.requestFullscreen||e.webkitRequestFullscreen||e.mozRequestFullScreen||e.msRequestFullscreen; if(r){ var p=r.call(e); if(p && p.catch) p.catch(function(){}); } }catch(e){} }
+		function ensureFullscreenOnGesture(){
+			var fired=false;
+			function handler(){ if(fired) return; fired=true; if(!isFullscreen()) requestFs(document.documentElement); cleanup(); }
+			function onKey(ev){ ev=ev||window.event; var k=ev.key||ev.keyCode; if(k==='Enter' || k===13 || k===32) handler(); }
+			function cleanup(){ window.removeEventListener('click', handler); window.removeEventListener('touchstart', handler); window.removeEventListener('keydown', onKey); }
+			window.addEventListener('click', handler, { once:true });
+			window.addEventListener('touchstart', handler, { once:true });
+			window.addEventListener('keydown', onKey);
+		}
+		const params = new URLSearchParams(location.search);
+		const storeId = params.get('store_id') || '';
+		const screenId = params.get('screen_id') || '';
+		const pairCode = params.get('code') || '';
+		const syncCoordinator = new window.SyncCoordinator(storeId, screenId);
+		const debugMode = params.get('debug') === '1' || params.get('debug') === 'true';
+		
+		// 🚀 AGGRESSIVE SERVER TIME SYNC: Initialize immediately and re-sync every 5 seconds
+		(async function initializeServerTimeSync() {
+			try {
+				// Initial sync with multiple samples for accuracy
+				await getServerTime();
+				console.log('✅ Initial server time synchronized');
+				
+				// 🚀 CONTINUOUS RE-SYNC: Re-sync every 5 seconds for perfect clock alignment
+				setInterval(async () => {
+					try {
+						await getServerTime();
+						console.log('🔄 Server time re-synchronized, offset:', serverTimeOffset.toFixed(3) + 'ms');
+					} catch(err) {
+						console.warn('⚠️ Background server time sync failed:', err);
+					}
+				}, 5000); // Every 5 seconds (optimized for bandwidth)
+				
+			} catch(err) {
+				console.warn('⚠️ Initial server time sync failed:', err);
+			}
+		})();
+		
+		// Extract screen number from screenId (e.g., "screen1" -> 1)
+		function getScreenNumber(screenId) {
+			if(!screenId) return 0;
+			const match = screenId.match(/screen(\d+)/);
+			return match ? parseInt(match[1]) : 0;
+		}
+	const screenNumber = getScreenNumber(screenId);
+		console.log('Webplayer initialized for:', { storeId, screenId, screenNumber });
+
+	// Optional display control via query param: ?fit=cover|contain
+	const urlParams = new URLSearchParams(location.search);
+	const IMAGE_FIT_PARAM = urlParams.get('fit');
+		
+		const DEFAULT_ORIGIN = 'https://api.everydayadvertise.com';
+		const ORIGIN = (window.location && window.location.origin)
+			? (window.location.origin.startsWith('http:') && 
+			   !window.location.hostname.includes('127.0.0.1') &&
+			   !window.location.hostname.includes('localhost')
+				? window.location.origin.replace(/^http:/, 'https:')
+				: window.location.origin)
+			: DEFAULT_ORIGIN;
+		// Always use the API origin for media fallbacks to avoid 404s on apex domain
+		const MEDIA_ORIGIN = 'https://api.everydayadvertise.com';
+		try{ if (location.protocol === 'http:' && /(^|\.)everydayadvertise\.com$/i.test(location.hostname)) { location.replace('https:' + location.href.slice(5)); } }catch{}
+
+		const videoExt = ['mp4','webm','ogg','mov','avi','mkv','m4v'];
+		function extFromName(name){ if(!name) return ''; const n=String(name); const base=n.split('?')[0].split('#')[0]; return (base.split('.').pop()||'').toLowerCase(); }
+		function isVideoByName(name){ if(!name) return false; return videoExt.includes(extFromName(name)); }
+		function fileNameFrom(item){
+			if(!item) return '';
+			if(typeof item === 'string'){
+				try{ const u = new URL(item); return (u.pathname.split('/').pop()||''); }catch{ return (item.split('/').pop()||''); }
+			}
+			const f = item.file || '';
+			if(f) return String(f).split('/').pop()||'';
+			const u = item.url || '';
+			try{ const p = new URL(u).pathname; return (p.split('/').pop()||''); }catch{ return (String(u).split('/').pop()||''); }
+		}
+		function relKeyFrom(item){
+			try{
+				if(!item) return '';
+				if(typeof item === 'string'){
+					if(/^https?:\/\//i.test(item)){ const u=new URL(item); return u.pathname.replace(/^\//,''); }
+					return item.startsWith('/')?item.slice(1):item;
+				}
+				if(item.file){ const s=String(item.file); return s.startsWith('/')?s.slice(1):s; }
+				if(item.url){ const u=new URL(String(item.url)); return u.pathname.replace(/^\//,''); }
+				return '';
+			}catch{ return ''; }
+		}
+		function determineSliceOrder(item){
+			try {
+				if(item && item.sync_ref && item.sync_ref.order !== undefined && item.sync_ref.order !== null){
+					const parsed = parseInt(item.sync_ref.order, 10);
+					if(!Number.isNaN(parsed) && parsed >= 0){
+						return parsed;
+					}
+				}
+				if(screenNumber > 0){
+					const fallback = screenNumber - 1;
+					if(fallback >= 0){
+						return fallback;
+					}
+				}
+			}catch{}
+			return null;
+		}
+
+		const SYNC_ALIGNMENT_WINDOW_MS = 50; // 50ms sync window - reasonable tolerance
+		const SYNC_PRECISION_TOLERANCE = 30; // 30ms precision tolerance for good sync
+		
+		// Server time synchronization variables
+		let serverTimeOffset = 0; // Offset between server and client time
+		let lastServerSync = 0;
+		let syncSamples = []; // Store multiple samples for better accuracy
+		let networkLatency = 0; // Estimated network latency
+		
+		// SERVER TIME SYNC - Re-sync every 10 seconds for stable sync
+		async function getServerTime() {
+			const maxRetries = 3; // Reasonable retry count
+			const samples = [];
+			
+			for(let attempt = 0; attempt < maxRetries; attempt++) {
+				try {
+					const startTime = performance.now();
+					const response = await fetch('/api/server_time', { 
+						cache: 'no-cache',
+						headers: { 'Cache-Control': 'no-cache' }
+					});
+					const requestLatency = performance.now() - startTime;
+					
+					if(!response.ok) {
+						throw new Error(`HTTP ${response.status}`);
+					}
+					
+					const data = await response.json();
+					const clientTime = Date.now();
+					const serverTime = data.server_time_ms;
+					
+					// Compensate for network latency (half of round-trip time)
+					const adjustedServerTime = serverTime + (requestLatency / 2);
+					const offset = adjustedServerTime - clientTime;
+					
+					samples.push({
+						offset: offset,
+						latency: requestLatency,
+						timestamp: clientTime
+					});
+					
+					console.log(`🌐 SERVER TIME SAMPLE ${attempt + 1}:`, {
+						server: serverTime,
+						client: clientTime,
+						latency: requestLatency.toFixed(1) + 'ms',
+						offset: offset.toFixed(3) + 'ms',
+						screenId: screenId
+					});
+					
+				} catch(err) {
+					console.warn(`Server time sync attempt ${attempt + 1} failed:`, err);
+					if(attempt === maxRetries - 1) {
+						console.warn('All server time sync attempts failed, using client time');
+						return Date.now();
+					}
+					// Wait before retry
+					await new Promise(resolve => setTimeout(resolve, 100));
+				}
+			}
+			
+			if(samples.length > 0) {
+				// Calculate median offset for better accuracy
+				const offsets = samples.map(s => s.offset).sort((a, b) => a - b);
+				const medianOffset = offsets[Math.floor(offsets.length / 2)];
+				
+				// Calculate average latency
+				const avgLatency = samples.reduce((sum, s) => sum + s.latency, 0) / samples.length;
+				
+				serverTimeOffset = medianOffset;
+				networkLatency = avgLatency;
+				lastServerSync = Date.now();
+				
+				// Store samples for trend analysis
+				syncSamples.push({
+					offset: medianOffset,
+					latency: avgLatency,
+					timestamp: lastServerSync
+				});
+				
+				// Keep only last 10 samples
+				if(syncSamples.length > 10) {
+					syncSamples = syncSamples.slice(-10);
+				}
+				
+				console.log('🌐 FINAL SERVER TIME SYNC:', {
+					medianOffset: medianOffset.toFixed(3) + 'ms',
+					avgLatency: avgLatency.toFixed(1) + 'ms',
+					samples: samples.length,
+					screenId: screenId
+				});
+				
+				return Date.now() + medianOffset;
+			}
+			
+			return Date.now(); // Fallback
+		}
+		
+		function getServerSyncedTime() {
+			const clientTime = Date.now();
+			
+			// Re-sync every 10 seconds for stable coordination
+			if(clientTime - lastServerSync > 10000) { // Re-sync every 10 seconds
+				getServerTime(); // Async refresh for next time
+			}
+			
+			// Apply drift compensation if we have multiple samples
+			let adjustedOffset = serverTimeOffset;
+			if(syncSamples.length >= 3) {
+				// Calculate drift trend from recent samples
+				const recent = syncSamples.slice(-5);
+				const oldestTime = recent[0].timestamp;
+				const newestTime = recent[recent.length - 1].timestamp;
+				const oldestOffset = recent[0].offset;
+				const newestOffset = recent[recent.length - 1].offset;
+				
+				if(newestTime > oldestTime) {
+					const driftRate = (newestOffset - oldestOffset) / (newestTime - oldestTime);
+					const timeSinceLastSync = clientTime - lastServerSync;
+					adjustedOffset = serverTimeOffset + (driftRate * timeSinceLastSync);
+					
+					// Log drift compensation occasionally
+					if(Math.abs(driftRate) > 0.001 && Math.random() < 0.1) {
+						console.log('🔄 Clock drift compensation:', {
+							drift: (driftRate * 1000).toFixed(6) + 'ms/s',
+							adjustment: (driftRate * timeSinceLastSync).toFixed(3) + 'ms',
+							screenId: screenId
+						});
+					}
+				}
+			}
+			
+			return clientTime + adjustedOffset;
+		}
+		
+		// ULTRA-SIMPLE SYNC SYSTEM - Just wait for 5-second boundaries
+		async function computeSyncDelayMs(item, durationSec){
+			if(!item || !item.sync_ref) {
+				return 0; // No sync needed
+			}
+			
+			const syncGroup = item.sync_ref.group || 'default';
+			const now = Date.now();
+			
+			// Every 2 seconds, all screens sync up (very short interval for perfect sync)
+			const SYNC_INTERVAL = 2000; 
+			const nextSyncMoment = Math.ceil(now / SYNC_INTERVAL) * SYNC_INTERVAL;
+			const waitTime = Math.max(0, nextSyncMoment - now);
+			
+			console.log(`🚀 [${screenId}] SIMPLE SYNC: group=[${syncGroup}] wait=${waitTime}ms next=${new Date(nextSyncMoment).toLocaleString()}`);
+			
+			return waitTime;
+				
+				console.log('🔄 SERVER-SYNCED calculation:', {
+					startEpoch: startEpochSec,
+					durationMs: durMs,
+					serverTime: now.toFixed(3),
+					baseMs: baseMs,
+					screenId: screenId,
+					offset: serverTimeOffset.toFixed(3) + 'ms'
+				});
+				
+				if(now + SYNC_PRECISION_TOLERANCE < baseMs){
+					const waitTime = Math.min(baseMs - now, durMs);
+					console.log('🔄 Waiting for future start:', waitTime.toFixed(3), 'ms');
+					return waitTime;
+				}
+				
+				const elapsed = now - baseMs;
+				const phase = ((elapsed % durMs) + durMs) % durMs;
+				console.log('🔄 Current phase in video:', phase.toFixed(3), 'ms of', durMs, 'ms total');
+				
+				// Ultra-tight sync window
+				if(phase <= SYNC_PRECISION_TOLERANCE) {
+					console.log('🔄 Perfect server sync - immediate playback');
+					return 0;
+				}
+				
+				const deltaToNext = durMs - phase;
+				if(deltaToNext <= SYNC_ALIGNMENT_WINDOW_MS){
+					console.log('🔄 Server precision wait for next cycle:', deltaToNext.toFixed(3), 'ms');
+					return deltaToNext;
+				}
+				
+		}
+
+		async function alignToSyncWindow(item, durationSec){
+			const syncGroup = item && item.sync_ref && item.sync_ref.group ? item.sync_ref.group : 'default';
+			await stableSyncWait(syncGroup, screenId);
+			console.log('🚀 SYNC COMPLETE:', screenId, 'starting playback NOW (server time sync)');
+		}
+
+		function calculateSyncedVideoTime(item) {
+			try {
+				if(!item || !item.sync_ref) return null;
+				const startEpochSec = Number(item.sync_ref.start_epoch || item.sync_ref.startEpoch);
+				const duration = Number(item.duration || 10);
+				if(!Number.isFinite(startEpochSec) || !Number.isFinite(duration)) return null;
+				
+				// Use server-synchronized time for perfect cross-screen video timing
+				const now = getServerSyncedTime();
+				const baseMs = startEpochSec * 1000;
+				const elapsed = now - baseMs;
+				const videoTime = (elapsed / 1000) % duration;
+				
+				console.log('🎯 SERVER-SYNCED VIDEO TIME CALC:', {
+					serverTime: now.toFixed(3),
+					baseMs: baseMs,
+					elapsed: elapsed.toFixed(3),
+					duration: duration,
+					videoTime: videoTime.toFixed(6),
+					screenId: screenId,
+					serverOffset: serverTimeOffset.toFixed(3) + 'ms'
+				});
+				
+				return Math.max(0, videoTime);
+			} catch(err) {
+				console.warn('calculateSyncedVideoTime error:', err);
+				return null;
+			}
+		}
+
+	function startSyncMonitoring(videoElement, item) {
+		if(!videoElement || !item || !item.sync_ref) return;
+		
+		let syncCheckInterval;
+		let lastCorrectionTime = 0;
+		const SYNC_CHECK_INTERVAL = 250; // Check every 250ms (4x per second) - more frequent
+		const HARD_SYNC_THRESHOLD = 0.3; // Hard sync if >300ms drift (tighter)
+		const MICRO_ADJUST_THRESHOLD = 0.1; // Gentle correction if >100ms drift (more responsive)
+		const CORRECTION_COOLDOWN = 2000; // 2 seconds between corrections (faster)
+		
+		// 🎯 TIGHTER SYNC: More aggressive corrections for perfect synchronization
+		// Uses TINY playback rate changes (1.03x/0.97x) for faster correction
+		
+		const checkSync = () => {
+			try {
+				if(!document.body.contains(videoElement) || videoElement.paused || videoElement.ended) {
+					console.log('🔄 Stopping sync monitoring - video stopped or removed');
+					clearInterval(syncCheckInterval);
+					return;
+				}
+				
+				const expectedTime = calculateSyncedVideoTime(item);
+				if(expectedTime === null) return;
+				
+				const actualTime = videoElement.currentTime;
+				const drift = Math.abs(actualTime - expectedTime);
+				const isBehind = actualTime < expectedTime;
+				const now = Date.now();
+				const timeSinceLastCorrection = now - lastCorrectionTime;
+				
+				// HARD SYNC for major drift (>300ms)
+				if(drift > HARD_SYNC_THRESHOLD && timeSinceLastCorrection > CORRECTION_COOLDOWN) {
+					console.log('🔄 HARD SYNC (>300ms):', {
+						screen: screenId,
+						expected: expectedTime.toFixed(3),
+						actual: actualTime.toFixed(3),
+						drift: (drift * 1000).toFixed(0) + 'ms'
+					});
+					
+					videoElement.currentTime = expectedTime;
+					videoElement.playbackRate = 1.0;
+					lastCorrectionTime = now;
+					
+				// MICRO-ADJUSTMENT for medium drift (100-300ms)
+				// Uses 3% speed change for faster correction
+				} else if(drift > MICRO_ADJUST_THRESHOLD && timeSinceLastCorrection > CORRECTION_COOLDOWN) {
+					const adjustment = isBehind ? 1.03 : 0.97; // 3% change (faster correction)
+					videoElement.playbackRate = adjustment;
+					lastCorrectionTime = now;
+					
+					console.log('⚡ Micro-adjustment (100-300ms):', {
+						screen: screenId,
+						rate: adjustment,
+						drift: (drift * 1000).toFixed(0) + 'ms',
+						direction: isBehind ? 'catch up' : 'slow down'
+					});
+					
+					// Reset to 1.0 after 1.5 seconds (faster reset)
+					setTimeout(() => {
+						if(videoElement && document.body.contains(videoElement)) {
+							videoElement.playbackRate = 1.0;
+						}
+					}, 1500);
+					
+				// GOOD SYNC (<100ms) - maintain normal speed
+				} else {
+					if(videoElement.playbackRate !== 1.0) {
+						videoElement.playbackRate = 1.0;
+					}
+					// Log occasionally
+					if(Math.random() < 0.02) {
+						console.log('📊 Sync status:', {
+							screen: screenId,
+							drift: (drift * 1000).toFixed(0) + 'ms',
+							status: drift < 0.05 ? '✅ Perfect' : drift < 0.1 ? '✔️ Good' : '⚠️ Adjusting'
+						});
+					}
+				}
+			} catch(err) {
+				console.warn('Sync monitoring error:', err);
+			}
+		};			// Start monitoring after 1 second delay
+			setTimeout(() => {
+				syncCheckInterval = setInterval(checkSync, SYNC_CHECK_INTERVAL);
+				console.log('� Sync monitoring started for', screenId);
+			}, 1000);
+		}
+
+		function normalizeSliceUrl(rawUrl, item){
+			if(!rawUrl) return rawUrl;
+			try {
+				const desiredOrder = determineSliceOrder(item);
+				if(desiredOrder === null) return rawUrl;
+				const hasProtocol = /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(rawUrl);
+				const base = (hasProtocol ? undefined : (window.location && window.location.origin ? window.location.origin : ORIGIN));
+				const urlObj = new URL(rawUrl, base || ORIGIN);
+				const current = parseInt(urlObj.searchParams.get('slice_order') || '', 10);
+				if(Number.isNaN(current) || current !== desiredOrder){
+					urlObj.searchParams.set('slice_order', desiredOrder);
+					console.log('Adjusted slice_order to match screen order:', { from: Number.isNaN(current) ? 'none' : current, to: desiredOrder, url: urlObj.toString() });
+				}
+				return urlObj.toString();
+			}catch(err){
+				console.warn('Failed to normalize slice URL', rawUrl, err);
+				return rawUrl;
+			}
+		}
+
+		function ensureVideoPlaying(video, contextLabel){
+			if(!video) return;
+			let attempts = 0;
+			const maxAttempts = 6;
+			const attemptDelay = 320;
+			function attemptPlayback(){
+				if(!document.body.contains(video)){
+					return;
+				}
+				if(!video.paused && video.readyState >= 2){
+					console.log('✅ Video confirmed playing', {
+						label: contextLabel || 'unknown',
+						readyState: video.readyState,
+						currentTime: video.currentTime
+					});
+					return;
+				}
+				attempts += 1;
+				console.log('⚠️ Video not yet playing, retrying...', {
+					label: contextLabel || 'unknown',
+					readyState: video.readyState,
+					networkState: video.networkState,
+					paused: video.paused,
+					attempt: attempts
+				});
+				try {
+					const playPromise = video.play();
+					if(playPromise && playPromise.catch){
+						playPromise.catch(err => console.warn('Retry play rejected', err));
+					}
+				}catch(err){
+					console.warn('Retry play threw error', err);
+				}
+				if(attempts < maxAttempts){
+					setTimeout(attemptPlayback, attemptDelay);
+				}else{
+					console.error('❌ Video failed to enter playing state after retries', {
+						label: contextLabel || 'unknown',
+						readyState: video.readyState,
+						networkState: video.networkState
+					});
+				}
+			}
+			attemptPlayback();
+		}
+
+		// Wait until the browser has actually painted the first decoded frame
+		// before we fade out the old layer. This prevents rare long-run flashes
+		// where readiness events fire but the frame isn't on screen yet.
+		function waitForFirstFramePaint(video, timeoutMs = 1500){
+			return new Promise(resolve => {
+				let done = false;
+				const finish = () => { if(!done){ done = true; cleanup(); resolve(); } };
+				const cleanup = () => {
+					try{
+						video.removeEventListener('timeupdate', onTU);
+						video.removeEventListener('playing', onPlaying);
+						video.removeEventListener('seeked', onSeeked);
+					}catch{}
+				};
+				const onTU = () => { try{ if(video.currentTime > 0){ finish(); } }catch{} };
+				const onSeeked = () => {
+					// Give the engine a tick after seeking
+					requestAnimationFrame(() => { if(!done){ /* no-op, rAF gives a paint chance */ } });
+				};
+				const onPlaying = () => {
+					try{
+						if(typeof video.requestVideoFrameCallback === 'function'){
+							// Resolve on the next presented frame
+							video.requestVideoFrameCallback(() => finish());
+							return;
+						}
+					}catch{}
+					// Fallback: allow two RAFs to ensure a paint occurred
+					requestAnimationFrame(() => requestAnimationFrame(finish));
+				};
+				try{
+					video.addEventListener('timeupdate', onTU);
+					video.addEventListener('playing', onPlaying, { once:true });
+					video.addEventListener('seeked', onSeeked, { once:true });
+				}catch{}
+				// If we're already effectively showing frames, resolve quickly
+				try{
+					if((video.readyState||0) >= 2 && video.currentTime > 0 && !video.paused){ finish(); return; }
+				}catch{}
+				// Nudge playback in case it's paused
+				try{ if(video.paused){ const p = video.play(); if(p && p.catch){ p.catch(()=>{}); } } }catch{}
+				setTimeout(finish, timeoutMs);
+			});
+		}
+
+		function mediaUrl(item){
+			if(!item) return '';
+			
+		// For slice-aware videos with sync_ref, use FULL CDN video and apply client-side CSS crop
+		// This matches custom_player.py behavior to avoid double-cropping
+		if (typeof item === 'object' && item.slice_aware && item.sync_ref && item.url) {
+			console.log('🎬 Using FULL CDN URL for client-side CSS cropping (matching custom player)');
+			const fullUrl = item.url;
+			if(!fullUrl.includes('127.0.0.1') && !fullUrl.includes('localhost')){
+				return fullUrl.replace(/^http:/,'https:');
+			}
+			return fullUrl;
+		}
+		
+		// For slice-aware videos, prioritize slice_url or preferred_url
+		if (typeof item === 'object' && item.slice_aware && (item.slice_url || item.preferred_url)) {
+			let sliceUrl = item.slice_url || item.preferred_url;
+			sliceUrl = normalizeSliceUrl(sliceUrl, item);
+			console.log('Using slice-aware URL:', sliceUrl);
+			// Only upgrade to HTTPS for non-localhost URLs
+			if(!sliceUrl.includes('127.0.0.1') && !sliceUrl.includes('localhost')){
+				return sliceUrl.replace(/^http:/,'https:');
+			}
+			return sliceUrl;
+		}			// First check if item has a slice_url (provided by server for webplayer slice support)
+			let sliceUrl = (typeof item === 'object' && item.slice_url) ? item.slice_url : null;
+			if(sliceUrl){
+				// Use the slice URL provided by the server (already contains slice parameters)
+				sliceUrl = normalizeSliceUrl(sliceUrl, item);
+				console.log('Using server slice_url:', sliceUrl);
+				// Only upgrade to HTTPS for non-localhost URLs
+				if(!sliceUrl.includes('127.0.0.1') && !sliceUrl.includes('localhost')){
+					return sliceUrl.replace(/^http:/,'https:');
+				}
+				return sliceUrl;
+			}
+			
+			// Fallback: Generate slice URL client-side if sync_ref is present
+			const syncRef = (typeof item === 'object' && item.sync_ref) ? item.sync_ref : null;
+			if(syncRef && syncRef.mode && syncRef.count > 1) {
+				const baseUrl = (typeof item === 'string') ? item : (item.url || item.file || '');
+				if(baseUrl && isVideoByName(baseUrl)) {
+					// Extract filename for slice URL construction
+					let filename = baseUrl;
+					if(filename.includes('/')) {
+						filename = filename.split('/').pop();
+					}
+					
+				// Construct slice URL using current screen context
+				// Use syncRef.order if available, otherwise screenNumber - 1 (0-indexed)
+				const sliceOrder = (syncRef.order !== undefined && syncRef.order !== null) 
+					? syncRef.order 
+					: Math.max(0, screenNumber - 1);
+				const sliceParams = new URLSearchParams({
+					slice_mode: syncRef.mode || 'split-h',
+					slice_count: syncRef.count || 3,
+					slice_order: sliceOrder
+				});					const sliceUrl = `${ORIGIN}/slice-video/users/toengpheng_at_gmail.com/2025-09/${filename}?${sliceParams}`;
+					console.log('Generated client-side slice URL:', sliceUrl);
+					return sliceUrl;
+				}
+			}
+			
+			const u = (typeof item === 'string') ? item : (item.url || item.file || '');
+			if(/^https?:\/\//i.test(u)){
+				// Keep absolute URL (CDN) for both images and videos; upgrade to HTTPS if needed for non-localhost
+				if(!u.includes('127.0.0.1') && !u.includes('localhost')){
+					return u.replace(/^http:/,'https:');
+				}
+				return u;
+			}
+			const fname = (u.startsWith('/') ? u.slice(1) : u);
+			const isVid = isVideoByName(fname);
+			return `${ORIGIN}/${isVid ? 'media' : 'static/uploads'}/${fname}`;
+		}
+
+	const stage = document.getElementById('stage');
+		const layerA = document.getElementById('layerA');
+		const layerB = document.getElementById('layerB');
+		let front = layerA, back = layerB;
+		// Robust transition guard: ensure only one transition runs at a time and
+		// cancel any pending timeouts from previous transitions to prevent drift
+		let __transitionTimers = [];
+		let __transitionId = 0;
+		function __clearTransitionTimers(){
+			try{ for(const t of __transitionTimers){ clearTimeout(t); } }catch{}
+			__transitionTimers = [];
+			// Safety: never leave layers stuck in a transient state
+			try{ front.classList.remove('transitioning'); back.classList.remove('transitioning'); }catch{}
+		}
+		function __newTransitionId(){ __clearTransitionTimers(); __transitionId = (__transitionId + 1) % 1000000000; return __transitionId; }
+		function __trackTimeout(fn, ms){ const id = setTimeout(()=>{ // auto-remove on fire
+			__transitionTimers = __transitionTimers.filter(x=>x!==id);
+			try{ fn(); }catch(e){ console.warn('transition timer fn error', e); }
+		}, ms); __transitionTimers.push(id); return id; }
+		let playlist = [];
+		let idx = 0;
+		let timer = null;
+		let lastFetchTs = 0;
+		let currentItemKey = '';
+		let forceAdvanceNow = false;
+		const PLAYLIST_REFRESH_MIN_MS = 3000; // INSTANT REFRESH: Faster refresh for immediate schedule changes
+		const COMMANDS_POLL_MS = 1500; // INSTANT POLLING: Faster polling for immediate admin updates
+
+		const overlay = document.getElementById('overlay');
+		overlay.textContent = `Store ${storeId} • Screen ${screenId}`;
+		const PLAYLIST_REFRESH_INTERVAL_MS = 10000; // Periodic playlist refresh while playing
+		let playlistRefreshTicker = null;
+		let playlistSignature = '';
+		let idleMessageVisible = false;
+		let idleMessageNode = null;
+		let consecutiveErrors = 0; // Track consecutive media load failures
+		let lastErrorTime = 0;
+		// 🚀 AGGRESSIVE PRELOADING: Prefetch MORE videos for ZERO loading delays
+		const PRELOAD_AHEAD = 6; // 🚀 Prefetch next 6 items (was 4) for better sync start
+		const MAX_CACHE = 10; // 🚀 Larger cache (was 6) for smoother transitions
+		const preloadCache = new Map(); // url -> { node, type, ts }
+		function cachePut(url, entry){
+			if(!url || !entry) return; preloadCache.set(url, entry); trimCache();
+		}
+		function cacheGet(url){ return preloadCache.get(url); }
+		function cacheTake(url){ const e=preloadCache.get(url); if(e){ preloadCache.delete(url); } return e; }
+		function trimCache(){
+			if(preloadCache.size <= MAX_CACHE) return;
+			const arr = Array.from(preloadCache.entries());
+			arr.sort((a,b)=> (a[1].ts||0) - (b[1].ts||0));
+			while(preloadCache.size > MAX_CACHE && arr.length){
+				const [url, ent] = arr.shift(); try{ if(ent && ent.node && ent.type==='video'){ ent.node.pause(); ent.node.remove(); } }catch{}
+				preloadCache.delete(url);
+			}
+		}
+		function computePlaylistSignature(list, orientation, rotation){
+			try{
+				const keys = (Array.isArray(list) ? list : []).map(keyFrom).join('|');
+				return `${keys}::${orientation||''}::${rotation||0}`;
+			}catch(err){
+				console.warn('Failed to compute playlist signature', err);
+				return `sig:${Date.now()}`;
+			}
+		}
+		
+		// Client-side schedule filtering (matches server logic)
+		function isItemActiveNow(item){
+			try{
+				// Check if item is enabled
+				if(item.enabled === false){
+					console.log('🔍 Item DISABLED:', item.name || item.id);
+					return false;
+				}
+				
+				// Get current local time
+				const now = new Date();
+				const currentDay = ['sun','mon','tue','wed','thu','fri','sat'][now.getDay()];
+				const currentTime = now.getHours() * 100 + now.getMinutes(); // e.g. 14:30 = 1430
+				
+				console.log('🔍 Checking item:', item.name || item.id, {
+					currentDay,
+					currentTime,
+					hasSchedule: !!item.schedule,
+					scheduleLength: (item.schedule || []).length,
+					hasLegacy: !!(item.start || item.end || (item.days && item.days.length))
+				});
+				
+				// Check multiple schedule windows (priority)
+				const scheduleWindows = item.schedule || [];
+				if(scheduleWindows.length > 0){
+					console.log('🔍 Checking', scheduleWindows.length, 'schedule windows for:', item.name || item.id);
+					for(const window of scheduleWindows){
+						if(window.enabled === false){
+							console.log('  ❌ Window disabled');
+							continue;
+						}
+						
+						// Check days
+						const days = window.days || [];
+						console.log('  🗓️ Window days:', days, 'current:', currentDay);
+						if(days.length > 0 && !days.includes(currentDay)){
+							console.log('  ❌ Day mismatch');
+							continue;
+						}
+						
+						// Check time range
+						const start = window.start; // "HH:MM:SS" format
+						const end = window.end;
+						if(start || end){
+							const startNum = start ? parseInt(start.replace(/:/g,'').substring(0,4)) : 0;
+							const endNum = end ? parseInt(end.replace(/:/g,'').substring(0,4)) : 2359;
+							console.log('  ⏰ Time range:', start, '-', end, '(', startNum, '-', endNum, ') current:', currentTime);
+							if(currentTime < startNum || currentTime > endNum){
+								console.log('  ❌ Time out of range');
+								continue;
+							}
+						}
+						
+						// This window is active
+						console.log('  ✅ WINDOW ACTIVE!');
+						return true;
+					}
+					// No active windows
+					console.log('❌ NO ACTIVE WINDOWS for:', item.name || item.id);
+					return false;
+				}
+				
+				// Check legacy single start/end window
+				const start = item.start;
+				const end = item.end;
+				const days = item.days || [];
+				
+				if(start || end || days.length > 0){
+					console.log('🔍 Legacy schedule:', {start, end, days});
+					// Check days
+					if(days.length > 0 && !days.includes(currentDay)){
+						console.log('❌ Legacy day mismatch');
+						return false;
+					}
+					
+					// Check time range
+					if(start || end){
+						const startNum = start ? parseInt(start.replace(/:/g,'').substring(0,4)) : 0;
+						const endNum = end ? parseInt(end.replace(/:/g,'').substring(0,4)) : 2359;
+						console.log('⏰ Legacy time:', startNum, '-', endNum, 'current:', currentTime);
+						if(currentTime < startNum || currentTime > endNum){
+							console.log('❌ Legacy time out of range');
+							return false;
+						}
+					}
+				}
+				
+				// No schedule restrictions or within active window
+				console.log('✅ ACTIVE (no restrictions or legacy match):', item.name || item.id);
+				return true;
+			}catch(err){
+				console.warn('Schedule check error:', err);
+				return true; // Default to active if check fails
+			}
+		}
+		
+		function showIdleState(message){
+			try{
+				const text = message || 'Waiting for schedule…';
+				if(!idleMessageNode){
+					idleMessageNode = document.createElement('div');
+					idleMessageNode.className = 'idle-message';
+				}
+				
+				// 🔍 ENHANCED DIAGNOSTIC DISPLAY
+				// Show detailed info when in debug mode or after multiple errors
+				if(debugMode || message.includes('Error') || message.includes('Failed')){
+					const diagnosticInfo = [
+						text,
+						'',
+						'📺 Device Info:',
+						'Brand: ' + (window.tvDetector ? window.tvDetector.brand.toUpperCase() : 'Unknown'),
+						'Model: ' + (window.tvDetector ? window.tvDetector.model : 'Unknown'),
+						'Browser: ' + (window.tvDetector ? window.tvDetector.browserEngine : 'Unknown'),
+						'',
+						'🎬 Video Support:',
+						'H.264: ' + (window.tvDetector && window.tvDetector.capabilities.h264 ? '✅ Yes' : '❌ No'),
+						'H.265: ' + (window.tvDetector && window.tvDetector.capabilities.h265 ? '✅ Yes' : '❌ No'),
+						'VP9: ' + (window.tvDetector && window.tvDetector.capabilities.vp9 ? '✅ Yes' : '❌ No'),
+						'',
+						'Screen: ' + screenId,
+						'Store: ' + storeId,
+						'',
+						'💡 Open browser console (F12) for detailed logs'
+					];
+					idleMessageNode.innerHTML = diagnosticInfo.join('<br>');
+					idleMessageNode.style.fontSize = '16px';
+					idleMessageNode.style.textAlign = 'left';
+					idleMessageNode.style.maxWidth = '90vw';
+					idleMessageNode.style.padding = '24px';
+				} else {
+					idleMessageNode.textContent = text;
+					idleMessageNode.style.fontSize = '';
+					idleMessageNode.style.textAlign = '';
+					idleMessageNode.style.maxWidth = '';
+					idleMessageNode.style.padding = '';
+				}
+				
+				clearNode(back);
+				if(front.firstChild !== idleMessageNode){
+					clearNode(front);
+					front.appendChild(idleMessageNode);
+				}
+				front.classList.remove('hidden', 'fade', 'transitioning');
+				front.classList.add('visible');
+				back.classList.remove('visible', 'fade', 'transitioning');
+				back.classList.add('hidden');
+				idleMessageVisible = true;
+			}catch(err){
+				console.warn('Failed to show idle state', err);
+			}
+		}
+		function hideIdleState(){
+			if(!idleMessageVisible) return;
+			try{
+				if(idleMessageNode && idleMessageNode.parentNode){
+					idleMessageNode.parentNode.removeChild(idleMessageNode);
+				}
+			}catch(err){
+				console.warn('Failed to hide idle state', err);
+			}
+			idleMessageVisible = false;
+		}
+		async function primePreload(item){
+			try{
+				if(!item) return; const url = mediaUrl(item); if(!url) return;
+				if(cacheGet(url)) return; // already primed
+				// Prefer extension-based detection; only trust media_type as a last resort when URL doesn't look like an image
+				const isVid = (
+					isVideoByName(url) ||
+					isVideoByName(fileNameFrom(item)) ||
+					(((item.media_type||'').toLowerCase()==='video') && !/\.(png|jpe?g|gif|webp|svg)(\?|#|$)/i.test(String(url)))
+				);
+				const node = isVid ? await preloadVideo(url) : await preloadImage(url);
+				cachePut(url, { node, type: isVid?'video':'image', ts: Date.now() });
+			}catch{}
+		}
+
+		function keyFrom(item){
+			try{
+				if(!item) return '';
+				if(item.id) return `id:${item.id}`;
+				const f = (item.url || item.file || '').toString();
+				if(f) return `f:${f.split('?')[0]}`;
+				return `n:${fileNameFrom(item)}`;
+			}catch{ return ''; }
+		}
+
+		let orientationMode = 'default'; // 'vertical' | 'horizontal' | 'default'
+		let displayRotation = 0; // 0|90|180|270
+		function applyOrientation(){
+			try{
+				// Base rotation from orientation
+				let rot = (orientationMode === 'vertical') ? 90 : 0;
+				let total = ((rot + (Number(displayRotation)||0)) % 360 + 360) % 360;
+				
+				// Get viewport dimensions
+				const vw = window.innerWidth || document.documentElement.clientWidth || 1920;
+				const vh = window.innerHeight || document.documentElement.clientHeight || 1080;
+				
+				// Calculate scale to FILL screen (like Pi client - no letterboxing)
+				let scale = 1;
+				if (total % 180 === 90) {
+					// Portrait orientation on landscape screen (or vice versa)
+					// Scale to ensure content fills the screen completely
+					scale = Math.max(vw/vh, vh/vw);
+				}
+				
+				// Apply transforms
+				const parts = [`rotate(${total}deg)`];
+				if (scale !== 1) { 
+					parts.push(`scale(${scale.toFixed(5)})`); 
+				}
+				stage.style.transform = parts.join(' ');
+				stage.style.transformOrigin = 'center center';
+				
+				console.log(`📐 Orientation applied: mode=${orientationMode}, rotation=${displayRotation}°, total=${total}°, scale=${scale.toFixed(3)}`);
+			}catch(e){
+				console.error('❌ Orientation error:', e);
+			}
+		}
+
+		async function fetchPlaylist(forceAdvanceOnChange = false){
+			try{
+				const qs = new URLSearchParams();
+				if(pairCode) qs.set('user_code', pairCode);
+				// Skip server-side schedule filtering so playlist stays stable
+				// Client will filter by schedule in real-time without reloading
+				qs.set('skip_schedule_filter', '1');
+				const r = await fetch(`${ORIGIN}/playlist/${encodeURIComponent(storeId)}/${encodeURIComponent(screenId)}?`+qs.toString(), { cache:'no-store', headers: pairCode?{'X-User-Code': pairCode}:{}});
+				const j = await r.json();
+				if(j && j.success && Array.isArray(j.playlist)){
+					const newSignature = computePlaylistSignature(j.playlist, j.orientation, j.rotation);
+					const signatureChanged = Boolean(playlistSignature) && newSignature !== playlistSignature;
+					playlist = j.playlist;
+					playlistSignature = newSignature;
+					if(typeof j.orientation === 'string'){ orientationMode = j.orientation; }
+					if(typeof j.rotation === 'number'){ displayRotation = (j.rotation||0); }
+					applyOrientation();
+					if(idx >= playlist.length) idx = 0;
+					// If the currently showing item is no longer present (e.g., schedule switch), advance immediately
+					if(currentItemKey){
+						const stillPresent = playlist.some(it => keyFrom(it) === currentItemKey);
+						if(!stillPresent && playlist.length){
+							forceAdvanceNow = true;
+							if(timer){ clearTimeout(timer); timer = null; }
+							setTimeout(()=>{ if(!timer) tick(); }, 0);
+						}
+					}
+					if(signatureChanged && playlist.length && forceAdvanceOnChange){
+						forceAdvanceNow = true;
+						idx = 0;
+						if(timer){ clearTimeout(timer); timer = null; }
+						setTimeout(()=>{ if(!timer) tick(); }, 0);
+					}
+				}
+			}catch(e){ overlay.textContent = `Playlist error: ${e&&e.message||'unknown'}`; }
+			lastFetchTs = Date.now();
+			if(!playlist.length){
+				showIdleState('Waiting for schedule…');
+			}else{
+				hideIdleState();
+			}
+		}
+
+		async function pollCommands(){
+			try{
+				const qs = new URLSearchParams({ store_id: storeId, screen_id: screenId, limit: '5', pop: '1' });
+				if(pairCode) qs.set('user_code', pairCode);
+				const r = await fetch(`${ORIGIN}/api/commands?`+qs.toString(), { cache:'no-store', headers: pairCode?{'X-User-Code': pairCode}:{}});
+				const j = await r.json();
+				if(j && j.success && Array.isArray(j.commands) && j.commands.length){
+					const hasReload = j.commands.some(c=> (c && (c.type||'').toLowerCase()==='reload'));
+					if(hasReload){ await fetchPlaylist(true); }
+				}
+			}catch{}
+		}
+
+		function clearNode(node){ while(node.firstChild) node.removeChild(node.firstChild); }
+		function swapLayers(){ const t = front; front = back; back = t; }
+		function preloadImage(url){ 
+			return new Promise((resolve,reject)=>{ 
+				console.log('🖼️ [PRELOAD] Starting image preload for:', url);
+				const img=new Image(); 
+				let to=setTimeout(()=>{
+					img.onload=null;
+					img.onerror=null;
+					console.error('❌ [IMAGE ERROR] Image timeout after 6s:', url);
+					reject(new Error('image timeout'));
+				},6000); 
+				img.onload=()=>{
+					clearTimeout(to);
+					console.log('✅ [IMAGE] Image loaded successfully:', url);
+					resolve(img);
+				}; 
+				img.onerror=(e)=>{
+					clearTimeout(to);
+					console.error('❌ [IMAGE ERROR] Failed to load:', url);
+					console.error('❌ [IMAGE ERROR] Error:', e);
+					console.error('❌ [IMAGE ERROR] naturalWidth:', img.naturalWidth, 'naturalHeight:', img.naturalHeight);
+					reject(e||new Error('image error'));
+				}; 
+				// Only enable CORS when loading from the same origin; setting this for
+				// third-party hosts (like the CDN) will cause the browser to REQUIRE
+				// CORS headers and the load will fail. Leaving it unset allows images
+				// to display normally without canvas access.
+				try{
+					const u = new URL(url);
+					const cur = new URL(ORIGIN);
+					if(u.host === cur.host){ img.crossOrigin = 'anonymous'; }
+				}catch{}
+				
+				img.src=url; 
+				console.log('🖼️ [PRELOAD] Image src set, waiting for load...');
+			}); 
+		}
+		function videoMimeFrom(url){
+			const e = extFromName(url);
+			switch(e){
+				case 'mp4': case 'm4v': case 'mov': return 'video/mp4';
+				case 'webm': return 'video/webm';
+				case 'ogv': case 'ogg': return 'video/ogg';
+				case 'm3u8': return 'application/x-mpegURL';
+				case 'avi': return 'video/x-msvideo';
+				case 'mkv': return 'video/x-matroska';
+				default: return '';
+			}
+		}
+
+		function preloadVideo(url){
+			// 🎬 OPTIMIZED for MULTIPLE SCREENS: Efficient loading for 4+ screens
+			return new Promise(function(resolve,reject){
+				console.log('📹 [PRELOAD] Starting video preload for:', url);
+				var v=document.createElement('video');
+				v.autoplay=false; 
+				v.muted=true; 
+				v.playsInline = true;
+				
+				// 🚀 SMART PRELOADING: Use brand config if available, fallback to metadata
+				// For multiple screens, load metadata quickly, then buffer during playback
+				try{
+					v.preload = (window.TVConfig && window.TVConfig.video && window.TVConfig.video.preload) ? window.TVConfig.video.preload : 'metadata';
+					console.log('📹 [PRELOAD] Using preload mode:', v.preload);
+				}catch(e){ v.preload = 'metadata'; }
+				
+				// 🔥 AMAZON FIRE TV / UNIVERSAL TV COMPATIBILITY
+				// Try to set crossOrigin, but don't fail if not supported
+				try{ v.crossOrigin = 'anonymous'; }catch(e){ 
+					console.log('📹 [COMPAT] crossOrigin not supported, continuing anyway'); 
+				}
+				
+				// 🚀 HARDWARE ACCELERATION: Force GPU rendering for smooth playback
+				v.style.transform = 'translateZ(0)';
+				v.style.willChange = 'transform'; // Hint browser to optimize
+				v.style.backfaceVisibility = 'hidden';
+				v.style.webkitBackfaceVisibility = 'hidden';
+				
+				// 🚀 MULTI-SCREEN SYNC OPTIMIZATION: Enhanced preloading for synchronized individual files
+				if(url.includes('/slice-video/') || url.includes('cdn.everydayadvertise.com') || url.includes('-screen')) {
+					v.setAttribute('data-instant-load', 'true');
+					v.setAttribute('data-sync-video', 'true');
+					v.setAttribute('data-individual-slice', 'true'); // Mark as individual slice file
+					// Enhanced preload for sync groups (brand-configurable)
+					try{
+						v.preload = (window.TVConfig && window.TVConfig.video && window.TVConfig.video.preload) ? window.TVConfig.video.preload : 'auto';
+					}catch(e){ v.preload = 'auto'; }
+					v.setAttribute('data-setup', '{"preload": "auto"}');
+					console.log('🎬 SYNC-OPTIMIZED individual file loading:', url);
+				}
+				
+				// 🏆 ENTERPRISE VIDEO ATTRIBUTES - Eliminate all black screens
+				try{
+					v.setAttribute('playsinline','true');
+					v.setAttribute('webkit-playsinline','true');
+					v.setAttribute('muted','true');
+					// Professional anti-black-screen attributes
+					v.setAttribute('data-no-black-screen', 'true');
+					v.style.backgroundColor = '#000'; // Ensure black background, never transparent
+					// Some Chinese/Android-based TV browsers (X5) honor these
+					v.setAttribute('x5-video-player-type','h5');
+					v.setAttribute('x5-playsinline','true');
+					
+					// 🔥 AMAZON FIRE TV SPECIFIC ATTRIBUTES
+					// Fire TV / Silk browser attributes
+					v.setAttribute('preload', v.preload || 'auto');
+					v.setAttribute('type', 'video/mp4'); // Help Fire TV identify format
+					
+					// 📺 UNIVERSAL TV COMPATIBILITY ATTRIBUTES
+					// LG webOS
+					v.setAttribute('data-webos-player', 'true');
+					// Samsung Tizen
+					v.setAttribute('data-tizen-player', 'true');
+					
+					console.log('📹 [COMPAT] All TV compatibility attributes applied');
+				}catch(e){
+					console.log('📹 [COMPAT] Some attributes failed (non-critical):', e.message);
+				}
+
+				// 🔥 ENHANCED TV COMPATIBILITY: Use <source> element for better codec detection
+				// This helps Amazon Fire TV, Samsung, LG, and other smart TVs identify the correct codec
+				var useSourceElement = isVewdTV() || (window.TVConfig && window.TVConfig.compatibility && window.TVConfig.compatibility.useSourceElement);
+				
+				if(useSourceElement || true){ // ALWAYS use source element for maximum compatibility
+					try{
+						console.log('📹 [COMPAT] Using <source> element for better codec detection');
+						// Provide a <source> for better type detection
+						var srcEl=document.createElement('source');
+						srcEl.src=url; 
+						var mt=videoMimeFrom(url); 
+						if(mt) {
+							srcEl.type=mt;
+							console.log('📹 [COMPAT] Video MIME type:', mt);
+						}
+						v.appendChild(srcEl);
+						// Also set v.src as fallback for some TVs
+						v.src=url; 
+						v.load();
+						console.log('📹 [COMPAT] Video load() called');
+					}catch(e){
+						console.error('📹 [ERROR] Failed to setup source element:', e);
+					}
+					
+					// For Vewd/OperaTV, resolve immediately
+					if(isVewdTV()){
+						console.log('📹 [COMPAT] Vewd TV detected - resolving immediately');
+						return resolve(v);
+					}
+				}
+				// For slice videos, skip preload bin to avoid abort issues
+				if(url.includes('/slice-video/')){
+					console.log('🎬 Slice video: skipping preload bin, loading directly');
+					try{
+						var srcEl=document.createElement('source');
+						srcEl.src=url; var mt=videoMimeFrom(url); if(mt) srcEl.type=mt;
+						v.appendChild(srcEl);
+						v.src=url; v.load();
+					}catch(e){}
+					// Still wait for video to be ready, but don't put in hidden bin
+					// This prevents abort events from conflicting render logic
+				}
+				// Attach to hidden bin to trigger buffering in strict engines
+				else{
+					try{
+						var bin = document.getElementById('preload-bin');
+						if(bin) bin.appendChild(v);
+					}catch(e){}
+				}
+				var settled=false; var to=null; var earlyPrimeDone=false;
+				var cleanup=function(){
+					try{
+						v.removeEventListener('loadeddata', onReady);
+						v.removeEventListener('canplay', onReady);
+						v.removeEventListener('canplaythrough', onReady);
+						v.removeEventListener('loadedmetadata', onMeta);
+						v.removeEventListener('error', onErr);
+						v.removeEventListener('stalled', onStall);
+					}catch(e){}
+					if(to) clearTimeout(to);
+				};
+				var finish=function(ok, err){
+					if(settled) return;
+					settled=true; cleanup();
+					if(ok) resolve(v); else reject(err || new Error('video error'));
+				};
+				var onMeta=function(){
+					// 🎬 FIXED: Don't finish too early - let video fully prepare
+					if(!isVewdTV() && !earlyPrimeDone){
+						earlyPrimeDone=true;
+						try{ 
+							console.log('🚀 Video prime - preparing for playback');
+							var p=v.play(); 
+							if(p&&p.then){ 
+								p.then(function(){ 
+									try{ v.pause(); }catch(e){} 
+								}).catch(function(){}); 
+							} 
+						}catch(e){}
+					}
+					// FIXED: For slice videos, wait for more data before declaring ready
+					console.log('📹 Video metadata loaded, readyState:', v.readyState, 'for URL:', url);
+				};
+				var onReady=function(){
+					// 🎯 MULTI-SCREEN OPTIMIZATION: Lower ready state requirement for faster startup
+					try{
+						console.log('📹 Video ready check, readyState:', v.readyState, 'for URL:', url);
+						// readyState >= 2 (HAVE_CURRENT_DATA) is enough to start
+						// We don't need HAVE_ENOUGH_DATA (4) for initial playback
+						if(v.readyState >= 2) {
+							console.log('✅ Video READY with playable data at state:', v.readyState);
+							return finish(true);
+						}
+						// For metadata-only preload, accept lower ready state
+						if(v.readyState >= 1 && v.preload === 'metadata') {
+							console.log('✅ Video metadata READY (will buffer during playback)');
+							return finish(true);
+						}
+					}catch(e){}
+					// Don't finish early - wait for proper readiness
+					console.log('⏳ Video not quite ready yet, readyState:', v.readyState);
+				};
+				var onErr=function(e){ 
+					console.error('❌ [VIDEO ERROR] ====================');
+					console.error('❌ [VIDEO ERROR] URL:', url);
+					console.error('❌ [VIDEO ERROR] Error details:', e);
+					console.error('❌ [VIDEO ERROR] readyState:', v.readyState, '(0=HAVE_NOTHING, 1=HAVE_METADATA, 2=HAVE_CURRENT_DATA, 3=HAVE_FUTURE_DATA, 4=HAVE_ENOUGH_DATA)');
+					console.error('❌ [VIDEO ERROR] networkState:', v.networkState, '(0=NETWORK_EMPTY, 1=NETWORK_IDLE, 2=NETWORK_LOADING, 3=NETWORK_NO_SOURCE)');
+					console.error('❌ [VIDEO ERROR] error code:', v.error ? v.error.code : 'none', '(1=ABORTED, 2=NETWORK, 3=DECODE, 4=SRC_NOT_SUPPORTED)');
+					console.error('❌ [VIDEO ERROR] error message:', v.error ? v.error.message : 'none');
+					console.error('❌ [VIDEO ERROR] currentSrc:', v.currentSrc);
+					console.error('❌ [VIDEO ERROR] User Agent:', navigator.userAgent);
+					console.error('❌ [VIDEO ERROR] TV Brand:', window.tvDetector ? window.tvDetector.brand : 'unknown');
+					
+					// 🔥 AMAZON FIRE TV / TV-SPECIFIC ERROR DIAGNOSTICS
+					if(window.tvDetector){
+						console.error('❌ [TV INFO] Brand:', window.tvDetector.brand);
+						console.error('❌ [TV INFO] Model:', window.tvDetector.model);
+						console.error('❌ [TV INFO] Browser Engine:', window.tvDetector.browserEngine);
+						console.error('❌ [TV INFO] H.264 Support:', window.tvDetector.capabilities.h264);
+						console.error('❌ [TV INFO] H.265 Support:', window.tvDetector.capabilities.h265);
+						console.error('❌ [TV INFO] VP9 Support:', window.tvDetector.capabilities.vp9);
+					}
+					console.error('❌ [VIDEO ERROR] ====================');
+					
+					// Enhanced fallback for slice videos
+					if(url.includes('slice-video') && url.includes('slice_order=')){
+						console.log('🔄 Slice video failed - trying to reload...');
+						// Try to reload the video element
+						try {
+							v.load();
+							console.log('🔄 Slice video reload attempted');
+							// Give it more time to load after reload
+							setTimeout(() => {
+								if(!settled && v.readyState >= 2) {
+									console.log('✅ Slice video recovered after reload!');
+									finish(true);
+									return;
+								}
+							}, 3000);
+						} catch(reloadErr) {
+							console.error('❌ Slice video reload failed:', reloadErr);
+						}
+					}
+					// Extended error recovery for slice videos
+					var recoveryDelay = url.includes('/slice-video/') ? 5000 : 2000;
+					setTimeout(() => {
+						if(!settled) {
+							console.log('💥 Video failed after', recoveryDelay/1000, 'seconds - finishing with error');
+							finish(false, e instanceof Error? e : new Error('video error: ' + (e && e.message || 'unknown')));
+						}
+					}, recoveryDelay);
+				};
+				var stallCount = 0;
+				var stallRecoveryTimer = null;
+				var onStall=function(){
+					console.log('Video stalled, readyState:', v.readyState);
+					stallCount++;
+					
+					// If video stalls at readyState 0 (not loading at all), try to force reload
+					if(v.readyState === 0 && stallCount <= 3){
+						console.log('⚠️ Video stuck at readyState 0, attempting recovery #' + stallCount);
+						
+						// Clear any existing recovery timer
+						if(stallRecoveryTimer) clearTimeout(stallRecoveryTimer);
+						
+						// Try to reload after a short delay
+						stallRecoveryTimer = setTimeout(function(){
+							try{
+								console.log('🔄 Forcing video reload...');
+								v.load();
+								// If still not loading after reload, try setting src again
+								setTimeout(function(){
+									if(v.readyState === 0){
+										console.log('🔄 Still stuck, resetting src...');
+										var currentSrc = v.src;
+										v.src = '';
+										v.src = currentSrc;
+										v.load();
+									}
+								}, 2000);
+							}catch(e){
+								console.error('Recovery attempt failed:', e);
+							}
+						}, 1000);
+					}
+					// Don't treat stall as fatal - videos can recover
+				};
+				var onWaiting=function(){
+					console.log('Video waiting for data...');
+				};
+				try{
+					v.addEventListener('loadedmetadata', onMeta);
+					v.addEventListener('loadeddata', onReady);
+					v.addEventListener('canplay', onReady);
+					v.addEventListener('canplaythrough', onReady);
+					v.addEventListener('error', onErr);
+					v.addEventListener('stalled', onStall);
+					v.addEventListener('waiting', onWaiting);
+					v.addEventListener('suspend', function() { console.log('Video suspend event'); });
+					v.addEventListener('abort', function() { console.log('Video abort event'); });
+				}catch(e){}
+				// FIXED TIMEOUT: Generous timeouts for slice videos which need more processing time
+				var timeoutDuration = url.includes('/slice-video/') ? 30000 : 20000; // 30s for slices (more processing time), 20s for others
+				to=setTimeout(function(){ 
+					console.log('⏰ Video timeout after', timeoutDuration/1000, 'seconds for:', url);
+					console.log('📹 Final readyState:', v.readyState);
+					finish(false, new Error('video timeout')); 
+				}, timeoutDuration);
+				try{
+					// Firefox-specific loading improvements
+					var isFirefox = navigator.userAgent.toLowerCase().indexOf('firefox') > -1;
+					if(isFirefox) {
+						// Firefox prefers direct src setting first
+						v.src = url;
+						// Then add source element for backup
+						var srcEl=document.createElement('source');
+						srcEl.src=url; var mt=videoMimeFrom(url); if(mt) srcEl.type=mt;
+						v.appendChild(srcEl);
+						console.log('🦊 Firefox: Set direct src + source element for:', url);
+					} else {
+						// Other browsers: Add <source> with type to help older engines
+						var srcEl=document.createElement('source');
+						srcEl.src=url; var mt=videoMimeFrom(url); if(mt) srcEl.type=mt;
+						v.appendChild(srcEl);
+						v.src=url;
+					}
+					v.load();
+				}catch(e){
+					console.error('Failed to set video source:', e);
+				}
+			}); }
+
+		function tryPlayWithPrompt(video){
+			try{
+				var p = video.play();
+				if(p && p.then){
+					p.catch(function(){
+						// Autoplay blocked. Prompt user to press OK/Enter.
+						var msgShown=false;
+						function showMsg(){ if(msgShown) return; msgShown=true; overlay.textContent = `${overlay.textContent} • Press OK/Enter to start`; }
+						function clearMsg(){ overlay.textContent = overlay.textContent.replace(/\s•\sPress OK\/Enter to start$/,''); }
+						function handler(){
+							window.removeEventListener('keydown', onKey);
+							window.removeEventListener('click', handler);
+							window.removeEventListener('touchstart', handler);
+							clearMsg(); try{ video.play().catch(function(){}); }catch(e){}
+						}
+						function onKey(ev){ var k=ev && (ev.key||ev.keyCode); if(k==='Enter'||k===13||k===32){ handler(); } }
+						showMsg();
+						window.addEventListener('keydown', onKey);
+						window.addEventListener('click', handler);
+						window.addEventListener('touchstart', handler);
+					});
+				}
+			}catch(e){}
+		}
+
+		function effectClassFor(item){
+			const e = String(item && item.effect || '').toLowerCase();
+			if(!e) return '';
+			switch(e){
+				case 'fade':
+					// Use the default crossfade (layer fade-out) with no extra per-node class
+					return '';
+				case 'slide-l': return 'enter-slide-l';
+				case 'slide-r': return 'enter-slide-r';
+				case 'zoom-in': return 'enter-zoom-in';
+				case 'zoom-out': return 'enter-zoom-out';
+				case 'rotate': return 'enter-rotate';
+				default: return '';
+			}
+		}
+
+		function computeSegmentStyles(node, item, options={}){
+			try{
+				const sref = item && item.sync_ref || {};
+				const mode = (sref.mode||'').toLowerCase();
+				let count = parseInt(sref.count||0, 10);
+				if(!Number.isNaN(count) && count >= 0){
+					count = Math.min(count, 4); // Limit to 4 segments for performance
+				}else{
+					count = 0;
+				}
+				let order = determineSliceOrder(item);
+				const orderSource = order !== null ? 'determineSliceOrder' : 'fallback';
+				if(order === null){
+					order = screenNumber > 0 ? screenNumber - 1 : 0;
+				}
+				if(count > 0){
+					order = Math.max(0, Math.min(order, count-1));
+				}
+				console.log('🎯 SLICE ORDER CALCULATION:', {
+					screenId: screenId,
+					screenNumber: screenNumber,
+					syncRef_order: sref.order,
+					calculated_order: order,
+					order_source: orderSource,
+					count: count
+				});
+				const hasSliceUrl = !!(item && item.slice_url);
+				const videoElement = (node && node.tagName === 'VIDEO') ? node : null;
+				const shouldSegment = count > 1 && (mode === 'split-h' || mode === 'split-v');
+				
+				// DEBUG: Log sync video detection
+				console.log('🔍 SYNC VIDEO DEBUG:', {
+					screenNumber: screenNumber,
+					hasSliceUrl: hasSliceUrl,
+					syncRef: sref,
+					mode: mode,
+					count: count,
+					order: order,
+					shouldSegment: shouldSegment,
+					itemKeys: item ? Object.keys(item) : 'no item'
+				});
+				
+				node.__segmentItem = item;
+				if(options.host){ node.__segmentHost = options.host; }
+				if(videoElement && !options.skipMetadataHook && !videoElement.__segmentMetadataHandler){
+					const metaHandler = () => {
+						try{
+							videoElement.dataset.videoWidth = String(videoElement.videoWidth || 0);
+							videoElement.dataset.videoHeight = String(videoElement.videoHeight || 0);
+							console.log('📐 Segment metadata captured:', {
+								width: videoElement.videoWidth,
+								height: videoElement.videoHeight,
+								ratio: (videoElement.videoWidth && videoElement.videoHeight)
+									? (videoElement.videoWidth / videoElement.videoHeight).toFixed(3)
+									: null
+							});
+							computeSegmentStyles(node, item, { skipMetadataHook: true, triggeredByMeta: true });
+							attachSegmentNode(node);
+						}catch(err){ console.warn('Segment metadata handler error', err); }
+					};
+					videoElement.addEventListener('loadedmetadata', metaHandler);
+					videoElement.__segmentMetadataHandler = metaHandler;
+				}
+				let needClientCrop = false;
+				if(shouldSegment){
+					if(!hasSliceUrl){
+						needClientCrop = true;
+					}else if(videoElement){
+						const rawWidth = videoElement.videoWidth || parseInt(videoElement.dataset.videoWidth || '0', 10) || 0;
+						const rawHeight = videoElement.videoHeight || parseInt(videoElement.dataset.videoHeight || '0', 10) || 0;
+						if(rawWidth && rawHeight){
+							const aspect = rawWidth / Math.max(1, rawHeight);
+							const inverseAspect = rawHeight / Math.max(1, rawWidth);
+							if(mode === 'split-h' && aspect >= 2.2){
+								needClientCrop = true;
+								console.log('⚙️ Client-side segment enforcement (wide aspect)', { aspect, rawWidth, rawHeight });
+							}
+							if(mode === 'split-v' && inverseAspect >= 2.2){
+								needClientCrop = true;
+								console.log('⚙️ Client-side segment enforcement (tall aspect)', { aspect: inverseAspect, rawWidth, rawHeight });
+							}
+						}else if(!options.triggeredByMeta){
+							// Metadata not ready yet; wait for loadedmetadata event
+						}
+					}
+				}
+				if(!needClientCrop){
+					if(node.__segmentWrapper && node.__segmentWrapper.parentNode){
+						node.__segmentWrapper.parentNode.replaceChild(node, node.__segmentWrapper);
+					}
+					node.__segmentWrapper = null;
+					node.__segmentInner = null;
+					node.className = node.className.replace(/\bsegment\b/g, '');
+					node.style.webkitTransform = '';
+					node.style.mozTransform = '';
+					node.style.oTransform = '';
+					node.style.transform = '';
+					node.style.webkitTransformOrigin = '';
+					node.style.mozTransformOrigin = '';
+					node.style.oTransformOrigin = '';
+					node.style.transformOrigin = '';
+					node.style.position = '';
+					node.style.top = '';
+					node.style.left = '';
+					node.style.width = '';
+					node.style.height = '';
+					node.__segmentRoot = node;
+					return node;
+				}
+				let wrap = node.__segmentWrapper;
+				let inner = node.__segmentInner;
+				if(!wrap){
+					wrap = document.createElement('div');
+					wrap.className = 'segment-wrap';
+					inner = document.createElement('div');
+					inner.className = 'segment-inner';
+					wrap.appendChild(inner);
+					inner.appendChild(node);
+					node.__segmentWrapper = wrap;
+					node.__segmentInner = inner;
+				}else{
+					inner = node.__segmentInner;
+					if(inner && node.parentNode !== inner){
+						inner.innerHTML = '';
+						inner.appendChild(node);
+					}
+				}
+				node.className = node.className.replace(/\bsegment\b/g, '') + ' segment';
+				node.style.position = 'absolute';
+				node.style.top = '0px';
+				node.style.left = '0px';
+				node.style.width = '100vw';
+				node.style.height = '100vh';
+				node.style.objectFit = 'fill';
+				const screenWidth = window.innerWidth || document.documentElement.clientWidth || 1920;
+				const screenHeight = window.innerHeight || document.documentElement.clientHeight || 1080;
+				if(isLowEndTV() || !supportsTransform()){
+					wrap.style.width = screenWidth + 'px';
+					wrap.style.height = screenHeight + 'px';
+					wrap.style.overflow = 'hidden';
+					inner.style.position = 'absolute';
+					inner.style.top = '0px';
+					inner.style.left = (-(order * screenWidth)) + 'px';
+					inner.style.width = (screenWidth * count) + 'px';
+					inner.style.height = screenHeight + 'px';
+					node.style.width = (screenWidth * count) + 'px';
+					node.style.height = screenHeight + 'px';
+					console.log('Applied pixel fallback (inner)');
+				}else{
+					inner.style.webkitTransformOrigin = 'left top';
+					inner.style.mozTransformOrigin = 'left top';
+					inner.style.oTransformOrigin = 'left top';
+					inner.style.transformOrigin = 'left top';
+					if(mode === 'split-h'){
+						const transformValue = 'scaleX(' + count + ') translateX(' + (-(order * 100 / Math.max(1, count))) + '%)';
+						inner.style.webkitTransform = transformValue;
+						inner.style.mozTransform = transformValue;
+						inner.style.oTransform = transformValue;
+						inner.style.transform = transformValue;
+						console.log('🎬 SLICE TRANSFORM APPLIED:', {
+							screen: screenNumber,
+							order: order,
+							count: count,
+							transform: transformValue,
+							mode: mode
+						});
+					}else{
+						const transformValue = 'scaleY(' + count + ') translateY(' + (-(order * 100 / Math.max(1, count))) + '%)';
+						inner.style.webkitTransform = transformValue;
+						inner.style.mozTransform = transformValue;
+						inner.style.oTransform = transformValue;
+						inner.style.transform = transformValue;
+						console.log('Applied vertical segment transform (inner):', transformValue);
+					}
+				}
+				node.__segmentRoot = wrap;
+				return wrap;
+			}catch(e){
+				if(typeof console !== 'undefined' && console.error) {
+					console.error('computeSegmentStyles error:', e);
+				}
+			}
+			return node;
+		}
+
+		function attachSegmentNode(node, host){
+			if(!node) return;
+			const targetHost = host || node.__segmentHost;
+			if(!targetHost) return;
+			const root = node.__segmentRoot || node;
+			if(targetHost.firstChild !== root){
+				clearNode(targetHost);
+				targetHost.appendChild(root);
+			}
+		}
+
+		async function showItem(item){
+			hideIdleState();
+			
+			// 🚀 STAGGERED LOADING: Delay based on screen number to prevent simultaneous load
+			// This spreads bandwidth usage when 4 screens start together
+			const screenNum = parseInt((screenId || '').match(/\d+$/)?.[0] || '0');
+			const staggerDelay = screenNum * 300; // 300ms delay per screen (screen1=0ms, screen2=300ms, screen3=600ms, screen4=900ms)
+			
+			if(staggerDelay > 0) {
+				console.log('🕐 STAGGER LOADING: Screen', screenNum, 'waiting', staggerDelay, 'ms to distribute load');
+				await new Promise(resolve => setTimeout(resolve, staggerDelay));
+			}
+			
+			let url = mediaUrl(item);
+			if(!url) return;
+			// Prefer extension-based detection; only trust media_type as a last resort when URL doesn't look like an image
+			const isVid = (
+				isVideoByName(url) ||
+				isVideoByName(fileNameFrom(item)) ||
+				(((item.media_type||'').toLowerCase()==='video') && !/\.(png|jpe?g|gif|webp|svg)(\?|#|$)/i.test(String(url)))
+			);
+			// Prefer origin URL on Vewd/OperaTV to avoid CORS/CDN quirks
+			if(isVid && isVewdTV()){
+				const rel = relKeyFrom(item);
+				if(rel){ url = `${ORIGIN}/media/${rel}`; }
+			}
+
+			// Build same-origin fallback (helps some Sony/other TV browsers with CDN/TLS/CORS quirks)
+			let fallbackUrl = '';
+			try{
+				const thisHost = (new URL(url)).host;
+				const ourHost = (new URL(ORIGIN)).host;
+				if(thisHost && ourHost && thisHost !== ourHost){
+					const fname = fileNameFrom(item);
+					if(fname){
+						// Use MEDIA_ORIGIN to ensure paths resolve on the API domain
+						fallbackUrl = isVid ? `${MEDIA_ORIGIN}/media/${encodeURIComponent(fname)}` : `${MEDIA_ORIGIN}/static/uploads/${encodeURIComponent(fname)}`;
+					}
+				}
+			}catch{}
+			try{
+				let cached = cacheTake(url);
+				const node = cached?.node || (isVid ? await preloadVideo(url) : await preloadImage(url));
+				node.className = 'media';
+				// Image fit policy: default to 'contain' when rotated 90/270 to avoid
+				// perceived over-zoom on portrait posters; allow override via ?fit.
+				if(!isVid){
+					const base = (orientationMode === 'vertical') ? 90 : 0;
+					const total = ((base + (Number(displayRotation)||0)) % 360 + 360) % 360;
+					const rotated90 = (total % 180 === 90);
+					let fit = 'cover';
+					if(IMAGE_FIT_PARAM){
+						fit = (IMAGE_FIT_PARAM.toLowerCase() === 'contain') ? 'contain' : 'cover';
+					} else if(rotated90){
+						fit = 'contain';
+					}
+					node.style.objectFit = fit;
+					node.style.objectPosition = 'center center';
+				}
+				const eff = effectClassFor(item);
+				if(eff){ node.classList.add('anim'); node.classList.add(eff); }
+				if(isVid){ 
+					node.loop = true; 
+					node.autoplay = true; 
+					node.muted = true; 
+					node.playsInline = true;
+					
+					// 🎬 MULTI-SCREEN PLAYBACK: Optimized for 4+ simultaneous screens
+					node.setAttribute('data-instant-ready', 'true');
+					node.setAttribute('data-professional-sync', 'true');
+					
+					// 🚀 PROGRESSIVE LOADING: Upgrade preload after initial start
+					// Start with metadata, then upgrade to auto after playback begins
+					setTimeout(() => {
+						if(node.preload === 'metadata') {
+							node.preload = 'auto';
+							console.log('📈 Progressive loading: upgraded to auto-buffer for:', url);
+						}
+					}, 2000); // Upgrade after 2 seconds
+					
+					// 🏆 ENTERPRISE ERROR HANDLING: Smooth recovery
+					node.addEventListener('error', function(e) {
+						console.error('🚨 Video error:', e, 'URL:', url);
+					});
+					
+					node.addEventListener('stalled', function() {
+						console.log('🎬 Video stalled, executing recovery...');
+						setTimeout(() => {
+							try {
+								if (node.paused) {
+									console.log('🚀 Recovery: restarting playback...');
+									node.play().catch(e => console.log('Recovery completed:', e));
+								}
+							} catch(e) {}
+						}, 100); // Fast recovery
+					});
+					
+					node.addEventListener('waiting', function() {
+						console.log('⏳ Video buffering...');
+					});
+					
+					// 🚀 READY NOTIFICATION
+					node.addEventListener('loadeddata', function() {
+						console.log('✅ Video ready, readyState:', node.readyState);
+					});
+				}
+				// Apply split segment cropping if this item is part of a split group
+				const host = back;
+				node.__segmentHost = host;
+				computeSegmentStyles(node, item, { host });
+				attachSegmentNode(node, host);
+				host.classList.add('fade'); host.classList.remove('hidden');
+				
+				// FIXED: Ensure video plays properly WITH SYNC
+				if(isVid){ 
+					console.log('🎬 STARTING SYNCHRONIZED VIDEO PLAYBACK for:', url);
+					
+					// ULTRA-PRECISE SYNC ALIGNMENT: Sub-millisecond timing across all screens
+					const syncVideo = async () => {
+						try{
+							// Calculate sync timing based on video duration
+							const duration = item.duration || 10; // Default 10 seconds if not specified
+							console.log('⏰ ULTRA-PRECISE SYNC: Aligning video timing, duration:', duration, 'seconds');
+							
+							// Wait for perfect sync window
+							await alignToSyncWindow(item, duration);
+							
+							// Calculate exact video currentTime for perfect sync
+							const syncedTime = calculateSyncedVideoTime(item);
+							if(syncedTime !== null && syncedTime > 0) {
+								console.log('🎯 SETTING PRECISE VIDEO TIME:', syncedTime.toFixed(3), 'seconds for', screenId);
+								node.currentTime = syncedTime;
+								
+								// Wait for seek to complete with timeout
+								await new Promise((resolve) => {
+
+									let seekCompleted = false;
+									const seekTimeout = setTimeout(() => {
+										if(!seekCompleted) {
+											console.warn('⚠️ Seek timeout - proceeding with playback');
+											seekCompleted = true;
+										  resolve();
+										}
+									}, 200);
+									
+									const onSeeked = () => {
+										if(!seekCompleted) {
+											seekCompleted = true;
+											clearTimeout(seekTimeout);
+											node.removeEventListener('seeked', onSeeked);
+											console.log('✅ Video seek completed to:', node.currentTime.toFixed(3), 'seconds');
+											resolve();
+										}
+									};
+									
+									if(Math.abs(node.currentTime - syncedTime) < 0.1) {
+										// Already at correct time
+										clearTimeout(seekTimeout);
+										resolve();
+									} else {
+										node.addEventListener('seeked', onSeeked);
+									}
+								});
+							}
+							
+							console.log('▶️ ULTRA-PRECISE SYNC COMPLETE: Playing video at synchronized moment');
+							console.log('▶️ Video readyState:', node.readyState, 'currentTime:', node.currentTime.toFixed(3));
+							
+							// Synchronized playback start with final timing verification
+							const playStartTime = performance.now();
+							await tryPlayWithPrompt(node);
+							console.log('🎬 Video play initiated in:', (performance.now() - playStartTime).toFixed(3), 'ms');
+							
+							// Start continuous sync monitoring for drift correction
+							startSyncMonitoring(node, item);
+							
+						}catch(e){
+							console.error('❌ Ultra-precise sync video play error:', e);
+							// Fallback to immediate play if sync fails
+							tryPlayWithPrompt(node);
+						}
+					};
+					
+					// Start sync process after brief DOM attachment delay
+					setTimeout(syncVideo, 100);
+				}
+				// 🎬 PROFESSIONAL TRANSITION: Zero black screens, enterprise smooth
+				const reveal = ()=>{
+					console.log('🚀 PROFESSIONAL REVEAL: Executing smooth enterprise transition');
+					// Start a new guarded transition cycle
+					const tid = __newTransitionId();
+					// Add anti-black-screen protection
+					back.classList.add('transitioning');
+					front.classList.add('transitioning');
+				
+					requestAnimationFrame(()=>{
+						// If another transition started, abort this one
+						if(__transitionId !== tid) return;
+						back.classList.add('visible'); back.classList.remove('fade');
+						front.classList.add('fade'); front.classList.remove('visible');
+					
+						requestAnimationFrame(()=>{
+							if(__transitionId !== tid) return;
+							if(eff){ node.classList.remove('enter-slide-l','enter-slide-r','enter-zoom-in','enter-zoom-out'); node.style.opacity=''; }
+						});
+					
+						// Professional timing - remove protection after smooth transition
+						__trackTimeout(()=> {
+							if(__transitionId !== tid) return;
+							front.classList.add('hidden'); front.classList.remove('fade'); 
+							back.classList.remove('transitioning');
+							front.classList.remove('transitioning');
+							swapLayers();
+							console.log('🎬 PROFESSIONAL transition completed - zero black screens');
+						}, 600); // Faster transitions for snappier feel
+					});
+				};
+				if(isVid){
+					let revealed=false;
+					async function safeReveal(){ 
+						if(revealed) return; 
+						revealed=true; 
+						console.log('✅ SYNCHRONIZED REVEAL: Showing video now for', screenId, 'readyState:', node.readyState);
+						
+						// Ensure video time is synchronized before reveal
+						if(item && item.sync_ref && item.sync_ref.start_epoch) {
+							const expectedTime = calculateSyncedVideoTime(item);
+							if(expectedTime !== null && Math.abs(node.currentTime - expectedTime) > 0.5) {
+								console.log('🔄 SYNC CORRECTION: Adjusting video time from', node.currentTime.toFixed(2), 'to', expectedTime.toFixed(2));
+								node.currentTime = expectedTime;
+							}
+						}
+						
+						// Kick playback and wait until a real frame has been presented
+						ensureVideoPlaying(node, 'pre-reveal');
+						await waitForFirstFramePaint(node, 1500);
+						// Give the browser a paint cycle (or two) after attaching and seeking
+						// so the first decoded frame is ready before we fade out the old layer.
+						const doReveal = () => { reveal(); ensureVideoPlaying(node, 'primary-sync'); };
+						requestAnimationFrame(() => requestAnimationFrame(doReveal));
+					}
+					try{
+						// FIXED: Wait for proper video readiness before reveal
+						console.log('📹 Checking video readiness, current state:', node.readyState);
+						if((node.readyState||0) >= 2){ // Wait for HAVE_CURRENT_DATA for actual playback
+							console.log('✅ VIDEO READY - Immediate reveal at readyState:', node.readyState);
+							safeReveal();
+						}
+						else{
+							console.log('⏳ Video not ready yet, setting up listeners...');
+							node.addEventListener('loadeddata', () => {
+								console.log('✅ Video loadeddata event - revealing now');
+								safeReveal();
+							}, { once:true });
+							node.addEventListener('canplay', () => {
+								console.log('✅ Video canplay event - revealing now');
+								safeReveal();
+							}, { once:true });
+							node.addEventListener('canplaythrough', () => {
+								console.log('✅ Video canplaythrough event - revealing now');
+								safeReveal();
+							}, { once:true });
+							// Longer timeout to ensure video loads properly
+							setTimeout(() => {
+								console.log('⏰ Video reveal timeout - forcing reveal');
+								safeReveal();
+							}, 1200); // Force reveal quickly to avoid prolonged blank states
+						}
+					}catch(e){ 
+						console.error('❌ Video reveal error:', e);
+						setTimeout(safeReveal, 500); 
+					}
+				}else{
+					reveal();
+				}
+				currentItemKey = keyFrom(item);
+				
+				// Reset error counter on successful load
+				if(consecutiveErrors > 0){
+					console.log('✅ [SUCCESS] Media loaded successfully, resetting error counter from', consecutiveErrors, 'to 0');
+					consecutiveErrors = 0;
+				}
+				
+				try{ sendClientEvent('load_ok', item, null).catch(()=>{}); }catch{}
+			}catch(e){
+				// Track consecutive errors
+				consecutiveErrors++;
+				lastErrorTime = Date.now();
+				
+				console.error('❌ [LOAD ERROR] ====================');
+				console.error('❌ [LOAD ERROR] Primary load failed for:', url);
+				console.error('❌ [LOAD ERROR] Error:', e);
+				console.error('❌ [LOAD ERROR] isVideo:', isVid);
+				console.error('❌ [LOAD ERROR] Fallback URL available:', !!fallbackUrl);
+				console.error('❌ [LOAD ERROR] Consecutive errors:', consecutiveErrors);
+				console.error('❌ [LOAD ERROR] User Agent:', navigator.userAgent);
+				if(window.tvDetector){
+					console.error('❌ [TV INFO] Brand:', window.tvDetector.brand);
+					console.error('❌ [TV INFO] Model:', window.tvDetector.model);
+					console.error('❌ [TV INFO] Browser Engine:', window.tvDetector.browserEngine);
+				}
+				console.error('❌ [LOAD ERROR] ====================');
+				
+				// Show diagnostic message after 3 consecutive errors
+				if(consecutiveErrors >= 3){
+					console.error('❌ [CRITICAL] Multiple consecutive media load failures detected!');
+					showIdleState('⚠️ Media Loading Error\n\nUnable to load media files.\nThis may be a compatibility issue.');
+					
+					// Send error event to server for monitoring
+					try{
+						sendClientEvent('media_load_error', item, `Consecutive errors: ${consecutiveErrors}, Last: ${e.message}`).catch(()=>{});
+					}catch{}
+				}
+				
+				// If image failed and we have a same-origin fallback, try that first
+				if(!isVid && fallbackUrl){
+					console.log('🔄 [FALLBACK] Attempting image fallback URL:', fallbackUrl);
+					try{
+						const node = await preloadImage(fallbackUrl);
+						node.className = 'media';
+						const eff = effectClassFor(item);
+						if(eff){ node.classList.add('anim'); node.classList.add(eff); }
+						clearNode(back); back.appendChild(node);
+						back.classList.add('fade'); back.classList.remove('hidden');
+						requestAnimationFrame(()=>{
+							back.classList.add('visible'); back.classList.remove('fade');
+							front.classList.add('fade'); front.classList.remove('visible');
+							requestAnimationFrame(()=>{
+								if(eff){ node.classList.remove('enter-slide-l','enter-slide-r','enter-zoom-in','enter-zoom-out'); node.style.opacity=''; }
+							});
+							const tid = __newTransitionId();
+							__trackTimeout(()=>{ if(__transitionId !== tid) return; front.classList.add('hidden'); front.classList.remove('fade'); swapLayers(); }, 1100);
+						});
+						try{ sendClientEvent('load_ok', item, null).catch(()=>{}); }catch{}
+						return;
+					}catch(_imgFallbackErr){ /* proceed to video-specific fallbacks */ }
+				}
+				
+				// Enhanced fallback for slice videos
+				try{
+					let fallbackUrl = null;
+					
+					// If slice video failed, try different approaches
+					if(url.includes('slice-video') && url.includes('slice_order=')){
+						console.log('Slice video failed, trying fallbacks...');
+						
+						// Fallback 1: Try with reduced timeout parameters
+						if(url.includes('slice_count=3')){
+							fallbackUrl = url.replace('slice_count=3', 'slice_count=2');
+							console.log('Trying with reduced slice count:', fallbackUrl);
+						}
+						
+						// Fallback 2: Try original video URL if available
+						if(!fallbackUrl){
+							const rel = relKeyFrom(item);
+							if(rel){
+								fallbackUrl = `${MEDIA_ORIGIN}/media/${rel}`;
+								console.log('Falling back to original video:', fallbackUrl);
+							}
+						}
+					}
+					
+					// Standard CDN->Origin fallback for regular videos
+					if(!fallbackUrl && isVid){
+						const rel = relKeyFrom(item);
+						if(rel){
+							fallbackUrl = `${MEDIA_ORIGIN}/media/${rel}`;
+						}
+					}
+					
+					if(fallbackUrl){
+						console.log('Attempting fallback URL:', fallbackUrl);
+						const node = await preloadVideo(fallbackUrl);
+						node.className = 'media'; 
+						node.loop = true; 
+						node.autoplay = true; 
+						node.muted = true; 
+						node.playsInline = true;
+						
+						const eff = effectClassFor(item); 
+						if(eff){ node.classList.add('anim'); node.classList.add(eff); }
+						
+						// Apply segment layout with fallback detection
+						const host = back;
+						node.__segmentHost = host;
+						computeSegmentStyles(node, item, { host });
+						attachSegmentNode(node, host);
+						host.classList.add('fade'); 
+						host.classList.remove('hidden');
+						
+						setTimeout(()=>{ try{ node.play().catch(()=>{});}catch{} }, 0);
+						
+						requestAnimationFrame(()=>{
+							back.classList.add('visible'); back.classList.remove('fade');
+							front.classList.add('fade'); front.classList.remove('visible');
+							requestAnimationFrame(()=>{
+								if(eff){ node.classList.remove('enter-slide-l','enter-slide-r','enter-zoom-in','enter-zoom-out'); node.style.opacity=''; }
+							});
+							const tid2 = __newTransitionId();
+							__trackTimeout(()=>{ if(__transitionId !== tid2) return; front.classList.add('hidden'); front.classList.remove('fade'); swapLayers(); }, 1100);
+						});
+						ensureVideoPlaying(node, 'fallback');
+						
+						try{ sendClientEvent('load_ok', item, null).catch(()=>{}); }catch{}
+						console.log('Fallback successful');
+						return;
+					}
+				}catch(fallbackError){
+					console.error('Fallback also failed:', fallbackError);
+				}
+				
+				overlay.textContent = `Load error: ${e&&e.message||'unknown'} (fallback failed)`;
+				try{ sendClientEvent('load_fail', item, String(e&&e.message||e)).catch(()=>{}); }catch{}
+			}
+		}
+
+		function nextIndex(){ 
+			if(!playlist.length) return 0; 
+			// Filter to only active items based on schedule
+			const activePlaylist = playlist.filter(isItemActiveNow);
+			if(!activePlaylist.length) return 0;
+			
+			// Find current item in active playlist
+			const currentKey = currentItemKey;
+			let currentActiveIdx = -1;
+			if(currentKey){
+				currentActiveIdx = activePlaylist.findIndex(item => keyFrom(item) === currentKey);
+			}
+			
+			// Return next active item index in original playlist
+			const nextActiveIdx = (currentActiveIdx + 1) % activePlaylist.length;
+			const nextItem = activePlaylist[nextActiveIdx];
+			return playlist.findIndex(item => keyFrom(item) === keyFrom(nextItem));
+		}
+
+		async function tick(){
+			if(!playlist.length){ await fetchPlaylist(true); }
+			
+			// TEMPORARY: Disable schedule filtering until dashboard saves slot data properly
+			const activePlaylist = playlist; // Use full playlist without filtering
+			
+			console.log('🔍 PLAYLIST DEBUG: Using all', activePlaylist.length, 'items (schedule filtering disabled)');
+			
+			if(!activePlaylist.length){
+				console.warn('⚠️ NO ITEMS - waiting...');
+				showIdleState('Waiting for content…');
+				timer = setTimeout(tick, 3000);
+				return;
+			}
+			hideIdleState();
+			
+			// Find current item in active playlist, or start from first active item
+			let activeIdx = 0;
+			if(currentItemKey){
+				const foundIdx = activePlaylist.findIndex(item => keyFrom(item) === currentItemKey);
+				if(foundIdx >= 0){
+					// Found the last played item, advance to NEXT item
+					activeIdx = (foundIdx + 1) % activePlaylist.length;
+				}
+			}
+			
+			// On forced schedule switch, jump to first active item
+			if(forceAdvanceNow){ forceAdvanceNow = false; activeIdx = 0; }
+			
+			const item = activePlaylist[activeIdx];
+			const next = activePlaylist[(activeIdx + 1) % activePlaylist.length];
+			const dur = Math.max(1, parseInt(item.duration||10));
+			
+			console.log('🔍 DURATION DEBUG:', {
+				item_id: item.id,
+				raw_duration: item.duration,
+				parsed_dur: dur,
+				item_name: item.name
+			});
+			
+			const currentKey = keyFrom(item);
+			const singleItemLoop = activePlaylist.length === 1 && currentItemKey && currentItemKey === currentKey;
+
+			if(singleItemLoop){
+				const hosts = [front, back];
+				let activeNode = null;
+				for(const host of hosts){
+					if(!host) continue;
+					const candidate = host.querySelector('video, img');
+					if(candidate){
+						activeNode = candidate;
+						break;
+					}
+				}
+				if(activeNode){
+					if(activeNode.tagName === 'VIDEO'){
+						activeNode.loop = true;
+						if(activeNode.paused || (activeNode.readyState||0) < 2){
+							ensureVideoPlaying(activeNode, 'single-item-loop');
+						}
+					}
+					if(Date.now() - lastFetchTs > PLAYLIST_REFRESH_MIN_MS){
+						fetchPlaylist().catch(err => console.warn('Single-item refresh failed', err));
+					}
+					if(timer){ clearTimeout(timer); }
+					const loopDelay = Math.max(PLAYLIST_REFRESH_MIN_MS, Math.min(dur * 1000, PLAYLIST_REFRESH_INTERVAL_MS));
+					timer = setTimeout(tick, loopDelay);
+					return;
+				}
+			}
+			await primePreload(item);
+			
+			// TEMPORARY: Skip sync waiting (causes NaN delay) - just play immediately
+			console.log('🚀 SKIPPING SYNC: Starting playback immediately');
+			
+			// 🚀 PROFESSIONAL PRELOADING: Enterprise-grade background preparation
+			console.log('🎬 PROFESSIONAL PRELOADING: Preparing', PRELOAD_AHEAD, 'items for smooth transitions...');
+			for(let i=1;i<=PRELOAD_AHEAD;i++){
+				const it = activePlaylist[(activeIdx + i) % activePlaylist.length];
+				primePreload(it).catch(e => console.log('🚨 Professional preload optimizing for item', i, ':', e));
+			}
+			
+			// 🎯 ENTERPRISE PRIORITY: Critical next item for zero-lag switching
+			if(next && next !== item) {
+				console.log('🚀 PRIORITY PROFESSIONAL preloading for instant switching...');
+				primePreload(next).catch(e => console.log('🎬 Professional priority optimization:', e));
+			}
+			
+			// 🏆 GLOBAL SYNC: All screens synchronized to server timestamp
+			const syncMoment = syncCoordinator.calculateSyncMoment(dur);
+			const currentTime = Date.now();
+			const syncDelay = Math.max(0, syncMoment - currentTime);
+			
+			console.log('🎯 GLOBAL SYNC: All screens syncing in', syncDelay, 'ms to timestamp', syncMoment);
+			
+			// Wait for sync moment, then show item simultaneously across all screens
+			if(syncDelay > 0) {
+				if(timer){ clearTimeout(timer); }
+				timer = setTimeout(async () => {
+					try{
+						await showItem(item);
+						console.log('✅ SYNCHRONIZED: Screen', screenId, 'started at global sync timestamp');
+					}catch(err){
+						console.error('❌ Failed to show item:', err);
+						// Continue to next item even if this one fails
+					}
+					
+					// Update current item tracking
+					currentItemKey = keyFrom(item);
+					
+					// Schedule next tick at synchronized interval
+					if(timer){ clearTimeout(timer); }
+					timer = setTimeout(tick, dur*1000);
+				}, syncDelay);
+				return;
+			}
+			
+			// Immediate show if already at sync moment
+			try{
+				await showItem(item);
+			}catch(err){
+				console.error('❌ Failed to show item:', err);
+				// Continue to next item even if this one fails
+			}
+			
+			// Update current item tracking
+			currentItemKey = keyFrom(item);
+			
+			if(Date.now() - lastFetchTs > PLAYLIST_REFRESH_MIN_MS){ fetchPlaylist(); }
+			
+			// Use global sync for next transition instead of individual timing
+			if(timer){ clearTimeout(timer); }
+			timer = setTimeout(tick, dur*1000);
+		}
+
+		async function sendClientEvent(event, item, error){
+			try{
+				const body = { store_id: String(storeId), screen_id: String(screenId), event: String(event||'') };
+				const fname = fileNameFrom(item); if(fname) body.file = fname;
+				if(item && item.id) body.item_id = item.id;
+				if(error) body.error = String(error).slice(0,200);
+				const qs = new URLSearchParams(); if(pairCode) qs.set('user_code', pairCode);
+				await fetch(`${ORIGIN}/api/client_event?`+qs.toString(), { method:'POST', headers: { 'Content-Type':'application/json', ...(pairCode?{'X-User-Code':pairCode}:{}) }, body: JSON.stringify(body) });
+			}catch{}
+		}
+
+		window.addEventListener('resize', ()=>{ try{ applyOrientation(); }catch{} });
+		(async function init(){
+			if(!storeId || !screenId){ location.href = '/webplayer'; return; }
+			
+			// Initialize enhanced server time synchronization for perfect cross-screen sync
+			console.log('🌐 Initializing enhanced server time synchronization for', screenId);
+			await getServerTime();
+			
+			// Perform additional sync samples for better initial accuracy
+			setTimeout(async () => {
+				await getServerTime();
+				console.log('🌐 Secondary server time sync completed for', screenId);
+			}, 2000);
+			
+			// Set up frequent server time sync to maintain consistency
+			setInterval(async () => {
+				await getServerTime();
+				console.log('🌐 Periodic server time sync refreshed for', screenId);
+			}, 15000); // Sync every 15 seconds for better consistency
+			
+			// Additional high-frequency sync for the first 2 minutes
+			let initialSyncCount = 0;
+			const initialSyncInterval = setInterval(async () => {
+				await getServerTime();
+				initialSyncCount++;
+				console.log(`🌐 Initial high-freq sync ${initialSyncCount} for`, screenId);
+				
+				if(initialSyncCount >= 8) { // 8 syncs in 2 minutes
+					clearInterval(initialSyncInterval);
+					console.log('🌐 Initial high-frequency sync phase completed for', screenId);
+				}
+			}, 15000); // Every 15 seconds for first 2 minutes
+			
+			// Prompt user-controlled fullscreen; avoid automatic requests that modern browsers block
+			ensureFullscreenOnGesture();
+			// Hint for users if fullscreen is blocked
+			try{ 
+				setTimeout(()=>{ 
+					if(!isFullscreen()){ 
+						overlay.textContent = `${overlay.textContent} • Press Enter or Click to go Fullscreen`; 
+						console.log('Added fullscreen hint to overlay');
+					} 
+				}, 1000); 
+			}catch{}
+			// Kick off
+			tick();
+			if(!playlistRefreshTicker){
+				playlistRefreshTicker = setInterval(()=>{
+					fetchPlaylist(true).catch(err => console.warn('Periodic playlist refresh failed', err));
+				}, PLAYLIST_REFRESH_INTERVAL_MS);
+			}
+			// Keep-alive heartbeat so dashboard sees this webplayer as online
+			async function sendHeartbeat(){
+				try{
+					const qs = new URLSearchParams({ store_id: storeId, screen_id: screenId });
+					if(pairCode) qs.set('user_code', pairCode);
+					await fetch(`${ORIGIN}/api/screen_heartbeat?`+qs.toString(), { method:'GET', cache:'no-store', headers: pairCode?{'X-User-Code': pairCode}:{} });
+				}catch{}
+			}
+			sendHeartbeat(); setInterval(sendHeartbeat, 30000);
+			// Poll for server-side commands (like reload) to apply changes instantly
+			setInterval(pollCommands, COMMANDS_POLL_MS);
+			// Pause when tab hidden
+			document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ if(timer){ clearTimeout(timer); timer=null; } } else { if(!timer) tick(); } });
+		})();
+
+		// Preload video and ensure ready before sync
+		async function robustSyncWait(node, item, durationSec, screenId) {
+			// Wait for video metadata and readyState
+			if (node.readyState < 2) {
+				await new Promise((resolve) => {
+					node.addEventListener('loadedmetadata', resolve, { once: true });
+				});
+			}
+			// Wait for enough data to play
+			if (node.readyState < 3) {
+				await new Promise((resolve) => {
+					node.addEventListener('canplay', resolve, { once: true });
+				});
+			}
+			// Fallback: if not ready in 2s, proceed anyway
+			setTimeout(() => {
+				if (node.readyState < 3) {
+					console.warn('⚠️ Video not ready after 2s, starting anyway to avoid black screen');
+				}
+			}, 2000);
+			// Now do sync wait
+			const syncGroup = item && item.sync_ref && item.sync_ref.group ? item.sync_ref.group : 'default';
+			await stableSyncWait(syncGroup, screenId);
+			console.log('🚀 SYNC COMPLETE:', screenId, 'starting playback NOW (server time sync)');
+		}
+	</script>
+</body>
+</html>

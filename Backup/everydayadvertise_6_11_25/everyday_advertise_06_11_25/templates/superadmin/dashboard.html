@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Super Admin Dashboard</title>
+  <style>
+    :root { --bg:#0b1020; --panel:#111830; --text:#e6edf3; --muted:#9fb0cc; --border:rgba(255,255,255,.08); --brand1:#6f86ff; --brand2:#9a7bff; }
+    * { box-sizing:border-box }
+    body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); color:var(--text); margin:0; }
+    header { display:flex; align-items:center; justify-content:space-between; padding:16px 22px; border-bottom:1px solid var(--border); position:sticky; top:0; background:rgba(11,16,32,.8); backdrop-filter: blur(10px); }
+    .brand { font-weight:700; letter-spacing:.3px }
+    .chip { padding:6px 10px; background:#0c1327; border:1px solid var(--border); border-radius:999px; font-size:12px; color:var(--muted) }
+    main { padding:22px; max-width:1200px; margin:0 auto }
+    .grid { display:grid; grid-template-columns:1fr; gap:16px }
+    @media(min-width:960px){ .grid { grid-template-columns: 1fr 2fr } }
+    .card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px }
+    h2 { margin:0 0 12px 0; font-size:18px }
+    table { width:100%; border-collapse: collapse; font-size:14px }
+    th, td { text-align:left; padding:10px 8px; border-bottom:1px solid var(--border) }
+    th { color:var(--muted); font-weight:600 }
+    .row-actions { display:flex; gap:6px; flex-wrap:wrap }
+    .btn { border:none; border-radius:8px; padding:8px 10px; font-weight:600; cursor:pointer }
+    .btn--primary { background:linear-gradient(135deg,var(--brand1),var(--brand2)); color:#0b0f1e }
+    .btn--ghost { background:#0c1327; color:var(--text); border:1px solid var(--border) }
+    .form-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px }
+    .form-grid input { width:100%; padding:10px; border-radius:8px; border:1px solid var(--border); background:#0c1327; color:var(--text) }
+    .stat { display:flex; gap:10px; align-items:center; }
+    .stat h3 { margin:0; font-size:14px; color:var(--muted) }
+    .stat strong { font-size:22px }
+    .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:12px }
+    .pill { font-size:12px; padding:4px 8px; border-radius:999px; background:#0c1327; border:1px solid var(--border); color:var(--muted) }
+    .pill--bad { color:#ffbfbf; border-color:#ffbfbf33; }
+    .pill--good { color:#b0ffbf; border-color:#b0ffbf33; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">Super Admin</div>
+    <div class="chip">Global view</div>
+    <a href="/superadmin/logout" class="btn btn--ghost">Logout</a>
+  </header>
+  <main>
+    <div class="grid">
+      <section class="card">
+        <h2>Quick stats</h2>
+        <div class="stats">
+          <div class="stat"><h3>Users</h3><strong>{{ totals.users }}</strong></div>
+          <div class="stat"><h3>Stores</h3><strong>{{ totals.stores }}</strong></div>
+          <div class="stat"><h3>Screens</h3><strong>{{ totals.screens }}</strong></div>
+          <div class="stat"><h3>Online</h3><strong>{{ totals.online }}</strong></div>
+        </div>
+      </section>
+      <section class="card">
+        <h2>Create user</h2>
+        <form method="post" action="/superadmin/users/create" class="form-grid">
+          <input type="text" name="full_name" placeholder="Full name (optional)">
+          <input type="text" name="username" placeholder="Email" required>
+          <input type="password" name="password" placeholder="Temp password" required>
+          <div></div><div></div>
+          <button class="btn btn--primary" type="submit">Create</button>
+        </form>
+      </section>
+    </div>
+
+    <section class="card" style="margin-top:16px">
+      <h2>All users</h2>
+      <div style="overflow:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>User</th>
+            <th>Name</th>
+            <th>Code</th>
+            <th>Stores</th>
+            <th>Screens</th>
+            <th>Online</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in users %}
+            <tr>
+              <td>{{ u.id }}</td>
+              <td>{{ u.username }}</td>
+              <td>{{ u.full_name or '' }}</td>
+              <td><span class="pill">{{ u.link_code or '—' }}</span></td>
+              <td>{{ u.stores_count }}</td>
+              <td>{{ u.screens_count }}</td>
+              <td>{{ u.online_screens }}</td>
+              <td>
+                {% if u.is_blocked %}
+                  <span class="pill pill--bad">Blocked</span>
+                {% else %}
+                  <span class="pill pill--good">Active</span>
+                {% endif %}
+                {% if u.has_password %}
+                  <span class="pill">Local login: enabled</span>
+                {% else %}
+                  <span class="pill">Local login: disabled</span>
+                {% endif %}
+              </td>
+              <td class="row-actions">
+                <form method="post" action="/superadmin/users/{{u.id}}/rename" style="display:inline-flex; gap:6px; align-items:center">
+                  <input type="text" name="full_name" placeholder="Full name" value="{{ u.full_name or '' }}" style="width:160px">
+                  <input type="text" name="username" placeholder="Email" value="{{ u.username }}" style="width:220px">
+                  <button class="btn btn--ghost" type="submit">Save</button>
+                </form>
+                <form method="post" action="/superadmin/users/{{u.id}}/password" style="display:inline-flex; gap:6px; align-items:center">
+                  <input type="password" name="password" placeholder="New local password" style="width:160px">
+                  <button class="btn btn--ghost" type="submit">Set local password</button>
+                </form>
+                {% if u.is_blocked %}
+                <form method="post" action="/superadmin/users/{{u.id}}/unblock" style="display:inline">
+                  <button class="btn btn--primary" type="submit">Unblock</button>
+                </form>
+                {% else %}
+                <form method="post" action="/superadmin/users/{{u.id}}/block" style="display:inline">
+                  <button class="btn btn--ghost" type="submit">Block</button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

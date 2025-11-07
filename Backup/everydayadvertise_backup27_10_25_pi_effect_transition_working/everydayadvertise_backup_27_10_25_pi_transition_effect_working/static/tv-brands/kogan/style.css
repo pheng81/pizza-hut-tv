@@ -1,0 +1,95 @@
+/**
+ * Kogan TV Specific Styles
+ * Simple, clean styles for Kogan brand TVs
+ */
+
+/* Kogan Focus Styles - Simple blue outline */
+*:focus {
+  outline: 3px solid #0066CC !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 12px rgba(0, 102, 204, 0.4);
+}
+
+/* Body optimizations */
+body {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Container padding for safe area */
+.container {
+  padding: 5% !important;
+}
+
+/* Video player optimizations - Conservative */
+video {
+  image-rendering: auto;
+  transform: translateZ(0);
+}
+
+/* Simple button styles */
+button, .btn {
+  min-height: 55px;
+  min-width: 140px;
+  font-size: 18px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+button:focus, .btn:focus {
+  transform: scale(1.03);
+  background-color: #0066CC;
+  color: white;
+}
+
+/* Navigation */
+nav a {
+  padding: 12px 18px;
+  display: block;
+}
+
+nav a:focus {
+  background-color: #0066CC;
+  color: white;
+}
+
+/* Simple grid layout */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 18px;
+}
+
+/* Card styles */
+.card {
+  border-radius: 6px;
+  overflow: hidden;
+  transition: transform 0.2s ease;
+}
+
+.card:focus, .card:hover {
+  transform: scale(1.03);
+  box-shadow: 0 0 15px rgba(0, 102, 204, 0.5);
+}
+
+/* Typography - Standard sizes */
+h1 { font-size: 40px; }
+h2 { font-size: 32px; }
+h3 { font-size: 24px; }
+p { font-size: 18px; line-height: 1.5; }
+
+/* Loading indicator */
+.loading {
+  display: inline-block;
+  width: 50px;
+  height: 50px;
+  border: 5px solid #0066CC;
+  border-radius: 50%;
+  border-top-color: transparent;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

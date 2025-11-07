@@ -1,0 +1,24 @@
+<div id="cookieConsent" style="display:none;position:fixed;left:16px;right:16px;bottom:16px;z-index:10000;background:#0d1218;color:#e6edf3;border:1px solid #263244;border-radius:12px;padding:12px 14px;box-shadow:0 10px 30px rgba(0,0,0,.25);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif">
+  <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between">
+    <div style="min-width:240px;flex:1 1 auto;font-size:14px;line-height:1.4">
+      We use cookies only for essential features like login and session security. By using this site, you accept cookies.
+    </div>
+    <div style="display:flex;gap:8px;flex:0 0 auto">
+      <a href="/privacy" style="text-decoration:none;color:#9fb3c8;border:1px solid #324152;border-radius:8px;padding:8px 10px;background:#121a24">Learn more</a>
+      <button id="cookieAcceptBtn" style="border:1px solid #2563eb;background:#2563eb;color:#fff;padding:8px 12px;border-radius:8px;cursor:pointer">Accept</button>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  try{
+    var KEY = 'cookieConsent.v1';
+    var accepted = localStorage.getItem(KEY);
+    var el = document.getElementById('cookieConsent');
+    if(!el) return;
+    if(!accepted){ el.style.display = 'block'; }
+    var btn = document.getElementById('cookieAcceptBtn');
+    if(btn){ btn.addEventListener('click', function(){ localStorage.setItem(KEY, '1'); el.style.display='none'; }); }
+  }catch(e){}
+})();
+</script>

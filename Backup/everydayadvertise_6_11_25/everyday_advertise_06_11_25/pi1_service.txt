@@ -1,0 +1,17 @@
+[Unit]
+Description=Pizza Hut TV Complete Pi Client
+After=graphical.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/everydayadvertise/.Xauthority
+ExecStart=/usr/bin/python3 /home/everydayadvertise/complete_pi_client.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

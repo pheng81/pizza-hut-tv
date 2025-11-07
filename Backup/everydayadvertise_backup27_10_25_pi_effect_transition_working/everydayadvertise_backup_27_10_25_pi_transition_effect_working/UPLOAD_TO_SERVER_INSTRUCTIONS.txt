@@ -1,0 +1,215 @@
+================================================================================
+           SCREEN PREVIEW - DEPLOYMENT STATUS & NEXT STEPS
+================================================================================
+
+✅ COMPLETED - Pi Side:
+----------------------
+- complete_pi_client.py uploaded to Pi
+- Pillow already installed
+- Pi client restarted and running
+- WebSocket connected to server
+- Pi is READY to send screenshots
+
+⏳ PENDING - Server Side (CRITICAL - THIS IS WHY YOU DON'T SEE IT):
+--------------------------------------------------------------------
+The server needs these 2 files uploaded:
+
+1. templates/dashboard.html
+   - This shows the "📺 Screen Preview" section in the modal
+   - Without this, you won't see the preview UI at all
+   
+2. app.py  
+   - This relays screenshot requests between dashboard and Pi
+   - Without this, requests won't reach the Pi
+
+================================================================================
+                    HOW TO UPLOAD TO SERVER
+================================================================================
+
+SSH is blocked/timing out, so use ONE of these methods:
+
+METHOD 1: AWS Lightsail Console (RECOMMENDED IF YOU USE AWS)
+------------------------------------------------------------
+1. Go to: https://lightsail.aws.amazon.com/
+2. Click your instance name
+3. Click "Connect" tab
+4. Click "Connect using SSH" (opens web terminal)
+5. In the web terminal:
+
+   # Create upload directory
+   mkdir -p /tmp/upload
+   
+   # You'll need to copy file contents manually or use:
+   # In another tab, go to "Storage" and upload files
+   
+6. Or use FileZilla with SFTP:
+   Host: (your server IP)
+   Protocol: SFTP
+   Port: 22
+   Username: ubuntu
+   
+7. Upload:
+   Local: c:\Users\toeng\Pizza Hut TV\templates\dashboard.html
+   Remote: /home/ubuntu/Pizza-Hut-TV/templates/dashboard.html
+   
+   Local: c:\Users\toeng\Pizza Hut TV\app.py
+   Remote: /home/ubuntu/Pizza-Hut-TV/app.py
+
+8. Restart service:
+   sudo systemctl restart pizza-hut-tv
+
+
+METHOD 2: WinSCP (Easy Windows Tool)
+-------------------------------------
+1. Download WinSCP: https://winscp.net/
+2. Install and open
+3. Connection settings:
+   - File protocol: SFTP
+   - Host name: everydayadvertise.com (or server IP)
+   - Port: 22
+   - User name: ubuntu
+   - Password: (your password)
+4. Click "Login"
+5. Navigate left panel to: c:\Users\toeng\Pizza Hut TV\
+6. Navigate right panel to: /home/ubuntu/Pizza-Hut-TV/
+7. Drag and drop:
+   - templates/dashboard.html → templates/
+   - app.py → root folder
+8. Use built-in terminal (Ctrl+T) to restart:
+   sudo systemctl restart pizza-hut-tv
+
+
+METHOD 3: FileZilla (Also Good)
+--------------------------------
+1. Download: https://filezilla-project.org/
+2. File > Site Manager > New Site
+3. Settings:
+   - Protocol: SFTP
+   - Host: everydayadvertise.com
+   - Port: 22
+   - Logon Type: Normal
+   - User: ubuntu
+   - Password: (your password)
+4. Connect and upload files
+5. Use SSH separately to restart service
+
+
+METHOD 4: Different Network/VPN
+--------------------------------
+Sometimes ISP blocks port 22. Try:
+1. Mobile phone hotspot
+2. VPN service
+3. Different location/network
+Then use regular SCP:
+   scp "c:\Users\toeng\Pizza Hut TV\templates\dashboard.html" ubuntu@everydayadvertise.com:~/Pizza-Hut-TV/templates/
+   scp "c:\Users\toeng\Pizza Hut TV\app.py" ubuntu@everydayadvertise.com:~/Pizza-Hut-TV/
+   ssh ubuntu@everydayadvertise.com "sudo systemctl restart pizza-hut-tv"
+
+
+METHOD 5: Check Server Provider Control Panel
+----------------------------------------------
+Your hosting might have:
+- Web-based file manager
+- Built-in SSH terminal
+- FTP access
+- Alternative upload methods
+
+Check your hosting provider's dashboard.
+
+
+================================================================================
+                         AFTER UPLOADING
+================================================================================
+
+1. Restart the server service:
+   sudo systemctl restart pizza-hut-tv
+
+2. Wait 10 seconds for service to start
+
+3. Check it's running:
+   sudo systemctl status pizza-hut-tv
+
+4. Test the website:
+   - Open: https://everydayadvertise.com/dashboard
+   - Hard refresh: Ctrl+Shift+R (clear cache)
+   - Open Remote Pi Manager
+   - Connect to: raspberrypi-ce39
+   - Should see: "📺 Screen Preview" section
+   - Click: "▶ Start"
+   - Screenshots should appear every 2 seconds!
+
+
+================================================================================
+                           TESTING LOCALLY
+================================================================================
+
+If you can't access server yet, test locally:
+
+1. Open new PowerShell
+2. cd "c:\Users\toeng\Pizza Hut TV"
+3. python app.py
+4. Open: http://localhost:5002/dashboard
+5. Test Remote Pi Manager (will connect to real Pi via WebSocket)
+6. Verify preview works
+
+This confirms the code works before deploying to production.
+
+
+================================================================================
+                          TROUBLESHOOTING
+================================================================================
+
+"I still can't connect to server"
+→ Contact your hosting provider
+→ Check if server IP changed
+→ Check firewall settings
+→ Try from different device/network
+
+"I uploaded files but don't see preview"
+→ Clear browser cache (Ctrl+Shift+Delete)
+→ Hard refresh (Ctrl+Shift+R)
+→ Check browser console for errors (F12)
+→ Verify file upload location is correct
+
+"Screenshots not appearing"
+→ Check server logs: sudo journalctl -u pizza-hut-tv -f
+→ Check browser console: Look for WebSocket messages
+→ Pi is ready, server needs the files!
+
+
+================================================================================
+                            FILE LOCATIONS
+================================================================================
+
+LOCAL FILES (Your PC):
+- c:\Users\toeng\Pizza Hut TV\templates\dashboard.html
+- c:\Users\toeng\Pizza Hut TV\app.py
+- c:\Users\toeng\Pizza Hut TV\complete_pi_client.py (already uploaded to Pi ✅)
+
+SERVER LOCATIONS:
+- /home/ubuntu/Pizza-Hut-TV/templates/dashboard.html
+- /home/ubuntu/Pizza-Hut-TV/app.py
+
+PI LOCATION:
+- /home/everydayadvertise/complete_pi_client.py ✅ DONE
+
+
+================================================================================
+                         QUICK REFERENCE
+================================================================================
+
+Pi Status: ✅ READY (running with screenshot support)
+Server Status: ⏳ NEEDS UPDATE (missing 2 files)
+Blocking Issue: SSH port 22 blocked/timing out
+
+Solution: Use alternative upload method (WinSCP, FileZilla, AWS Console)
+
+Once server files uploaded: FEATURE WILL WORK IMMEDIATELY
+
+
+================================================================================
+
+Questions? Check the browser console (F12) for error messages.
+The preview section should appear automatically when Pi connects.
+
+================================================================================

@@ -1,0 +1,155 @@
+SCREEN PREVIEW DEPLOYMENT - QUICK GUIDE
+==========================================
+
+PROBLEM: SSH to server is blocked, so we deploy to Pi only first.
+
+WHAT'S ALREADY DONE:
+✓ Code written and saved locally
+✓ All 3 files ready to deploy
+
+FILES TO DEPLOY:
+================
+
+1. TO PI (raspberrypi):
+   File: complete_pi_client.py
+   Location: /home/everydayadvertise/complete_pi_client.py
+   
+2. TO SERVER (everydayadvertise.com):
+   File: templates/dashboard.html
+   Location: /home/ubuntu/Pizza-Hut-TV/templates/dashboard.html
+   
+3. TO SERVER (everydayadvertise.com):
+   File: app.py
+   Location: /home/ubuntu/Pizza-Hut-TV/app.py
+
+DEPLOYMENT STEPS:
+=================
+
+STEP 1: Deploy to Pi (DO THIS NOW)
+-----------------------------------
+Run in PowerShell:
+cd "c:\Users\toeng\Pizza Hut TV"
+.\quick_deploy_preview.ps1
+
+Or manually:
+scp complete_pi_client.py everydayadvertise@raspberrypi:~/
+ssh everydayadvertise@raspberrypi
+cd ~/pizza-hut-tv && source bin/activate && pip install Pillow
+sudo apt-get install -y scrot
+pkill -f complete_pi_client.py
+nohup ~/pizza-hut-tv/bin/python ~/complete_pi_client.py > /tmp/pi_test.log 2>&1 &
+exit
+
+
+STEP 2: Deploy to Server (NEED ALTERNATIVE ACCESS)
+---------------------------------------------------
+Since SSH is blocked, use ONE of these methods:
+
+METHOD A: AWS Lightsail Console
+1. Go to https://lightsail.aws.amazon.com/
+2. Click on your instance
+3. Click "Connect using SSH" (web-based terminal)
+4. You'll need to upload files first - use FTP or console's upload feature
+
+METHOD B: FTP/SFTP Client
+1. Download FileZilla or WinSCP
+2. Connect to: everydayadvertise.com (or server IP)
+3. Port: 22 (SFTP) or 21 (FTP)
+4. Username: ubuntu
+5. Upload both files to correct locations
+6. Use web SSH to restart service
+
+METHOD C: cPanel / Control Panel
+1. Login to your hosting control panel
+2. Use File Manager
+3. Navigate to /home/ubuntu/Pizza-Hut-TV/
+4. Upload files
+5. Use terminal in cPanel to restart service
+
+METHOD D: Try Different Network
+Sometimes SSH is blocked by ISP or firewall:
+1. Try from phone hotspot
+2. Try from VPN
+3. Try from different location
+
+
+STEP 3: Restart Server Service
+-------------------------------
+After uploading files, run:
+sudo systemctl restart pizza-hut-tv
+
+Or:
+cd /home/ubuntu/Pizza-Hut-TV
+sudo systemctl restart pizza-hut-tv
+
+
+TESTING:
+========
+1. Open: https://everydayadvertise.com/dashboard
+2. Clear browser cache (Ctrl+Shift+R)
+3. Open Remote Pi Manager
+4. Connect to: raspberrypi-ce39
+5. Look for "📺 Screen Preview" section
+6. Click "▶ Start" button
+7. Screenshots should appear every 2 seconds
+
+
+TROUBLESHOOTING:
+================
+
+Preview section doesn't show:
+- Server files not uploaded yet (dashboard.html)
+- Browser cache not cleared
+- Check browser console for errors (F12)
+
+Pi not connecting:
+- Check Pi is online: ping raspberrypi.local
+- Check Pi logs: ssh everydayadvertise@raspberrypi "tail -f /tmp/pi_test.log"
+- Restart Pi client (see Step 1)
+
+Screenshots not appearing:
+- Check Pillow installed: ssh everydayadvertise@raspberrypi "pip list | grep Pillow"
+- Check scrot installed: ssh everydayadvertise@raspberrypi "which scrot"
+- Check logs for "📸" messages
+
+Server not restarting:
+- Check service status: sudo systemctl status pizza-hut-tv
+- Check logs: sudo journalctl -u pizza-hut-tv -f
+- Manual restart: sudo systemctl stop pizza-hut-tv && sudo systemctl start pizza-hut-tv
+
+
+CURRENT STATUS:
+===============
+✅ Local files ready
+⏳ Pi deployment - READY TO RUN (run quick_deploy_preview.ps1)
+⏳ Server deployment - WAITING FOR ACCESS
+⏳ Testing - AFTER DEPLOYMENT
+
+
+WHAT EACH FILE DOES:
+====================
+
+complete_pi_client.py:
+- Captures screenshots using pygame or scrot
+- Sends screenshots via WebSocket to server
+- Responds to 'request_screenshot' events
+
+app.py:
+- Relays screenshot requests from dashboard to Pi
+- Relays screenshot data from Pi to dashboard
+- Handles WebSocket 'request_screenshot' and 'screenshot_data' events
+
+templates/dashboard.html:
+- Shows "📺 Screen Preview" section when Pi connects
+- Sends screenshot requests every 2 seconds
+- Displays received screenshots
+- Has Start/Stop controls
+
+
+NEED HELP?
+==========
+If you can't access the server at all:
+1. Check with your hosting provider
+2. Reset SSH access in control panel
+3. Contact me with error messages
+4. We can test locally first: python app.py (then visit http://localhost:5002)
