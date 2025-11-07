@@ -170,6 +170,11 @@ hard_restart_service.sh
 pi_client_working.tar.gz
 scripts.zip
 
+# Environment variables
+.env
+.env.local
+.env.*.local
+
 # Secrets and large archives
 # Avoid committing OAuth credentials and large zips
 Google&Microsoft_Auth/
