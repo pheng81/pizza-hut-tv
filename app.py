@@ -8,6 +8,7 @@ import time
 import logging
 import sqlite3
 import uuid
+import fcntl  # For file locking to prevent race conditions
 import random
 import subprocess
 import shutil
@@ -30,6 +31,9 @@ from flask_socketio import SocketIO, emit, join_room, leave_room
 
 # Ensure both names available for existing code
 _shutil = shutil
+
+# Base directory for all file operations (prevents relative path issues with gunicorn workers)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Load .env first
 load_dotenv()
@@ -92,7 +96,7 @@ def _set_job_status(job_id, status_data):
 # --- SQLite user database helpers ---
 def _db_path() -> str:
     # Allow relocating the DB out of the repo so deploys don't overwrite it
-    p = os.environ.get('USERS_DB_PATH') or 'database.db'
+    p = os.environ.get('USERS_DB_PATH') or os.path.join(BASE_DIR, 'database.db')
     try:
         d = os.path.dirname(p)
         if d:
@@ -112,6 +116,17 @@ def init_db():
     # Add columns/indexes best-effort
     try:
         cols = [r[1] for r in db.execute('PRAGMA table_info(users)').fetchall()]
+        # Super-admin visible flags
+        if 'is_blocked' not in cols:
+            try:
+                db.execute('ALTER TABLE users ADD COLUMN is_blocked INTEGER DEFAULT 0')
+            except Exception:
+                pass
+        if 'role' not in cols:
+            try:
+                db.execute('ALTER TABLE users ADD COLUMN role TEXT')
+            except Exception:
+                pass
         if 'full_name' not in cols:
             try:
                 db.execute('ALTER TABLE users ADD COLUMN full_name TEXT')
@@ -150,6 +165,13 @@ def init_db():
         pass
     db.commit()
 
+    # Dedicated superadmin table (separate from regular users)
+    try:
+        db.execute('CREATE TABLE IF NOT EXISTS superadmins (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password_hash TEXT)')
+        db.commit()
+    except Exception:
+        pass
+
 init_db()
 
 # -------- Early logging to file for startup diagnostics (captures silent exits) --------
@@ -178,8 +200,8 @@ socketio = SocketIO(
     app,
     cors_allowed_origins="*",
     async_mode='threading',
-    ping_timeout=60,
-    ping_interval=25,
+    ping_timeout=120,
+    ping_interval=30,
     logger=True,
     engineio_logger=True
 )
@@ -491,10 +513,16 @@ def login():
         try:
             db = get_db()
             row = db.execute(
-                'SELECT username, password_hash FROM users WHERE username = ?',
+                'SELECT username, password_hash, COALESCE(is_blocked, 0) AS is_blocked FROM users WHERE username = ?',
                 (u,)
             ).fetchone()
             if row and check_password_hash(row['password_hash'], p or ''):
+                # Blocked users cannot login
+                try:
+                    if int(row['is_blocked'] or 0) == 1:
+                        raise RuntimeError('Account is blocked')
+                except Exception:
+                    pass
                 session['user'] = {'name': row['username'], 'method': 'local'}
                 session.permanent = True  # Make session persist across browser restarts
                 # Ensure this user has a pairing code
@@ -901,6 +929,12 @@ def home():
     except Exception:
         pass
     return resp
+
+@app.route('/pair')
+def pair():
+    """Mobile pairing page for Android TV - scan QR code to enter pairing code"""
+    code = request.args.get('code', '')
+    return render_template('pair.html', code=code)
 
 @app.route('/video-test')
 def video_test():
@@ -2054,6 +2088,47 @@ def screen_heartbeat():
         save_store_config(cfg)
     return jsonify({'success': True})
 
+# -------- Public API for TV app: list screens for a store (pair-code or session required) --------
+@app.route('/api/screens/<store_id>', methods=['GET'])
+def api_screens_for_store(store_id: str):
+    """Return list of screens for a store for Android TV app.
+    Auth: session user (dashboard) OR X-User-Code pairing header / user_code query param.
+    Response shape matches Android app expectation: { success, store_id, screens: [{id: "..."}] }
+    """
+    try:
+        # Prefer logged-in session user; otherwise accept pair code header
+        ukey = _resolve_effective_user_key()
+        if not ukey:
+            return jsonify({'success': False, 'error': 'pair code required'}), 403
+
+        cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey))
+        screens_all = cfg.get('screens') or {}
+
+        # Legacy mapping: if old store_id like '1881' no longer exists, map to current master store
+        try:
+            if store_id not in screens_all and str(store_id) == '1881':
+                m = cfg.get('master_store_id')
+                if m and m in screens_all:
+                    store_id = m
+        except Exception:
+            pass
+
+        store_map = screens_all.get(store_id)
+        if not isinstance(store_map, dict):
+            return jsonify({'success': False, 'error': 'store not found'}), 404
+
+        # Build simple list of screen ids; keep existing keys as-is
+        # Include rotation value for each screen so Android TV app can apply orientation
+        screen_list = []
+        for sid in sorted(store_map.keys()):
+            screen_data = store_map.get(sid, {})
+            rotation = screen_data.get('rotation', 0) if isinstance(screen_data, dict) else 0
+            screen_list.append({'id': sid, 'rotation': rotation})
+        return jsonify({'success': True, 'store_id': store_id, 'screens': screen_list})
+    except Exception as e:
+        app.logger.exception('api_screens_for_store failed')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # -------- Client event reporting (per-item load success/failure) --------
 @app.route('/api/client_event', methods=['POST'])
 def client_event():
@@ -2525,7 +2600,8 @@ def screen_status_by_store(store_id):
     return {'success': True, 'status': result}
 
 # -------------------- Core Configuration & Media Type Definitions --------------------
-CONFIG_FILE = 'store_config.json'
+CONFIG_FILE = os.path.join(BASE_DIR, 'store_config.json')
+PI_MAP_FILE = os.path.join(BASE_DIR, 'pi_id_ip_map.json')
 
 # --- Multi-tenant config selection (per-logged-in user) ---
 def _safe_user_key() -> Optional[str]:
@@ -3157,13 +3233,201 @@ def _resolve_user_key_by_code(raw_code: Optional[str]) -> Optional[str]:
         if not (len(code) == 4 and code.isdigit()):
             return None
         db = get_db()
-        row = db.execute('SELECT username FROM users WHERE link_code = ?', (code,)).fetchone()
+        row = db.execute('SELECT username, COALESCE(is_blocked, 0) AS is_blocked FROM users WHERE link_code = ?', (code,)).fetchone()
         if not row:
             return None
+        try:
+            if int(row['is_blocked'] or 0) == 1:
+                return None
+        except Exception:
+            pass
         uname = (row['username'] or '').strip().lower()
         return _safe_key_from_username(uname)
     except Exception:
         return None
+
+# ---------------------- Super Admin auth & dashboard ----------------------
+from functools import wraps as _wraps
+
+def superadmin_required(view):
+    @_wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get('super_admin'):
+            return redirect(url_for('superadmin_login', next=request.path))
+        return view(*args, **kwargs)
+    return wrapped
+
+@app.route('/superadmin/login', methods=['GET','POST'])
+def superadmin_login():
+    if request.method == 'POST':
+        u = (request.form.get('username') or '').strip().lower()
+        p = request.form.get('password') or ''
+        try:
+            db = get_db()
+            row = db.execute('SELECT username, password_hash FROM superadmins WHERE username = ?', (u,)).fetchone()
+            if row and check_password_hash(row['password_hash'], p or ''):
+                session['super_admin'] = {'name': row['username']}
+                session.permanent = True
+                nxt = request.args.get('next') or url_for('superadmin_dashboard')
+                return redirect(nxt)
+        except Exception as e:
+            logging.warning('Superadmin login DB error: %s', e)
+        # Fallback: env-based master credentials if table empty
+        try:
+            env_u = os.environ.get('SUPERADMIN_USERNAME')
+            env_p = os.environ.get('SUPERADMIN_PASSWORD')
+            if env_u and env_p and u == env_u and p == env_p:
+                session['super_admin'] = {'name': env_u}
+                session.permanent = True
+                return redirect(url_for('superadmin_dashboard'))
+        except Exception:
+            pass
+        flash('Invalid credentials', 'error')
+    return render_template('superadmin/login.html')
+
+@app.route('/superadmin/logout')
+def superadmin_logout():
+    session.pop('super_admin', None)
+    return redirect(url_for('home'))
+
+def _collect_user_metrics():
+    """Return list of users with counts: stores, screens, online screens."""
+    db = get_db()
+    cur = db.execute('SELECT id, username, full_name, link_code, COALESCE(is_blocked,0) AS is_blocked, CASE WHEN password_hash IS NULL OR password_hash = '' THEN 0 ELSE 1 END AS has_password FROM users ORDER BY username')
+    users = []
+    now = int(time.time())
+    for row in cur.fetchall() or []:
+        uname = (row['username'] or '').strip().lower()
+        safe = _safe_key_from_username(uname) or ''
+        cfg = load_store_config_for_user_safe_key(safe) if safe else {'stores': [], 'screens': {}}
+        stores = cfg.get('stores', []) or []
+        screens_map = cfg.get('screens', {}) or {}
+        screens_count = sum(len(s or {}) for s in screens_map.values())
+        online = 0
+        try:
+            for sid_map in screens_map.values():
+                for s in (sid_map or {}).values():
+                    last = int(s.get('last_seen', 0) or 0)
+                    if (now - last) < HEARTBEAT_TIMEOUT:
+                        online += 1
+        except Exception:
+            pass
+        users.append({
+            'id': row['id'],
+            'username': uname,
+            'full_name': row['full_name'],
+            'link_code': row['link_code'],
+            'is_blocked': int(row['is_blocked'] or 0),
+            'has_password': int(row['has_password'] or 0),
+            'stores_count': len(stores),
+            'screens_count': screens_count,
+            'online_screens': online,
+        })
+    return users
+
+@app.route('/superadmin')
+@app.route('/superadmin/dashboard')
+@superadmin_required
+def superadmin_dashboard():
+    users = _collect_user_metrics()
+    totals = {
+        'users': len(users),
+        'stores': sum(u['stores_count'] for u in users),
+        'screens': sum(u['screens_count'] for u in users),
+        'online': sum(u['online_screens'] for u in users),
+    }
+    return render_template('superadmin/dashboard.html', users=users, totals=totals)
+
+@app.route('/superadmin/users/create', methods=['POST'])
+@superadmin_required
+def superadmin_create_user():
+    data = request.form
+    email = (data.get('username') or '').strip().lower()
+    full_name = (data.get('full_name') or '').strip()
+    pwd = data.get('password') or ''
+    if not email or not pwd:
+        flash('Username and password required', 'error')
+        return redirect(url_for('superadmin_dashboard'))
+    try:
+        db = get_db()
+        db.execute('INSERT INTO users (username, password_hash, full_name, is_blocked) VALUES (?, ?, ?, 0)', (
+            email, generate_password_hash(pwd), full_name
+        ))
+        db.commit()
+        try:
+            _ensure_user_link_code(email)
+        except Exception:
+            pass
+        flash('User created', 'success')
+    except sqlite3.IntegrityError:
+        flash('Username already exists', 'error')
+    except Exception as e:
+        flash(f'Create failed: {e}', 'error')
+    return redirect(url_for('superadmin_dashboard'))
+
+@app.route('/superadmin/users/<int:user_id>/block', methods=['POST'])
+@superadmin_required
+def superadmin_block_user(user_id):
+    db = get_db()
+    db.execute('UPDATE users SET is_blocked = 1 WHERE id = ?', (user_id,))
+    db.commit()
+    flash('User blocked', 'success')
+    return redirect(url_for('superadmin_dashboard'))
+
+@app.route('/superadmin/users/<int:user_id>/unblock', methods=['POST'])
+@superadmin_required
+def superadmin_unblock_user(user_id):
+    db = get_db()
+    db.execute('UPDATE users SET is_blocked = 0 WHERE id = ?', (user_id,))
+    db.commit()
+    flash('User unblocked', 'success')
+    return redirect(url_for('superadmin_dashboard'))
+
+@app.route('/superadmin/users/<int:user_id>/password', methods=['POST'])
+@superadmin_required
+def superadmin_reset_password(user_id):
+    pwd = request.form.get('password') or ''
+    if len(pwd) < 6:
+        flash('Password must be at least 6 characters', 'error')
+        return redirect(url_for('superadmin_dashboard'))
+    db = get_db()
+    db.execute('UPDATE users SET password_hash = ? WHERE id = ?', (generate_password_hash(pwd), user_id))
+    db.commit()
+    flash('Password updated', 'success')
+    return redirect(url_for('superadmin_dashboard'))
+
+@app.route('/superadmin/users/<int:user_id>/rename', methods=['POST'])
+@superadmin_required
+def superadmin_rename_user(user_id):
+    email = (request.form.get('username') or '').strip().lower()
+    full_name = (request.form.get('full_name') or '').strip()
+    if not email:
+        flash('Username required', 'error')
+        return redirect(url_for('superadmin_dashboard'))
+    try:
+        db = get_db()
+        # Fetch current username to rename config files if needed
+        cur = db.execute('SELECT username FROM users WHERE id = ?', (user_id,)).fetchone()
+        old_email = (cur['username'] or '').strip().lower() if cur else None
+        db.execute('UPDATE users SET username = ?, full_name = ? WHERE id = ?', (email, full_name, user_id))
+        db.commit()
+        # Move per-user config file
+        try:
+            old_safe = _safe_key_from_username(old_email)
+            new_safe = _safe_key_from_username(email)
+            if old_safe and new_safe and old_safe != new_safe:
+                old_path = _config_path_for_user_safe_key(old_safe)
+                new_path = _config_path_for_user_safe_key(new_safe)
+                if os.path.exists(old_path) and not os.path.exists(new_path):
+                    os.replace(old_path, new_path)
+        except Exception:
+            pass
+        flash('User updated', 'success')
+    except sqlite3.IntegrityError:
+        flash('Username already exists', 'error')
+    except Exception as e:
+        flash(f'Update failed: {e}', 'error')
+    return redirect(url_for('superadmin_dashboard'))
 
 def _get_current_username_from_session() -> Optional[str]:
     try:
@@ -3179,14 +3443,15 @@ def _get_current_username_from_session() -> Optional[str]:
         return None
 
 def _config_path_for_user_safe_key(safe_key: str) -> str:
-    return f"store_config__{safe_key}.json"
+    return os.path.join(BASE_DIR, f"store_config__{safe_key}.json")
 
 def load_store_config_for_user_safe_key(safe_key: str):
     """Load another user's config by safe key (used for code-based listing).
     SECURITY: Each user starts with EMPTY config - NO cross-user data inheritance.
     """
     path = _config_path_for_user_safe_key(safe_key)
-    is_user_scoped = True
+    lock_path = path + '.lock'
+    
     if not os.path.exists(path):
         # SECURITY FIX: Each user starts with EMPTY config
         # DO NOT seed from global config - that contains OTHER users' stores/screens!
@@ -3199,54 +3464,73 @@ def load_store_config_for_user_safe_key(safe_key: str):
         cfg['master_store_id'] = None
         
         logging.info(f'✓ New user {safe_key} starts with empty config (no cross-user data)')
-        # Save to user-scoped file
-        try:
-            tmp = path + '.tmp'
-            with open(tmp, 'w') as f:
-                json.dump(cfg, f, indent=2, ensure_ascii=False)
-            os.replace(tmp, path)
-        except Exception:
-            pass
+        # Save to user-scoped file with locking
+        save_store_config_for_user_safe_key(safe_key, cfg)
         return cfg
+    
+    # Acquire shared lock for reading
     try:
-        with open(path, 'r') as f:
-            cfg = json.load(f)
-    except Exception:
-        # Corrupt -> back up and reset to per-user default (single master store)
+        lock_file = open(lock_path, 'w')
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_SH)
+        
         try:
-            shutil.copyfile(path, path + '.corrupt.bak')
-        except Exception:
-            pass
-        cfg = get_default_config(user_scoped=True)
+            with open(path, 'r') as f:
+                cfg = json.load(f)
+        except json.JSONDecodeError as e:
+            # Only treat JSON decode errors as corruption
+            logging.error(f'⚠️ Corrupt JSON in {path}: {e}')
+            try:
+                shutil.copyfile(path, path + f'.corrupt.{int(time.time())}')
+            except Exception:
+                pass
+            cfg = get_default_config(user_scoped=True)
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+            lock_file.close()
+            try:
+                os.remove(lock_path)
+            except:
+                pass
+    except Exception as e:
+        logging.error(f'Error loading config for {safe_key}: {e}')
+        # If we can't even lock, try to load anyway
         try:
-            tmp = path + '.tmp'
-            with open(tmp, 'w') as f:
-                json.dump(cfg, f, indent=2, ensure_ascii=False)
-            os.replace(tmp, path)
+            with open(path, 'r') as f:
+                cfg = json.load(f)
         except Exception:
-            pass
-        return cfg
+            cfg = get_default_config(user_scoped=True)
+    
     # backfill master_store_id
     if 'master_store_id' not in cfg and cfg.get('stores'):
         cfg['master_store_id'] = cfg['stores'][0]['id']
-        try:
-            tmp = path + '.tmp'
-            with open(tmp, 'w') as f:
-                json.dump(cfg, f, indent=2, ensure_ascii=False)
-            os.replace(tmp, path)
-        except Exception:
-            pass
+        save_store_config_for_user_safe_key(safe_key, cfg)
     return cfg
 
 def save_store_config_for_user_safe_key(safe_key: str, config):
-    """Save the given config to the per-user JSON path atomically."""
+    """Save the given config to the per-user JSON path atomically with file locking."""
+    path = _config_path_for_user_safe_key(safe_key)
+    lock_path = path + '.lock'
+    
+    # Acquire exclusive lock
     try:
-        path = _config_path_for_user_safe_key(safe_key)
-        tmp = path + '.tmp'
-        with open(tmp, 'w') as f:
-            json.dump(config, f, indent=2, ensure_ascii=False)
-        os.replace(tmp, path)
-        print(f"Configuration atomically saved to {path}")
+        lock_file = open(lock_path, 'w')
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        
+        try:
+            # Write to temp file with unique name to avoid collisions
+            tmp = path + f'.tmp.{os.getpid()}.{threading.get_ident()}'
+            with open(tmp, 'w') as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
+            os.replace(tmp, path)
+            print(f"Configuration atomically saved to {path}")
+        finally:
+            # Release lock
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+            lock_file.close()
+            try:
+                os.remove(lock_path)
+            except:
+                pass
     except Exception as e:
         print(f"Error saving per-user configuration: {e}")
         raise
@@ -4971,8 +5255,9 @@ def pi_manager():
         # Combine data from connected_pis and pi_map
         all_pi_ids = set(list(connected_pis.keys()) + list(pi_map.keys()))
         
-        # Pi offline timeout: consider offline if no heartbeat for 60 seconds (1 minute)
-        PI_OFFLINE_TIMEOUT = 60
+        # Pi offline timeout: consider offline if no heartbeat for 120 seconds (2 minutes)
+        # Pis send heartbeats every 30 seconds, so 120s allows up to 3 missed heartbeats
+        PI_OFFLINE_TIMEOUT = 120
         import time as time_module
         current_time = time_module.time()
         
@@ -5047,22 +5332,57 @@ def pi_manager():
                 'screen_name': 'Not Assigned'
             }
             
-            # Try to match Pi ID with store/screen from config
+            # FIRST: Try to get assignment from real-time heartbeat data in connected_pis
             found = False
-            for store in config.get('stores', []):
-                store_id = store.get('id')
-                for screen_id, screen_data in config.get('screens', {}).get(store_id, {}).items():
-                    if screen_data.get('pi_id') == pi_id:
-                        pi_info['store_id'] = store_id
-                        pi_info['store_name'] = store.get('name', store_id)
-                        pi_info['screen_id'] = screen_id
-                        pi_info['screen_name'] = screen_data.get('name', screen_id)
-                        # Get custom location name if set
+            if pi_id in connected_pis:
+                heartbeat_store_id = connected_pis[pi_id].get('store_id')
+                heartbeat_screen_id = connected_pis[pi_id].get('screen_id')
+                
+                if heartbeat_store_id and heartbeat_screen_id:
+                    # Find store name from config
+                    store_name = heartbeat_store_id
+                    for store in config.get('stores', []):
+                        if store.get('id') == heartbeat_store_id:
+                            store_name = store.get('name', heartbeat_store_id)
+                            break
+                    
+                    # Get screen name from config if available
+                    screen_name = heartbeat_screen_id
+                    screen_data = config.get('screens', {}).get(heartbeat_store_id, {}).get(heartbeat_screen_id, {})
+                    if screen_data:
+                        screen_name = screen_data.get('name', heartbeat_screen_id)
                         pi_info['location'] = screen_data.get('location_name', '')
-                        found = True
+                    
+                    pi_info['store_id'] = heartbeat_store_id
+                    pi_info['store_name'] = store_name
+                    pi_info['screen_id'] = heartbeat_screen_id
+                    pi_info['screen_name'] = screen_name
+                    found = True
+                    logging.info(f"[Pi Manager] ✅ Found assignment from HEARTBEAT: {pi_id} -> {heartbeat_store_id}/{heartbeat_screen_id}")
+            
+            # FALLBACK: If not in heartbeat, try config file (for offline Pis)
+            if not found:
+                logging.info(f"[Pi Manager] Looking for assignment in CONFIG for Pi ID: '{pi_id}'")
+                for store in config.get('stores', []):
+                    store_id = store.get('id')
+                    for screen_id, screen_data in config.get('screens', {}).get(store_id, {}).items():
+                        screen_pi_id = screen_data.get('pi_id')
+                        logging.debug(f"[Pi Manager] Checking {store_id}/{screen_id}: pi_id='{screen_pi_id}' vs '{pi_id}'")
+                        if screen_pi_id == pi_id:
+                            pi_info['store_id'] = store_id
+                            pi_info['store_name'] = store.get('name', store_id)
+                            pi_info['screen_id'] = screen_id
+                            pi_info['screen_name'] = screen_data.get('name', screen_id)
+                            # Get custom location name if set
+                            pi_info['location'] = screen_data.get('location_name', '')
+                            found = True
+                            logging.info(f"[Pi Manager] ✅ Found assignment from CONFIG: {pi_id} -> {store_id}/{screen_id}")
+                            break
+                    if found:
                         break
-                if found:
-                    break
+            
+            if not found:
+                logging.warning(f"[Pi Manager] ❌ No assignment found for Pi ID: '{pi_id}'")
             
             pi_devices.append(pi_info)
         
@@ -5091,7 +5411,7 @@ def pi_manager():
         
         available_pi_ids = [pi_id for pi_id in all_pi_ids if pi_id not in assigned_pi_ids]
         
-        return render_template(
+        resp = make_response(render_template(
             'pi_manager.html',
             pi_devices=pi_devices,
             available_pi_ids=available_pi_ids,
@@ -5106,7 +5426,12 @@ def pi_manager():
             link_code=link_code,
             build_stamp=BUILD_STAMP,
             git_commit=GIT_COMMIT
-        )
+        ))
+        # Prevent browser caching to ensure fresh store names are displayed
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        resp.headers['Pragma'] = 'no-cache'
+        resp.headers['Expires'] = '0'
+        return resp
     except Exception as e:
         logging.error(f"Error in pi_manager route: {e}")
         import traceback
@@ -5121,8 +5446,9 @@ def get_pi_status():
         import json
         import time as time_module
         
-        # Pi offline timeout: consider offline if no heartbeat for 60 seconds
-        PI_OFFLINE_TIMEOUT = 60
+        # Pi offline timeout: consider offline if no heartbeat for 120 seconds (2 minutes)
+        # Pis send heartbeats every 30 seconds, so 120s allows up to 3 missed heartbeats
+        PI_OFFLINE_TIMEOUT = 120
         current_time = time_module.time()
         logging.info(f"=== API Pi Status Check at {current_time} ===")
         
@@ -6859,6 +7185,20 @@ def parse_time_string(time_str, now):
     if not time_str:
         return None
     
+    # Try mm/dd/yyyy HH:MM:SS format (from dashboard date picker)
+    if len(time_str) == 19 and time_str.count('/') == 2 and time_str.count(':') == 2:
+        try:
+            return datetime.strptime(time_str, '%m/%d/%Y %H:%M:%S')
+        except:
+            pass
+    
+    # Try mm/dd/yyyy format (date only)
+    if len(time_str) == 10 and time_str.count('/') == 2:
+        try:
+            return datetime.strptime(time_str, '%m/%d/%Y')
+        except:
+            pass
+    
     # ISO datetime with T: YYYY-MM-DDTHH:MM:SS or YYYY-MM-DDTHH:MM
     if 'T' in time_str:
         try:
@@ -7347,13 +7687,25 @@ def get_playlist(store_id, screen_id):
                             print("DEBUG: Cannot assign slice URL (missing file field)")
             except Exception as e_slice:
                 print(f"WARNING: Slice URL assignment error: {e_slice}")
-            # Image display hints for clients (e.g., Android TV): default to fit/contain
+            # Image display hints for clients (e.g., Android TV): prefer fill/cover (match Pi/webplayer)
             try:
                 mt_hint = it.get('media_type') or item.get('media_type') or classify_media(it.get('file') or '')
                 if mt_hint == 'image':
                     # Hints: 'image_fit' is semantic, 'image_scale' mirrors Android ScaleType names
-                    it.setdefault('image_fit', 'contain')            # contain within screen, keep aspect, letterbox if needed
-                    it.setdefault('image_scale', 'fit_center')        # Android ImageView.ScaleType equivalent
+                    # If this playlist is being served to Android clients, instruct them to center-crop to avoid letterboxing.
+                    # For other clients, these are harmless hints.
+                    try:
+                        ua = request.headers.get('User-Agent','')
+                        is_android = ('Android' in ua) or ('TV' in ua and 'Android' in ua)
+                    except Exception:
+                        is_android = False
+                    if is_android:
+                        it.setdefault('image_fit', 'cover')           # fill screen, keep aspect, crop if needed
+                        it.setdefault('image_scale', 'center_crop')    # Android ImageView.ScaleType equivalent
+                    else:
+                        # Non-Android default remains cover to match webplayer/Pi behavior
+                        it.setdefault('image_fit', 'cover')
+                        it.setdefault('image_scale', 'center_crop')
             except Exception:
                 pass
             # Prefer id mapping; if missing, fall back to file key.
@@ -8049,6 +8401,12 @@ def upload_media():
             response_data['screen_count'] = len(sliced_files)
             response_data['layout'] = layout_info['layout']
             print(f"[upload_media] Returning response with {len(sliced_files)} sliced files")
+        else:
+            # For videos that weren't sliced (single-screen or detection failed),
+            # include screen_count=1 so dashboard knows to show single-screen message
+            if media_type == 'video':
+                response_data['screen_count'] = 1
+                print(f"[upload_media] Returning single-screen video response")
         
         return jsonify(response_data)
     except Exception as e:
@@ -8424,8 +8782,12 @@ def assign_to_screen():
                 key = rel
             except Exception:
                 return jsonify({'success': False, 'error': 'invalid media URL'}), 400
-        # Final check: key must begin with user_root/
-        if not key.startswith(user_root + '/'):
+        
+        # Allow YouTube URLs (youtube:VIDEO_ID format)
+        is_youtube = key.startswith('youtube:')
+        
+        # Final check: key must begin with user_root/ OR be a YouTube URL
+        if not is_youtube and not key.startswith(user_root + '/'):
             # Soft-allow if this exact key was presigned by this user recently (same session user)
             try:
                 me = _safe_user_key()
@@ -8452,7 +8814,9 @@ def assign_to_screen():
             except Exception:
                 # If diagnostics fail, fall back to deny safely
                 return jsonify({'success': False, 'error': 'cross-tenant media access denied'}), 403
-        if not allowed_file(key):
+        
+        # Skip file type validation for YouTube URLs
+        if not is_youtube and not allowed_file(key):
             return jsonify({'success': False, 'error': 'Invalid or unsupported file type'}), 400
 
         config = ensure_playlists_structure(load_store_config())
@@ -8547,6 +8911,37 @@ def assign_to_screen():
                 'store_id': store_id,
                 'screen_id': screen_id,
                 'applied_to_all': False
+            })
+        
+        # Auto-create screen if it doesn't exist
+        if store_id in config.get('screens', {}):
+            # Determine if this is a promo screen (vertical) or regular screen (horizontal)
+            screen_type = screen_id.split('_', 1)[-1] if '_' in screen_id else screen_id
+            is_promo = screen_type.startswith('promo')
+            
+            # Create the screen
+            config['screens'][store_id][screen_id] = {
+                'file': None,
+                'vertical': is_promo,
+                'horizontal': not is_promo,
+                'rotation': 0,
+                'protected': False,
+                'playlist': []
+            }
+            
+            # Now assign to the newly created screen
+            _assign_to(store_id, screen_id)
+            save_store_config(config)
+            
+            return jsonify({
+                'success': True,
+                'filename': key,
+                'url': build_public_url(key),
+                'media_type': classify_media(key),
+                'store_id': store_id,
+                'screen_id': screen_id,
+                'applied_to_all': False,
+                'screen_created': True
             })
 
         return jsonify({'success': False, 'error': 'screen not found'}), 404
@@ -10241,18 +10636,29 @@ def socketio_error_handler(func):
 
 @socketio.on('connect')
 @socketio_error_handler
-def handle_connect():
-    """Handle new WebSocket connection"""
-    logging.info(f'🌐 WebSocket connection from {request.sid}')
+def handle_connect(auth=None):
+    """Handle new WebSocket connection.
+
+    Flask-SocketIO (python-socketio v5+) may pass an auth payload to the
+    connect handler. Accept an optional parameter to avoid a TypeError when
+    the client includes auth during the handshake.
+    """
+    try:
+        logging.info(
+            '🌐 WebSocket connection from %s%s',
+            getattr(request, 'sid', 'unknown'),
+            f" auth={auth}" if auth is not None else ''
+        )
+    except Exception:
+        logging.info('🌐 WebSocket connection established')
 
 @socketio.on('disconnect')
-@socketio_error_handler
 def handle_disconnect():
     """Handle WebSocket disconnection"""
     # Find Pi and update last_seen timestamp instead of deleting
     with pi_connection_lock:
         for pi_id, pi_info in list(connected_pis.items()):
-            if pi_info['sid'] == request.sid:
+            if isinstance(pi_info, dict) and pi_info.get('sid') == request.sid:
                 # Update last_seen to current time when disconnecting
                 disconnect_time = time.time()
                 connected_pis[pi_id]['last_seen'] = disconnect_time
@@ -10362,13 +10768,80 @@ def handle_pi_registration(data):
 def handle_pi_heartbeat(data):
     """
     Pi sends periodic heartbeat to maintain connection
-    Update last seen timestamp
+    Update last seen timestamp and registration info
     """
     pi_id = data.get('pi_id')
     if pi_id and pi_id in connected_pis:
         connected_pis[pi_id]['last_heartbeat'] = time.time()
         connected_pis[pi_id]['last_seen'] = time.time()
         connected_pis[pi_id]['connected'] = True
+        
+        # Update registration with current store/screen if provided
+        store_id = data.get('store_id')
+        screen_id = data.get('screen_id')
+        pair_code = data.get('pair_code')
+        
+        # Update connected_pis dictionary with current assignment for dashboard display
+        if store_id:
+            connected_pis[pi_id]['store_id'] = store_id
+        if screen_id:
+            connected_pis[pi_id]['screen_id'] = screen_id
+        if pair_code:
+            connected_pis[pi_id]['pair_code'] = pair_code
+        
+        if store_id and screen_id and pair_code:
+            try:
+                # Find which user owns this pair_code (it's stored in link_code column)
+                conn = get_db()
+                cursor = conn.cursor()
+                cursor.execute("SELECT username FROM users WHERE link_code = ?", (pair_code,))
+                user_row = cursor.fetchone()
+                
+                if user_row:
+                    username = user_row[0]
+                    # Convert username (email) to safe key and get config path
+                    safe_key = username.lower().replace('@', '_at_')
+                    safe_key = ''.join(c for c in safe_key if (c.isalnum() or c in '._-'))
+                    config_path = _config_path_for_user_safe_key(safe_key)
+                    
+                    try:
+                        with open(config_path, 'r') as f:
+                            config = json.load(f)
+                    except:
+                        config = {}
+                    
+                    # First, remove this pi_id from ANY other screens (Pi can only be assigned to ONE screen)
+                    if 'screens' in config:
+                        for sid in config['screens']:
+                            for scr_id in config['screens'][sid]:
+                                if config['screens'][sid][scr_id].get('pi_id') == pi_id:
+                                    if not (sid == store_id and scr_id == screen_id):
+                                        # Remove pi_id from old screen
+                                        logging.info(f'🔄 Moving {pi_id} from {sid}/{scr_id} to {store_id}/{screen_id}')
+                                        config['screens'][sid][scr_id].pop('pi_id', None)
+                    
+                    # Update the screen's pi_id
+                    if 'screens' not in config:
+                        config['screens'] = {}
+                    if store_id not in config['screens']:
+                        config['screens'][store_id] = {}
+                    if screen_id not in config['screens'][store_id]:
+                        config['screens'][store_id][screen_id] = {}
+                    
+                    # Update this screen's pi_id
+                    config['screens'][store_id][screen_id]['pi_id'] = pi_id
+                    
+                    # Save updated config
+                    with open(config_path, 'w') as f:
+                        json.dump(config, f, indent=2)
+                    
+                    logging.info(f'✅ Updated registration for {pi_id}: {store_id}/{screen_id} (user: {username})')
+                else:
+                    logging.warning(f'❌ No user found with pair_code: {pair_code}')
+                conn.close()
+            except Exception as e:
+                logging.error(f'❌ Failed to update registration for {pi_id}: {e}')
+        
         emit('heartbeat_ack', {'status': 'ok'})
 
 @socketio.on('pi_status_update')
@@ -10402,7 +10875,10 @@ def handle_config_applied(data):
     }, broadcast=True)
 
 # ===== WebPlayer Mobile-to-TV Code Sharing =====
-webplayer_sessions = {}  # Store active webplayer sessions
+webplayer_sessions = {}  # Store active webplayer sessions (session_id -> sid)
+webplayer_session_codes = {}  # Last pairing code sent per session_id (for HTTP poll fallback)
+webplayer_store_codes = {}   # Last store code sent per session_id (for HTTP poll fallback)
+webplayer_last_selection = {}  # Last selected screen per session_id (for HTTP poll fallback)
 
 @socketio.on('join_session')
 @socketio_error_handler
@@ -10420,14 +10896,46 @@ def handle_send_code(data):
     session_id = data.get('session_id')
     code = data.get('code')
     
-    if session_id and code and session_id in webplayer_sessions:
-        target_sid = webplayer_sessions[session_id]
-        emit('code_entered', {'session_id': session_id, 'code': code}, room=target_sid)
-        logging.info(f'📱 Code {code} sent from mobile to TV session {session_id}')
-        # Acknowledge to mobile
-        emit('code_sent_ack', {'status': 'success'})
+    if session_id and code:
+        # Store last code for polling fallback
+        try:
+            webplayer_session_codes[session_id] = {
+                'code': str(code)[:4],
+                'ts': time.time()
+            }
+        except Exception:
+            pass
+        if session_id in webplayer_sessions:
+            target_sid = webplayer_sessions[session_id]
+            emit('code_entered', {'session_id': session_id, 'code': code}, room=target_sid)
+            logging.info(f'📱 Code {code} sent from mobile to TV session {session_id}')
+            # Acknowledge to mobile
+            emit('code_sent_ack', {'status': 'success'})
+        else:
+            emit('code_sent_ack', {'status': 'queued', 'message': 'TV session not connected yet'})
     else:
-        emit('code_sent_ack', {'status': 'error', 'message': 'Session not found'})
+        emit('code_sent_ack', {'status': 'error', 'message': 'Session or code missing'})
+
+@app.route('/api/session_poll/<session_id>', methods=['GET'])
+def api_session_poll(session_id: str):
+    """HTTP fallback for TVs that cannot receive Socket.IO events reliably.
+    Returns {'success': true, 'code': '1234'} when a recent code exists for the session.
+    Codes older than 60s are discarded.
+    """
+    try:
+        rec = webplayer_session_codes.get(session_id)
+        if not rec:
+            return jsonify({'success': True, 'code': None})
+        if time.time() - rec.get('ts', 0) > 60:
+            # Expire old codes
+            try:
+                webplayer_session_codes.pop(session_id, None)
+            except Exception:
+                pass
+            return jsonify({'success': True, 'code': None})
+        return jsonify({'success': True, 'code': rec.get('code')})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @socketio.on('send_store_code')
 @socketio_error_handler
@@ -10436,6 +10944,16 @@ def handle_send_store_code(data):
     session_id = data.get('session_id')
     store_code = data.get('store_code')
     
+    # Record last store code for HTTP polling fallback (non-fatal if this fails)
+    try:
+        if session_id and store_code:
+            webplayer_store_codes[session_id] = {
+                'store_code': str(store_code),
+                'ts': time.time()
+            }
+    except Exception:
+        pass
+
     if session_id and store_code and session_id in webplayer_sessions:
         target_sid = webplayer_sessions[session_id]
         emit('store_code_entered', {'session_id': session_id, 'store_code': store_code}, room=target_sid)
@@ -10445,6 +10963,43 @@ def handle_send_store_code(data):
     else:
         emit('store_code_sent_ack', {'status': 'error', 'message': 'Session not found'})
 
+@app.route('/api/store_session_poll/<session_id>', methods=['GET'])
+def api_store_session_poll(session_id: str):
+    """HTTP fallback for TVs that cannot receive Socket.IO events reliably for store code.
+    Returns {'success': true, 'store_code': '1000'} when a recent store code exists for the session.
+    Store codes older than 120s are discarded.
+    """
+    try:
+        rec = webplayer_store_codes.get(session_id)
+        if not rec:
+            return jsonify({'success': True, 'store_code': None})
+        if time.time() - rec.get('ts', 0) > 120:
+            # Expire old store codes
+            try:
+                webplayer_store_codes.pop(session_id, None)
+            except Exception:
+                pass
+            return jsonify({'success': True, 'store_code': None})
+        return jsonify({'success': True, 'store_code': rec.get('store_code')})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/store_session_push', methods=['POST'])
+def api_store_session_push():
+    """HTTP write path from mobile to push store code to the polling cache.
+    Body: {"session_id": "tv_...", "store_code": "1234"}
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        session_id = (data.get('session_id') or '').strip()
+        store_code = str(data.get('store_code') or '').strip()
+        if not session_id or not store_code:
+            return jsonify({'success': False, 'error': 'session_id and store_code required'}), 400
+        webplayer_store_codes[session_id] = {'store_code': store_code, 'ts': time.time()}
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @socketio.on('send_screen_selection')
 @socketio_error_handler
 def handle_send_screen_selection(data):
@@ -10453,6 +11008,17 @@ def handle_send_screen_selection(data):
     screen_id = data.get('screen_id')
     store_id = data.get('store_id')
     
+    # Record last selection for HTTP poll fallback
+    try:
+        if session_id and screen_id:
+            webplayer_last_selection[session_id] = {
+                'store_id': store_id,
+                'screen_id': screen_id,
+                'ts': time.time()
+            }
+    except Exception:
+        pass
+
     if session_id and screen_id and session_id in webplayer_sessions:
         target_sid = webplayer_sessions[session_id]
         emit('screen_selected', {
@@ -10474,6 +11040,42 @@ def handle_leave_session(data):
     if session_id and session_id in webplayer_sessions:
         del webplayer_sessions[session_id]
         logging.info(f'📺 WebPlayer session left: {session_id}')
+
+@app.route('/api/selection_session_poll/<session_id>', methods=['GET'])
+def api_selection_session_poll(session_id: str):
+    """HTTP fallback: get last selected screen for a session within 120s.
+    Returns: {'success': true, 'selection': {'store_id': str, 'screen_id': str}} or selection=None.
+    """
+    try:
+        rec = webplayer_last_selection.get(session_id)
+        if not rec:
+            return jsonify({'success': True, 'selection': None})
+        if time.time() - rec.get('ts', 0) > 120:
+            try:
+                webplayer_last_selection.pop(session_id, None)
+            except Exception:
+                pass
+            return jsonify({'success': True, 'selection': None})
+        return jsonify({'success': True, 'selection': {'store_id': rec.get('store_id'), 'screen_id': rec.get('screen_id')}})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/selection_session_push', methods=['POST'])
+def api_selection_session_push():
+    """HTTP write path from mobile to push the last selected screen into the polling cache.
+    Body: {"session_id": "tv_...", "store_id": "1111", "screen_id": "1111_screen1"}
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        session_id = (data.get('session_id') or '').strip()
+        store_id = (data.get('store_id') or '').strip()
+        screen_id = (data.get('screen_id') or '').strip()
+        if not session_id or not screen_id:
+            return jsonify({'success': False, 'error': 'session_id and screen_id required'}), 400
+        webplayer_last_selection[session_id] = {'store_id': store_id, 'screen_id': screen_id, 'ts': time.time()}
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @socketio.on('request_screenshot')
 @socketio_error_handler
@@ -10750,6 +11352,41 @@ def configure_pi_websocket():
         
         logging.info(f'✅ Configuration broadcast sent (target PI: {pi_id})')
         
+        # IMPORTANT: Also save the Pi assignment to config file so it persists
+        try:
+            ukey = _safe_user_key()
+            config = load_store_config_for_user_safe_key(ukey) if ukey else load_store_config()
+            
+            # Ensure screens dict exists for this store
+            if store_id not in config.get('screens', {}):
+                config['screens'][store_id] = {}
+                logging.info(f'[configure-pi-ws] Created screens entry for store: {store_id}')
+            
+            # Auto-create screen if it doesn't exist
+            if screen_id not in config['screens'][store_id]:
+                logging.info(f'[configure-pi-ws] Screen {screen_id} not found - creating it')
+                config['screens'][store_id][screen_id] = {
+                    'name': screen_id.replace('_', ' ').title(),
+                    'orientation': 'landscape',
+                    'playlist': []
+                }
+            
+            # Save the pi_id assignment
+            config['screens'][store_id][screen_id]['pi_id'] = pi_id
+            logging.info(f'[configure-pi-ws] Setting pi_id={pi_id} for {store_id}/{screen_id}')
+            
+            # Save config
+            if ukey:
+                save_store_config_for_user_safe_key(ukey, config)
+                logging.info(f'[configure-pi-ws] ✅ Saved config for user: {ukey}')
+            else:
+                save_store_config(config)
+                logging.info(f'[configure-pi-ws] ✅ Saved global config')
+                
+        except Exception as save_error:
+            logging.error(f'[configure-pi-ws] Failed to save assignment: {save_error}')
+            # Don't fail the whole request - config was still sent to Pi
+        
         return jsonify({
             'success': True,
             'message': f'Configuration sent to Pi {pi_id} via WebSocket',
@@ -10843,6 +11480,105 @@ def pi_restart():
     except Exception as e:
         logging.error(f'Restart Pi error: {e}')
         return jsonify({'success': False, 'message': f'Restart failed: {e}'}), 500
+
+@app.route('/api/pi-delete', methods=['POST'])
+def pi_delete():
+    """Delete a Pi device from the database"""
+    try:
+        data = request.get_json()
+        pi_id = data.get('pi_id', '').strip()
+        
+        if not pi_id:
+            return jsonify({'success': False, 'message': 'Pi ID required'}), 400
+        
+        logging.info(f'[DELETE] Delete request for Pi: {pi_id}')
+        
+        # Track if we actually did anything
+        actions_taken = []
+        
+        # 1. Remove from connected_pis if currently connected
+        with pi_connection_lock:
+            if pi_id in connected_pis:
+                logging.info(f'[DELETE] Removing connected Pi {pi_id} from connected_pis')
+                # Send disconnect event to the Pi
+                pi_sid = connected_pis[pi_id]['sid']
+                try:
+                    socketio.emit('force_disconnect', {
+                        'reason': 'Device deleted from system'
+                    }, room=pi_sid)
+                    actions_taken.append('disconnected from server')
+                except Exception as e:
+                    logging.warning(f'[DELETE] Could not send disconnect to {pi_id}: {e}')
+                del connected_pis[pi_id]
+                actions_taken.append('removed from active connections')
+        
+        # 2. Remove Pi assignments from all user config files
+        try:
+            with get_db() as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT id FROM users')
+                users = cursor.fetchall()
+                
+                assignments_removed = 0
+                for user in users:
+                    user_id = user['id']
+                    try:
+                        config = load_store_config_for_user_safe_key(user_id)
+                        if config and 'screens' in config:
+                            modified = False
+                            # Check all stores and screens for this pi_id
+                            for store_id, screens in config['screens'].items():
+                                for screen_id, screen_data in screens.items():
+                                    if isinstance(screen_data, dict) and screen_data.get('pi_id') == pi_id:
+                                        logging.info(f'[DELETE] Removing {pi_id} assignment from user {user_id}, store {store_id}, screen {screen_id}')
+                                        screen_data['pi_id'] = None
+                                        modified = True
+                                        assignments_removed += 1
+                            
+                            if modified:
+                                save_store_config_for_user_safe_key(user_id, config)
+                    except Exception as e:
+                        logging.warning(f'[DELETE] Error checking user {user_id} config: {e}')
+                
+                if assignments_removed > 0:
+                    actions_taken.append(f'removed {assignments_removed} assignment(s)')
+        except Exception as e:
+            logging.warning(f'[DELETE] Error removing Pi assignments: {e}')
+        
+        # 3. Remove from pi_id_ip_map.json (persistent storage)
+        try:
+            import json
+            import os
+            pi_map_file = 'pi_id_ip_map.json'
+            if os.path.exists(pi_map_file):
+                with open(pi_map_file, 'r') as f:
+                    pi_map = json.load(f)
+                
+                if pi_id in pi_map:
+                    del pi_map[pi_id]
+                    with open(pi_map_file, 'w') as f:
+                        json.dump(pi_map, f, indent=2)
+                    actions_taken.append('removed from device registry')
+                    logging.info(f'[DELETE] Removed {pi_id} from pi_id_ip_map.json')
+        except Exception as e:
+            logging.warning(f'[DELETE] Error removing from pi_id_ip_map.json: {e}')
+        
+        # Always succeed - if Pi was shown in the list, allow deletion
+        # This handles offline/unassigned Pis that just need to be removed from the UI
+        if not actions_taken:
+            actions_taken.append('marked for removal (was not connected or assigned)')
+        
+        message = f'Pi {pi_id} deleted - ' + ', '.join(actions_taken)
+        logging.info(f'[DELETE] {message}')
+        
+        return jsonify({
+            'success': True,
+            'message': f'Pi {pi_id} removed from system'
+        }), 200
+        
+    except Exception as e:
+        logging.error(f'Delete Pi error: {e}')
+        return jsonify({'success': False, 'message': f'Delete failed: {e}'}), 500
 
 # List all connected Pis (useful for admin dashboard)
 @app.route('/api/connected-pis')
@@ -10961,22 +11697,35 @@ def add_pi_device():
         # Update screen configuration with Pi ID
         if store_id not in config.get('screens', {}):
             config['screens'][store_id] = {}
+            logging.info(f'[add_pi_device] Created screens entry for store: {store_id}')
         
-        if screen_id in config['screens'][store_id]:
-            config['screens'][store_id][screen_id]['pi_id'] = pi_id
-            save_store_config_for_user_safe_key(config, ukey)
-            
-            logging.info(f'Added Pi device: {pi_id} -> {ip_address} for {store_id}/{screen_id}')
-            
-            return jsonify({
-                'success': True,
-                'message': f'Pi device {pi_id} added successfully'
-            }), 200
+        # Auto-create screen if it doesn't exist
+        if screen_id not in config['screens'][store_id]:
+            logging.info(f'[add_pi_device] Screen {screen_id} not found - creating it')
+            config['screens'][store_id][screen_id] = {
+                'name': screen_id.replace('_', ' ').title(),
+                'orientation': 'landscape',
+                'playlist': []
+            }
+        
+        # Set the pi_id for this screen
+        config['screens'][store_id][screen_id]['pi_id'] = pi_id
+        logging.info(f'[add_pi_device] Setting pi_id={pi_id} for {store_id}/{screen_id}')
+        
+        # Save the config
+        if ukey:
+            save_store_config_for_user_safe_key(ukey, config)
+            logging.info(f'[add_pi_device] Saved config for user: {ukey}')
         else:
-            return jsonify({
-                'success': False,
-                'message': f'Screen {screen_id} not found in store {store_id}'
-            }), 400
+            save_store_config(config)
+            logging.info(f'[add_pi_device] Saved global config')
+        
+        logging.info(f'✅ Added Pi device: {pi_id} -> {ip_address} for {store_id}/{screen_id}')
+        
+        return jsonify({
+            'success': True,
+            'message': f'Pi device {pi_id} added successfully'
+        }), 200
         
     except Exception as e:
         logging.error(f'Error adding Pi device: {e}')

@@ -78,6 +78,12 @@
             function fallbackToOrigin(img, original){
                 try{
                     if(!img) return;
+                    // Skip fallback for YouTube videos - they should be rendered as iframes, not images
+                    const origStr = String(original || '');
+                    if (origStr.includes('youtube:')) {
+                        console.log('[img-fallback] Skipping YouTube URL:', original);
+                        return;
+                    }
                     const cur = original || img.currentSrc || img.src || '';
                     const key = _extractKey(cur);
                     const step = parseInt(img.dataset.fallbackStep || '0', 10);
@@ -1422,7 +1428,7 @@
     .playlist-row { display:flex; flex-direction:column; position:relative; background:#fff; border:1px solid #dcdfe3; border-radius:6px; padding:6px 8px; gap:4px; }
     .playlist-row .pl-top { display:grid; grid-template-columns:60px 1fr 1fr auto; align-items:center; gap:8px; }
     .playlist-row .pl-top .pl-thumb { width:60px; height:40px; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:4px; background:#f3f4f5; }
-    .playlist-row .pl-top .pl-thumb img, .playlist-row .pl-top .pl-thumb video { max-width:100%; max-height:100%; object-fit:cover; }
+    .playlist-row .pl-top .pl-thumb img, .playlist-row .pl-top .pl-thumb video, .playlist-row .pl-top .pl-thumb iframe { max-width:100%; max-height:100%; object-fit:cover; }
     .playlist-row .pl-top .pl-time { display:flex; flex-direction:column; gap:2px; }
     .playlist-row .pl-top .pl-time label { font-size:9px; font-weight:600; letter-spacing:.4px; text-transform:uppercase; color:#555; }
     .playlist-row .pl-top input.tp-input { font-size:11px; padding:4px 6px; border:1px solid #cfd3d7; border-radius:4px; background:#fff; cursor:pointer; }
@@ -1473,7 +1479,7 @@
     .playlist-row.apple .pl-duration { flex:0 0 30px; display:flex; flex-direction:column; align-items:center; }
     .playlist-row.apple .pl-duration label { font-size:7px; font-weight:600; letter-spacing:.3px; }
     .playlist-row.apple .pl-duration input { width:26px; padding:2px 2px; font-size:9px; text-align:center; }
-    .playlist-row.apple .pl-thumb img, .playlist-row.apple .pl-thumb video { object-fit:cover; }
+    .playlist-row.apple .pl-thumb img, .playlist-row.apple .pl-thumb video, .playlist-row.apple .pl-thumb iframe { object-fit:cover; }
     @media (max-width: 480px) { .playlist-row.apple { gap:3px; padding:3px 4px; } .playlist-row.apple .pl-time { min-width:42px; } .playlist-row.apple .pl-switch { width:28px; height:13px; } .playlist-row.apple .pl-switch.on:before { transform:translateX(14px); } }
     /* Compact state styles (override removed larger styles) */
     /* Removed extra top margin between consecutive playlist rows per request */
@@ -1756,9 +1762,6 @@
                         <button class="add-screen-btn" onclick="addNewScreen('screen')">
                             ➕ Add Screen
                         </button>
-                        <button id="add-sync-screen-btn" class="add-screen-btn" style="background:#555;" onclick="addSyncFollower()" title="Add follower screen to existing sync group (create base via Sync Upload if disabled)" disabled>
-                            🔗 Add Sync Screen
-                        </button>
                     </div>
                 </div>
                 <div class="screens-grid" id="screens-grid">
@@ -1912,6 +1915,15 @@
         document.getElementById('piId').focus();
         // Close drawer if open
         toggleDrawer(false);
+        
+        // If pairing code is already filled, trigger store fetch
+        setTimeout(() => {
+            const pairCodeInput = document.getElementById('piPairCode');
+            if (pairCodeInput && pairCodeInput.value && pairCodeInput.value.length === 4) {
+                console.log('🔄 Pairing code pre-filled, auto-fetching stores...');
+                showStoreStep();
+            }
+        }, 100);
     }
     
     // NEW Pi Device Manager Dashboard
@@ -2271,7 +2283,11 @@
                         </button>
                     </div>`;
                 
-                // Don't auto-close - let user close manually with the Close button
+                // Reload page after 2 seconds to refresh Pi assignment display
+                setTimeout(() => {
+                    console.log('🔄 Reloading page to show updated Pi assignment...');
+                    window.location.reload();
+                }, 2000);
             } else {
                 console.log('❌ Configuration failed:', result.message);
                 statusDiv.innerHTML = `<div style="color:#d32f2f; padding:10px; background:#ffebee; border-radius:8px;">❌ ${result.message || 'Configuration failed'}</div>`;
@@ -3071,6 +3087,7 @@
                     
                     // Add delete button if it doesn't exist (only for single-store uploads)
                     if (!data.applied_to_all) {
+                        /* Delete button removed per user request
                         const buttonContainer = input.parentElement;
                         let deleteBtn = buttonContainer.querySelector('.delete-btn');
                         if (!deleteBtn) {
@@ -3084,6 +3101,7 @@
                             const uploadBtn = buttonContainer.querySelector('.upload-btn');
                             uploadBtn.insertAdjacentElement('afterend', deleteBtn);
                         }
+                        */
                     }
                 } else {
                     let msg = 'Upload failed';
@@ -3357,9 +3375,18 @@
                 
                 <div class="screen-preview ${previewClass}" id="preview-${screenId}">
                     ${screenData.file ? (()=>{
+                        const raw=screenData.file;
+                        // Check for YouTube format
+                        if(String(raw).startsWith('youtube:')){
+                            const videoId = String(raw).slice(8); // Remove 'youtube:' prefix
+                            return `<div class='preview-item'>\
+<iframe src=\"https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}\" \
+style=\"width:100%;height:100%;border:none;\" \
+allow=\"autoplay; encrypted-media\" \
+allowfullscreen></iframe></div>`;
+                        }
                         const ext=(screenData.file.split('.').pop()||'').toLowerCase();
                         const videoExt=['mp4','webm','ogg','mov','avi','mkv','m4v'];
-                        const raw=screenData.file;
                         const isAbs=/^https?:\/\//i.test(String(raw));
                         const bust=Date.now();
                         if(videoExt.includes(ext)){
@@ -3396,12 +3423,8 @@
                 
                 <div class="button-row" style="justify-content:center; flex-wrap: nowrap; gap:6px; align-items:center; width:100%;">
                     <button class="upload-btn" onclick="openReplaceModal('${screenId}','SINGLE')" style="flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 10px; font-size:clamp(10px, 2vw, 12px);">Schedule</button>
-                    <button class="upload-btn" onclick="openSyncModal('${screenId}')" style="flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 10px; font-size:clamp(10px, 2vw, 12px); background:#495057;">Sync Upload</button>
                     <button class="upload-btn" onclick="openAutoSliceModal('${screenId}')" style="flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 10px; font-size:clamp(10px, 2vw, 12px); background:#28a745;" title="Auto-slice multi-screen videos">✂️ Auto-Slice</button>
-                    ${screenData.file ? 
-                        `<button class=\"delete-btn\" onclick=\"deleteFile('${screenId}')\" title=\"Delete current file\" style=\"flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 10px; font-size:clamp(10px, 2vw, 12px);\">🗑️ Delete</button>` : 
-                        ''
-                    }
+                    <button class="upload-btn" onclick="openYouTubeModal('${screenId}')" title="Add YouTube video to schedule" style="flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 10px; font-size:clamp(10px, 2vw, 12px); background:#FF0000;">▶️ YouTube</button>
                     <button class="rotate-btn" type="button" onclick="rotateScreen('${screenId}')" title="Rotate image 90°" style="flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 10px; font-size:clamp(10px, 2vw, 12px);">⤾ Rotate</button>
                     <span id="rotation-indicator-${screenId}" class="rotation-indicator rotate-${rotation}" title="Current rotation" style="flex:0 0 18px; width:18px; height:18px;"></span>
                     <input type="file" class="file-input" id="file-${screenId}" style="display:none;"
@@ -4789,12 +4812,25 @@
             }
         }
         function toggleItemWeekday(screenId,itemId,code,el){
+            console.log(`[SCHEDULE] toggleItemWeekday called: screen=${screenId}, item=${itemId}, code=${code}`);
             const parent = document.getElementById(`wd-primary-${screenId}-${itemId}`);
-            if(!parent) return;
+            if(!parent){ console.error('[SCHEDULE] Parent element not found'); return; }
             const btns=[...parent.querySelectorAll('.weekday-btn')];
             if(el){ el.classList.toggle('active'); }
             const days=btns.filter(b=>b.classList.contains('active')).map(b=>b.getAttribute('data-day'));
-            fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({days:days})}).then(r=>r.json()).then(d=>{ if(!d.success){ alert('Failed to update days'); } });
+            console.log(`[SCHEDULE] Selected days:`, days);
+            console.log(`[SCHEDULE] Sending PATCH to: /playlist/item/${currentStoreId}/${screenId}/${itemId}`);
+            fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({days:days})})
+                .then(r=>r.json())
+                .then(d=>{ 
+                    console.log('[SCHEDULE] Server response:', d);
+                    if(!d.success){ alert('Failed to update days: ' + (d.error || 'unknown error')); }
+                    else { console.log('[SCHEDULE] ✅ Days updated successfully!'); }
+                })
+                .catch(err=>{ 
+                    console.error('[SCHEDULE] ERROR saving days:', err); 
+                    alert('Network error saving schedule: ' + err.message); 
+                });
         }
         function addScheduleWindow(screenId,itemId){
                     fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}/schedule`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({start:null,end:null})})
@@ -4827,7 +4863,20 @@
         // Always render a lightweight, reliable thumbnail for playlist tiles.
         // - Images: use /thumb for local files; absolute URLs get cache-busted and fallback to origin on error.
         // - Videos: prefer a generated /vthumb still by filename; if missing, fall back to a static placeholder.
+        // - YouTube: show embedded playing video preview
         if (!file) return '<div style="font-size:10px; color:#888;">N/A</div>';
+        
+        console.log('[thumbForFile] Called with file:', file, 'Type:', typeof file);
+        
+        // Check for YouTube format - handle both raw format and CDN-prefixed format
+        const fileStr = String(file);
+        const youtubeMatch = fileStr.match(/youtube:([a-zA-Z0-9_-]{11})/);
+        if (youtubeMatch) {
+            const videoId = youtubeMatch[1];
+            console.log('[thumbForFile] YouTube detected:', videoId, 'Original file:', file);
+            return `<iframe src="https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&controls=0&modestbranding=1" style="width:100%; height:100%; border:none; object-fit:cover;" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
+        }
+        
         const isAbs = /^https?:\/\//i.test(String(file));
         const clean = String(file).split('?')[0];
         const ext = (clean.includes('.') ? clean.split('.').pop() : '').toLowerCase();
@@ -5251,6 +5300,40 @@
                 if(!st.items.length){ stopPreview(screenId); return; }
                 if(st.index >= st.items.length) st.index=0;
                 const item = st.items[st.index];
+                
+                // Check for YouTube format first - handle both direct and CDN-prefixed URLs
+                const fileStr = String(item.file || '');
+                const youtubeMatch = fileStr.match(/youtube:([a-zA-Z0-9_-]{11})/);
+                if (youtubeMatch) {
+                    const videoId = youtubeMatch[1];
+                    const iframe = document.createElement('iframe');
+                    iframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}`;
+                    iframe.style.width = '100%';
+                    iframe.style.height = '100%';
+                    iframe.style.border = 'none';
+                    iframe.allow = 'autoplay; encrypted-media';
+                    iframe.allowFullscreen = true;
+                    
+                    const wrap = document.createElement('div');
+                    wrap.className = 'preview-item fading-in';
+                    wrap.appendChild(iframe);
+                    
+                    const existing = Array.from(preview.querySelectorAll('.preview-item'));
+                    preview.appendChild(wrap);
+                    requestAnimationFrame(() => {
+                        wrap.classList.remove('fading-in');
+                        existing.forEach(el => { try { el.style.opacity = '0'; setTimeout(() => el.remove(), 220); } catch (_) {} });
+                    });
+                    
+                    let dur = parseInt(item.duration, 10);
+                    if (isNaN(dur) || dur < 1) dur = 10;
+                    if (dur > 30) dur = 30;
+                    st.nextAt = Date.now() + dur * 1000;
+                    st.index++;
+                    st.timer = setTimeout(() => runPreview(screenId), dur * 1000);
+                    return;
+                }
+                
                 const ext = (item.file||'').split('.').pop().toLowerCase();
                 const isVideo = ['mp4','webm','ogg','mov','avi','mkv','m4v'].includes(ext);
                 // Determine current rotation from in-memory data so it persists across item changes
@@ -5527,6 +5610,12 @@
                                         <div class="rp-grid" id="rp-grid-images"></div>
                                         <div class="rp-subtitle" style="margin-top:14px;">Videos</div>
                                         <div class="rp-grid" id="rp-grid-videos"></div>
+                                        <div class="rp-subtitle" style="margin-top:14px;">YouTube Video</div>
+                                        <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:6px 0 2px;">
+                                            <input id="rp-youtube-url" type="url" placeholder="Paste YouTube URL or video ID" style="flex:1; min-width:240px; padding:8px 10px; border:1px solid #dcdfe3; border-radius:6px; font-size:12px;">
+                                            <button class="btn" onclick="rpReplaceWithYouTube()" style="background:#FF0000; color:white;">▶️ Use YouTube</button>
+                                        </div>
+                                        <div class="rp-help">Paste a YouTube URL (e.g., https://youtube.com/watch?v=...) or just the video ID</div>
                                         <div class="rp-subtitle" style="margin-top:14px;">Import from link</div>
                                         <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:6px 0 2px;">
                                             <input id="rp-import-url" type="url" placeholder="Paste Dropbox / Google Drive / OneDrive share link" style="flex:1; min-width:240px; padding:8px 10px; border:1px solid #dcdfe3; border-radius:6px; font-size:12px;">
@@ -5769,6 +5858,56 @@
                     refreshLibrary();
                 }catch(e){ alert('Import failed: '+ e.message); }
             }
+            
+            async function rpReplaceWithYouTube(){
+                try{
+                    if(!rpCtx || !rpCtx.screenId || !rpCtx.itemId){
+                        alert('No item selected to replace');
+                        return;
+                    }
+                    
+                    const inp = document.getElementById('rp-youtube-url');
+                    const urlInput = (inp && inp.value || '').trim();
+                    if(!urlInput){ 
+                        alert('Please enter a YouTube URL or video ID'); 
+                        return; 
+                    }
+                    
+                    // Extract video ID from URL or use as-is if it's just an ID
+                    let videoId = urlInput;
+                    const youtubeRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+                    const match = urlInput.match(youtubeRegex);
+                    if (match && match[1]) {
+                        videoId = match[1];
+                    }
+                    
+                    // Create YouTube URL marker
+                    const youtubeUrl = `youtube:${videoId}`;
+                    
+                    // Update the playlist item with the YouTube URL
+                    const response = await fetch(`/playlist/item/${currentStoreId}/${rpCtx.screenId}/${rpCtx.itemId}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ file: youtubeUrl })
+                    });
+                    
+                    const result = await response.json();
+                    if (result.success) {
+                        inp.value = '';
+                        showMessage('✅ YouTube video set for this item!', '#28a745');
+                        closeReplaceModal();
+                        // Refresh both the playlist and reload the entire screen display
+                        await refreshPlaylist(rpCtx.screenId);
+                        loadScreensForStore(currentStoreId);
+                    } else {
+                        alert('Failed to update item: ' + (result.error || 'Unknown error'));
+                    }
+                } catch (error) {
+                    console.error('Error replacing with YouTube:', error);
+                    alert('Failed to set YouTube video. Please try again.');
+                }
+            }
+            
             function createFolderPrompt(){
                 const name = prompt('New folder name (letters, numbers, space, _, -, .):');
                                 if(!name){ return; }
@@ -5929,10 +6068,12 @@
                         const parsedAssign = await readJsonOrText(r);
                         const z = parsedAssign.json || { success:false, error: (parsedAssign.text||'').substring(0,200) };
                         if(!z.success) throw new Error('Assign failed: ' + (z.error || 'unknown'));
-                        // Clear progress and close
+                        // Clear progress and reset UI, but DON'T close modal
                         try{ resetRpUploadUI(); }catch{}
-                        closeReplaceModal();
+                        // Refresh the playlist to show the newly uploaded item
                         refreshPlaylist(sid);
+                        // Show success message
+                        alert('File uploaded successfully!');
                     } else {
                         const r = await fetch(`/playlist/item/${currentStoreId}/${sid}/${iid}`, {
                             method:'PATCH', headers:{ 'Content-Type':'application/json' },
@@ -6058,6 +6199,99 @@
             }
             function openSyncModal(screenId){ ensureSyncModal(); window.__syncTargetScreen = screenId; document.getElementById('sync-overlay').style.display='flex'; refreshSyncLibrary(); }
             function closeSyncModal(){ const ov=document.getElementById('sync-overlay'); if(ov) ov.style.display='none'; }
+            
+            // ============================================
+            // YOUTUBE VIDEO MODAL
+            // ============================================
+            let youtubeTargetScreen = null;
+            
+            function openYouTubeModal(screenId) {
+                youtubeTargetScreen = screenId;
+                document.getElementById('youtubeModal').style.display = 'flex';
+                document.getElementById('youtubeUrl').value = '';
+                document.getElementById('youtubeDuration').value = '30';
+                document.getElementById('youtubeUrl').focus();
+            }
+            
+            function closeYouTubeModal() {
+                document.getElementById('youtubeModal').style.display = 'none';
+                youtubeTargetScreen = null;
+            }
+            
+            async function addYouTubeVideo() {
+                const urlInput = document.getElementById('youtubeUrl').value.trim();
+                const duration = parseInt(document.getElementById('youtubeDuration').value) || 30;
+                
+                if (!urlInput) {
+                    alert('Please enter a YouTube URL or video ID');
+                    return;
+                }
+                
+                if (!youtubeTargetScreen) {
+                    alert('No screen selected');
+                    return;
+                }
+                
+                // Extract video ID from URL or use as-is if it's just an ID
+                let videoId = urlInput;
+                const youtubeRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+                const match = urlInput.match(youtubeRegex);
+                if (match && match[1]) {
+                    videoId = match[1];
+                }
+                
+                // Create YouTube embed URL - use a special marker so backend knows it's YouTube
+                const youtubeUrl = `youtube:${videoId}`;
+                
+                try {
+                    // Use assign_to_screen which will create a new playlist item
+                    // The filename will be the YouTube URL marker
+                    const response = await fetch('/assign_to_screen', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            store_id: currentStoreId,
+                            screen_id: youtubeTargetScreen,
+                            filename: youtubeUrl
+                        })
+                    });
+                    
+                    const result = await response.json();
+                    if (result.success) {
+                        // Now update the newly created item with duration
+                        // The assign_to_screen creates an item, we need to update its duration
+                        await refreshPlaylist(youtubeTargetScreen);
+                        
+                        // Get the playlist to find the new item
+                        const playlistResponse = await fetch(`/playlist/${currentStoreId}/${youtubeTargetScreen}?skip_schedule_filter=1&_=${Date.now()}`, { cache: 'no-store' });
+                        const playlistData = await playlistResponse.json();
+                        
+                        if (playlistData.success && playlistData.playlist && playlistData.playlist.length > 0) {
+                            // Find the YouTube item we just added
+                            const youtubeItem = playlistData.playlist.find(item => item.file && item.file.includes(videoId));
+                            
+                            if (youtubeItem && duration !== 10) {
+                                // Update duration if not default
+                                await fetch(`/playlist/item/${currentStoreId}/${youtubeTargetScreen}/${youtubeItem.id}`, {
+                                    method: 'PATCH',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ duration: duration })
+                                });
+                            }
+                        }
+                        
+                        showMessage(`YouTube video added to ${youtubeTargetScreen}!`, '#28a745');
+                        closeYouTubeModal();
+                        loadScreensForStore(currentStoreId);
+                    } else {
+                        alert('Failed to add YouTube video: ' + (result.error || 'Unknown error'));
+                    }
+                } catch (error) {
+                    console.error('Error adding YouTube video:', error);
+                    alert('Failed to add YouTube video. Please try again.');
+                }
+            }
+            
             async function refreshSyncLibrary(){
                 const cont = document.getElementById('sync-lib'); if(!cont) return; cont.innerHTML = '<div style="font-size:12px;color:#666;">Loading…</div>';
                 try{
@@ -7358,12 +7592,15 @@
         script.src = 'https://cdn.socket.io/4.5.4/socket.io.min.js';
         script.onload = function() {
             // Initialize Socket.IO connection with polling only (Cloudflare compatible)
-            socket = io({
+            // Connect to same origin (handles both direct IP and domain access)
+            const socketUrl = window.location.origin;
+            socket = io(socketUrl, {
                 transports: ['polling'],  // Use polling only, no WebSocket upgrade
                 upgrade: false,            // Disable WebSocket upgrade
                 reconnection: true,
                 reconnectionDelay: 1000,
-                reconnectionAttempts: 5
+                reconnectionAttempts: 5,
+                path: '/socket.io/'       // Explicit Socket.IO path
             });
             
             socket.on('connect', function() {
@@ -7824,6 +8061,36 @@
                     <button type="button" class="btn-secondary" onclick="closeRemotePiManager()" style="padding: 10px 20px; border-radius: 8px;">Close</button>
                 </div>
                     </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- YouTube Video Modal -->
+    <div id="youtubeModal" class="modal" style="display:none;">
+        <div class="modal-content" style="max-width:600px;">
+            <div class="modal-header">
+                <h3>▶️ Add YouTube Video</h3>
+                <button type="button" class="close" onclick="closeYouTubeModal()">&times;</button>
+            </div>
+            <div style="padding:20px;">
+                <p style="margin-bottom:15px; color:#666;">Paste a YouTube video URL or video ID to add it to the schedule.</p>
+                
+                <div class="form-group">
+                    <label for="youtubeUrl">YouTube URL or Video ID</label>
+                    <input type="text" id="youtubeUrl" placeholder="https://www.youtube.com/watch?v=... or video ID" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; font-size:14px;">
+                    <small style="color:#666; display:block; margin-top:5px;">Examples: https://www.youtube.com/watch?v=dQw4w9WgXcQ or dQw4w9WgXcQ</small>
+                </div>
+                
+                <div class="form-group" style="margin-top:15px;">
+                    <label for="youtubeDuration">Duration (seconds)</label>
+                    <input type="number" id="youtubeDuration" value="30" min="5" max="3600" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; font-size:14px;">
+                    <small style="color:#666; display:block; margin-top:5px;">How long to display this video in the playlist rotation</small>
+                </div>
+                
+                <div style="margin-top:20px; display:flex; gap:10px; justify-content:flex-end;">
+                    <button type="button" class="btn-secondary" onclick="closeYouTubeModal()">Cancel</button>
+                    <button type="button" class="btn-primary" onclick="addYouTubeVideo()" style="background:#FF0000;">Add to Schedule</button>
                 </div>
             </div>
         </div>
