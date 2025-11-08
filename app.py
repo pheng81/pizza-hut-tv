@@ -5426,8 +5426,29 @@ def pi_manager():
         # Calculate statistics
         total_stores = len(config.get('stores', []))
         total_screens = sum(len(screens) for screens in config.get('screens', {}).values())
-        online_count = len([p for p in pi_devices if p['status'] == 'online'])
-        offline_count = len(pi_devices) - online_count
+        
+        # Count online Pi devices
+        pi_online_count = len([p for p in pi_devices if p['status'] == 'online'])
+        
+        # Count online Android TV devices
+        android_tv_online_count = 0
+        ANDROID_TV_OFFLINE_TIMEOUT = 120
+        with android_tv_lock:
+            for device_id, tv_data in connected_android_tvs.items():
+                # Only count devices for current user
+                if ukey and tv_data.get('user_key') != ukey:
+                    continue
+                last_seen_timestamp = tv_data.get('last_seen')
+                if last_seen_timestamp and isinstance(last_seen_timestamp, (int, float)):
+                    time_since_last_seen = current_time - last_seen_timestamp
+                    if time_since_last_seen < ANDROID_TV_OFFLINE_TIMEOUT:
+                        android_tv_online_count += 1
+        
+        # Total online = Pi devices + Android TV devices
+        online_count = pi_online_count + android_tv_online_count
+        
+        # Offline = all screens defined in config minus those currently online
+        offline_count = total_screens - online_count
         
         # Compute user info for header menu
         try:
@@ -5598,6 +5619,182 @@ def get_android_tv_status():
         return jsonify({'devices': devices})
     except Exception as e:
         logging.error(f"Error in get_android_tv_status: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/all_screens_status')
+@login_required
+def get_all_screens_status():
+    """API endpoint to get ALL screens from config with their online/offline status"""
+    try:
+        import time as time_module
+        import json
+        from datetime import datetime
+        
+        # Get user-specific config
+        ukey = _safe_user_key()
+        config = load_store_config_for_user_safe_key(ukey) if ukey else load_store_config()
+        
+        PI_OFFLINE_TIMEOUT = 120
+        ANDROID_TV_OFFLINE_TIMEOUT = 120
+        current_time = time_module.time()
+        
+        # Build a map of which screens are online
+        online_screens = {}  # {store_id: {screen_id: device_info}}
+        
+        # Check Pi devices
+        try:
+            with open('pi_id_ip_map.json', 'r') as f:
+                pi_map = json.load(f)
+        except Exception:
+            pi_map = {}
+        
+        all_pi_ids = set(list(connected_pis.keys()) + list(pi_map.keys()))
+        
+        for pi_id in all_pi_ids:
+            # Check if Pi is online
+            last_seen_timestamp = None
+            if pi_id in connected_pis:
+                last_seen_timestamp = connected_pis[pi_id].get('last_seen')
+            elif pi_id in pi_map and isinstance(pi_map[pi_id], dict):
+                last_seen_timestamp = pi_map[pi_id].get('last_seen')
+            
+            is_online = False
+            ip_address = 'Unknown'
+            
+            if last_seen_timestamp and isinstance(last_seen_timestamp, (int, float)):
+                time_since_last_seen = current_time - last_seen_timestamp
+                is_online = time_since_last_seen < PI_OFFLINE_TIMEOUT
+                last_seen_formatted = datetime.fromtimestamp(last_seen_timestamp).strftime('%Y-%m-%d %I:%M:%S %p')
+            else:
+                last_seen_formatted = 'Never'
+            
+            # Get IP
+            if pi_id in pi_map:
+                pi_data = pi_map[pi_id]
+                if isinstance(pi_data, dict):
+                    ip_address = pi_data.get('ip', 'Unknown')
+                elif isinstance(pi_data, str):
+                    ip_address = pi_data
+            if ip_address == 'Unknown' and pi_id in connected_pis:
+                ip_address = connected_pis[pi_id].get('ip', 'Unknown')
+            
+            # Find which screen this Pi is assigned to
+            assignment_found = False
+            
+            # First check heartbeat data
+            if pi_id in connected_pis:
+                store_id = connected_pis[pi_id].get('store_id')
+                screen_id = connected_pis[pi_id].get('screen_id')
+                if store_id and screen_id:
+                    if store_id not in online_screens:
+                        online_screens[store_id] = {}
+                    online_screens[store_id][screen_id] = {
+                        'device_type': 'pi',
+                        'device_id': pi_id,
+                        'is_online': is_online,
+                        'last_seen': last_seen_formatted,
+                        'ip': ip_address
+                    }
+                    assignment_found = True
+            
+            # Check config if not found in heartbeat
+            if not assignment_found:
+                for store in config.get('stores', []):
+                    store_id = store.get('id')
+                    for screen_id, screen_data in config.get('screens', {}).get(store_id, {}).items():
+                        if screen_data.get('pi_id') == pi_id:
+                            if store_id not in online_screens:
+                                online_screens[store_id] = {}
+                            online_screens[store_id][screen_id] = {
+                                'device_type': 'pi',
+                                'device_id': pi_id,
+                                'is_online': is_online,
+                                'last_seen': last_seen_formatted,
+                                'ip': ip_address
+                            }
+                            assignment_found = True
+                            break
+                    if assignment_found:
+                        break
+        
+        # Check Android TV devices
+        with android_tv_lock:
+            for device_id, tv_data in connected_android_tvs.items():
+                # Only check devices for current user
+                if ukey and tv_data.get('user_key') != ukey:
+                    continue
+                
+                last_seen_timestamp = tv_data.get('last_seen')
+                store_id = tv_data.get('store_id')
+                screen_id = tv_data.get('screen_id')
+                
+                if not store_id or not screen_id:
+                    continue
+                
+                is_online = False
+                if last_seen_timestamp and isinstance(last_seen_timestamp, (int, float)):
+                    time_since_last_seen = current_time - last_seen_timestamp
+                    is_online = time_since_last_seen < ANDROID_TV_OFFLINE_TIMEOUT
+                    last_seen_formatted = datetime.fromtimestamp(last_seen_timestamp).strftime('%Y-%m-%d %I:%M:%S %p')
+                else:
+                    last_seen_formatted = 'Never'
+                
+                if store_id not in online_screens:
+                    online_screens[store_id] = {}
+                online_screens[store_id][screen_id] = {
+                    'device_type': 'android_tv',
+                    'device_id': device_id,
+                    'is_online': is_online,
+                    'last_seen': last_seen_formatted,
+                    'ip': tv_data.get('ip', 'Unknown')
+                }
+        
+        # Now build the complete list of all screens from config
+        all_screens = []
+        
+        for store in config.get('stores', []):
+            store_id = store.get('id')
+            store_name = store.get('name', store_id)
+            
+            for screen_id, screen_data in config.get('screens', {}).get(store_id, {}).items():
+                screen_name = screen_data.get('name', screen_id)
+                location = screen_data.get('location_name', '')
+                
+                # Check if this screen has an online device
+                device_info = online_screens.get(store_id, {}).get(screen_id)
+                
+                if device_info:
+                    # Screen has a device (online or offline)
+                    all_screens.append({
+                        'screen_id': screen_id,
+                        'screen_name': screen_name,
+                        'store_id': store_id,
+                        'store_name': store_name,
+                        'location': location,
+                        'device_type': device_info['device_type'],
+                        'device_id': device_info['device_id'],
+                        'status': 'online' if device_info['is_online'] else 'offline',
+                        'last_seen': device_info['last_seen'],
+                        'ip': device_info['ip']
+                    })
+                else:
+                    # Screen has no device assigned or device never connected
+                    all_screens.append({
+                        'screen_id': screen_id,
+                        'screen_name': screen_name,
+                        'store_id': store_id,
+                        'store_name': store_name,
+                        'location': location,
+                        'device_type': 'none',
+                        'device_id': 'Not Assigned',
+                        'status': 'offline',
+                        'last_seen': 'Never',
+                        'ip': 'N/A'
+                    })
+        
+        return jsonify({'screens': all_screens})
+    except Exception as e:
+        logging.error(f"Error in get_all_screens_status: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/upload_to_screen', methods=['POST'])

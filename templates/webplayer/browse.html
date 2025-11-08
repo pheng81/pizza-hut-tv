@@ -75,7 +75,18 @@
 
     function renderScreens(){
       screensEl.innerHTML = '';
+      
+      // DEBUG: Log data structure to console
+      console.log('DEBUG renderScreens - storeId:', storeId);
+      console.log('DEBUG renderScreens - data:', data);
+      console.log('DEBUG renderScreens - data.screens:', data ? data.screens : 'no data');
+      console.log('DEBUG renderScreens - data.screens[storeId]:', (data && data.screens) ? data.screens[storeId] : 'no screens');
+      
       var sc = (data && data.screens && data.screens[storeId]) ? data.screens[storeId] : {};
+      
+      console.log('DEBUG renderScreens - filtered screens (sc):', sc);
+      console.log('DEBUG renderScreens - number of screens:', Object.keys(sc).length);
+      
       var entries = [];
       for(var k in sc){ if(sc.hasOwnProperty(k)) entries.push([k, sc[k]]); }
       if(!entries.length){

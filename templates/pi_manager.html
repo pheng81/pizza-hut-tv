@@ -1931,10 +1931,22 @@
         function updateCombinedStatistics() {
             // Use the global variables that store actual counts from API responses
             const totalOnline = piOnlineCount + androidTvOnlineCount;
-            const totalOffline = piOfflineCount + androidTvOfflineCount;
+            
+            // Calculate offline as: total screens - online count
+            // Get total screens from the stat card (which is set by server on page load)
+            let totalScreens = 0;
+            const statsCards = document.querySelectorAll('.stat-card');
+            statsCards.forEach(card => {
+                const title = card.querySelector('h3');
+                const valueElement = card.querySelector('.stat-value');
+                if (title && title.textContent.includes('Total Screens')) {
+                    totalScreens = parseInt(valueElement.textContent) || 0;
+                }
+            });
+            
+            const totalOffline = Math.max(0, totalScreens - totalOnline);
             
             // Update main statistics cards
-            const statsCards = document.querySelectorAll('.stat-card');
             statsCards.forEach(card => {
                 const title = card.querySelector('h3');
                 const valueElement = card.querySelector('.stat-value');
@@ -1947,7 +1959,7 @@
                 }
             });
             
-            console.log('📊 Combined statistics - Pi: ' + piOnlineCount + 'online/' + piOfflineCount + 'offline, Android TV: ' + androidTvOnlineCount + 'online/' + androidTvOfflineCount + 'offline, Total: ' + totalOnline + 'online/' + totalOffline + 'offline');
+            console.log('📊 Combined statistics - Pi: ' + piOnlineCount + 'online/' + piOfflineCount + 'offline, Android TV: ' + androidTvOnlineCount + 'online/' + androidTvOfflineCount + 'offline, Total: ' + totalOnline + 'online/' + totalOffline + 'offline (from ' + totalScreens + ' total screens)');
         }
 
         // Auto-refresh Android TV device status
@@ -2178,8 +2190,119 @@
             });
             document.querySelector(`[data-filter="${filter}"]`).classList.add('active');
             
-            // Apply filter
-            filterDevices();
+            // If "Offline" filter selected, load and show unassigned screens too
+            if (filter === 'offline') {
+                loadUnassignedScreens();
+            } else {
+                // Remove any unassigned screen cards when not in offline mode
+                document.querySelectorAll('.device-card.unassigned-screen').forEach(card => card.remove());
+                filterDevices();
+            }
+        }
+        
+        function loadUnassignedScreens() {
+            fetch('/api/all_screens_status')
+                .then(response => response.json())
+                .then(data => {
+                    const screens = data.screens || [];
+                    const devicesGrid = document.querySelector('.devices-grid');
+                    
+                    // Remove any existing unassigned screen cards first
+                    document.querySelectorAll('.device-card.unassigned-screen').forEach(card => card.remove());
+                    
+                    // Find the Android TV section header to insert before it
+                    const androidHeader = devicesGrid.querySelector('[style*="grid-column: 1 / -1"]');
+                    
+                    // Filter to only unassigned screens (no device)
+                    const unassignedScreens = screens.filter(s => s.device_id === 'Not Assigned');
+                    
+                    // Add cards for each unassigned screen
+                    unassignedScreens.forEach(screen => {
+                        const cardHtml = `
+                            <div class="device-card offline unassigned-screen">
+                                <!-- Device Header -->
+                                <div class="device-header">
+                                    <div class="device-header-left">
+                                        <div class="device-icon">❓</div>
+                                        <div class="device-title-wrapper">
+                                            <h3>${screen.screen_id} (No Device)</h3>
+                                            <div class="device-subtitle">
+                                                <span class="device-status offline">offline</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="device-header-right">
+                                        <div class="device-info-item">
+                                            <strong>🏪 Store</strong>
+                                            <span>${screen.store_name}</span>
+                                        </div>
+                                        <div class="device-info-item">
+                                            <strong>🖥️ Screen</strong>
+                                            <span>${screen.screen_name}</span>
+                                        </div>
+                                        <div class="device-info-item">
+                                            <strong>⏰ Last Seen</strong>
+                                            <span>Never</span>
+                                        </div>
+                                        <div class="device-info-item">
+                                            <strong>🌐 IP Address</strong>
+                                            <span>N/A</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Device Body -->
+                                <div class="device-body">
+                                    <div class="device-details-grid">
+                                        <div class="device-detail-item">
+                                            <strong>🏪 Store</strong>
+                                            <span>${screen.store_name}</span>
+                                        </div>
+                                        <div class="device-detail-item">
+                                            <strong>🖥️ Screen</strong>
+                                            <span>${screen.screen_name}</span>
+                                        </div>
+                                        <div class="device-detail-item">
+                                            <strong>🌐 IP</strong>
+                                            <span>N/A</span>
+                                        </div>
+                                        <div class="device-detail-item">
+                                            <strong>⏰ Last Seen</strong>
+                                            <span>Never</span>
+                                        </div>
+                                        ${screen.location ? `
+                                        <div class="device-detail-item">
+                                            <strong>📍 Location</strong>
+                                            <span>${screen.location}</span>
+                                        </div>
+                                        ` : ''}
+                                    </div>
+                                </div>
+
+                                <!-- Device Footer (Actions) -->
+                                <div class="device-footer">
+                                    <button class="btn-small btn-connect" disabled style="opacity: 0.5; cursor: not-allowed;">No Device</button>
+                                    <button class="btn-small btn-settings" disabled style="opacity: 0.5; cursor: not-allowed;">No Device</button>
+                                </div>
+                            </div>
+                        `;
+                        
+                        // Insert before Android TV section
+                        if (androidHeader) {
+                            androidHeader.insertAdjacentHTML('beforebegin', cardHtml);
+                        } else {
+                            devicesGrid.insertAdjacentHTML('beforeend', cardHtml);
+                        }
+                    });
+                    
+                    // Now apply the offline filter to show everything
+                    filterDevices();
+                })
+                .catch(error => {
+                    console.error('Error loading unassigned screens:', error);
+                    filterDevices();
+                });
         }
 
         function updateNoResultsMessage() {
@@ -2203,8 +2326,236 @@
                 if (noResultsMsg) {
                     noResultsMsg.style.display = 'none';
                 }
-                devicesGrid.style.display = 'flex';
+                devicesGrid.style.display = 'grid';
             }
+        }
+
+        // REMOVED: refreshAllScreens() - was causing confusion between devices and screens
+        // The page now shows DEVICES (Pi hardware) not individual screens
+        // This is the correct behavior - you manage devices, not screens here
+        
+        function refreshAllScreens_DISABLED() {
+            fetch('/api/all_screens_status')
+                .then(response => response.json())
+                .then(data => {
+                    const screens = data.screens || [];
+                    const devicesGrid = document.querySelector('.devices-grid');
+                    
+                    // Clear existing devices
+                    devicesGrid.innerHTML = '';
+                    
+                    let piOnline = 0;
+                    let piOffline = 0;
+                    let androidOnline = 0;
+                    let androidOffline = 0;
+                    
+                    // Group screens by device type
+                    const piScreens = screens.filter(s => s.device_type === 'pi' || s.device_type === 'none');
+                    const androidScreens = screens.filter(s => s.device_type === 'android_tv');
+                    
+                    // Render Pi devices/screens
+                    piScreens.forEach(screen => {
+                        if (screen.status === 'online') piOnline++;
+                        else piOffline++;
+                        
+                        const deviceIcon = screen.device_id === 'Not Assigned' ? '❓' : '🖥️';
+                        const deviceDisplayId = screen.device_id === 'Not Assigned' ? `${screen.screen_id} (No Device)` : screen.device_id;
+                        
+                        const cardHtml = `
+                            <div class="device-card ${screen.status}">
+                                <!-- Device Header -->
+                                <div class="device-header">
+                                    <div class="device-header-left">
+                                        <div class="device-icon">${deviceIcon}</div>
+                                        <div class="device-title-wrapper">
+                                            <h3>${deviceDisplayId}</h3>
+                                            <div class="device-subtitle">
+                                                <span class="device-status ${screen.status}">${screen.status}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="device-header-right">
+                                        <div class="device-info-item">
+                                            <strong>🏪 Store</strong>
+                                            <span>${screen.store_name}</span>
+                                        </div>
+                                        <div class="device-info-item">
+                                            <strong>🖥️ Screen</strong>
+                                            <span>${screen.screen_name}</span>
+                                        </div>
+                                        <div class="device-info-item">
+                                            <strong>⏰ Last Seen</strong>
+                                            <span>${screen.last_seen}</span>
+                                        </div>
+                                        <div class="device-info-item">
+                                            <strong>🌐 IP Address</strong>
+                                            <span>${screen.ip}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Device Body -->
+                                <div class="device-body">
+                                    <div class="device-details-grid">
+                                        <div class="device-detail-item">
+                                            <strong>🏪 Store</strong>
+                                            <span>${screen.store_name}</span>
+                                        </div>
+                                        <div class="device-detail-item">
+                                            <strong>🖥️ Screen</strong>
+                                            <span>${screen.screen_name}</span>
+                                        </div>
+                                        <div class="device-detail-item">
+                                            <strong>🌐 IP</strong>
+                                            <span>${screen.ip}</span>
+                                        </div>
+                                        <div class="device-detail-item">
+                                            <strong>⏰ Last Seen</strong>
+                                            <span>${screen.last_seen}</span>
+                                        </div>
+                                        ${screen.location ? `
+                                        <div class="device-detail-item">
+                                            <strong>📍 Location</strong>
+                                            <span>${screen.location}</span>
+                                        </div>
+                                        ` : ''}
+                                    </div>
+                                </div>
+
+                                <!-- Device Footer (Actions) -->
+                                <div class="device-footer">
+                                    ${screen.status === 'online' && screen.device_id !== 'Not Assigned' 
+                                        ? `<button type="button" class="btn-small btn-connect" onclick="openVncPopup('${screen.device_id}')">Connect</button>`
+                                        : '<button class="btn-small btn-connect" disabled style="opacity: 0.5; cursor: not-allowed;">Offline</button>'
+                                    }
+                                    ${screen.device_id !== 'Not Assigned'
+                                        ? `<button class="btn-small btn-restart" onclick="restartDevice('${screen.device_id}')">Restart</button>
+                                           <button class="btn-small btn-settings" onclick="editDevice('${screen.device_id}')">Settings</button>
+                                           <button class="btn-small btn-delete" onclick="deleteDevice('${screen.device_id}')">Delete</button>`
+                                        : '<button class="btn-small btn-settings" disabled style="opacity: 0.5;">No Device</button>'
+                                    }
+                                </div>
+                            </div>
+                        `;
+                        devicesGrid.insertAdjacentHTML('beforeend', cardHtml);
+                    });
+                    
+                    // Add Android TV section header
+                    const androidHeaderHtml = `
+                        <div style="grid-column: 1 / -1; margin-top: 40px; margin-bottom: 0;">
+                            <div class="section-header">
+                                <div class="section-title">
+                                    <h2>📱 Android TV Devices</h2>
+                                    <div class="stats-inline">
+                                        <span class="stat-badge" id="androidTvOnlineCount">${androidOnline} online</span>
+                                        <span class="stat-badge" id="androidTvOfflineCount">${androidOffline} offline</span>
+                                        <span class="stat-badge" id="androidTvTotalCount">${androidScreens.length} total</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    devicesGrid.insertAdjacentHTML('beforeend', androidHeaderHtml);
+                    
+                    // Render Android TV devices/screens
+                    androidScreens.forEach(screen => {
+                        if (screen.status === 'online') androidOnline++;
+                        else androidOffline++;
+                        
+                        const cardHtml = `
+                            <div class="device-card ${screen.status}">
+                                <!-- Device Header -->
+                                <div class="device-header">
+                                    <div class="device-header-left">
+                                        <div class="device-icon">📱</div>
+                                        <div class="device-title-wrapper">
+                                            <h3>${screen.device_id}</h3>
+                                            <div class="device-subtitle">
+                                                <span class="device-status ${screen.status}">${screen.status}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="device-header-right">
+                                        <div class="device-info-item">
+                                            <strong>🏪 Store</strong>
+                                            <span>${screen.store_name}</span>
+                                        </div>
+                                        <div class="device-info-item">
+                                            <strong>🖥️ Screen</strong>
+                                            <span>${screen.screen_name}</span>
+                                        </div>
+                                        <div class="device-info-item">
+                                            <strong>⏰ Last Seen</strong>
+                                            <span>${screen.last_seen}</span>
+                                        </div>
+                                        <div class="device-info-item">
+                                            <strong>🌐 IP Address</strong>
+                                            <span>${screen.ip}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Device Body -->
+                                <div class="device-body">
+                                    <div class="device-details-grid">
+                                        <div class="device-detail-item">
+                                            <strong>🏪 Store</strong>
+                                            <span>${screen.store_name}</span>
+                                        </div>
+                                        <div class="device-detail-item">
+                                            <strong>🖥️ Screen</strong>
+                                            <span>${screen.screen_name}</span>
+                                        </div>
+                                        <div class="device-detail-item">
+                                            <strong>🌐 IP</strong>
+                                            <span>${screen.ip}</span>
+                                        </div>
+                                        <div class="device-detail-item">
+                                            <strong>⏰ Last Seen</strong>
+                                            <span>${screen.last_seen}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Device Footer (Actions) -->
+                                <div class="device-footer">
+                                    ${screen.status === 'online' 
+                                        ? `<button class="btn-small btn-primary" onclick="refreshAndroidTvScreen('${screen.device_id}')">Refresh</button>`
+                                        : '<button class="btn-small btn-primary" disabled style="opacity: 0.5; cursor: not-allowed;">Offline</button>'
+                                    }
+                                    <button class="btn-small btn-danger" onclick="removeAndroidTvDevice('${screen.device_id}')">Remove</button>
+                                </div>
+                            </div>
+                        `;
+                        devicesGrid.insertAdjacentHTML('beforeend', cardHtml);
+                    });
+                    
+                    // Update badge counts
+                    document.getElementById('androidTvOnlineCount').textContent = androidOnline + ' online';
+                    document.getElementById('androidTvOfflineCount').textContent = androidOffline + ' offline';
+                    document.getElementById('androidTvTotalCount').textContent = androidScreens.length + ' total';
+                    
+                    // Store counts in global variables
+                    piOnlineCount = piOnline;
+                    piOfflineCount = piOffline;
+                    androidTvOnlineCount = androidOnline;
+                    androidTvOfflineCount = androidOffline;
+                    
+                    // Update combined statistics
+                    updateCombinedStatistics();
+                    
+                    // Apply current filter if any
+                    if (currentStatusFilter !== 'all') {
+                        filterDevices();
+                    }
+                    
+                    console.log('All screens refreshed - Pi Online: ' + piOnline + ', Pi Offline: ' + piOffline + ', Android Online: ' + androidOnline + ', Android Offline: ' + androidOffline);
+                })
+                .catch(error => {
+                    console.error('Error fetching all screens:', error);
+                });
         }
 
         // Start auto-refresh timer (10 seconds)
