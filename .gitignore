@@ -25,8 +25,15 @@ env/
 # Logs
 *.log
 
-# Database
-*.db
+# Database (including timestamped backups)
+# Keep database.db and store_config so local dev works!
+# database.db  # COMMENTED OUT - we want to track the local copy
+*.db.backup-*
+database_to_restore.db
+database_restored.db
+pizzahut.db
+pizzahut_tv.db
+users.db
 *.sqlite
 *.sqlite3
 
@@ -89,6 +96,10 @@ users.db
 user_database.db
 users_from_server.sqlite
 *_BACKUP*.json
+*.json.backup-*
+store_config_backup.json
+database_to_restore.db
+database_restored.db
 temp_*.json
 pi1_config.json
 RECOVERED_*.json

@@ -4,10 +4,19 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Web Player — TV Code</title>
-<!-- Socket.IO for real-time communication -->
+<!-- Preconnect to CDNs for faster resource loading -->
+<link rel="preconnect" href="https://cdn.socket.io" crossorigin>
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+<!-- Load scripts normally (removing defer to fix loading spinner stuck issue) -->
 <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-<!-- QR Code Library -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  /* Loading spinner */
+  .page-loader{position:fixed;inset:0;background:#0b0f14;display:flex;align-items:center;justify-content:center;z-index:999;transition:opacity .3s}
+  .page-loader.hidden{opacity:0;pointer-events:none}
+  .spinner{width:40px;height:40px;border:3px solid #1b2632;border-top-color:#3b82f6;border-radius:50%;animation:spin 0.8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
 <style>
   :root{
     --bg:#0b0f14;          /* deep slate */
@@ -130,6 +139,11 @@
 </style>
 </head>
 <body>
+  <!-- Loading spinner -->
+  <div class="page-loader" id="pageLoader">
+    <div class="spinner"></div>
+  </div>
+  
   <div class="intro" id="intro">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 320" width="100%" height="100%" xmlns:xlink="http://www.w3.org/1999/xlink" style="width:min(90vw,900px);height:auto;aspect-ratio:3/1">
       <defs>
@@ -221,6 +235,14 @@
   </div>
   
   <script>
+    // Hide loading spinner immediately when page starts executing
+    (function() {
+      var loader = document.getElementById('pageLoader');
+      if (loader) {
+        setTimeout(function() { loader.classList.add('hidden'); }, 100);
+      }
+    })();
+    
     // Enforce HTTPS on our domain for some TV browsers
     try{ if (location.protocol === 'http:' && /(^|\.)everydayadvertise\.com$/i.test(location.hostname)) { location.replace('https:' + location.href.slice(5)); } }catch(e){}
 
@@ -325,6 +347,7 @@
           colorLight: "#ffffff",
           correctLevel: QRCode.CorrectLevel.M
         });
+        
         // Insert brand logo overlay in the center of the QR
         try{
           var logo = document.createElement('div');

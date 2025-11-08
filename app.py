@@ -8,7 +8,11 @@ import time
 import logging
 import sqlite3
 import uuid
-import fcntl  # For file locking to prevent race conditions
+# Import fcntl only on Unix/Linux (not available on Windows)
+try:
+    import fcntl  # For file locking to prevent race conditions
+except ImportError:
+    fcntl = None  # Windows doesn't have fcntl
 import random
 import subprocess
 import shutil
@@ -3471,7 +3475,8 @@ def load_store_config_for_user_safe_key(safe_key: str):
     # Acquire shared lock for reading
     try:
         lock_file = open(lock_path, 'w')
-        fcntl.flock(lock_file.fileno(), fcntl.LOCK_SH)
+        if fcntl:  # Only use file locking on Unix/Linux
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_SH)
         
         try:
             with open(path, 'r') as f:
@@ -3485,7 +3490,8 @@ def load_store_config_for_user_safe_key(safe_key: str):
                 pass
             cfg = get_default_config(user_scoped=True)
         finally:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+            if fcntl:  # Only use file locking on Unix/Linux
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
             lock_file.close()
             try:
                 os.remove(lock_path)
@@ -3514,7 +3520,8 @@ def save_store_config_for_user_safe_key(safe_key: str, config):
     # Acquire exclusive lock
     try:
         lock_file = open(lock_path, 'w')
-        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        if fcntl:  # Only use file locking on Unix/Linux
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
         
         try:
             # Write to temp file with unique name to avoid collisions
@@ -3525,7 +3532,8 @@ def save_store_config_for_user_safe_key(safe_key: str, config):
             print(f"Configuration atomically saved to {path}")
         finally:
             # Release lock
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+            if fcntl:  # Only use file locking on Unix/Linux
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
             lock_file.close()
             try:
                 os.remove(lock_path)

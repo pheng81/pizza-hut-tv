@@ -152,9 +152,6 @@ class VNCTunnel:
             os.environ['DISPLAY'] = ':0'
             logging.info('📺 Set DISPLAY=:0 for screen capture')
         
-        # For simplicity, we'll capture screen periodically instead of full VNC protocol
-        # This is easier than implementing full RFB protocol
-        
         try:
             import mss  # type: ignore
             has_mss = True
@@ -165,7 +162,6 @@ class VNCTunnel:
                 logging.warning('⚠️ mss not installed, using PIL ImageGrab fallback')
             else:
                 logging.error('❌ Neither mss nor Pillow are available for capture')
-                # Immediately notify dashboard to avoid silent black screen
                 self._send_error('Screen capture unavailable (install mss or Pillow)')
         
         frame_count = 0
@@ -256,6 +252,83 @@ class VNCTunnel:
                 time.sleep(1)
         
         logging.info('🛑 VNC tunnel loop stopped')
+    
+    def _vnc_socket_stream(self):
+        """Stream from VNC server using scrot screenshot tool"""
+        import subprocess
+        import tempfile
+        
+        logging.info('🎥 Starting VNC screenshot streaming (scrot)')
+        
+        frame_count = 0
+        last_frame_time = 0
+        fps_limit = 10  # 10 FPS for VNC viewing
+        
+        while self.running:
+            try:
+                current_time = time.time()
+                
+                # Limit frame rate
+                if current_time - last_frame_time < (1.0 / fps_limit):
+                    time.sleep(0.01)
+                    continue
+                
+                last_frame_time = current_time
+                
+                # Use scrot to take screenshot (works with Wayland via XWayland)
+                with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
+                    tmp_path = tmp.name
+                
+                result = subprocess.run(
+                    ['scrot', '-o', '-q', '85', tmp_path],
+                    capture_output=True,
+                    timeout=2,
+                    env={'DISPLAY': ':0'}
+                )
+                
+                if result.returncode == 0:
+                    try:
+                        with open(tmp_path, 'rb') as f:
+                            jpeg_data = f.read()
+                        
+                        if jpeg_data and _PIL_AVAILABLE:
+                            # Resize using PIL
+                            img = Image.open(io.BytesIO(jpeg_data))
+                            if img.width > 1280 or img.height > 720:
+                                img.thumbnail((1280, 720), Image.Resampling.LANCZOS)
+                            
+                            buffer = io.BytesIO()
+                            img.save(buffer, format='JPEG', quality=85)
+                            jpeg_data = buffer.getvalue()
+                        
+                        frame_b64 = base64.b64encode(jpeg_data).decode('utf-8')
+                        
+                        self.socketio.emit('vnc_data', {
+                            'pi_id': self.pi_id,
+                            'target_sid': self.dashboard_sid,
+                            'frame': frame_b64,
+                            'width': 1280,
+                            'height': 720
+                        })
+                        
+                        frame_count += 1
+                        if frame_count == 1:
+                            logging.info(f'📺 VNC streaming via scrot at 1280x720, {fps_limit} FPS')
+                        if frame_count % 50 == 0:
+                            logging.debug(f'📺 VNC frames sent: {frame_count}')
+                    finally:
+                        import os
+                        try:
+                            os.unlink(tmp_path)
+                        except:
+                            pass
+                else:
+                    logging.error(f'❌ scrot failed: {result.stderr.decode() if result.stderr else "unknown error"}')
+                    time.sleep(1)
+                
+            except Exception as e:
+                logging.error(f'❌ VNC screenshot error: {e}')
+                time.sleep(1)
     
     def _create_vnc_mouse_packet(self, x, y, button_mask):
         """Create VNC RFB mouse event packet"""

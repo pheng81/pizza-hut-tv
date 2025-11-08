@@ -155,16 +155,52 @@
     </div>
 
     {% if code %}
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script>
-        // Auto-submit the code to the TV
-        // This simulates the code entry, though actual implementation 
-        // would require WebSocket or polling from the TV app
-        console.log('Pairing code:', '{{ code }}');
+        // Auto-submit the code to the TV via Socket.IO
+        const pairCode = '{{ code }}';
+        console.log('Pairing code:', pairCode);
         
-        // Show success for 3 seconds
-        setTimeout(() => {
+        // Extract session_id from URL (e.g., ?session_id=tv_abc123)
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessionId = urlParams.get('session_id');
+        
+        if (sessionId) {
+            console.log('Connecting to Socket.IO with session:', sessionId);
+            
+            // Connect to Socket.IO server
+            const socket = io({
+                transports: ['websocket', 'polling']
+            });
+            
+            socket.on('connect', () => {
+                console.log('✅ Connected to server');
+                
+                // Send the code to the TV
+                socket.emit('code_entered', {
+                    session_id: sessionId,
+                    code: pairCode
+                });
+                
+                console.log('📤 Sent code to TV:', pairCode);
+                
+                // Show success message
+                document.querySelector('.success-message').classList.add('show');
+                document.querySelector('.success-message').textContent = '✅ Code sent to TV!';
+            });
+            
+            socket.on('connect_error', (err) => {
+                console.error('❌ Connection error:', err);
+                document.querySelector('.success-message').style.background = '#f44336';
+                document.querySelector('.success-message').textContent = '❌ Could not connect to server';
+                document.querySelector('.success-message').classList.add('show');
+            });
+        } else {
+            console.warn('⚠️ No session_id in URL - cannot send code to TV');
+            document.querySelector('.success-message').style.background = '#ff9800';
+            document.querySelector('.success-message').textContent = '⚠️ Missing session ID';
             document.querySelector('.success-message').classList.add('show');
-        }, 500);
+        }
     </script>
     {% endif %}
 </body>

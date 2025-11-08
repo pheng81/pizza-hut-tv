@@ -7,6 +7,28 @@ param(
 )
 
 Write-Host "== Pizza Hut TV Server Deploy ==" -ForegroundColor Cyan
+Write-Host ""
+
+# Check if local database exists and is recent
+$localDbAge = $null
+if (Test-Path "database.db") {
+    $localDbAge = (Get-Date) - (Get-Item "database.db").LastWriteTime
+    Write-Host "Local database found (last updated: $([math]::Round($localDbAge.TotalHours, 1)) hours ago)" -ForegroundColor Cyan
+    
+    if ($localDbAge.TotalDays -gt 1) {
+        Write-Host "  ⚠ Local database is over 1 day old" -ForegroundColor Yellow
+        $syncFirst = Read-Host "Sync from server first? (yes/no)"
+        if ($syncFirst -eq "yes") {
+            Write-Host "Running sync..." -ForegroundColor Yellow
+            & "$PSScriptRoot\sync_from_server.ps1" -AutoSync
+            Write-Host ""
+        }
+    }
+} else {
+    Write-Host "⚠ No local database found!" -ForegroundColor Yellow
+    Write-Host "  Run .\sync_from_server.ps1 to download server data for local testing" -ForegroundColor Cyan
+    Write-Host ""
+}
 
 # Create temp directory on server
 Write-Host "Creating temp deploy directory..." -ForegroundColor Yellow
@@ -73,6 +95,10 @@ if (Test-Path 'static') {
     & scp -i $KeyPath -r 'static' "ubuntu@${Server}:~/${TempPath}/" | Out-Null
 }
 
+Write-Host "Creating automatic backup before deployment..." -ForegroundColor Cyan
+$timestamp = [int][double]::Parse((Get-Date -UFormat %s))
+& ssh -i $KeyPath "ubuntu@${Server}" "cd ${FinalPath} && if [ -f database.db ]; then cp database.db database.db.backup-${timestamp}; echo 'Database backup: database.db.backup-${timestamp}'; fi; if [ -f store_config__test9_at_gmail.com.json ]; then cp store_config__test9_at_gmail.com.json store_config__test9_at_gmail.com.json.backup-${timestamp}; echo 'Config backup: store_config__test9_at_gmail.com.json.backup-${timestamp}'; fi"
+
 Write-Host "Moving files to production directory..." -ForegroundColor Yellow
 # Use single-line remote command to avoid CRLF issues on Linux
 & ssh -i $KeyPath "ubuntu@${Server}" "sudo mkdir -p ${FinalPath}/templates ${FinalPath}/static; if ls ~/${TempPath}/*.py 1>/dev/null 2>&1; then sudo cp ~/${TempPath}/*.py ${FinalPath}/; fi; if ls ~/${TempPath}/*.txt 1>/dev/null 2>&1; then sudo cp ~/${TempPath}/*.txt ${FinalPath}/; fi; if [ -d ~/${TempPath}/templates ]; then sudo cp -r ~/${TempPath}/templates/* ${FinalPath}/templates/ 2>/dev/null || true; fi; if [ -d ~/${TempPath}/templates/templates ]; then sudo cp -r ~/${TempPath}/templates/templates/* ${FinalPath}/templates/ 2>/dev/null || true; fi; if [ -d ~/${TempPath}/static ]; then sudo cp -r ~/${TempPath}/static/* ${FinalPath}/static/ 2>/dev/null || true; fi; if [ -d ~/${TempPath}/static/static ]; then sudo cp -r ~/${TempPath}/static/static/* ${FinalPath}/static/ 2>/dev/null || true; fi; sudo chown -R ubuntu:ubuntu ${FinalPath}/templates ${FinalPath}/static; sudo find ${FinalPath}/templates -type d -exec chmod 755 {} \; ; sudo find ${FinalPath}/templates -type f -exec chmod 644 {} \; ; sudo find ${FinalPath}/static -type d -exec chmod 755 {} \; ; sudo find ${FinalPath}/static -type f -exec chmod 644 {} \; ; rm -rf ~/${TempPath}"
@@ -101,4 +127,24 @@ if(-not $PreserveConfig) {
     Write-Host "Skipping service restart (PreserveConfig specified)" -ForegroundColor Yellow
 }
 
-Write-Host "Server deployment complete!" -ForegroundColor Green
+Write-Host ""
+Write-Host "=== Syncing Server Data Back to Local ===" -ForegroundColor Cyan
+Write-Host "Downloading latest database and config from server..." -ForegroundColor Yellow
+
+# Download database
+& scp -i $KeyPath "ubuntu@${Server}:${FinalPath}/database.db" "${PSScriptRoot}/database.db"
+if ($LASTEXITCODE -eq 0) {
+    $dbSize = (Get-Item "${PSScriptRoot}/database.db").Length
+    Write-Host "  ✓ Database synced ($([math]::Round($dbSize/1KB, 2)) KB)" -ForegroundColor Green
+}
+
+# Download store config
+& scp -i $KeyPath "ubuntu@${Server}:${FinalPath}/store_config__test9_at_gmail.com.json" "${PSScriptRoot}/store_config__test9_at_gmail.com.json"
+if ($LASTEXITCODE -eq 0) {
+    $configSize = (Get-Item "${PSScriptRoot}/store_config__test9_at_gmail.com.json").Length
+    Write-Host "  ✓ Store config synced ($([math]::Round($configSize/1KB, 2)) KB)" -ForegroundColor Green
+}
+
+Write-Host ""
+Write-Host "✅ Server deployment complete!" -ForegroundColor Green
+Write-Host "✅ Local data synced with server!" -ForegroundColor Green

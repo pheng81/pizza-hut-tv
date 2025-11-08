@@ -1,0 +1,113 @@
+{
+  "stores": [
+    {
+      "id": "1000",
+      "name": "My First Store"
+    },
+    {
+      "id": "1111",
+      "name": "Store 1111"
+    },
+    {
+      "id": "1931",
+      "name": "Store 1931"
+    },
+    {
+      "id": "7048",
+      "name": "Store 7048"
+    }
+  ],
+  "master_store_id": "1000",
+  "screens": {
+    "1000": {},
+    "1111": {
+      "1111_screen1": {
+        "file": null,
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "pi_id": "raspberrypi-3ef9",
+        "last_seen": 1762514368
+      },
+      "1111_screen2": {
+        "pi_id": "raspberrypi-ce39",
+        "playlist": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "last_seen": 1762514367
+      },
+      "1111_promo1": {
+        "file": null,
+        "vertical": true,
+        "horizontal": false,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1111_promo2": {
+        "file": null,
+        "vertical": true,
+        "horizontal": false,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      }
+    },
+    "1931": {
+      "1931_screen1": {
+        "file": null,
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1931_screen2": {
+        "file": null,
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      }
+    },
+    "7048": {
+      "7048_screen1": {
+        "file": null,
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      }
+    }
+  }
+}

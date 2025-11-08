@@ -1,0 +1,18 @@
+[Unit]
+Description=Pizza Hut TV Client
+After=network.target graphical.target
+
+[Service]
+Type=simple
+User=everydayadvertise0002
+WorkingDirectory=/home/everydayadvertise0002
+Environment="DISPLAY=:0"
+Environment="WAYLAND_DISPLAY=wayland-0"
+Environment="XDG_RUNTIME_DIR=/run/user/1000"
+Environment="XAUTHORITY=/home/everydayadvertise0002/.Xauthority"
+ExecStart=/usr/bin/python3 /home/everydayadvertise0002/complete_pi_client.py --server https://everydayadvertise.com
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=graphical.target
