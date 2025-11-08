@@ -2462,10 +2462,27 @@
 					fetchPlaylist(true).catch(err => console.warn('Periodic playlist refresh failed', err));
 				}, PLAYLIST_REFRESH_INTERVAL_MS);
 			}
+			// Generate or retrieve persistent device ID for Android TV tracking
+			function getDeviceId() {
+				let deviceId = localStorage.getItem('phtv_device_id');
+				if (!deviceId) {
+					// Generate unique ID: tv_ + random string + timestamp
+					deviceId = 'tv_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+					localStorage.setItem('phtv_device_id', deviceId);
+					console.log('🆔 Generated new device ID:', deviceId);
+				}
+				return deviceId;
+			}
+			const DEVICE_ID = getDeviceId();
+			
 			// Keep-alive heartbeat so dashboard sees this webplayer as online
 			async function sendHeartbeat(){
 				try{
-					const qs = new URLSearchParams({ store_id: storeId, screen_id: screenId });
+					const qs = new URLSearchParams({ 
+						store_id: storeId, 
+						screen_id: screenId,
+						device_id: DEVICE_ID  // Send persistent device ID
+					});
 					if(pairCode) qs.set('user_code', pairCode);
 					await fetch(`${ORIGIN}/api/screen_heartbeat?`+qs.toString(), { method:'GET', cache:'no-store', headers: pairCode?{'X-User-Code': pairCode}:{} });
 				}catch{}

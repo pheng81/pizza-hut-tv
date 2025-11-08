@@ -113,6 +113,9 @@ if(-not $PreserveConfig) {
         Write-Warning "Pip install had issues (exit code $LASTEXITCODE), continuing anyway..."
     }
     
+    Write-Host "Cleaning up zombie processes before restart..." -ForegroundColor Yellow
+    & ssh -i $KeyPath "ubuntu@${Server}" "sudo pkill -f 'gunicorn.*pizza-hut-tv' || true; sleep 1"
+    
     Write-Host "Restarting Pizza Hut TV service..." -ForegroundColor Yellow
     & ssh -i $KeyPath "ubuntu@${Server}" "sudo systemctl restart pizza-hut-tv"
     if($LASTEXITCODE -ne 0) {
@@ -135,14 +138,16 @@ Write-Host "Downloading latest database and config from server..." -ForegroundCo
 & scp -i $KeyPath "ubuntu@${Server}:${FinalPath}/database.db" "${PSScriptRoot}/database.db"
 if ($LASTEXITCODE -eq 0) {
     $dbSize = (Get-Item "${PSScriptRoot}/database.db").Length
-    Write-Host "  ✓ Database synced ($([math]::Round($dbSize/1KB, 2)) KB)" -ForegroundColor Green
+    $dbSizeKB = [math]::Round($dbSize/1024, 2)
+    Write-Host ('  ✓ Database synced (' + $dbSizeKB + ' KB)') -ForegroundColor Green
 }
 
 # Download store config
 & scp -i $KeyPath "ubuntu@${Server}:${FinalPath}/store_config__test9_at_gmail.com.json" "${PSScriptRoot}/store_config__test9_at_gmail.com.json"
 if ($LASTEXITCODE -eq 0) {
     $configSize = (Get-Item "${PSScriptRoot}/store_config__test9_at_gmail.com.json").Length
-    Write-Host "  ✓ Store config synced ($([math]::Round($configSize/1KB, 2)) KB)" -ForegroundColor Green
+    $configSizeKB = [math]::Round($configSize/1024, 2)
+    Write-Host ('  ✓ Store config synced (' + $configSizeKB + ' KB)') -ForegroundColor Green
 }
 
 Write-Host ""

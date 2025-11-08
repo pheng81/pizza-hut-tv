@@ -214,6 +214,12 @@ socketio = SocketIO(
 connected_pis = {}  # { 'pi_id': {'sid': socket_id, 'connected_at': timestamp, 'ip': ip_address} }
 pi_connection_lock = threading.Lock()
 
+# Track connected Android TV devices via heartbeat
+# Key = device_id (session_id or unique identifier)
+# Value = {'store_id': str, 'screen_id': str, 'last_seen': timestamp, 'ip': str}
+connected_android_tvs = {}
+android_tv_lock = threading.Lock()
+
 # Session configuration - make sessions last 30 days
 from datetime import timedelta
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
@@ -2084,8 +2090,31 @@ def screen_heartbeat():
             logging.debug('HB screen not found: store=%s screen=%s candidate=%s keys=%s', store_id, screen_id, candidate, list(store_screens.keys()))
             return jsonify({'success': False, 'error': 'Screen not found'}), 404
     # record last_seen epoch seconds
-    store_screens[screen_id]['last_seen'] = int(time.time())
+    current_timestamp = int(time.time())
+    store_screens[screen_id]['last_seen'] = current_timestamp
     logging.debug('HB set last_seen for %s/%s', store_id, screen_id)
+    
+    # Track Android TV device in connected_android_tvs for real-time status
+    device_id = data.get('device_id')  # Android TV should send unique device_id
+    if not device_id:
+        # Fallback: use session_id or generate from store+screen
+        device_id = data.get('session_id') or f"{store_id}_{screen_id}"
+    
+    client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+    if ',' in str(client_ip):
+        client_ip = client_ip.split(',')[0].strip()
+    
+    with android_tv_lock:
+        connected_android_tvs[device_id] = {
+            'store_id': store_id,
+            'screen_id': screen_id,
+            'last_seen': current_timestamp,
+            'ip': client_ip,
+            'user_key': user_key
+        }
+    
+    logging.info(f'[Android TV] Heartbeat from device {device_id}: {store_id}/{screen_id} @ {client_ip}')
+    
     if user_key:
         save_store_config_for_user_safe_key(user_key, cfg)
     else:
@@ -5497,6 +5526,78 @@ def get_pi_status():
         return jsonify(statuses)
     except Exception as e:
         logging.error(f"Error in get_pi_status: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/android_tv_status')
+@login_required
+def get_android_tv_status():
+    """API endpoint to get current Android TV device statuses (for auto-refresh)"""
+    try:
+        import time as time_module
+        from datetime import datetime
+        
+        # Android TV offline timeout: consider offline if no heartbeat for 120 seconds (2 minutes)
+        # Android TVs send heartbeats every ~30s, so 120s allows up to 3 missed heartbeats
+        ANDROID_TV_OFFLINE_TIMEOUT = 120
+        current_time = time_module.time()
+        logging.info(f"=== API Android TV Status Check at {current_time} ===")
+        
+        # Get user-specific config
+        ukey = _safe_user_key()
+        config = load_store_config_for_user_safe_key(ukey) if ukey else load_store_config()
+        
+        devices = []
+        
+        with android_tv_lock:
+            for device_id, tv_data in connected_android_tvs.items():
+                # Only show devices for current user
+                if ukey and tv_data.get('user_key') != ukey:
+                    continue
+                
+                last_seen_timestamp = tv_data.get('last_seen')
+                store_id = tv_data.get('store_id')
+                screen_id = tv_data.get('screen_id')
+                
+                if last_seen_timestamp and isinstance(last_seen_timestamp, (int, float)):
+                    last_seen_formatted = datetime.fromtimestamp(last_seen_timestamp).strftime('%Y-%m-%d %I:%M:%S %p')
+                    time_since_last_seen = current_time - last_seen_timestamp
+                    is_online = time_since_last_seen < ANDROID_TV_OFFLINE_TIMEOUT
+                    logging.info(f"API: Android TV {device_id}: last_seen={last_seen_formatted}, time_since={time_since_last_seen:.1f}s, is_online={is_online}")
+                else:
+                    last_seen_formatted = 'Never'
+                    is_online = False
+                    logging.info(f"API: Android TV {device_id}: No valid timestamp")
+                
+                # Get store and screen names
+                store_name = store_id
+                screen_name = screen_id
+                location = ''
+                
+                for store in config.get('stores', []):
+                    if store.get('id') == store_id:
+                        store_name = store.get('name', store_id)
+                        break
+                
+                screen_data = config.get('screens', {}).get(store_id, {}).get(screen_id, {})
+                if screen_data:
+                    screen_name = screen_data.get('name', screen_id)
+                    location = screen_data.get('location_name', '')
+                
+                devices.append({
+                    'id': device_id,
+                    'status': 'online' if is_online else 'offline',
+                    'last_seen': last_seen_formatted,
+                    'ip': tv_data.get('ip', 'Unknown'),
+                    'store_id': store_id,
+                    'store_name': store_name,
+                    'screen_id': screen_id,
+                    'screen_name': screen_name,
+                    'location': location
+                })
+        
+        return jsonify({'devices': devices})
+    except Exception as e:
+        logging.error(f"Error in get_android_tv_status: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/upload_to_screen', methods=['POST'])
@@ -11048,6 +11149,121 @@ def handle_leave_session(data):
     if session_id and session_id in webplayer_sessions:
         del webplayer_sessions[session_id]
         logging.info(f'📺 WebPlayer session left: {session_id}')
+
+# ===== Android TV Remote Control Commands =====
+
+@socketio.on('android_tv_register')
+@socketio_error_handler
+def handle_android_tv_register(data):
+    """Android TV registers with server and provides device_id for remote control"""
+    device_id = data.get('device_id')
+    store_id = data.get('store_id')
+    screen_id = data.get('screen_id')
+    
+    if device_id:
+        with android_tv_lock:
+            if device_id not in connected_android_tvs:
+                connected_android_tvs[device_id] = {}
+            
+            connected_android_tvs[device_id]['socket_id'] = request.sid
+            connected_android_tvs[device_id]['store_id'] = store_id
+            connected_android_tvs[device_id]['screen_id'] = screen_id
+            connected_android_tvs[device_id]['last_seen'] = int(time.time())
+        
+        logging.info(f'📱 Android TV registered: {device_id} (sid: {request.sid})')
+        emit('registration_ack', {'status': 'success', 'device_id': device_id})
+
+@socketio.on('android_tv_command')
+@socketio_error_handler
+def handle_android_tv_command(data):
+    """Dashboard sends remote command to Android TV device"""
+    device_id = data.get('device_id')
+    command = data.get('command')  # 'refresh_screen', 'reload_playlist', 'restart_app'
+    
+    if not device_id or not command:
+        emit('command_result', {'status': 'error', 'message': 'device_id and command required'})
+        return
+    
+    with android_tv_lock:
+        device_data = connected_android_tvs.get(device_id)
+    
+    if not device_data:
+        emit('command_result', {'status': 'error', 'message': 'Device not found'})
+        logging.warning(f'⚠️ Android TV command failed: device {device_id} not found')
+        return
+    
+    socket_id = device_data.get('socket_id')
+    if not socket_id:
+        emit('command_result', {'status': 'error', 'message': 'Device not connected via Socket.IO'})
+        logging.warning(f'⚠️ Android TV command failed: device {device_id} has no socket connection')
+        return
+    
+    # Send command to Android TV device
+    socketio.emit('remote_command', {
+        'command': command,
+        'timestamp': time.time()
+    }, room=socket_id)
+    
+    logging.info(f'📱 Sent command "{command}" to Android TV {device_id}')
+    emit('command_result', {'status': 'success', 'message': f'Command "{command}" sent to {device_id}'})
+
+@app.route('/api/android_tv_command', methods=['POST'])
+@login_required
+def api_android_tv_command():
+    """HTTP endpoint for sending commands to Android TV devices (alternative to Socket.IO)"""
+    try:
+        data = request.get_json() or {}
+        device_id = data.get('device_id')
+        command = data.get('command')
+        
+        if not device_id or not command:
+            return jsonify({'success': False, 'error': 'device_id and command required'}), 400
+        
+        with android_tv_lock:
+            device_data = connected_android_tvs.get(device_id)
+        
+        if not device_data:
+            return jsonify({'success': False, 'error': 'Device not found'}), 404
+        
+        socket_id = device_data.get('socket_id')
+        if not socket_id:
+            return jsonify({'success': False, 'error': 'Device not connected via Socket.IO'}), 503
+        
+        # Send command to Android TV device
+        socketio.emit('remote_command', {
+            'command': command,
+            'timestamp': time.time()
+        }, room=socket_id)
+        
+        logging.info(f'📱 HTTP: Sent command "{command}" to Android TV {device_id}')
+        return jsonify({'success': True, 'message': f'Command "{command}" sent to {device_id}'})
+        
+    except Exception as e:
+        logging.error(f'Error in android_tv_command: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/android_tv_remove', methods=['POST'])
+@login_required
+def api_android_tv_remove():
+    """Remove Android TV device from tracking"""
+    try:
+        data = request.get_json() or {}
+        device_id = data.get('device_id')
+        
+        if not device_id:
+            return jsonify({'success': False, 'error': 'device_id required'}), 400
+        
+        with android_tv_lock:
+            if device_id in connected_android_tvs:
+                del connected_android_tvs[device_id]
+                logging.info(f'🗑️ Removed Android TV device: {device_id}')
+                return jsonify({'success': True, 'message': f'Device {device_id} removed'})
+            else:
+                return jsonify({'success': False, 'error': 'Device not found'}), 404
+    
+    except Exception as e:
+        logging.error(f'Error in android_tv_remove: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/selection_session_poll/<session_id>', methods=['GET'])
 def api_selection_session_poll(session_id: str):

@@ -103,13 +103,16 @@
         }
 
         .btn-secondary {
-            background: #f5f5f7;
+            background: transparent;
             color: #1d1d1f;
-            border: 1px solid rgba(0,0,0,0.1);
+            border: 1px solid rgba(0,0,0,0.12);
+            padding: 10px 18px;
+            font-size: 14px;
+            white-space: nowrap;
         }
 
         .btn-secondary:hover {
-            background: #e8e8ed;
+            background: rgba(0,0,0,0.04);
         }
 
         /* Stats Cards */
@@ -163,13 +166,18 @@
 
         /* Pi Devices Section */
         .devices-section {
-            background: rgba(255,255,255,0.92);
-            backdrop-filter: saturate(180%) blur(20px);
-            -webkit-backdrop-filter: saturate(180%) blur(20px);
+            background: transparent;
             border-radius: 18px;
-            padding: 28px 32px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-            border: 1px solid rgba(0,0,0,0.06);
+            padding: 0;
+        }
+
+        .section {
+            margin-bottom: 32px;
+        }
+
+        .content-card {
+            background: transparent;
+            padding: 0 4px;
         }
 
         .section-header {
@@ -177,6 +185,7 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 20px;
+            padding: 0 4px;
         }
 
         .section-header h2 {
@@ -186,31 +195,70 @@
             letter-spacing: -0.02em;
         }
 
-        /* Search and Filter Bar */
-        .search-filter-bar {
+        .section-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .stats-inline {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .stat-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            background: rgba(0,0,0,0.05);
+            color: #86868b;
+        }
+
+        /* All controls in one row */
+        .devices-header-row {
             display: flex;
             gap: 16px;
-            margin-bottom: 20px;
+            margin-bottom: 24px;
+            padding: 0;
             align-items: center;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
+        }
+
+        .devices-header-row h2 {
+            margin: 0;
+            font-size: 22px;
+            font-weight: 600;
+            color: #1d1d1f;
+            white-space: nowrap;
+            min-width: 120px;
         }
 
         .search-box {
-            flex: 1;
-            min-width: 250px;
+            flex: 1 1 auto;
+            min-width: 200px;
+            max-width: 400px;
+            position: relative;
+        }
+
+        .search-box svg {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #666;
+            pointer-events: none;
         }
 
         .search-box input {
             width: 100%;
-            padding: 12px 16px 12px 40px;
-            border: 1px solid rgba(0,0,0,0.12);
+            padding: 10px 16px 10px 40px;
+            border: none;
             border-radius: 10px;
             font-size: 14px;
             font-family: inherit;
-            background: rgba(255,255,255,0.9);
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23666' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z'/%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: 14px center;
+            background: transparent;
             transition: all 0.2s;
         }
 
@@ -223,18 +271,21 @@
         .filter-buttons {
             display: flex;
             gap: 8px;
+            flex-shrink: 0;
+            align-items: center;
         }
 
         .filter-btn {
             padding: 10px 18px;
-            border: 1px solid rgba(0,0,0,0.12);
+            border: none;
             border-radius: 20px;
-            background: rgba(255,255,255,0.9);
+            background: transparent;
             color: #1d1d1f;
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 500;
             cursor: pointer;
             transition: all 0.2s;
+            white-space: nowrap;
         }
 
         .filter-btn:hover {
@@ -244,60 +295,49 @@
         .filter-btn.active {
             background: #0071e3;
             color: white;
-            border-color: #0071e3;
         }
 
         /* Device Cards */
         .devices-grid {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px;
+            padding: 0 4px;
         }
 
         .device-card {
             border: 1px solid rgba(0,0,0,0.08);
-            border-radius: 14px;
-            padding: 0;
+            border-radius: 12px;
+            padding: 16px;
             transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
-            background: #ffffff;
+            background: transparent;
             overflow: hidden;
         }
 
         .device-card:hover {
             border-color: rgba(0, 113, 227, 0.3);
-            box-shadow: 0 4px 16px rgba(0, 113, 227, 0.1);
-            transform: translateY(-1px);
+            background: rgba(255,255,255,0.05);
+            box-shadow: 0 4px 12px rgba(0, 113, 227, 0.08);
+            transform: translateY(-2px);
         }
 
-        .device-card.online::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 0;
-            bottom: 0;
-            width: 4px;
-            background: linear-gradient(180deg, #30d158 0%, #32d74b 100%);
+        .device-card.online {
+            border-left: 3px solid #30d158;
         }
 
-        .device-card.offline::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 0;
-            bottom: 0;
-            width: 4px;
-            background: linear-gradient(180deg, #ff453a 0%, #ff375f 100%);
+        .device-card.offline {
+            border-left: 3px solid #ff453a;
         }
 
         /* Device Card Header */
         .device-header {
-            padding: 18px 24px;
-            border-bottom: 1px solid rgba(0,0,0,0.06);
+            padding: 0;
+            border-bottom: none;
             display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 16px;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 12px;
         }
 
         .device-header-left {
@@ -309,14 +349,14 @@
         }
 
         .device-icon {
-            width: 44px;
-            height: 44px;
-            border-radius: 12px;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 22px;
+            font-size: 18px;
             flex-shrink: 0;
         }
 
@@ -327,9 +367,9 @@
 
         .device-title-wrapper h3 {
             color: #1d1d1f;
-            font-size: 17px;
+            font-size: 15px;
             font-weight: 600;
-            margin: 0 0 2px 0;
+            margin: 0 0 4px 0;
             letter-spacing: -0.01em;
             white-space: nowrap;
             overflow: hidden;
@@ -338,19 +378,12 @@
 
         .device-subtitle {
             color: #86868b;
-            font-size: 13px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            flex-wrap: wrap;
-            line-height: 1.4;
+            font-size: 11px;
+            display: inline-block;
         }
 
         .device-header-right {
-            display: flex;
-            align-items: center;
-            gap: 20px;
-            flex-shrink: 0;
+            display: none;
         }
 
         .device-info-item {
@@ -377,34 +410,40 @@
 
         /* Device Card Body */
         .device-body {
-            padding: 18px 24px;
+            padding: 0;
+            margin-bottom: 12px;
         }
 
         .device-details-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
         }
 
         .device-detail-item {
             display: flex;
-            flex-direction: column;
-            gap: 4px;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
         }
 
         .device-detail-item strong {
             color: #86868b;
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
+            font-size: 12px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 4px;
         }
 
         .device-detail-item span {
             color: #1d1d1f;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 500;
-            line-height: 1.4;
+            text-align: right;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .location-value {
@@ -427,86 +466,96 @@
 
         /* Device Card Footer */
         .device-footer {
-            padding: 14px 24px;
-            background: #f9f9f9;
+            padding: 0;
+            padding-top: 12px;
+            background: transparent;
             border-top: 1px solid rgba(0,0,0,0.06);
             display: flex;
-            gap: 8px;
+            gap: 6px;
         }
 
         .device-status {
-            padding: 5px 12px;
-            border-radius: 12px;
+            padding: 2px 8px;
+            border-radius: 6px;
             font-size: 11px;
             font-weight: 600;
             text-transform: uppercase;
             white-space: nowrap;
-            letter-spacing: 0.06em;
+            letter-spacing: 0.03em;
         }
 
         .device-status.online {
-            background: rgba(48, 209, 88, 0.15);
-            color: #1e3a20;
+            background: rgba(48, 209, 88, 0.1);
+            color: #30d158;
         }
 
         .device-status.offline {
-            background: rgba(255, 69, 58, 0.15);
-            color: #4a1818;
+            background: rgba(255, 69, 58, 0.1);
+            color: #ff453a;
         }
 
         .btn-small {
-            padding: 8px 16px;
+            flex: 1;
+            padding: 8px 12px;
             font-size: 12px;
-            border-radius: 980px;
-            border: none;
+            border-radius: 8px;
+            border: 1px solid rgba(0,0,0,0.12);
+            background: #ffffff;
+            color: #1d1d1f;
             cursor: pointer;
             font-weight: 500;
             transition: all 0.2s ease;
             text-decoration: none;
             display: inline-flex;
             align-items: center;
+            justify-content: center;
             gap: 4px;
             letter-spacing: -0.01em;
+            white-space: nowrap;
+        }
+
+        .btn-small:hover {
+            background: #f5f5f7;
+            border-color: rgba(0,0,0,0.2);
         }
 
         .btn-connect {
             background: #0071e3;
             color: white;
+            border-color: #0071e3;
         }
 
         .btn-connect:hover {
             background: #0077ed;
-            box-shadow: 0 2px 8px rgba(0, 113, 227, 0.3);
         }
 
         .btn-restart {
             background: #ff9500;
             color: white;
+            border-color: #ff9500;
         }
 
         .btn-restart:hover {
             background: #ffa319;
-            box-shadow: 0 2px 8px rgba(255, 149, 0, 0.3);
         }
 
         .btn-settings {
-            background: #f5f5f7;
-            color: #1d1d1f;
-            border: 1px solid rgba(0,0,0,0.1);
+            background: transparent;
         }
 
         .btn-settings:hover {
-            background: #e8e8ed;
+            background: rgba(0,0,0,0.04);
         }
 
         .btn-delete {
-            background: #ff3b30;
-            color: white;
+            color: #ff453a;
+            border-color: rgba(255, 69, 58, 0.3);
+            background: transparent;
         }
 
         .btn-delete:hover {
-            background: #ff4d42;
-            box-shadow: 0 2px 8px rgba(255, 59, 48, 0.3);
+            background: rgba(255, 69, 58, 0.05);
+            border-color: #ff453a;
         }
 
         /* Refresh Button */
@@ -681,6 +730,176 @@
             flex: 1;
         }
 
+        /* Compact Android TV Cards */
+        .android-tv-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px;
+            padding: 0 4px;
+        }
+
+        .android-tv-card {
+            border: 1px solid rgba(0,0,0,0.08);
+            border-radius: 12px;
+            padding: 16px;
+            background: transparent;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .android-tv-card:hover {
+            border-color: rgba(0, 113, 227, 0.3);
+            background: rgba(255,255,255,0.05);
+            box-shadow: 0 4px 12px rgba(0, 113, 227, 0.08);
+            transform: translateY(-2px);
+        }
+
+        .android-tv-card.online {
+            border-left: 3px solid #30d158;
+        }
+
+        .android-tv-card.offline {
+            border-left: 3px solid #ff453a;
+        }
+
+        .android-tv-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .android-tv-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+
+        .android-tv-title {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .android-tv-title h4 {
+            color: #1d1d1f;
+            font-size: 15px;
+            font-weight: 600;
+            margin: 0 0 4px 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .android-tv-status-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .android-tv-status-badge.online {
+            background: rgba(48, 209, 88, 0.1);
+            color: #30d158;
+        }
+
+        .android-tv-status-badge.offline {
+            background: rgba(255, 69, 58, 0.1);
+            color: #ff453a;
+        }
+
+        .android-tv-info {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 12px;
+            font-size: 13px;
+        }
+
+        .android-tv-info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .android-tv-info-label {
+            color: #86868b;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .android-tv-info-value {
+            color: #1d1d1f;
+            font-weight: 500;
+            text-align: right;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .android-tv-actions {
+            display: flex;
+            gap: 6px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(0,0,0,0.06);
+        }
+
+        .android-tv-btn {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid rgba(0,0,0,0.12);
+            border-radius: 8px;
+            background: #ffffff;
+            color: #1d1d1f;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .android-tv-btn:hover {
+            background: #f5f5f7;
+            border-color: rgba(0,0,0,0.2);
+        }
+
+        .android-tv-btn.primary {
+            background: #0071e3;
+            color: white;
+            border-color: #0071e3;
+        }
+
+        .android-tv-btn.primary:hover {
+            background: #0077ed;
+        }
+
+        .android-tv-btn.danger {
+            color: #ff453a;
+            border-color: rgba(255, 69, 58, 0.3);
+        }
+
+        .android-tv-btn.danger:hover {
+            background: rgba(255, 69, 58, 0.05);
+            border-color: #ff453a;
+        }
+
+        .android-tv-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
         @media (max-width: 768px) {
             .container {
                 padding: 16px;
@@ -807,13 +1026,9 @@
 
         <!-- Pi Devices Section -->
         <div class="devices-section">
-            <div class="section-header">
+            <!-- All controls in one row -->
+            <div class="devices-header-row">
                 <h2>Pi Devices</h2>
-                <button class="btn btn-secondary" onclick="refreshDevices()">🔄 Refresh</button>
-            </div>
-
-            <!-- Search/Filter Bar -->
-            <div class="search-filter-bar">
                 <div class="search-box">
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                         <path d="M9 2a7 7 0 100 14 7 7 0 000-14zM2 9a7 7 0 1112.452 4.391l3.328 3.329a1 1 0 01-1.414 1.414l-3.329-3.328A7 7 0 012 9z" fill="currentColor"/>
@@ -825,10 +1040,11 @@
                     <button class="filter-btn" data-filter="online" onclick="setStatusFilter('online')">Online</button>
                     <button class="filter-btn" data-filter="offline" onclick="setStatusFilter('offline')">Offline</button>
                 </div>
+                <button class="btn btn-secondary" onclick="refreshDevices()">🔄 Refresh</button>
             </div>
 
-            {% if pi_devices %}
             <div class="devices-grid">
+                {% if pi_devices %}
                 {% for device in pi_devices %}
                 <div class="device-card {{ device.status }}">
                     <!-- Device Header -->
@@ -867,13 +1083,29 @@
                     <div class="device-body">
                         <div class="device-details-grid">
                             <div class="device-detail-item">
+                                <strong>🏪 Store</strong>
+                                <span>{{ device.store_name }}</span>
+                            </div>
+                            <div class="device-detail-item">
+                                <strong>🖥️ Screen</strong>
+                                <span>{{ device.screen_name }}</span>
+                            </div>
+                            <div class="device-detail-item">
+                                <strong>🌐 IP</strong>
+                                <span>{{ device.ip }}</span>
+                            </div>
+                            <div class="device-detail-item">
+                                <strong>⏰ Last Seen</strong>
+                                <span>{{ device.last_seen }}</span>
+                            </div>
+                            <div class="device-detail-item">
                                 <strong>📍 Location</strong>
                                 {% if device.store_id %}
                                 <span class="location-value" onclick="editLocation('{{ device.id }}')">
-                                    {{ device.location if device.location else '📌 Set location...' }}
+                                    {{ device.location if device.location else 'Set location...' }}
                                 </span>
                                 {% else %}
-                                <span class="location-placeholder">Configure via Settings first</span>
+                                <span class="location-placeholder">Not set</span>
                                 {% endif %}
                             </div>
                         </div>
@@ -892,16 +1124,35 @@
                     </div>
                 </div>
                 {% endfor %}
+                {% else %}
+                <div class="empty-state" style="grid-column: 1 / -1;">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    <h3>No Pi Devices Found</h3>
+                    <p>Add your first Pi device to get started</p>
+                </div>
+                {% endif %}
+                
+                <!-- Android TV Devices Title (inside same grid) -->
+                <div style="grid-column: 1 / -1; margin-top: 40px; margin-bottom: 0;">
+                    <div class="section-header">
+                        <div class="section-title">
+                            <h2>📱 Android TV Devices</h2>
+                            <div class="stats-inline">
+                                <span class="stat-badge" id="androidTvOnlineCount">0 online</span>
+                                <span class="stat-badge" id="androidTvOfflineCount">0 offline</span>
+                                <span class="stat-badge" id="androidTvTotalCount">0 total</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Android TV devices will be populated here by JavaScript -->
+                <div id="androidTvDevicesGrid" style="display: contents;">
+                </div>
             </div>
-            {% else %}
-            <div class="empty-state">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
-                <h3>No Pi Devices Found</h3>
-                <p>Add your first Pi device to get started</p>
             </div>
-            {% endif %}
         </div>
     </div>
 
@@ -1592,6 +1843,12 @@
             }
         }
 
+        // Global variables to store device counts
+        let piOnlineCount = 0;
+        let piOfflineCount = 0;
+        let androidTvOnlineCount = 0;
+        let androidTvOfflineCount = 0;
+
         // Auto-refresh device status every 10 seconds using AJAX
         function refreshDeviceStatus() {
             fetch('/api/pi_status')
@@ -1656,11 +1913,211 @@
                         }
                     });
                     
-                    console.log('Device statuses updated at ' + new Date().toLocaleTimeString() + ' - Online: ' + onlineCount + ', Offline: ' + offlineCount);
+                    // Store counts in global variables
+                    piOnlineCount = onlineCount;
+                    piOfflineCount = offlineCount;
+                    
+                    console.log('Pi Device statuses updated at ' + new Date().toLocaleTimeString() + ' - Online: ' + onlineCount + ', Offline: ' + offlineCount);
+                    
+                    // Update combined statistics after Pi refresh
+                    updateCombinedStatistics();
                 })
                 .catch(error => {
                     console.error('Error fetching device status:', error);
                 });
+        }
+        
+        // Update combined statistics for both Pi and Android TV devices
+        function updateCombinedStatistics() {
+            // Use the global variables that store actual counts from API responses
+            const totalOnline = piOnlineCount + androidTvOnlineCount;
+            const totalOffline = piOfflineCount + androidTvOfflineCount;
+            
+            // Update main statistics cards
+            const statsCards = document.querySelectorAll('.stat-card');
+            statsCards.forEach(card => {
+                const title = card.querySelector('h3');
+                const valueElement = card.querySelector('.stat-value');
+                if (title && valueElement) {
+                    if (title.textContent.includes('Screens Online')) {
+                        valueElement.textContent = totalOnline;
+                    } else if (title.textContent.includes('Screens Offline')) {
+                        valueElement.textContent = totalOffline;
+                    }
+                }
+            });
+            
+            console.log('📊 Combined statistics - Pi: ' + piOnlineCount + 'online/' + piOfflineCount + 'offline, Android TV: ' + androidTvOnlineCount + 'online/' + androidTvOfflineCount + 'offline, Total: ' + totalOnline + 'online/' + totalOffline + 'offline');
+        }
+
+        // Auto-refresh Android TV device status
+        function refreshAndroidTvStatus() {
+            fetch('/api/android_tv_status')
+                .then(response => response.json())
+                .then(data => {
+                    const devices = data.devices || [];
+                    const androidTvGrid = document.getElementById('androidTvDevicesGrid');
+                    
+                    let onlineCount = 0;
+                    let offlineCount = 0;
+                    
+                    // Build HTML for all Android TV devices matching Pi device style
+                    let html = '';
+                    devices.forEach(device => {
+                        if (device.status === 'online') {
+                            onlineCount++;
+                        } else {
+                            offlineCount++;
+                        }
+                        
+                        html += `
+                            <div class="device-card ${device.status}">
+                                <!-- Device Header -->
+                                <div class="device-header">
+                                    <div class="device-header-left">
+                                        <div class="device-icon">📱</div>
+                                        <div class="device-title-wrapper">
+                                            <h3>${device.id}</h3>
+                                            <div class="device-subtitle">
+                                                <span class="device-status ${device.status}">${device.status}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="device-header-right">
+                                        <div class="device-info-item">
+                                            <strong>🏪 Store</strong>
+                                            <span>${device.store_name}</span>
+                                        </div>
+                                        <div class="device-info-item">
+                                            <strong>🖥️ Screen</strong>
+                                            <span>${device.screen_name}</span>
+                                        </div>
+                                        <div class="device-info-item">
+                                            <strong>⏰ Last Seen</strong>
+                                            <span>${device.last_seen}</span>
+                                        </div>
+                                        <div class="device-info-item">
+                                            <strong>🌐 IP Address</strong>
+                                            <span>${device.ip}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Device Body -->
+                                <div class="device-body">
+                                    <div class="device-details-grid">
+                                        <div class="device-detail-item">
+                                            <strong>🏪 Store</strong>
+                                            <span>${device.store_name}</span>
+                                        </div>
+                                        <div class="device-detail-item">
+                                            <strong>🖥️ Screen</strong>
+                                            <span>${device.screen_name}</span>
+                                        </div>
+                                        <div class="device-detail-item">
+                                            <strong>🌐 IP</strong>
+                                            <span>${device.ip}</span>
+                                        </div>
+                                        <div class="device-detail-item">
+                                            <strong>⏰ Last Seen</strong>
+                                            <span>${device.last_seen}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Device Footer (Actions) -->
+                                <div class="device-footer">
+                                    ${device.status === 'online' 
+                                        ? '<button class="btn-small btn-primary" onclick="refreshAndroidTvScreen(\'' + device.id + '\')">Refresh</button>'
+                                        : '<button class="btn-small btn-primary" disabled style="opacity: 0.5; cursor: not-allowed;">Offline</button>'
+                                    }
+                                    <button class="btn-small btn-danger" onclick="removeAndroidTvDevice('${device.id}')">Remove</button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    androidTvGrid.innerHTML = html;
+                    
+                    // Store counts in global variables
+                    androidTvOnlineCount = onlineCount;
+                    androidTvOfflineCount = offlineCount;
+                    
+                    // Update Android TV section counters
+                    document.getElementById('androidTvOnlineCount').textContent = onlineCount + ' online';
+                    document.getElementById('androidTvOfflineCount').textContent = offlineCount + ' offline';
+                    document.getElementById('androidTvTotalCount').textContent = devices.length + ' total';
+                    
+                    console.log('Android TV statuses updated - Online: ' + onlineCount + ', Offline: ' + offlineCount);
+                    
+                    // Update combined statistics after Android TV refresh
+                    updateCombinedStatistics();
+                })
+                .catch(error => {
+                    console.error('Error fetching Android TV status:', error);
+                });
+        }
+
+        // Android TV Action Functions
+        function refreshAndroidTvScreen(deviceId) {
+            if (!confirm('Send refresh command to Android TV: ' + deviceId + '?')) {
+                return;
+            }
+            
+            fetch('/api/android_tv_command', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    device_id: deviceId,
+                    command: 'refresh_screen'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('✅ Refresh command sent to ' + deviceId);
+                } else {
+                    alert('❌ Failed to send command: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                alert('❌ Error sending command: ' + error);
+                console.error('Error:', error);
+            });
+        }
+
+        function viewAndroidTvDetails(deviceId) {
+            alert('Device details for: ' + deviceId + '\n\nDetailed information will be shown in a modal in a future update.');
+        }
+
+        function removeAndroidTvDevice(deviceId) {
+            if (confirm('Remove Android TV device ' + deviceId + ' from tracking?\n\nThis will stop tracking this device until it sends heartbeats again.')) {
+                fetch('/api/android_tv_remove', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        device_id: deviceId
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('✅ Device removed: ' + deviceId);
+                        refreshAndroidTvStatus();
+                    } else {
+                        alert('❌ Failed to remove device: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    alert('❌ Error removing device: ' + error);
+                    console.error('Error:', error);
+                });
+            }
         }
 
         // Search and Filter Functions
@@ -1751,10 +2208,16 @@
         }
 
         // Start auto-refresh timer (10 seconds)
-        setInterval(refreshDeviceStatus, 10000);
+        setInterval(function() {
+            refreshDeviceStatus();
+            refreshAndroidTvStatus();
+        }, 10000);
         
         // Also update once immediately after page load
-        setTimeout(refreshDeviceStatus, 2000);
+        setTimeout(function() {
+            refreshDeviceStatus();
+            refreshAndroidTvStatus();
+        }, 2000);
     </script>
 </body>
 </html>
