@@ -235,11 +235,11 @@
     }
     
     .hero h1 {
-      font-size: clamp(49px, 5.5vw, 75px);
+      font-size: clamp(39px, 5.5vw, 60px);
       font-weight: 700;
       letter-spacing: -0.02em;
       line-height: 1.15;
-      margin-bottom: 16px;
+      margin-bottom: 32px;
       color: #1d1d1f;
       background: linear-gradient(135deg, #1d1d1f 0%, #4a4a4f 100%);
       -webkit-background-clip: text;
@@ -267,7 +267,7 @@
     }
     
     .hero .subtitle {
-      font-size: 26px;
+      font-size: 21px;
       color: #6e6e73;
       max-width: 420px;
       margin-bottom: 28px;
@@ -698,13 +698,14 @@
     }
     
     .action-title h3 {
-      font-size: 32px;
+      font-size: 24px;
       font-weight: 700;
       color: #000000;
       letter-spacing: -0.01em;
-      line-height: 1.3;
+      line-height: 1.2;
       max-width: 1000px;
       margin: 0 auto;
+      white-space: nowrap;
     }
 
     /* (removed) Tighter section title when used inside action-section */
@@ -731,7 +732,8 @@
       }
       
       .action-title h3 {
-        font-size: 24px;
+        font-size: 16px;
+        white-space: normal;
       }
     }
     
@@ -921,11 +923,11 @@
     @media (max-width: 768px) {
       .brand img { height: 56px; }
       .hero h1 {
-        font-size: 44px;
+        font-size: 35px;
       }
       
       .hero .subtitle {
-        font-size: 23px;
+        font-size: 18px;
       }
       
       .hero-cta {
@@ -1006,11 +1008,11 @@
       }
       
       .hero h1 {
-        font-size: 44px;
+        font-size: 35px;
       }
       
       .hero .subtitle {
-        font-size: 23px;
+        font-size: 18px;
         max-width: 100%;
       }
       .hero-video { width: 85%; max-width: 380px; margin: 0 auto; }
@@ -1291,7 +1293,6 @@
       <div class="nav-links">
         <a href="#features">Features</a>
         <a href="#platforms">Platforms</a>
-        <a href="/healthz">Status</a>
         <a href="{{ url_for('superadmin_login') }}">Super Admin</a>
         <a href="{{ url_for('login') }}" class="btn-login">Login</a>
       </div>
@@ -1398,7 +1399,7 @@
           <div class="price-amount">
             Custom
           </div>
-          <div class="price-period">$10 per screen</div>
+          <div class="price-period" style="visibility: hidden;">placeholder</div>
           
           <ul class="pricing-features">
             <li>Full white-label software</li>

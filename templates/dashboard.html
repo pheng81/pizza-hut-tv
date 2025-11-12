@@ -1795,17 +1795,6 @@
             <div style="display: none;">
                 <!-- Legacy static screen loop removed to avoid Jinja errors -->
             </div>
-        <div class="apply-section">
-            <div style="margin-top: 0; padding-top: 0;">
-                <p style="margin-bottom: 15px; color: #666;">File Management</p>
-                <button class="gallery-btn" onclick="window.open('/gallery', '_blank')" style="margin-right: 10px;">
-                    📁 View All Files
-                </button>
-                <button class="cleanup-btn" onclick="cleanupUnusedFiles()">
-                    🧹 Delete Unused Files
-                </button>
-            </div>
-        </div>
     </div>
     
     <!-- Mobile drawer (hamburger menu) -->
@@ -1827,6 +1816,10 @@
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
                 <span>Add Store</span>
             </button>
+            <button class="action-item" onclick="openStoreGroupsManager()" title="Manage Store Groups">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                <span>Store Groups</span>
+            </button>
             <button class="action-item" onclick="openLibraryManager()" title="Manage Library">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z"></path></svg>
                 <span>Manage Library</span>
@@ -1839,17 +1832,9 @@
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c1.5-3.5 5-6 8-6s6.5 2.5 8 6"></path></svg>
                 <span>Profile</span>
             </button>
-            <button class="action-item" onclick="openRemotePiManager()" title="Remote Pi Manager">
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2H10a2 2 0 0 0-2 2v16"/></svg>
-                <span>Remote Pi Manager</span>
-            </button>
             <button class="action-item" onclick="openPiDeviceManager()" title="Pi Device Manager">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
                 <span>Pi Device Manager</span>
-            </button>
-            <button class="action-item" onclick="futureAction()" title="Custom action">
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6l6 12H6z"></path></svg>
-                <span>Custom</span>
             </button>
             <a class="action-item" href="{{ url_for('logout') }}" title="Log out">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -1869,6 +1854,15 @@
             <div class="modal-header" id="applyAllTitle">Apply to ALL</div>
             <div class="modal-body">
                 <div class="modal-desc" id="applyAllDesc">This will impact the stores below:</div>
+                
+                <!-- Store Groups Quick Selection -->
+                <div id="applyAllGroups" style="margin:12px 0; padding:12px; background:#f8f9fa; border-radius:8px; display:none;">
+                    <div style="font-size:13px; font-weight:600; color:#1d1d1f; margin-bottom:8px;">📁 Quick Select by Group:</div>
+                    <div id="applyGroupButtons" style="display:flex; flex-wrap:wrap; gap:8px;">
+                        <!-- Group buttons will be rendered here -->
+                    </div>
+                </div>
+                
                 <!-- Apply-All tools: search and clear selection -->
                 <div id="applyAllTools" style="display:flex; gap:8px; align-items:center; margin:8px 0 12px; flex-wrap:wrap;">
                     <input id="applyStoreSearch" type="text" placeholder="Search stores (name or ID)" 
@@ -2126,6 +2120,15 @@
                 
                 // Show screen preview section
                 document.getElementById('piScreenPreview').style.display = 'block';
+                
+                // Auto-load stores if pairing code is pre-filled
+                setTimeout(() => {
+                    const pairCodeInput = document.getElementById('piPairCode');
+                    if (pairCodeInput && pairCodeInput.value && pairCodeInput.value.length === 4) {
+                        console.log('🔄 Pairing code pre-filled after connection, auto-fetching stores...');
+                        showStoreStep();
+                    }
+                }, 100);
                 
                 // Store Pi IP address for VNC connection
                 piIpAddress = result.ip_address || '192.168.1.131';  // Use detected IP or fallback
@@ -3557,6 +3560,334 @@ allowfullscreen></iframe></div>`;
             }
             return impacted;
         }
+
+        // -------- Store Groups Management --------
+        function getStoreGroups(){
+            const groups = allStoresData.store_groups || [];
+            console.log('📁 getStoreGroups:', groups.length, 'groups found');
+            return groups;
+        }
+        
+        function saveStoreGroups(groups){
+            console.log('💾 Saving store groups:', groups);
+            allStoresData.store_groups = groups;
+            fetch('/save_store_groups', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ groups: groups })
+            })
+            .then(r=>r.json())
+            .then(data=>{
+                console.log('💾 Save response:', data);
+                if(data && data.success){
+                    showMessage('✅ Store groups saved');
+                } else {
+                    showMessage('❌ Failed to save groups: ' + (data.error || 'Unknown error'), '#c0392b');
+                }
+            })
+            .catch(e=>{
+                console.error('❌ Save groups error:', e);
+                showMessage('❌ Failed to save groups', '#c0392b');
+            });
+        }
+        
+        function openStoreGroupsManager(){
+            console.log('🏪 Opening Store Groups Manager');
+            console.log('📋 Current allStoresData.store_groups:', allStoresData.store_groups);
+            document.getElementById('storeGroupsModal').style.display = 'flex';
+            renderStoreGroups();
+            toggleDrawer(false);
+        }
+        
+        function closeStoreGroupsManager(){
+            document.getElementById('storeGroupsModal').style.display = 'none';
+        }
+        
+        function createStoreGroup(){
+            const nameInput = document.getElementById('newGroupName');
+            const name = (nameInput.value || '').trim();
+            if(!name){ showMessage('⚠️ Enter a group name', '#e67e22'); return; }
+            
+            const groups = getStoreGroups();
+            const id = 'group_' + Date.now();
+            groups.push({ id, name, store_ids: [] });
+            saveStoreGroups(groups);
+            renderStoreGroups();
+            nameInput.value = '';
+            showMessage('✅ Group created: ' + name);
+        }
+        
+        function deleteStoreGroup(groupId){
+            if(!confirm('Delete this group? Stores will not be deleted, only the grouping.')) return;
+            const groups = getStoreGroups().filter(g => g.id !== groupId);
+            saveStoreGroups(groups);
+            renderStoreGroups();
+        }
+        
+        function toggleStoreInGroup(groupId, storeId, checkbox){
+            const groups = getStoreGroups();
+            const group = groups.find(g => g.id === groupId);
+            if(!group) return;
+            
+            if(checkbox.checked){
+                if(!group.store_ids.includes(storeId)){
+                    group.store_ids.push(storeId);
+                }
+            } else {
+                group.store_ids = group.store_ids.filter(id => id !== storeId);
+            }
+            saveStoreGroups(groups);
+            
+            // Update the count display immediately
+            updateGroupStoreCount(groupId);
+        }
+        
+        function updateGroupStoreCount(groupId){
+            const groups = getStoreGroups();
+            const group = groups.find(g => g.id === groupId);
+            if(!group) return;
+            
+            const count = (group.store_ids || []).length;
+            const groupCard = document.querySelector(`[data-group-id="${groupId}"]`);
+            if(groupCard){
+                const countEl = groupCard.querySelector('.group-store-count');
+                if(countEl){
+                    countEl.textContent = `${count} store${count !== 1 ? 's' : ''}`;
+                }
+            }
+        }
+        
+        function renameStoreGroup(groupId){
+            const groups = getStoreGroups();
+            const group = groups.find(g => g.id === groupId);
+            if(!group) return;
+            
+            const newName = prompt('Rename group:', group.name);
+            if(!newName || newName.trim() === group.name) return;
+            
+            group.name = newName.trim();
+            saveStoreGroups(groups);
+            renderStoreGroups();
+        }
+        
+        function renderStoreGroups(){
+            const container = document.getElementById('groupsContainer');
+            const groups = getStoreGroups();
+            const stores = allStoresData.stores || [];
+            
+            // Update group count badge
+            const countBadge = document.getElementById('groupsCount');
+            if(countBadge) countBadge.textContent = groups.length === 0 ? '' : `${groups.length} ${groups.length === 1 ? 'group' : 'groups'}`;
+            
+            if(!groups.length){
+                container.innerHTML = `
+                    <div style="text-align:center; padding:50px 20px; background:#f8f9fa; border-radius:8px; border:2px dashed #ccc;">
+                        <div style="font-size:48px; margin-bottom:12px; opacity:0.6;">📦</div>
+                        <div style="font-size:16px; font-weight:600; color:#555; margin-bottom:6px;">No groups yet</div>
+                        <div style="font-size:14px; color:#777;">Create your first group above to organize stores!</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Group count already updated above
+            const _countBadge = document.getElementById('groupsCount');
+            if(countBadge) countBadge.textContent = `${groups.length} ${groups.length === 1 ? 'group' : 'groups'}`;
+            
+            container.innerHTML = groups.map((group) => {
+                const storeCount = (group.store_ids || []).length;
+                
+                return `
+                    <div data-group-id="${group.id}" style="border:1px solid #ddd; border-radius:8px; padding:0; background:#fff; overflow:hidden;">
+                        
+                        <!-- Group Header -->
+                        <div style="background:#f8f9fa; padding:16px 18px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #e0e0e0;">
+                            <div style="display:flex; align-items:center; gap:12px; flex:1;">
+                                <button class="btn" onclick="toggleGroupExpand('${group.id}')" title="Expand/Collapse" 
+                                    style="padding:6px 10px; font-size:16px; line-height:1; min-width:32px; background:#fff; border:1px solid #ccc; border-radius:6px;">
+                                    <span id="toggle-icon-${group.id}">+</span>
+                                </button>
+                                <div style="flex:1;">
+                                    <div style="font-size:16px; font-weight:600; color:#333;">${group.name}</div>
+                                    <div class="group-store-count" style="font-size:13px; color:#666; margin-top:3px;">
+                                        ${storeCount} store${storeCount !== 1 ? 's' : ''}
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="display:flex; gap:8px;">
+                                <button class="btn" onclick="renameStoreGroup('${group.id}')" 
+                                    style="padding:7px 14px; font-size:13px; background:#fff; border:1px solid #ccc;">
+                                    Rename
+                                </button>
+                                <button class="btn" onclick="deleteStoreGroup('${group.id}')" 
+                                    style="padding:7px 14px; font-size:13px; background:#fff; border:1px solid #dc3545; color:#dc3545;">
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Group Content (Stores List) -->
+                        <div id="group-content-${group.id}" style="display:none; padding:16px; background:#fff;">
+                            <!-- Search and Actions Bar -->
+                            <div style="display:flex; gap:10px; margin-bottom:14px; align-items:center; flex-wrap:wrap;">
+                                <input type="text" id="search-${group.id}" placeholder="Search stores..." 
+                                    oninput="filterGroupStores('${group.id}')"
+                                    style="flex:1; min-width:200px; padding:8px 12px; border:1px solid #ddd; border-radius:6px; font-size:13px;">
+                                <button class="btn" onclick="selectAllGroupStores('${group.id}')" 
+                                    style="padding:8px 16px; font-size:13px; background:#0066cc; color:#fff; border:none; white-space:nowrap;">
+                                    ✓ Select All
+                                </button>
+                                <button class="btn" onclick="unselectAllGroupStores('${group.id}')" 
+                                    style="padding:8px 16px; font-size:13px; background:#fff; border:1px solid #ccc; white-space:nowrap;">
+                                    ✗ Unselect All
+                                </button>
+                            </div>
+                            <div id="stores-list-${group.id}" style="max-height:250px; overflow-y:auto; display:grid; grid-template-columns:repeat(auto-fill, minmax(250px, 1fr)); gap:8px;">
+                                ${stores.map(store => {
+                                    const checked = (group.store_ids || []).includes(store.id);
+                                    return `
+                                        <label style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:${checked ? '#f0f8ff' : '#fafafa'}; border:1px solid ${checked ? '#0066cc' : '#ddd'}; border-radius:6px; cursor:pointer;"
+                                            onmouseover="if(!this.querySelector('input').checked) this.style.background='#f5f5f5'"
+                                            onmouseout="if(!this.querySelector('input').checked) this.style.background='#fafafa'">
+                                            <input type="checkbox" ${checked ? 'checked' : ''} 
+                                                onchange="toggleStoreInGroup('${group.id}', '${store.id}', this); this.parentElement.style.borderColor = this.checked ? '#0066cc' : '#ddd'; this.parentElement.style.background = this.checked ? '#f0f8ff' : '#fafafa';" 
+                                                style="width:18px; height:18px; cursor:pointer;">
+                                            <div style="flex:1; min-width:0;">
+                                                <div style="font-size:14px; font-weight:500; color:#333; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${store.name || store.id}</div>
+                                                <div style="font-size:12px; color:#666; margin-top:2px;">ID: ${store.id}</div>
+                                            </div>
+                                        </label>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function toggleGroupExpand(groupId){
+            const content = document.getElementById(`group-content-${groupId}`);
+            const icon = document.getElementById(`toggle-icon-${groupId}`);
+            if(!content || !icon) return;
+            
+            if(content.style.display === 'none'){
+                content.style.display = 'block';
+                icon.textContent = '−';
+            } else {
+                content.style.display = 'none';
+                icon.textContent = '+';
+            }
+        }
+        
+        function filterGroupStores(groupId){
+            const searchInput = document.getElementById(`search-${groupId}`);
+            const storesList = document.getElementById(`stores-list-${groupId}`);
+            if(!searchInput || !storesList) return;
+            
+            const searchTerm = searchInput.value.toLowerCase().trim();
+            const labels = storesList.querySelectorAll('label');
+            
+            labels.forEach(label => {
+                const text = label.textContent.toLowerCase();
+                if(text.includes(searchTerm)){
+                    label.style.display = 'flex';
+                } else {
+                    label.style.display = 'none';
+                }
+            });
+        }
+        
+        function selectAllGroupStores(groupId){
+            const storesList = document.getElementById(`stores-list-${groupId}`);
+            if(!storesList) return;
+            
+            const checkboxes = storesList.querySelectorAll('input[type="checkbox"]');
+            checkboxes.forEach(checkbox => {
+                if(checkbox.parentElement.style.display !== 'none'){
+                    checkbox.checked = true;
+                    checkbox.onchange();
+                }
+            });
+        }
+        
+        function unselectAllGroupStores(groupId){
+            const storesList = document.getElementById(`stores-list-${groupId}`);
+            if(!storesList) return;
+            
+            const checkboxes = storesList.querySelectorAll('input[type="checkbox"]');
+            checkboxes.forEach(checkbox => {
+                if(checkbox.parentElement.style.display !== 'none'){
+                    checkbox.checked = false;
+                    checkbox.onchange();
+                }
+            });
+        }
+        
+        function selectGroupStores(groupId, buttonElement){
+            const groups = getStoreGroups();
+            const group = groups.find(g => g.id === groupId);
+            if(!group || !group.store_ids) return;
+            
+            // Check if button is already selected
+            const isSelected = buttonElement && buttonElement.style.background === 'rgb(0, 102, 204)';
+            
+            if(isSelected){
+                // Deselect: remove highlight and uncheck stores
+                buttonElement.style.background = '';
+                buttonElement.style.color = '';
+                buttonElement.style.borderColor = '';
+                
+                const checkboxes = document.querySelectorAll('#applyAllList input.apply-store');
+                let count = 0;
+                checkboxes.forEach(cb => {
+                    const storeId = cb.getAttribute('data-store-id');
+                    if(group.store_ids.includes(storeId)){
+                        cb.checked = false;
+                        count++;
+                    }
+                });
+                showMessage(`❌ Deselected ${count} store${count !== 1 ? 's' : ''} from group: ${group.name}`);
+            } else {
+                // Select: add highlight and check stores
+                if(buttonElement){
+                    buttonElement.style.background = '#0066cc';
+                    buttonElement.style.color = '#fff';
+                    buttonElement.style.borderColor = '#0066cc';
+                }
+                
+                const checkboxes = document.querySelectorAll('#applyAllList input.apply-store');
+                let count = 0;
+                checkboxes.forEach(cb => {
+                    const storeId = cb.getAttribute('data-store-id');
+                    if(group.store_ids.includes(storeId)){
+                        cb.checked = true;
+                        count++;
+                    }
+                });
+                showMessage(`✅ Selected ${count} store${count !== 1 ? 's' : ''} from group: ${group.name}`);
+            }
+        }
+        
+        function renderApplyAllGroups(){
+            const groups = getStoreGroups();
+            const groupsSection = document.getElementById('applyAllGroups');
+            const buttonsContainer = document.getElementById('applyGroupButtons');
+            
+            if(!groups.length || !buttonsContainer){
+                if(groupsSection) groupsSection.style.display = 'none';
+                return;
+            }
+            
+            buttonsContainer.innerHTML = groups.map(group => {
+                const count = (group.store_ids || []).length;
+                return `<button class="btn group-select-btn" data-group-id="${group.id}" onclick="selectGroupStores('${group.id}', this)" style="padding:6px 14px; font-size:13px; white-space:nowrap; transition:all 0.2s;">
+                    ${group.name} (${count})
+                </button>`;
+            }).join('');
+            groupsSection.style.display = 'block';
+        }
+
         function openApplyAllModal(screenId, mode, selectedIds){
             applyAllModalState = { screenId, mode, selectedIds: Array.isArray(selectedIds)? selectedIds : [] };
             const impacted = computeImpactedStores(screenId);
@@ -3572,6 +3903,10 @@ allowfullscreen></iframe></div>`;
             document.getElementById('applyAllAction').textContent = (mode === 'mirror') ? 'Replace selected stores' : 'Apply to selected stores';
             const hint = document.getElementById('applySelHint');
             if (hint) hint.style.display = (selectedIds && selectedIds.length) ? 'block' : 'none';
+            
+            // Render store groups for quick selection
+            renderApplyAllGroups();
+            
             modal.classList.add('show');
             backdrop.classList.add('show');
             // Wire Enter key on search and focus it
@@ -3594,6 +3929,14 @@ allowfullscreen></iframe></div>`;
             try{
                 const cbs = document.querySelectorAll('#applyAllList input.apply-store');
                 cbs.forEach(cb=> cb.checked = false);
+                
+                // Remove highlight from all group buttons
+                const allButtons = document.querySelectorAll('.group-select-btn');
+                allButtons.forEach(btn => {
+                    btn.style.background = '';
+                    btn.style.color = '';
+                    btn.style.borderColor = '';
+                });
             }catch{}
         }
         function searchAndTickApplyStores(){
@@ -3668,7 +4011,9 @@ allowfullscreen></iframe></div>`;
                                 duration: it.duration || 10,
                                 repeat: !!it.repeat,
                                 link_next: !!it.link_next,
-                                media_type: it.media_type || ((it.file||'').split('.').pop())
+                                media_type: it.media_type || ((it.file||'').split('.').pop()),
+                                effect: (it.effect !== undefined && it.effect !== null) ? it.effect : '',
+                                days: Array.isArray(it.days) ? it.days : []
                             }));
                         }
                     }catch{}
@@ -3692,7 +4037,9 @@ allowfullscreen></iframe></div>`;
                                 duration: si.duration || 10,
                                 repeat: !!si.repeat,
                                 link_next: !!si.link_next,
-                                media_type: si.media_type || ((si.file||'').split('.').pop())
+                                media_type: si.media_type || ((si.file||'').split('.').pop()),
+                                effect: (si.effect !== undefined && si.effect !== null) ? si.effect : '',
+                                days: Array.isArray(si.days) ? si.days : []
                             }));
                             // Prefer explicit file if present on master
                             scr.file = mScr.file || (scr.playlist[0] && scr.playlist[0].file) || filename;
@@ -3716,12 +4063,30 @@ allowfullscreen></iframe></div>`;
                                 if(!scr.file) scr.file = selectedItems[0].file;
                             }
                         } else {
+                            // Get schedule/transition from master item if available
+                            const masterItem = masterList.find(mi => mi && mi.file === filename) || {};
+                            const itemDefaults = {
+                                id: String(Date.now()),
+                                file: filename,
+                                enabled: true,
+                                start: masterItem.start || null,
+                                end: masterItem.end || null,
+                                schedule: Array.isArray(masterItem.schedule) ? masterItem.schedule : [],
+                                duration: masterItem.duration || 10,
+                                repeat: masterItem.repeat !== undefined ? masterItem.repeat : true,
+                                link_next: !!masterItem.link_next,
+                                media_type: (filename||'').split('.').pop(),
+                                effect: (masterItem.effect !== undefined && masterItem.effect !== null) ? masterItem.effect : '',
+                                days: Array.isArray(masterItem.days) ? masterItem.days : []
+                            };
                             if (mode === 'override'){
                                 scr.file = filename;
-                                scr.playlist = [{ id: String(Date.now()), file: filename, enabled:true, start:null, end:null, schedule:[], duration:10, repeat:true, link_next:false, media_type:(filename||'').split('.').pop() }];
+                                scr.playlist = [itemDefaults];
                             } else {
                                 scr.playlist = scr.playlist || [];
-                                if (!scr.playlist.some(it=>it && it.file===filename)) scr.playlist.push({ id: String(Date.now()+Math.random()), file: filename, enabled:true, start:null, end:null, schedule:[], duration:10, repeat:true, link_next:false, media_type:(filename||'').split('.').pop() });
+                                if (!scr.playlist.some(it=>it && it.file===filename)) {
+                                    scr.playlist.push(Object.assign({ id: String(Date.now()+Math.random()) }, itemDefaults));
+                                }
                                 if (!scr.file) scr.file = filename;
                             }
                         }
@@ -3741,15 +4106,32 @@ allowfullscreen></iframe></div>`;
                                 duration: si.duration || 10,
                                 repeat: !!si.repeat,
                                 link_next: !!si.link_next,
-                                media_type: si.media_type || ((si.file||'').split('.').pop())
+                                media_type: si.media_type || ((si.file||'').split('.').pop()),
+                                effect: (si.effect !== undefined && si.effect !== null) ? si.effect : '',
+                                days: Array.isArray(si.days) ? si.days : []
                             }));
                             scr.file = mScr.file || (scr.playlist[0] && scr.playlist[0].file) || filename;
                         } else if (selectedItems.length){
                             scr.playlist = selectedItems.map(si=>Object.assign({ id: String(Date.now()+Math.random()) }, si));
                             scr.file = selectedItems[0].file;
                         } else {
+                            // Get schedule/transition from master item if available
+                            const masterItem = masterList.find(mi => mi && mi.file === filename) || {};
                             scr.file = filename;
-                            scr.playlist = [{ id: String(Date.now()), file: filename, enabled:true, start:null, end:null, schedule:[], duration:10, repeat:true, link_next:false, media_type:(filename||'').split('.').pop() }];
+                            scr.playlist = [{
+                                id: String(Date.now()),
+                                file: filename,
+                                enabled: true,
+                                start: masterItem.start || null,
+                                end: masterItem.end || null,
+                                schedule: Array.isArray(masterItem.schedule) ? masterItem.schedule : [],
+                                duration: masterItem.duration || 10,
+                                repeat: masterItem.repeat !== undefined ? masterItem.repeat : true,
+                                link_next: !!masterItem.link_next,
+                                media_type: (filename||'').split('.').pop(),
+                                effect: (masterItem.effect !== undefined && masterItem.effect !== null) ? masterItem.effect : '',
+                                days: Array.isArray(masterItem.days) ? masterItem.days : []
+                            }];
                         }
                     });
                     showMessage(data.message || 'Replicated');
@@ -4426,7 +4808,7 @@ allowfullscreen></iframe></div>`;
                                                                                 <div class="pl-actions inline-actions primary-actions">\
                                                                                         <div class="group left">\
                                                                                             ${item && item.sync_ref && item.sync_ref.role==='follower' && idx===0 ? '' : `<button class=\"pl-switch ${item.enabled?'on':'off'}\" aria-label=\"Toggle item\" data-realstate=\"${item.enabled?'on':'off'}\" title=\"Enable / Disable (independent of schedule)\" onclick=\"toggleEnableSwitch(this,'${screenId}','${item.id}')\"><span>${item.enabled?'On':'Off'}</span></button>`}\
-                                                                                            ${isMasterStore(currentStoreId) ? `<label style='display:inline-flex;align-items:center;gap:6px;margin-left:8px;font-size:11px;color:#444;'><input type='checkbox' data-bind='apply-select' data-item-id='${item.id}'><span>tick</span></label>` : ''}\
+                                                                                            ${isMasterStore(currentStoreId) ? `<label style='display:inline-flex;align-items:center;gap:8px;margin-left:8px;font-size:15px;font-weight:500;color:#1d1d1f;cursor:pointer;'><input type='checkbox' data-bind='apply-select' data-item-id='${item.id}' style='width:18px;height:18px;cursor:pointer;'><span>tick</span></label>` : ''}\
                                                                                         </div>\
                                                                                         <div class="group center combo-dur-del">\
                                                                                             ${item && item.sync_ref && item.sync_ref.role==='follower' && idx===0 ? '<div style="font-size:12px;color:#666;">Duration (sync)</div>' : `<div class=\"dur-box small\"><button class=\"pl-icon-btn dur-btn\" onclick=\"adjustDuration('${screenId}','${item.id}',-1, event)\" aria-label=\"Decrease duration\">−</button><div class=\"dur-display\" id=\"durdisp-${screenId}-${item.id}\">${(item.duration||5)}s</div><button class=\"pl-icon-btn dur-btn\" onclick=\"adjustDuration('${screenId}','${item.id}',1, event)\" aria-label=\"Increase duration\">+</button></div><input id=\"dur-${screenId}-${item.id}\" type=\"hidden\" value=\"${item.duration || 5}\">`}
@@ -7935,6 +8317,46 @@ allowfullscreen></iframe></div>`;
                 <div class="modal-buttons" style="padding: 10px 0 0;">
                     <button type="button" class="btn-secondary" onclick="closeAddStoreDialog()">Cancel</button>
                     <button type="button" class="btn-primary" onclick="addNewStoresBulk()">Add All</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Store Groups Manager Modal -->
+    <div id="storeGroupsModal" class="modal" role="dialog" aria-modal="true">
+        <div class="modal-content" style="max-width: 900px;">
+            <div class="modal-header">
+                <h3>🏪 Store Groups Manager</h3>
+                <button type="button" class="close" onclick="closeStoreGroupsManager()">&times;</button>
+            </div>
+            <div style="padding:24px;">
+                <p style="color:#666; font-size:14px; margin-bottom:24px; padding:12px 16px; background:#f8f9fa; border-radius:8px; border-left:3px solid #0066cc;">
+                    Create groups to organize stores by location, region, or category. Use groups for faster bulk operations.
+                </p>
+                
+                <!-- Create New Group Section -->
+                <div style="background:#fff; border:1px solid #ddd; border-radius:8px; padding:20px; margin-bottom:24px;">
+                    <h4 style="margin:0 0 14px 0; font-size:15px; font-weight:600; color:#333;">➕ Create New Group</h4>
+                    <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+                        <div style="flex:1; min-width:250px; max-width:450px;">
+                            <label style="display:block; font-size:13px; font-weight:500; margin-bottom:6px; color:#555;">Group Name</label>
+                            <input type="text" id="newGroupName" placeholder="e.g., Sydney Stores, NSW Region" 
+                                style="width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:6px; font-size:14px;"
+                                onkeypress="if(event.key==='Enter') createStoreGroup()">
+                        </div>
+                        <button class="btn-primary" onclick="createStoreGroup()" style="padding:10px 24px; white-space:nowrap;">Create Group</button>
+                    </div>
+                </div>
+
+                <!-- Existing Groups List -->
+                <div id="groupsList">
+                    <h4 style="margin:0 0 14px 0; font-size:15px; font-weight:600; color:#333;">
+                        📁 Your Groups
+                        <span id="groupsCount" style="background:#e8e8e8; color:#555; padding:3px 10px; border-radius:12px; font-size:12px; font-weight:600; margin-left:8px;"></span>
+                    </h4>
+                    <div id="groupsContainer" style="display:flex; flex-direction:column; gap:12px;">
+                        <!-- Groups will be rendered here -->
+                    </div>
                 </div>
             </div>
         </div>

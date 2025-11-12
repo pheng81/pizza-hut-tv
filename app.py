@@ -6732,7 +6732,9 @@ def replicate_screen():
                         'duration': it.get('duration', 10),
                         'repeat': bool(it.get('repeat', True)),
                         'link_next': bool(it.get('link_next', False)),
-                        'media_type': it.get('media_type') or classify_media(it.get('file') or '')
+                        'media_type': it.get('media_type') or classify_media(it.get('file') or ''),
+                        'effect': it.get('effect', ''),
+                        'days': it.get('days', [])
                     }
                     source_items.append(copied)
             # If selection empty after filtering, clear the selection flag
@@ -6760,7 +6762,9 @@ def replicate_screen():
                         'duration': it.get('duration', 10),
                         'repeat': bool(it.get('repeat', True)),
                         'link_next': bool(it.get('link_next', False)),
-                        'media_type': it.get('media_type') or classify_media(it.get('file') or '')
+                        'media_type': it.get('media_type') or classify_media(it.get('file') or ''),
+                        'effect': it.get('effect', ''),
+                        'days': it.get('days', [])
                     })
             selected_item_ids = master_ids
 
@@ -6861,11 +6865,32 @@ def replicate_screen():
                         screens[actual_id]['file'] = source_items[0].get('file')
             else:
                 # Legacy single-file replicate path
+                # Get schedule/transition from master item if available
+                master_item = None
+                for it in source_playlist:
+                    if isinstance(it, dict) and it.get('file') == source_file:
+                        master_item = it
+                        break
+                
                 if mode == 'addon':
                     # Keep existing items, append if missing
                     pl = screens[actual_id].setdefault('playlist', [])
                     if not any(i.get('file') == source_file for i in pl):
-                        pl.append({'id': str(uuid.uuid4()), 'file': source_file, 'enabled': True, 'start': None, 'end': None, 'schedule': [], 'duration': 10, 'repeat': True, 'link_next': False, 'media_type': classify_media(source_file)})
+                        new_item = {
+                            'id': str(uuid.uuid4()), 
+                            'file': source_file, 
+                            'enabled': True, 
+                            'start': master_item.get('start') if master_item else None, 
+                            'end': master_item.get('end') if master_item else None, 
+                            'schedule': master_item.get('schedule', []) if master_item else [], 
+                            'duration': master_item.get('duration', 10) if master_item else 10, 
+                            'repeat': master_item.get('repeat', True) if master_item else True, 
+                            'link_next': master_item.get('link_next', False) if master_item else False, 
+                            'media_type': classify_media(source_file),
+                            'effect': master_item.get('effect', '') if master_item else '',
+                            'days': master_item.get('days', []) if master_item else []
+                        }
+                        pl.append(new_item)
                     if not screens[actual_id].get('file'):
                         screens[actual_id]['file'] = source_file
                 else:
@@ -6875,13 +6900,15 @@ def replicate_screen():
                         'id': str(uuid.uuid4()),
                         'file': source_file,
                         'enabled': True,
-                        'start': None,
-                        'end': None,
-                        'schedule': [],
-                        'duration': 10,
-                        'repeat': True,
-                        'link_next': False,
-                        'media_type': classify_media(source_file)
+                        'start': master_item.get('start') if master_item else None,
+                        'end': master_item.get('end') if master_item else None,
+                        'schedule': master_item.get('schedule', []) if master_item else [],
+                        'duration': master_item.get('duration', 10) if master_item else 10,
+                        'repeat': master_item.get('repeat', True) if master_item else True,
+                        'link_next': master_item.get('link_next', False) if master_item else False,
+                        'media_type': classify_media(source_file),
+                        'effect': master_item.get('effect', '') if master_item else '',
+                        'days': master_item.get('days', []) if master_item else []
                     }]
             updated_stores.append(sid)
             # Enqueue reload for each affected screen
@@ -7150,6 +7177,32 @@ def add_screen():
     except Exception as e:
         print(f"Error adding screen: {e}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/save_store_groups', methods=['POST'])
+@login_required
+def save_store_groups():
+    """Save store groups for the current user"""
+    try:
+        data = request.get_json() or {}
+        groups = data.get('groups', [])
+        
+        user_key = _safe_user_key()
+        
+        # Load current config using the existing function
+        cfg = load_store_config_for_user_safe_key(user_key)
+        
+        # Update store_groups
+        cfg['store_groups'] = groups
+        
+        # Save config using the existing function
+        save_store_config_for_user_safe_key(user_key, cfg)
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"Error saving store groups: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/delete_screen', methods=['POST'])
 @login_required

@@ -1114,7 +1114,7 @@
                     <!-- Device Footer (Actions) -->
                     <div class="device-footer">
                         {% if device.status == 'online' %}
-                        <button type="button" class="btn-small btn-connect" onclick="openVncPopup('{{ device.id }}')">Connect</button>
+                        <button type="button" class="btn-small btn-connect" onclick="openVncPopup('{{ device.id }}')">LIVE</button>
                         {% else %}
                         <button class="btn-small btn-connect" disabled style="opacity: 0.5; cursor: not-allowed;">Offline</button>
                         {% endif %}
