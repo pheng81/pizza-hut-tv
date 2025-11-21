@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Resend Verification Email</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <style>
+    :root{
+      --bg:#0b0f14; --card:#111827; --muted:#9fb3c8; --text:#e6edf3; --stroke:#243244;
+      --input:#0f172a; --btn:#1e293b; --btn-hover:#2b3a52; --accent:#f97316;
+    }
+    *{box-sizing:border-box}
+    body{
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background:#ffffff; color:#0a0a0a;
+      display:flex; align-items:center; justify-content:center; min-height:100vh; padding:24px;
+    }
+    .card{
+      width: 420px; max-width: 100%;
+      background:#fff; border:1px solid #e5e7eb; border-radius:16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.06);
+      padding:28px 28px 22px;
+    }
+    .brand{ display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:8px; }
+    .brand .logo{ height:36px; filter: saturate(0.9) brightness(1.05); }
+    h1{ text-align:center; font-size:22px; margin:6px 0 14px; }
+    .muted{ color:var(--muted); font-size:12px; text-align:center; margin-bottom:16px; }
+    .flash{ color:#dc2626; font-size:12px; margin:8px 0; text-align:center; padding:8px; background:#fee; border-radius:6px; }
+    .flash.success{ color:#059669; background:#d1fae5; }
+    .btn{ width:100%; padding:10px 12px; border-radius:8px; border:1px solid #cfd8e3; background:#1e293b; color:#e6edf3; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; text-decoration:none; }
+    .btn:hover{ background:#2563eb; border-color:#2563eb; color:#fff; }
+    label{ display:block; font-size:12px; color:var(--muted); margin-bottom:6px; }
+    input[type=email]{ width:100%; padding:11px 12px; border-radius:8px; border:1px solid #d1d5db; background:#ffffff; color:#0a0a0a; }
+    .field{ margin:12px 0; }
+    .primary{ background:linear-gradient(135deg, var(--accent), #ffb36b); color:#111; border:0; font-weight:700; }
+    .primary:hover{ filter:brightness(.95); }
+    .footer{ text-align:center; margin-top:16px; font-size:13px; }
+    .footer a{ color:#2563eb; text-decoration:none; }
+    .footer a:hover{ text-decoration:underline; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">
+      <img class="logo" src="{{ url_for('static', filename='ea-logo.svg') }}" alt="Logo">
+    </div>
+    <h1>Resend Verification Email</h1>
+    <p class="muted">Enter your email address and we'll send you a new verification link.</p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="flash {{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <form method="post" action="{{ url_for('resend_verification') }}">
+      <div class="field">
+        <label for="email">Email Address</label>
+        <input type="email" id="email" name="email" autocomplete="email" required>
+      </div>
+      <div class="field">
+        <button class="btn primary" type="submit">Send Verification Email</button>
+      </div>
+    </form>
+
+    <div class="footer">
+      <a href="{{ url_for('login') }}">Back to Login</a>
+    </div>
+  </div>
+</body>
+</html>

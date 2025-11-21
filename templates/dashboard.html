@@ -265,19 +265,20 @@
         }
         
         .stores-section {
-            background-color: white;
-            padding: 20px;
-            border-radius: 8px;
+            background: #f8f9fa;
+            border-radius: 4px;
             margin-bottom: 20px;
             box-shadow: none;
+            overflow: hidden;
         }
         
     .stores-header {
             display: flex;
             align-items: center;
             gap: 12px;
-            margin-bottom: 16px;
-            padding-left: 15px; /* align with .store-management inner padding */
+            padding: 15px;
+            background: transparent;
+            border-radius: 0;
         }
         .stores-title {
             /* Larger, script-like “running word” style */
@@ -1135,13 +1136,14 @@
         }
         
         .store-management {
-            background: #f8f9fa;
+            background: transparent;
             padding: 15px;
-            border-radius: 4px;
-            margin-bottom: 15px;
+            border-radius: 0;
+            margin-bottom: 0;
             display: flex;
             align-items: center;
             gap: 10px;
+            border-top: 1px solid #e9ecef;
         }
         
         .store-management label {
@@ -1557,19 +1559,46 @@
             .stores-title .tv-svg { width:32px; height:32px; }
             .stores-title .brand-logo { max-height: 32px; height: auto; }
 
-            /* Store selector area */
-            .store-management { flex-direction: column; align-items: stretch; gap: 10px; }
-            .store-management select { width: 100%; min-width: 0; }
-            .store-search { width: 100%; }
-            .store-search.open .search-input { width: 100%; }
+            /* Store selector area - keep in one row on mobile */
+            .store-management { 
+                display: flex; 
+                flex-direction: row; 
+                align-items: center; 
+                gap: 8px;
+                flex-wrap: wrap;
+                padding: 10px 15px !important;
+                margin-bottom: 10px !important;
+            }
+            .store-management label { 
+                font-size: 14px;
+                white-space: nowrap;
+                margin: 0;
+            }
+            .store-management select { 
+                flex: 1;
+                min-width: 150px;
+                font-size: 14px;
+                padding: 6px 10px;
+            }
+            .store-search { 
+                flex-shrink: 0;
+            }
+            .store-search .search-btn {
+                padding: 6px 10px;
+            }
+            .store-search.open .search-input { width: 200px; }
             /* Hide large desktop buttons; we show compact ones in the mobile action row */
             .store-management .add-store-btn, .store-management .delete-store-btn { display:none; }
 
             /* Sections */
-            .section-header { flex-direction: column; align-items: stretch; gap: 10px; }
-            .section-header .section-left { justify-content: space-between; }
-            /* Hide per-section Add Screen on mobile; replaced by top action row */
-            .section-header .add-screen-btn { display:none; }
+            .section-header { flex-direction: row; align-items: center; gap: 10px; justify-content: space-between; }
+            .section-header .section-left { justify-content: flex-start; }
+            .section-header .section-left h3 { display: none; }
+            .section-header .store-info .store-number,
+            .section-header .store-info .store-name { display: none; }
+            .section-header .master-indicator { display: flex !important; font-size: 14px; }
+            /* Keep Add Screen button visible on mobile */
+            .section-header .add-screen-btn { display: inline-flex !important; }
 
             /* Grid to single column */
             .screens-grid, .promos-grid { grid-template-columns: 1fr; gap: 14px; }
@@ -1682,7 +1711,7 @@
 <body>
     <div class="container">
         <div class="stores-section">
-        <div class="stores-header">
+            <div class="stores-header">
                         <div class="stores-title">
                                                         <img class="brand-logo" src="{{ url_for('static', filename='ea-logo.svg') }}?v={{ asset_bust|default(0) }}" alt="Everyday Advertise" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';" />
                             <span class="header-sep" aria-hidden="true"></span>
@@ -1695,9 +1724,8 @@
                                                             <path d="M6 9l6 6 6-6" />
                                                         </svg>
                                                     </button>
-                                                    <!-- Desktop actions removed; all actions are inside the hamburger menu to match design -->
-                                                    <div class="stores-actions desktop-actions" role="toolbar" aria-label="Header actions" style="display:none"></div>
-                                                </div>
+                <!-- Desktop actions removed; all actions are inside the hamburger menu to match design -->
+                <div class="stores-actions desktop-actions" role="toolbar" aria-label="Header actions" style="display:none"></div>
             </div>
             
             <!-- Store Management -->
@@ -1831,6 +1859,10 @@
             <button class="action-item" onclick="toggleProfilePanel(true)" title="Profile">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c1.5-3.5 5-6 8-6s6.5 2.5 8 6"></path></svg>
                 <span>Profile</span>
+            </button>
+            <button class="action-item" onclick="window.location.href='/account'" title="Account">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                <span>Account</span>
             </button>
             <button class="action-item" onclick="openPiDeviceManager()" title="Pi Device Manager">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
@@ -4245,9 +4277,185 @@ allowfullscreen></iframe></div>`;
             }catch(e){ console.error(e); }
         }
         
+        function showAddScreenConfirmDialog(screenCount) {
+            return new Promise((resolve) => {
+                // Create modal overlay
+                const overlay = document.createElement('div');
+                overlay.style.cssText = `
+                    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                    background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+                    display: flex; align-items: center; justify-content: center;
+                    z-index: 10000; animation: fadeIn 0.2s ease;
+                `;
+                
+                // Create dialog
+                const dialog = document.createElement('div');
+                dialog.style.cssText = `
+                    background: white; border-radius: 16px; padding: 0;
+                    max-width: 480px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                    animation: slideUp 0.3s ease; position: relative; overflow: hidden;
+                `;
+                
+                dialog.innerHTML = `
+                    <style>
+                        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+                        @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+                        .screen-icon-container {
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            padding: 32px; text-align: center;
+                        }
+                        .tv-screen-icon {
+                            width: 120px; height: 90px; margin: 0 auto 16px;
+                            background: rgba(255,255,255,0.15); border-radius: 16px;
+                            display: flex; align-items: center; justify-content: center;
+                            border: 4px solid rgba(255,255,255,0.3);
+                            position: relative;
+                            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+                        }
+                        .tv-screen-icon::before {
+                            content: '';
+                            width: 70px; height: 50px;
+                            background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+                            border-radius: 8px;
+                            border: 3px solid rgba(255,255,255,0.9);
+                            position: relative;
+                            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+                        }
+                        .tv-screen-icon::after {
+                            content: '+'; position: absolute; bottom: -12px; right: -12px;
+                            background: #10b981; color: white; width: 36px; height: 36px;
+                            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+                            font-size: 24px; font-weight: bold; border: 4px solid white;
+                            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+                        }
+                        .dialog-title {
+                            color: white; font-size: 24px; font-weight: 700; margin: 0;
+                        }
+                        .dialog-content {
+                            padding: 28px 32px;
+                        }
+                        .screen-count-badge {
+                            display: inline-flex; align-items: center; gap: 8px;
+                            background: #f3f4f6; border-radius: 8px; padding: 12px 16px;
+                            margin: 12px 0 20px 0; font-size: 15px; color: #374151;
+                        }
+                        .screen-count-badge svg {
+                            width: 20px; height: 20px; color: #667eea;
+                        }
+                        .warning-box {
+                            background: #fef3c7; border-left: 4px solid #f59e0b;
+                            padding: 16px; border-radius: 8px; margin: 16px 0;
+                        }
+                        .warning-box-title {
+                            display: flex; align-items: center; gap: 8px;
+                            font-weight: 600; color: #92400e; margin-bottom: 8px; font-size: 14px;
+                        }
+                        .warning-box-text {
+                            color: #78350f; font-size: 14px; line-height: 1.5;
+                        }
+                        .price-highlight {
+                            color: #dc2626; font-weight: 700; font-size: 18px;
+                        }
+                        .dialog-buttons {
+                            display: flex; gap: 12px; margin-top: 24px;
+                        }
+                        .dialog-btn {
+                            flex: 1; padding: 14px 24px; border: none; border-radius: 10px;
+                            font-size: 15px; font-weight: 600; cursor: pointer;
+                            transition: all 0.2s; font-family: inherit;
+                        }
+                        .dialog-btn-cancel {
+                            background: #f3f4f6; color: #374151;
+                        }
+                        .dialog-btn-cancel:hover {
+                            background: #e5e7eb;
+                        }
+                        .dialog-btn-confirm {
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            color: white;
+                        }
+                        .dialog-btn-confirm:hover {
+                            transform: translateY(-2px); box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+                        }
+                    </style>
+                    <div class="screen-icon-container">
+                        <div class="tv-screen-icon"></div>
+                        <h2 class="dialog-title">Add Another Screen?</h2>
+                    </div>
+                    <div class="dialog-content">
+                        <div style="display: flex; align-items: center; gap: 12px; padding: 16px; background: #f8f9fa; border-radius: 10px; margin-bottom: 20px;">
+                            <div style="width: 50px; height: 38px; background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%); border-radius: 6px; border: 2px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.1); flex-shrink: 0;"></div>
+                            <div style="font-size: 15px; color: #374151;">
+                                <strong>Current screens:</strong> <span style="color: #667eea; font-weight: 700; font-size: 18px;">${screenCount}</span>
+                            </div>
+                        </div>
+                        
+                        <div class="warning-box">
+                            <div class="warning-box-title">
+                                <svg style="width: 20px; height: 20px;" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                </svg>
+                                Additional Charge
+                            </div>
+                            <div class="warning-box-text">
+                                Adding another screen will create a new subscription at <span class="price-highlight">$5/month</span> per screen.
+                            </div>
+                        </div>
+                        
+                        <p style="color: #6b7280; font-size: 14px; margin: 16px 0 0 0;">
+                            Do you want to proceed and add another screen to your account?
+                        </p>
+                        
+                        <div class="dialog-buttons">
+                            <button class="dialog-btn dialog-btn-cancel" id="cancelBtn">Cancel</button>
+                            <button class="dialog-btn dialog-btn-confirm" id="confirmBtn">Yes, Add Screen</button>
+                        </div>
+                    </div>
+                `;
+                
+                overlay.appendChild(dialog);
+                document.body.appendChild(overlay);
+                
+                // Button handlers
+                document.getElementById('cancelBtn').onclick = () => {
+                    overlay.remove();
+                    resolve(false);
+                };
+                document.getElementById('confirmBtn').onclick = () => {
+                    overlay.remove();
+                    resolve(true);
+                };
+                
+                // Click outside to cancel
+                overlay.onclick = (e) => {
+                    if (e.target === overlay) {
+                        overlay.remove();
+                        resolve(false);
+                    }
+                };
+            });
+        }
+        
         async function addNewScreen(screenType) {
             try {
                 console.log('Adding new screen:', screenType, 'for store:', currentStoreId);
+                
+                // First check if user will need to pay for this screen
+                const checkResp = await fetch('/check_screen_limit', {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const checkData = await checkResp.json();
+                
+                // If user has existing screens and subscription, warn about additional charge
+                if (checkData.has_subscription && checkData.screen_count >= 1) {
+                    const confirmed = await showAddScreenConfirmDialog(checkData.screen_count);
+                    if (!confirmed) {
+                        console.log('User cancelled adding additional screen');
+                        return;
+                    }
+                }
+                
                 const resp = await fetch('/add_screen', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -4255,6 +4463,18 @@ allowfullscreen></iframe></div>`;
                 });
                 const data = await resp.json();
                 console.log('Add screen response:', data);
+                
+                // Check if subscription is required
+                if (resp.status === 403 && data.requires_subscription) {
+                    // Show subscription modal/alert
+                    const message = data.message || 'You have reached your free screen limit. Subscribe to add more screens at $5 per screen per month.';
+                    const goToSubscribe = confirm(`${message}\\n\\nWould you like to subscribe now?`);
+                    if (goToSubscribe) {
+                        window.location.href = '/subscribe';
+                    }
+                    return;
+                }
+                
                 if(!data.success){ alert(`❌ Error: ${data.error}`); return; }
                 // Inject into in-memory model
                 if(!allStoresData.screens) allStoresData.screens = {};
@@ -5530,19 +5750,10 @@ allowfullscreen></iframe></div>`;
                 document.getElementById('current-store-name').textContent = storeData.name;
             }
 
-            // Add Auto Sync Upload Video button to dashboard header if not present
+            // Check phone verification status and show popup if needed
             setTimeout(() => {
-                let btn = document.getElementById('auto-sync-upload-btn');
-                if (!btn) {
-                    btn = document.createElement('button');
-                    btn.id = 'auto-sync-upload-btn';
-                    btn.textContent = 'Auto Sync Upload Video';
-                    btn.style.cssText = 'margin: 0 12px; padding: 8px 18px; background: #c8102e; color: #fff; font-weight: bold; border-radius: 8px; border: none; font-size: 16px; cursor: pointer;';
-                    btn.onclick = showScreenSyncUploadModal;
-                    const header = document.querySelector('.dashboard-header') || document.body;
-                    header.insertBefore(btn, header.firstChild);
-                }
-            }, 400);
+                checkPhoneVerification();
+            }, 800);
 
             // --- Live Preview Rotation (Dashboard) ---
             (()=>{ // IIFE to avoid globals clashing if script reloaded
@@ -7748,7 +7959,170 @@ allowfullscreen></iframe></div>`;
             setupAutoPlaylistRefresh();
             // Begin status polling for initial store
             startStatusPolling(currentStoreId);
+            
+            // Check phone verification on page load
+            checkPhoneVerification();
         });
+        
+        // Phone verification check function
+        function checkPhoneVerification() {
+            fetch('/api/account/phone/status')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success && !data.phone_verified) {
+                        showPhoneVerificationPrompt(data.has_phone);
+                    }
+                })
+                .catch(err => console.log('Phone check error:', err));
+        }
+        
+        function showPhoneVerificationPrompt(hasPhone) {
+            // Create professional notification banner at top
+            const banner = document.createElement('div');
+            banner.id = 'phone-verify-banner';
+            banner.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 8px 24px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                z-index: 10000;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                animation: slideDown 0.4s ease-out;
+            `;
+            
+            const message = hasPhone 
+                ? 'Please verify your phone number to continue using all features.'
+                : 'Please add and verify your phone number to continue using all features.';
+            
+            banner.innerHTML = `
+                <style>
+                    @keyframes slideDown {
+                        from { transform: translateY(-100%); opacity: 0; }
+                        to { transform: translateY(0); opacity: 1; }
+                    }
+                    #phone-verify-banner {
+                        padding: 8px 16px !important;
+                    }
+                    #phone-verify-banner .content-wrapper {
+                        display: flex;
+                        align-items: center;
+                        width: 100%;
+                        gap: 12px;
+                    }
+                    #phone-verify-banner .phone-img {
+                        height: 60px;
+                        flex-shrink: 0;
+                    }
+                    #phone-verify-banner .message-text {
+                        font-size: 18px;
+                        font-weight: 600;
+                        flex: 1;
+                        min-width: 0;
+                    }
+                    #phone-verify-banner .button-group {
+                        display: flex;
+                        gap: 8px;
+                        flex-shrink: 0;
+                    }
+                    #phone-verify-banner .verify-btn {
+                        background: white;
+                        color: #667eea;
+                        border: none;
+                        padding: 10px 24px;
+                        border-radius: 6px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.2s;
+                        font-size: 14px;
+                        white-space: nowrap;
+                    }
+                    #phone-verify-banner .verify-btn:hover {
+                        transform: translateY(-2px);
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+                    }
+                    #phone-verify-banner .close-btn {
+                        background: rgba(255,255,255,0.2);
+                        color: white;
+                        border: none;
+                        padding: 8px 16px;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        transition: all 0.2s;
+                        font-size: 14px;
+                        white-space: nowrap;
+                    }
+                    #phone-verify-banner .close-btn:hover {
+                        background: rgba(255,255,255,0.3);
+                    }
+                    
+                    @media (max-width: 768px) {
+                        #phone-verify-banner {
+                            padding: 8px 12px !important;
+                        }
+                        #phone-verify-banner .content-wrapper {
+                            flex-direction: column;
+                            text-align: center;
+                            gap: 8px;
+                        }
+                        #phone-verify-banner .phone-img {
+                            height: 50px;
+                        }
+                        #phone-verify-banner .message-text {
+                            font-size: 14px;
+                        }
+                        #phone-verify-banner .button-group {
+                            width: 100%;
+                            justify-content: center;
+                        }
+                        #phone-verify-banner .verify-btn,
+                        #phone-verify-banner .close-btn {
+                            padding: 8px 16px;
+                            font-size: 13px;
+                        }
+                    }
+                </style>
+                <div class="content-wrapper">
+                    <img src="/static/image_and_video/add_phone.png" alt="Add Phone" class="phone-img">
+                    <span class="message-text">${message}</span>
+                    <div class="button-group">
+                        <button class="verify-btn" onclick="window.location.href='/account'">
+                            Go to Account Settings
+                        </button>
+                        <button class="close-btn" onclick="dismissPhoneBanner()">
+                            Dismiss
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.insertBefore(banner, document.body.firstChild);
+            
+            // Push content down to avoid overlap - adjust for mobile
+            const mainContent = document.querySelector('.dashboard-container') || document.querySelector('main') || document.body;
+            if (mainContent) {
+                const isMobile = window.innerWidth <= 768;
+                mainContent.style.marginTop = isMobile ? '160px' : '80px';
+            }
+        }
+        
+        function dismissPhoneBanner() {
+            const banner = document.getElementById('phone-verify-banner');
+            if (banner) {
+                banner.remove();
+            }
+            // Reset margin when banner is dismissed
+            const mainContent = document.querySelector('.dashboard-container') || document.querySelector('main') || document.body;
+            if (mainContent) {
+                mainContent.style.marginTop = '0';
+            }
+        }
 
         // ---- Online/Offline status polling ----
         let statusPollHandle = null;

@@ -1,9 +1,0 @@
-2025-10-31 11:22:35,662 DEBUG Logging initialized. Writing to startup_log.txt
-2025-10-31 11:22:35,686 INFO Server initialized for threading.
-2025-10-31 11:22:35,686 DEBUG App module import start
-2025-10-31 11:22:35,807 DEBUG Flask-Compress enabled
-2025-10-31 11:22:35,881 DEBUG Attempting to start Flask+SocketIO development server on port 5100
-2025-10-31 11:22:35,885 WARNING  * Debugger is active!
-2025-10-31 11:22:35,900 INFO  * Debugger PIN: 116-199-980
-2025-10-31 11:35:09,306 INFO 127.0.0.1 - - [31/Oct/2025 11:35:09] "GET / HTTP/1.1" 200 -
-2025-10-31 12:06:27,687 INFO 127.0.0.1 - - [31/Oct/2025 12:06:27] "GET / HTTP/1.1" 200 -

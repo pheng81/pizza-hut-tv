@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Account - EverydayAdvertise</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+      background: transparent;
+      color: #1e293b;
+      line-height: 1.6;
+    }
+    
+    /* Header */
+    .header {
+      background: rgba(255, 255, 255, 0.9);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+      padding: 12px 24px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(10px);
+    }
+    .header-content {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .logo {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1e293b;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #fe2c55 0%, #25f4ee 100%);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 18px;
+    }
+    .nav-links {
+      display: flex;
+      gap: 32px;
+      align-items: center;
+    }
+    .nav-links a {
+      color: #64748b;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+      padding: 8px 0;
+      border-bottom: 2px solid transparent;
+      position: relative;
+    }
+    .nav-links a:hover,
+    .nav-links a.active {
+      color: #1e293b;
+      border-bottom-color: #fe2c55;
+    }
+    
+    /* Main Container */
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 32px 24px 80px;
+    }
+    .page-header {
+      margin-bottom: 32px;
+    }
+    .page-title {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #1e293b;
+    }
+    .page-subtitle {
+      color: #64748b;
+      font-size: 14px;
+    }
+    
+    /* TikTok-style Cards Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .stat-card {
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 12px;
+      padding: 24px;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+    }
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #fe2c55 0%, #25f4ee 100%);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .stat-card:hover {
+      border-color: rgba(254, 44, 85, 0.4);
+      transform: translateY(-4px);
+      box-shadow: 0 12px 32px rgba(254, 44, 85, 0.2);
+    }
+    .stat-card:hover::before {
+      opacity: 1;
+    }
+    .stat-label {
+      font-size: 12px;
+      color: #64748b;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .stat-value {
+      font-size: 32px;
+      font-weight: 800;
+      color: #1e293b;
+      line-height: 1;
+    }
+    .stat-value.gradient {
+      background: linear-gradient(135deg, #fe2c55 0%, #ff6b9d 50%, #25f4ee 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    /* Badge Styles */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 24px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .badge-active {
+      background: linear-gradient(135deg, rgba(37, 244, 238, 0.2) 0%, rgba(37, 244, 238, 0.1) 100%);
+      color: #25f4ee;
+      border: 1.5px solid rgba(37, 244, 238, 0.4);
+    }
+    .badge-trial {
+      background: linear-gradient(135deg, rgba(254, 44, 85, 0.2) 0%, rgba(254, 44, 85, 0.1) 100%);
+      color: #fe2c55;
+      border: 1.5px solid rgba(254, 44, 85, 0.4);
+    }
+    .badge-inactive {
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.55);
+      border: 1.5px solid rgba(255, 255, 255, 0.12);
+    }
+    
+    /* Info Card */
+    .info-card {
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 12px;
+      padding: 28px;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      margin-bottom: 24px;
+    }
+    .info-card-title {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 24px;
+      color: #1e293b;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .title-accent {
+      width: 4px;
+      height: 24px;
+      background: linear-gradient(180deg, #fe2c55 0%, #ff6b9d 100%);
+      border-radius: 2px;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 0;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    }
+    .info-row:last-child {
+      border-bottom: none;
+    }
+    .info-label {
+      color: #64748b;
+      font-weight: 500;
+      font-size: 14px;
+    }
+    .info-value {
+      color: #1e293b;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    
+    /* TikTok-style Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 14px 32px;
+      border-radius: 8px;
+      font-weight: 700;
+      text-decoration: none;
+      text-align: center;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      letter-spacing: 0.3px;
+      position: relative;
+      overflow: hidden;
+    }
+    .btn::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.2);
+      transform: translate(-50%, -50%);
+      transition: width 0.6s, height 0.6s;
+    }
+    .btn:active::before {
+      width: 300px;
+      height: 300px;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #fe2c55 0%, #ff1744 100%);
+      color: white;
+      box-shadow: 0 4px 16px rgba(254, 44, 85, 0.3);
+    }
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #ff1744 0%, #fe2c55 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(254, 44, 85, 0.5);
+    }
+    .btn-secondary {
+      background: transparent;
+      color: #64748b;
+      border: 2px solid rgba(0, 0, 0, 0.2);
+    }
+    .btn-secondary:hover {
+      background: rgba(0, 0, 0, 0.05);
+      border-color: rgba(0, 0, 0, 0.4);
+    }
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.15);
+      color: #ef4444;
+      border: 2px solid rgba(239, 68, 68, 0.3);
+    }
+    .btn-danger:hover {
+      background: rgba(239, 68, 68, 0.25);
+      border-color: rgba(239, 68, 68, 0.5);
+    }
+    .action-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin-top: 24px;
+    }
+    
+    /* Trial Banner */
+    .trial-banner {
+      background: linear-gradient(135deg, rgba(254, 44, 85, 0.15) 0%, rgba(255, 107, 157, 0.15) 100%);
+      padding: 28px;
+      border-radius: 12px;
+      margin-bottom: 32px;
+      border: 1.5px solid rgba(254, 44, 85, 0.3);
+      position: relative;
+      overflow: hidden;
+    }
+    .trial-banner::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #fe2c55 0%, #ff6b9d 50%, #25f4ee 100%);
+    }
+    .trial-banner h3 {
+      color: #fe2c55;
+      margin-bottom: 12px;
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .trial-banner p {
+      color: #64748b;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .trial-days {
+      font-size: 48px;
+      font-weight: 900;
+      background: linear-gradient(135deg, #fe2c55 0%, #ff6b9d 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1;
+      margin: 16px 0;
+    }
+    
+    /* Billing History */
+    .billing-list {
+      margin-top: 20px;
+    }
+    .billing-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 18px;
+      background: rgba(0, 0, 0, 0.03);
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 8px;
+      margin-bottom: 12px;
+      transition: all 0.2s;
+    }
+    .billing-item:hover {
+      background: rgba(0, 0, 0, 0.05);
+      border-color: rgba(254, 44, 85, 0.3);
+      transform: translateX(4px);
+    }
+    .billing-date {
+      font-weight: 600;
+      color: #1e293b;
+      font-size: 14px;
+    }
+    .billing-amount {
+      font-weight: 800;
+      font-size: 16px;
+      background: linear-gradient(135deg, #25f4ee 0%, #69fffa 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .billing-status {
+      font-size: 11px;
+      padding: 5px 12px;
+      border-radius: 16px;
+      margin-left: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .status-paid {
+      background: rgba(37, 244, 238, 0.15);
+      color: #25f4ee;
+      border: 1px solid rgba(37, 244, 238, 0.3);
+    }
+    .status-pending {
+      background: rgba(254, 44, 85, 0.15);
+      color: #fe2c55;
+      border: 1px solid rgba(254, 44, 85, 0.3);
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+      .action-grid {
+        grid-template-columns: 1fr;
+      }
+      .nav-links {
+        gap: 16px;
+      }
+      .page-title {
+        font-size: 24px;
+      }
+    }
+    
+    /* Loading Animation */
+    @keyframes shimmer {
+      0% { background-position: -1000px 0; }
+      100% { background-position: 1000px 0; }
+    }
+    .loading {
+      animation: shimmer 2s infinite;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+      background-size: 1000px 100%;
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <div class="header">
+    <div class="header-content">
+      <a href="{{ url_for('dashboard') }}" class="logo">
+        <div class="logo-icon">E</div>
+        EverydayAdvertise
+      </a>
+      <nav class="nav-links">
+        <a href="{{ url_for('dashboard') }}">Dashboard</a>
+        <a href="{{ url_for('account') }}" class="active">Account</a>
+        <a href="{{ url_for('logout') }}">Logout</a>
+      </nav>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- Page Header -->
+    <div class="page-header">
+      <h1 class="page-title">My Account</h1>
+      <p class="page-subtitle">Manage your subscription and billing information</p>
+    </div>
+
+    <!-- Trial Banner (if applicable) -->
+    {% if is_trial and trial_days_left is not none %}
+    <div class="trial-banner">
+      <h3>🎉 Free Trial Active</h3>
+      <div class="trial-days">{{ trial_days_left }}</div>
+      <p>Days remaining in your free trial. Enjoy full access to all features!</p>
+    </div>
+    {% endif %}
+
+    <!-- Stats Grid -->
+    <div class="stats-grid">
+      <!-- Subscription Status -->
+      <div class="stat-card">
+        <div class="stat-label">Subscription Status</div>
+        <div class="stat-value">
+          {% if subscription_info %}
+            {% set status = subscription_info.get('status', 'inactive')|lower %}
+            {% if status == 'active' %}
+              <span class="badge badge-active">● Active</span>
+            {% elif status == 'trialing' %}
+              <span class="badge badge-trial">● Trial</span>
+            {% else %}
+              <span class="badge badge-inactive">○ Inactive</span>
+            {% endif %}
+          {% else %}
+            <span class="badge badge-inactive">○ No Subscription</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Next Billing -->
+      <div class="stat-card">
+        <div class="stat-label">Next Billing Date</div>
+        <div class="stat-value gradient">
+          {{ next_billing_date or 'N/A' }}
+        </div>
+      </div>
+
+      <!-- Screens -->
+      <div class="stat-card">
+        <div class="stat-label">Active Screens</div>
+        <div class="stat-value gradient">
+          {{ screen_count }}
+        </div>
+      </div>
+
+      <!-- Budget -->
+      <div class="stat-card">
+        <div class="stat-label">Monthly Cost</div>
+        <div class="stat-value gradient">
+          ${{ screen_count * 5 }}.00
+        </div>
+      </div>
+    </div>
+
+    <!-- Subscription Details -->
+    <div class="info-card">
+      <h2 class="info-card-title">
+        <span class="title-accent"></span>
+        Subscription Details
+      </h2>
+      <div class="info-row">
+        <span class="info-label">Plan</span>
+        <span class="info-value">$5 per screen / month</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Current Period</span>
+        <span class="info-value">
+          {% if subscription_info and subscription_info.get('current_period_end') %}
+            Until {{ next_billing_date }}
+          {% else %}
+            No active period
+          {% endif %}
+        </span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Auto-renew</span>
+        <span class="info-value">
+          {% if is_canceled %}
+            Canceled (ends {{ next_billing_date }})
+          {% elif has_active %}
+            Enabled
+          {% else %}
+            N/A
+          {% endif %}
+        </span>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="action-grid">
+        {% if has_active %}
+          <form action="{{ url_for('billing_portal') }}" method="POST" style="display: inline;">
+            <button type="submit" class="btn btn-primary" style="width: 100%;">
+              Manage Subscription
+            </button>
+          </form>
+          
+          {% if not is_canceled %}
+            <form action="{{ url_for('cancel_subscription') }}" method="POST" 
+                  onsubmit="return confirm('Are you sure you want to cancel your subscription?');">
+              <button type="submit" class="btn btn-danger" style="width: 100%;">
+                Cancel Subscription
+              </button>
+            </form>
+          {% else %}
+            <form action="{{ url_for('reactivate_subscription') }}" method="POST">
+              <button type="submit" class="btn btn-secondary" style="width: 100%;">
+                Reactivate
+              </button>
+            </form>
+          {% endif %}
+        {% else %}
+          <form action="{{ url_for('billing_checkout') }}" method="POST">
+            <button type="submit" class="btn btn-primary" style="width: 100%;">
+              Subscribe Now
+            </button>
+          </form>
+        {% endif %}
+        
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary" style="width: 100%;">
+          Add More Screens
+        </a>
+      </div>
+    </div>
+
+    <!-- Account Information -->
+    <div class="info-card">
+      <h2 class="info-card-title">
+        <span class="title-accent"></span>
+        Account Information
+      </h2>
+      <div class="info-row">
+        <span class="info-label">Email</span>
+        <span class="info-value">{{ user_info.email }}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Account Type</span>
+        <span class="info-value">{{ 'Administrator' if user_info.is_admin else 'Standard User' }}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Member Since</span>
+        <span class="info-value">{{ account_created or 'Unknown' }}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Total Screens</span>
+        <span class="info-value">{{ screen_count }}</span>
+      </div>
+    </div>
+
+    <!-- Billing History -->
+    {% if billing_history %}
+    <div class="info-card">
+      <h2 class="info-card-title">
+        <span class="title-accent"></span>
+        Billing History
+      </h2>
+      <div class="billing-list">
+        {% for invoice in billing_history[:5] %}
+        <div class="billing-item">
+          <span class="billing-date">{{ invoice.date }}</span>
+          <div>
+            <span class="billing-amount">{{ invoice.amount }}</span>
+            <span class="billing-status {% if invoice.status == 'paid' %}status-paid{% else %}status-pending{% endif %}">
+              {{ invoice.status }}
+            </span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</body>
+</html>

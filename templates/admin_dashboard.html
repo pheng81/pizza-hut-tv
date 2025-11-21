@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard - EverydayAdvertise</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .header {
+      background: white;
+      padding: 20px 30px;
+      border-radius: 12px;
+      margin-bottom: 30px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .header h1 {
+      color: #1f2937;
+      font-size: 28px;
+    }
+
+    .header-actions a {
+      padding: 10px 20px;
+      background: #3b82f6;
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+
+    .header-actions a:hover {
+      background: #2563eb;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+
+    .stat-card {
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
+    .stat-label {
+      color: #6b7280;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      color: #1f2937;
+      font-size: 32px;
+      font-weight: 700;
+    }
+
+    .stat-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+      font-size: 24px;
+    }
+
+    .icon-users { background: #dbeafe; color: #1e40af; }
+    .icon-money { background: #d1fae5; color: #065f46; }
+    .icon-screens { background: #fef3c7; color: #92400e; }
+    .icon-cancel { background: #fee2e2; color: #991b1b; }
+
+    .content-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+
+    .card {
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
+    .card-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #1f2937;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid #e5e7eb;
+    }
+
+    .feedback-item {
+      padding: 16px;
+      background: #f9fafb;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      border-left: 4px solid #3b82f6;
+    }
+
+    .feedback-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      margin-bottom: 8px;
+    }
+
+    .feedback-user {
+      font-weight: 600;
+      color: #1f2937;
+    }
+
+    .feedback-date {
+      color: #6b7280;
+      font-size: 13px;
+    }
+
+    .feedback-screen {
+      color: #6b7280;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+
+    .feedback-reason {
+      display: inline-block;
+      padding: 4px 12px;
+      background: #fef3c7;
+      color: #92400e;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+
+    .feedback-text {
+      color: #374151;
+      font-size: 14px;
+      font-style: italic;
+      padding: 8px;
+      background: white;
+      border-radius: 4px;
+    }
+
+    .reason-stat {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      background: #f9fafb;
+      border-radius: 6px;
+      margin-bottom: 8px;
+    }
+
+    .reason-label {
+      font-weight: 500;
+      color: #374151;
+    }
+
+    .reason-count {
+      background: #3b82f6;
+      color: white;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th {
+      background: #f3f4f6;
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      color: #1f2937;
+      font-size: 14px;
+    }
+
+    td {
+      padding: 12px;
+      border-bottom: 1px solid #e5e7eb;
+      color: #374151;
+      font-size: 14px;
+    }
+
+    tr:hover {
+      background: #f9fafb;
+    }
+
+    .badge {
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .badge-active {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: #6b7280;
+    }
+
+    @media (max-width: 768px) {
+      .content-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1><i class="fas fa-shield-alt"></i> Admin Dashboard</h1>
+    <div class="header-actions">
+      <a href="{{ url_for('dashboard') }}"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+    </div>
+  </div>
+
+  <!-- Stats Overview -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-icon icon-users">
+        <i class="fas fa-users"></i>
+      </div>
+      <div class="stat-label">Total Users</div>
+      <div class="stat-value">{{ total_users }}</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon icon-users">
+        <i class="fas fa-user-check"></i>
+      </div>
+      <div class="stat-label">Active Subscribers</div>
+      <div class="stat-value">{{ active_subscribers }}</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon icon-screens">
+        <i class="fas fa-tv"></i>
+      </div>
+      <div class="stat-label">Total Screens</div>
+      <div class="stat-value">{{ total_screens }}</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon icon-money">
+        <i class="fas fa-dollar-sign"></i>
+      </div>
+      <div class="stat-label">Monthly Revenue</div>
+      <div class="stat-value">${{ monthly_revenue }}</div>
+    </div>
+  </div>
+
+  <!-- Content Grid -->
+  <div class="content-grid">
+    <!-- Cancellation Feedback -->
+    <div class="card">
+      <h2 class="card-title"><i class="fas fa-comments"></i> Cancellation Feedback</h2>
+      {% if cancellations %}
+        <div style="max-height: 600px; overflow-y: auto;">
+          {% for cancel in cancellations %}
+          <div class="feedback-item">
+            <div class="feedback-header">
+              <div>
+                <div class="feedback-user">{{ cancel.username }}</div>
+                <div class="feedback-screen">Screen: {{ cancel.screen_name }}</div>
+              </div>
+              <div class="feedback-date">{{ cancel.date }}</div>
+            </div>
+            <span class="feedback-reason">{{ cancel.reason }}</span>
+            {% if cancel.feedback %}
+            <div class="feedback-text">"{{ cancel.feedback }}"</div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty-state">
+          <i class="fas fa-inbox" style="font-size: 48px; margin-bottom: 16px; opacity: 0.3;"></i>
+          <p>No cancellation feedback yet</p>
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- Cancellation Reasons -->
+    <div class="card">
+      <h2 class="card-title"><i class="fas fa-chart-pie"></i> Cancellation Reasons</h2>
+      {% if reason_stats %}
+        {% for stat in reason_stats %}
+        <div class="reason-stat">
+          <span class="reason-label">{{ stat.reason }}</span>
+          <span class="reason-count">{{ stat.count }}</span>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="empty-state">
+          <p>No data available</p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- User Statistics -->
+  <div class="card">
+    <h2 class="card-title"><i class="fas fa-users-cog"></i> Top Users by Screens</h2>
+    {% if user_stats %}
+    <table>
+      <thead>
+        <tr>
+          <th>User</th>
+          <th>Active Screens</th>
+          <th>Total Screens</th>
+          <th>Last Activity</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for user in user_stats %}
+        <tr>
+          <td>{{ user.username }}</td>
+          <td><span class="badge badge-active">{{ user.active_screens }}</span></td>
+          <td>{{ user.total_screens }}</td>
+          <td>{{ datetime.fromtimestamp(user.last_screen_added).strftime('%Y-%m-%d') if user.last_screen_added else 'N/A' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+      <p>No user data available</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <script>
+    console.log('Admin Dashboard Loaded');
+  </script>
+</body>
+</html>

@@ -8,6 +8,7 @@ import time
 import logging
 import sqlite3
 import uuid
+import base64
 # Import fcntl only on Unix/Linux (not available on Windows)
 try:
     import fcntl  # For file locking to prevent race conditions
@@ -32,6 +33,12 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv, dotenv_values
 from flask_socketio import SocketIO, emit, join_room, leave_room
+
+# Vonage SMS for phone verification
+try:
+    import vonage
+except ImportError:
+    vonage = None
 
 # Ensure both names available for existing code
 _shutil = shutil
@@ -68,6 +75,12 @@ except Exception:
     boto3 = None
     # Ensure name exists so later references do not raise NameError when boto3 missing
     BotoConfig = None
+
+# Optional Stripe SDK for billing
+try:
+    import stripe
+except Exception:
+    stripe = None
 
 # Global in-memory cache for library listings
 _LIB_CACHE: dict = {}
@@ -165,6 +178,48 @@ def init_db():
                 db.execute('ALTER TABLE users ADD COLUMN avatar TEXT')
             except Exception:
                 pass
+        if 'stripe_customer_id' not in cols:
+            try:
+                db.execute('ALTER TABLE users ADD COLUMN stripe_customer_id TEXT')
+                db.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_stripe_customer ON users(stripe_customer_id)')
+            except Exception:
+                pass
+        if 'subscription_status' not in cols:
+            try:
+                db.execute('ALTER TABLE users ADD COLUMN subscription_status TEXT')
+            except Exception:
+                pass
+        if 'subscription_plan' not in cols:
+            try:
+                db.execute('ALTER TABLE users ADD COLUMN subscription_plan TEXT')
+            except Exception:
+                pass
+        if 'phone_number' not in cols:
+            try:
+                db.execute('ALTER TABLE users ADD COLUMN phone_number TEXT')
+                db.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone ON users(phone_number)')
+            except Exception:
+                pass
+        if 'phone_verified' not in cols:
+            try:
+                db.execute('ALTER TABLE users ADD COLUMN phone_verified INTEGER DEFAULT 0')
+            except Exception:
+                pass
+        if 'phone_verification_code' not in cols:
+            try:
+                db.execute('ALTER TABLE users ADD COLUMN phone_verification_code TEXT')
+            except Exception:
+                pass
+        if 'phone_code_sent_at' not in cols:
+            try:
+                db.execute('ALTER TABLE users ADD COLUMN phone_code_sent_at INTEGER')
+            except Exception:
+                pass
+        if 'phone_verification_request_id' not in cols:
+            try:
+                db.execute('ALTER TABLE users ADD COLUMN phone_verification_request_id TEXT')
+            except Exception:
+                pass
     except Exception:
         pass
     db.commit()
@@ -176,7 +231,111 @@ def init_db():
     except Exception:
         pass
 
+    # Subscription tracking table (one row per active Stripe subscription)
+    try:
+        db.execute(
+            'CREATE TABLE IF NOT EXISTS subscriptions ('
+            'id INTEGER PRIMARY KEY, '
+            'user_id INTEGER NOT NULL, '
+            'stripe_subscription_id TEXT, '
+            'stripe_price_id TEXT, '
+            'plan_name TEXT, '
+            'status TEXT, '
+            'quantity INTEGER DEFAULT 1, '
+            'current_period_end INTEGER, '
+            'trial_end INTEGER, '
+            'cancel_at_period_end INTEGER DEFAULT 0, '
+            'created_at INTEGER DEFAULT (strftime("%s", "now")), '
+            'updated_at INTEGER, '
+            'UNIQUE(user_id), '
+            'FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE'
+            ')'
+        )
+        db.execute('CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status)')
+        db.execute('CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_id ON subscriptions(stripe_subscription_id)')
+        
+        # Create screen_subscriptions table for per-screen billing
+        db.execute(
+            'CREATE TABLE IF NOT EXISTS screen_subscriptions ('
+            'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+            'user_id INTEGER NOT NULL, '
+            'screen_id TEXT NOT NULL, '
+            'store_id TEXT NOT NULL, '
+            'screen_name TEXT, '
+            'stripe_subscription_id TEXT UNIQUE, '
+            'stripe_price_id TEXT, '
+            'status TEXT, '
+            'current_period_start INTEGER, '
+            'current_period_end INTEGER, '
+            'cancel_at_period_end INTEGER DEFAULT 0, '
+            'created_at INTEGER DEFAULT (strftime("%s", "now")), '
+            'updated_at INTEGER, '
+            'UNIQUE(user_id, screen_id, store_id), '
+            'FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE'
+            ')'
+        )
+        db.execute('CREATE INDEX IF NOT EXISTS idx_screen_subs_user ON screen_subscriptions(user_id)')
+        db.execute('CREATE INDEX IF NOT EXISTS idx_screen_subs_stripe ON screen_subscriptions(stripe_subscription_id)')
+        db.execute('CREATE INDEX IF NOT EXISTS idx_screen_subs_status ON screen_subscriptions(status)')
+        
+        # Create cancellation_feedback table
+        db.execute(
+            'CREATE TABLE IF NOT EXISTS cancellation_feedback ('
+            'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+            'user_id INTEGER NOT NULL, '
+            'username TEXT, '
+            'screen_id TEXT, '
+            'screen_name TEXT, '
+            'reason TEXT, '
+            'feedback_text TEXT, '
+            'canceled_at INTEGER DEFAULT (strftime("%s", "now")), '
+            'FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE'
+            ')'
+        )
+        db.execute('CREATE INDEX IF NOT EXISTS idx_cancel_feedback_user ON cancellation_feedback(user_id)')
+        db.execute('CREATE INDEX IF NOT EXISTS idx_cancel_feedback_date ON cancellation_feedback(canceled_at)')
+        
+        db.commit()
+    except Exception as _sub_e:
+        logging.warning('Subscription table init failed: %s', _sub_e)
+
 init_db()
+
+# Stripe configuration (optional; only active when API keys exist)
+STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
+STRIPE_PUBLISHABLE_KEY = os.environ.get('STRIPE_PUBLISHABLE_KEY')
+STRIPE_STANDARD_PRICE_ID = os.environ.get('STRIPE_PRICE_ID') or os.environ.get('STRIPE_PRICE_STANDARD')
+STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
+STRIPE_PRICE_DISPLAY = os.environ.get('STRIPE_PRICE_DISPLAY') or '$5 per screen / month'
+STRIPE_TRIAL_DAYS = os.environ.get('STRIPE_TRIAL_DAYS')
+
+if stripe is not None and STRIPE_SECRET_KEY:
+    try:
+        stripe.api_key = STRIPE_SECRET_KEY
+        logging.info('Stripe billing enabled')
+    except Exception as _stripe_e:
+        logging.warning('Stripe init failed: %s', _stripe_e)
+        stripe = None
+else:
+    stripe = None
+
+# Vonage SMS configuration
+VONAGE_API_KEY = os.environ.get('VONAGE_API_KEY')
+VONAGE_API_SECRET = os.environ.get('VONAGE_API_SECRET')
+VONAGE_FROM_NUMBER = os.environ.get('VONAGE_FROM_NUMBER')  # Your Vonage phone number
+
+if vonage is not None and VONAGE_API_KEY and VONAGE_API_SECRET:
+    try:
+        vonage_client = vonage.Client(key=VONAGE_API_KEY, secret=VONAGE_API_SECRET)
+        vonage_messages = vonage.Messages(vonage_client)
+        logging.info('Vonage Messages API enabled for phone verification')
+    except Exception as _vonage_e:
+        logging.warning('Vonage init failed: %s', _vonage_e)
+        vonage_messages = None
+else:
+    vonage_messages = None
+    if not VONAGE_API_KEY:
+        logging.info('Vonage Messages disabled: VONAGE_API_KEY not set')
 
 # -------- Early logging to file for startup diagnostics (captures silent exits) --------
 LOG_FILE = 'startup_log.txt'
@@ -198,6 +357,22 @@ app = Flask(__name__)
 # Use a strong, consistent secret key for session signing
 app.secret_key = os.environ.get('SECRET_KEY') or 'pizza-hut-tv-oauth-session-key-2025-production'
 app.config['TEMPLATES_AUTO_RELOAD'] = True
+
+# Template filters
+@app.template_filter('format_timestamp')
+def format_timestamp(timestamp):
+    """Format Unix timestamp to readable datetime string."""
+    if not timestamp:
+        return 'N/A'
+    try:
+        from datetime import datetime
+        if isinstance(timestamp, (int, float)):
+            dt = datetime.fromtimestamp(timestamp)
+        else:
+            dt = datetime.fromisoformat(str(timestamp))
+        return dt.strftime('%Y-%m-%d %H:%M:%S')
+    except Exception:
+        return str(timestamp)
 
 # Initialize Socket.IO for WebSocket relay (TeamViewer-style)
 socketio = SocketIO(
@@ -436,6 +611,317 @@ def login_required(view):
         return view(*args, **kwargs)
     return wrapped
 
+def _stripe_enabled() -> bool:
+    return bool(stripe and STRIPE_SECRET_KEY and STRIPE_STANDARD_PRICE_ID)
+
+def _current_username() -> str:
+    try:
+        user = session.get('user') or {}
+        return (user.get('email') or user.get('name') or '').strip().lower()
+    except Exception:
+        return ''
+
+def _current_user_id() -> int|None:
+    try:
+        user = session.get('user') or {}
+        if user.get('id'):
+            return user['id']
+        username = _current_username()
+        if not username:
+            return None
+        db = get_db()
+        row = db.execute('SELECT id FROM users WHERE username = ?', (username,)).fetchone()
+        if row:
+            user_dict = dict(session.get('user') or {})
+            user_dict['id'] = row['id']
+            session['user'] = user_dict
+            return row['id']
+    except Exception as _e:
+        logging.warning('Failed to resolve user id: %s', _e)
+    return None
+
+def _record_subscription_status(user_id: int, status: str, stripe_subscription_id: str|None,
+                                 price_id: str|None, plan_name: str|None, quantity: int|None,
+                                 current_period_end: int|None, trial_end: int|None, cancel_at_period_end: bool|None):
+    try:
+        db = get_db()
+        now = int(time.time())
+        db.execute(
+            'INSERT INTO subscriptions (user_id, stripe_subscription_id, stripe_price_id, plan_name, status, quantity, current_period_end, trial_end, cancel_at_period_end, updated_at) '
+            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) '
+            'ON CONFLICT(user_id) DO UPDATE SET '
+            'stripe_subscription_id=excluded.stripe_subscription_id,'
+            'stripe_price_id=excluded.stripe_price_id,'
+            'plan_name=excluded.plan_name,'
+            'status=excluded.status,'
+            'quantity=excluded.quantity,'
+            'current_period_end=excluded.current_period_end,'
+            'trial_end=excluded.trial_end,'
+            'cancel_at_period_end=excluded.cancel_at_period_end,'
+            'updated_at=excluded.updated_at'
+            , (user_id, stripe_subscription_id, price_id, plan_name, status,
+               quantity or 1, current_period_end, trial_end, 1 if cancel_at_period_end else 0, now)
+        )
+        db.execute('UPDATE users SET subscription_status = ?, subscription_plan = ? WHERE id = ?',
+                   (status, plan_name or price_id, user_id))
+        db.commit()
+    except Exception as _e:
+        logging.warning('Failed to record subscription status: %s', _e)
+
+def _user_has_active_subscription(user_id: int|None = None) -> bool:
+    if not _stripe_enabled():
+        return True
+    if session.get('user', {}).get('is_admin'):
+        return True
+    if user_id is None:
+        user_id = _current_user_id()
+    if not user_id:
+        return False
+    try:
+        db = get_db()
+        row = db.execute('SELECT status, current_period_end FROM subscriptions WHERE user_id = ?', (user_id,)).fetchone()
+        if not row:
+            return False
+        status = (row['status'] or '').lower()
+        if status in ('active', 'trialing'):
+            return True
+        if status == 'past_due':
+            try:
+                cpe = int(row['current_period_end'] or 0)
+                if cpe and cpe >= int(time.time()):
+                    return True
+            except Exception:
+                pass
+    except Exception as _e:
+        logging.warning('Failed to check subscription for user %s: %s', user_id, _e)
+    return False
+
+def _count_user_screens() -> int:
+    """Count total screens across all stores for the current user"""
+    try:
+        ukey = _safe_user_key()
+        config = load_store_config_for_user_safe_key(ukey) if ukey else load_store_config()
+        screens_dict = config.get('screens', {})
+        total = sum(len(store_screens) for store_screens in screens_dict.values())
+        return total
+    except Exception as _e:
+        logging.warning('Failed to count user screens: %s', _e)
+        return 0
+
+def _get_user_screens_list() -> list:
+    """Get list of all screens with details for the current user"""
+    try:
+        ukey = _safe_user_key()
+        config = load_store_config_for_user_safe_key(ukey) if ukey else load_store_config()
+        screens_dict = config.get('screens', {})
+        stores = {s['id']: s['name'] for s in config.get('stores', [])}
+        
+        screens_list = []
+        for store_id, store_screens in screens_dict.items():
+            store_name = stores.get(store_id, f'Store {store_id}')
+            for screen in store_screens:
+                screens_list.append({
+                    'id': screen.get('id'),
+                    'name': screen.get('name', 'Unnamed Screen'),
+                    'store_id': store_id,
+                    'store_name': store_name,
+                    'type': screen.get('type', 'screen')
+                })
+        return screens_list
+    except Exception as _e:
+        logging.warning('Failed to get user screens list: %s', _e)
+        return []
+
+def _create_screen_subscription(user_id: int, screen_id: str, store_id: str, screen_name: str) -> dict|None:
+    """Create individual Stripe subscription for a specific screen"""
+    if not _stripe_enabled():
+        logging.warning('Stripe not enabled, cannot create screen subscription')
+        return None
+    
+    try:
+        # Get or create Stripe customer
+        customer_id = _get_or_create_stripe_customer(user_id)
+        if not customer_id:
+            logging.error('Failed to get Stripe customer')
+            return None
+        
+        # Create subscription in Stripe
+        subscription = stripe.Subscription.create(
+            customer=customer_id,
+            items=[{'price': STRIPE_STANDARD_PRICE_ID}],
+            metadata={
+                'user_id': user_id,
+                'screen_id': screen_id,
+                'store_id': store_id,
+                'screen_name': screen_name
+            },
+            trial_period_days=int(STRIPE_TRIAL_DAYS) if STRIPE_TRIAL_DAYS else None
+        )
+        
+        # Save to database
+        db = get_db()
+        db.execute(
+            'INSERT OR REPLACE INTO screen_subscriptions '
+            '(user_id, screen_id, store_id, screen_name, stripe_subscription_id, stripe_price_id, '
+            'status, current_period_start, current_period_end, cancel_at_period_end, updated_at) '
+            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            (user_id, screen_id, store_id, screen_name, subscription.id, STRIPE_STANDARD_PRICE_ID,
+             subscription.status, subscription.current_period_start, subscription.current_period_end,
+             1 if subscription.cancel_at_period_end else 0, int(time.time()))
+        )
+        db.commit()
+        
+        logging.info(f'Created screen subscription: {subscription.id} for screen {screen_id}')
+        return {
+            'subscription_id': subscription.id,
+            'status': subscription.status,
+            'current_period_end': subscription.current_period_end
+        }
+    except Exception as e:
+        logging.error(f'Failed to create screen subscription: {e}', exc_info=True)
+        return None
+
+def _get_screen_subscriptions(user_id: int) -> list:
+    """Get all screen subscriptions for a user with billing details"""
+    try:
+        db = get_db()
+        rows = db.execute(
+            'SELECT id, screen_id, store_id, screen_name, stripe_subscription_id, status, '
+            'current_period_start, current_period_end, cancel_at_period_end, created_at '
+            'FROM screen_subscriptions WHERE user_id = ? ORDER BY created_at DESC',
+            (user_id,)
+        ).fetchall()
+        
+        subscriptions = []
+        for row in rows:
+            sub_data = {
+                'id': row['id'],
+                'screen_id': row['screen_id'],
+                'store_id': row['store_id'],
+                'screen_name': row['screen_name'],
+                'stripe_subscription_id': row['stripe_subscription_id'],
+                'status': row['status'],
+                'cancel_at_period_end': bool(row['cancel_at_period_end']),
+                'created_at': row['created_at']
+            }
+            
+            # Format dates
+            if row['current_period_start']:
+                sub_data['billing_start'] = datetime.fromtimestamp(row['current_period_start']).strftime('%b %d, %Y')
+            if row['current_period_end']:
+                sub_data['next_billing'] = datetime.fromtimestamp(row['current_period_end']).strftime('%b %d, %Y')
+                sub_data['next_billing_timestamp'] = row['current_period_end']
+            
+            subscriptions.append(sub_data)
+        
+        return subscriptions
+    except Exception as e:
+        logging.error(f'Failed to get screen subscriptions: {e}', exc_info=True)
+        return []
+
+def _cancel_screen_subscription(screen_subscription_id: int, immediate: bool = False) -> bool:
+    """Cancel a specific screen subscription"""
+    if not _stripe_enabled():
+        return False
+    
+    try:
+        db = get_db()
+        row = db.execute(
+            'SELECT stripe_subscription_id, screen_id, store_id FROM screen_subscriptions WHERE id = ?',
+            (screen_subscription_id,)
+        ).fetchone()
+        
+        if not row or not row['stripe_subscription_id']:
+            logging.error(f'Screen subscription {screen_subscription_id} not found')
+            return False
+        
+        stripe_sub_id = row['stripe_subscription_id']
+        
+        if immediate:
+            # Cancel immediately
+            stripe.Subscription.delete(stripe_sub_id)
+            db.execute('UPDATE screen_subscriptions SET status = ?, cancel_at_period_end = 1, updated_at = ? WHERE id = ?',
+                      ('canceled', int(time.time()), screen_subscription_id))
+        else:
+            # Cancel at period end
+            subscription = stripe.Subscription.modify(stripe_sub_id, cancel_at_period_end=True)
+            db.execute('UPDATE screen_subscriptions SET cancel_at_period_end = 1, updated_at = ? WHERE id = ?',
+                      (int(time.time()), screen_subscription_id))
+        
+        db.commit()
+        logging.info(f'Cancelled screen subscription {screen_subscription_id} (immediate={immediate})')
+        return True
+    except Exception as e:
+        logging.error(f'Failed to cancel screen subscription: {e}', exc_info=True)
+        return False
+
+def subscription_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if _user_has_active_subscription():
+            return view(*args, **kwargs)
+        flash('An active subscription is required to access the dashboard. Please subscribe to continue.', 'error')
+        return redirect(url_for('subscribe', next=request.path))
+    return wrapped
+
+def _get_or_create_stripe_customer(user_id: int|None = None) -> str|None:
+    if not _stripe_enabled():
+        return None
+    user_id = user_id or _current_user_id()
+    if not user_id:
+        return None
+    email = _current_username()
+    try:
+        db = get_db()
+        row = db.execute('SELECT stripe_customer_id FROM users WHERE id = ?', (user_id,)).fetchone()
+        if row and row['stripe_customer_id']:
+            return row['stripe_customer_id']
+        if not stripe:
+            return None
+        customer = stripe.Customer.create(email=email or None, metadata={'app_user_id': user_id})
+        db.execute('UPDATE users SET stripe_customer_id = ? WHERE id = ?', (customer.id, user_id))
+        db.commit()
+        return customer.id
+    except Exception as _e:
+        logging.warning('Failed to create Stripe customer for user %s: %s', user_id, _e)
+        return None
+
+def _sync_subscription_from_stripe(subscription_obj):
+    if not subscription_obj:
+        return
+    customer_id = subscription_obj.get('customer')
+    if not customer_id:
+        return
+    try:
+        db = get_db()
+        row = db.execute('SELECT id FROM users WHERE stripe_customer_id = ?', (customer_id,)).fetchone()
+        if not row:
+            logging.warning('Stripe webhook for unknown customer %s', customer_id)
+            return
+        plan_info = None
+        quantity = None
+        price_id = None
+        items = subscription_obj.get('items', {}).get('data', []) if isinstance(subscription_obj.get('items'), dict) else []
+        if items:
+            first_item = items[0]
+            quantity = first_item.get('quantity') or 1
+            plan_info = first_item.get('plan') or {}
+            price_id = (plan_info.get('id') or first_item.get('price', {}).get('id'))
+        plan_name = (plan_info.get('nickname') if isinstance(plan_info, dict) else None) or subscription_obj.get('description') or price_id
+        _record_subscription_status(
+            user_id=row['id'],
+            status=subscription_obj.get('status'),
+            stripe_subscription_id=subscription_obj.get('id'),
+            price_id=price_id,
+            plan_name=plan_name,
+            quantity=quantity,
+            current_period_end=subscription_obj.get('current_period_end'),
+            trial_end=subscription_obj.get('trial_end'),
+            cancel_at_period_end=subscription_obj.get('cancel_at_period_end')
+        )
+    except Exception as _e:
+        logging.warning('Failed to sync Stripe subscription: %s', _e)
+
 def _effective_admin_creds():
     exp_u = os.environ.get('ADMIN_USERNAME') or 'admin'
     exp_p = os.environ.get('ADMIN_PASSWORD')
@@ -502,7 +988,7 @@ def login():
         # 1) Admin/basic auth via env vars
         try:
             if _check_basic_auth(u, p):
-                session['user'] = {'name': u, 'method': 'password'}
+                session['user'] = {'name': u, 'method': 'password', 'is_admin': True}
                 session.permanent = True  # Make session persist across browser restarts
                 nxt = request.args.get('next')
                 if not nxt:
@@ -523,7 +1009,7 @@ def login():
         try:
             db = get_db()
             row = db.execute(
-                'SELECT username, password_hash, COALESCE(is_blocked, 0) AS is_blocked FROM users WHERE username = ?',
+                'SELECT id, username, password_hash, COALESCE(is_blocked, 0) AS is_blocked, COALESCE(email_verified, 0) AS email_verified, verify_token, role FROM users WHERE username = ?',
                 (u,)
             ).fetchone()
             if row and check_password_hash(row['password_hash'], p or ''):
@@ -533,7 +1019,43 @@ def login():
                         raise RuntimeError('Account is blocked')
                 except Exception:
                     pass
-                session['user'] = {'name': row['username'], 'method': 'local'}
+                # Check email verification
+                try:
+                    email_verified = int(row['email_verified'] or 0)
+                    verify_token = row.get('verify_token')
+                    logging.info(f'Login attempt for {u}: email_verified={email_verified}, has_token={bool(verify_token)}')
+                    
+                    # Auto-verify old accounts created before email verification was implemented
+                    # (they have email_verified=0 but no verify_token)
+                    if email_verified == 0 and not verify_token:
+                        logging.info(f'Auto-verifying legacy account: {u}')
+                        try:
+                            db.execute('UPDATE users SET email_verified = 1 WHERE username = ?', (u,))
+                            db.commit()
+                            email_verified = 1
+                        except Exception as _upd_e:
+                            logging.error(f'Failed to auto-verify legacy account {u}: {_upd_e}')
+                    
+                    if email_verified == 0:
+                        flash('Please verify your email before logging in. Check your inbox for the verification link.', 'error')
+                        logging.warning(f'Blocked unverified login attempt for {u}')
+                        return redirect(url_for('login'))
+                except Exception as _ver_e:
+                    logging.error(f'Email verification check failed for {u}: {_ver_e}')
+                    # If column doesn't exist, allow login (backward compatibility)
+                    pass
+                # Check if user is admin
+                is_admin = False
+                try:
+                    user_role = row.get('role')
+                    logging.info(f'LOGIN CHECK: user={u}, role={user_role}, is_admin_check={user_role and user_role.lower() == "admin"}')
+                    if user_role and user_role.lower() == 'admin':
+                        is_admin = True
+                        logging.info(f'Admin user logged in: {u}')
+                except Exception as e:
+                    logging.error(f'Admin check failed for {u}: {e}')
+                    pass
+                session['user'] = {'id': row['id'], 'name': row['username'], 'method': 'local', 'is_admin': is_admin}
                 session.permanent = True  # Make session persist across browser restarts
                 # Ensure this user has a pairing code
                 try:
@@ -542,6 +1064,14 @@ def login():
                     pass
                 nxt = request.args.get('next')
                 if not nxt:
+                    # Check if user has active subscription - redirect new users to subscribe page
+                    # Skip subscription check for admin users
+                    try:
+                        if not is_admin and not _user_has_active_subscription(row['id']):
+                            logging.info(f'New user {u} without subscription - redirecting to subscribe')
+                            return redirect(url_for('subscribe', welcome=1))
+                    except Exception as _sub_e:
+                        logging.warning(f'Failed to check subscription for {u}: {_sub_e}')
                     try:
                         host = request.host or ''
                         if host.startswith('api.') and 'everydayadvertise.com' in host:
@@ -876,12 +1406,79 @@ def signup():
                     # Fallback for older DB without full_name
                     db.execute('INSERT INTO users (username, password_hash) VALUES (?, ?)', (username, generate_password_hash(password)))
                 db.commit()
+                
+                # AUTO-CREATE DEFAULT STORE: Create "My First Store" for new user
+                logging.info(f'SIGNUP_AUTOSTORE: Starting auto-store creation for username={username}')
+                try:
+                    # Build the user-specific config filename manually (no session yet)
+                    # Match _safe_user_key() logic: replace @ only, keep dots
+                    safe_key = username.lower().replace('@', '_at_')
+                    safe_key = ''.join(c for c in safe_key if (c.isalnum() or c in '._-'))
+                    user_config_path = os.path.join(BASE_DIR, f"store_config__{safe_key}.json")
+                    logging.info(f'SIGNUP_AUTOSTORE: Config path will be: {user_config_path}')
+                    
+                    # Create config with default store
+                    default_store_id = '1000'
+                    default_store_name = 'My First Store'
+                    
+                    config = {
+                        'stores': [{
+                            'id': default_store_id,
+                            'name': default_store_name
+                        }],
+                        'master_store_id': default_store_id,
+                        'screens': {
+                            default_store_id: {}
+                        }
+                    }
+                    logging.info(f'SIGNUP_AUTOSTORE: Config dict created: {config}')
+                    
+                    # Save directly to the user's config file
+                    with open(user_config_path, 'w') as f:
+                        json.dump(config, f, indent=2)
+                    logging.info(f'SIGNUP_AUTOSTORE: File written, now verifying...')
+                    
+                    # Verify the file was created correctly
+                    if os.path.exists(user_config_path):
+                        with open(user_config_path, 'r') as f:
+                            verify_config = json.load(f)
+                        logging.info(f'SIGNUP_AUTOSTORE: SUCCESS! File verified with stores: {verify_config.get("stores", [])}')
+                        logging.info(f'Auto-created default store "{default_store_name}" (ID: {default_store_id}) for new user: {username} at {user_config_path}')
+                    else:
+                        logging.error(f'SIGNUP_AUTOSTORE: FAILED - File does not exist after write: {user_config_path}')
+                except Exception as store_err:
+                    import traceback
+                    logging.error(f'SIGNUP_AUTOSTORE: EXCEPTION for {username}: {store_err}')
+                    logging.error(f'SIGNUP_AUTOSTORE: Traceback: {traceback.format_exc()}')
+                
                 # Generate a pairing code for this new user
                 try:
                     _ensure_user_link_code(username)
                 except Exception:
                     pass
-                flash('Account created! Please sign in.', 'success')
+
+                # Check if SMTP is configured before attempting signup
+                if not _mail_configured():
+                    # SMTP not configured - cannot send verification email
+                    # For development: auto-verify the user
+                    logging.warning('SMTP not configured - auto-verifying user %s for development', username)
+                    try:
+                        db.execute('UPDATE users SET email_verified = 1 WHERE username = ?', (username,))
+                        db.commit()
+                        flash('Account created successfully! You can now log in. (Email verification disabled - SMTP not configured)', 'success')
+                    except Exception as _e:
+                        logging.error('Failed to auto-verify user: %s', _e)
+                        flash('Account created but verification failed. Please contact support.', 'error')
+                    return redirect(url_for('login'))
+                
+                # Send verification email
+                try:
+                    _send_verification_email(username)
+                    flash('Account created! Please check your email to verify your account before logging in.', 'success')
+                except Exception as _e:
+                    logging.warning('Failed to send verification email: %s', _e)
+                    flash('Account created! However, we could not send a verification email. Please contact support.', 'warning')
+                
                 return redirect(url_for('login'))
             except sqlite3.IntegrityError:
                 flash('Username already exists', 'error')
@@ -894,7 +1491,11 @@ def signup():
     except Exception:
         google_enabled = False
         microsoft_enabled = False
-    resp = make_response(render_template('signup.html', google_enabled=google_enabled, microsoft_enabled=microsoft_enabled))
+    try:
+        trial_days_display = int(STRIPE_TRIAL_DAYS or 14)
+    except Exception:
+        trial_days_display = 14
+    resp = make_response(render_template('signup.html', google_enabled=google_enabled, microsoft_enabled=microsoft_enabled, trial_days_display=trial_days_display))
     try:
         resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
     except Exception:
@@ -939,6 +1540,507 @@ def home():
     except Exception:
         pass
     return resp
+
+@app.route('/subscribe')
+@login_required
+def subscribe():
+    user_id = _current_user_id()
+    subscription_row = None
+    if user_id:
+        try:
+            db = get_db()
+            subscription_row = db.execute('SELECT * FROM subscriptions WHERE user_id = ?', (user_id,)).fetchone()
+        except Exception as _e:
+            logging.warning('Failed to load subscription row: %s', _e)
+    if subscription_row is not None:
+        subscription_row = dict(subscription_row)
+    has_active = _user_has_active_subscription(user_id)
+    next_renewal = None
+    if subscription_row and subscription_row.get('current_period_end'):
+        try:
+            next_renewal = datetime.fromtimestamp(int(subscription_row['current_period_end'])).strftime('%b %d, %Y')
+        except Exception:
+            next_renewal = None
+    template_ctx = {
+        'stripe_enabled': _stripe_enabled(),
+        'subscription': subscription_row,
+        'has_active': has_active,
+        'publishable_key': STRIPE_PUBLISHABLE_KEY,
+        'price_display': STRIPE_PRICE_DISPLAY,
+        'trial_days': STRIPE_TRIAL_DAYS,
+        'price_id': STRIPE_STANDARD_PRICE_ID,
+        'next_renewal': next_renewal,
+    }
+    return render_template('subscribe.html', **template_ctx)
+
+@app.route('/billing/checkout', methods=['POST'])
+@login_required
+def billing_checkout():
+    if not _stripe_enabled():
+        flash('Billing is not yet configured. Please contact support.', 'error')
+        return redirect(url_for('subscribe'))
+    user_id = _current_user_id()
+    if not user_id:
+        flash('Could not determine current user for billing', 'error')
+        return redirect(url_for('subscribe'))
+    try:
+        customer_id = _get_or_create_stripe_customer(user_id)
+        success_url = url_for('billing_success', _external=True) + '?session_id={CHECKOUT_SESSION_ID}'
+        cancel_url = url_for('billing_cancelled', _external=True)
+        subscription_data = {}
+        try:
+            if STRIPE_TRIAL_DAYS:
+                subscription_data['trial_period_days'] = int(STRIPE_TRIAL_DAYS)
+        except Exception:
+            subscription_data = {}
+        params = {
+            'mode': 'subscription',
+            'line_items': [{'price': STRIPE_STANDARD_PRICE_ID, 'quantity': 1}],
+            'customer': customer_id,
+            'success_url': success_url,
+            'cancel_url': cancel_url,
+            'allow_promotion_codes': True,
+            'metadata': {'app_user_id': user_id},
+        }
+        if subscription_data:
+            params['subscription_data'] = subscription_data
+        checkout_session = stripe.checkout.Session.create(**params)
+        return redirect(checkout_session.url, code=303)
+    except Exception as _e:
+        logging.error('Failed to create Stripe checkout session: %s', _e)
+        flash('Could not start checkout session. Please try again or contact support.', 'error')
+        return redirect(url_for('subscribe'))
+
+@app.route('/billing/success')
+@login_required
+def billing_success():
+    session_id = request.args.get('session_id')
+    if session_id and stripe:
+        try:
+            checkout_session = stripe.checkout.Session.retrieve(session_id)
+            subscription_id = checkout_session.get('subscription')
+            if subscription_id:
+                sub = stripe.Subscription.retrieve(subscription_id)
+                _sync_subscription_from_stripe(sub)
+        except Exception as _e:
+            logging.warning('Checkout success sync failed: %s', _e)
+    flash('Subscription activated! You can now access your dashboard.', 'success')
+    return redirect(url_for('dashboard'))
+
+@app.route('/billing/cancelled')
+@login_required
+def billing_cancelled():
+    flash('Checkout cancelled. You can restart the process whenever you are ready.', 'error')
+    return redirect(url_for('subscribe'))
+
+@app.route('/billing_portal', methods=['POST'])
+@login_required
+def billing_portal():
+    """Create Stripe billing portal session for subscription management"""
+    if not _stripe_enabled():
+        flash('Stripe is not configured', 'error')
+        return redirect(url_for('account'))
+    
+    try:
+        user_id = _current_user_id()
+        if not user_id:
+            flash('User session error', 'error')
+            return redirect(url_for('login'))
+        
+        # Get or create Stripe customer
+        customer_id = _get_or_create_stripe_customer(user_id)
+        if not customer_id:
+            flash('Unable to access billing portal. Please contact support.', 'error')
+            return redirect(url_for('account'))
+        
+        # Create billing portal session
+        return_url = url_for('account', _external=True)
+        portal_session = stripe.billing_portal.Session.create(
+            customer=customer_id,
+            return_url=return_url,
+        )
+        
+        return redirect(portal_session.url)
+        
+    except Exception as e:
+        logging.error(f'Billing portal error: {e}')
+        flash('Unable to open billing portal. Please try again later.', 'error')
+        return redirect(url_for('account'))
+
+@app.route('/cancel_subscription', methods=['POST'])
+@login_required
+def cancel_subscription():
+    """Cancel subscription at end of billing period"""
+    if not _stripe_enabled():
+        flash('Stripe is not configured', 'error')
+        return redirect(url_for('account'))
+    
+    try:
+        user_id = _current_user_id()
+        if not user_id:
+            flash('User session error', 'error')
+            return redirect(url_for('login'))
+        
+        # Get current subscription from database
+        db = get_db()
+        sub_row = db.execute(
+            'SELECT stripe_subscription_id FROM subscriptions WHERE user_id = ? AND status IN ("active", "trialing") ORDER BY id DESC LIMIT 1',
+            (user_id,)
+        ).fetchone()
+        
+        if not sub_row or not sub_row['stripe_subscription_id']:
+            flash('No active subscription found', 'error')
+            return redirect(url_for('account'))
+        
+        # Cancel subscription at period end
+        stripe_sub_id = sub_row['stripe_subscription_id']
+        updated_sub = stripe.Subscription.modify(
+            stripe_sub_id,
+            cancel_at_period_end=True
+        )
+        
+        # Sync to local database
+        _sync_subscription_from_stripe(updated_sub)
+        
+        flash('Subscription will be cancelled at the end of your current billing period. You can reactivate anytime before then.', 'success')
+        return redirect(url_for('account'))
+        
+    except Exception as e:
+        logging.error(f'Cancel subscription error: {e}')
+        flash('Unable to cancel subscription. Please try again later.', 'error')
+        return redirect(url_for('account'))
+
+@app.route('/reactivate_subscription', methods=['POST'])
+@login_required
+def reactivate_subscription():
+    """Reactivate a cancelled subscription"""
+    if not _stripe_enabled():
+        flash('Stripe is not configured', 'error')
+        return redirect(url_for('account'))
+    
+    try:
+        user_id = _current_user_id()
+        if not user_id:
+            flash('User session error', 'error')
+            return redirect(url_for('login'))
+        
+        # Get current subscription from database
+        db = get_db()
+        sub_row = db.execute(
+            'SELECT stripe_subscription_id FROM subscriptions WHERE user_id = ? AND cancel_at_period_end = 1 ORDER BY id DESC LIMIT 1',
+            (user_id,)
+        ).fetchone()
+        
+        if not sub_row or not sub_row['stripe_subscription_id']:
+            flash('No cancelled subscription found', 'error')
+            return redirect(url_for('account'))
+        
+        # Reactivate subscription
+        stripe_sub_id = sub_row['stripe_subscription_id']
+        updated_sub = stripe.Subscription.modify(
+            stripe_sub_id,
+            cancel_at_period_end=False
+        )
+        
+        # Sync to local database
+        _sync_subscription_from_stripe(updated_sub)
+        
+        flash('Subscription reactivated successfully!', 'success')
+        return redirect(url_for('account'))
+        
+    except Exception as e:
+        logging.error(f'Reactivate subscription error: {e}')
+        flash('Unable to reactivate subscription. Please try again later.', 'error')
+        return redirect(url_for('account'))
+
+@app.route('/remove_screen', methods=['POST'])
+@login_required
+def remove_screen():
+    """Remove an individual screen and cancel its subscription"""
+    try:
+        data = request.get_json() or request.form
+        screen_sub_id = data.get('screen_subscription_id')
+        reason = data.get('reason', 'No reason provided')
+        feedback = data.get('feedback', '')
+        
+        if not screen_sub_id:
+            return jsonify({'success': False, 'error': 'Missing screen_subscription_id'}), 400
+        
+        # Cancel the screen subscription
+        user_id = _current_user_id()
+        username = _current_username()
+        if not user_id:
+            return jsonify({'success': False, 'error': 'User session error'}), 400
+        
+        # Get subscription details
+        db = get_db()
+        sub_row = db.execute(
+            'SELECT screen_id, screen_name, store_id, user_id FROM screen_subscriptions WHERE id = ? AND user_id = ?',
+            (screen_sub_id, user_id)
+        ).fetchone()
+        
+        if not sub_row:
+            return jsonify({'success': False, 'error': 'Subscription not found'}), 404
+        
+        screen_id = sub_row['screen_id']
+        screen_name = sub_row['screen_name']
+        store_id = sub_row['store_id']
+        
+        # Save cancellation feedback
+        try:
+            db.execute(
+                'INSERT INTO cancellation_feedback (user_id, username, screen_id, screen_name, reason, feedback_text) '
+                'VALUES (?, ?, ?, ?, ?, ?)',
+                (user_id, username, screen_id, screen_name, reason, feedback)
+            )
+            db.commit()
+            logging.info(f'Saved cancellation feedback for {screen_id}: {reason}')
+        except Exception as e:
+            logging.error(f'Failed to save cancellation feedback: {e}')
+        
+        # Cancel the Stripe subscription
+        cancelled = _cancel_screen_subscription(screen_sub_id, immediate=True)
+        if not cancelled:
+            return jsonify({'success': False, 'error': 'Failed to cancel subscription'}), 500
+        
+        # Remove screen from config
+        ukey = _safe_user_key()
+        if ukey:
+            config = load_store_config_for_user_safe_key(ukey)
+            screens_dict = config.get('screens', {})
+            
+            if store_id in screens_dict:
+                # Remove screen from store's screens dict
+                if screen_id in screens_dict[store_id]:
+                    del screens_dict[store_id][screen_id]
+                
+                # Remove empty store entry
+                if not screens_dict[store_id]:
+                    del screens_dict[store_id]
+                
+                config['screens'] = screens_dict
+                save_store_config_for_user_safe_key(ukey, config)
+        
+        new_total_screens = _count_user_screens()
+        logging.info(f'Removed screen {screen_id} and cancelled subscription, new count: {new_total_screens}')
+        
+        return jsonify({'success': True, 'new_count': new_total_screens})
+            
+    except Exception as e:
+        logging.error(f'Remove screen error: {e}', exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/migrate_to_screen_subscriptions', methods=['POST'])
+@login_required
+def migrate_to_screen_subscriptions():
+    """One-time migration: Convert existing screens to individual subscriptions"""
+    try:
+        user_id = _current_user_id()
+        if not user_id:
+            return jsonify({'success': False, 'error': 'User session error'}), 400
+        
+        # Get user's screens from config
+        ukey = _safe_user_key()
+        if not ukey:
+            return jsonify({'success': False, 'error': 'User key error'}), 400
+        
+        config = load_store_config_for_user_safe_key(ukey)
+        screens_dict = config.get('screens', {})
+        stores = {s['id']: s['name'] for s in config.get('stores', [])}
+        
+        # Get existing subscription details
+        db = get_db()
+        sub_row = db.execute(
+            'SELECT status, current_period_end, created_at FROM subscriptions WHERE user_id = ?',
+            (user_id,)
+        ).fetchone()
+        
+        if sub_row:
+            status = sub_row['status']
+            period_end = sub_row['current_period_end']
+            # Calculate period start from created_at or estimate from period_end
+            if sub_row['created_at']:
+                period_start = sub_row['created_at']
+            elif period_end:
+                # Estimate 30 days before period_end
+                period_start = period_end - (30 * 24 * 60 * 60)
+            else:
+                period_start = int(time.time())
+        else:
+            status = 'trialing'
+            period_start = int(time.time())
+            period_end = period_start + (14 * 24 * 60 * 60)  # 14 days trial
+        
+        # Create screen subscriptions
+        created_count = 0
+        for store_id, store_screens in screens_dict.items():
+            store_name = stores.get(store_id, f'Store {store_id}')
+            for screen_id, screen_data in store_screens.items():
+                # Check if already exists
+                existing = db.execute(
+                    'SELECT id FROM screen_subscriptions WHERE user_id = ? AND screen_id = ? AND store_id = ?',
+                    (user_id, screen_id, store_id)
+                ).fetchone()
+                
+                if not existing:
+                    db.execute(
+                        'INSERT INTO screen_subscriptions '
+                        '(user_id, screen_id, store_id, screen_name, status, '
+                        'current_period_start, current_period_end, cancel_at_period_end, created_at, updated_at) '
+                        'VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)',
+                        (user_id, screen_id, store_id, screen_id, status, period_start, period_end,
+                         int(time.time()), int(time.time()))
+                    )
+                    created_count += 1
+        
+        db.commit()
+        logging.info(f'Migrated {created_count} screens to individual subscriptions for user {user_id}')
+        
+        return jsonify({
+            'success': True,
+            'migrated_count': created_count,
+            'message': f'Successfully migrated {created_count} screens to individual subscriptions'
+        })
+        
+    except Exception as e:
+        logging.error(f'Migration error: {e}', exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/remove_all_screens', methods=['POST'])
+@login_required
+def remove_all_screens():
+    """Remove all screens and cancel all individual subscriptions"""
+    try:
+        user_id = _current_user_id()
+        if not user_id:
+            return jsonify({'success': False, 'error': 'User session error'}), 400
+        
+        # Get all screen subscriptions
+        db = get_db()
+        subs = db.execute(
+            'SELECT id FROM screen_subscriptions WHERE user_id = ? AND status IN ("active", "trialing")',
+            (user_id,)
+        ).fetchall()
+        
+        # Cancel all subscriptions
+        cancelled_count = 0
+        for sub in subs:
+            if _cancel_screen_subscription(sub['id'], immediate=True):
+                cancelled_count += 1
+        
+        # Remove all screens from config
+        ukey = _safe_user_key()
+        if ukey:
+            config = load_store_config_for_user_safe_key(ukey)
+            config['screens'] = {}
+            save_store_config_for_user_safe_key(ukey, config)
+        
+        logging.info(f'Cancelled {cancelled_count} screen subscriptions and removed all screens for user {user_id}')
+        return jsonify({
+            'success': True, 
+            'message': f'Cancelled {cancelled_count} screen subscriptions',
+            'cancelled_count': cancelled_count
+        })
+        
+    except Exception as e:
+        logging.error(f'Remove all screens error: {e}', exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+def _update_subscription_quantity(new_quantity: int):
+    """Update Stripe subscription quantity"""
+    if not _stripe_enabled():
+        return
+    
+    try:
+        user_id = _current_user_id()
+        if not user_id:
+            return
+        
+        db = get_db()
+        sub_row = db.execute(
+            'SELECT stripe_subscription_id FROM subscriptions WHERE user_id = ? AND status IN ("active", "trialing") ORDER BY id DESC LIMIT 1',
+            (user_id,)
+        ).fetchone()
+        
+        if sub_row and sub_row['stripe_subscription_id']:
+            stripe_sub = stripe.Subscription.retrieve(sub_row['stripe_subscription_id'])
+            
+            # Update the first subscription item quantity
+            if stripe_sub.items and stripe_sub.items.data:
+                stripe.SubscriptionItem.modify(
+                    stripe_sub.items.data[0].id,
+                    quantity=max(1, new_quantity)  # Minimum 1
+                )
+                
+                # Sync back to database
+                updated_sub = stripe.Subscription.retrieve(sub_row['stripe_subscription_id'])
+                _sync_subscription_from_stripe(updated_sub)
+                
+                logging.info(f'Updated subscription quantity to {new_quantity}')
+    except Exception as e:
+        logging.error(f'Update subscription quantity error: {e}', exc_info=True)
+
+@app.route('/resend-verification', methods=['GET', 'POST'])
+def resend_verification():
+    """Resend email verification link"""
+    if request.method == 'POST':
+        email = (request.form.get('email') or '').strip().lower()
+        if not email:
+            flash('Please enter your email', 'error')
+            return render_template('resend_verification.html')
+        
+        try:
+            db = get_db()
+            row = db.execute('SELECT email_verified FROM users WHERE username = ?', (email,)).fetchone()
+            if row:
+                if int(row['email_verified'] or 0) == 1:
+                    flash('Your email is already verified. You can log in now.', 'success')
+                    return redirect(url_for('login'))
+                else:
+                    _send_verification_email(email)
+                    flash('Verification email sent! Please check your inbox.', 'success')
+            else:
+                # Don't reveal if user exists
+                flash('If that email is registered, we sent a verification link.', 'success')
+        except Exception as e:
+            logging.warning('Resend verification failed: %s', e)
+            flash('Could not send verification email. Please try again later.', 'error')
+        
+        return redirect(url_for('login'))
+    
+    return render_template('resend_verification.html')
+
+@app.route('/stripe/webhook', methods=['POST'])
+def stripe_webhook():
+    if not stripe:
+        return jsonify({'error': 'Stripe disabled'}), 400
+    payload = request.get_data(as_text=True)
+    sig_header = request.headers.get('Stripe-Signature')
+    event = None
+    try:
+        if STRIPE_WEBHOOK_SECRET:
+            event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+        else:
+            event = json.loads(payload)
+    except Exception as _e:
+        logging.warning('Stripe webhook error: %s', _e)
+        return jsonify({'error': 'invalid payload'}), 400
+
+    event_type = event.get('type')
+    data_object = event.get('data', {}).get('object')
+
+    try:
+        if event_type == 'checkout.session.completed':
+            subscription_id = data_object.get('subscription') if isinstance(data_object, dict) else None
+            if subscription_id:
+                sub = stripe.Subscription.retrieve(subscription_id)
+                _sync_subscription_from_stripe(sub)
+        elif event_type in ('customer.subscription.created', 'customer.subscription.updated', 'customer.subscription.deleted'):
+            _sync_subscription_from_stripe(data_object)
+    except Exception as _sync_e:
+        logging.warning('Failed processing Stripe webhook event %s: %s', event_type, _sync_e)
+
+    return jsonify({'received': True})
 
 @app.route('/pair')
 def pair():
@@ -1131,6 +2233,12 @@ def auth_google_callback():
                     db.commit()
                     logging.info(f'✓ OAuth: User {uname} saved successfully')
                     _ensure_user_link_code(uname)
+                    try:
+                        row_id = db.execute('SELECT id FROM users WHERE username = ?', (uname,)).fetchone()
+                        if row_id:
+                            session.setdefault('user', {})['id'] = row_id['id']
+                    except Exception as _id_e:
+                        logging.warning('Failed to cache user id for oauth user %s: %s', uname, _id_e)
                     
                 except Exception as e:
                     logging.error(f'✗ OAuth: Failed to save user {uname}: {e}')
@@ -1141,6 +2249,16 @@ def auth_google_callback():
             logging.error(f'✗ OAuth: User creation failed completely: {e}')
         nxt = request.args.get('next')
         if not nxt:
+            # Check if user has active subscription - redirect new users to subscribe page
+            # Skip for admin users
+            try:
+                user_id = session.get('user', {}).get('id')
+                is_admin = session.get('user', {}).get('is_admin', False)
+                if user_id and not is_admin and not _user_has_active_subscription(user_id):
+                    logging.info(f'New OAuth user {email} without subscription - redirecting to subscribe')
+                    return redirect(url_for('subscribe', welcome=1))
+            except Exception as _sub_e:
+                logging.warning(f'Failed to check subscription for OAuth user {email}: {_sub_e}')
             try:
                 host = request.host or ''
                 if host.startswith('api.') and 'everydayadvertise.com' in host:
@@ -1380,10 +2498,26 @@ def auth_microsoft_callback():
                 except Exception:
                     pass
                 _ensure_user_link_code(uname)
+                try:
+                    row_id = db.execute('SELECT id FROM users WHERE username = ?', (uname,)).fetchone()
+                    if row_id:
+                        session.setdefault('user', {})['id'] = row_id['id']
+                except Exception as _id_e:
+                    logging.warning('Microsoft OAuth id lookup failed: %s', _id_e)
         except Exception:
             pass
         nxt = request.args.get('next')
         if not nxt:
+            # Check if user has active subscription - redirect new users to subscribe page
+            # Skip for admin users
+            try:
+                user_id = session.get('user', {}).get('id')
+                is_admin = session.get('user', {}).get('is_admin', False)
+                if user_id and not is_admin and not _user_has_active_subscription(user_id):
+                    logging.info(f'New Microsoft OAuth user {email} without subscription - redirecting to subscribe')
+                    return redirect(url_for('subscribe', welcome=1))
+            except Exception as _sub_e:
+                logging.warning(f'Failed to check subscription for Microsoft OAuth user {email}: {_sub_e}')
             try:
                 host = request.host or ''
                 if host.startswith('api.') and 'everydayadvertise.com' in host:
@@ -1424,10 +2558,26 @@ def auth_microsoft_callback():
                 except Exception:
                     pass
                 _ensure_user_link_code(uname)
+                try:
+                    row_id = db.execute('SELECT id FROM users WHERE username = ?', (uname,)).fetchone()
+                    if row_id:
+                        session.setdefault('user', {})['id'] = row_id['id']
+                except Exception as _id_e:
+                    logging.warning('Microsoft manual OAuth id lookup failed: %s', _id_e)
         except Exception as _e:
             logging.warning('Microsoft manual flow user upsert failed: %s', _e)
         nxt = request.args.get('next')
         if not nxt:
+            # Check if user has active subscription - redirect new users to subscribe page
+            # Skip for admin users
+            try:
+                user_id = session.get('user', {}).get('id')
+                is_admin = session.get('user', {}).get('is_admin', False)
+                if user_id and not is_admin and not _user_has_active_subscription(user_id):
+                    logging.info(f'New Microsoft OAuth user {email} without subscription - redirecting to subscribe')
+                    return redirect(url_for('subscribe', welcome=1))
+            except Exception as _sub_e:
+                logging.warning(f'Failed to check subscription for Microsoft OAuth user {email}: {_sub_e}')
             try:
                 host = request.host or ''
                 if host.startswith('api.') and 'everydayadvertise.com' in host:
@@ -3326,7 +4476,7 @@ def superadmin_logout():
 def _collect_user_metrics():
     """Return list of users with counts: stores, screens, online screens."""
     db = get_db()
-    cur = db.execute('SELECT id, username, full_name, link_code, COALESCE(is_blocked,0) AS is_blocked, CASE WHEN password_hash IS NULL OR password_hash = '' THEN 0 ELSE 1 END AS has_password FROM users ORDER BY username')
+    cur = db.execute("SELECT id, username, full_name, link_code, role, COALESCE(is_blocked,0) AS is_blocked, CASE WHEN password_hash IS NULL OR password_hash = '' THEN 0 ELSE 1 END AS has_password FROM users ORDER BY username")
     users = []
     now = int(time.time())
     for row in cur.fetchall() or []:
@@ -3352,6 +4502,7 @@ def _collect_user_metrics():
             'link_code': row['link_code'],
             'is_blocked': int(row['is_blocked'] or 0),
             'has_password': int(row['has_password'] or 0),
+            'is_admin': (row['role'] or '').lower() == 'admin',
             'stores_count': len(stores),
             'screens_count': screens_count,
             'online_screens': online,
@@ -3362,14 +4513,91 @@ def _collect_user_metrics():
 @app.route('/superadmin/dashboard')
 @superadmin_required
 def superadmin_dashboard():
-    users = _collect_user_metrics()
-    totals = {
-        'users': len(users),
-        'stores': sum(u['stores_count'] for u in users),
-        'screens': sum(u['screens_count'] for u in users),
-        'online': sum(u['online_screens'] for u in users),
-    }
-    return render_template('superadmin/dashboard.html', users=users, totals=totals)
+    try:
+        search_query = request.args.get('search', '').strip().lower()
+        users = _collect_user_metrics()
+        
+        # Filter users by search query
+        if search_query:
+            users = [u for u in users if 
+                    search_query in u['username'].lower() or 
+                    search_query in (u['full_name'] or '').lower() or
+                    search_query in str(u['id']) or
+                    search_query in (u['link_code'] or '').lower()]
+        
+        totals = {
+            'users': len(users),
+            'stores': sum(u['stores_count'] for u in users),
+            'screens': sum(u['screens_count'] for u in users),
+            'online': sum(u['online_screens'] for u in users),
+        }
+        return render_template('superadmin/dashboard.html', users=users, totals=totals, search_query=search_query)
+    except Exception as e:
+        logging.error(f'Superadmin dashboard error: {e}', exc_info=True)
+        return f'<h1>Error</h1><pre>{str(e)}</pre>', 500
+
+@app.route('/superadmin/feedback')
+@superadmin_required
+def superadmin_feedback():
+    """View all cancellation feedback"""
+    try:
+        db = get_db()
+        
+        # Ensure table exists with proper error handling
+        try:
+            # Check if table exists first
+            table_check = db.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='cancellation_feedback'"
+            ).fetchone()
+            
+            if not table_check:
+                logging.info('Creating cancellation_feedback table...')
+                db.execute(
+                    'CREATE TABLE cancellation_feedback ('
+                    'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+                    'user_id INTEGER NOT NULL, '
+                    'username TEXT, '
+                    'screen_id TEXT, '
+                    'screen_name TEXT, '
+                    'reason TEXT, '
+                    'feedback_text TEXT, '
+                    'canceled_at INTEGER DEFAULT (strftime("%s", "now"))'
+                    ')'
+                )
+                db.commit()
+                logging.info('cancellation_feedback table created successfully')
+        except Exception as table_err:
+            logging.error(f'Table creation error: {table_err}', exc_info=True)
+        
+        # Try to fetch feedbacks
+        try:
+            feedbacks = db.execute(
+                'SELECT * FROM cancellation_feedback ORDER BY canceled_at DESC LIMIT 500'
+            ).fetchall()
+        except Exception as fetch_err:
+            logging.error(f'Feedback fetch error: {fetch_err}', exc_info=True)
+            feedbacks = []
+        
+        feedback_list = []
+        for fb in feedbacks:
+            try:
+                feedback_list.append({
+                    'id': fb['id'],
+                    'created_at': fb['canceled_at'],
+                    'username': fb['username'],
+                    'screen_id': fb['screen_id'],
+                    'screen_name': fb['screen_name'] or 'N/A',
+                    'reason': fb['reason'],
+                    'feedback_text': fb['feedback_text'] or ''
+                })
+            except Exception as row_err:
+                logging.error(f'Row processing error: {row_err}')
+                continue
+        
+        return render_template('superadmin/feedback.html', feedbacks=feedback_list)
+    except Exception as e:
+        logging.error(f'Superadmin feedback error: {e}', exc_info=True)
+        return f'<h1>Error Loading Feedback</h1><p>{str(e)}</p><p>Check server logs for details.</p>', 500
 
 @app.route('/superadmin/users/create', methods=['POST'])
 @superadmin_required
@@ -3378,20 +4606,22 @@ def superadmin_create_user():
     email = (data.get('username') or '').strip().lower()
     full_name = (data.get('full_name') or '').strip()
     pwd = data.get('password') or ''
+    is_admin = data.get('is_admin') == '1'
+    role = 'admin' if is_admin else None
     if not email or not pwd:
         flash('Username and password required', 'error')
         return redirect(url_for('superadmin_dashboard'))
     try:
         db = get_db()
-        db.execute('INSERT INTO users (username, password_hash, full_name, is_blocked) VALUES (?, ?, ?, 0)', (
-            email, generate_password_hash(pwd), full_name
+        db.execute('INSERT INTO users (username, password_hash, full_name, is_blocked, role) VALUES (?, ?, ?, 0, ?)', (
+            email, generate_password_hash(pwd), full_name, role
         ))
         db.commit()
         try:
             _ensure_user_link_code(email)
         except Exception:
             pass
-        flash('User created', 'success')
+        flash(f'User created{" as admin" if is_admin else ""}', 'success')
     except sqlite3.IntegrityError:
         flash('Username already exists', 'error')
     except Exception as e:
@@ -3461,6 +4691,126 @@ def superadmin_rename_user(user_id):
     except Exception as e:
         flash(f'Update failed: {e}', 'error')
     return redirect(url_for('superadmin_dashboard'))
+
+@app.route('/superadmin/users/<int:user_id>')
+@superadmin_required
+def superadmin_user_detail(user_id):
+    try:
+        db = get_db()
+        logging.info(f"[SUPERADMIN] Loading details for user_id={user_id}")
+        
+        user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+        if not user:
+            logging.warning(f"[SUPERADMIN] User {user_id} not found")
+            flash('User not found', 'error')
+            return redirect(url_for('superadmin_dashboard'))
+        
+        logging.info(f"[SUPERADMIN] User found: {user['username']}")
+        
+        # Get subscription info
+        subscription = None
+        try:
+            subscription = db.execute('SELECT * FROM subscriptions WHERE user_id = ? ORDER BY id DESC LIMIT 1', (user_id,)).fetchone()
+            logging.info(f"[SUPERADMIN] Subscription query successful: {subscription is not None}")
+        except Exception as e:
+            logging.error(f"[SUPERADMIN] Subscription query failed: {e}")
+        
+        # Get user config for stores and screens
+        try:
+            uname = (user['username'] or '').strip().lower()
+            logging.info(f"[SUPERADMIN] Processing username: {uname}")
+            safe = _safe_key_from_username(uname)
+            logging.info(f"[SUPERADMIN] Safe key: {safe}")
+            cfg = load_store_config_for_user_safe_key(safe) if safe else {'stores': [], 'screens': {}}
+            logging.info(f"[SUPERADMIN] Config loaded: {len(cfg.get('stores', []))} stores, {len(cfg.get('screens', {}))} screens")
+        except Exception as e:
+            logging.error(f"[SUPERADMIN] Config loading failed: {e}")
+            cfg = {'stores': [], 'screens': {}}
+        
+        # Template expects these variables (tables don't exist yet, so pass empty lists)
+        screen_subs = []
+        cancellations = []
+        
+        logging.info(f"[SUPERADMIN] Rendering template for user {user_id}")
+        return render_template('superadmin/user_detail.html', 
+                             user=user, 
+                             subscription=subscription,
+                             config=cfg,
+                             screen_subs=screen_subs,
+                             cancellations=cancellations)
+    except Exception as e:
+        logging.error(f"[SUPERADMIN] Fatal error in user_detail for user_id={user_id}: {e}", exc_info=True)
+        flash(f'Error loading user details: {str(e)}', 'error')
+        return redirect(url_for('superadmin_dashboard'))
+
+@app.route('/superadmin/users/<int:user_id>/cancel-subscription', methods=['POST'])
+@superadmin_required
+def superadmin_cancel_subscription(user_id):
+    try:
+        db = get_db()
+        user = db.execute('SELECT username FROM users WHERE id = ?', (user_id,)).fetchone()
+        if not user:
+            flash('User not found', 'error')
+            return redirect(url_for('superadmin_dashboard'))
+        
+        # Cancel main subscription
+        db.execute('''UPDATE subscriptions 
+                     SET status = 'canceled', 
+                         cancel_at_period_end = 1,
+                         updated_at = ?
+                     WHERE user_id = ?''', (int(time.time()), user_id))
+        db.commit()
+        
+        flash(f'Subscription canceled for {user["username"]}', 'success')
+    except Exception as e:
+        flash(f'Error canceling subscription: {e}', 'error')
+    
+    return redirect(url_for('superadmin_user_detail', user_id=user_id))
+
+@app.route('/superadmin/users/<int:user_id>/reset-subscription', methods=['POST'])
+@superadmin_required
+def superadmin_reset_subscription(user_id):
+    try:
+        db = get_db()
+        user = db.execute('SELECT username FROM users WHERE id = ?', (user_id,)).fetchone()
+        if not user:
+            flash('User not found', 'error')
+            return redirect(url_for('superadmin_dashboard'))
+        
+        now = int(time.time())
+        trial_end = now + (14 * 24 * 3600)  # 14 days trial
+        
+        # Reset main subscription
+        db.execute('''UPDATE subscriptions 
+                     SET status = 'trialing',
+                         cancel_at_period_end = 0,
+                         current_period_start = ?,
+                         current_period_end = ?,
+                         updated_at = ?
+                     WHERE user_id = ?''', (now, trial_end, now, user_id))
+        
+        # If no subscription exists, create one
+        if db.execute('SELECT id FROM subscriptions WHERE user_id = ?', (user_id,)).fetchone() is None:
+            db.execute('''INSERT INTO subscriptions 
+                         (user_id, stripe_subscription_id, status, current_period_start, current_period_end, created_at, updated_at)
+                         VALUES (?, ?, 'trialing', ?, ?, ?, ?)''',
+                      (user_id, None, now, trial_end, now, now))
+        
+        # Reset all screen subscriptions
+        db.execute('''UPDATE screen_subscriptions 
+                     SET status = 'trialing',
+                         cancel_at_period_end = 0,
+                         current_period_start = ?,
+                         current_period_end = ?,
+                         updated_at = ?
+                     WHERE user_id = ?''', (now, trial_end, now, user_id))
+        
+        db.commit()
+        flash(f'Subscription reset for {user["username"]} - 14 day trial started', 'success')
+    except Exception as e:
+        flash(f'Error resetting subscription: {e}', 'error')
+    
+    return redirect(url_for('superadmin_user_detail', user_id=user_id))
 
 def _get_current_username_from_session() -> Optional[str]:
     try:
@@ -3614,20 +4964,192 @@ def profile():
     uname = _get_current_username_from_session()
     code = None
     full_name = None
+    phone_number = None
+    subscription_status = None
+    screen_count = None
     try:
         if uname:
             code = _ensure_user_link_code(uname)
-            row = get_db().execute('SELECT full_name FROM users WHERE username = ?', (uname,)).fetchone()
-            full_name = (row['full_name'] if row and 'full_name' in row.keys() else None)
-    except Exception:
-        pass
+            db = get_db()
+            row = db.execute('SELECT full_name, phone FROM users WHERE username = ?', (uname,)).fetchone()
+            if row:
+                full_name = row['full_name'] if 'full_name' in row.keys() else None
+                phone_number = row['phone'] if 'phone' in row.keys() else None
+            # Get subscription info
+            user_id = _current_user_id()
+            if user_id:
+                sub_row = db.execute('SELECT status FROM subscriptions WHERE user_id = ? ORDER BY id DESC LIMIT 1', (user_id,)).fetchone()
+                if sub_row:
+                    subscription_status = sub_row['status']
+                # Count screens
+                screen_count = _count_user_screens()
+    except Exception as e:
+        logging.warning(f'Profile page error: {e}')
     # Basic cache control to avoid exposing stale codes
-    resp = make_response(render_template('profile.html', username=uname, full_name=full_name, link_code=code, build_stamp=BUILD_STAMP))
+    resp = make_response(render_template('profile.html', 
+                                        username=uname, 
+                                        full_name=full_name, 
+                                        phone_number=phone_number,
+                                        subscription_status=subscription_status,
+                                        screen_count=screen_count,
+                                        link_code=code, 
+                                        build_stamp=BUILD_STAMP))
     try:
         resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
     except Exception:
         pass
     return resp
+
+@app.route('/account', methods=['GET'])
+@login_required
+def account():
+    """Full account dashboard with subscriptions, billing, screens, and phone management"""
+    uname = _get_current_username_from_session()
+    user_id = _current_user_id()
+    logging.info(f'ACCOUNT PAGE: username={uname}, user_id={user_id}')
+    
+    # User info
+    user_info = {'email': uname, 'is_admin': session.get('user', {}).get('is_admin', False)}
+    account_created = None
+    phone_number = None
+    phone_verified = False
+    
+    # Subscription info
+    subscription_info = None
+    has_active = False
+    is_canceled = False
+    next_billing_date = None
+    billing_history = []
+    
+    try:
+        db = get_db()
+        
+        # Get user details (removed created_at - column doesn't exist)
+        user_row = db.execute(
+            'SELECT full_name, phone_number, phone_verified, role FROM users WHERE username = ?',
+            (uname,)
+        ).fetchone()
+        if user_row:
+            user_info['full_name'] = user_row['full_name'] or uname
+            phone_number = user_row['phone_number']
+            phone_verified = bool(user_row['phone_verified'])
+        
+        # Get subscription details
+        if user_id:
+            sub_row = db.execute(
+                'SELECT status, current_period_end, cancel_at_period_end, plan_name, quantity '
+                'FROM subscriptions WHERE user_id = ? ORDER BY id DESC LIMIT 1',
+                (user_id,)
+            ).fetchone()
+            
+            if sub_row:
+                subscription_info = {
+                    'status': sub_row['status'],
+                    'current_period_end': sub_row['current_period_end'],
+                    'plan_name': sub_row['plan_name'],
+                    'quantity': sub_row['quantity']
+                }
+                has_active = sub_row['status'] in ('active', 'trialing')
+                is_canceled = bool(sub_row['cancel_at_period_end'])
+                
+                if sub_row['current_period_end']:
+                    from datetime import datetime
+                    try:
+                        next_billing_date = datetime.fromtimestamp(int(sub_row['current_period_end'])).strftime('%B %d, %Y')
+                    except:
+                        next_billing_date = None
+        
+        # Count screens and get list with subscription details
+        screen_count = _count_user_screens()
+        screens_list = _get_user_screens_list()
+        
+        # Get screen-level subscriptions
+        screen_subscriptions = []
+        if user_id:
+            # Auto-sync: Create subscription records for any screens that don't have them
+            if screens_list:
+                existing_subs = db.execute(
+                    'SELECT screen_id FROM screen_subscriptions WHERE user_id = ?',
+                    (user_id,)
+                ).fetchall()
+                existing_screen_ids = {row['screen_id'] for row in existing_subs}
+                
+                # Get subscription info
+                sub_row = db.execute(
+                    'SELECT status, current_period_end, created_at FROM subscriptions WHERE user_id = ?',
+                    (user_id,)
+                ).fetchone()
+                
+                if sub_row:
+                    status = sub_row['status']
+                    period_end = sub_row['current_period_end']
+                    period_start = sub_row['created_at'] or int(time.time())
+                else:
+                    status = 'trialing'
+                    period_start = int(time.time())
+                    period_end = period_start + (14 * 24 * 60 * 60)
+                
+                # Create missing screen subscriptions
+                for screen in screens_list:
+                    if screen['id'] not in existing_screen_ids:
+                        try:
+                            db.execute(
+                                'INSERT INTO screen_subscriptions '
+                                '(user_id, screen_id, store_id, screen_name, status, '
+                                'current_period_start, current_period_end, cancel_at_period_end, created_at, updated_at) '
+                                'VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)',
+                                (user_id, screen['id'], screen['store_id'], screen['name'], status,
+                                 period_start, period_end, int(time.time()), int(time.time()))
+                            )
+                            logging.info(f'Auto-created screen subscription record for {screen["id"]}')
+                        except Exception as e:
+                            logging.warning(f'Failed to auto-create screen subscription: {e}')
+                
+                db.commit()
+            
+            screen_subscriptions = _get_screen_subscriptions(user_id)
+        
+        logging.info(f'ACCOUNT PAGE: Counted {screen_count} screens, {len(screen_subscriptions)} subscriptions for user {uname}')
+        
+        # Fetch billing history from Stripe
+        if user_id and _stripe_enabled():
+            try:
+                customer_id = _get_or_create_stripe_customer(user_id)
+                if customer_id:
+                    # Fetch last 10 invoices
+                    invoices = stripe.Invoice.list(customer=customer_id, limit=10)
+                    for inv in invoices.data:
+                        from datetime import datetime
+                        billing_history.append({
+                            'date': datetime.fromtimestamp(inv.created).strftime('%b %d, %Y'),
+                            'amount': f"${inv.amount_paid / 100:.2f}",
+                            'status': inv.status,
+                            'invoice_pdf': inv.invoice_pdf,
+                            'hosted_invoice_url': inv.hosted_invoice_url
+                        })
+            except Exception as inv_err:
+                logging.warning(f'Failed to fetch billing history: {inv_err}')
+        
+    except Exception as e:
+        logging.error(f'Account page error: {e}', exc_info=True)
+        screen_count = 0
+        screens_list = []
+        screen_subscriptions = []
+    
+    return render_template('account.html',
+                         user_info=user_info,
+                         account_created=account_created,
+                         phone_number=phone_number,
+                         phone_verified=phone_verified,
+                         subscription_info=subscription_info,
+                         has_active=has_active,
+                         is_canceled=is_canceled,
+                         next_billing_date=next_billing_date,
+                         screen_count=screen_count,
+                         screens_list=screens_list,
+                         screen_subscriptions=screen_subscriptions,
+                         billing_history=billing_history,
+                         build_stamp=BUILD_STAMP)
 
 @app.route('/profile/regenerate_code', methods=['POST'])
 @login_required
@@ -3854,6 +5376,257 @@ def api_profile_upload_avatar():
         
     except Exception as e:
         logging.error(f'Avatar upload error: {str(e)}', exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/account/phone', methods=['POST'])
+@login_required
+def api_account_update_phone():
+    """Update user's phone number"""
+    try:
+        uname = _get_current_username_from_session()
+        if not uname:
+            return jsonify({'success': False, 'error': 'Authentication required'}), 403
+        
+        data = request.get_json()
+        phone_number = data.get('phone_number', '').strip()
+        
+        if not phone_number:
+            return jsonify({'success': False, 'error': 'Phone number is required'}), 400
+        
+        # Basic validation for international format
+        if not phone_number.startswith('+'):
+            return jsonify({'success': False, 'error': 'Phone must be in international format (e.g., +61403666669)'}), 400
+        
+        db = get_db()
+        
+        # Check if phone is already used by another user
+        existing = db.execute('SELECT username FROM users WHERE phone_number = ? AND username != ?', 
+                            (phone_number, uname)).fetchone()
+        if existing:
+            return jsonify({'success': False, 'error': 'This phone number is already registered'}), 400
+        
+        # Update phone number and mark as unverified
+        db.execute(
+            'UPDATE users SET phone_number = ?, phone_verified = 0 WHERE username = ?',
+            (phone_number, uname)
+        )
+        db.commit()
+        
+        logging.info(f'Phone number updated for {uname}: {phone_number}')
+        return jsonify({'success': True, 'message': 'Phone number updated successfully'})
+        
+    except Exception as e:
+        logging.error(f'Phone update error: {str(e)}', exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/account/phone/send-code', methods=['POST'])
+@login_required
+def api_send_phone_verification():
+    """Send SMS verification code to user's phone using Vonage Verify API v2"""
+    try:
+        if not vonage_client:
+            return jsonify({'success': False, 'error': 'SMS service not configured'}), 503
+        
+        uname = _get_current_username_from_session()
+        if not uname:
+            return jsonify({'success': False, 'error': 'Authentication required'}), 403
+        
+        db = get_db()
+        user = db.execute('SELECT phone_number, phone_verified, phone_code_sent_at, phone_verification_request_id FROM users WHERE username = ?', (uname,)).fetchone()
+        
+        if not user or not user['phone_number']:
+            return jsonify({'success': False, 'error': 'Please add a phone number first'}), 400
+        
+        if user['phone_verified']:
+            return jsonify({'success': False, 'error': 'Phone number already verified'}), 400
+        
+        # Rate limiting: 1 code per minute
+        if user['phone_code_sent_at']:
+            last_sent = user['phone_code_sent_at']
+            now = int(time.time())
+            if now - last_sent < 60:
+                wait_time = 60 - (now - last_sent)
+                return jsonify({'success': False, 'error': f'Please wait {wait_time} seconds before requesting a new code'}), 429
+        
+        # Use Vonage Verify API v2 - it handles code generation and sending automatically
+        try:
+            # Clean phone number - must be in E.164 format with + prefix
+            phone = user['phone_number'].strip()
+            if not phone.startswith('+'):
+                phone = '+' + phone
+            
+            # Remove any spaces or dashes
+            phone = phone.replace(' ', '').replace('-', '')
+            
+            logging.info(f'Starting Vonage Verify v2 request for {phone}')
+            
+            # Use Verify API v2 via direct HTTP request
+            import requests
+            
+            auth_header = base64.b64encode(f"{VONAGE_API_KEY}:{VONAGE_API_SECRET}".encode()).decode()
+            
+            headers = {
+                'Authorization': f'Basic {auth_header}',
+                'Content-Type': 'application/json'
+            }
+            
+            payload = {
+                'brand': 'EverydayAdvertise',
+                'workflow': [{
+                    'channel': 'sms',
+                    'to': phone
+                }],
+                'code_length': 6
+            }
+            
+            verify_response = requests.post(
+                'https://api.nexmo.com/v2/verify',
+                json=payload,
+                headers=headers
+            )
+            
+            response = verify_response.json()
+            logging.info(f'Vonage Verify v2 HTTP response (status {verify_response.status_code}): {response}')
+            
+            if verify_response.status_code not in [200, 202]:
+                error_msg = response.get('title', response.get('detail', 'Verification failed'))
+                logging.error(f'Verify API error: {error_msg}')
+                raise Exception(error_msg)
+            
+            logging.info(f'Vonage Verify v2 response: {response}')
+            
+            # Save request_id for verification check later
+            request_id = response.get('request_id')
+            if not request_id:
+                raise Exception('No request_id returned from Verify API')
+            
+            # Save request_id and timestamp
+            now = int(time.time())
+            db.execute(
+                'UPDATE users SET phone_verification_request_id = ?, phone_code_sent_at = ? WHERE username = ?',
+                (request_id, now, uname)
+            )
+            db.commit()
+            
+            logging.info(f'Verification request started for {uname}: request_id={request_id}')
+            return jsonify({'success': True, 'message': 'Verification code sent via SMS', 'request_id': request_id})
+                
+        except Exception as sms_err:
+            logging.error(f'Verify API error for {uname}: {sms_err}', exc_info=True)
+            return jsonify({'success': False, 'error': f'Failed to send SMS: {str(sms_err)}'}), 500
+        
+    except Exception as e:
+        logging.error(f'Send verification error: {str(e)}', exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/account/phone/status', methods=['GET'])
+@login_required
+def api_phone_status():
+    """Check phone verification status"""
+    try:
+        uname = _get_current_username_from_session()
+        if not uname:
+            return jsonify({'success': False, 'error': 'Authentication required'}), 403
+        
+        db = get_db()
+        user = db.execute('SELECT phone_number, phone_verified FROM users WHERE username = ?', (uname,)).fetchone()
+        
+        if not user:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        
+        return jsonify({
+            'success': True,
+            'has_phone': bool(user['phone_number']),
+            'phone_verified': bool(user['phone_verified'])
+        })
+        
+    except Exception as e:
+        logging.error(f'Phone status error: {str(e)}', exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/account/phone/verify', methods=['POST'])
+@login_required
+def api_verify_phone_code():
+    """Verify phone number with SMS code using Vonage Verify API v2"""
+    try:
+        if not vonage_client:
+            return jsonify({'success': False, 'error': 'Verification service not configured'}), 503
+            
+        uname = _get_current_username_from_session()
+        if not uname:
+            return jsonify({'success': False, 'error': 'Authentication required'}), 403
+        
+        data = request.get_json()
+        code = data.get('code', '').strip()
+        
+        if not code:
+            return jsonify({'success': False, 'error': 'Verification code is required'}), 400
+        
+        db = get_db()
+        user = db.execute(
+            'SELECT phone_number, phone_verified, phone_verification_request_id, phone_code_sent_at FROM users WHERE username = ?',
+            (uname,)
+        ).fetchone()
+        
+        if not user or not user['phone_number']:
+            return jsonify({'success': False, 'error': 'No phone number found'}), 400
+        
+        if user['phone_verified']:
+            return jsonify({'success': False, 'error': 'Phone number already verified'}), 400
+        
+        if not user['phone_verification_request_id']:
+            return jsonify({'success': False, 'error': 'No verification request found. Please request a new code.'}), 400
+        
+        # Check request expiration (10 minutes)
+        if user['phone_code_sent_at']:
+            now = int(time.time())
+            if now - user['phone_code_sent_at'] > 600:  # 10 minutes
+                return jsonify({'success': False, 'error': 'Verification code expired. Please request a new code.'}), 400
+        
+        # Verify code using Vonage Verify API v2 via HTTP
+        try:
+            import requests
+            
+            auth_header = base64.b64encode(f"{VONAGE_API_KEY}:{VONAGE_API_SECRET}".encode()).decode()
+            
+            headers = {
+                'Authorization': f'Basic {auth_header}',
+                'Content-Type': 'application/json'
+            }
+            
+            payload = {
+                'code': code
+            }
+            
+            verify_response = requests.post(
+                f'https://api.nexmo.com/v2/verify/{user["phone_verification_request_id"]}',
+                json=payload,
+                headers=headers
+            )
+            
+            response = verify_response.json() if verify_response.text else {}
+            logging.info(f'Vonage Verify check response (status {verify_response.status_code}): {response}')
+            
+            if verify_response.status_code == 200:
+                # Mark phone as verified and clear request_id
+                db.execute(
+                    'UPDATE users SET phone_verified = 1, phone_verification_request_id = NULL, phone_code_sent_at = NULL WHERE username = ?',
+                    (uname,)
+                )
+                db.commit()
+                
+                logging.info(f'Phone verified successfully for {uname}: {user["phone_number"]}')
+                return jsonify({'success': True, 'message': 'Phone number verified successfully!'})
+            else:
+                error_msg = response.get('title', response.get('detail', 'Invalid verification code'))
+                raise Exception(error_msg)
+            
+        except Exception as verify_err:
+            logging.error(f'Verification check failed for {uname}: {verify_err}')
+            return jsonify({'success': False, 'error': 'Invalid or expired verification code'}), 400
+        
+    except Exception as e:
+        logging.error(f'Phone verification error: {str(e)}', exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
 def save_store_config(config):
@@ -5268,6 +7041,91 @@ def dashboard():
         import traceback
         traceback.print_exc()
         return f"Error: {e}", 500
+
+@app.route('/admin/dashboard')
+@login_required
+def admin_dashboard():
+    """Super Admin Dashboard - Analytics and Feedback"""
+    # Check if user is admin
+    current_username = session.get('user', {}).get('name', '')
+    is_admin = (current_username == 'test9@gmail.com')
+    
+    if not is_admin:
+        flash('Access denied. Admin only.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    try:
+        db = get_db()
+        
+        # Get overall statistics
+        total_users = db.execute('SELECT COUNT(*) as count FROM users').fetchone()['count']
+        active_subs = db.execute(
+            'SELECT COUNT(DISTINCT user_id) as count FROM screen_subscriptions WHERE status IN ("active", "trialing")'
+        ).fetchone()['count']
+        total_screens = db.execute('SELECT COUNT(*) as count FROM screen_subscriptions').fetchone()['count']
+        total_revenue = db.execute(
+            'SELECT COUNT(*) * 5 as revenue FROM screen_subscriptions WHERE status IN ("active", "trialing")'
+        ).fetchone()['revenue']
+        
+        # Get cancellation feedback (last 50)
+        cancellations = db.execute(
+            'SELECT cf.*, u.username as user_email '
+            'FROM cancellation_feedback cf '
+            'LEFT JOIN users u ON cf.user_id = u.id '
+            'ORDER BY cf.canceled_at DESC LIMIT 50'
+        ).fetchall()
+        
+        # Format cancellation data
+        cancellation_data = []
+        for row in cancellations:
+            cancellation_data.append({
+                'id': row['id'],
+                'username': row['user_email'] or row['username'],
+                'screen_name': row['screen_name'],
+                'reason': row['reason'],
+                'feedback': row['feedback_text'],
+                'date': datetime.fromtimestamp(row['canceled_at']).strftime('%Y-%m-%d %H:%M')
+            })
+        
+        # Cancellation reasons summary
+        reason_stats = db.execute(
+            'SELECT reason, COUNT(*) as count FROM cancellation_feedback GROUP BY reason ORDER BY count DESC'
+        ).fetchall()
+        
+        # Recent user signups
+        recent_users = db.execute(
+            'SELECT id, username, full_name, created_at FROM users ORDER BY id DESC LIMIT 10'
+        ).fetchall()
+        
+        # Users by subscription status
+        user_stats = db.execute('''
+            SELECT 
+                u.username,
+                COUNT(CASE WHEN ss.status IN ('active', 'trialing') THEN 1 END) as active_screens,
+                COUNT(ss.id) as total_screens,
+                MAX(ss.created_at) as last_screen_added
+            FROM users u
+            LEFT JOIN screen_subscriptions ss ON u.id = ss.user_id
+            WHERE u.username != 'test9@gmail.com'
+            GROUP BY u.id
+            ORDER BY active_screens DESC
+            LIMIT 20
+        ''').fetchall()
+        
+        return render_template('admin_dashboard.html',
+                             total_users=total_users,
+                             active_subscribers=active_subs,
+                             total_screens=total_screens,
+                             monthly_revenue=total_revenue,
+                             cancellations=cancellation_data,
+                             reason_stats=reason_stats,
+                             recent_users=recent_users,
+                             user_stats=user_stats)
+                             
+    except Exception as e:
+        logging.error(f'Admin dashboard error: {e}', exc_info=True)
+        flash('Error loading admin dashboard', 'error')
+        return redirect(url_for('dashboard'))
 
 @app.route('/pi-manager')
 @login_required
@@ -7056,11 +8914,42 @@ def test_delete():
     """Test page for debugging delete functionality"""
     return render_template('test_delete.html')
 
+@app.route('/check_screen_limit', methods=['GET'])
+@login_required
+def check_screen_limit():
+    """Check current screen count and subscription status before adding new screen"""
+    try:
+        current_username = session.get('user', {}).get('name', '')
+        is_admin_user = (current_username == 'test9@gmail.com')
+        
+        current_screen_count = _count_user_screens()
+        has_subscription = _user_has_active_subscription()
+        
+        return jsonify({
+            'success': True,
+            'screen_count': current_screen_count,
+            'has_subscription': has_subscription,
+            'is_admin': is_admin_user
+        })
+    except Exception as e:
+        logging.error(f'Error checking screen limit: {e}')
+        return jsonify({
+            'success': False,
+            'screen_count': 0,
+            'has_subscription': False,
+            'is_admin': False
+        })
+
 @app.route('/add_screen', methods=['POST'])
 @login_required
 def add_screen():
     """Add a new screen to a store"""
     try:
+        # ADMIN BYPASS: Check if current user is test9@gmail.com (hardcoded admin)
+        current_username = session.get('user', {}).get('name', '')
+        is_admin_user = (current_username == 'test9@gmail.com')
+        logging.info(f'ADD_SCREEN: user={current_username}, is_admin_user={is_admin_user}')
+        
         data = request.get_json()
         store_id = data.get('store_id')
         screen_type = data.get('screen_type', 'screen')  # 'screen' or 'promo'
@@ -7070,6 +8959,23 @@ def add_screen():
         if not store_id:
             return jsonify({'error': 'Store ID is required'}), 400
 
+        # Check subscription requirement: ALL users need subscription to add screens
+        # EXCEPT: test9@gmail.com (hardcoded admin bypass)
+        if not is_admin_user:
+            current_screen_count = _count_user_screens()
+            has_subscription = _user_has_active_subscription()
+            is_admin = session.get('user', {}).get('is_admin', False)
+            
+            logging.info(f'ADD_SCREEN CHECK: screens={current_screen_count}, has_sub={has_subscription}, is_admin={is_admin}')
+        
+            # Require subscription for ALL screens (removed >= 1 check for free screen)
+            if not has_subscription and not is_admin:
+                return jsonify({
+                    'error': 'Subscription required',
+                    'message': 'Please subscribe to add screens. Subscription is $5 per screen per month.',
+                    'requires_subscription': True,
+                    'current_screens': current_screen_count
+                }), 403
         # Respect per-user segmented config if present
         ukey = _safe_user_key()
         config = load_store_config_for_user_safe_key(ukey) if ukey else load_store_config()
@@ -7167,10 +9073,65 @@ def add_screen():
         else:
             save_store_config(config)
         
+        # Create individual screen subscription record (skip for admin)
+        subscription_created = False
+        if not is_admin_user:
+            user_id = _current_user_id()
+            if user_id:
+                # Get screen name for billing
+                screen_name = new_screen_id
+                
+                # Always create database record
+                db = get_db()
+                
+                # Get subscription info or create trial
+                sub_row = db.execute(
+                    'SELECT status, current_period_end, created_at FROM subscriptions WHERE user_id = ?',
+                    (user_id,)
+                ).fetchone()
+                
+                if sub_row:
+                    status = sub_row['status']
+                    period_end = sub_row['current_period_end']
+                    period_start = sub_row['created_at'] or int(time.time())
+                else:
+                    status = 'trialing'
+                    period_start = int(time.time())
+                    period_end = period_start + (14 * 24 * 60 * 60)
+                
+                # Insert screen subscription record
+                try:
+                    db.execute(
+                        'INSERT OR REPLACE INTO screen_subscriptions '
+                        '(user_id, screen_id, store_id, screen_name, status, '
+                        'current_period_start, current_period_end, cancel_at_period_end, created_at, updated_at) '
+                        'VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)',
+                        (user_id, new_screen_id, store_id, screen_name, status, period_start, period_end,
+                         int(time.time()), int(time.time()))
+                    )
+                    db.commit()
+                    subscription_created = True
+                    
+                    # If Stripe enabled, create actual subscription
+                    if _stripe_enabled():
+                        sub_result = _create_screen_subscription(user_id, new_screen_id, store_id, screen_name)
+                        if sub_result:
+                            # Update with Stripe subscription ID
+                            db.execute(
+                                'UPDATE screen_subscriptions SET stripe_subscription_id = ? WHERE user_id = ? AND screen_id = ?',
+                                (sub_result['subscription_id'], user_id, new_screen_id)
+                            )
+                            db.commit()
+                    
+                    logging.info(f'Screen subscription record created for {new_screen_id}')
+                except Exception as e:
+                    logging.error(f'Failed to create screen subscription record: {e}')
+        
         return jsonify({
             'success': True,
             'screen_id': new_screen_id,
             'screen': config['screens'][store_id][new_screen_id],
+            'subscription_created': subscription_created,
             'message': f'Added {new_screen_id} successfully'
         })
         

@@ -44,15 +44,30 @@
 		<div class="hdr">Profile</div>
 		<div class="body">
 			<div class="row"><div class="label">Full name</div><div>{{ full_name or '-' }}</div></div>
-			<div class="row"><div class="label">Username</div><div>{{ username or '-' }}</div></div>
+			<div class="row"><div class="label">Username / Email</div><div>{{ username or '-' }}</div></div>
+			<div class="row"><div class="label">Phone number</div><div>{{ phone_number or 'Not set' }}</div></div>
 			<div class="row">
+				<div class="label">Subscription</div>
 				<div>
-					<div class="label">Android TV pairing code</div>
-					<div id="code" class="code">{{ link_code or '----' }}</div>
-					<div class="note">Use this 4-digit code on your Android TV to list your stores and screens.</div>
+					{% if subscription_status %}
+						<span style="color:{{ '#16a34a' if subscription_status in ['active','trialing'] else '#dc2626' }};font-weight:600">{{ subscription_status|title }}</span>
+						{% if screen_count %}<div class="note">{{ screen_count }} screen(s)</div>{% endif %}
+					{% else %}
+						<span style="color:#dc2626">No active subscription</span>
+					{% endif %}
+					<div style="margin-top:8px"><a href="/subscribe">Manage subscription →</a></div>
 				</div>
-				<div>
-					<button id="regenBtn" class="btn" onclick="regen()">Regenerate</button>
+			</div>
+			<div style="border-top:1px solid #f0f0f5;margin:16px 0;padding-top:16px">
+				<div class="row">
+					<div>
+						<div class="label">Android TV pairing code</div>
+						<div id="code" class="code">{{ link_code or '----' }}</div>
+						<div class="note">Use this 4-digit code on your Android TV to list your stores and screens.</div>
+					</div>
+					<div>
+						<button id="regenBtn" class="btn" onclick="regen()">Regenerate</button>
+					</div>
 				</div>
 			</div>
 			<div class="row"><a href="/dashboard">← Back to dashboard</a><span class="muted">build {{ build_stamp }}</span></div>

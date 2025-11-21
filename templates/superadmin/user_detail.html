@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>User Details - {{ user.username }}</title>
+  <style>
+    :root { 
+      --bg: #f8f9fa; 
+      --panel: #ffffff; 
+      --text: #1a1a1a; 
+      --muted: #6c757d; 
+      --border: #e1e4e8; 
+      --brand: #0066cc; 
+      --brand-hover: #0052a3;
+      --success: #28a745;
+      --danger: #dc3545;
+      --warning: #ffc107;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    }
+    * { box-sizing:border-box; margin:0; padding:0 }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: var(--bg); 
+      color: var(--text); 
+      line-height: 1.6;
+    }
+    header { 
+      display:flex; 
+      align-items:center; 
+      justify-content:space-between; 
+      padding:20px 32px; 
+      background: var(--panel);
+      border-bottom:1px solid var(--border); 
+      box-shadow: var(--shadow);
+    }
+    .brand { 
+      font-weight:700; 
+      font-size: 18px;
+      color: var(--brand);
+    }
+    main { padding:32px; max-width:1400px; margin:0 auto }
+    .card { 
+      background: var(--panel); 
+      border:1px solid var(--border); 
+      border-radius:8px; 
+      padding:24px;
+      box-shadow: var(--shadow);
+      margin-bottom: 24px;
+    }
+    h2 { 
+      margin:0 0 20px 0; 
+      font-size:20px; 
+      font-weight: 600;
+      color: var(--text);
+    }
+    h3 { 
+      margin:20px 0 12px 0; 
+      font-size:16px; 
+      font-weight: 600;
+      color: var(--text);
+    }
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .info-item {
+      padding: 12px;
+      background: var(--bg);
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    .info-label {
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .info-value {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    table { 
+      width:100%; 
+      border-collapse: collapse; 
+      font-size:14px;
+    }
+    th, td { 
+      text-align:left; 
+      padding:12px 10px; 
+      border-bottom:1px solid var(--border);
+    }
+    th { 
+      color: var(--muted); 
+      font-weight:600;
+      background: var(--bg);
+      text-transform: uppercase;
+      font-size: 12px;
+      letter-spacing: 0.5px;
+    }
+    tbody tr:hover { background: #f8f9fa; }
+    .btn { 
+      border:none; 
+      border-radius:6px; 
+      padding:10px 20px; 
+      font-weight:600; 
+      cursor:pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .btn--primary { 
+      background: var(--brand); 
+      color: white;
+    }
+    .btn--primary:hover { 
+      background: var(--brand-hover);
+    }
+    .btn--ghost { 
+      background: white; 
+      color: var(--text); 
+      border:1px solid var(--border);
+    }
+    .btn--danger { 
+      background: var(--danger); 
+      color: white;
+    }
+    .btn--success { 
+      background: var(--success); 
+      color: white;
+    }
+    .btn--warning { 
+      background: var(--warning); 
+      color: #1a1a1a;
+    }
+    .pill { 
+      font-size:11px; 
+      padding:4px 10px; 
+      border-radius:12px; 
+      background: var(--bg); 
+      border:1px solid var(--border); 
+      color: var(--muted);
+      font-weight: 500;
+      display: inline-block;
+      white-space: nowrap;
+    }
+    .pill--bad { 
+      color: var(--danger); 
+      background: #fff5f5;
+      border-color: #feb2b2;
+    }
+    .pill--good { 
+      color: var(--success); 
+      background: #f0fdf4;
+      border-color: #86efac;
+    }
+    .pill--warning { 
+      color: #856404; 
+      background: #fff3cd;
+      border-color: #ffc107;
+    }
+    .action-buttons {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+    }
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">👤 {{ user.username }}</div>
+    <a href="/superadmin/dashboard" class="btn btn--ghost">← Back to Dashboard</a>
+  </header>
+  <main>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div style="padding:12px 16px; background:{% if category=='success' %}#f0fdf4{% else %}#fff5f5{% endif %}; border:1px solid {% if category=='success' %}#86efac{% else %}#feb2b2{% endif %}; border-radius:8px; margin-bottom:20px; color:{% if category=='success' %}#28a745{% else %}#dc3545{% endif %}">
+            {{ message }}
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <div class="card">
+      <h2>📋 User Information</h2>
+      <div class="info-grid">
+        <div class="info-item">
+          <div class="info-label">User ID</div>
+          <div class="info-value">{{ user.id }}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Email</div>
+          <div class="info-value">{{ user.username }}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Full Name</div>
+          <div class="info-value">{{ user.full_name or 'Not set' }}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Link Code</div>
+          <div class="info-value">{{ user.link_code or 'Not set' }}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Account Status</div>
+          <div class="info-value">
+            {% if user.is_blocked %}
+              <span class="pill pill--bad">🚫 Blocked</span>
+            {% else %}
+              <span class="pill pill--good">✅ Active</span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Role</div>
+          <div class="info-value">
+            {% if user.role and user.role.lower() == 'admin' %}
+              <span class="pill" style="background:#e3f2fd; color:#0066cc; border-color:#90caf9;">👑 Admin</span>
+            {% else %}
+              <span class="pill">User</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>💳 Subscription Details</h2>
+      {% if subscription %}
+        <div class="info-grid">
+          <div class="info-item">
+            <div class="info-label">Status</div>
+            <div class="info-value">
+              {% if subscription.status == 'active' %}
+                <span class="pill pill--good">Active</span>
+              {% elif subscription.status == 'trialing' %}
+                <span class="pill pill--warning">Trial</span>
+              {% elif subscription.status == 'canceled' %}
+                <span class="pill pill--bad">Canceled</span>
+              {% else %}
+                <span class="pill">{{ subscription.status }}</span>
+              {% endif %}
+            </div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Stripe ID</div>
+            <div class="info-value">{{ subscription.stripe_subscription_id or 'N/A' }}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Current Period</div>
+            <div class="info-value">
+              {% if subscription.current_period_start %}
+                {{ subscription.current_period_start | format_timestamp }}
+              {% else %}
+                N/A
+              {% endif %}
+            </div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Next Billing</div>
+            <div class="info-value">
+              {% if subscription.current_period_end %}
+                {{ subscription.current_period_end | format_timestamp }}
+              {% else %}
+                N/A
+              {% endif %}
+            </div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Cancel at Period End</div>
+            <div class="info-value">{{ 'Yes' if subscription.cancel_at_period_end else 'No' }}</div>
+          </div>
+        </div>
+        
+        <div class="action-buttons">
+          <form method="post" action="/superadmin/users/{{ user.id }}/cancel-subscription" onsubmit="return confirm('Cancel this user\'s subscription?')">
+            <button class="btn btn--danger" type="submit">Cancel Subscription</button>
+          </form>
+          <form method="post" action="/superadmin/users/{{ user.id }}/reset-subscription" onsubmit="return confirm('Reset subscription to 14-day trial?')">
+            <button class="btn btn--success" type="submit">Reset Subscription (14 Days Trial)</button>
+          </form>
+        </div>
+      {% else %}
+        <div class="empty-state">
+          <p>No subscription found</p>
+          <form method="post" action="/superadmin/users/{{ user.id }}/reset-subscription" style="margin-top:20px">
+            <button class="btn btn--primary" type="submit">Create Trial Subscription</button>
+          </form>
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>📺 Screen Subscriptions ({{ screen_subs | length }})</h2>
+      {% if screen_subs %}
+        <table>
+          <thead>
+            <tr>
+              <th>Screen ID</th>
+              <th>Screen Name</th>
+              <th>Store ID</th>
+              <th>Status</th>
+              <th>Created</th>
+              <th>Current Period End</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for sub in screen_subs %}
+              <tr>
+                <td>{{ sub.screen_id }}</td>
+                <td>{{ sub.screen_name or 'N/A' }}</td>
+                <td>{{ sub.store_id }}</td>
+                <td>
+                  {% if sub.status == 'active' %}
+                    <span class="pill pill--good">Active</span>
+                  {% elif sub.status == 'trialing' %}
+                    <span class="pill pill--warning">Trial</span>
+                  {% elif sub.status == 'canceled' %}
+                    <span class="pill pill--bad">Canceled</span>
+                  {% else %}
+                    <span class="pill">{{ sub.status }}</span>
+                  {% endif %}
+                </td>
+                <td>{{ sub.created_at | format_timestamp if sub.created_at else 'N/A' }}</td>
+                <td>{{ sub.current_period_end | format_timestamp if sub.current_period_end else 'N/A' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="empty-state">No screen subscriptions</div>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>🏪 Stores & Screens</h2>
+      <div class="info-grid">
+        <div class="info-item">
+          <div class="info-label">Total Stores</div>
+          <div class="info-value">{{ config.stores | length }}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Total Screens</div>
+          <div class="info-value">
+            {% set total_screens = namespace(count=0) %}
+            {% for store_id, screens in config.screens.items() %}
+              {% set total_screens.count = total_screens.count + (screens | length) %}
+            {% endfor %}
+            {{ total_screens.count }}
+          </div>
+        </div>
+      </div>
+      
+      {% if config.stores %}
+        <h3>Stores</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Store ID</th>
+              <th>Store Name</th>
+              <th>Screens</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for store in config.stores %}
+              <tr>
+                <td>{{ store.id }}</td>
+                <td>{{ store.name }}</td>
+                <td>{{ config.screens.get(store.id | string, {}) | length }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>❌ Cancellation History ({{ cancellations | length }})</h2>
+      {% if cancellations %}
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Screen ID</th>
+              <th>Screen Name</th>
+              <th>Reason</th>
+              <th>Feedback</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for cancel in cancellations %}
+              <tr>
+                <td>{{ cancel.canceled_at | format_timestamp if cancel.canceled_at else 'N/A' }}</td>
+                <td>{{ cancel.screen_id }}</td>
+                <td>{{ cancel.screen_name or 'N/A' }}</td>
+                <td><span class="pill">{{ cancel.reason }}</span></td>
+                <td>{{ cancel.feedback_text or '—' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="empty-state">No cancellation history</div>
+      {% endif %}
+    </div>
+  </main>
+</body>
+</html>

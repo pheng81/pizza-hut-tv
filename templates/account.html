@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Account - EverydayAdvertise</title>
+  
+  <!-- International Telephone Input -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.11/build/css/intlTelInput.css">
+  <script src="https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.11/build/js/intlTelInput.min.js"></script>
+  
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+      background: transparent;
+      color: #1e293b;
+      line-height: 1.6;
+    }
+    
+    /* Header */
+    .header {
+      background: rgba(255, 255, 255, 0.9);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+      padding: 12px 24px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(10px);
+    }
+    .header-content {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .logo {
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+    }
+    .logo img {
+      height: 43px;
+      width: auto;
+    }
+    .nav-links {
+      display: flex;
+      gap: 32px;
+      align-items: center;
+    }
+    .nav-links a {
+      color: #64748b;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+      padding: 8px 0;
+      border-bottom: 2px solid transparent;
+      position: relative;
+    }
+    .nav-links a:hover,
+    .nav-links a.active {
+      color: #1e293b;
+      border-bottom-color: #fe2c55;
+    }
+    
+    /* Main Container */
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 32px 24px 80px;
+    }
+    .page-header {
+      margin-bottom: 32px;
+    }
+    .page-title {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #1e293b;
+    }
+    .page-subtitle {
+      color: #64748b;
+      font-size: 14px;
+    }
+    
+    /* TikTok-style Cards Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .stat-card {
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 12px;
+      padding: 24px;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+    }
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #fe2c55 0%, #25f4ee 100%);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .stat-card:hover {
+      border-color: rgba(254, 44, 85, 0.4);
+      transform: translateY(-4px);
+      box-shadow: 0 12px 32px rgba(254, 44, 85, 0.2);
+    }
+    .stat-card:hover::before {
+      opacity: 1;
+    }
+    .stat-label {
+      font-size: 12px;
+      color: #64748b;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .stat-value {
+      font-size: 32px;
+      font-weight: 800;
+      color: #1e293b;
+      line-height: 1;
+    }
+    .stat-value.gradient {
+      background: linear-gradient(135deg, #fe2c55 0%, #ff6b9d 50%, #25f4ee 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    /* Badge Styles */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 24px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .badge-active {
+      background: linear-gradient(135deg, rgba(37, 244, 238, 0.2) 0%, rgba(37, 244, 238, 0.1) 100%);
+      color: #25f4ee;
+      border: 1.5px solid rgba(37, 244, 238, 0.4);
+    }
+    .badge-trial {
+      background: linear-gradient(135deg, rgba(254, 44, 85, 0.2) 0%, rgba(254, 44, 85, 0.1) 100%);
+      color: #fe2c55;
+      border: 1.5px solid rgba(254, 44, 85, 0.4);
+    }
+    .badge-inactive {
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.55);
+      border: 1.5px solid rgba(255, 255, 255, 0.12);
+    }
+    
+    /* Info Card */
+    .info-card {
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 12px;
+      padding: 28px;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      margin-bottom: 24px;
+    }
+    .info-card-title {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 24px;
+      color: #1e293b;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .title-accent {
+      width: 4px;
+      height: 24px;
+      background: linear-gradient(180deg, #fe2c55 0%, #ff6b9d 100%);
+      border-radius: 2px;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 0;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    }
+    .info-row:last-child {
+      border-bottom: none;
+    }
+    .info-label {
+      color: #64748b;
+      font-weight: 500;
+      font-size: 14px;
+    }
+    .info-value {
+      color: #1e293b;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    
+    /* TikTok-style Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 14px 32px;
+      border-radius: 8px;
+      font-weight: 700;
+      text-decoration: none;
+      text-align: center;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      letter-spacing: 0.3px;
+      position: relative;
+      overflow: hidden;
+    }
+    .btn::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.2);
+      transform: translate(-50%, -50%);
+      transition: width 0.6s, height 0.6s;
+    }
+    .btn:active::before {
+      width: 300px;
+      height: 300px;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #fe2c55 0%, #ff1744 100%);
+      color: white;
+      box-shadow: 0 4px 16px rgba(254, 44, 85, 0.3);
+    }
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #ff1744 0%, #fe2c55 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(254, 44, 85, 0.5);
+    }
+    .btn-secondary {
+      background: transparent;
+      color: #64748b;
+      border: 2px solid rgba(0, 0, 0, 0.2);
+    }
+    .btn-secondary:hover {
+      background: rgba(0, 0, 0, 0.05);
+      border-color: rgba(0, 0, 0, 0.4);
+    }
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.15);
+      color: #ef4444;
+      border: 2px solid rgba(239, 68, 68, 0.3);
+    }
+    .btn-danger:hover {
+      background: rgba(239, 68, 68, 0.25);
+      border-color: rgba(239, 68, 68, 0.5);
+    }
+    .action-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin-top: 24px;
+    }
+    
+    /* Trial Banner */
+    .trial-banner {
+      background: linear-gradient(135deg, rgba(254, 44, 85, 0.15) 0%, rgba(255, 107, 157, 0.15) 100%);
+      padding: 28px;
+      border-radius: 12px;
+      margin-bottom: 32px;
+      border: 1.5px solid rgba(254, 44, 85, 0.3);
+      position: relative;
+      overflow: hidden;
+    }
+    .trial-banner::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #fe2c55 0%, #ff6b9d 50%, #25f4ee 100%);
+    }
+    .trial-banner h3 {
+      color: #fe2c55;
+      margin-bottom: 12px;
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .trial-banner p {
+      color: #64748b;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .trial-days {
+      font-size: 48px;
+      font-weight: 900;
+      background: linear-gradient(135deg, #fe2c55 0%, #ff6b9d 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1;
+      margin: 16px 0;
+    }
+    
+    /* Billing History */
+    .billing-list {
+      margin-top: 20px;
+    }
+    .billing-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 18px;
+      background: rgba(0, 0, 0, 0.03);
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 8px;
+      margin-bottom: 12px;
+      transition: all 0.2s;
+    }
+    .billing-item:hover {
+      background: rgba(0, 0, 0, 0.05);
+      border-color: rgba(254, 44, 85, 0.3);
+      transform: translateX(4px);
+    }
+    .billing-date {
+      font-weight: 600;
+      color: #1e293b;
+      font-size: 14px;
+    }
+    .billing-amount {
+      font-weight: 600;
+      font-size: 16px;
+      color: #10b981 !important;
+      background-clip: text;
+    }
+    .billing-status {
+      font-size: 11px;
+      padding: 5px 12px;
+      border-radius: 16px;
+      margin-left: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .status-paid {
+      background: rgba(37, 244, 238, 0.15);
+      color: #25f4ee;
+      border: 1px solid rgba(37, 244, 238, 0.3);
+    }
+    .status-pending {
+      background: rgba(254, 44, 85, 0.15);
+      color: #fe2c55;
+      border: 1px solid rgba(254, 44, 85, 0.3);
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+      .action-grid {
+        grid-template-columns: 1fr;
+      }
+      .nav-links {
+        gap: 16px;
+      }
+      .page-title {
+        font-size: 24px;
+      }
+    }
+    
+    /* Loading Animation */
+    @keyframes shimmer {
+      0% { background-position: -1000px 0; }
+      100% { background-position: 1000px 0; }
+    }
+    .loading {
+      animation: shimmer 2s infinite;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+      background-size: 1000px 100%;
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <div class="header">
+    <div class="header-content">
+      <a href="{{ url_for('dashboard') }}" class="logo">
+        <img src="{{ url_for('static', filename='ea-logo.svg') }}" alt="EverydayAdvertise">
+      </a>
+      <nav class="nav-links">
+        <a href="{{ url_for('dashboard') }}">Dashboard</a>
+        <a href="{{ url_for('account') }}" class="active">Account</a>
+        <a href="{{ url_for('logout') }}">Logout</a>
+      </nav>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- Page Header -->
+    <div class="page-header">
+      <h1 class="page-title">My Account</h1>
+      <p class="page-subtitle">Manage your subscription and billing information</p>
+    </div>
+
+    <!-- Trial Banner (if applicable) -->
+    {% if is_trial and trial_days_left is not none %}
+    <div class="trial-banner">
+      <h3>🎉 Free Trial Active</h3>
+      <div class="trial-days">{{ trial_days_left }}</div>
+      <p>Days remaining in your free trial. Enjoy full access to all features!</p>
+    </div>
+    {% endif %}
+
+    <!-- Stats Grid -->
+    <div class="stats-grid">
+      <!-- Subscription Status -->
+      <div class="stat-card">
+        <div class="stat-label">Subscription Status</div>
+        <div class="stat-value">
+          {% if subscription_info %}
+            {% set status = subscription_info.get('status', 'inactive')|lower %}
+            {% if status == 'active' %}
+              <span class="badge badge-active">● Active</span>
+            {% elif status == 'trialing' %}
+              <span class="badge badge-trial">● Trial</span>
+            {% else %}
+              <span class="badge badge-inactive">○ Inactive</span>
+            {% endif %}
+          {% else %}
+            <span class="badge badge-inactive">○ No Subscription</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Next Billing -->
+      <div class="stat-card">
+        <div class="stat-label">Next Billing Date</div>
+        <div class="stat-value gradient">
+          {{ next_billing_date or 'N/A' }}
+        </div>
+      </div>
+
+      <!-- Screens -->
+      <div class="stat-card">
+        <div class="stat-label">Active Screens</div>
+        <div class="stat-value gradient">
+          {{ screen_count }}
+        </div>
+      </div>
+
+      <!-- Budget -->
+      <div class="stat-card">
+        <div class="stat-label">Monthly Cost</div>
+        <div class="stat-value gradient">
+          ${{ screen_count * 5 }}.00
+        </div>
+      </div>
+    </div>
+
+    <!-- Subscription Details -->
+    <div class="info-card">
+      <h2 class="info-card-title">
+        <span class="title-accent"></span>
+        Subscription Details
+      </h2>
+      <div class="info-row">
+        <span class="info-label">Plan</span>
+        <span class="info-value">$5 per screen / month</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Current Period</span>
+        <span class="info-value">
+          {% if subscription_info and subscription_info.get('current_period_end') %}
+            Until {{ next_billing_date }}
+          {% else %}
+            No active period
+          {% endif %}
+        </span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Auto-renew</span>
+        <span class="info-value">
+          {% if is_canceled %}
+            Canceled (ends {{ next_billing_date }})
+          {% elif has_active %}
+            Enabled
+          {% else %}
+            N/A
+          {% endif %}
+        </span>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="action-grid">
+        {% if has_active %}
+          <form action="{{ url_for('billing_portal') }}" method="POST" style="display: inline;">
+            <button type="submit" class="btn btn-primary" style="width: 100%;">
+              <i class="fas fa-cog"></i> Manage Subscription
+            </button>
+          </form>
+          
+          {% if not is_canceled %}
+            <form action="{{ url_for('cancel_subscription') }}" method="POST" 
+                  onsubmit="return confirm('Are you sure you want to cancel your subscription? It will remain active until the end of your billing period.');"
+                  style="display: inline;">
+              <button type="submit" class="btn btn-danger" style="width: 100%;">
+                <i class="fas fa-times-circle"></i> Cancel Subscription
+              </button>
+            </form>
+          {% else %}
+            <form action="{{ url_for('reactivate_subscription') }}" method="POST" style="display: inline;">
+              <button type="submit" class="btn btn-secondary" style="width: 100%;">
+                <i class="fas fa-redo"></i> Reactivate Subscription
+              </button>
+            </form>
+          {% endif %}
+        {% else %}
+          <form action="{{ url_for('billing_checkout') }}" method="POST">
+            <button type="submit" class="btn btn-primary" style="width: 100%;">
+              Subscribe Now
+            </button>
+          </form>
+        {% endif %}
+        
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary" style="width: 100%;">
+          Add More Screens
+        </a>
+      </div>
+    </div>
+
+    <!-- Account Information -->
+    <div class="info-card">
+      <h2 class="info-card-title">
+        <span class="title-accent"></span>
+        Account Information
+      </h2>
+      <div class="info-row">
+        <span class="info-label">Email</span>
+        <span class="info-value">{{ user_info.email }}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Account Type</span>
+        <span class="info-value">{{ 'Administrator' if user_info.is_admin else 'Standard User' }}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Member Since</span>
+        <span class="info-value">{{ account_created or 'Unknown' }}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Total Screens</span>
+        <span class="info-value">{{ screen_count }}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Phone Number</span>
+        <span class="info-value" id="phoneDisplay">
+          {% if phone_number %}
+            {{ phone_number }}
+            {% if phone_verified %}
+              <span style="color: #10b981; font-size: 12px; margin-left: 8px;">✓ Verified</span>
+            {% else %}
+              <span style="color: #f59e0b; font-size: 12px; margin-left: 8px;">⚠ Not verified</span>
+            {% endif %}
+          {% else %}
+            <span style="color: #94a3b8;">Not set</span>
+          {% endif %}
+        </span>
+      </div>
+      
+      <!-- Phone Edit Form (hidden by default) -->
+      <div id="phoneEditForm" style="display: none; margin-top: 16px; padding: 20px; background: #f8fafc; border-radius: 8px;">
+        <div style="margin-bottom: 12px;">
+          <label for="phoneInput" style="display: block; font-weight: 600; margin-bottom: 8px; color: #475569;">
+            Enter your phone number
+          </label>
+          <input type="tel" id="phoneInput" placeholder="+61403666669" value="{{ phone_number or '' }}"
+                 style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+          <p style="color: #6b7280; font-size: 12px; margin-top: 6px;">
+            Must include country code (e.g., +61 for Australia, +1 for USA)
+          </p>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 16px;">
+          <button onclick="savePhone()" class="btn btn-primary" style="flex: 1;">Save Phone</button>
+          <button onclick="cancelPhoneEdit()" class="btn btn-secondary" style="flex: 1;">Cancel</button>
+        </div>
+        <div id="phoneMessage" style="margin-top: 12px; font-size: 13px;"></div>
+      </div>
+      
+      <!-- Phone Verification Form (shown when phone exists but not verified) -->
+      {% if phone_number and not phone_verified %}
+      <div id="phoneVerifyForm" style="margin-top: 16px; padding: 20px; background: #fef3c7; border-radius: 8px; border: 2px solid #fbbf24;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+          <span style="font-size: 20px;">📱</span>
+          <h3 style="margin: 0; color: #92400e; font-size: 15px; font-weight: 600;">Verify Your Phone Number</h3>
+        </div>
+        <p style="color: #78350f; font-size: 13px; margin-bottom: 16px;">
+          We'll send a 6-digit verification code to {{ phone_number }}
+        </p>
+        <div id="verifyCodeInput" style="display: none; margin-bottom: 16px;">
+          <label for="verificationCode" style="display: block; font-weight: 600; margin-bottom: 8px; color: #78350f;">
+            Enter verification code
+          </label>
+          <input type="text" id="verificationCode" placeholder="000000" maxlength="6"
+                 style="width: 100%; padding: 12px; border: 2px solid #fbbf24; border-radius: 8px; font-size: 18px; letter-spacing: 4px; text-align: center; font-weight: 600;">
+        </div>
+        <button onclick="sendVerificationCode()" id="sendCodeBtn" class="btn btn-primary" style="width: 100%; background: #f59e0b; border-color: #f59e0b;">
+          📤 Send Verification Code
+        </button>
+        <button onclick="verifyPhoneCode()" id="verifyCodeBtn" class="btn btn-primary" style="width: 100%; display: none; background: #10b981; border-color: #10b981;">
+          ✓ Verify Code
+        </button>
+        <div id="verifyMessage" style="margin-top: 12px; font-size: 13px;"></div>
+      </div>
+      {% endif %}
+      
+      <div style="margin-top: 16px;">
+        <button onclick="editPhone()" id="editPhoneBtn" class="btn btn-secondary" style="width: 100%;">
+          {{ 'Update Phone Number' if phone_number else 'Add Phone Number' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Screens Management with Individual Billing -->
+    {% if screen_subscriptions %}
+    <div class="info-card">
+      <h2 class="info-card-title">
+        <span class="title-accent"></span>
+        Manage Screen Subscriptions
+      </h2>
+      <p style="color: #6b7280; font-size: 14px; margin-bottom: 20px;">
+        Each screen has its own subscription billed individually at $5/month. Cancel any screen subscription at any time.
+      </p>
+      
+      <div class="screens-list" style="margin-bottom: 20px;">
+        {% for sub in screen_subscriptions %}
+        <div class="screen-item" data-sub-id="{{ sub.id }}" 
+             style="padding: 16px; background: #f9fafb; border-radius: 8px; margin-bottom: 12px; border: 1px solid #e5e7eb;">
+          <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+            <div style="flex: 1;">
+              <div style="font-weight: 600; color: #111827; font-size: 15px; margin-bottom: 6px;">
+                {{ sub.screen_name }}
+              </div>
+              <div style="color: #6b7280; font-size: 13px; margin-bottom: 4px;">
+                <i class="fas fa-store" style="margin-right: 6px;"></i>Store: {{ sub.store_id }}
+                <span style="margin: 0 8px;">•</span>
+                <span style="padding: 2px 8px; background: 
+                {% if sub.status == 'active' %}#d1fae5; color: #059669{% elif sub.status == 'trialing' %}#dbeafe; color: #1e40af{% elif sub.status == 'canceled' %}#fee2e2; color: #dc2626{% else %}#f3f4f6; color: #6b7280{% endif %}; 
+                border-radius: 4px; font-size: 12px; font-weight: 500; text-transform: capitalize;">
+                  {{ sub.status }}
+                </span>
+                {% if sub.cancel_at_period_end %}
+                <span style="margin-left: 8px; color: #f59e0b; font-weight: 500;">
+                  <i class="fas fa-exclamation-triangle"></i> Cancels on {{ sub.next_billing }}
+                </span>
+                {% endif %}
+              </div>
+              <div style="color: #6b7280; font-size: 13px;">
+                {% if sub.billing_start %}
+                <i class="fas fa-calendar-alt" style="margin-right: 6px;"></i>Started: {{ sub.billing_start }}
+                {% endif %}
+                {% if sub.next_billing and not sub.cancel_at_period_end %}
+                <span style="margin-left: 16px;">
+                  <i class="fas fa-calendar-check" style="margin-right: 6px;"></i>Next billing: {{ sub.next_billing }}
+                </span>
+                {% endif %}
+              </div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-weight: 600; color: #10b981; font-size: 16px; margin-bottom: 8px;">
+                $5.00/mo
+              </div>
+              {% if sub.status not in ['canceled', 'incomplete_expired'] %}
+              <button onclick="cancelScreenSubscription({{ sub.id }}, '{{ sub.screen_name }}')" 
+                      class="btn-cancel-screen"
+                      style="padding: 8px 16px; background: #ef4444; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; transition: background 0.2s;"
+                      onmouseover="this.style.background='#dc2626'"
+                      onmouseout="this.style.background='#ef4444'">
+                <i class="fas fa-times" style="margin-right: 6px;"></i>Cancel
+              </button>
+              {% else %}
+              <span style="color: #9ca3af; font-size: 13px; font-style: italic;">Cancelled</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      
+      <div style="padding: 16px; background: #fef3c7; border-radius: 8px; border: 1px solid #fde68a; margin-bottom: 16px;">
+        <div style="display: flex; align-items: start; gap: 12px;">
+          <i class="fas fa-exclamation-triangle" style="color: #d97706; font-size: 18px; margin-top: 2px;"></i>
+          <div>
+            <div style="font-weight: 600; color: #92400e; margin-bottom: 4px;">Cancel All Screen Subscriptions</div>
+            <div style="color: #92400e; font-size: 13px; margin-bottom: 12px;">
+              This will immediately cancel all {{ screen_subscriptions|length }} screen subscriptions and remove all screens. Each subscription will stop billing. This action cannot be undone.
+            </div>
+            <button onclick="removeAllScreens()" 
+                    class="btn-remove-all"
+                    style="padding: 10px 20px; background: #dc2626; color: white; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.2s;"
+                    onmouseover="this.style.background='#b91c1c'"
+                    onmouseout="this.style.background='#dc2626'">
+              <i class="fas fa-trash-alt" style="margin-right: 8px;"></i>Cancel All {{ screen_subscriptions|length }} Subscriptions
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Billing History / Invoice History -->
+    {% if billing_history %}
+    <div class="info-card">
+      <h2 class="info-card-title">
+        <span class="title-accent"></span>
+        Invoice History
+      </h2>
+      <div class="billing-list">
+        {% for invoice in billing_history[:10] %}
+        <div class="billing-item" style="display: flex; justify-content: space-between; align-items: center; padding: 16px 0; border-bottom: 1px solid #e5e7eb;">
+          <div style="flex: 1;">
+            <span class="billing-date" style="font-weight: 400; color: #6b7280; font-size: 14px;">{{ invoice.date }}</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span class="billing-amount" style="font-weight: 600; color: #10b981; font-size: 16px; min-width: 80px; text-align: right;">{{ invoice.amount }}</span>
+            <span class="billing-status" 
+                  style="padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 500; text-transform: capitalize; min-width: 60px; text-align: center;
+                  {% if invoice.status == 'paid' %}background-color: #d1fae5; color: #059669;{% elif invoice.status == 'open' %}background-color: #fef3c7; color: #d97706;{% else %}background-color: #f3f4f6; color: #6b7280;{% endif %}">
+              {{ invoice.status }}
+            </span>
+            {% if invoice.invoice_pdf %}
+            <a href="{{ invoice.invoice_pdf }}" target="_blank" class="btn btn-sm" 
+               style="padding: 6px 14px; font-size: 13px; font-weight: 500; text-decoration: none; background: #ffffff; color: #6b7280; border: 1px solid #e5e7eb; border-radius: 4px; transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px;"
+               onmouseover="this.style.background='#f9fafb'; this.style.borderColor='#d1d5db';"
+               onmouseout="this.style.background='#ffffff'; this.style.borderColor='#e5e7eb';">
+              PDF
+            </a>
+            {% endif %}
+            {% if invoice.hosted_invoice_url %}
+            <a href="{{ invoice.hosted_invoice_url }}" target="_blank" class="btn btn-sm" 
+               style="padding: 6px 14px; font-size: 13px; font-weight: 500; text-decoration: none; background: #3b82f6; color: #ffffff; border: 1px solid #3b82f6; border-radius: 4px; transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px;"
+               onmouseover="this.style.background='#2563eb'; this.style.borderColor='#2563eb';"
+               onmouseout="this.style.background='#3b82f6'; this.style.borderColor='#3b82f6';">
+              View
+            </a>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+<script>
+  let iti; // International telephone input instance
+  
+  // Initialize intl-tel-input when phone edit form is shown
+  function editPhone() {
+    document.getElementById('phoneEditForm').style.display = 'block';
+    document.getElementById('editPhoneBtn').style.display = 'none';
+    
+    // Initialize intl-tel-input with country flags
+    const input = document.getElementById('phoneInput');
+    if (!iti) {
+      iti = window.intlTelInput(input, {
+        initialCountry: "auto",
+        geoIpLookup: callback => {
+          fetch("https://ipapi.co/json")
+            .then(res => res.json())
+            .then(data => callback(data.country_code))
+            .catch(() => callback("us"));
+        },
+        utilsScript: "https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.11/build/js/utils.js",
+        separateDialCode: true,
+        preferredCountries: ["au", "us", "gb", "ca"],
+        autoPlaceholder: "aggressive"
+      });
+    }
+    
+    // Pre-fill with existing phone if available
+    const currentPhone = "{{ phone_number or '' }}";
+    if (currentPhone) {
+      iti.setNumber(currentPhone);
+    }
+  }
+  
+  function cancelPhoneEdit() {
+    document.getElementById('phoneEditForm').style.display = 'none';
+    document.getElementById('editPhoneBtn').style.display = 'block';
+    document.getElementById('phoneMessage').innerHTML = '';
+  }
+  
+  async function savePhone() {
+    const msgDiv = document.getElementById('phoneMessage');
+    
+    if (!iti.isValidNumber()) {
+      msgDiv.innerHTML = '<span style="color: #ef4444;">Please enter a valid phone number</span>';
+      return;
+    }
+    
+    const phoneNumber = iti.getNumber(); // Full international format: +61403666669
+    
+    msgDiv.innerHTML = '<span style="color: #3b82f6;">Saving...</span>';
+    
+    try {
+      const response = await fetch('/api/account/phone', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ phone_number: phoneNumber })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        msgDiv.innerHTML = '<span style="color: #10b981;">✓ Phone number saved successfully!</span>';
+        
+        // Update display
+        setTimeout(() => {
+          document.getElementById('phoneDisplay').innerHTML = 
+            phoneNumber + ' <span style="color: #f59e0b; font-size: 12px; margin-left: 8px;">⚠ Not verified</span>';
+          cancelPhoneEdit();
+          location.reload(); // Refresh to show verification form
+        }, 1500);
+      } else {
+        msgDiv.innerHTML = '<span style="color: #ef4444;">Error: ' + (data.error || 'Failed to save') + '</span>';
+      }
+    } catch (error) {
+      msgDiv.innerHTML = '<span style="color: #ef4444;">Error: ' + error.message + '</span>';
+    }
+  }
+  
+  // Send verification code via SMS
+  async function sendVerificationCode() {
+    const msgDiv = document.getElementById('verifyMessage');
+    const sendBtn = document.getElementById('sendCodeBtn');
+    const verifyBtn = document.getElementById('verifyCodeBtn');
+    const codeInput = document.getElementById('verifyCodeInput');
+    
+    sendBtn.disabled = true;
+    sendBtn.textContent = '📤 Sending...';
+    msgDiv.innerHTML = '<span style="color: #3b82f6;">Sending verification code...</span>';
+    
+    try {
+      const response = await fetch('/api/account/phone/send-code', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        msgDiv.innerHTML = '<span style="color: #10b981;">✓ Verification code sent! Check your phone.</span>';
+        
+        // Show code input and verify button
+        codeInput.style.display = 'block';
+        sendBtn.style.display = 'none';
+        verifyBtn.style.display = 'block';
+        
+        // Focus on code input
+        document.getElementById('verificationCode').focus();
+        
+        // Add countdown for resend
+        let countdown = 60;
+        const countdownInterval = setInterval(() => {
+          countdown--;
+          if (countdown <= 0) {
+            clearInterval(countdownInterval);
+            sendBtn.style.display = 'block';
+            sendBtn.disabled = false;
+            sendBtn.textContent = '🔄 Resend Code';
+          } else {
+            msgDiv.innerHTML = `<span style="color: #10b981;">✓ Code sent! Resend available in ${countdown}s</span>`;
+          }
+        }, 1000);
+      } else {
+        msgDiv.innerHTML = '<span style="color: #ef4444;">Error: ' + (data.error || 'Failed to send') + '</span>';
+        sendBtn.disabled = false;
+        sendBtn.textContent = '📤 Send Verification Code';
+      }
+    } catch (error) {
+      msgDiv.innerHTML = '<span style="color: #ef4444;">Error: ' + error.message + '</span>';
+      sendBtn.disabled = false;
+      sendBtn.textContent = '📤 Send Verification Code';
+    }
+  }
+  
+  // Verify the SMS code
+  async function verifyPhoneCode() {
+    const msgDiv = document.getElementById('verifyMessage');
+    const verifyBtn = document.getElementById('verifyCodeBtn');
+    const code = document.getElementById('verificationCode').value.trim();
+    
+    if (!code || code.length !== 6) {
+      msgDiv.innerHTML = '<span style="color: #ef4444;">Please enter the 6-digit code</span>';
+      return;
+    }
+    
+    verifyBtn.disabled = true;
+    verifyBtn.textContent = '⏳ Verifying...';
+    msgDiv.innerHTML = '<span style="color: #3b82f6;">Verifying code...</span>';
+    
+    try {
+      const response = await fetch('/api/account/phone/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ code: code })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        msgDiv.innerHTML = '<span style="color: #10b981; font-weight: 600;">🎉 Phone verified successfully!</span>';
+        
+        // Refresh page to show verified status
+        setTimeout(() => {
+          location.reload();
+        }, 2000);
+      } else {
+        msgDiv.innerHTML = '<span style="color: #ef4444;">Error: ' + (data.error || 'Invalid code') + '</span>';
+        verifyBtn.disabled = false;
+        verifyBtn.textContent = '✓ Verify Code';
+        
+        // Clear the code input on error
+        document.getElementById('verificationCode').value = '';
+        document.getElementById('verificationCode').focus();
+      }
+    } catch (error) {
+      msgDiv.innerHTML = '<span style="color: #ef4444;">Error: ' + error.message + '</span>';
+      verifyBtn.disabled = false;
+      verifyBtn.textContent = '✓ Verify Code';
+    }
+  }
+  
+  // Cancel individual screen subscription
+  async function cancelScreenSubscription(subId, screenName) {
+    const confirmMsg = `Cancel subscription for "${screenName}"?\n\nThe screen will be removed and billing will stop immediately.\n\nThis action cannot be undone.`;
+    
+    if (!confirm(confirmMsg)) {
+      return;
+    }
+    
+    // Ask for cancellation reason
+    const reasons = [
+      'I found an alternative',
+      'I no longer need it',
+      "It's too expensive",
+      'Other reason'
+    ];
+    
+    let reason = prompt('Why are you canceling? (optional)\n\n1. I found an alternative\n2. I no longer need it\n3. It\'s too expensive\n4. Other reason\n\nEnter 1-4 or your reason:');
+    
+    let reasonText = 'No reason provided';
+    let feedback = '';
+    
+    if (reason) {
+      if (reason === '1') reasonText = 'I found an alternative';
+      else if (reason === '2') reasonText = 'I no longer need it';
+      else if (reason === '3') reasonText = "It's too expensive";
+      else if (reason === '4') {
+        reasonText = 'Other reason';
+        feedback = prompt('Please tell us more (optional):') || '';
+      } else {
+        reasonText = reason;
+      }
+    }
+    
+    try {
+      const response = await fetch('/remove_screen', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          screen_subscription_id: subId,
+          reason: reasonText,
+          feedback: feedback
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // Remove from UI
+        const screenElement = document.querySelector(`[data-sub-id="${subId}"]`);
+        if (screenElement) {
+          screenElement.style.transition = 'opacity 0.3s';
+          screenElement.style.opacity = '0';
+          setTimeout(() => screenElement.remove(), 300);
+        }
+        
+        // Show success message and reload after delay
+        alert(`Screen subscription cancelled!\nRemaining screens: ${data.new_count}`);
+        setTimeout(() => location.reload(), 1000);
+      } else {
+        alert('Error: ' + (data.error || 'Failed to cancel subscription'));
+      }
+    } catch (error) {
+      alert('Error: ' + error.message);
+    }
+  }
+  
+  // Remove all screens
+  async function removeAllScreens() {
+    const screenCount = {{ screen_subscriptions|length }};
+    const confirmMsg = `⚠️ WARNING: This will cancel ALL ${screenCount} screen subscriptions immediately.\n\nAll screens will be removed and billing will stop.\n\nThis action CANNOT be undone!\n\nAre you absolutely sure?`;
+    
+    if (!confirm(confirmMsg)) {
+      return;
+    }
+    
+    // Double confirmation
+    const doubleConfirm = prompt('Type "DELETE ALL" to confirm (case-sensitive):');
+    if (doubleConfirm !== 'DELETE ALL') {
+      alert('Cancellation aborted. No changes made.');
+      return;
+    }
+    
+    try {
+      const response = await fetch('/remove_all_screens', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        alert('All screen subscriptions cancelled.\n\nRedirecting to account page...');
+        location.reload();
+      } else {
+        alert('Error: ' + (data.error || 'Failed to cancel all subscriptions'));
+      }
+    } catch (error) {
+      alert('Error: ' + error.message);
+    }
+  }
+</script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-﻿param(
+param(
     [string]$Server = "54.252.90.27",
     [string]$KeyPath = "C:\Users\toeng\Downloads\LightsailDefaultKey-ap-southeast-2(3).pem",
     [string]$TempPath = "pizza-hut-tv-deploy",
@@ -16,7 +16,7 @@ if (Test-Path "database.db") {
     Write-Host "Local database found (last updated: $([math]::Round($localDbAge.TotalHours, 1)) hours ago)" -ForegroundColor Cyan
     
     if ($localDbAge.TotalDays -gt 1) {
-        Write-Host "  âš  Local database is over 1 day old" -ForegroundColor Yellow
+        Write-Host "  ⚠ Local database is over 1 day old" -ForegroundColor Yellow
         $syncFirst = Read-Host "Sync from server first? (yes/no)"
         if ($syncFirst -eq "yes") {
             Write-Host "Running sync..." -ForegroundColor Yellow
@@ -25,7 +25,7 @@ if (Test-Path "database.db") {
         }
     }
 } else {
-    Write-Host "âš  No local database found!" -ForegroundColor Yellow
+    Write-Host "⚠ No local database found!" -ForegroundColor Yellow
     Write-Host "  Run .\sync_from_server.ps1 to download server data for local testing" -ForegroundColor Cyan
     Write-Host ""
 }
@@ -140,13 +140,13 @@ if ($vonageCheck -match "0") {
     & ssh -i $KeyPath "ubuntu@${Server}" "echo '' >> ${FinalPath}/.env ; echo '# Vonage SMS Configuration' >> ${FinalPath}/.env ; echo 'VONAGE_API_KEY=cd8f971d' >> ${FinalPath}/.env ; echo 'VONAGE_API_SECRET=az2Stt9sdkNpPjCssXMvdxkzR7ZxL99UoDK5FqEqHXMBy1m' >> ${FinalPath}/.env ; echo 'VONAGE_FROM_NUMBER=+13165308999' >> ${FinalPath}/.env"
     
     if ($LASTEXITCODE -eq 0) {
-        Write-Host "âœ“ Vonage credentials added" -ForegroundColor Green
+        Write-Host "✓ Vonage credentials added" -ForegroundColor Green
         Write-Host "Restarting service to load credentials..." -ForegroundColor Yellow
         & ssh -i $KeyPath "ubuntu@${Server}" "sudo systemctl restart pizza-hut-tv"
         Start-Sleep -Seconds 2
     }
 } else {
-    Write-Host "âœ“ Vonage credentials already configured" -ForegroundColor Green
+    Write-Host "✓ Vonage credentials already configured" -ForegroundColor Green
 }
 
 Write-Host ""
@@ -158,7 +158,7 @@ Write-Host "Downloading latest database and config from server..." -ForegroundCo
 if ($LASTEXITCODE -eq 0) {
     $dbSize = (Get-Item "${PSScriptRoot}/database.db").Length
     $dbSizeKB = [math]::Round($dbSize/1024, 2)
-    Write-Host ('  âœ“ Database synced (' + $dbSizeKB + ' KB)') -ForegroundColor Green
+    Write-Host ('  ✓ Database synced (' + $dbSizeKB + ' KB)') -ForegroundColor Green
 }
 
 # Download store config
@@ -166,9 +166,9 @@ if ($LASTEXITCODE -eq 0) {
 if ($LASTEXITCODE -eq 0) {
     $configSize = (Get-Item "${PSScriptRoot}/store_config__test9_at_gmail.com.json").Length
     $configSizeKB = [math]::Round($configSize/1024, 2)
-    Write-Host ('  âœ“ Store config synced (' + $configSizeKB + ' KB)') -ForegroundColor Green
+    Write-Host ('  ✓ Store config synced (' + $configSizeKB + ' KB)') -ForegroundColor Green
 }
 
 Write-Host ""
-Write-Host "âœ… Server deployment complete!" -ForegroundColor Green
-Write-Host "âœ… Local data synced with server!" -ForegroundColor Green
+Write-Host "✅ Server deployment complete!" -ForegroundColor Green
+Write-Host "✅ Local data synced with server!" -ForegroundColor Green

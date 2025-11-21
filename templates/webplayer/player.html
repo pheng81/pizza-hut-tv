@@ -861,6 +861,10 @@
 				}
 				return u;
 			}
+			// Check if URL already has /static/uploads/ or /media/ prefix - if so, use as-is
+			if(u.startsWith('/static/uploads/') || u.startsWith('/media/')){
+				return u;
+			}
 			const fname = (u.startsWith('/') ? u.slice(1) : u);
 			const isVid = isVideoByName(fname);
 			return `${ORIGIN}/${isVid ? 'media' : 'static/uploads'}/${fname}`;

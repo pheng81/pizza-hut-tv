@@ -43,25 +43,21 @@
     {
       "id": "7048",
       "name": "Wagga Wagga - Pizza Hut"
-    },
-    {
-      "id": "7777",
-      "name": "kkkk"
     }
   ],
   "master_store_id": "1000",
   "screens": {
     "1000": {
-      "1000_screen1": {
-        "file": "users/test9_at_gmail.com/2025-11/c9143a65-cf43-461b-95d9-fc46354bfb38.png",
-        "vertical": false,
-        "horizontal": true,
-        "rotation": 0,
+      "1000_promo1": {
+        "file": "users/test9_at_gmail.com/2025-10/86c70b0c-7ef4-47bc-99c2-fadba86b1fd5.jpg",
+        "vertical": true,
+        "horizontal": false,
+        "rotation": 270,
         "protected": false,
         "playlist": [
           {
-            "id": "ecf761e1-2c4f-417f-adc4-a6fd03a8cc9b",
-            "file": "users/test9_at_gmail.com/2025-11/c9143a65-cf43-461b-95d9-fc46354bfb38.png",
+            "id": "a12b74c9-88a4-4627-ac30-b675c19e09a2",
+            "file": "users/test9_at_gmail.com/2025-10/bb29f060-1078-4c52-ad5d-fd984030e489.png",
             "enabled": true,
             "start": null,
             "end": null,
@@ -76,7 +72,258 @@
         "rotation_meta": {
           "last_index": 0,
           "last_ts": 0
+        },
+        "last_seen": 1761035510,
+        "events": [
+          {
+            "ts": 1760606114,
+            "event": "load_ok",
+            "file": "86c70b0c-7ef4-47bc-99c2-fadba86b1fd5.jpg",
+            "item_id": "a12b74c9-88a4-4627-ac30-b675c19e09a2",
+            "error": null
+          },
+          {
+            "ts": 1760606194,
+            "event": "load_ok",
+            "file": "86c70b0c-7ef4-47bc-99c2-fadba86b1fd5.jpg",
+            "item_id": "a12b74c9-88a4-4627-ac30-b675c19e09a2",
+            "error": null
+          }
+        ],
+        "last_item_status": {
+          "id:a12b74c9-88a4-4627-ac30-b675c19e09a2": {
+            "state": "ok",
+            "ts": 1760606194,
+            "error": null,
+            "file": "86c70b0c-7ef4-47bc-99c2-fadba86b1fd5.jpg",
+            "item_id": "a12b74c9-88a4-4627-ac30-b675c19e09a2"
+          }
+        },
+        "cmd_queue": []
+      },
+      "1000_screen1": {
+        "horizontal": true,
+        "file": "users/test9_at_gmail.com/2025-11/4d563e01-febb-4bc5-a91e-f2b0628f96c4.webp",
+        "playlist": [
+          {
+            "id": "b77e9886-7332-417a-b6fc-3bba78dbd852",
+            "file": "users/test9_at_gmail.com/2025-10/e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "effect": "fade"
+          }
+        ],
+        "fresh": true,
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "cmd_queue": [
+          {
+            "id": "8013fdb3-8dc2-492d-be03-a1c3de5de5a3",
+            "ts": 1762136711,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          },
+          {
+            "id": "ab89bfaa-bba9-425d-8874-08aaf9403e96",
+            "ts": 1762156143,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          },
+          {
+            "id": "2a6cdbff-c63b-49a2-a5bc-28c91297f42f",
+            "ts": 1762156255,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          },
+          {
+            "id": "21b1a597-c005-4dd9-9fa4-2aec9be008ee",
+            "ts": 1762156566,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          },
+          {
+            "id": "32e5b888-d354-40e3-830b-70a2499b4a8e",
+            "ts": 1762169192,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ]
+      },
+      "1000_screen2": {
+        "horizontal": true,
+        "file": "users/test9_at_gmail.com/2025-11/e5ae6bcf-d004-4d00-a251-207d3996ad04.png",
+        "playlist": [
+          {
+            "file": "users/test9_at_gmail.com/2025-10/d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "url": "https://cdn.everydayadvertise.com/users/test9_at_gmail.com/2025-10/a5311253-ce88-4453-9e64-3c5c36b2b6b9-screen2.mp4",
+            "duration": 0,
+            "type": "video",
+            "sync_ref": {
+              "start_epoch": 1761095269,
+              "group": "sync_group_1761095269",
+              "precision_mode": "high",
+              "preload_buffer": 2000,
+              "sync_tolerance": 10
+            },
+            "id": "f0be825d-dbd4-4ccb-85dc-f6a78a6d148f",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "effect": "dissolve"
+          },
+          {
+            "id": "3903cbe5-277d-4058-a641-a2064c8ba0b7",
+            "file": "users/test9_at_gmail.com/2025-11/e5ae6bcf-d004-4d00-a251-207d3996ad04.png",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 10,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image"
+          }
+        ],
+        "fresh": true,
+        "rotation_meta": {
+          "last_index": 1,
+          "last_ts": 1762480134
+        },
+        "cmd_queue": [
+          {
+            "id": "7c0e0a4f-f818-41f9-a0f4-ace68d27faf6",
+            "ts": 1762169193,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          },
+          {
+            "id": "02fa132e-e896-4ef4-b33d-4096ff48f786",
+            "ts": 1762334041,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          },
+          {
+            "id": "4b192eb2-e8ff-4659-80f7-f610d96b09d5",
+            "ts": 1762334077,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ],
+        "last_seen": 1762480135,
+        "events": [
+          {
+            "ts": 1762480135,
+            "event": "play_fail",
+            "file": "users/test9_at_gmail.com/2025-11/e5ae6bcf-d004-4d00-a251-207d3996ad04.png",
+            "item_id": null,
+            "error": "media load failed"
+          },
+          {
+            "ts": 1762480136,
+            "event": "play_fail",
+            "file": "users/test9_at_gmail.com/2025-10/d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "f0be825d-dbd4-4ccb-85dc-f6a78a6d148f",
+            "error": "media load failed"
+          },
+          {
+            "ts": 1762480136,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-10/d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "f0be825d-dbd4-4ccb-85dc-f6a78a6d148f",
+            "error": null
+          },
+          {
+            "ts": 1762480136,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-11/e5ae6bcf-d004-4d00-a251-207d3996ad04.png",
+            "item_id": "3903cbe5-277d-4058-a641-a2064c8ba0b7",
+            "error": null
+          }
+        ],
+        "last_item_status": {
+          "file:users/test9_at_gmail.com/2025-11/e5ae6bcf-d004-4d00-a251-207d3996ad04.png": {
+            "state": "fail",
+            "ts": 1762480135,
+            "error": "media load failed",
+            "file": "users/test9_at_gmail.com/2025-11/e5ae6bcf-d004-4d00-a251-207d3996ad04.png",
+            "item_id": null
+          },
+          "id:f0be825d-dbd4-4ccb-85dc-f6a78a6d148f": {
+            "state": "ok",
+            "ts": 1762480136,
+            "error": null,
+            "file": "users/test9_at_gmail.com/2025-10/d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "f0be825d-dbd4-4ccb-85dc-f6a78a6d148f"
+          },
+          "id:3903cbe5-277d-4058-a641-a2064c8ba0b7": {
+            "state": "ok",
+            "ts": 1762480136,
+            "error": null,
+            "file": "users/test9_at_gmail.com/2025-11/e5ae6bcf-d004-4d00-a251-207d3996ad04.png",
+            "item_id": "3903cbe5-277d-4058-a641-a2064c8ba0b7"
+          }
         }
+      },
+      "1000_screen3": {
+        "horizontal": true,
+        "file": "https://cdn.everydayadvertise.com/users/test9_at_gmail.com/2025-10/a5311253-ce88-4453-9e64-3c5c36b2b6b9-screen3.mp4",
+        "playlist": [
+          {
+            "file": "users/test9_at_gmail.com/2025-10/742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "url": "https://cdn.everydayadvertise.com/users/test9_at_gmail.com/2025-10/a5311253-ce88-4453-9e64-3c5c36b2b6b9-screen3.mp4",
+            "duration": 0,
+            "type": "video",
+            "sync_ref": {
+              "start_epoch": 1761095269,
+              "group": "sync_group_1761095269",
+              "precision_mode": "high",
+              "preload_buffer": 2000,
+              "sync_tolerance": 10
+            },
+            "id": "f30b9869-5cf5-4dc1-95ef-b4bf699a7fce",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image"
+          }
+        ],
+        "fresh": true,
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        },
+        "cmd_queue": [
+          {
+            "id": "c4962d45-4639-45bd-975c-ce5a35e6c7e5",
+            "ts": 1762480078,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ]
       }
     },
     "1931": {
@@ -86,15 +333,16 @@
         "playlist": [
           {
             "id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "file": "users/test9_at_gmail.com/2025-11/09d19b87-381b-4161-9065-4779550bf3dd.png",
+            "file": "users/test9_at_gmail.com/2025-10/e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
             "enabled": true,
             "start": null,
             "end": null,
             "schedule": [],
-            "duration": 25,
+            "duration": 12,
             "repeat": true,
             "link_next": false,
-            "media_type": "image"
+            "media_type": "image",
+            "effect": "slide-up"
           }
         ],
         "fresh": true,
@@ -102,703 +350,703 @@
           "last_index": 0,
           "last_ts": 1762480117
         },
-        "last_seen": 1763605012,
+        "last_seen": 1762935778,
         "events": [
           {
-            "ts": 1763180279,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 25, Last: undefined"
+            "ts": 1761859112,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-10/38531fbd-55ed-4c87-aa9e-576834c649d3-screen1.mp4",
+            "item_id": "450f49f5-c8f7-414a-971d-bc74545e840f",
+            "error": null
           },
           {
-            "ts": 1763180292,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
+            "ts": 1761859114,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
           },
           {
-            "ts": 1763180292,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 26, Last: undefined"
+            "ts": 1761859119,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
           },
           {
-            "ts": 1763180304,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 27, Last: undefined"
+            "ts": 1761859124,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
           },
           {
-            "ts": 1763180304,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
+            "ts": 1761859129,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
           },
           {
-            "ts": 1763180316,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 28, Last: undefined"
+            "ts": 1761859132,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-10/38531fbd-55ed-4c87-aa9e-576834c649d3-screen1.mp4",
+            "item_id": "450f49f5-c8f7-414a-971d-bc74545e840f",
+            "error": null
           },
           {
-            "ts": 1763180316,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
+            "ts": 1761859134,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
           },
           {
-            "ts": 1763180329,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 29, Last: undefined"
+            "ts": 1761859139,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
           },
           {
-            "ts": 1763180329,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
+            "ts": 1761859142,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-10/38531fbd-55ed-4c87-aa9e-576834c649d3-screen1.mp4",
+            "item_id": "450f49f5-c8f7-414a-971d-bc74545e840f",
+            "error": null
           },
           {
-            "ts": 1763180341,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 30, Last: undefined"
+            "ts": 1761859144,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
           },
           {
-            "ts": 1763180341,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
+            "ts": 1761859149,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
           },
           {
-            "ts": 1763180355,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
+            "ts": 1761859154,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
           },
           {
-            "ts": 1763180367,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
+            "ts": 1761859159,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
           },
           {
-            "ts": 1763180384,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
+            "ts": 1761859162,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-10/38531fbd-55ed-4c87-aa9e-576834c649d3-screen1.mp4",
+            "item_id": "450f49f5-c8f7-414a-971d-bc74545e840f",
+            "error": null
           },
           {
-            "ts": 1763180384,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 3, Last: undefined"
+            "ts": 1761859164,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
           },
           {
-            "ts": 1763180396,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 4, Last: undefined"
+            "ts": 1761859169,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
           },
           {
-            "ts": 1763180396,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
+            "ts": 1761859172,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-10/38531fbd-55ed-4c87-aa9e-576834c649d3-screen1.mp4",
+            "item_id": "450f49f5-c8f7-414a-971d-bc74545e840f",
+            "error": null
           },
           {
-            "ts": 1763180409,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 5, Last: undefined"
+            "ts": 1761859175,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
           },
           {
-            "ts": 1763180409,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
+            "ts": 1761859180,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
           },
           {
-            "ts": 1763180421,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 6, Last: undefined"
+            "ts": 1761859185,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
           },
           {
-            "ts": 1763180421,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
+            "ts": 1761859190,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
           },
           {
-            "ts": 1763180434,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
+            "ts": 1761859192,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-10/38531fbd-55ed-4c87-aa9e-576834c649d3-screen1.mp4",
+            "item_id": "450f49f5-c8f7-414a-971d-bc74545e840f",
+            "error": null
           },
           {
-            "ts": 1763180434,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 7, Last: undefined"
+            "ts": 1761859195,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
           },
           {
-            "ts": 1763180446,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
+            "ts": 1761859200,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
           },
           {
-            "ts": 1763180446,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 8, Last: undefined"
+            "ts": 1761859202,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-10/38531fbd-55ed-4c87-aa9e-576834c649d3-screen1.mp4",
+            "item_id": "450f49f5-c8f7-414a-971d-bc74545e840f",
+            "error": null
           },
           {
-            "ts": 1763180458,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 9, Last: undefined"
+            "ts": 1761859202,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-10/38531fbd-55ed-4c87-aa9e-576834c649d3-screen1.mp4",
+            "item_id": "450f49f5-c8f7-414a-971d-bc74545e840f",
+            "error": null
           },
           {
-            "ts": 1763180458,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
+            "ts": 1761859205,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
           },
           {
-            "ts": 1763180471,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 10, Last: undefined"
+            "ts": 1761859210,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
           },
           {
-            "ts": 1763180471,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
+            "ts": 1761859215,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
           },
           {
-            "ts": 1763180483,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 11, Last: undefined"
+            "ts": 1761859220,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
           },
           {
-            "ts": 1763180483,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
+            "ts": 1761859222,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-10/38531fbd-55ed-4c87-aa9e-576834c649d3-screen1.mp4",
+            "item_id": "450f49f5-c8f7-414a-971d-bc74545e840f",
+            "error": null
           },
           {
-            "ts": 1763180496,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
+            "ts": 1761859225,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
           },
           {
-            "ts": 1763180496,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 12, Last: undefined"
+            "ts": 1761859230,
+            "event": "playlist_reload",
+            "file": null,
+            "item_id": null,
+            "error": null
           },
           {
-            "ts": 1763180508,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
+            "ts": 1762136704,
+            "event": "load_ok",
+            "file": "38531fbd-55ed-4c87-aa9e-576834c649d3-screen1.mp4",
+            "item_id": "450f49f5-c8f7-414a-971d-bc74545e840f",
+            "error": null
           },
           {
-            "ts": 1763180508,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 13, Last: undefined"
+            "ts": 1762136743,
+            "event": "load_ok",
+            "file": "50f89320-a959-48eb-87b6-19bb74d4bc55.jpg",
+            "item_id": "57f322f4-a63e-4332-91a4-3ed47002e572",
+            "error": null
           },
           {
-            "ts": 1763180520,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
+            "ts": 1762136743,
+            "event": "load_ok",
+            "file": "50f89320-a959-48eb-87b6-19bb74d4bc55.jpg",
+            "item_id": "57f322f4-a63e-4332-91a4-3ed47002e572",
+            "error": null
           },
           {
-            "ts": 1763180520,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 14, Last: undefined"
+            "ts": 1762136743,
+            "event": "load_ok",
+            "file": "50f89320-a959-48eb-87b6-19bb74d4bc55.jpg",
+            "item_id": "57f322f4-a63e-4332-91a4-3ed47002e572",
+            "error": null
           },
           {
-            "ts": 1763180533,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 15, Last: undefined"
+            "ts": 1762136766,
+            "event": "load_ok",
+            "file": "50f89320-a959-48eb-87b6-19bb74d4bc55.jpg",
+            "item_id": "57f322f4-a63e-4332-91a4-3ed47002e572",
+            "error": null
           },
           {
-            "ts": 1763180533,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
+            "ts": 1762136836,
+            "event": "load_ok",
+            "file": "50f89320-a959-48eb-87b6-19bb74d4bc55.jpg",
+            "item_id": "57f322f4-a63e-4332-91a4-3ed47002e572",
+            "error": null
           },
           {
-            "ts": 1763180545,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 16, Last: undefined"
-          },
-          {
-            "ts": 1763180545,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763180558,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 17, Last: undefined"
-          },
-          {
-            "ts": 1763180558,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763180570,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 18, Last: undefined"
-          },
-          {
-            "ts": 1763180570,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763180582,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763180582,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 19, Last: undefined"
-          },
-          {
-            "ts": 1763180595,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763180595,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 20, Last: undefined"
-          },
-          {
-            "ts": 1763180607,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 21, Last: undefined"
-          },
-          {
-            "ts": 1763180607,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763180620,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 22, Last: undefined"
-          },
-          {
-            "ts": 1763180620,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763180632,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 23, Last: undefined"
-          },
-          {
-            "ts": 1763180632,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763180644,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763180644,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 24, Last: undefined"
-          },
-          {
-            "ts": 1763180657,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763180657,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 25, Last: undefined"
-          },
-          {
-            "ts": 1763180669,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763180669,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 26, Last: undefined"
-          },
-          {
-            "ts": 1763180682,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 27, Last: undefined"
-          },
-          {
-            "ts": 1763180682,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763180694,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 28, Last: undefined"
-          },
-          {
-            "ts": 1763180694,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763180706,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 29, Last: undefined"
-          },
-          {
-            "ts": 1763180706,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763180719,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763180719,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 30, Last: undefined"
-          },
-          {
-            "ts": 1763180731,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763180731,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 31, Last: undefined"
-          },
-          {
-            "ts": 1763180743,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 32, Last: undefined"
-          },
-          {
-            "ts": 1763180743,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763180756,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 33, Last: undefined"
-          },
-          {
-            "ts": 1763180756,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763180768,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763180768,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 34, Last: undefined"
-          },
-          {
-            "ts": 1763180781,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763180781,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 35, Last: undefined"
-          },
-          {
-            "ts": 1763180818,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763180818,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 38, Last: undefined"
-          },
-          {
-            "ts": 1763180830,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763180830,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 39, Last: undefined"
-          },
-          {
-            "ts": 1763180843,
-            "event": "media_load_error",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "Consecutive errors: 40, Last: undefined"
-          },
-          {
-            "ts": 1763180843,
-            "event": "load_fail",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763180849,
+            "ts": 1762136838,
             "event": "load_ok",
             "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
             "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
             "error": null
           },
           {
-            "ts": 1763182660,
+            "ts": 1762136838,
             "event": "load_ok",
             "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
             "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
             "error": null
           },
           {
-            "ts": 1763182660,
+            "ts": 1762136866,
             "event": "load_ok",
             "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
             "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
             "error": null
           },
           {
-            "ts": 1763183417,
+            "ts": 1762136876,
+            "event": "load_ok",
+            "file": "8fa342a1-ceb7-4be0-9b17-993b39e76208.png",
+            "item_id": "21e0bf3a-c582-4b98-b02b-b10c1fae7a52",
+            "error": null
+          },
+          {
+            "ts": 1762136887,
             "event": "load_ok",
             "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
             "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
             "error": null
           },
           {
-            "ts": 1763183417,
+            "ts": 1762136910,
+            "event": "load_ok",
+            "file": "a5311253-ce88-4453-9e64-3c5c36b2b6b9-screen4.mp4",
+            "item_id": "21e0bf3a-c582-4b98-b02b-b10c1fae7a52",
+            "error": null
+          },
+          {
+            "ts": 1762137029,
             "event": "load_ok",
             "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
             "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
             "error": null
           },
           {
-            "ts": 1763183429,
+            "ts": 1762137109,
             "event": "load_ok",
             "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
             "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
             "error": null
           },
           {
-            "ts": 1763183487,
+            "ts": 1762137119,
+            "event": "load_ok",
+            "file": "de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+            "item_id": "f9e7da95-451d-49b7-8bba-555eb3c55320",
+            "error": null
+          },
+          {
+            "ts": 1762137129,
             "event": "load_ok",
             "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
             "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
             "error": null
           },
           {
-            "ts": 1763194239,
+            "ts": 1762137139,
+            "event": "load_ok",
+            "file": "de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+            "item_id": "f9e7da95-451d-49b7-8bba-555eb3c55320",
+            "error": null
+          },
+          {
+            "ts": 1762137150,
             "event": "load_ok",
             "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
             "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
             "error": null
           },
           {
-            "ts": 1763208326,
+            "ts": 1762137160,
+            "event": "load_ok",
+            "file": "de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+            "item_id": "f9e7da95-451d-49b7-8bba-555eb3c55320",
+            "error": null
+          },
+          {
+            "ts": 1762137170,
             "event": "load_ok",
             "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
             "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
             "error": null
           },
           {
-            "ts": 1763251292,
+            "ts": 1762137181,
+            "event": "load_ok",
+            "file": "de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+            "item_id": "f9e7da95-451d-49b7-8bba-555eb3c55320",
+            "error": null
+          },
+          {
+            "ts": 1762137191,
             "event": "load_ok",
             "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
             "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
             "error": null
           },
           {
-            "ts": 1763338531,
+            "ts": 1762137201,
+            "event": "load_ok",
+            "file": "de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+            "item_id": "f9e7da95-451d-49b7-8bba-555eb3c55320",
+            "error": null
+          },
+          {
+            "ts": 1762137212,
             "event": "load_ok",
             "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
             "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
             "error": null
           },
           {
-            "ts": 1763421946,
+            "ts": 1762137222,
+            "event": "load_ok",
+            "file": "de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+            "item_id": "f9e7da95-451d-49b7-8bba-555eb3c55320",
+            "error": null
+          },
+          {
+            "ts": 1762137232,
             "event": "load_ok",
             "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
             "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
             "error": null
           },
           {
-            "ts": 1763434734,
+            "ts": 1762137243,
+            "event": "load_ok",
+            "file": "de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+            "item_id": "f9e7da95-451d-49b7-8bba-555eb3c55320",
+            "error": null
+          },
+          {
+            "ts": 1762137253,
             "event": "load_ok",
             "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
             "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
             "error": null
           },
           {
-            "ts": 1763510374,
+            "ts": 1762137265,
+            "event": "load_ok",
+            "file": "de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+            "item_id": "f9e7da95-451d-49b7-8bba-555eb3c55320",
+            "error": null
+          },
+          {
+            "ts": 1762137275,
             "event": "load_ok",
             "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
             "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
             "error": null
           },
           {
-            "ts": 1763597153,
+            "ts": 1762137288,
+            "event": "load_ok",
+            "file": "de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+            "item_id": "f9e7da95-451d-49b7-8bba-555eb3c55320",
+            "error": null
+          },
+          {
+            "ts": 1762137298,
+            "event": "load_ok",
+            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
+            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
+            "error": null
+          },
+          {
+            "ts": 1762137310,
+            "event": "load_ok",
+            "file": "de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+            "item_id": "f9e7da95-451d-49b7-8bba-555eb3c55320",
+            "error": null
+          },
+          {
+            "ts": 1762137321,
+            "event": "load_ok",
+            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
+            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
+            "error": null
+          },
+          {
+            "ts": 1762137333,
+            "event": "load_ok",
+            "file": "de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+            "item_id": "f9e7da95-451d-49b7-8bba-555eb3c55320",
+            "error": null
+          },
+          {
+            "ts": 1762137343,
+            "event": "load_ok",
+            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
+            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
+            "error": null
+          },
+          {
+            "ts": 1762137356,
+            "event": "load_ok",
+            "file": "de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+            "item_id": "f9e7da95-451d-49b7-8bba-555eb3c55320",
+            "error": null
+          },
+          {
+            "ts": 1762137366,
+            "event": "load_ok",
+            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
+            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
+            "error": null
+          },
+          {
+            "ts": 1762137378,
+            "event": "load_ok",
+            "file": "de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+            "item_id": "f9e7da95-451d-49b7-8bba-555eb3c55320",
+            "error": null
+          },
+          {
+            "ts": 1762137389,
+            "event": "load_ok",
+            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
+            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
+            "error": null
+          },
+          {
+            "ts": 1762137401,
+            "event": "load_ok",
+            "file": "de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+            "item_id": "f9e7da95-451d-49b7-8bba-555eb3c55320",
+            "error": null
+          },
+          {
+            "ts": 1762137411,
+            "event": "load_ok",
+            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
+            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
+            "error": null
+          },
+          {
+            "ts": 1762137423,
+            "event": "load_ok",
+            "file": "de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+            "item_id": "f9e7da95-451d-49b7-8bba-555eb3c55320",
+            "error": null
+          },
+          {
+            "ts": 1762137434,
+            "event": "load_ok",
+            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
+            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
+            "error": null
+          },
+          {
+            "ts": 1762137446,
+            "event": "load_ok",
+            "file": "de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+            "item_id": "f9e7da95-451d-49b7-8bba-555eb3c55320",
+            "error": null
+          },
+          {
+            "ts": 1762137456,
+            "event": "load_ok",
+            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
+            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
+            "error": null
+          },
+          {
+            "ts": 1762137469,
+            "event": "load_ok",
+            "file": "de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+            "item_id": "f9e7da95-451d-49b7-8bba-555eb3c55320",
+            "error": null
+          },
+          {
+            "ts": 1762137479,
+            "event": "load_ok",
+            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
+            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
+            "error": null
+          },
+          {
+            "ts": 1762137491,
+            "event": "load_ok",
+            "file": "de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+            "item_id": "f9e7da95-451d-49b7-8bba-555eb3c55320",
+            "error": null
+          },
+          {
+            "ts": 1762137502,
+            "event": "load_ok",
+            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
+            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
+            "error": null
+          },
+          {
+            "ts": 1762137514,
+            "event": "load_ok",
+            "file": "de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+            "item_id": "f9e7da95-451d-49b7-8bba-555eb3c55320",
+            "error": null
+          },
+          {
+            "ts": 1762137524,
+            "event": "load_ok",
+            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
+            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
+            "error": null
+          },
+          {
+            "ts": 1762137537,
+            "event": "load_ok",
+            "file": "de03f4a3-488d-4921-8d9b-91ccf34f02aa.png",
+            "item_id": "f9e7da95-451d-49b7-8bba-555eb3c55320",
+            "error": null
+          },
+          {
+            "ts": 1762137547,
+            "event": "load_ok",
+            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
+            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
+            "error": null
+          },
+          {
+            "ts": 1762138127,
+            "event": "load_ok",
+            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
+            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
+            "error": null
+          },
+          {
+            "ts": 1762138206,
+            "event": "load_ok",
+            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
+            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
+            "error": null
+          },
+          {
+            "ts": 1762138684,
+            "event": "load_ok",
+            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
+            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
+            "error": null
+          },
+          {
+            "ts": 1762210346,
+            "event": "load_ok",
+            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
+            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
+            "error": null
+          },
+          {
+            "ts": 1762300544,
+            "event": "load_ok",
+            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
+            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
+            "error": null
+          },
+          {
+            "ts": 1762386746,
+            "event": "load_ok",
+            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
+            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
+            "error": null
+          },
+          {
+            "ts": 1762478654,
+            "event": "load_ok",
+            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
+            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
+            "error": null
+          },
+          {
+            "ts": 1762480117,
+            "event": "play_fail",
+            "file": "users/test9_at_gmail.com/2025-10/e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
+            "item_id": null,
+            "error": "media load failed"
+          },
+          {
+            "ts": 1762480119,
+            "event": "play_fail",
+            "file": "users/test9_at_gmail.com/2025-10/e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
+            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
+            "error": "media load failed"
+          },
+          {
+            "ts": 1762480119,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-10/e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
+            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
+            "error": null
+          },
+          {
+            "ts": 1762480123,
+            "event": "play_fail",
+            "file": "users/test9_at_gmail.com/2025-10/e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
+            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
+            "error": "media load failed"
+          },
+          {
+            "ts": 1762480139,
+            "event": "play_fail",
+            "file": "users/test9_at_gmail.com/2025-10/e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
+            "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
+            "error": "media load failed"
+          },
+          {
+            "ts": 1762502078,
             "event": "load_ok",
             "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
             "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc",
@@ -850,7 +1098,7 @@
           },
           "id:e00d516c-0b42-4e04-b62d-619cad5390bc": {
             "state": "ok",
-            "ts": 1763597153,
+            "ts": 1762502078,
             "error": null,
             "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
             "item_id": "e00d516c-0b42-4e04-b62d-619cad5390bc"
@@ -877,229 +1125,816 @@
             "item_id": null
           }
         },
-        "cmd_queue": [
-          {
-            "id": "bffa3b73-6407-4df9-abf4-58962ab28d15",
-            "ts": 1763605684,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "2caf16af-6944-4621-844d-f1ef36d80b6c",
-            "ts": 1763605991,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "61e4ef07-a8d1-4ed2-b4b3-6510372ad7c5",
-            "ts": 1763606031,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "1603a837-9a48-4a63-b9bf-2ea83b9ab727",
-            "ts": 1763606032,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "9d32891d-49d2-447f-ba54-1b9ec5343e56",
-            "ts": 1763606103,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "998ec028-17f0-4d35-b65e-385254ce50d0",
-            "ts": 1763606201,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "ea742f8c-9875-4747-854a-1d364f9b12f4",
-            "ts": 1763606208,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "b5b70912-d187-4cfa-b2ea-c02b8d6585f5",
-            "ts": 1763606403,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "1d6f8396-0873-496b-a8cf-899be801df3d",
-            "ts": 1763606500,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "836f3425-a096-435f-924f-3f223ec79b2e",
-            "ts": 1763606501,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "6407796d-11d9-4820-af6d-6169e21a8536",
-            "ts": 1763606503,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "557911b4-538f-436d-8bbe-0d52d55efc18",
-            "ts": 1763606503,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "741cf5f7-413c-4971-a4f7-61f392de1ac0",
-            "ts": 1763606503,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "419b53f1-51e6-4186-afe7-c099217a268b",
-            "ts": 1763606507,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "8da8c3ab-2d0d-4289-bba2-23087f13f89f",
-            "ts": 1763606509,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "c506d2e7-e0f5-423f-b237-8db5abb78c61",
-            "ts": 1763606509,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "ee839ad0-3b99-4807-ae13-02cf190086fd",
-            "ts": 1763606510,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "cea3e65e-57c0-426e-8445-fbd386402ef8",
-            "ts": 1763606511,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "299f8e90-e206-4676-a81a-e0b988b6323c",
-            "ts": 1763606511,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "2299e53e-2bd2-4b5d-9708-6ae88c22f357",
-            "ts": 1763606511,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "11ebcb86-b6d9-490a-8079-9ec055aab810",
-            "ts": 1763606513,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "b7305dd2-c9f3-4e80-b380-d266b9226d21",
-            "ts": 1763606513,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "20de6616-a10b-4311-9cd0-02d375d76f58",
-            "ts": 1763606514,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "45d7cbce-c8b8-4d7d-b388-72a90dd640e3",
-            "ts": 1763606514,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "cc27388c-f50f-4a3a-b727-0608b134e7b0",
-            "ts": 1763606515,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          }
-        ],
+        "cmd_queue": [],
         "protected": true,
         "rotation": 0
       },
-      "SINGLE": {
-        "file": "users/test9_at_gmail.com/2025-11/a2ec1123-0807-4ff9-8dda-275854c32a33.webp",
-        "vertical": false,
+      "1931_screen2": {
         "horizontal": true,
-        "rotation": 0,
-        "protected": false,
+        "file": "users/test9_at_gmail.com/2025-11/e5ae6bcf-d004-4d00-a251-207d3996ad04.png",
         "playlist": [
           {
-            "id": "05c1e6e1-abcd-47d9-a32a-a0b921a98741",
-            "file": "users/test9_at_gmail.com/2025-11/a2ec1123-0807-4ff9-8dda-275854c32a33.webp",
+            "id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "file": "users/test9_at_gmail.com/2025-10/742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
             "enabled": true,
             "start": null,
             "end": null,
             "schedule": [],
-            "duration": 10,
+            "duration": 15,
             "repeat": true,
             "link_next": false,
-            "media_type": "animated"
+            "media_type": "image",
+            "effect": "slide-r"
+          },
+          {
+            "id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "file": "users/test9_at_gmail.com/2025-10/d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "enabled": true,
+            "start": null,
+            "end": null,
+            "schedule": [],
+            "duration": 15,
+            "repeat": true,
+            "link_next": false,
+            "media_type": "image",
+            "effect": "dissolve"
           }
         ],
+        "fresh": true,
         "rotation_meta": {
-          "last_index": 0,
-          "last_ts": 0
+          "last_index": 1,
+          "last_ts": 1762480110
         },
-        "last_seen": 1763208344,
         "events": [
           {
-            "ts": 1763208344,
+            "ts": 1762507231,
             "event": "load_ok",
-            "file": "a2ec1123-0807-4ff9-8dda-275854c32a33.webp",
-            "item_id": "05c1e6e1-abcd-47d9-a32a-a0b921a98741",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762507247,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762507263,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762507278,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762507294,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762507309,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762507325,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762507341,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762507356,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762507372,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762507387,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762507404,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762507419,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762507434,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762507450,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762507465,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762507481,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762507497,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762507512,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762507528,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762507544,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762507559,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762507575,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762507590,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762507606,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762507622,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762507637,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762507653,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762507668,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762507684,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762507700,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762507715,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762507731,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762507746,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762507762,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762507778,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762507793,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762507809,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762507824,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762507840,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762507856,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762507871,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762507887,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762507903,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762507918,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762507934,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762507949,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762507965,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762507980,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762507996,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762935030,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762935046,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762935062,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762935077,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762935093,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762935109,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762935124,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762935140,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762935155,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762935171,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762935187,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762935202,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762935218,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762935233,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762935249,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762935265,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762935280,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762935296,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762935311,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762935327,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762935343,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762935358,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762935374,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762935389,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762935405,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762935421,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762935436,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762935452,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762935467,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762935483,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762935499,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762935514,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762935530,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762935545,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762935561,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762935577,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762935592,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762935608,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762935624,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762935639,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762935655,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762935670,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762935686,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762935702,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762935717,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762935733,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762935748,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762935764,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
+            "error": null
+          },
+          {
+            "ts": 1762935780,
+            "event": "load_ok",
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe",
+            "error": null
+          },
+          {
+            "ts": 1762935795,
+            "event": "load_ok",
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010",
             "error": null
           }
         ],
         "last_item_status": {
-          "id:05c1e6e1-abcd-47d9-a32a-a0b921a98741": {
+          "id:d1b1a275-42e1-4b27-a273-d36c96789062": {
             "state": "ok",
-            "ts": 1763208344,
+            "ts": 1760918778,
             "error": null,
-            "file": "a2ec1123-0807-4ff9-8dda-275854c32a33.webp",
-            "item_id": "05c1e6e1-abcd-47d9-a32a-a0b921a98741"
+            "file": "7c29a95c-342e-4744-b12d-7f86ad6417b1.png",
+            "item_id": "d1b1a275-42e1-4b27-a273-d36c96789062"
+          },
+          "id:ee37b7ec-fcf4-4df9-aa64-e7c62f781c6d": {
+            "state": "ok",
+            "ts": 1762137385,
+            "error": null,
+            "file": "38531fbd-55ed-4c87-aa9e-576834c649d3-screen2.mp4",
+            "item_id": "ee37b7ec-fcf4-4df9-aa64-e7c62f781c6d"
+          },
+          "id:e9a68efb-b1c1-4a7b-94b5-781d6b406194": {
+            "state": "ok",
+            "ts": 1761110326,
+            "error": null,
+            "file": "1aecf5b0-7caf-47f4-9661-fd97351f13ae.png",
+            "item_id": "e9a68efb-b1c1-4a7b-94b5-781d6b406194"
+          },
+          "file:users/test9_at_gmail.com/2025-10/38531fbd-55ed-4c87-aa9e-576834c649d3-screen2.mp4": {
+            "state": "play_ok",
+            "ts": 1761960606,
+            "error": null,
+            "file": "users/test9_at_gmail.com/2025-10/38531fbd-55ed-4c87-aa9e-576834c649d3-screen2.mp4",
+            "item_id": null
+          },
+          "id:4b892f0d-4590-4384-b6b0-c68d17ceb010": {
+            "state": "ok",
+            "ts": 1762935795,
+            "error": null,
+            "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
+            "item_id": "4b892f0d-4590-4384-b6b0-c68d17ceb010"
+          },
+          "id:b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe": {
+            "state": "ok",
+            "ts": 1762935780,
+            "error": null,
+            "file": "d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": "b6d1e026-bbf4-4b0f-9d04-e6761c6c3ebe"
+          },
+          "id:2bde0d16-459b-497f-a1d1-3b7c56fd4d32": {
+            "state": "ok",
+            "ts": 1762256541,
+            "error": null,
+            "file": "e5ae6bcf-d004-4d00-a251-207d3996ad04.png",
+            "item_id": "2bde0d16-459b-497f-a1d1-3b7c56fd4d32"
+          },
+          "id:7b98421b-e3f8-481b-a804-91eee64d2f38": {
+            "state": "ok",
+            "ts": 1762383157,
+            "error": null,
+            "file": "e5ae6bcf-d004-4d00-a251-207d3996ad04.png",
+            "item_id": "7b98421b-e3f8-481b-a804-91eee64d2f38"
+          },
+          "file:users/test9_at_gmail.com/2025-10/d3775600-7487-4f52-a503-119f6bd5070a.jpeg": {
+            "state": "fail",
+            "ts": 1762480111,
+            "error": "media load failed",
+            "file": "users/test9_at_gmail.com/2025-10/d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
+            "item_id": null
           }
-        }
+        },
+        "last_seen": 1762935772,
+        "cmd_queue": [],
+        "protected": true
       },
       "1931_promo1": {
         "file": "users/test9_at_gmail.com/2025-10/4d0bed41-ae1c-42ea-b4cf-d9676ac7b6c1.jpg",
@@ -1153,8 +1988,15 @@
           "last_index": 2,
           "last_ts": 1761379521
         },
-        "last_seen": 1763208349,
+        "last_seen": 1762507781,
         "events": [
+          {
+            "ts": 1761798643,
+            "event": "load_ok",
+            "file": "users/test9_at_gmail.com/2025-10/9f0acfa0-d629-4a12-912f-1ae91d7e3a23.png",
+            "item_id": "a8166bf9-d4c9-4c94-81c4-67b4f9fb2ee4",
+            "error": null
+          },
           {
             "ts": 1761798647,
             "event": "playlist_reload",
@@ -1847,19 +2689,12 @@
             "file": "9f0acfa0-d629-4a12-912f-1ae91d7e3a23.png",
             "item_id": "a8166bf9-d4c9-4c94-81c4-67b4f9fb2ee4",
             "error": null
-          },
-          {
-            "ts": 1763208351,
-            "event": "load_ok",
-            "file": "9f0acfa0-d629-4a12-912f-1ae91d7e3a23.png",
-            "item_id": "a8166bf9-d4c9-4c94-81c4-67b4f9fb2ee4",
-            "error": null
           }
         ],
         "last_item_status": {
           "id:a8166bf9-d4c9-4c94-81c4-67b4f9fb2ee4": {
             "state": "ok",
-            "ts": 1763208351,
+            "ts": 1761877127,
             "error": null,
             "file": "9f0acfa0-d629-4a12-912f-1ae91d7e3a23.png",
             "item_id": "a8166bf9-d4c9-4c94-81c4-67b4f9fb2ee4"
@@ -1899,1235 +2734,139 @@
         "longitude": 150.9427428,
         "address": "Pizza Hut Express, Canley Vale Road, Canley Vale, Sydney, Fairfield City Council, New South Wales, 2166, Australia"
       },
-      "1931_screen2": {
-        "file": "users/test9_at_gmail.com/2025-11/fb76b860-eefc-41a3-ac15-8f6796036d75.png",
+      "SINGLE": {
+        "file": "users/test9_at_gmail.com/2025-11/a2ec1123-0807-4ff9-8dda-275854c32a33.webp",
         "vertical": false,
         "horizontal": true,
         "rotation": 0,
         "protected": false,
         "playlist": [
           {
-            "id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "file": "users/test9_at_gmail.com/2025-11/fb76b860-eefc-41a3-ac15-8f6796036d75.png",
+            "id": "05c1e6e1-abcd-47d9-a32a-a0b921a98741",
+            "file": "users/test9_at_gmail.com/2025-11/a2ec1123-0807-4ff9-8dda-275854c32a33.webp",
             "enabled": true,
             "start": null,
             "end": null,
             "schedule": [],
-            "duration": 27,
+            "duration": 10,
             "repeat": true,
             "link_next": false,
-            "media_type": "image"
+            "media_type": "animated"
           }
         ],
-        "fresh": true,
-        "rotation_meta": {
-          "last_index": 0,
-          "last_ts": 1763177531
-        },
-        "last_seen": 1763604988,
-        "events": [
-          {
-            "ts": 1763178111,
-            "event": "load_fail",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763178127,
-            "event": "media_load_error",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 3, Last: undefined"
-          },
-          {
-            "ts": 1763178127,
-            "event": "load_fail",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763178134,
-            "event": "load_fail",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763178162,
-            "event": "load_fail",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763178173,
-            "event": "load_fail",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763178184,
-            "event": "media_load_error",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 3, Last: undefined"
-          },
-          {
-            "ts": 1763178184,
-            "event": "load_fail",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763178195,
-            "event": "media_load_error",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 4, Last: undefined"
-          },
-          {
-            "ts": 1763178195,
-            "event": "load_fail",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763178205,
-            "event": "load_fail",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763178205,
-            "event": "media_load_error",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 5, Last: undefined"
-          },
-          {
-            "ts": 1763178216,
-            "event": "load_fail",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763178216,
-            "event": "media_load_error",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 6, Last: undefined"
-          },
-          {
-            "ts": 1763178227,
-            "event": "media_load_error",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 7, Last: undefined"
-          },
-          {
-            "ts": 1763178227,
-            "event": "load_fail",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763178237,
-            "event": "media_load_error",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 8, Last: undefined"
-          },
-          {
-            "ts": 1763178237,
-            "event": "load_fail",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763178248,
-            "event": "load_fail",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763178248,
-            "event": "media_load_error",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 9, Last: undefined"
-          },
-          {
-            "ts": 1763178259,
-            "event": "load_fail",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763178259,
-            "event": "media_load_error",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 10, Last: undefined"
-          },
-          {
-            "ts": 1763178269,
-            "event": "load_fail",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763178269,
-            "event": "media_load_error",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 11, Last: undefined"
-          },
-          {
-            "ts": 1763178280,
-            "event": "load_fail",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763178280,
-            "event": "media_load_error",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 12, Last: undefined"
-          },
-          {
-            "ts": 1763178291,
-            "event": "load_fail",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763178291,
-            "event": "media_load_error",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 13, Last: undefined"
-          },
-          {
-            "ts": 1763178301,
-            "event": "load_fail",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763178302,
-            "event": "media_load_error",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 14, Last: undefined"
-          },
-          {
-            "ts": 1763178312,
-            "event": "media_load_error",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 15, Last: undefined"
-          },
-          {
-            "ts": 1763178312,
-            "event": "load_fail",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763178323,
-            "event": "media_load_error",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 16, Last: undefined"
-          },
-          {
-            "ts": 1763178323,
-            "event": "load_fail",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763178333,
-            "event": "media_load_error",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 17, Last: undefined"
-          },
-          {
-            "ts": 1763178333,
-            "event": "load_fail",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763178344,
-            "event": "load_fail",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763178344,
-            "event": "media_load_error",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 18, Last: undefined"
-          },
-          {
-            "ts": 1763178355,
-            "event": "media_load_error",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 19, Last: undefined"
-          },
-          {
-            "ts": 1763178355,
-            "event": "load_fail",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763178365,
-            "event": "media_load_error",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 20, Last: undefined"
-          },
-          {
-            "ts": 1763178365,
-            "event": "load_fail",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763178376,
-            "event": "media_load_error",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 21, Last: undefined"
-          },
-          {
-            "ts": 1763178376,
-            "event": "load_fail",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763178387,
-            "event": "load_fail",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763178387,
-            "event": "media_load_error",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 22, Last: undefined"
-          },
-          {
-            "ts": 1763178397,
-            "event": "media_load_error",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 23, Last: undefined"
-          },
-          {
-            "ts": 1763178398,
-            "event": "load_fail",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763178408,
-            "event": "load_fail",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763178408,
-            "event": "media_load_error",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 24, Last: undefined"
-          },
-          {
-            "ts": 1763178419,
-            "event": "load_fail",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763178419,
-            "event": "media_load_error",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 25, Last: undefined"
-          },
-          {
-            "ts": 1763178430,
-            "event": "media_load_error",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 26, Last: undefined"
-          },
-          {
-            "ts": 1763178430,
-            "event": "load_fail",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763178622,
-            "event": "load_fail",
-            "file": "fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763179498,
-            "event": "load_fail",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763179508,
-            "event": "load_fail",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763179519,
-            "event": "media_load_error",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 3, Last: undefined"
-          },
-          {
-            "ts": 1763179519,
-            "event": "load_fail",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763179530,
-            "event": "media_load_error",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 4, Last: undefined"
-          },
-          {
-            "ts": 1763179530,
-            "event": "load_fail",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763179540,
-            "event": "media_load_error",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 5, Last: undefined"
-          },
-          {
-            "ts": 1763179540,
-            "event": "load_fail",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763179551,
-            "event": "load_fail",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763179551,
-            "event": "media_load_error",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 6, Last: undefined"
-          },
-          {
-            "ts": 1763179562,
-            "event": "media_load_error",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 7, Last: undefined"
-          },
-          {
-            "ts": 1763179562,
-            "event": "load_fail",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763179573,
-            "event": "media_load_error",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 8, Last: undefined"
-          },
-          {
-            "ts": 1763179573,
-            "event": "load_fail",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763179584,
-            "event": "load_fail",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763179584,
-            "event": "media_load_error",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 9, Last: undefined"
-          },
-          {
-            "ts": 1763179594,
-            "event": "media_load_error",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 10, Last: undefined"
-          },
-          {
-            "ts": 1763179594,
-            "event": "load_fail",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763179605,
-            "event": "media_load_error",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 11, Last: undefined"
-          },
-          {
-            "ts": 1763179605,
-            "event": "load_fail",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763179616,
-            "event": "media_load_error",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 12, Last: undefined"
-          },
-          {
-            "ts": 1763179616,
-            "event": "load_fail",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763179626,
-            "event": "load_fail",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763179626,
-            "event": "media_load_error",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 13, Last: undefined"
-          },
-          {
-            "ts": 1763179637,
-            "event": "load_fail",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763179637,
-            "event": "media_load_error",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 14, Last: undefined"
-          },
-          {
-            "ts": 1763179648,
-            "event": "media_load_error",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 15, Last: undefined"
-          },
-          {
-            "ts": 1763179648,
-            "event": "load_fail",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763179658,
-            "event": "media_load_error",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 16, Last: undefined"
-          },
-          {
-            "ts": 1763179658,
-            "event": "load_fail",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763179669,
-            "event": "media_load_error",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "Consecutive errors: 17, Last: undefined"
-          },
-          {
-            "ts": 1763179669,
-            "event": "load_fail",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": "[object Event]"
-          },
-          {
-            "ts": 1763180891,
-            "event": "load_ok",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": null
-          },
-          {
-            "ts": 1763182214,
-            "event": "load_ok",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": null
-          },
-          {
-            "ts": 1763183491,
-            "event": "load_ok",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": null
-          },
-          {
-            "ts": 1763193950,
-            "event": "load_ok",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": null
-          },
-          {
-            "ts": 1763193950,
-            "event": "load_ok",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": null
-          },
-          {
-            "ts": 1763197203,
-            "event": "load_ok",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": null
-          },
-          {
-            "ts": 1763208340,
-            "event": "load_ok",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": null
-          },
-          {
-            "ts": 1763274355,
-            "event": "load_ok",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": null
-          },
-          {
-            "ts": 1763338544,
-            "event": "load_ok",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": null
-          },
-          {
-            "ts": 1763421944,
-            "event": "load_ok",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": null
-          },
-          {
-            "ts": 1763434776,
-            "event": "load_ok",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": null
-          },
-          {
-            "ts": 1763510380,
-            "event": "load_ok",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": null
-          },
-          {
-            "ts": 1763597162,
-            "event": "load_ok",
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13",
-            "error": null
-          }
-        ],
-        "last_item_status": {
-          "id:38cce251-88a2-40cb-9557-e85dc4d0cf13": {
-            "state": "ok",
-            "ts": 1763597162,
-            "error": null,
-            "file": "09d19b87-381b-4161-9065-4779550bf3dd.png",
-            "item_id": "38cce251-88a2-40cb-9557-e85dc4d0cf13"
-          },
-          "file:users/test9_at_gmail.com/2025-11/fb76b860-eefc-41a3-ac15-8f6796036d75.png": {
-            "state": "fail",
-            "ts": 1763177531,
-            "error": "image too large",
-            "file": "users/test9_at_gmail.com/2025-11/fb76b860-eefc-41a3-ac15-8f6796036d75.png",
-            "item_id": null
-          }
-        },
-        "cmd_queue": [
-          {
-            "id": "cf8c71bf-f5d8-46ba-9e58-5dc3f950eb67",
-            "ts": 1763605700,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "c4fc49db-115e-469b-994b-5bb74bc378e6",
-            "ts": 1763606387,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "c4398af3-2b2e-4284-b41a-5b2f31598132",
-            "ts": 1763606518,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "e1903e4c-94d0-4c55-9d7d-3ffa8e873741",
-            "ts": 1763606518,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "b137a935-37a2-407d-8ea2-508777efe39c",
-            "ts": 1763606519,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "b20629cb-c057-4945-9637-28e3936e75aa",
-            "ts": 1763606519,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "44dce8fb-f0cc-4460-b84c-8fd7cb4893fc",
-            "ts": 1763606520,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "1baa6070-bec2-469a-bc1f-ee8dd7656012",
-            "ts": 1763606520,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "f911c961-761f-4fc3-a094-162fcd384c3f",
-            "ts": 1763606521,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "380d6300-5915-4306-be22-776ccd256ec4",
-            "ts": 1763606521,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "d8b7a88d-3bb9-4f95-b4fe-f9a61f1254bd",
-            "ts": 1763606522,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "9405f750-8954-4988-9734-ef0460b3f6bf",
-            "ts": 1763606522,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "dfa037a3-450e-45b7-a882-3ecd74c0f6e1",
-            "ts": 1763606523,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "81fe101a-3514-4b79-b727-30c7c069064b",
-            "ts": 1763606524,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "be5df38a-1b38-49bd-aa13-b64afdb063eb",
-            "ts": 1763606525,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "6e78ec34-7125-4a0f-a97d-1d29cd9e30f3",
-            "ts": 1763606525,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "edea6ead-dcf1-448b-802c-0fef03081a86",
-            "ts": 1763606526,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "2a1377d9-281d-4819-b2c2-15c94e0a9251",
-            "ts": 1763606526,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "38f9106a-2add-4abd-973b-3f27effb119f",
-            "ts": 1763606527,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          }
-        ]
-      },
-      "1931_screen3": {
-        "file": "users/test9_at_gmail.com/2025-09/b71138b4-8aeb-488e-bb97-586ca3dba1ee.mp4",
-        "vertical": false,
-        "horizontal": true,
-        "rotation": 0,
-        "protected": false,
-        "playlist": [
-          {
-            "id": "ab7bc1ef-7dd6-4817-8dec-7b5387e0723a",
-            "file": "users/test9_at_gmail.com/2025-10/a5311253-ce88-4453-9e64-3c5c36b2b6b9-screen4.mp4",
-            "enabled": true,
-            "start": null,
-            "end": null,
-            "schedule": [],
-            "duration": 7,
-            "repeat": true,
-            "link_next": false,
-            "media_type": "video",
-            "effect": "dissolve"
-          },
-          {
-            "id": "7acc1a89-ce44-4bc9-8c1c-8a60b7ba1ddd",
-            "file": "users/test9_at_gmail.com/2025-09/b71138b4-8aeb-488e-bb97-586ca3dba1ee.mp4",
-            "enabled": true,
-            "start": null,
-            "end": null,
-            "schedule": [],
-            "duration": 20,
-            "repeat": true,
-            "link_next": false,
-            "media_type": "video",
-            "effect": "slide-r"
-          }
-        ],
-        "fresh": true,
         "rotation_meta": {
           "last_index": 0,
           "last_ts": 0
         },
-        "cmd_queue": [
-          {
-            "id": "7f37ebcb-b8fe-4a67-862e-2c2d83a8cf7f",
-            "ts": 1763604692,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "e28d20f9-4c1d-4801-a11e-ef2ecd1af5d9",
-            "ts": 1763604692,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "fafaa7ee-cf4d-4057-9515-df240e3dbbdb",
-            "ts": 1763604694,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "1a294f60-c258-49c1-a915-a9fafb242c66",
-            "ts": 1763604695,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "0f6f75ab-b241-459f-baa6-6682e77cb0b1",
-            "ts": 1763604695,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "be35e73f-8288-468c-aa48-e12fcc013149",
-            "ts": 1763604696,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "ddfe5e2d-d1ae-4f19-8ac2-93741321a4d8",
-            "ts": 1763604696,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "681e48a4-3edd-4907-aea0-2c53dd1baff2",
-            "ts": 1763604697,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "bff95512-9d5d-43d9-9479-d1884db87122",
-            "ts": 1763604698,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "f8cf9bca-bf56-4b7b-ae70-c4215a8630f7",
-            "ts": 1763604698,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "98ad056e-5edb-4632-a4c0-5a942e371adf",
-            "ts": 1763604727,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "502ca77c-50c3-443b-a2d9-4e84759dc49a",
-            "ts": 1763604727,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "28981f2c-074a-475a-af14-2afeefae9475",
-            "ts": 1763604729,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "757cb178-3331-4b5d-be3e-30c0608bfd7d",
-            "ts": 1763604737,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "13352fc5-3ccc-4481-a540-3b119d1d8077",
-            "ts": 1763604759,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "17692e22-02c7-4518-ae55-31f4aba62156",
-            "ts": 1763604760,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "dc21c188-3e70-4023-8137-7378a536adf7",
-            "ts": 1763604762,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "aa99a93c-007b-40a6-a2ad-bc510096b7e3",
-            "ts": 1763604762,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "007b27b3-e715-4689-888e-ce7046b3e681",
-            "ts": 1763604768,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "d7ab95df-0393-4098-9c8e-b50bf5344822",
-            "ts": 1763604796,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "51663fc5-5e22-4dbf-8ae3-028ef270a65c",
-            "ts": 1763604804,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "adf4bc14-f996-4bce-b224-4ef4c1e01a4e",
-            "ts": 1763604805,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "d1e3ee64-6c01-47c2-90d2-ba15c0e77e17",
-            "ts": 1763604808,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "e2f416f4-9862-435a-a9e3-60fbfacb29b9",
-            "ts": 1763604814,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "62b38f30-be2d-46b0-ba0e-e043f80032eb",
-            "ts": 1763604817,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "768af3e5-e726-44d7-abbd-dda185e0cd3c",
-            "ts": 1763604818,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "16293ac5-b0ef-4e1b-9785-4a67c59d57c0",
-            "ts": 1763604819,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "b4943aae-a1a8-4cbe-b1be-e9e2b29bce48",
-            "ts": 1763604820,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "fdc5f847-2c76-46d3-be1d-5cfe98ab56c3",
-            "ts": 1763604821,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "5a2d2d8c-6e16-4f19-a5c7-96da6963228a",
-            "ts": 1763604822,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "adc8401e-a9fc-4103-8732-24ef7b2fe61b",
-            "ts": 1763604822,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "df384f74-0a00-4b5a-8850-61661f1f3f18",
-            "ts": 1763604823,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "4ca5b62f-ebb4-4962-9411-de857cf7be0c",
-            "ts": 1763604982,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "f9d4c57d-6e0e-45fd-ad8b-b45d116dfcef",
-            "ts": 1763604982,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "a120cc68-56b4-42f9-8977-dbc6cb747c9d",
-            "ts": 1763604983,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "9e32abc0-da82-463e-8403-3cd234c0e0a3",
-            "ts": 1763606539,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "2dc2909f-8520-43d8-8401-8af5dd81a2dd",
-            "ts": 1763606540,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "4c3af25b-48ce-4489-933d-073fd64bc3e6",
-            "ts": 1763606540,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "f29b9b7b-9d51-4b85-ac2d-41b66d89529d",
-            "ts": 1763606541,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "e88dda24-bbdf-4dab-a948-30d3634cb832",
-            "ts": 1763606541,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "9687cc0c-263a-41d3-9c73-6759b0172c23",
-            "ts": 1763606542,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "0a03a27c-1f52-4a48-a8e7-05273d8ff2de",
-            "ts": 1763606542,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "5270ca52-add0-41e6-b4f7-059faa6d989c",
-            "ts": 1763606543,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "701f20fd-6423-4d02-93cd-2727eca358ac",
-            "ts": 1763606553,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          }
-        ]
+        "last_seen": 1762171591
+      },
+      "1787_screen3": {
+        "file": null,
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1712_screen3": {
+        "file": null,
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1897_promo2": {
+        "file": null,
+        "vertical": true,
+        "horizontal": false,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1897_screen3": {
+        "file": null,
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1111_promo2": {
+        "file": null,
+        "vertical": true,
+        "horizontal": false,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1000_screen3": {
+        "file": null,
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1887_screen3": {
+        "file": null,
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1887_promo2": {
+        "file": null,
+        "vertical": true,
+        "horizontal": false,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1887_promo3": {
+        "file": null,
+        "vertical": true,
+        "horizontal": false,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
       }
     },
     "1887": {
@@ -3139,102 +2878,24 @@
         "protected": false,
         "playlist": [
           {
-            "file": "users/test9_at_gmail.com/2025-11/09d19b87-381b-4161-9065-4779550bf3dd.png",
+            "file": "users/test9_at_gmail.com/2025-10/e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
             "enabled": true,
             "start": null,
             "end": null,
             "schedule": [],
-            "duration": 20,
+            "duration": 10,
             "repeat": true,
             "link_next": false,
             "media_type": "image",
             "id": "c6cae1d2-22f9-404c-bd53-0e56b7d6aff5"
           }
         ],
-        "cmd_queue": [
-          {
-            "id": "f8aca94e-1f35-4434-8eb7-b048b95e5bb5",
-            "ts": 1762999926,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "42512889-fac8-44ac-8cae-537c4a7add76",
-            "ts": 1762999958,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "df2dc1f2-8475-4d12-8953-505a088aa887",
-            "ts": 1762999958,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "ae8ff10c-26ae-4bbd-bdad-8adbd8b6b302",
-            "ts": 1762999960,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "be85377e-0769-4b8b-90e7-97e6198bacc2",
-            "ts": 1762999961,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "35d67c7f-c1a7-4533-aeb7-53dabda8c876",
-            "ts": 1762999961,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "367485d5-59a4-4c2f-86f0-f768cf599100",
-            "ts": 1762999961,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "c762a5fa-c4d5-46e7-b585-26852752c985",
-            "ts": 1762999963,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "1d004bb7-c02b-4e9a-ac3b-0c7612ef9193",
-            "ts": 1762999964,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "dd38eccf-524f-4823-b8b3-b638229b927b",
-            "ts": 1762999964,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "24535012-13c2-4805-8865-2490320519fe",
-            "ts": 1762999965,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          }
-        ],
+        "cmd_queue": [],
         "rotation_meta": {
           "last_index": 0,
           "last_ts": 0
         },
-        "last_seen": 1762965570,
+        "last_seen": 1762935788,
         "events": [
           {
             "ts": 1762341804,
@@ -3276,17 +2937,17 @@
         "protected": false,
         "playlist": [
           {
-            "file": "users/test9_at_gmail.com/2025-11/fb76b860-eefc-41a3-ac15-8f6796036d75.png",
+            "file": "users/test9_at_gmail.com/2025-10/d3775600-7487-4f52-a503-119f6bd5070a.jpeg",
             "enabled": true,
             "start": null,
             "end": null,
             "schedule": [],
-            "duration": 20,
+            "duration": 10,
             "repeat": true,
             "link_next": false,
             "media_type": "image",
             "id": "7cf613f1-aabf-4489-8904-32e310553162",
-            "effect": "dissolve"
+            "effect": "fade"
           }
         ],
         "cmd_queue": [
@@ -3300,90 +2961,6 @@
           {
             "id": "cc5e8c67-46f6-48be-99ea-e8a5544fccdd",
             "ts": 1762140621,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "e288635e-77aa-4aed-8d5a-4e7870e6588a",
-            "ts": 1762999937,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "e93e0948-037d-4231-b21c-8903b40c652e",
-            "ts": 1762999945,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "b1fce7b9-da85-4792-87bb-7ceca50bfe82",
-            "ts": 1762999946,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "362d23d1-07ff-459f-9afb-5ecfcc9cca77",
-            "ts": 1762999947,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "f7551b2a-e06b-454a-ac3b-c4f58894c5d6",
-            "ts": 1762999948,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "f1170a8a-fed1-4df4-81e2-af6b9bc9ae12",
-            "ts": 1762999950,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "d3e9b487-cebe-46ac-9a46-c3acd75af433",
-            "ts": 1762999951,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "b31a7ea8-79e7-4a00-bbd8-7feb2fba3f08",
-            "ts": 1762999951,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "d5d540d2-fce7-4f95-9b16-26f17e9d6236",
-            "ts": 1762999952,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "b2f03427-1097-457b-b8c1-81544e77af2b",
-            "ts": 1762999953,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "0492d303-948b-4a9b-b305-57b1aa075757",
-            "ts": 1762999953,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "30294ed5-4011-488e-8366-1d01fbb151e8",
-            "ts": 1762999954,
             "type": "reload",
             "item_id": null,
             "file": null
@@ -3426,111 +3003,19 @@
             "start": null,
             "end": null,
             "schedule": [],
-            "duration": 20,
+            "duration": 10,
             "repeat": true,
             "link_next": false,
             "media_type": "image",
             "id": "25330ce4-a2b7-41a1-9b98-22d6ff12c590"
           }
         ],
-        "cmd_queue": [
-          {
-            "id": "27824c4d-2215-4005-820c-36a5752b05b9",
-            "ts": 1762999973,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "964de7bb-e1b8-460e-9aa4-60e30ee302f0",
-            "ts": 1762999974,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "d776a33b-5644-4182-bd3c-3de8f390e65a",
-            "ts": 1762999975,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "0f3a7f38-426e-4492-afc7-6d3b442f152a",
-            "ts": 1762999975,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "9e553a40-4cc7-41a4-bf0c-d7378d29f9a6",
-            "ts": 1762999977,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "18df780f-6b85-44a1-80a1-d218262944dd",
-            "ts": 1762999978,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "884f8acd-a0da-4cfe-a044-3539f69c8df0",
-            "ts": 1762999979,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "c2af89b7-eab9-433e-82f0-6bd0e8cac40f",
-            "ts": 1762999980,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "98a35c03-01bd-4bbe-ba83-c1f7f995d2b0",
-            "ts": 1762999980,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "39b3a998-fe0f-4e07-8d80-64fc56d2636d",
-            "ts": 1762999981,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "5de66405-025f-4d11-9cff-6b90e0ba646b",
-            "ts": 1762999981,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "3ecf7843-523b-473a-bef3-6fc9154d8e80",
-            "ts": 1762999982,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          },
-          {
-            "id": "4c5a8546-3fe1-4c75-a8d6-e1eacf3d5f72",
-            "ts": 1762999982,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          }
-        ],
+        "cmd_queue": [],
         "rotation_meta": {
           "last_index": 0,
           "last_ts": 0
         },
-        "last_seen": 1762965257
+        "last_seen": 1762935776
       },
       "1887_promo1": {
         "file": "users/test9_at_gmail.com/2025-10/daae16ce-79f0-4528-9e24-8d3d59436cde.png",
@@ -3817,30 +3302,6 @@
           }
         ],
         "fresh": true,
-        "rotation_meta": {
-          "last_index": 0,
-          "last_ts": 0
-        }
-      },
-      "1887_promo2": {
-        "file": null,
-        "vertical": true,
-        "horizontal": false,
-        "rotation": 0,
-        "protected": false,
-        "playlist": [],
-        "rotation_meta": {
-          "last_index": 0,
-          "last_ts": 0
-        }
-      },
-      "1887_promo3": {
-        "file": null,
-        "vertical": true,
-        "horizontal": false,
-        "rotation": 0,
-        "protected": false,
-        "playlist": [],
         "rotation_meta": {
           "last_index": 0,
           "last_ts": 0
@@ -5967,8 +5428,22 @@
           "last_index": 0,
           "last_ts": 0
         },
-        "last_seen": 1763178461,
+        "last_seen": 1762507994,
         "events": [
+          {
+            "ts": 1762240260,
+            "event": "load_ok",
+            "file": "0a326ff9-89ab-489b-a6de-11a2b0515c02.webp",
+            "item_id": "83bb872d-7cf8-4858-bc1c-cca370966955",
+            "error": null
+          },
+          {
+            "ts": 1762240272,
+            "event": "load_ok",
+            "file": "00659098-c6b8-4307-bb5e-0442adc4d468-screen1.mp4",
+            "item_id": "d3301221-a67b-48d7-9052-9da137f6516a",
+            "error": null
+          },
           {
             "ts": 1762240282,
             "event": "load_ok",
@@ -6654,27 +6129,13 @@
             "file": "00659098-c6b8-4307-bb5e-0442adc4d468-screen1.mp4",
             "item_id": "d3301221-a67b-48d7-9052-9da137f6516a",
             "error": null
-          },
-          {
-            "ts": 1763096302,
-            "event": "load_ok",
-            "file": "00659098-c6b8-4307-bb5e-0442adc4d468-screen1.mp4",
-            "item_id": "d3301221-a67b-48d7-9052-9da137f6516a",
-            "error": null
-          },
-          {
-            "ts": 1763178468,
-            "event": "load_fail",
-            "file": "00659098-c6b8-4307-bb5e-0442adc4d468-screen1.mp4",
-            "item_id": "d3301221-a67b-48d7-9052-9da137f6516a",
-            "error": "video error: unknown"
           }
         ],
         "last_item_status": {
           "id:d3301221-a67b-48d7-9052-9da137f6516a": {
-            "state": "fail",
-            "ts": 1763178468,
-            "error": "video error: unknown",
+            "state": "ok",
+            "ts": 1762245930,
+            "error": null,
             "file": "00659098-c6b8-4307-bb5e-0442adc4d468-screen1.mp4",
             "item_id": "d3301221-a67b-48d7-9052-9da137f6516a"
           },
@@ -6735,8 +6196,15 @@
           "last_index": 0,
           "last_ts": 0
         },
-        "last_seen": 1763178449,
+        "last_seen": 1762507993,
         "events": [
+          {
+            "ts": 1762241938,
+            "event": "load_ok",
+            "file": "00659098-c6b8-4307-bb5e-0442adc4d468-screen2.mp4",
+            "item_id": "fe34df3c-0ea3-4aea-93a0-cac6e106f798",
+            "error": null
+          },
           {
             "ts": 1762241969,
             "event": "load_ok",
@@ -7429,20 +6897,13 @@
             "file": "00659098-c6b8-4307-bb5e-0442adc4d468-screen2.mp4",
             "item_id": "fe34df3c-0ea3-4aea-93a0-cac6e106f798",
             "error": null
-          },
-          {
-            "ts": 1763178456,
-            "event": "load_fail",
-            "file": "00659098-c6b8-4307-bb5e-0442adc4d468-screen2.mp4",
-            "item_id": "fe34df3c-0ea3-4aea-93a0-cac6e106f798",
-            "error": "video error: unknown"
           }
         ],
         "last_item_status": {
           "id:fe34df3c-0ea3-4aea-93a0-cac6e106f798": {
-            "state": "fail",
-            "ts": 1763178456,
-            "error": "video error: unknown",
+            "state": "ok",
+            "ts": 1762502080,
+            "error": null,
             "file": "00659098-c6b8-4307-bb5e-0442adc4d468-screen2.mp4",
             "item_id": "fe34df3c-0ea3-4aea-93a0-cac6e106f798"
           },
@@ -7455,6 +6916,30 @@
           }
         },
         "cmd_queue": []
+      },
+      "1000_screen3": {
+        "file": null,
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1712_screen3": {
+        "file": null,
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
       }
     },
     "1897": {
@@ -7938,7 +7423,7 @@
           "last_index": 0,
           "last_ts": 0
         },
-        "last_seen": 1763685977,
+        "last_seen": 1762507997,
         "events": [
           {
             "ts": 1762335039,
@@ -7988,61 +7473,12 @@
             "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
             "item_id": "bd7bd32d-d625-427d-b86f-6ad1e899ad14",
             "error": null
-          },
-          {
-            "ts": 1763163295,
-            "event": "load_ok",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "bd7bd32d-d625-427d-b86f-6ad1e899ad14",
-            "error": null
-          },
-          {
-            "ts": 1763251288,
-            "event": "load_ok",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "bd7bd32d-d625-427d-b86f-6ad1e899ad14",
-            "error": null
-          },
-          {
-            "ts": 1763336674,
-            "event": "load_ok",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "bd7bd32d-d625-427d-b86f-6ad1e899ad14",
-            "error": null
-          },
-          {
-            "ts": 1763436956,
-            "event": "load_ok",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "bd7bd32d-d625-427d-b86f-6ad1e899ad14",
-            "error": null
-          },
-          {
-            "ts": 1763517186,
-            "event": "load_ok",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "bd7bd32d-d625-427d-b86f-6ad1e899ad14",
-            "error": null
-          },
-          {
-            "ts": 1763606006,
-            "event": "load_ok",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "bd7bd32d-d625-427d-b86f-6ad1e899ad14",
-            "error": null
-          },
-          {
-            "ts": 1763683368,
-            "event": "load_ok",
-            "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
-            "item_id": "bd7bd32d-d625-427d-b86f-6ad1e899ad14",
-            "error": null
           }
         ],
         "last_item_status": {
           "id:bd7bd32d-d625-427d-b86f-6ad1e899ad14": {
             "state": "ok",
-            "ts": 1763683368,
+            "ts": 1762502078,
             "error": null,
             "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
             "item_id": "bd7bd32d-d625-427d-b86f-6ad1e899ad14"
@@ -9008,7 +8444,7 @@
           "last_index": 0,
           "last_ts": 0
         },
-        "last_seen": 1763164450
+        "last_seen": 1762935789
       },
       "5022_screen2": {
         "file": null,
@@ -9022,65 +8458,8 @@
           "last_index": 0,
           "last_ts": 0
         },
-        "last_seen": 1763164453
-      }
-    },
-    "7777": {
-      "7777_screen1": {
-        "file": "users/test9_at_gmail.com/2025-11/c9143a65-cf43-461b-95d9-fc46354bfb38.png",
-        "vertical": false,
-        "horizontal": true,
-        "rotation": 0,
-        "protected": false,
-        "playlist": [
-          {
-            "file": "users/test9_at_gmail.com/2025-11/c9143a65-cf43-461b-95d9-fc46354bfb38.png",
-            "enabled": true,
-            "start": null,
-            "end": null,
-            "schedule": [],
-            "duration": 10,
-            "repeat": true,
-            "link_next": false,
-            "media_type": "image",
-            "effect": "",
-            "days": [],
-            "id": "ccb90856-92df-4a6c-b615-2ba98cad3f3a"
-          }
-        ],
-        "fresh": true,
-        "rotation_meta": {
-          "last_index": 0,
-          "last_ts": 0
-        },
-        "cmd_queue": [
-          {
-            "id": "e651d0e9-df00-4261-a8a0-ce3514348479",
-            "ts": 1763607321,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          }
-        ]
+        "last_seen": 1762935790
       }
     }
-  },
-  "store_groups": [
-    {
-      "id": "group_1763607230786",
-      "name": "nsw",
-      "store_ids": [
-        "1897",
-        "7777"
-      ]
-    },
-    {
-      "id": "group_1763607255650",
-      "name": "act",
-      "store_ids": [
-        "1887",
-        "1891"
-      ]
-    }
-  ]
+  }
 }

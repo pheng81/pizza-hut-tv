@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Account Settings • EverydayAdvertise</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #ffffff;
+      min-height: 100vh;
+      color: #1d1d1f;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .header {
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 20px;
+      padding: 24px 32px;
+      margin-bottom: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 28px;
+      color: #1e293b;
+    }
+    .header .user-email {
+      color: #64748b;
+      font-size: 14px;
+    }
+    .header .btn {
+      background: #6366f1;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 10px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+      border: none;
+      cursor: pointer;
+    }
+    .header .btn:hover {
+      background: #4f46e5;
+      transform: translateY(-1px);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 20px;
+      padding: 28px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+    }
+    .card h2 {
+      margin: 0 0 20px;
+      font-size: 20px;
+      color: #1e293b;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .card h2::before {
+      content: '';
+      display: inline-block;
+      width: 4px;
+      height: 24px;
+      background: linear-gradient(135deg, #6366f1, #14b8a6);
+      border-radius: 2px;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .status-badge.active {
+      background: rgba(34, 197, 94, 0.15);
+      color: #16a34a;
+    }
+    .status-badge.trial {
+      background: rgba(59, 130, 246, 0.15);
+      color: #2563eb;
+    }
+    .status-badge.canceled {
+      background: rgba(251, 146, 60, 0.15);
+      color: #ea580c;
+    }
+    .status-badge.inactive {
+      background: rgba(239, 68, 68, 0.15);
+      color: #dc2626;
+    }
+    .status-badge::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin: 20px 0;
+    }
+    .stat {
+      background: #f8fafc;
+      padding: 16px;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+    }
+    .stat-label {
+      font-size: 12px;
+      color: #64748b;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #1e293b;
+    }
+    .stat-value.highlight {
+      color: #6366f1;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid #e2e8f0;
+      font-size: 14px;
+    }
+    .info-row:last-child {
+      border-bottom: none;
+    }
+    .info-label {
+      color: #64748b;
+      font-weight: 500;
+    }
+    .info-value {
+      color: #1e293b;
+      font-weight: 600;
+    }
+    .btn {
+      background: #6366f1;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 10px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+      border: none;
+      cursor: pointer;
+      display: inline-block;
+      text-align: center;
+    }
+    .btn:hover {
+      background: #4f46e5;
+      transform: translateY(-1px);
+    }
+    .btn-secondary {
+      background: #f1f5f9;
+      color: #475569;
+    }
+    .btn-secondary:hover {
+      background: #e2e8f0;
+    }
+    .btn-danger {
+      background: #ef4444;
+      color: white;
+    }
+    .btn-danger:hover {
+      background: #dc2626;
+    }
+    .btn-success {
+      background: #10b981;
+      color: white;
+    }
+    .btn-success:hover {
+      background: #059669;
+    }
+    .btn-block {
+      width: 100%;
+      margin-top: 16px;
+    }
+    .alert {
+      padding: 14px 18px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .alert-success {
+      background: #dcfce7;
+      color: #166534;
+      border: 1px solid #bbf7d0;
+    }
+    .alert-error {
+      background: #fee2e2;
+      color: #991b1b;
+      border: 1px solid #fecaca;
+    }
+    .alert-warning {
+      background: #fef3c7;
+      color: #92400e;
+      border: 1px solid #fde68a;
+    }
+    .billing-history {
+      margin-top: 20px;
+    }
+    .invoice-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      background: #f8fafc;
+      border-radius: 10px;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+    .invoice-item:last-child {
+      margin-bottom: 0;
+    }
+    .invoice-date {
+      color: #64748b;
+      font-weight: 500;
+    }
+    .invoice-amount {
+      color: #1e293b;
+      font-weight: 700;
+    }
+    .invoice-status {
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: capitalize;
+    }
+    .invoice-status.paid {
+      background: rgba(34, 197, 94, 0.15);
+      color: #16a34a;
+    }
+    .invoice-link {
+      color: #6366f1;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .invoice-link:hover {
+      text-decoration: underline;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #94a3b8;
+      font-size: 14px;
+    }
+    form {
+      display: inline;
+    }
+    .countdown {
+      font-size: 32px;
+      font-weight: 700;
+      color: #6366f1;
+      text-align: center;
+      margin: 16px 0;
+    }
+    .countdown-label {
+      text-align: center;
+      color: #64748b;
+      font-size: 13px;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div>
+        <h1>My Account</h1>
+        <div class="user-email">{{ user_info.email }}</div>
+      </div>
+      <a href="{{ url_for('dashboard') }}" class="btn">← Back to Dashboard</a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert {{ 'alert-success' if category == 'success' else 'alert-error' }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <div class="grid">
+      <!-- Subscription Status -->
+      <div class="card">
+        <h2>Subscription Status</h2>
+        
+        {% if has_active %}
+          {% if is_trial %}
+            <span class="status-badge trial">Free Trial</span>
+            {% if trial_days_left is not none %}
+              <div class="countdown">{{ trial_days_left }}</div>
+              <div class="countdown-label">Days Left in Trial</div>
+            {% endif %}
+          {% elif is_canceled %}
+            <span class="status-badge canceled">Canceled</span>
+            <div class="alert alert-warning" style="margin-top: 16px;">
+              Your subscription is canceled and will end on <strong>{{ next_billing_date }}</strong>. 
+              You can reactivate anytime before then.
+            </div>
+          {% else %}
+            <span class="status-badge active">Active</span>
+          {% endif %}
+
+          <div class="stat-grid">
+            <div class="stat">
+              <div class="stat-label">Screens</div>
+              <div class="stat-value highlight">{{ screen_count }}</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Days Until Renewal</div>
+              <div class="stat-value">{{ days_remaining if days_remaining is not none else '—' }}</div>
+            </div>
+          </div>
+
+          <div class="info-row">
+            <span class="info-label">Next Billing Date</span>
+            <span class="info-value">{{ next_billing_date or 'N/A' }}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Plan</span>
+            <span class="info-value">{{ price_display or '$5/screen/month' }}</span>
+          </div>
+
+          {% if is_canceled %}
+            <form method="post" action="{{ url_for('reactivate_subscription') }}">
+              <button type="submit" class="btn btn-success btn-block">Reactivate Subscription</button>
+            </form>
+          {% else %}
+            <form method="post" action="{{ url_for('cancel_subscription') }}" 
+                  onsubmit="return confirm('Are you sure you want to cancel your subscription? Your service will continue until {{ next_billing_date }}.')">
+              <button type="submit" class="btn btn-danger btn-block">Cancel Subscription</button>
+            </form>
+          {% endif %}
+        {% else %}
+          <span class="status-badge inactive">No Active Subscription</span>
+          <div class="alert alert-error" style="margin-top: 16px;">
+            You don't have an active subscription. Subscribe now to keep your screens online.
+          </div>
+          <a href="{{ url_for('subscribe') }}" class="btn btn-block">Start Subscription</a>
+        {% endif %}
+      </div>
+
+      <!-- Account Information -->
+      <div class="card">
+        <h2>Account Information</h2>
+        
+        <div class="info-row">
+          <span class="info-label">Email</span>
+          <span class="info-value">{{ user_info.email }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Account Type</span>
+          <span class="info-value">{{ 'Administrator' if user_info.is_admin else 'Standard User' }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Member Since</span>
+          <span class="info-value">{{ account_created or 'Unknown' }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Total Screens</span>
+          <span class="info-value">{{ screen_count }}</span>
+        </div>
+
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-block">Manage Screens</a>
+      </div>
+    </div>
+
+    <!-- Billing History -->
+    {% if billing_history %}
+    <div class="card">
+      <h2>Billing History</h2>
+      <div class="billing-history">
+        {% for invoice in billing_history %}
+          <div class="invoice-item">
+            <div>
+              <div class="invoice-date">{{ invoice.date }}</div>
+              <span class="invoice-status {{ invoice.status }}">{{ invoice.status }}</span>
+            </div>
+            <div style="text-align: right;">
+              <div class="invoice-amount">{{ invoice.amount }}</div>
+              {% if invoice.invoice_pdf %}
+                <a href="{{ invoice.invoice_pdf }}" target="_blank" class="invoice-link">Download PDF</a>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Quick Actions -->
+    <div class="card">
+      <h2>Quick Actions</h2>
+      <div style="display: grid; gap: 12px;">
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Manage Screens</a>
+        {% if not has_active %}
+          <a href="{{ url_for('subscribe') }}" class="btn">Start Subscription</a>
+        {% endif %}
+        <a href="mailto:support@everydayadvertise.com" class="btn btn-secondary">Contact Support</a>
+      </div>
+    </div>
+  </div>
+</body>
+{% include '_cookie_consent.html' %}
+</html>

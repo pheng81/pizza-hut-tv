@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cancellation Feedback - Super Admin</title>
+  <style>
+    :root { 
+      --bg: #f8f9fa; 
+      --panel: #ffffff; 
+      --text: #1a1a1a; 
+      --muted: #6c757d; 
+      --border: #e1e4e8; 
+      --brand: #0066cc; 
+      --brand-hover: #0052a3;
+      --danger: #dc3545;
+      --warning: #ffc107;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    }
+    * { box-sizing:border-box; margin:0; padding:0 }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: var(--bg); 
+      color: var(--text); 
+      line-height: 1.6;
+    }
+    header { 
+      display:flex; 
+      align-items:center; 
+      justify-content:space-between; 
+      padding:20px 32px; 
+      background: #2d3748;
+      color: white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .brand { 
+      font-weight:700; 
+      font-size: 18px;
+    }
+    main { padding:32px; max-width:1400px; margin:0 auto }
+    .page-title { 
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+    .page-subtitle {
+      color: var(--muted);
+      margin-bottom: 32px;
+      font-size: 15px;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      margin-bottom: 32px;
+    }
+    .stat-card {
+      background: var(--panel);
+      padding: 20px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+    }
+    .stat-label {
+      font-size: 13px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--brand);
+    }
+    .card { 
+      background: var(--panel); 
+      border:1px solid var(--border); 
+      border-radius:8px; 
+      padding:24px;
+      box-shadow: var(--shadow);
+      margin-bottom: 24px;
+    }
+    table { 
+      width:100%; 
+      border-collapse: collapse; 
+      font-size:14px;
+    }
+    th, td { 
+      text-align:left; 
+      padding:12px 10px; 
+      border-bottom:1px solid var(--border);
+    }
+    th { 
+      color: var(--muted); 
+      font-weight:600;
+      background: #f8f9fa;
+      position: sticky;
+      top: 0;
+    }
+    tr:hover { background: #f8f9fa; }
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    .btn--ghost {
+      background: transparent;
+      color: white;
+      border: 1px solid rgba(255,255,255,0.3);
+    }
+    .btn--ghost:hover {
+      background: rgba(255,255,255,0.1);
+      border-color: rgba(255,255,255,0.5);
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .badge--expensive {
+      background: #fff3cd;
+      color: #856404;
+    }
+    .badge--alternative {
+      background: #d1ecf1;
+      color: #0c5460;
+    }
+    .badge--no-need {
+      background: #d4edda;
+      color: #155724;
+    }
+    .badge--other {
+      background: #e2e3e5;
+      color: #383d41;
+    }
+    .feedback-text {
+      font-style: italic;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">📊 Cancellation Feedback</div>
+    <a href="/superadmin/dashboard" class="btn btn--ghost">← Back to Dashboard</a>
+  </header>
+  <main>
+    <div class="page-title">Cancellation Feedback</div>
+    <div class="page-subtitle">View reasons why users cancelled their screen subscriptions</div>
+
+    {% if feedbacks %}
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total Feedbacks</div>
+          <div class="stat-value">{{ feedbacks | length }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Too Expensive</div>
+          <div class="stat-value">{{ feedbacks | selectattr('reason', 'equalto', "It's too expensive") | list | length }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Found Alternative</div>
+          <div class="stat-value">{{ feedbacks | selectattr('reason', 'equalto', 'I found an alternative') | list | length }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">No Longer Need</div>
+          <div class="stat-value">{{ feedbacks | selectattr('reason', 'equalto', 'I no longer need it') | list | length }}</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>User</th>
+              <th>Screen</th>
+              <th>Reason</th>
+              <th>Additional Feedback</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for fb in feedbacks %}
+              <tr>
+                <td>{{ fb.created_at[:10] if fb.created_at else 'N/A' }}</td>
+                <td>{{ fb.username }}</td>
+                <td>
+                  <strong>{{ fb.screen_name }}</strong><br>
+                  <small style="color: var(--muted);">{{ fb.screen_id }}</small>
+                </td>
+                <td>
+                  {% if fb.reason == "It's too expensive" %}
+                    <span class="badge badge--expensive">💸 Too Expensive</span>
+                  {% elif fb.reason == 'I found an alternative' %}
+                    <span class="badge badge--alternative">🔄 Found Alternative</span>
+                  {% elif fb.reason == 'I no longer need it' %}
+                    <span class="badge badge--no-need">✅ No Longer Need</span>
+                  {% else %}
+                    <span class="badge badge--other">💭 {{ fb.reason }}</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if fb.feedback_text %}
+                    <div class="feedback-text">"{{ fb.feedback_text }}"</div>
+                  {% else %}
+                    <span style="color: var(--muted);">No additional feedback</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="card">
+        <div class="empty-state">
+          <h3>No Feedback Yet</h3>
+          <p>Cancellation feedback will appear here when users cancel their screen subscriptions.</p>
+        </div>
+      </div>
+    {% endif %}
+  </main>
+</body>
+</html>
