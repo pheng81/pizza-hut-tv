@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <!-- Gradient rounded rectangle background -->
+    <path
+        android:fillType="evenOdd"
+        android:pathData="M18,0 L82,0 Q100,0 100,18 L100,82 Q100,100 82,100 L18,100 Q0,100 0,82 L0,18 Q0,0 18,0 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0"
+                android:startY="50"
+                android:endX="100"
+                android:endY="50">
+                <item android:offset="0" android:color="#ff2d84"/>
+                <item android:offset="0.5" android:color="#b544ff"/>
+                <item android:offset="1" android:color="#3c6cff"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- EA letters in white -->
+    <!-- E -->
+    <path
+        android:fillColor="#ffffff"
+        android:pathData="M12,36 H46 v8 H20 v6 H42 v8 H20 v6 H46 v8 H12 Z"/>
+
+    <!-- A (stylized) -->
+    <path
+        android:fillColor="#ffffff"
+        android:pathData="M58,36 H78 q8,0 13,5 t5,13 q0,8 -5,13 t-13,5 H66 v10 H58 Z M66,48 v18 h12 q4,0 6,-3 t2,-6 q0,-4 -2,-6 t-6,-3 Z"/>
+</vector>

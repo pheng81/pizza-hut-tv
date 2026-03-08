@@ -1,0 +1,86 @@
+plugins {
+	id 'com.android.application'
+	id 'org.jetbrains.kotlin.android'
+}
+
+android {
+	namespace 'com.everydayadvertise.tv'
+	compileSdk 35
+
+	signingConfigs {
+		release {
+			storeFile file("../everydayadvertise.keystore")
+			storePassword "EverydayAdvertise2025!"
+			keyAlias "everydayadvertise"
+			keyPassword "EverydayAdvertise2025!"
+		}
+	}
+
+	defaultConfig {
+		applicationId 'com.everydayadvertise.tv'
+		minSdk 21
+		targetSdk 35
+		versionCode = 48
+		versionName "1.6"
+	// Allow overriding BASE URL at build time (e.g. -PPHTV_BASE_URL="https://everydayadvertise.com/")
+	def suppliedBase = project.findProperty('PHTV_BASE_URL') as String
+	def defaultProd = 'https://everydayadvertise.com/'
+	def defaultEmu = 'http://10.0.2.2:5002/'
+	// Default app base URL (can be overridden via -P)
+	def baseForDefault = suppliedBase ?: defaultProd
+	buildConfigField 'String', 'PHTV_BASE_URL', '"' + baseForDefault + '"'
+	}
+
+	buildTypes {
+		release {
+			signingConfig signingConfigs.release
+			minifyEnabled true
+			proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+			// Production: prefer supplied domain; fallback to direct server IP
+			def suppliedBase = project.findProperty('PHTV_BASE_URL') as String
+			def defaultProd = 'https://everydayadvertise.com/'
+			buildConfigField 'String', 'PHTV_BASE_URL', '"' + (suppliedBase ?: defaultProd) + '"'
+		}
+		debug {
+			// Prefer supplied domain if provided; otherwise emulator alias
+			def suppliedBase = project.findProperty('PHTV_BASE_URL') as String
+			def defaultProd = 'https://everydayadvertise.com/'
+			buildConfigField 'String', 'PHTV_BASE_URL', '"' + (suppliedBase ?: defaultProd) + '"'
+		}
+	}
+
+	compileOptions {
+		sourceCompatibility JavaVersion.VERSION_17
+		targetCompatibility JavaVersion.VERSION_17
+	}
+	kotlinOptions {
+		jvmTarget = '17'
+	}
+	buildFeatures {
+		viewBinding true
+		buildConfig true
+	}
+}
+
+dependencies {
+	implementation 'androidx.core:core-ktx:1.13.1'
+	implementation 'androidx.appcompat:appcompat:1.7.0'
+	implementation 'com.google.android.material:material:1.12.0'
+	implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+	implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
+	implementation 'com.squareup.retrofit2:retrofit:2.11.0'
+	implementation 'com.squareup.retrofit2:converter-gson:2.11.0'
+	implementation 'com.squareup.retrofit2:converter-scalars:2.11.0'
+	implementation 'com.squareup.okhttp3:logging-interceptor:4.12.0'
+	// ExoPlayer for faster, smoother video playback & pre-buffering
+	implementation 'com.google.android.exoplayer:exoplayer:2.19.1'
+	implementation 'com.google.android.exoplayer:extension-okhttp:2.19.1'
+	// QR Code generation
+	implementation 'com.google.zxing:core:3.5.3'
+	// Socket.IO client for session handoff
+	implementation ('io.socket:socket.io-client:2.1.0') {
+		exclude group: 'org.json', module: 'json'
+	}
+	// Removed org.json:json - Android provides JSON classes natively
+}
+

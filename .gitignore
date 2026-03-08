@@ -1,6 +1,20 @@
 # Large files and build artifacts
-android_tv_app/
+android_tv_app/.gradle/
+android_tv_app/.idea/
+android_tv_app/build/
+android_tv_app/app/build/
+android_tv_app/caches/
+android_tv_app/daemon/
+android_tv_app/gradle-*/
+android_tv_app/jdks/
+android_tv_app/kotlin-profile/
+android_tv_app/local.properties
+android_tv_app/*.keystore
+android_tv_app/**/*.keystore
+android_tv_app/**/*.jks
+android_tv_app/**/key.properties
 backup_*.zip
+Backup/
 Backup/*.zip
 *.jar
 *.apk
