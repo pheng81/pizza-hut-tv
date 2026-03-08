@@ -191,3 +191,6 @@ scripts.zip
 Google&Microsoft_Auth/
 client_secret*.json
 *.zip
+
+# Local secret keys
+all_files/Data_sever_key/*.pem
