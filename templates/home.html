@@ -120,6 +120,101 @@
       background: #0077ed;
       transform: scale(1.02);
     }
+
+    .promo-ticker {
+      width: 100%;
+      overflow: hidden;
+      background: var(--promo-bg, #111827);
+      color: var(--promo-color, #ffffff);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+      min-height: var(--promo-height, 52px);
+      display: flex;
+      align-items: center;
+    }
+
+    .promo-ticker.font-system-ui {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    }
+
+    .promo-ticker.font-display {
+      font-family: 'SF Pro Display', 'Segoe UI', sans-serif;
+    }
+
+    .promo-ticker.font-serif {
+      font-family: Georgia, 'Times New Roman', serif;
+    }
+
+    .promo-ticker.font-monospace {
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+    }
+
+    .promo-ticker__viewport {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 0 16px;
+      overflow: hidden;
+      white-space: nowrap;
+      width: 100%;
+    }
+
+    .promo-ticker__track {
+      display: inline-flex;
+      align-items: center;
+      gap: 48px;
+      min-width: max-content;
+      animation: promoMarquee linear infinite;
+      animation-duration: var(--promo-speed, 24s);
+      font-size: var(--promo-size, 18px);
+      font-weight: var(--promo-weight, 700);
+      font-style: var(--promo-style, normal);
+      letter-spacing: 0.02em;
+      text-transform: none;
+    }
+
+    .promo-ticker.align-left .promo-ticker__item {
+      text-align: left;
+      justify-content: flex-start;
+    }
+
+    .promo-ticker.align-center .promo-ticker__item {
+      text-align: center;
+      justify-content: center;
+    }
+
+    .promo-ticker.align-right .promo-ticker__item {
+      text-align: right;
+      justify-content: flex-end;
+    }
+
+    .promo-ticker.direction-right .promo-ticker__track {
+      animation-name: promoMarqueeReverse;
+    }
+
+    .promo-ticker.pause-on-hover:hover .promo-ticker__track {
+      animation-play-state: paused;
+    }
+
+    .promo-ticker__item {
+      display: inline-flex;
+      align-items: center;
+      gap: 48px;
+      padding-right: 48px;
+      min-width: max-content;
+    }
+
+    .promo-ticker__bullet {
+      opacity: 0.5;
+    }
+
+    @keyframes promoMarquee {
+      from { transform: translateX(0); }
+      to { transform: translateX(-50%); }
+    }
+
+    @keyframes promoMarqueeReverse {
+      from { transform: translateX(-50%); }
+      to { transform: translateX(0); }
+    }
     
     /* Hero Section - Apple Design Language */
     .hero {
@@ -154,7 +249,7 @@
       width: 100%;
       max-width: 450px;
       background: #000;
-      border: 1px solid rgba(0, 0, 0, 0.1);
+      border: none;
       position: relative;
       margin-right: 0;
     }
@@ -167,7 +262,7 @@
       overflow: hidden;
       box-shadow: 0 20px 60px rgba(0,0,0,.2);
       background: #000;
-      border: 1px solid rgba(0, 0, 0, 0.1);
+      border: none;
     }
     
     .device-mock .device-bg {
@@ -217,6 +312,49 @@
     .hero-video:hover {
       transform: scale(1.02) translateY(-4px);
       box-shadow: 0 30px 80px rgba(0, 0, 0, 0.3);
+    }
+
+    .homepage-body-media {
+      max-width: 1200px;
+      margin: 0 auto 24px;
+      padding: 0 40px;
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 24px;
+    }
+
+    .homepage-body-media-card {
+      background: #ffffff;
+      border-radius: 28px;
+      overflow: hidden;
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      grid-column: span 12;
+    }
+
+    .homepage-body-media-card.layout-half {
+      grid-column: span 6;
+    }
+
+    .homepage-body-media-card.layout-third {
+      grid-column: span 4;
+    }
+
+    .homepage-body-media-card img,
+    .homepage-body-media-card video {
+      width: 100%;
+      display: block;
+      max-height: 720px;
+      object-fit: cover;
+      background: #000;
+    }
+
+    .homepage-body-media-caption {
+      padding: 16px 20px;
+      color: var(--text-gray);
+      font-size: 16px;
+      line-height: 1.5;
+      background: rgba(255, 255, 255, 0.92);
     }
     
     .hero-video video {
@@ -481,36 +619,6 @@
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
     }
     
-    /* Video Demo Section */
-    .demo-section {
-      background: transparent;
-      padding: 30px 40px; /* reduced vertical spacing */
-    }
-    
-    .demo-container {
-      max-width: 1200px;
-      margin: 0 auto;
-    }
-    
-    .demo-video {
-      border-radius: 0;
-      overflow: hidden;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
-      margin-bottom: 40px;
-    }
-    
-    .demo-video video {
-      width: 100%;
-      display: block;
-    }
-    
-    /* See It In Action Section */
-    .action-section {
-      background: transparent;
-      padding: 40px 30px; /* reduced from 80px to tighten spacing */
-      overflow: hidden;
-    }
-    
     /* Professional Pricing Section */
     .pricing-section {
       background: rgba(255, 255, 255, 0.95);
@@ -682,61 +790,6 @@
       }
     }
     
-    .action-container {
-      max-width: 1400px;
-      margin: 0 auto;
-      text-align: center;
-    }
-    
-    .action-visual {
-      position: relative;
-    }
-    
-    .action-title {
-      text-align: center;
-      margin-bottom: 18px; /* tighter gap above the screens */
-    }
-    
-    .action-title h3 {
-      font-size: 24px;
-      font-weight: 700;
-      color: #000000;
-      letter-spacing: -0.01em;
-      line-height: 1.2;
-      max-width: 1000px;
-      margin: 0 auto;
-      white-space: nowrap;
-    }
-
-    /* (removed) Tighter section title when used inside action-section */
-    /* .action-section .section-title { margin: 16px 0 12px; font-size: 40px; } */
-    
-    .action-screen {
-      position: relative;
-      max-width: 1200px;
-      margin: 0 auto;
-    }
-    
-    .action-video {
-      width: 100%;
-      height: auto;
-      display: block;
-      border-radius: 0;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-    }
-    
-    /* Update responsive for action section */
-  @media (max-width: 768px) {
-      .action-section {
-        padding: 30px 20px; /* mobile: also reduce */
-      }
-      
-      .action-title h3 {
-        font-size: 16px;
-        white-space: normal;
-      }
-    }
-    
     /* Features Section */
     .features {
       max-width: 1200px;
@@ -760,15 +813,28 @@
     }
     
     .feature-card {
+      background: transparent;
+      backdrop-filter: none;
+      padding: 8px 8px 8px 0;
+      border-radius: 0;
+      box-shadow: none;
+      transition: all 0.3s;
+    }
+
+    .features.features-cards .feature-card {
       background: rgba(255, 255, 255, 0.7);
       backdrop-filter: blur(10px);
       padding: 40px;
       border-radius: 20px;
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-      transition: all 0.3s;
     }
     
     .feature-card:hover {
+      transform: none;
+      box-shadow: none;
+    }
+
+    .features.features-cards .feature-card:hover {
       transform: translateY(-8px);
       box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
     }
@@ -811,20 +877,20 @@
     
     .platform-item {
       text-align: center;
-      padding: 30px;
-      background: rgba(255, 255, 255, 0.25);
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      border-radius: 16px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      padding: 18px 12px;
+      background: transparent;
+      backdrop-filter: none;
+      border: none;
+      border-radius: 0;
+      box-shadow: none;
       transition: all 0.3s;
     }
     
     .platform-item:hover {
-      background: rgba(255, 255, 255, 0.35);
-      backdrop-filter: blur(15px);
-      transform: translateY(-8px);
-      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+      background: transparent;
+      backdrop-filter: none;
+      transform: none;
+      box-shadow: none;
     }
     
     .platform-item .icon {
@@ -1016,6 +1082,16 @@
         max-width: 100%;
       }
       .hero-video { width: 85%; max-width: 380px; margin: 0 auto; }
+      .homepage-body-media {
+        padding: 0 20px;
+        grid-template-columns: 1fr;
+      }
+
+      .homepage-body-media-card,
+      .homepage-body-media-card.layout-half,
+      .homepage-body-media-card.layout-third {
+        grid-column: auto;
+      }
     }
     
     /* Animations */
@@ -1299,81 +1375,81 @@
     </nav>
   </header>
 
+  {% if home_content.promo_enabled and home_promo_messages %}
+  <section class="promo-ticker font-{{ home_content.promo_font_family }} align-{{ home_content.promo_text_align }} direction-{{ home_content.promo_direction }} {% if home_content.promo_pause_on_hover %}pause-on-hover{% endif %}" style="--promo-bg: {{ home_content.promo_bg_color }}; --promo-color: {{ home_content.promo_text_color }}; --promo-size: {{ home_content.promo_font_size }}px; --promo-weight: {{ home_content.promo_font_weight }}; --promo-style: {{ home_content.promo_font_style }}; --promo-speed: {{ home_content.promo_speed }}s; --promo-height: {{ home_content.promo_height }}px;">
+    <div class="promo-ticker__viewport">
+      <div class="promo-ticker__track">
+        {% for _ in range(2) %}
+          {% for promo_message in home_promo_messages %}
+          <span class="promo-ticker__item">{{ promo_message }}{% if not loop.last or _ == 0 %}<span class="promo-ticker__bullet">•</span>{% endif %}</span>
+          {% endfor %}
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
   <!-- Hero Section -->
   <section class="hero animate-in">
     <div class="hero-content">
       
       
-      <h1>The Most Advanced<br><span class="nowrap">Digital Menu System</span></h1>
-      <p class="subtitle">User-friendly. Powerful. Perfectly synchronized.</p>
+      <h1>{{ home_content.hero_title_line1 or 'The Most Advanced' }}<br><span class="nowrap">{{ home_content.hero_title_line2 or 'Digital Menu System' }}</span></h1>
+      <p class="subtitle">{{ home_content.hero_subtitle or 'User-friendly. Powerful. Perfectly synchronized.' }}</p>
       
       <div class="hero-cta">
-        <a href="{{ url_for('login') }}" class="btn-primary">Get Started Free</a>
-        <a href="#demo-video" class="btn-secondary">Watch Demo</a>
+        <a href="{{ home_content.hero_primary_cta_url or url_for('login') }}" class="btn-primary">{{ home_content.hero_primary_cta_text or 'Get Started Free' }}</a>
+        <a href="{{ home_content.hero_secondary_cta_url or '#features' }}" class="btn-secondary">{{ home_content.hero_secondary_cta_text or 'See Features' }}</a>
       </div>
       
       <p class="micro-proof">
-        ✓ No credit card required  &nbsp; ✓ Setup in 5 minutes  &nbsp; ✓ 24/7 Support
+        ✓ {{ home_pricing_feature or 'Free trial period' }}  &nbsp; ✓ {{ home_content.hero_proof_secondary or 'Setup in 5 minutes' }}  &nbsp; ✓ {{ home_content.hero_proof_tertiary or '24/7 Support' }}
       </p>
     </div>
     
     <div class="hero-video">
       <div class="device-mock">
         <div class="device-bg">
-          <img src="{{ url_for('static', filename='digital_menu_focus.jpg') }}" alt="Digital menu focus">
+          <img src="{{ url_for('static', filename=(home_content.hero_image_path or 'imag2.png')) }}?v={{ asset_bust or 0 }}" alt="EverydayAdvertise dashboard preview">
         </div>
       </div>
     </div>
   </section>
 
-  <!-- See It In Action Section -->
-  <section class="action-section">
-    <div class="action-container">
-      <div class="action-visual">
-        <div class="action-title">
-          <h3>Transform any TV into a perfectly synchronized video‑wall — without expensive "pro" signage</h3>
-        </div>
-        <div class="action-screen">
-          <video autoplay loop muted playsinline preload="auto" class="action-video">
-            <source src="{{ url_for('static', filename='home_video_sync_03.mp4') }}?v={{ asset_bust or 0 }}" type="video/mp4">
-            Your browser does not support the video tag.
-          </video>
-        </div>
-      </div>
+  {% if home_body_media %}
+  <section class="homepage-body-media">
+    {% for media_item in home_body_media %}
+    <div class="homepage-body-media-card layout-{{ media_item.layout_style }}">
+      {% if media_item.media_type == 'video' %}
+      <video controls playsinline preload="metadata">
+        <source src="{{ url_for('static', filename=media_item.media_path) }}?v={{ asset_bust or 0 }}">
+      </video>
+      {% else %}
+      <img src="{{ url_for('static', filename=media_item.media_path) }}?v={{ asset_bust or 0 }}" alt="Website body media">
+      {% endif %}
+      {% if media_item.caption %}
+      <div class="homepage-body-media-caption">{{ media_item.caption }}</div>
+      {% endif %}
     </div>
+    {% endfor %}
   </section>
-
-  <!-- Dashboard Video Section -->
-  <section id="demo-video" class="demo-section">
-    <div class="demo-container">
-      <h2 class="section-title">Powerful Dashboard</h2>
-      <div class="demo-video">
-        <video controls autoplay loop muted playsinline preload="auto">
-          <source src="{{ url_for('static', filename='dashboard.mp4') }}" type="video/mp4">
-          Your browser does not support the video tag.
-        </video>
-      </div>
-      <p style="text-align: center; color: var(--text-gray); font-size: 18px;">
-        Manage all your screens from one powerful dashboard
-      </p>
-    </div>
-  </section>
+  {% endif %}
 
   <!-- Pricing Section -->
   <section class="pricing-section">
     <div class="pricing-container">
       <div class="pricing-header">
-        <h2>Simple, Transparent Pricing</h2>
-        <p>No hidden fees. No long-term contracts. Cancel anytime.</p>
+        <h2>{{ home_content.pricing_title or 'Simple, Transparent Pricing' }}</h2>
+        <p>{{ home_content.pricing_subtitle or 'No hidden fees. No long-term contracts. Cancel anytime.' }}</p>
       </div>
       
       <div class="pricing-cards-grid">
         <!-- Standard Pricing Card -->
         <div class="pricing-card">
           <div class="price-amount">
-            <span class="currency">$</span>5
+            <span class="currency">$</span>{{ home_price_amount or '5' }}
           </div>
-          <div class="price-period">per screen / month</div>
+          <div class="price-period">{{ home_price_period or 'per screen / month' }}</div>
           
           <ul class="pricing-features">
             <li>Unlimited content updates</li>
@@ -1381,7 +1457,7 @@
             <li>Cloud-based management</li>
             <li>24/7 technical support</li>
             <li>No setup fees</li>
-            <li>Free trial period</li>
+            <li>{{ home_pricing_feature or 'Free trial period' }}</li>
           </ul>
           
           <div class="pricing-cta">
@@ -1389,7 +1465,7 @@
           </div>
           
           <p class="pricing-note">
-            Try it free for 14 days. No credit card required.
+            {{ home_pricing_note or 'Try it free for 14 days. No credit card required.' }}
           </p>
         </div>
         
@@ -1423,45 +1499,23 @@
   </section>
 
   <!-- Features Section -->
-  <section id="features" class="features">
-    <h2 class="section-title">Why Choose EverydayAdvertise?</h2>
+  <section class="features {% if home_content.features_style == 'cards' %}features-cards{% else %}features-flat{% endif %}" id="features">
+    <h2 class="section-title">{{ home_content.features_title }}</h2>
     
     <div class="feature-grid">
+      {% for feature_item in home_features %}
       <div class="feature-card">
-        <div class="feature-icon">🎬</div>
-        <h3>Perfect Sync</h3>
-        <p>Industry-leading synchronization technology keeps all your screens in perfect harmony. Create stunning video walls that wow customers.</p>
+        <div class="feature-icon">
+          {% if feature_item.icon_kind == 'image' %}
+          <img src="{{ url_for('static', filename=feature_item.icon_value) }}?v={{ asset_bust or 0 }}" alt="{{ feature_item.title }}" style="width: 80px; height: 80px; object-fit: contain; border-radius: 8px;">
+          {% else %}
+          {{ feature_item.icon_value }}
+          {% endif %}
+        </div>
+        <h3>{{ feature_item.title }}</h3>
+        <p>{{ feature_item.description }}</p>
       </div>
-      
-      <div class="feature-card">
-        <div class="feature-icon"><img src="{{ url_for('static', filename='store_screens.webp') }}?v={{ asset_bust or 0 }}" alt="Easy Management" style="width: 80px; height: 80px; object-fit: contain; border-radius: 8px;"></div>
-        <h3>Easy Management</h3>
-        <p>Powerful dashboard lets you manage all screens from anywhere. Upload content, schedule playlists, and monitor status in real-time.</p>
-      </div>
-      
-      <div class="feature-card">
-        <div class="feature-icon">⚡</div>
-        <h3>Lightning Fast</h3>
-        <p>Optimized for performance. Content loads instantly and transitions are buttery smooth. No lag, no buffering.</p>
-      </div>
-      
-      <div class="feature-card">
-        <div class="feature-icon">🔄</div>
-        <h3>Auto Updates</h3>
-        <p>Change your menu once, update everywhere. All screens refresh automatically when you make changes.</p>
-      </div>
-      
-      <div class="feature-card">
-        <div class="feature-icon">🎯</div>
-        <h3>Multi-Store Support</h3>
-        <p>Manage multiple locations from one dashboard. Different menus for different stores, all in one place.</p>
-      </div>
-      
-      <div class="feature-card">
-        <div class="feature-icon">🛡️</div>
-        <h3>Rock Solid</h3>
-        <p>Enterprise-grade reliability. Your menus stay up 24/7 with automatic failover and offline support.</p>
-      </div>
+      {% endfor %}
     </div>
   </section>
 

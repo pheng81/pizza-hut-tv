@@ -482,7 +482,7 @@
       <div class="stat-card">
         <div class="stat-label">Monthly Cost</div>
         <div class="stat-value gradient">
-          ${{ screen_count * 5 }}.00
+          ${{ '%.2f'|format(monthly_cost or 0) }}
         </div>
       </div>
     </div>
@@ -495,7 +495,7 @@
       </h2>
       <div class="info-row">
         <span class="info-label">Plan</span>
-        <span class="info-value">$5 per screen / month</span>
+        <span class="info-value">{{ price_display or '$5 per screen / month' }}</span>
       </div>
       <div class="info-row">
         <span class="info-label">Current Period</span>
@@ -657,7 +657,7 @@
         Manage Screen Subscriptions
       </h2>
       <p style="color: #6b7280; font-size: 14px; margin-bottom: 20px;">
-        Each screen has its own subscription billed individually at $5/month. Cancel any screen subscription at any time.
+        Each billable screen uses your current plan rate of {{ price_display or '$5 per screen / month' }}. Cancel any screen subscription at any time.
       </p>
       
       <div class="screens-list" style="margin-bottom: 20px;">
@@ -696,7 +696,7 @@
             </div>
             <div style="text-align: right;">
               <div style="font-weight: 600; color: #10b981; font-size: 16px; margin-bottom: 8px;">
-                $5.00/mo
+                {{ price_display or '$5 per screen / month' }}
               </div>
               {% if sub.status not in ['canceled', 'incomplete_expired'] %}
               <button onclick="cancelScreenSubscription({{ sub.id }}, '{{ sub.screen_name }}')" 

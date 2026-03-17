@@ -166,6 +166,9 @@
         <div class="plan-box">
           <p class="price">{{ price_display or '$5 per screen / month' }}</p>
           <p style="margin:12px 0 0; color:#475569;">{{ trial_days or 14 }}-day free trial. Cancel anytime.</p>
+          {% if free_screens and free_screens > 0 %}
+            <p style="margin:8px 0 0; color:#475569;">First {{ free_screens }} screen{{ '' if free_screens == 1 else 's' }} can be used before billing starts.</p>
+          {% endif %}
           <ul class="features">
             <li>Unlimited menu updates</li>
             <li>Perfectly synchronized screens</li>

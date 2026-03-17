@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../services/api_client.dart';
 import 'tabs/commands_tab.dart';
+import 'tabs/device_manager_tab.dart';
 import 'tabs/profile_tab.dart';
 import 'tabs/stores_tab.dart';
-import 'tabs/upload_tab.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({
@@ -27,6 +27,13 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final titles = [
+      'Stores & Screens',
+      'Device Manager',
+      'TV Commands',
+      'Profile'
+    ];
     final tabs = [
       StoresTab(
         apiClient: widget.apiClient,
@@ -39,11 +46,7 @@ class _MainShellState extends State<MainShell> {
           });
         },
       ),
-      UploadTab(
-        apiClient: widget.apiClient,
-        selectedStoreId: _selectedStoreId,
-        selectedScreenId: _selectedScreenId,
-      ),
+      DeviceManagerTab(apiClient: widget.apiClient),
       CommandsTab(apiClient: widget.apiClient),
       ProfileTab(
         apiClient: widget.apiClient,
@@ -52,8 +55,26 @@ class _MainShellState extends State<MainShell> {
     ];
 
     return Scaffold(
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(titles[_index]),
+            Text(
+              'Everyday Advertise',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: Colors.white.withAlpha(220),
+                  ),
+            ),
+          ],
+        ),
+      ),
       body: SafeArea(child: tabs[_index]),
       bottomNavigationBar: NavigationBar(
+        height: 72,
+        backgroundColor: Colors.white,
+        indicatorColor: scheme.primaryContainer,
         selectedIndex: _index,
         onDestinationSelected: (value) {
           setState(() {
@@ -61,8 +82,8 @@ class _MainShellState extends State<MainShell> {
           });
         },
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.store), label: 'Stores'),
-          NavigationDestination(icon: Icon(Icons.upload_file), label: 'Upload'),
+          NavigationDestination(icon: Icon(Icons.storefront), label: 'Stores'),
+          NavigationDestination(icon: Icon(Icons.devices), label: 'Devices'),
           NavigationDestination(icon: Icon(Icons.tv), label: 'Commands'),
           NavigationDestination(icon: Icon(Icons.person), label: 'Profile'),
         ],

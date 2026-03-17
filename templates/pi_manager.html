@@ -1052,7 +1052,10 @@
                         <div class="device-header-left">
                             <div class="device-icon">🖥️</div>
                             <div class="device-title-wrapper">
-                                <h3>{{ device.id }}</h3>
+                                <h3>{{ device.location if device.location else device.id }}</h3>
+                                {% if device.location %}
+                                <div style="font-size:12px;color:#6b7280;line-height:1.2;">ID: {{ device.id }}</div>
+                                {% endif %}
                                 <div class="device-subtitle">
                                     <span class="device-status {{ device.status }}">{{ device.status }}</span>
                                 </div>
@@ -1099,10 +1102,10 @@
                                 <span>{{ device.last_seen }}</span>
                             </div>
                             <div class="device-detail-item">
-                                <strong>📍 Location</strong>
+                                <strong>✏️ Name</strong>
                                 {% if device.store_id %}
                                 <span class="location-value" onclick="editLocation('{{ device.id }}')">
-                                    {{ device.location if device.location else 'Set location...' }}
+                                    {{ device.location if device.location else 'Set name...' }}
                                 </span>
                                 {% else %}
                                 <span class="location-placeholder">Not set</span>

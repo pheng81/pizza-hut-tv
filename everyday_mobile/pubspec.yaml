@@ -39,6 +39,13 @@ dependencies:
   dio_cookie_manager: ^3.1.1
   file_picker: ^8.1.2
   shared_preferences: ^2.3.2
+  video_player: ^2.9.2
+  flutter_svg: ^2.0.10+1
+  url_launcher: ^6.3.1
+  app_links: ^6.3.3
+  google_sign_in: ^6.2.2
+  youtube_player_iframe: ^5.2.1
+  image_picker: ^1.1.2
 
 dev_dependencies:
   flutter_test:

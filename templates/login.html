@@ -67,7 +67,7 @@
       <div class="field"><button class="btn primary" type="submit">Sign in</button></div>
     </form>
 
-      {% if google_enabled or microsoft_enabled %}
+      {% if google_enabled or microsoft_enabled or apple_enabled %}
       <div class="sep"><div class="line"></div> or <div class="line"></div></div>
       {% endif %}
       {% if google_enabled %}
@@ -83,6 +83,14 @@
         <button class="btn" type="submit">
           <svg width="16" height="16" viewBox="0 0 23 23" aria-hidden="true"><path fill="#F25022" d="M1 1h10v10H1z"/><path fill="#7FBA00" d="M12 1h10v10H12z"/><path fill="#00A4EF" d="M1 12h10v10H1z"/><path fill="#FFB900" d="M12 12h10v10H12z"/></svg>
           Continue with Microsoft
+        </button>
+      </form>
+      {% endif %}
+      {% if apple_enabled %}
+      <form method="get" action="{{ url_for('auth_apple') }}" style="margin-top:8px">
+        <button class="btn" type="submit">
+          <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16.37 12.74c.02 2.02 1.77 2.69 1.79 2.7-.01.05-.28.95-.93 1.88-.57.8-1.16 1.6-2.1 1.62-.92.02-1.22-.55-2.28-.55-1.07 0-1.4.53-2.26.57-.9.03-1.58-.9-2.15-1.69-1.17-1.69-2.07-4.77-.86-6.88.6-1.04 1.68-1.7 2.86-1.72.9-.02 1.74.6 2.28.6.53 0 1.53-.75 2.57-.64.44.02 1.68.18 2.48 1.35-.06.04-1.48.86-1.47 2.56zm-1.77-5.64c.47-.56.8-1.33.71-2.1-.68.03-1.5.45-1.99 1.01-.44.5-.82 1.28-.72 2.04.76.06 1.53-.39 2-.95z"/></svg>
+          Continue with Apple
         </button>
       </form>
       {% endif %}

@@ -100,8 +100,9 @@ $timestamp = [int][double]::Parse((Get-Date -UFormat %s))
 & ssh -i $KeyPath "ubuntu@${Server}" "cd ${FinalPath} && if [ -f database.db ]; then cp database.db database.db.backup-${timestamp}; echo 'Database backup: database.db.backup-${timestamp}'; fi; if [ -f store_config__test9_at_gmail.com.json ]; then cp store_config__test9_at_gmail.com.json store_config__test9_at_gmail.com.json.backup-${timestamp}; echo 'Config backup: store_config__test9_at_gmail.com.json.backup-${timestamp}'; fi"
 
 Write-Host "Moving files to production directory..." -ForegroundColor Yellow
-# Use single-line remote command to avoid CRLF issues on Linux
-& ssh -i $KeyPath "ubuntu@${Server}" "sudo mkdir -p ${FinalPath}/templates ${FinalPath}/static; if ls ~/${TempPath}/*.py 1>/dev/null 2>&1; then sudo cp ~/${TempPath}/*.py ${FinalPath}/; fi; if ls ~/${TempPath}/*.txt 1>/dev/null 2>&1; then sudo cp ~/${TempPath}/*.txt ${FinalPath}/; fi; if [ -d ~/${TempPath}/templates ]; then sudo cp -r ~/${TempPath}/templates/* ${FinalPath}/templates/ 2>/dev/null || true; fi; if [ -d ~/${TempPath}/templates/templates ]; then sudo cp -r ~/${TempPath}/templates/templates/* ${FinalPath}/templates/ 2>/dev/null || true; fi; if [ -d ~/${TempPath}/static ]; then sudo cp -r ~/${TempPath}/static/* ${FinalPath}/static/ 2>/dev/null || true; fi; if [ -d ~/${TempPath}/static/static ]; then sudo cp -r ~/${TempPath}/static/static/* ${FinalPath}/static/ 2>/dev/null || true; fi; sudo chown -R ubuntu:ubuntu ${FinalPath}/templates ${FinalPath}/static; sudo find ${FinalPath}/templates -type d -exec chmod 755 {} \; ; sudo find ${FinalPath}/templates -type f -exec chmod 644 {} \; ; sudo find ${FinalPath}/static -type d -exec chmod 755 {} \; ; sudo find ${FinalPath}/static -type f -exec chmod 644 {} \; ; rm -rf ~/${TempPath}"
+# Keep the remote copy command on one line to avoid CRLF and shell parsing issues.
+$remoteCopyCmd = "set -e; sudo mkdir -p ${FinalPath}/templates ${FinalPath}/static; if ls ~/${TempPath}/*.py 1>/dev/null 2>&1; then sudo cp ~/${TempPath}/*.py ${FinalPath}/; fi; if ls ~/${TempPath}/*.txt 1>/dev/null 2>&1; then sudo cp ~/${TempPath}/*.txt ${FinalPath}/; fi; if [ -d ~/${TempPath}/templates ]; then sudo cp -r ~/${TempPath}/templates/* ${FinalPath}/templates/ 2>/dev/null || true; fi; if [ -d ~/${TempPath}/templates/templates ]; then sudo cp -r ~/${TempPath}/templates/templates/* ${FinalPath}/templates/ 2>/dev/null || true; fi; if [ -d ~/${TempPath}/static ]; then sudo cp -r ~/${TempPath}/static/* ${FinalPath}/static/ 2>/dev/null || true; fi; if [ -d ~/${TempPath}/static/static ]; then sudo cp -r ~/${TempPath}/static/static/* ${FinalPath}/static/ 2>/dev/null || true; fi; sudo chown -R ubuntu:ubuntu ${FinalPath}/templates ${FinalPath}/static; sudo chmod -R u=rwX,go=rX ${FinalPath}/templates ${FinalPath}/static; rm -rf ~/${TempPath}"
+& ssh -i $KeyPath "ubuntu@${Server}" $remoteCopyCmd
 if($LASTEXITCODE -ne 0) {
     Write-Warning "Some files may not have been copied (exit code $LASTEXITCODE)"
 }
@@ -135,18 +136,18 @@ Write-Host "=== Configuring Vonage SMS ===" -ForegroundColor Cyan
 
 # Check if Vonage is already configured
 $vonageCheck = & ssh -i $KeyPath "ubuntu@${Server}" "grep -c 'VONAGE_API_KEY' ${FinalPath}/.env 2>/dev/null || echo 0"
-if ($vonageCheck -match "0") {
+if (($vonageCheck | Out-String).Trim() -eq "0") {
     Write-Host "Adding Vonage credentials to .env..." -ForegroundColor Yellow
     & ssh -i $KeyPath "ubuntu@${Server}" "echo '' >> ${FinalPath}/.env ; echo '# Vonage SMS Configuration' >> ${FinalPath}/.env ; echo 'VONAGE_API_KEY=cd8f971d' >> ${FinalPath}/.env ; echo 'VONAGE_API_SECRET=az2Stt9sdkNpPjCssXMvdxkzR7ZxL99UoDK5FqEqHXMBy1m' >> ${FinalPath}/.env ; echo 'VONAGE_FROM_NUMBER=+13165308999' >> ${FinalPath}/.env"
-    
+
     if ($LASTEXITCODE -eq 0) {
-        Write-Host "âœ“ Vonage credentials added" -ForegroundColor Green
+        Write-Host "Vonage credentials added" -ForegroundColor Green
         Write-Host "Restarting service to load credentials..." -ForegroundColor Yellow
         & ssh -i $KeyPath "ubuntu@${Server}" "sudo systemctl restart pizza-hut-tv"
         Start-Sleep -Seconds 2
     }
 } else {
-    Write-Host "âœ“ Vonage credentials already configured" -ForegroundColor Green
+    Write-Host "Vonage credentials already configured" -ForegroundColor Green
 }
 
 Write-Host ""

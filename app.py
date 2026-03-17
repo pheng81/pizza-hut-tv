@@ -9,6 +9,7 @@ import logging
 import sqlite3
 import uuid
 import base64
+import secrets
 # Import fcntl only on Unix/Linux (not available on Windows)
 try:
     import fcntl  # For file locking to prevent race conditions
@@ -31,6 +32,7 @@ from typing import Optional
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response, send_file, make_response, session, has_request_context
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.utils import secure_filename
 from dotenv import load_dotenv, dotenv_values
 from flask_socketio import SocketIO, emit, join_room, leave_room
 
@@ -299,6 +301,175 @@ def init_db():
     except Exception as _sub_e:
         logging.warning('Subscription table init failed: %s', _sub_e)
 
+    try:
+        db.execute(
+            'CREATE TABLE IF NOT EXISTS billing_settings ('
+            'id INTEGER PRIMARY KEY CHECK (id = 1), '
+            'price_per_screen REAL NOT NULL DEFAULT 5, '
+            'price_display TEXT, '
+            'stripe_price_id TEXT, '
+            'trial_days INTEGER NOT NULL DEFAULT 14, '
+            'free_screens INTEGER NOT NULL DEFAULT 0, '
+            'updated_at INTEGER'
+            ')'
+        )
+        db.execute(
+            'CREATE TABLE IF NOT EXISTS user_billing_policy ('
+            'user_id INTEGER PRIMARY KEY, '
+            'price_per_screen REAL NOT NULL, '
+            'price_display TEXT, '
+            'stripe_price_id TEXT, '
+            'trial_days INTEGER NOT NULL, '
+            'free_screens INTEGER NOT NULL DEFAULT 0, '
+            'updated_at INTEGER, '
+            'source TEXT, '
+            'FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE'
+            ')'
+        )
+        db.execute(
+            'CREATE TABLE IF NOT EXISTS billing_promotions ('
+            'id INTEGER PRIMARY KEY CHECK (id = 1), '
+            'enabled INTEGER NOT NULL DEFAULT 0, '
+            'name TEXT, '
+            'audience TEXT NOT NULL DEFAULT "new_only", '
+            'start_date TEXT, '
+            'end_date TEXT, '
+            'price_per_screen REAL, '
+            'price_display TEXT, '
+            'stripe_price_id TEXT, '
+            'trial_days INTEGER, '
+            'free_screens INTEGER, '
+            'updated_at INTEGER'
+            ')'
+        )
+        db.commit()
+    except Exception as _billing_e:
+        logging.warning('Billing settings table init failed: %s', _billing_e)
+
+    try:
+        db.execute(
+            'CREATE TABLE IF NOT EXISTS homepage_settings ('
+            'id INTEGER PRIMARY KEY CHECK (id = 1), '
+            'hero_title_line1 TEXT, '
+            'hero_title_line2 TEXT, '
+            'hero_subtitle TEXT, '
+            'hero_primary_cta_text TEXT, '
+            'hero_primary_cta_url TEXT, '
+            'hero_secondary_cta_text TEXT, '
+            'hero_secondary_cta_url TEXT, '
+            'hero_proof_secondary TEXT, '
+            'hero_proof_tertiary TEXT, '
+            'hero_image_path TEXT, '
+            'promo_enabled INTEGER, '
+            'promo_text TEXT, '
+            'promo_bg_color TEXT, '
+            'promo_text_color TEXT, '
+            'promo_font_size INTEGER, '
+            'promo_font_weight TEXT, '
+            'promo_font_family TEXT, '
+            'promo_font_style TEXT, '
+            'promo_speed INTEGER, '
+            'promo_height INTEGER, '
+            'promo_text_align TEXT, '
+            'promo_pause_on_hover INTEGER, '
+            'promo_direction TEXT, '
+            'features_title TEXT, '
+            'features_style TEXT, '
+            'pricing_title TEXT, '
+            'pricing_subtitle TEXT, '
+            'updated_at INTEGER'
+            ')'
+        )
+        db.commit()
+        homepage_settings_columns = {
+            row['name'] for row in db.execute('PRAGMA table_info(homepage_settings)').fetchall()
+        }
+        if 'features_title' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN features_title TEXT')
+            db.commit()
+        if 'features_style' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN features_style TEXT')
+            db.commit()
+        if 'promo_enabled' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN promo_enabled INTEGER')
+            db.commit()
+        if 'promo_text' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN promo_text TEXT')
+            db.commit()
+        if 'promo_bg_color' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN promo_bg_color TEXT')
+            db.commit()
+        if 'promo_text_color' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN promo_text_color TEXT')
+            db.commit()
+        if 'promo_font_size' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN promo_font_size INTEGER')
+            db.commit()
+        if 'promo_font_weight' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN promo_font_weight TEXT')
+            db.commit()
+        if 'promo_font_family' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN promo_font_family TEXT')
+            db.commit()
+        if 'promo_font_style' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN promo_font_style TEXT')
+            db.commit()
+        if 'promo_speed' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN promo_speed INTEGER')
+            db.commit()
+        if 'promo_height' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN promo_height INTEGER')
+            db.commit()
+        if 'promo_text_align' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN promo_text_align TEXT')
+            db.commit()
+        if 'promo_pause_on_hover' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN promo_pause_on_hover INTEGER')
+            db.commit()
+        if 'promo_direction' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN promo_direction TEXT')
+            db.commit()
+    except Exception as _homepage_e:
+        logging.warning('Homepage settings table init failed: %s', _homepage_e)
+
+    try:
+        db.execute(
+            'CREATE TABLE IF NOT EXISTS homepage_body_media ('
+            'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+            'media_path TEXT NOT NULL, '
+            'media_type TEXT NOT NULL, '
+            'caption TEXT, '
+            'layout_style TEXT NOT NULL DEFAULT "full", '
+            'sort_order INTEGER NOT NULL DEFAULT 0, '
+            'created_at INTEGER NOT NULL'
+            ')'
+        )
+        db.commit()
+        homepage_body_media_columns = {
+            row['name'] for row in db.execute('PRAGMA table_info(homepage_body_media)').fetchall()
+        }
+        if 'layout_style' not in homepage_body_media_columns:
+            db.execute('ALTER TABLE homepage_body_media ADD COLUMN layout_style TEXT NOT NULL DEFAULT "full"')
+            db.commit()
+    except Exception as _homepage_media_e:
+        logging.warning('Homepage body media table init failed: %s', _homepage_media_e)
+
+    try:
+        db.execute(
+            'CREATE TABLE IF NOT EXISTS homepage_features ('
+            'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+            'icon_kind TEXT NOT NULL DEFAULT "emoji", '
+            'icon_value TEXT NOT NULL, '
+            'title TEXT NOT NULL, '
+            'description TEXT NOT NULL, '
+            'sort_order INTEGER NOT NULL DEFAULT 0, '
+            'created_at INTEGER NOT NULL'
+            ')'
+        )
+        db.commit()
+    except Exception as _homepage_features_e:
+        logging.warning('Homepage features table init failed: %s', _homepage_features_e)
+
 init_db()
 
 # Stripe configuration (optional; only active when API keys exist)
@@ -308,6 +479,705 @@ STRIPE_STANDARD_PRICE_ID = os.environ.get('STRIPE_PRICE_ID') or os.environ.get('
 STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
 STRIPE_PRICE_DISPLAY = os.environ.get('STRIPE_PRICE_DISPLAY') or '$5 per screen / month'
 STRIPE_TRIAL_DAYS = os.environ.get('STRIPE_TRIAL_DAYS')
+
+
+def _default_trial_days() -> int:
+    try:
+        return max(0, int((STRIPE_TRIAL_DAYS or '').strip() or '14'))
+    except Exception:
+        return 14
+
+
+def _default_price_per_screen() -> float:
+    raw = (os.environ.get('SUBSCRIPTION_PRICE_PER_SCREEN') or '').strip()
+    if raw:
+        try:
+            return max(0.0, float(raw))
+        except Exception:
+            pass
+    return 5.0
+
+
+def _default_free_screens() -> int:
+    raw = (os.environ.get('FREE_SCREEN_LIMIT') or '').strip()
+    if raw:
+        try:
+            return max(0, int(raw))
+        except Exception:
+            pass
+    return 0
+
+
+def _format_price_display(amount: float) -> str:
+    try:
+        value = float(amount)
+    except Exception:
+        value = 5.0
+    if value.is_integer():
+        amount_text = str(int(value))
+    else:
+        amount_text = f'{value:.2f}'
+    return f'${amount_text} per screen / month'
+
+
+def _normalize_billing_settings(row) -> dict:
+    try:
+        price_per_screen = max(0.0, float((row or {}).get('price_per_screen') or _default_price_per_screen()))
+    except Exception:
+        price_per_screen = _default_price_per_screen()
+    try:
+        trial_days = max(0, int((row or {}).get('trial_days') or _default_trial_days()))
+    except Exception:
+        trial_days = _default_trial_days()
+    try:
+        free_screens = max(0, int((row or {}).get('free_screens') or _default_free_screens()))
+    except Exception:
+        free_screens = _default_free_screens()
+
+    price_display = ((row or {}).get('price_display') or '').strip() or _format_price_display(price_per_screen)
+    stripe_price_id = ((row or {}).get('stripe_price_id') or '').strip() or ((STRIPE_STANDARD_PRICE_ID or '').strip())
+    updated_at = int((row or {}).get('updated_at') or int(time.time()))
+
+    return {
+        'price_per_screen': price_per_screen,
+        'price_display': price_display,
+        'stripe_price_id': stripe_price_id,
+        'trial_days': trial_days,
+        'free_screens': free_screens,
+        'updated_at': updated_at,
+    }
+
+
+def _ensure_billing_settings_seeded():
+    db = get_db()
+    defaults = _normalize_billing_settings({
+        'price_per_screen': _default_price_per_screen(),
+        'price_display': STRIPE_PRICE_DISPLAY,
+        'stripe_price_id': STRIPE_STANDARD_PRICE_ID,
+        'trial_days': _default_trial_days(),
+        'free_screens': _default_free_screens(),
+        'updated_at': int(time.time()),
+    })
+    db.execute(
+        'INSERT OR IGNORE INTO billing_settings '
+        '(id, price_per_screen, price_display, stripe_price_id, trial_days, free_screens, updated_at) '
+        'VALUES (1, ?, ?, ?, ?, ?, ?)',
+        (
+            defaults['price_per_screen'],
+            defaults['price_display'],
+            defaults['stripe_price_id'],
+            defaults['trial_days'],
+            defaults['free_screens'],
+            defaults['updated_at'],
+        ),
+    )
+    db.commit()
+
+
+def _get_global_billing_settings() -> dict:
+    try:
+        _ensure_billing_settings_seeded()
+        db = get_db()
+        row = db.execute('SELECT * FROM billing_settings WHERE id = 1').fetchone()
+        return _normalize_billing_settings(dict(row) if row else {})
+    except Exception as e:
+        logging.warning('Failed to load global billing settings: %s', e)
+        return _normalize_billing_settings({})
+
+
+def _parse_iso_date(value: str | None):
+    text = (value or '').strip()
+    if not text:
+        return None
+    try:
+        return datetime.strptime(text, '%Y-%m-%d').date()
+    except Exception:
+        return None
+
+
+def _normalize_billing_promotion(row) -> dict:
+    base = _get_global_billing_settings()
+    try:
+        enabled = int((row or {}).get('enabled') or 0) == 1
+    except Exception:
+        enabled = False
+
+    audience = ((row or {}).get('audience') or 'new_only').strip() or 'new_only'
+    if audience not in ('new_only', 'new_and_existing', 'existing_only'):
+        audience = 'new_only'
+
+    normalized = _normalize_billing_settings({
+        'price_per_screen': (row or {}).get('price_per_screen') if (row or {}).get('price_per_screen') is not None else base['price_per_screen'],
+        'price_display': (row or {}).get('price_display') or base['price_display'],
+        'stripe_price_id': (row or {}).get('stripe_price_id') or base['stripe_price_id'],
+        'trial_days': (row or {}).get('trial_days') if (row or {}).get('trial_days') is not None else base['trial_days'],
+        'free_screens': (row or {}).get('free_screens') if (row or {}).get('free_screens') is not None else base['free_screens'],
+        'updated_at': (row or {}).get('updated_at') or int(time.time()),
+    })
+
+    normalized.update({
+        'enabled': enabled,
+        'name': ((row or {}).get('name') or '').strip(),
+        'audience': audience,
+        'start_date': ((row or {}).get('start_date') or '').strip(),
+        'end_date': ((row or {}).get('end_date') or '').strip(),
+    })
+    return normalized
+
+
+def _get_billing_promotion() -> dict:
+    try:
+        db = get_db()
+        row = db.execute('SELECT * FROM billing_promotions WHERE id = 1').fetchone()
+        return _normalize_billing_promotion(dict(row) if row else {})
+    except Exception as e:
+        logging.warning('Failed to load billing promotion: %s', e)
+        return _normalize_billing_promotion({})
+
+
+def _billing_promotion_is_active(promotion: dict | None = None) -> bool:
+    promo = promotion or _get_billing_promotion()
+    if not promo.get('enabled'):
+        return False
+    today = datetime.utcnow().date()
+    start = _parse_iso_date(promo.get('start_date'))
+    end = _parse_iso_date(promo.get('end_date'))
+    if start and today < start:
+        return False
+    if end and today > end:
+        return False
+    return True
+
+
+def _billing_promotion_applies_to_new_users(promotion: dict | None = None) -> bool:
+    promo = promotion or _get_billing_promotion()
+    return promo.get('audience') in ('new_only', 'new_and_existing')
+
+
+def _billing_promotion_applies_to_existing_users(promotion: dict | None = None) -> bool:
+    promo = promotion or _get_billing_promotion()
+    return promo.get('audience') in ('existing_only', 'new_and_existing')
+
+
+def _get_new_user_billing_settings(source: str = 'default') -> tuple[dict, str]:
+    promotion = _get_billing_promotion()
+    if _billing_promotion_is_active(promotion) and _billing_promotion_applies_to_new_users(promotion):
+        promo_source = promotion.get('name') or 'promotion'
+        return _normalize_billing_settings(promotion), f'{source}:{promo_source}'
+    return _get_global_billing_settings(), source
+
+
+def _price_amount_text(amount: float) -> str:
+    try:
+        value = max(0.0, float(amount))
+    except Exception:
+        value = _default_price_per_screen()
+    if float(value).is_integer():
+        return str(int(value))
+    return f'{value:.2f}'
+
+
+def _split_price_display(price_per_screen: float, price_display: str | None) -> tuple[str, str]:
+    amount_text = _price_amount_text(price_per_screen)
+    text = (price_display or '').strip()
+    if not text:
+        return amount_text, 'per screen / month'
+
+    match = re.match(r'^\$(\d+(?:\.\d{1,2})?)(?:\s+(.*))?$', text)
+    if match:
+        parsed_amount = (match.group(1) or '').strip() or amount_text
+        parsed_period = (match.group(2) or '').strip() or 'per screen / month'
+        return parsed_amount, parsed_period
+
+    return amount_text, text
+
+
+def _public_home_pricing_feature(settings: dict) -> str:
+    trial_days = max(0, int(settings.get('trial_days') or 0))
+    free_screens = max(0, int(settings.get('free_screens') or 0))
+    if trial_days > 0 and free_screens > 0:
+        return f'{trial_days}-day free trial + first {free_screens} screen{"" if free_screens == 1 else "s"} free'
+    if trial_days > 0:
+        return f'{trial_days}-day free trial'
+    if free_screens > 0:
+        return f'First {free_screens} screen{"" if free_screens == 1 else "s"} free'
+    return 'Cancel anytime'
+
+
+def _public_home_pricing_note(settings: dict) -> str:
+    trial_days = max(0, int(settings.get('trial_days') or 0))
+    free_screens = max(0, int(settings.get('free_screens') or 0))
+    parts: list[str] = []
+    if trial_days > 0:
+        parts.append(f'Try it free for {trial_days} day{"" if trial_days == 1 else "s"}.')
+    if free_screens > 0:
+        parts.append(f'First {free_screens} screen{"" if free_screens == 1 else "s"} can be used before billing starts.')
+    parts.append('No credit card required.')
+    return ' '.join(parts)
+
+
+def _default_homepage_settings() -> dict:
+    return {
+        'hero_title_line1': 'The Most Advanced',
+        'hero_title_line2': 'Digital Menu System',
+        'hero_subtitle': 'User-friendly. Powerful. Perfectly synchronized.',
+        'hero_primary_cta_text': 'Get Started Free',
+        'hero_primary_cta_url': '/login',
+        'hero_secondary_cta_text': 'See Features',
+        'hero_secondary_cta_url': '#features',
+        'hero_proof_secondary': 'Setup in 5 minutes',
+        'hero_proof_tertiary': '24/7 Support',
+        'hero_image_path': 'imag2.png',
+        'promo_enabled': 0,
+        'promo_text': 'Launch special: 14-day free trial + first screen free. Setup in minutes.',
+        'promo_bg_color': '#111827',
+        'promo_text_color': '#ffffff',
+        'promo_font_size': 18,
+        'promo_font_weight': '700',
+        'promo_font_family': 'system-ui',
+        'promo_font_style': 'normal',
+        'promo_speed': 24,
+        'promo_height': 52,
+        'promo_text_align': 'center',
+        'promo_pause_on_hover': 1,
+        'promo_direction': 'left',
+        'features_title': 'Why Choose EverydayAdvertise?',
+        'features_style': 'flat',
+        'pricing_title': 'Simple, Transparent Pricing',
+        'pricing_subtitle': 'No hidden fees. No long-term contracts. Cancel anytime.',
+        'updated_at': int(time.time()),
+    }
+
+
+def _normalize_homepage_settings(row) -> dict:
+    defaults = _default_homepage_settings()
+    data = dict(row or {})
+    normalized = dict(defaults)
+    for key in (
+        'hero_title_line1',
+        'hero_title_line2',
+        'hero_subtitle',
+        'hero_primary_cta_text',
+        'hero_primary_cta_url',
+        'hero_secondary_cta_text',
+        'hero_secondary_cta_url',
+        'hero_proof_secondary',
+        'hero_proof_tertiary',
+        'hero_image_path',
+        'promo_text',
+        'promo_bg_color',
+        'promo_text_color',
+        'promo_font_weight',
+        'promo_font_family',
+        'promo_font_style',
+        'promo_text_align',
+        'promo_direction',
+        'features_title',
+        'pricing_title',
+        'pricing_subtitle',
+    ):
+        value = (data.get(key) or '').strip()
+        normalized[key] = value or defaults[key]
+    try:
+        normalized['promo_enabled'] = 1 if int(data.get('promo_enabled') or 0) == 1 else 0
+    except Exception:
+        normalized['promo_enabled'] = defaults['promo_enabled']
+    try:
+        normalized['promo_font_size'] = min(48, max(12, int(data.get('promo_font_size') or defaults['promo_font_size'])))
+    except Exception:
+        normalized['promo_font_size'] = defaults['promo_font_size']
+    if normalized['promo_font_weight'] not in ('400', '500', '600', '700', '800'):
+        normalized['promo_font_weight'] = defaults['promo_font_weight']
+    if normalized['promo_font_family'] not in ('system-ui', 'serif', 'monospace', 'display'):
+        normalized['promo_font_family'] = defaults['promo_font_family']
+    if normalized['promo_font_style'] not in ('normal', 'italic'):
+        normalized['promo_font_style'] = defaults['promo_font_style']
+    try:
+        normalized['promo_speed'] = min(80, max(8, int(data.get('promo_speed') or defaults['promo_speed'])))
+    except Exception:
+        normalized['promo_speed'] = defaults['promo_speed']
+    try:
+        normalized['promo_height'] = min(120, max(32, int(data.get('promo_height') or defaults['promo_height'])))
+    except Exception:
+        normalized['promo_height'] = defaults['promo_height']
+    try:
+        normalized['promo_pause_on_hover'] = 1 if int(data.get('promo_pause_on_hover') or 0) == 1 else 0
+    except Exception:
+        normalized['promo_pause_on_hover'] = defaults['promo_pause_on_hover']
+    if normalized['promo_text_align'] not in ('left', 'center', 'right'):
+        normalized['promo_text_align'] = defaults['promo_text_align']
+    if normalized['promo_direction'] not in ('left', 'right'):
+        normalized['promo_direction'] = defaults['promo_direction']
+    features_style = (data.get('features_style') or defaults['features_style']).strip().lower()
+    if features_style not in ('flat', 'cards'):
+        features_style = defaults['features_style']
+    normalized['features_style'] = features_style
+    try:
+        normalized['updated_at'] = int(data.get('updated_at') or defaults['updated_at'])
+    except Exception:
+        normalized['updated_at'] = defaults['updated_at']
+    return normalized
+
+
+def _ensure_homepage_settings_seeded():
+    db = get_db()
+    defaults = _default_homepage_settings()
+    db.execute(
+        'INSERT OR IGNORE INTO homepage_settings '
+        '(id, hero_title_line1, hero_title_line2, hero_subtitle, hero_primary_cta_text, hero_primary_cta_url, '
+        'hero_secondary_cta_text, hero_secondary_cta_url, hero_proof_secondary, hero_proof_tertiary, '
+        'hero_image_path, promo_enabled, promo_text, promo_bg_color, promo_text_color, promo_font_size, promo_font_weight, promo_font_family, promo_font_style, promo_speed, promo_height, promo_text_align, promo_pause_on_hover, promo_direction, '
+        'features_title, features_style, pricing_title, pricing_subtitle, updated_at) '
+        'VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        (
+            defaults['hero_title_line1'],
+            defaults['hero_title_line2'],
+            defaults['hero_subtitle'],
+            defaults['hero_primary_cta_text'],
+            defaults['hero_primary_cta_url'],
+            defaults['hero_secondary_cta_text'],
+            defaults['hero_secondary_cta_url'],
+            defaults['hero_proof_secondary'],
+            defaults['hero_proof_tertiary'],
+            defaults['hero_image_path'],
+            defaults['promo_enabled'],
+            defaults['promo_text'],
+            defaults['promo_bg_color'],
+            defaults['promo_text_color'],
+            defaults['promo_font_size'],
+            defaults['promo_font_weight'],
+            defaults['promo_font_family'],
+            defaults['promo_font_style'],
+            defaults['promo_speed'],
+            defaults['promo_height'],
+            defaults['promo_text_align'],
+            defaults['promo_pause_on_hover'],
+            defaults['promo_direction'],
+            defaults['features_title'],
+            defaults['features_style'],
+            defaults['pricing_title'],
+            defaults['pricing_subtitle'],
+            defaults['updated_at'],
+        ),
+    )
+    db.commit()
+
+
+def _get_homepage_promo_messages(settings: dict) -> list[str]:
+    lines = [line.strip() for line in (settings.get('promo_text') or '').splitlines() if line.strip()]
+    if not lines:
+        return []
+    return lines
+
+
+def _get_homepage_settings() -> dict:
+    try:
+        _ensure_homepage_settings_seeded()
+        db = get_db()
+        row = db.execute('SELECT * FROM homepage_settings WHERE id = 1').fetchone()
+        return _normalize_homepage_settings(dict(row) if row else {})
+    except Exception as e:
+        logging.warning('Failed to load homepage settings: %s', e)
+        return _normalize_homepage_settings({})
+
+
+def _default_homepage_features() -> list[dict]:
+    return [
+        {'icon_kind': 'emoji', 'icon_value': '🎬', 'title': 'Perfect Sync', 'description': 'Industry-leading synchronization technology keeps all your screens in perfect harmony. Create stunning video walls that wow customers.'},
+        {'icon_kind': 'image', 'icon_value': 'store_screens.webp', 'title': 'Easy Management', 'description': 'Powerful dashboard lets you manage all screens from anywhere. Upload content, schedule playlists, and monitor status in real-time.'},
+        {'icon_kind': 'emoji', 'icon_value': '⚡', 'title': 'Lightning Fast', 'description': 'Optimized for performance. Content loads instantly and transitions are buttery smooth. No lag, no buffering.'},
+        {'icon_kind': 'emoji', 'icon_value': '🔄', 'title': 'Auto Updates', 'description': 'Change your menu once, update everywhere. All screens refresh automatically when you make changes.'},
+        {'icon_kind': 'emoji', 'icon_value': '🎯', 'title': 'Multi-Store Support', 'description': 'Manage multiple locations from one dashboard. Different menus for different stores, all in one place.'},
+        {'icon_kind': 'emoji', 'icon_value': '🛡️', 'title': 'Rock Solid', 'description': 'Enterprise-grade reliability. Your menus stay up 24/7 with automatic failover and offline support.'},
+    ]
+
+
+def _normalize_homepage_feature_row(row) -> dict:
+    data = dict(row or {})
+    icon_kind = (data.get('icon_kind') or 'emoji').strip().lower()
+    if icon_kind not in ('emoji', 'image'):
+        icon_kind = 'emoji'
+    icon_value = (data.get('icon_value') or '✨').strip()
+    if icon_kind == 'image':
+        icon_value = icon_value.replace('\\', '/')
+    title = (data.get('title') or '').strip() or 'Feature'
+    description = (data.get('description') or '').strip() or 'Add a description in the website editor.'
+    try:
+        feature_id = int(data.get('id') or 0)
+    except Exception:
+        feature_id = 0
+    try:
+        sort_order = int(data.get('sort_order') or 0)
+    except Exception:
+        sort_order = 0
+    try:
+        created_at = int(data.get('created_at') or time.time())
+    except Exception:
+        created_at = int(time.time())
+    return {
+        'id': feature_id,
+        'icon_kind': icon_kind,
+        'icon_value': icon_value,
+        'title': title,
+        'description': description,
+        'sort_order': sort_order,
+        'created_at': created_at,
+    }
+
+
+def _ensure_homepage_features_seeded():
+    db = get_db()
+    existing_count = db.execute('SELECT COUNT(*) FROM homepage_features').fetchone()[0]
+    if existing_count:
+        return
+    for index, item in enumerate(_default_homepage_features(), start=1):
+        db.execute(
+            'INSERT INTO homepage_features (icon_kind, icon_value, title, description, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+            (item['icon_kind'], item['icon_value'], item['title'], item['description'], index, int(time.time())),
+        )
+    db.commit()
+
+
+def _get_homepage_features() -> list[dict]:
+    try:
+        _ensure_homepage_features_seeded()
+        db = get_db()
+        rows = db.execute('SELECT * FROM homepage_features ORDER BY sort_order ASC, id ASC').fetchall()
+        return [_normalize_homepage_feature_row(dict(row)) for row in rows]
+    except Exception as e:
+        logging.warning('Failed to load homepage features: %s', e)
+        return [_normalize_homepage_feature_row(item) for item in _default_homepage_features()]
+
+
+def _normalize_homepage_body_media_row(row) -> dict:
+    data = dict(row or {})
+    media_path = (data.get('media_path') or '').replace('\\', '/').strip()
+    media_type = (data.get('media_type') or classify_media(media_path or 'placeholder.png')).strip() or 'image'
+    caption = (data.get('caption') or '').strip()
+    layout_style = (data.get('layout_style') or 'full').strip().lower()
+    if layout_style not in ('full', 'half', 'third'):
+        layout_style = 'full'
+    try:
+        media_id = int(data.get('id') or 0)
+    except Exception:
+        media_id = 0
+    try:
+        sort_order = int(data.get('sort_order') or 0)
+    except Exception:
+        sort_order = 0
+    try:
+        created_at = int(data.get('created_at') or time.time())
+    except Exception:
+        created_at = int(time.time())
+    return {
+        'id': media_id,
+        'media_path': media_path,
+        'media_type': media_type,
+        'caption': caption,
+        'layout_style': layout_style,
+        'sort_order': sort_order,
+        'created_at': created_at,
+    }
+
+
+def _get_homepage_body_media() -> list[dict]:
+    try:
+        db = get_db()
+        rows = db.execute(
+            'SELECT * FROM homepage_body_media ORDER BY sort_order ASC, id ASC'
+        ).fetchall()
+        return [_normalize_homepage_body_media_row(dict(row)) for row in rows]
+    except Exception as e:
+        logging.warning('Failed to load homepage body media: %s', e)
+        return []
+
+
+def _cleanup_homepage_asset(rel_path: str | None):
+    path = (rel_path or '').replace('\\', '/').strip()
+    if not path.startswith('uploads/site/'):
+        return
+    site_content_folder = os.path.join(UPLOAD_FOLDER, 'site')
+    abs_path = os.path.abspath(os.path.join('static', path))
+    site_root = os.path.abspath(site_content_folder)
+    if not abs_path.startswith(site_root):
+        return
+    try:
+        if os.path.exists(abs_path):
+            os.remove(abs_path)
+    except Exception as e:
+        logging.warning('Failed to remove old homepage asset %s: %s', rel_path, e)
+
+
+def _save_homepage_image(file_storage, current_path: str | None = None) -> str:
+    if not file_storage or not getattr(file_storage, 'filename', ''):
+        return _normalize_homepage_settings({'hero_image_path': current_path}).get('hero_image_path')
+
+    filename = secure_filename(file_storage.filename or '')
+    if not filename or '.' not in filename:
+        raise ValueError('Please choose a valid image file.')
+
+    ext = filename.rsplit('.', 1)[1].lower()
+    if ext not in IMAGE_EXTENSIONS:
+        raise ValueError('Homepage hero image must be an image file.')
+
+    site_content_folder = os.path.join(UPLOAD_FOLDER, 'site')
+    os.makedirs(site_content_folder, exist_ok=True)
+    rel_path = f'uploads/site/homepage-hero-{int(time.time())}-{secrets.token_hex(4)}.{ext}'
+    abs_path = os.path.join('static', rel_path)
+    os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+    file_storage.save(abs_path)
+    _cleanup_homepage_asset(current_path)
+    return rel_path.replace('\\', '/')
+
+
+def _save_homepage_body_media(file_storage) -> dict:
+    if not file_storage or not getattr(file_storage, 'filename', ''):
+        raise ValueError('Please choose an image or video file.')
+
+    filename = secure_filename(file_storage.filename or '')
+    if not filename or not allowed_file(filename):
+        raise ValueError('Only supported image or video files can be uploaded.')
+
+    media_type = classify_media(filename)
+    if media_type not in ('image', 'animated', 'video'):
+        raise ValueError('Unsupported homepage media type.')
+
+    site_content_folder = os.path.join(UPLOAD_FOLDER, 'site')
+    os.makedirs(site_content_folder, exist_ok=True)
+    ext = filename.rsplit('.', 1)[1].lower()
+    rel_path = f'uploads/site/homepage-body-{int(time.time())}-{secrets.token_hex(4)}.{ext}'
+    abs_path = os.path.join('static', rel_path)
+    os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+    file_storage.save(abs_path)
+    return {
+        'media_path': rel_path.replace('\\', '/'),
+        'media_type': media_type,
+    }
+
+
+def _apply_billing_policy_to_existing_users(policy: dict, source: str) -> int:
+    db = get_db()
+    result = db.execute(
+        'UPDATE user_billing_policy SET '
+        'price_per_screen = ?, price_display = ?, stripe_price_id = ?, '
+        'trial_days = ?, free_screens = ?, updated_at = ?, source = ? '
+        'WHERE user_id IN (SELECT id FROM users)',
+        (
+            policy['price_per_screen'],
+            policy['price_display'],
+            policy['stripe_price_id'],
+            policy['trial_days'],
+            policy['free_screens'],
+            int(time.time()),
+            source,
+        ),
+    )
+    db.commit()
+
+    stripe_price_id = (policy.get('stripe_price_id') or '').strip()
+    if stripe and stripe_price_id:
+        for table_name in ('subscriptions', 'screen_subscriptions'):
+            try:
+                rows = db.execute(
+                    f'SELECT stripe_subscription_id FROM {table_name} '
+                    'WHERE stripe_subscription_id IS NOT NULL AND stripe_subscription_id != ""'
+                ).fetchall()
+            except Exception as e:
+                logging.warning('Failed to load Stripe subscriptions from %s: %s', table_name, e)
+                rows = []
+
+            for row in rows or []:
+                stripe_sub_id = (row['stripe_subscription_id'] or '').strip()
+                if not stripe_sub_id:
+                    continue
+                try:
+                    stripe_sub = stripe.Subscription.retrieve(stripe_sub_id)
+                    items = ((stripe_sub or {}).get('items') or {}).get('data') or []
+                    if not items:
+                        continue
+                    item_id = items[0].get('id')
+                    current_price = (((items[0] or {}).get('price') or {}).get('id') or '').strip()
+                    if not item_id or current_price == stripe_price_id:
+                        continue
+                    stripe.Subscription.modify(
+                        stripe_sub_id,
+                        items=[{'id': item_id, 'price': stripe_price_id}],
+                        proration_behavior='none',
+                    )
+                except Exception as e:
+                    logging.warning('Failed to migrate Stripe subscription %s to price %s: %s', stripe_sub_id, stripe_price_id, e)
+
+    return int(getattr(result, 'rowcount', 0) or 0)
+
+
+def _ensure_user_billing_policy(user_id: int, source: str = 'default') -> dict:
+    db = get_db()
+    row = db.execute('SELECT * FROM user_billing_policy WHERE user_id = ?', (user_id,)).fetchone()
+    if row:
+        return _normalize_billing_settings(dict(row))
+
+    settings, effective_source = _get_new_user_billing_settings(source)
+    db.execute(
+        'INSERT OR REPLACE INTO user_billing_policy '
+        '(user_id, price_per_screen, price_display, stripe_price_id, trial_days, free_screens, updated_at, source) '
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        (
+            user_id,
+            settings['price_per_screen'],
+            settings['price_display'],
+            settings['stripe_price_id'],
+            settings['trial_days'],
+            settings['free_screens'],
+            int(time.time()),
+            effective_source,
+        ),
+    )
+    db.commit()
+    return settings
+
+
+def _seed_missing_user_billing_policies(source: str = 'seeded'):
+    db = get_db()
+    settings = _get_global_billing_settings()
+    missing_users = db.execute(
+        'SELECT id FROM users WHERE id NOT IN (SELECT user_id FROM user_billing_policy)'
+    ).fetchall()
+    for row in missing_users or []:
+        db.execute(
+            'INSERT OR REPLACE INTO user_billing_policy '
+            '(user_id, price_per_screen, price_display, stripe_price_id, trial_days, free_screens, updated_at, source) '
+            'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            (
+                row['id'],
+                settings['price_per_screen'],
+                settings['price_display'],
+                settings['stripe_price_id'],
+                settings['trial_days'],
+                settings['free_screens'],
+                int(time.time()),
+                source,
+            ),
+        )
+    db.commit()
+
+
+def _get_user_billing_policy(user_id: int | None) -> dict:
+    if not user_id:
+        return _get_global_billing_settings()
+    try:
+        return _ensure_user_billing_policy(int(user_id))
+    except Exception as e:
+        logging.warning('Failed to load billing policy for user %s: %s', user_id, e)
+        return _get_global_billing_settings()
+
+
+def _apply_global_billing_settings_to_existing_users() -> int:
+    settings = _get_global_billing_settings()
+    return _apply_billing_policy_to_existing_users(settings, 'admin_apply_existing')
+
+
+_ensure_billing_settings_seeded()
+_seed_missing_user_billing_policies()
 
 if stripe is not None and STRIPE_SECRET_KEY:
     try:
@@ -563,6 +1433,54 @@ def send_email(to_addr: str, subject: str, body: str) -> bool:
         logging.warning('send_email failed at phase=%s: %s', phase, e)
         return False
 
+# Mobile social auth token cache (in-memory, short-lived)
+MOBILE_AUTH_TOKENS: dict = {}
+MOBILE_AUTH_TTL_SEC = int(os.environ.get('MOBILE_AUTH_TTL_SEC') or str(60 * 60 * 24 * 14))
+
+def _issue_mobile_auth_token(user: dict) -> str:
+    token = secrets.token_urlsafe(32)
+    now = int(time.time())
+    MOBILE_AUTH_TOKENS[token] = {
+        'user': {
+            'id': user.get('id'),
+            'name': user.get('name'),
+            'email': user.get('email'),
+            'method': user.get('method') or 'oauth',
+            'is_admin': bool(user.get('is_admin')),
+        },
+        'exp': now + MOBILE_AUTH_TTL_SEC,
+    }
+    return token
+
+def _mobile_user_from_token(token: str | None):
+    if not token:
+        return None
+    rec = MOBILE_AUTH_TOKENS.get(token)
+    if not rec:
+        return None
+    try:
+        if int(rec.get('exp') or 0) < int(time.time()):
+            MOBILE_AUTH_TOKENS.pop(token, None)
+            return None
+    except Exception:
+        MOBILE_AUTH_TOKENS.pop(token, None)
+        return None
+    return rec.get('user')
+
+def _cleanup_mobile_auth_tokens(limit: int = 250):
+    try:
+        now = int(time.time())
+        removed = 0
+        for k in list(MOBILE_AUTH_TOKENS.keys()):
+            if removed >= limit:
+                break
+            rec = MOBILE_AUTH_TOKENS.get(k) or {}
+            if int(rec.get('exp') or 0) < now:
+                MOBILE_AUTH_TOKENS.pop(k, None)
+                removed += 1
+    except Exception:
+        pass
+
 def _issue_verification_token(username: str) -> str:
     token = uuid.uuid4().hex + uuid.uuid4().hex
     try:
@@ -584,15 +1502,17 @@ def _send_verification_email(username: str):
             verify_url = f"{host}/verify/{token}"
         subject = 'Verify your EverydayAdvertise account'
         body = f"Welcome! Please verify your email by clicking this link:\n\n{verify_url}\n\nThis link will confirm your account. If you did not sign up, please ignore this email."
-        if _mail_configured():
-            ok = send_email(email, subject, body)
-            if ok:
-                logging.info('Verification email sent to %s', email)
-            else:
-                logging.warning('SMTP send failed; printing verification URL: %s', verify_url)
-        else:
-            logging.warning('SMTP not configured; printing verification URL: %s', verify_url)
-        return True
+        if not _mail_configured():
+            logging.warning('SMTP not configured; cannot send verification email. URL would be: %s', verify_url)
+            return False
+
+        ok = send_email(email, subject, body)
+        if ok:
+            logging.info('Verification email sent to %s', email)
+            return True
+
+        logging.warning('SMTP send failed for %s; verification URL: %s', email, verify_url)
+        return False
     except Exception as e:
         logging.warning('send_verification_email failed: %s', e)
         return False
@@ -606,26 +1526,261 @@ def login_required(view):
                 return view(*args, **kwargs)
         except Exception:
             pass
-        if not session.get('user'):
+        user = session.get('user')
+        if not user:
             return redirect(url_for('login', next=request.path))
+        # Guard against malformed sessions that are truthy but missing identity.
+        # This prevents "logged in but no email/user context" behavior in mobile.
+        if isinstance(user, dict):
+            uid = user.get('id')
+            has_identity = bool(
+                user.get('email')
+                or user.get('name')
+                or user.get('username')
+                or user.get('login')
+            )
+            if not has_identity:
+                try:
+                    if uid is not None and int(uid) > 0:
+                        db = get_db()
+                        row = db.execute('SELECT id FROM users WHERE id = ?', (int(uid),)).fetchone()
+                        has_identity = row is not None
+                except Exception:
+                    has_identity = False
+            if not has_identity:
+                try:
+                    session.pop('user', None)
+                except Exception:
+                    pass
+                return redirect(url_for('login', next=request.path))
         return view(*args, **kwargs)
     return wrapped
 
+@app.before_request
+def _hydrate_session_from_mobile_auth_header():
+    """Allow mobile app auth via X-Mobile-Auth token by hydrating Flask session."""
+    token = (request.headers.get('X-Mobile-Auth') or '').strip()
+    if not token:
+        return
+
+    user = _mobile_user_from_token(token)
+    if not user:
+        return
+
+    try:
+        # IMPORTANT: for mobile requests, token identity must win over any
+        # stale cookie session identity from prior web/browser usage.
+        session['user'] = user
+        session.permanent = True
+    except Exception:
+        pass
+
 def _stripe_enabled() -> bool:
-    return bool(stripe and STRIPE_SECRET_KEY and STRIPE_STANDARD_PRICE_ID)
+    try:
+        price_id = (_get_global_billing_settings().get('stripe_price_id') or '').strip()
+    except Exception:
+        price_id = (STRIPE_STANDARD_PRICE_ID or '').strip()
+    return bool(stripe and STRIPE_SECRET_KEY and price_id)
+
+def _is_valid_identity_value(value) -> bool:
+    try:
+        text = str(value or '').strip().lower()
+    except Exception:
+        return False
+    return bool(text and text not in ('-', 'null', 'none', 'undefined'))
+
+def _deep_find_email_like(obj) -> Optional[str]:
+    try:
+        if isinstance(obj, str):
+            cand = obj.strip().lower()
+            if '@' in cand and '.' in cand:
+                return cand
+            return None
+        if isinstance(obj, dict):
+            preferred_keys = ('email', 'username', 'name', 'login')
+            for k in preferred_keys:
+                if k in obj:
+                    v = obj.get(k)
+                    # Keep this strict: only accept email-like strings.
+                    found = _deep_find_email_like(v)
+                    if found:
+                        return found
+            # Only recurse into likely identity containers, not all keys.
+            for nested_key in ('user', 'account', 'profile', 'claims'):
+                if nested_key in obj:
+                    found = _deep_find_email_like(obj.get(nested_key))
+                    if found:
+                        return found
+            return None
+        if isinstance(obj, (list, tuple, set)):
+            for v in obj:
+                found = _deep_find_email_like(v)
+                if found:
+                    return found
+            return None
+    except Exception:
+        return None
+    return None
+
+def _deep_find_positive_int_id(obj) -> Optional[int]:
+    try:
+        if isinstance(obj, bool):
+            return None
+        if isinstance(obj, int):
+            return obj if obj > 0 else None
+        if isinstance(obj, str):
+            s = obj.strip()
+            if s.isdigit():
+                n = int(s)
+                return n if n > 0 else None
+            return None
+        if isinstance(obj, dict):
+            for id_key in ('id', 'user_id', 'uid'):
+                if id_key in obj:
+                    found = _deep_find_positive_int_id(obj.get(id_key))
+                    if found:
+                        return found
+            # Only recurse into likely identity containers, not all keys.
+            for nested_key in ('user', 'account', 'profile', 'claims'):
+                if nested_key in obj:
+                    found = _deep_find_positive_int_id(obj.get(nested_key))
+                    if found:
+                        return found
+            return None
+        if isinstance(obj, (list, tuple, set)):
+            for v in obj:
+                found = _deep_find_positive_int_id(v)
+                if found:
+                    return found
+            return None
+    except Exception:
+        return None
+    return None
 
 def _current_username() -> str:
     try:
         user = session.get('user') or {}
-        return (user.get('email') or user.get('name') or '').strip().lower()
+        if isinstance(user, dict):
+            direct = (user.get('email') or user.get('username') or user.get('name') or user.get('login') or '').strip().lower()
+            if _is_valid_identity_value(direct):
+                return direct
+        elif isinstance(user, str):
+            direct = user.strip().lower()
+            if _is_valid_identity_value(direct):
+                return direct
+        found = _deep_find_email_like(user)
+        if _is_valid_identity_value(found):
+            return found
+        return ''
     except Exception:
         return ''
+
+def _hydrate_session_identity_from_user_id() -> bool:
+    """If session has only user id, hydrate username/email from DB.
+
+    Returns True when a valid user id exists and hydration succeeded.
+    """
+    try:
+        user = session.get('user')
+        if not isinstance(user, dict):
+            return False
+
+        raw_id = user.get('id')
+        if raw_id is None:
+            return False
+
+        try:
+            uid = int(raw_id)
+        except Exception:
+            return False
+        if uid <= 0:
+            return False
+
+        db = get_db()
+        row = db.execute('SELECT username, role FROM users WHERE id = ?', (uid,)).fetchone()
+        if not row or not row['username']:
+            return False
+
+        uname = (row['username'] or '').strip().lower()
+        user['name'] = uname
+        user['email'] = uname
+        user['id'] = uid
+        user['is_admin'] = ((row['role'] or '').strip().lower() == 'admin')
+        session['user'] = user
+        return True
+    except Exception:
+        return False
+
+def _upsert_oauth_user(email: str, full_name: str | None, method: str = 'google') -> dict:
+    """Create/update OAuth user record and return session user payload."""
+    db = get_db()
+    uname = (email or '').strip().lower()
+    if not uname:
+        raise RuntimeError('Missing email')
+
+    row = db.execute('SELECT id, username, role FROM users WHERE username = ?', (uname,)).fetchone()
+    if row:
+        db.execute(
+            'UPDATE users SET full_name = ?, email_verified = 1 WHERE username = ?',
+            (full_name or uname, uname),
+        )
+    else:
+        db.execute(
+            'INSERT INTO users (username, full_name, email_verified) VALUES (?, ?, 1)',
+            (uname, full_name or uname),
+        )
+    db.commit()
+
+    row2 = db.execute('SELECT id, username, role FROM users WHERE username = ?', (uname,)).fetchone()
+    if not row2:
+        raise RuntimeError('User upsert failed')
+
+    try:
+        _ensure_user_billing_policy(int(row2['id']), source=f'oauth_{method}')
+    except Exception as _billing_e:
+        logging.warning('Failed to ensure billing policy for OAuth user %s: %s', uname, _billing_e)
+
+    try:
+        _ensure_user_link_code(uname)
+    except Exception:
+        pass
+
+    is_admin = False
+    try:
+        user_role = (row2['role'] or '').strip().lower()
+        is_admin = user_role == 'admin'
+    except Exception:
+        pass
+
+    return {
+        'id': row2['id'],
+        'name': row2['username'],
+        'email': uname,
+        'method': method,
+        'is_admin': is_admin,
+    }
 
 def _current_user_id() -> int|None:
     try:
         user = session.get('user') or {}
-        if user.get('id'):
-            return user['id']
+        parsed_id = _deep_find_positive_int_id(user)
+        if parsed_id:
+            db = get_db()
+            row = db.execute('SELECT id, username FROM users WHERE id = ?', (parsed_id,)).fetchone()
+            if row:
+                try:
+                    user_dict = dict(user) if isinstance(user, dict) else {}
+                    uname = (row['username'] or '').strip().lower()
+                    if uname:
+                        if not user_dict.get('name'):
+                            user_dict['name'] = uname
+                        if not user_dict.get('email'):
+                            user_dict['email'] = uname
+                    user_dict['id'] = row['id']
+                    session['user'] = user_dict
+                except Exception:
+                    pass
+                return row['id']
         username = _current_username()
         if not username:
             return None
@@ -739,6 +1894,9 @@ def _create_screen_subscription(user_id: int, screen_id: str, store_id: str, scr
         return None
     
     try:
+        policy = _get_user_billing_policy(user_id)
+        stripe_price_id = (policy.get('stripe_price_id') or '').strip() or (STRIPE_STANDARD_PRICE_ID or '').strip()
+
         # Get or create Stripe customer
         customer_id = _get_or_create_stripe_customer(user_id)
         if not customer_id:
@@ -746,17 +1904,19 @@ def _create_screen_subscription(user_id: int, screen_id: str, store_id: str, scr
             return None
         
         # Create subscription in Stripe
-        subscription = stripe.Subscription.create(
-            customer=customer_id,
-            items=[{'price': STRIPE_STANDARD_PRICE_ID}],
-            metadata={
+        params = {
+            'customer': customer_id,
+            'items': [{'price': stripe_price_id}],
+            'metadata': {
                 'user_id': user_id,
                 'screen_id': screen_id,
                 'store_id': store_id,
-                'screen_name': screen_name
+                'screen_name': screen_name,
             },
-            trial_period_days=int(STRIPE_TRIAL_DAYS) if STRIPE_TRIAL_DAYS else None
-        )
+        }
+        if int(policy.get('trial_days') or 0) > 0:
+            params['trial_period_days'] = int(policy['trial_days'])
+        subscription = stripe.Subscription.create(**params)
         
         # Save to database
         db = get_db()
@@ -765,7 +1925,7 @@ def _create_screen_subscription(user_id: int, screen_id: str, store_id: str, scr
             '(user_id, screen_id, store_id, screen_name, stripe_subscription_id, stripe_price_id, '
             'status, current_period_start, current_period_end, cancel_at_period_end, updated_at) '
             'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            (user_id, screen_id, store_id, screen_name, subscription.id, STRIPE_STANDARD_PRICE_ID,
+              (user_id, screen_id, store_id, screen_name, subscription.id, stripe_price_id,
              subscription.status, subscription.current_period_start, subscription.current_period_end,
              1 if subscription.cancel_at_period_end else 0, int(time.time()))
         )
@@ -971,6 +2131,20 @@ if OAuth is not None:
                 logging.debug('OAuth: Microsoft provider registered')
             except Exception:
                 pass
+        apple_client_id = os.environ.get('APPLE_CLIENT_ID')
+        apple_client_secret = os.environ.get('APPLE_CLIENT_SECRET')
+        if apple_client_id and apple_client_secret:
+            oauth.register(
+                name='apple',
+                client_id=apple_client_id,
+                client_secret=apple_client_secret,
+                server_metadata_url='https://appleid.apple.com/.well-known/openid-configuration',
+                client_kwargs={'scope': 'openid email name'},
+            )
+            try:
+                logging.debug('OAuth: Apple provider registered')
+            except Exception:
+                pass
     except Exception as _e:
         logging.warning('OAuth init failed: %s', _e)
 
@@ -979,7 +2153,7 @@ def login():
     """Sign-in form with three auth paths:
     1) Admin/basic via env vars
     2) Local SQLite users
-    3) OAuth buttons (Google/Microsoft) rendered when configured
+    3) OAuth buttons (Google/Microsoft/Apple) rendered when configured
     """
     if request.method == 'POST':
         u = (request.form.get('username') or '').strip().lower()
@@ -1089,18 +2263,428 @@ def login():
     try:
         google_env = bool(os.environ.get('GOOGLE_CLIENT_ID') and os.environ.get('GOOGLE_CLIENT_SECRET'))
         ms_env = bool(os.environ.get('MICROSOFT_CLIENT_ID') and os.environ.get('MICROSOFT_CLIENT_SECRET'))
+        apple_env = bool(os.environ.get('APPLE_CLIENT_ID') and os.environ.get('APPLE_CLIENT_SECRET'))
         google_enabled = bool(oauth and getattr(oauth, 'google', None)) or google_env
         microsoft_enabled = bool(oauth and getattr(oauth, 'microsoft', None)) or ms_env
+        apple_enabled = bool(oauth and getattr(oauth, 'apple', None)) or apple_env
     except Exception:
         google_enabled = False
         microsoft_enabled = False
+        apple_enabled = False
 
-    resp = make_response(render_template('login.html', google_enabled=google_enabled, microsoft_enabled=microsoft_enabled, build_stamp=BUILD_STAMP))
+    resp = make_response(render_template(
+        'login.html',
+        google_enabled=google_enabled,
+        microsoft_enabled=microsoft_enabled,
+        apple_enabled=apple_enabled,
+        build_stamp=BUILD_STAMP,
+    ))
     try:
         resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
     except Exception:
         pass
     return resp
+
+@app.route('/api/auth/local-login', methods=['POST'])
+def api_auth_local_login():
+    """Mobile-friendly local login that issues a mobile auth token.
+
+    This matches the website user experience: users can sign in first and are
+    blocked from subscribe actions later if email/phone are not verified.
+    """
+    try:
+        data = request.get_json(silent=True) or request.form or {}
+        username = (data.get('username') or '').strip().lower()
+        password = data.get('password') or ''
+
+        if not username or not password:
+            return jsonify({'success': False, 'error': 'Username and password are required'}), 400
+
+        try:
+            if _check_basic_auth(username, password):
+                user = {
+                    'id': None,
+                    'name': username,
+                    'email': username,
+                    'method': 'password',
+                    'is_admin': True,
+                }
+                session['user'] = user
+                session.permanent = True
+                mobile_token = _issue_mobile_auth_token(user)
+                _cleanup_mobile_auth_tokens()
+                return jsonify({
+                    'success': True,
+                    'mobile_auth_token': mobile_token,
+                    'user': {
+                        'id': None,
+                        'name': username,
+                        'email': username,
+                        'email_verified': True,
+                        'is_admin': True,
+                    },
+                })
+        except Exception:
+            pass
+
+        db = get_db()
+        row = db.execute(
+            'SELECT id, username, password_hash, COALESCE(is_blocked, 0) AS is_blocked, '
+            'COALESCE(email_verified, 0) AS email_verified, verify_token, role '
+            'FROM users WHERE username = ?',
+            (username,)
+        ).fetchone()
+
+        if not row or not check_password_hash(row['password_hash'], password):
+            return jsonify({'success': False, 'error': 'Invalid credentials'}), 401
+
+        try:
+            if int(row['is_blocked'] or 0) == 1:
+                return jsonify({'success': False, 'error': 'Account is blocked'}), 403
+        except Exception:
+            pass
+
+        try:
+            email_verified = int(row['email_verified'] or 0)
+            verify_token = row.get('verify_token')
+
+            if email_verified == 0 and not verify_token:
+                try:
+                    db.execute('UPDATE users SET email_verified = 1 WHERE username = ?', (username,))
+                    db.commit()
+                    email_verified = 1
+                except Exception as _upd_e:
+                    logging.error('Failed to auto-verify legacy account %s: %s', username, _upd_e)
+
+            if email_verified == 0:
+                return jsonify({
+                    'success': False,
+                    'error': 'Please verify your email before logging in. Check your inbox for the verification link.',
+                }), 403
+        except Exception as _ver_e:
+            logging.error('Email verification check failed for %s: %s', username, _ver_e)
+
+        is_admin = False
+        try:
+            user_role = (row['role'] or '').strip().lower()
+            is_admin = user_role == 'admin'
+        except Exception:
+            pass
+
+        user = {
+            'id': row['id'],
+            'name': row['username'],
+            'email': row['username'],
+            'method': 'local',
+            'is_admin': is_admin,
+        }
+        session['user'] = user
+        session.permanent = True
+        try:
+            _ensure_user_link_code(row['username'])
+        except Exception:
+            pass
+
+        mobile_token = _issue_mobile_auth_token(user)
+        _cleanup_mobile_auth_tokens()
+
+        return jsonify({
+            'success': True,
+            'mobile_auth_token': mobile_token,
+            'user': {
+                'id': row['id'],
+                'name': row['username'],
+                'email': row['username'],
+                'email_verified': bool(row['email_verified']),
+                'is_admin': is_admin,
+            },
+        })
+    except Exception as e:
+        logging.error('api_auth_local_login failed: %s', e, exc_info=True)
+        return jsonify({'success': False, 'error': 'Login failed'}), 500
+
+@app.route('/api/auth/providers')
+def api_auth_providers():
+    """Expose which social providers are configured for mobile/web clients."""
+    try:
+        google_env = bool(os.environ.get('GOOGLE_CLIENT_ID') and os.environ.get('GOOGLE_CLIENT_SECRET'))
+        microsoft_env = bool(os.environ.get('MICROSOFT_CLIENT_ID') and os.environ.get('MICROSOFT_CLIENT_SECRET'))
+        apple_env = bool(os.environ.get('APPLE_CLIENT_ID') and os.environ.get('APPLE_CLIENT_SECRET'))
+        google_enabled = bool(oauth and getattr(oauth, 'google', None)) or google_env
+        microsoft_enabled = bool(oauth and getattr(oauth, 'microsoft', None)) or microsoft_env
+        apple_enabled = bool(oauth and getattr(oauth, 'apple', None)) or apple_env
+    except Exception:
+        google_enabled = False
+        microsoft_enabled = False
+        apple_enabled = False
+
+    return jsonify({
+        'success': True,
+        'providers': {
+            'google': bool(google_enabled),
+            'microsoft': bool(microsoft_enabled),
+            'apple': bool(apple_enabled),
+        },
+        'google_client_id': os.environ.get('GOOGLE_CLIENT_ID') or '',
+    })
+
+
+def _create_local_signup_account(username: str, password: str, full_name: str = '') -> dict:
+    db = get_db()
+
+    try:
+        try:
+            db.execute(
+                'INSERT INTO users (username, password_hash, full_name) VALUES (?, ?, ?)',
+                (username, generate_password_hash(password), full_name),
+            )
+        except sqlite3.OperationalError:
+            db.execute(
+                'INSERT INTO users (username, password_hash) VALUES (?, ?)',
+                (username, generate_password_hash(password)),
+            )
+        db.commit()
+    except sqlite3.IntegrityError:
+        return {'success': False, 'error': 'Username already exists', 'status': 409}
+
+    try:
+        created_row = db.execute('SELECT id FROM users WHERE username = ?', (username,)).fetchone()
+        if created_row:
+            _ensure_user_billing_policy(int(created_row['id']), source='signup')
+    except Exception as _billing_e:
+        logging.warning('Failed to ensure billing policy for signup user %s: %s', username, _billing_e)
+
+    try:
+        safe_key = username.lower().replace('@', '_at_')
+        safe_key = ''.join(c for c in safe_key if (c.isalnum() or c in '._-'))
+        user_config_path = os.path.join(BASE_DIR, f'store_config__{safe_key}.json')
+        default_store_id = '1000'
+        default_store_name = 'My First Store'
+        config = {
+            'stores': [{'id': default_store_id, 'name': default_store_name}],
+            'master_store_id': default_store_id,
+            'screens': {default_store_id: {}},
+        }
+        with open(user_config_path, 'w') as f:
+            json.dump(config, f, indent=2)
+    except Exception as store_err:
+        logging.error('SIGNUP_AUTOSTORE failed for %s: %s', username, store_err, exc_info=True)
+
+    try:
+        _ensure_user_link_code(username)
+    except Exception:
+        pass
+
+    if not _mail_configured():
+        logging.warning('SMTP not configured - auto-verifying user %s for development', username)
+        try:
+            db.execute('UPDATE users SET email_verified = 1 WHERE username = ?', (username,))
+            db.commit()
+            return {
+                'success': True,
+                'message': 'Account created successfully! You can now log in. (Email verification disabled - SMTP not configured)',
+                'flash': 'success',
+                'email_verified': True,
+                'email_verification_required': False,
+            }
+        except Exception as verify_err:
+            logging.error('Failed to auto-verify user %s: %s', username, verify_err)
+            return {
+                'success': True,
+                'message': 'Account created but verification failed. Please contact support.',
+                'flash': 'error',
+                'email_verified': False,
+                'email_verification_required': True,
+            }
+
+    try:
+        sent_ok = _send_verification_email(username)
+        if sent_ok:
+            return {
+                'success': True,
+                'message': 'Account created! Please check your email to verify your account before logging in.',
+                'flash': 'success',
+                'email_verified': False,
+                'email_verification_required': True,
+            }
+        return {
+            'success': True,
+            'message': 'Account created, but we could not send a verification email right now. Please use resend verification later.',
+            'flash': 'warning',
+            'email_verified': False,
+            'email_verification_required': True,
+        }
+    except Exception as send_err:
+        logging.warning('Failed to send verification email for %s: %s', username, send_err)
+        return {
+            'success': True,
+            'message': 'Account created! However, we could not send a verification email. Please contact support.',
+            'flash': 'warning',
+            'email_verified': False,
+            'email_verification_required': True,
+        }
+
+
+@app.route('/api/auth/signup', methods=['POST'])
+def api_auth_signup():
+    """Mobile-friendly local signup that mirrors website signup validation and side effects."""
+    try:
+        data = request.get_json(silent=True) or request.form or {}
+        full_name = (data.get('full_name') or '').strip()
+        username = (data.get('username') or '').strip().lower()
+        password = data.get('password') or ''
+        password2 = data.get('password2') or ''
+
+        if not username or not password:
+            return jsonify({'success': False, 'error': 'Email and password required'}), 400
+        if '@' not in username or '.' not in username.split('@')[-1]:
+            return jsonify({'success': False, 'error': 'Please use a valid email address'}), 400
+        if password != password2:
+            return jsonify({'success': False, 'error': 'Passwords do not match'}), 400
+        if len(password) < 6:
+            return jsonify({'success': False, 'error': 'Password must be at least 6 characters'}), 400
+
+        result = _create_local_signup_account(username=username, password=password, full_name=full_name)
+        status = int(result.get('status') or 200)
+        if not result.get('success'):
+            return jsonify({'success': False, 'error': result.get('error') or 'Signup failed'}), status
+
+        return jsonify({
+            'success': True,
+            'message': result.get('message') or 'Account created successfully',
+            'email_verified': bool(result.get('email_verified')),
+            'email_verification_required': bool(result.get('email_verification_required', True)),
+        }), 200
+    except Exception as e:
+        logging.error('api_auth_signup failed: %s', e, exc_info=True)
+        return jsonify({'success': False, 'error': 'Signup failed'}), 500
+
+@app.route('/api/auth/google/native', methods=['POST'])
+def api_auth_google_native():
+    """Native Google Sign-In token exchange for mobile app.
+
+    Accepts Google `id_token`, verifies it with Google tokeninfo, then issues
+    a mobile auth token used via X-Mobile-Auth header.
+    """
+    try:
+        payload = request.get_json(silent=True) or {}
+        if not payload:
+            payload = request.form.to_dict() if request.form else {}
+        id_token = (payload.get('id_token') or '').strip()
+        server_auth_code = (payload.get('server_auth_code') or '').strip()
+        if not id_token and not server_auth_code:
+            return jsonify({'success': False, 'error': 'id_token or server_auth_code is required'}), 400
+
+        try:
+            import requests as _rq
+        except Exception:
+            return jsonify({'success': False, 'error': 'Server missing requests dependency'}), 500
+
+        claims = {}
+        if id_token:
+            try:
+                verify_resp = _rq.get(
+                    'https://oauth2.googleapis.com/tokeninfo',
+                    params={'id_token': id_token},
+                    timeout=12,
+                )
+                if verify_resp.status_code != 200:
+                    return jsonify({'success': False, 'error': 'Invalid Google token'}), 401
+                claims = verify_resp.json() if verify_resp.content else {}
+            except Exception as e:
+                logging.warning('Google native id_token verify failed: %s', e)
+                return jsonify({'success': False, 'error': 'Token verification failed'}), 502
+        else:
+            # Fallback for devices where idToken is not returned but serverAuthCode is.
+            gid = (os.environ.get('GOOGLE_CLIENT_ID') or '').strip()
+            gsecret = (os.environ.get('GOOGLE_CLIENT_SECRET') or '').strip()
+            if not gid or not gsecret:
+                return jsonify({'success': False, 'error': 'Google OAuth server credentials not configured'}), 500
+            try:
+                token_resp = _rq.post(
+                    'https://oauth2.googleapis.com/token',
+                    data={
+                        'code': server_auth_code,
+                        'client_id': gid,
+                        'client_secret': gsecret,
+                        'redirect_uri': 'postmessage',
+                        'grant_type': 'authorization_code',
+                    },
+                    timeout=12,
+                )
+                if token_resp.status_code != 200:
+                    return jsonify({'success': False, 'error': 'Invalid Google auth code'}), 401
+                token_json = token_resp.json() if token_resp.content else {}
+
+                exch_id_token = (token_json.get('id_token') or '').strip()
+                if exch_id_token:
+                    verify_resp = _rq.get(
+                        'https://oauth2.googleapis.com/tokeninfo',
+                        params={'id_token': exch_id_token},
+                        timeout=12,
+                    )
+                    if verify_resp.status_code != 200:
+                        return jsonify({'success': False, 'error': 'Google token exchange verification failed'}), 401
+                    claims = verify_resp.json() if verify_resp.content else {}
+                else:
+                    access_token = (token_json.get('access_token') or '').strip()
+                    if not access_token:
+                        return jsonify({'success': False, 'error': 'Google exchange returned no usable token'}), 401
+                    userinfo_resp = _rq.get(
+                        'https://openidconnect.googleapis.com/v1/userinfo',
+                        headers={'Authorization': f'Bearer {access_token}'},
+                        timeout=12,
+                    )
+                    if userinfo_resp.status_code != 200:
+                        return jsonify({'success': False, 'error': 'Failed to fetch Google user info'}), 401
+                    claims = userinfo_resp.json() if userinfo_resp.content else {}
+            except Exception as e:
+                logging.warning('Google native auth code exchange failed: %s', e)
+                return jsonify({'success': False, 'error': 'Auth code exchange failed'}), 502
+
+        aud = (claims.get('aud') or '').strip()
+        email = (claims.get('email') or '').strip().lower()
+        email_verified = str(claims.get('email_verified') or '').lower() in ('true', '1')
+        full_name = (claims.get('name') or '').strip()
+
+        allowed_aud = {
+            (os.environ.get('GOOGLE_CLIENT_ID') or '').strip(),
+            (os.environ.get('GOOGLE_ANDROID_CLIENT_ID') or '').strip(),
+            (os.environ.get('GOOGLE_IOS_CLIENT_ID') or '').strip(),
+        }
+        allowed_aud = {x for x in allowed_aud if x}
+
+        if allowed_aud and aud not in allowed_aud:
+            return jsonify({'success': False, 'error': 'Token audience mismatch'}), 401
+        if not email:
+            return jsonify({'success': False, 'error': 'Google email not available'}), 401
+        if not email_verified:
+            return jsonify({'success': False, 'error': 'Google email is not verified'}), 401
+
+        allowed_domain = (os.environ.get('GOOGLE_ALLOWED_DOMAIN') or '').strip().lower()
+        if allowed_domain and not email.endswith('@' + allowed_domain):
+            return jsonify({'success': False, 'error': 'Email domain not allowed'}), 403
+
+        user = _upsert_oauth_user(email=email, full_name=full_name, method='google')
+        session['user'] = user
+        session.permanent = True
+
+        mobile_token = _issue_mobile_auth_token(user)
+        _cleanup_mobile_auth_tokens()
+
+        return jsonify({
+            'success': True,
+            'mobile_auth_token': mobile_token,
+            'user': {
+                'id': user.get('id'),
+                'name': user.get('name'),
+                'email': user.get('email'),
+                'is_admin': bool(user.get('is_admin')),
+            },
+        })
+    except Exception as e:
+        logging.error('Google native login failed: %s', e)
+        return jsonify({'success': False, 'error': 'Google native login failed'}), 500
 
 # ---------------------- Password reset (request + confirm) ----------------------
 def _issue_password_reset_token(username: str) -> Optional[str]:
@@ -1128,52 +2712,162 @@ def _parse_reset_token_row(row) -> bool:
     except Exception:
         return False
 
+
+def _request_password_reset(email: str) -> dict:
+    clean_email = (email or '').strip().lower()
+    if not clean_email:
+        return {
+            'success': False,
+            'error': 'Please enter your email',
+            'status': 400,
+        }
+
+    try:
+        logging.info('forgot_password requested for %s', clean_email)
+        db = get_db()
+        row = db.execute('SELECT username FROM users WHERE username = ?', (clean_email,)).fetchone()
+        if not row:
+            return {
+                'success': True,
+                'message': 'If that email exists, we sent a reset link.',
+            }
+
+        token = _issue_password_reset_token(clean_email)
+        if not token:
+            return {
+                'success': False,
+                'error': 'Could not start password reset. Try again later.',
+                'status': 500,
+            }
+
+        try:
+            reset_url = url_for('reset_password', token=token, _external=True, _scheme='https')
+        except Exception:
+            host = 'https://api.everydayadvertise.com'
+            reset_url = f'{host}/reset/{token}'
+
+        app_reset_url = f'everydaymobile://reset-password?token={urllib.parse.quote(token, safe="")}'
+        body = (
+            'We received a request to reset your password.\n\n'
+            f'Open in the mobile app:\n{app_reset_url}\n\n'
+            f'Or use the website link:\n{reset_url}\n\n'
+            "If you didn't request this, you can ignore this email. The link expires in 1 hour."
+        )
+        subject = 'Reset your EverydayAdvertise password'
+
+        if _mail_configured():
+            logging.info('Attempting SMTP send to %s (host=%s)', clean_email, os.environ.get('SMTP_HOST'))
+            ok = send_email(clean_email, subject, body)
+            if ok:
+                return {
+                    'success': True,
+                    'message': 'If that email exists, we sent a reset link.',
+                }
+            return {
+                'success': False,
+                'error': 'Failed to send email. Try again later.',
+                'status': 500,
+            }
+
+        logging.warning('SMTP not configured; password reset URL: %s', reset_url)
+        return {
+            'success': True,
+            'message': 'If that email exists, we sent a reset link.',
+        }
+    except Exception as e:
+        logging.warning('forgot_password error: %s', e)
+        return {
+            'success': False,
+            'error': 'Could not process request.',
+            'status': 500,
+        }
+
+
+def _find_valid_reset_user(token: str):
+    tok = (token or '').strip()
+    if not tok:
+        return None
+    try:
+        db = get_db()
+        row = db.execute(
+            'SELECT username, verify_token FROM users WHERE verify_token LIKE ?',
+            (f'reset:%:{tok}',),
+        ).fetchone()
+        if not row or not _parse_reset_token_row(row):
+            return None
+        return row
+    except Exception as e:
+        logging.warning('find_valid_reset_user error: %s', e)
+        return None
+
+
+def _apply_password_reset(token: str, password: str) -> dict:
+    tok = (token or '').strip()
+    pwd = password or ''
+
+    if not tok:
+        return {
+            'success': False,
+            'error': 'Invalid reset link',
+            'status': 400,
+        }
+    if len(pwd) < 6:
+        return {
+            'success': False,
+            'error': 'Password must be at least 6 characters',
+            'status': 400,
+        }
+
+    row = _find_valid_reset_user(tok)
+    if not row:
+        return {
+            'success': False,
+            'error': 'Reset link is invalid or expired',
+            'status': 400,
+        }
+
+    try:
+        db = get_db()
+        db.execute(
+            'UPDATE users SET password_hash = ?, verify_token = NULL WHERE username = ?',
+            (generate_password_hash(pwd), row['username']),
+        )
+        db.commit()
+        return {
+            'success': True,
+            'message': 'Password updated. You can now sign in.',
+        }
+    except Exception as e:
+        logging.warning('apply_password_reset update failed: %s', e)
+        return {
+            'success': False,
+            'error': 'Could not update password',
+            'status': 500,
+        }
+
 @app.route('/forgot', methods=['GET','POST'])
 def forgot_password():
     if request.method == 'POST':
         email = (request.form.get('email') or '').strip().lower()
-        if not email:
-            flash('Please enter your email', 'error')
-            # Include an error flag in the redirect so the message shows even if cookies are scoped
-            return redirect(url_for('forgot_password', err=1))
-        try:
-            logging.info('forgot_password requested for %s', email)
-            db = get_db()
-            row = db.execute('SELECT username FROM users WHERE username = ?', (email,)).fetchone()
-            if not row:
-                # Do not reveal existence; show generic message
-                flash('If that email exists, we sent a reset link.', 'success')
-                return redirect(url_for('forgot_password', ok=1))
-            token = _issue_password_reset_token(email)
-            if not token:
-                flash('Could not start password reset. Try again later.', 'error')
-                return redirect(url_for('forgot_password', err=1))
-            try:
-                reset_url = url_for('reset_password', token=token, _external=True, _scheme='https')
-            except Exception:
-                host = 'https://api.everydayadvertise.com'
-                reset_url = f"{host}/reset/{token}"
-            body = f"We received a request to reset your password.\n\nClick this link to set a new password:\n{reset_url}\n\nIf you didn't request this, you can ignore this email. The link expires in 1 hour."
-            subject = 'Reset your EverydayAdvertise password'
-            if _mail_configured():
-                logging.info('Attempting SMTP send to %s (host=%s)', email, os.environ.get('SMTP_HOST'))
-                ok = send_email(email, subject, body)
-                if ok:
-                    flash('If that email exists, we sent a reset link.', 'success')
-                    return redirect(url_for('forgot_password', ok=1))
-                else:
-                    flash('Failed to send email. Try again later.', 'error')
-                    return redirect(url_for('forgot_password', err=1))
-            else:
-                logging.warning('SMTP not configured; password reset URL: %s', reset_url)
-                flash('If that email exists, we sent a reset link.', 'success')
-                return redirect(url_for('forgot_password', ok=1))
-        except Exception as e:
-            logging.warning('forgot_password error: %s', e)
-            flash('Could not process request.', 'error')
-            return redirect(url_for('forgot_password', err=1))
+        result = _request_password_reset(email)
+        if result.get('success'):
+            flash(result.get('message') or 'If that email exists, we sent a reset link.', 'success')
+            return redirect(url_for('forgot_password', ok=1))
+        flash(result.get('error') or 'Could not process request.', 'error')
+        return redirect(url_for('forgot_password', err=1))
     # GET
     return render_template('forgot.html')
+
+
+@app.route('/api/auth/forgot-password', methods=['POST'])
+def api_forgot_password():
+    data = request.get_json(silent=True) or request.form or {}
+    email = (data.get('email') or '').strip().lower()
+    result = _request_password_reset(email)
+    status = int(result.get('status') or (200 if result.get('success') else 500))
+    if result.get('success'):
+        return jsonify({'success': True, 'message': result.get('message')}), 200
+    return jsonify({'success': False, 'error': result.get('error') or 'Could not process request.'}), status
 
 @app.route('/reset/<token>', methods=['GET','POST'])
 def reset_password(token: str):
@@ -1182,31 +2876,35 @@ def reset_password(token: str):
         flash('Invalid reset link', 'error')
         return redirect(url_for('login'))
     try:
-        db = get_db()
-        row = db.execute('SELECT username, verify_token FROM users WHERE verify_token LIKE ?', (f'reset:%:{tok}',)).fetchone()
-        if not row or not _parse_reset_token_row(row):
+        row = _find_valid_reset_user(tok)
+        if not row:
             flash('Reset link is invalid or expired', 'error')
             return redirect(url_for('login'))
         if request.method == 'POST':
-            pwd = request.form.get('password') or ''
-            if len(pwd) < 6:
-                flash('Password must be at least 6 characters', 'error')
-                return render_template('reset.html', token=tok)
-            try:
-                db.execute('UPDATE users SET password_hash = ?, verify_token = NULL WHERE username = ?', (generate_password_hash(pwd), row['username']))
-                db.commit()
-                flash('Password updated. You can now sign in.', 'success')
+            result = _apply_password_reset(tok, request.form.get('password') or '')
+            if result.get('success'):
+                flash(result.get('message') or 'Password updated. You can now sign in.', 'success')
                 return redirect(url_for('login'))
-            except Exception as e:
-                logging.warning('reset_password update failed: %s', e)
-                flash('Could not update password', 'error')
-                return render_template('reset.html', token=tok)
+            flash(result.get('error') or 'Could not update password', 'error')
+            return render_template('reset.html', token=tok)
         # GET -> show form
         return render_template('reset.html', token=tok)
     except Exception as e:
         logging.warning('reset_password error: %s', e)
         flash('Reset link not valid', 'error')
         return redirect(url_for('login'))
+
+
+@app.route('/api/auth/reset-password', methods=['POST'])
+def api_reset_password():
+    data = request.get_json(silent=True) or request.form or {}
+    token = (data.get('token') or '').strip()
+    password = data.get('password') or ''
+    result = _apply_password_reset(token, password)
+    status = int(result.get('status') or (200 if result.get('success') else 500))
+    if result.get('success'):
+        return jsonify({'success': True, 'message': result.get('message')}), 200
+    return jsonify({'success': False, 'error': result.get('error') or 'Could not update password'}), status
 
 # ---- Import media from third-party share links (Dropbox / Google Drive / OneDrive) ----
 @app.route('/import_from_url', methods=['POST'])
@@ -1395,107 +3093,38 @@ def signup():
         elif len(password) < 6:
             flash('Password must be at least 6 characters', 'error')
         else:
-            db = get_db()
-            try:
-                # Try inserting with full_name if column exists
-                try:
-                    db.execute('INSERT INTO users (username, password_hash, full_name) VALUES (?, ?, ?)', (
-                        username, generate_password_hash(password), full_name
-                    ))
-                except sqlite3.OperationalError:
-                    # Fallback for older DB without full_name
-                    db.execute('INSERT INTO users (username, password_hash) VALUES (?, ?)', (username, generate_password_hash(password)))
-                db.commit()
-                
-                # AUTO-CREATE DEFAULT STORE: Create "My First Store" for new user
-                logging.info(f'SIGNUP_AUTOSTORE: Starting auto-store creation for username={username}')
-                try:
-                    # Build the user-specific config filename manually (no session yet)
-                    # Match _safe_user_key() logic: replace @ only, keep dots
-                    safe_key = username.lower().replace('@', '_at_')
-                    safe_key = ''.join(c for c in safe_key if (c.isalnum() or c in '._-'))
-                    user_config_path = os.path.join(BASE_DIR, f"store_config__{safe_key}.json")
-                    logging.info(f'SIGNUP_AUTOSTORE: Config path will be: {user_config_path}')
-                    
-                    # Create config with default store
-                    default_store_id = '1000'
-                    default_store_name = 'My First Store'
-                    
-                    config = {
-                        'stores': [{
-                            'id': default_store_id,
-                            'name': default_store_name
-                        }],
-                        'master_store_id': default_store_id,
-                        'screens': {
-                            default_store_id: {}
-                        }
-                    }
-                    logging.info(f'SIGNUP_AUTOSTORE: Config dict created: {config}')
-                    
-                    # Save directly to the user's config file
-                    with open(user_config_path, 'w') as f:
-                        json.dump(config, f, indent=2)
-                    logging.info(f'SIGNUP_AUTOSTORE: File written, now verifying...')
-                    
-                    # Verify the file was created correctly
-                    if os.path.exists(user_config_path):
-                        with open(user_config_path, 'r') as f:
-                            verify_config = json.load(f)
-                        logging.info(f'SIGNUP_AUTOSTORE: SUCCESS! File verified with stores: {verify_config.get("stores", [])}')
-                        logging.info(f'Auto-created default store "{default_store_name}" (ID: {default_store_id}) for new user: {username} at {user_config_path}')
-                    else:
-                        logging.error(f'SIGNUP_AUTOSTORE: FAILED - File does not exist after write: {user_config_path}')
-                except Exception as store_err:
-                    import traceback
-                    logging.error(f'SIGNUP_AUTOSTORE: EXCEPTION for {username}: {store_err}')
-                    logging.error(f'SIGNUP_AUTOSTORE: Traceback: {traceback.format_exc()}')
-                
-                # Generate a pairing code for this new user
-                try:
-                    _ensure_user_link_code(username)
-                except Exception:
-                    pass
-
-                # Check if SMTP is configured before attempting signup
-                if not _mail_configured():
-                    # SMTP not configured - cannot send verification email
-                    # For development: auto-verify the user
-                    logging.warning('SMTP not configured - auto-verifying user %s for development', username)
-                    try:
-                        db.execute('UPDATE users SET email_verified = 1 WHERE username = ?', (username,))
-                        db.commit()
-                        flash('Account created successfully! You can now log in. (Email verification disabled - SMTP not configured)', 'success')
-                    except Exception as _e:
-                        logging.error('Failed to auto-verify user: %s', _e)
-                        flash('Account created but verification failed. Please contact support.', 'error')
-                    return redirect(url_for('login'))
-                
-                # Send verification email
-                try:
-                    _send_verification_email(username)
-                    flash('Account created! Please check your email to verify your account before logging in.', 'success')
-                except Exception as _e:
-                    logging.warning('Failed to send verification email: %s', _e)
-                    flash('Account created! However, we could not send a verification email. Please contact support.', 'warning')
-                
+            result = _create_local_signup_account(
+                username=username,
+                password=password,
+                full_name=full_name,
+            )
+            if result.get('success'):
+                flash(result.get('message') or 'Account created successfully', result.get('flash') or 'success')
                 return redirect(url_for('login'))
-            except sqlite3.IntegrityError:
-                flash('Username already exists', 'error')
+            flash(result.get('error') or 'Signup failed', 'error')
     # Mirror login page behavior: expose whether Google OAuth is enabled
     try:
         google_env = bool(os.environ.get('GOOGLE_CLIENT_ID') and os.environ.get('GOOGLE_CLIENT_SECRET'))
         ms_env = bool(os.environ.get('MICROSOFT_CLIENT_ID') and os.environ.get('MICROSOFT_CLIENT_SECRET'))
+        apple_env = bool(os.environ.get('APPLE_CLIENT_ID') and os.environ.get('APPLE_CLIENT_SECRET'))
         google_enabled = bool(oauth and getattr(oauth, 'google', None)) or google_env
         microsoft_enabled = bool(oauth and getattr(oauth, 'microsoft', None)) or ms_env
+        apple_enabled = bool(oauth and getattr(oauth, 'apple', None)) or apple_env
     except Exception:
         google_enabled = False
         microsoft_enabled = False
+        apple_enabled = False
     try:
         trial_days_display = int(STRIPE_TRIAL_DAYS or 14)
     except Exception:
         trial_days_display = 14
-    resp = make_response(render_template('signup.html', google_enabled=google_enabled, microsoft_enabled=microsoft_enabled, trial_days_display=trial_days_display))
+    resp = make_response(render_template(
+        'signup.html',
+        google_enabled=google_enabled,
+        microsoft_enabled=microsoft_enabled,
+        apple_enabled=apple_enabled,
+        trial_days_display=trial_days_display,
+    ))
     try:
         resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
     except Exception:
@@ -1517,17 +3146,60 @@ def logout():
 # ---------------------- Public homepage ----------------------
 @app.route('/')
 def home():
+    home_billing = _get_global_billing_settings()
     try:
-        # Provide cache-busting for logo and build info
+        home_billing, _ = _get_new_user_billing_settings('public_home')
+    except Exception as e:
+        logging.warning('Failed to load public homepage billing settings: %s', e)
+
+    home_price_amount, home_price_period = _split_price_display(
+        home_billing.get('price_per_screen') or _default_price_per_screen(),
+        home_billing.get('price_display') or '',
+    )
+    home_pricing_feature = _public_home_pricing_feature(home_billing)
+    home_pricing_note = _public_home_pricing_note(home_billing)
+    home_content = _get_homepage_settings()
+    home_promo_messages = _get_homepage_promo_messages(home_content)
+    home_features = _get_homepage_features()
+    home_body_media = _get_homepage_body_media()
+
+    try:
+        # Serve the primary homepage template and keep cache-busting tied to
+        # the template actually rendered so edits show up immediately.
         import os, time as _t
+        templates_dir = os.path.join(os.path.dirname(__file__), 'templates')
         logo_path = os.path.join(os.path.dirname(__file__), 'static', 'ea-logo.svg')
-        asset_bust = int(os.path.getmtime(logo_path)) if os.path.exists(logo_path) else int(_t.time())
-        # Add page version for animated logo
-        page_version = '3.0'
+        primary_home_template = 'home.html'
+        fallback_home_template = 'home_new.html'
+        selected_home_template = primary_home_template
+        home_template_path = os.path.join(templates_dir, primary_home_template)
+        if not os.path.exists(home_template_path):
+            selected_home_template = fallback_home_template
+            home_template_path = os.path.join(templates_dir, fallback_home_template)
+        logo_mtime = int(os.path.getmtime(logo_path)) if os.path.exists(logo_path) else 0
+        template_mtime = int(os.path.getmtime(home_template_path)) if os.path.exists(home_template_path) else 0
+        asset_bust = max(logo_mtime, template_mtime, int(_t.time()))
+        page_version = str(max(logo_mtime, template_mtime, 4000))
     except Exception:
+        selected_home_template = 'home.html'
         asset_bust = 0
-        page_version = '3.0'
-    resp = make_response(render_template('home.html', build_stamp=BUILD_STAMP, git_commit=GIT_COMMIT, asset_bust=asset_bust, page_version=page_version))
+        page_version = '4000'
+    resp = make_response(render_template(
+        selected_home_template,
+        build_stamp=BUILD_STAMP,
+        git_commit=GIT_COMMIT,
+        asset_bust=asset_bust,
+        page_version=page_version,
+        home_billing=home_billing,
+        home_content=home_content,
+        home_promo_messages=home_promo_messages,
+        home_features=home_features,
+        home_body_media=home_body_media,
+        home_price_amount=home_price_amount,
+        home_price_period=home_price_period,
+        home_pricing_feature=home_pricing_feature,
+        home_pricing_note=home_pricing_note,
+    ))
     try:
         # Force no-cache to show logo animation immediately
         resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
@@ -1541,10 +3213,23 @@ def home():
         pass
     return resp
 
+
+@app.route('/privacy-policy')
+@app.route('/privacy')
+def privacy_policy():
+    return render_template('privacy_policy.html')
+
+
+@app.route('/terms-of-service')
+@app.route('/terms')
+def terms_of_service():
+    return render_template('terms_of_service.html')
+
 @app.route('/subscribe')
 @login_required
 def subscribe():
     user_id = _current_user_id()
+    billing_policy = _get_user_billing_policy(user_id)
     subscription_row = None
     if user_id:
         try:
@@ -1566,9 +3251,10 @@ def subscribe():
         'subscription': subscription_row,
         'has_active': has_active,
         'publishable_key': STRIPE_PUBLISHABLE_KEY,
-        'price_display': STRIPE_PRICE_DISPLAY,
-        'trial_days': STRIPE_TRIAL_DAYS,
-        'price_id': STRIPE_STANDARD_PRICE_ID,
+        'price_display': billing_policy['price_display'],
+        'trial_days': billing_policy['trial_days'],
+        'price_id': billing_policy['stripe_price_id'],
+        'free_screens': billing_policy['free_screens'],
         'next_renewal': next_renewal,
     }
     return render_template('subscribe.html', **template_ctx)
@@ -1583,19 +3269,24 @@ def billing_checkout():
     if not user_id:
         flash('Could not determine current user for billing', 'error')
         return redirect(url_for('subscribe'))
+
+    eligible, eligibility_error = _check_subscription_eligibility(user_id)
+    if not eligible:
+        flash(eligibility_error or 'You are not eligible to subscribe yet.', 'error')
+        return redirect(url_for('account'))
+
     try:
+        billing_policy = _get_user_billing_policy(user_id)
+        stripe_price_id = (billing_policy.get('stripe_price_id') or '').strip() or (STRIPE_STANDARD_PRICE_ID or '').strip()
         customer_id = _get_or_create_stripe_customer(user_id)
         success_url = url_for('billing_success', _external=True) + '?session_id={CHECKOUT_SESSION_ID}'
         cancel_url = url_for('billing_cancelled', _external=True)
         subscription_data = {}
-        try:
-            if STRIPE_TRIAL_DAYS:
-                subscription_data['trial_period_days'] = int(STRIPE_TRIAL_DAYS)
-        except Exception:
-            subscription_data = {}
+        if int(billing_policy.get('trial_days') or 0) > 0:
+            subscription_data['trial_period_days'] = int(billing_policy['trial_days'])
         params = {
             'mode': 'subscription',
-            'line_items': [{'price': STRIPE_STANDARD_PRICE_ID, 'quantity': 1}],
+            'line_items': [{'price': stripe_price_id, 'quantity': 1}],
             'customer': customer_id,
             'success_url': success_url,
             'cancel_url': cancel_url,
@@ -1610,6 +3301,150 @@ def billing_checkout():
         logging.error('Failed to create Stripe checkout session: %s', _e)
         flash('Could not start checkout session. Please try again or contact support.', 'error')
         return redirect(url_for('subscribe'))
+
+
+@app.route('/api/subscription/summary', methods=['GET'])
+@login_required
+def api_subscription_summary():
+    """Return the same subscription state shown on /subscribe for mobile clients."""
+    try:
+        user_id = _current_user_id()
+        if not user_id:
+            return jsonify({'success': False, 'error': 'auth required'}), 403
+
+        current_username = session.get('user', {}).get('name', '')
+        is_admin_user = (current_username == 'test9@gmail.com')
+        is_admin_flag = bool(session.get('user', {}).get('is_admin', False))
+        is_bypass = is_admin_user or is_admin_flag
+        billing_policy = _get_user_billing_policy(user_id)
+
+        db = get_db()
+        subscription_row = db.execute(
+            'SELECT * FROM subscriptions WHERE user_id = ? ORDER BY id DESC LIMIT 1',
+            (user_id,)
+        ).fetchone()
+
+        has_active = _user_has_active_subscription(user_id)
+        screen_count = _count_user_screens()
+
+        next_renewal = None
+        if subscription_row and subscription_row['current_period_end']:
+            try:
+                next_renewal = datetime.fromtimestamp(
+                    int(subscription_row['current_period_end'])
+                ).strftime('%b %d, %Y')
+            except Exception:
+                next_renewal = None
+
+        free_screens = int(billing_policy.get('free_screens') or 0)
+        requires_subscription = (not has_active) and (not is_bypass) and (screen_count >= free_screens)
+
+        return jsonify({
+            'success': True,
+            'stripe_enabled': _stripe_enabled(),
+            'has_active': has_active,
+            'requires_subscription': requires_subscription,
+            'is_admin_bypass': is_bypass,
+            'price_display': billing_policy['price_display'],
+            'trial_days': int(billing_policy['trial_days']),
+            'free_screens': free_screens,
+            'next_renewal': next_renewal,
+            'screen_count': screen_count,
+            'subscription': dict(subscription_row) if subscription_row else None,
+        })
+    except Exception as e:
+        logging.error('api_subscription_summary failed: %s', e, exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/billing/checkout-session', methods=['POST'])
+@login_required
+def api_billing_checkout_session():
+    """Create a Stripe checkout session and return URL as JSON for mobile apps."""
+    if not _stripe_enabled():
+        return jsonify({
+            'success': False,
+            'error': 'Billing is not configured',
+        }), 400
+
+    user_id = _current_user_id()
+    if not user_id:
+        return jsonify({'success': False, 'error': 'auth required'}), 403
+
+    eligible, eligibility_error = _check_subscription_eligibility(user_id)
+    if not eligible:
+        return jsonify({
+            'success': False,
+            'error': eligibility_error or 'You are not eligible to subscribe yet.',
+            'requires_verification': True,
+        }), 400
+
+    try:
+        billing_policy = _get_user_billing_policy(user_id)
+        stripe_price_id = (billing_policy.get('stripe_price_id') or '').strip() or (STRIPE_STANDARD_PRICE_ID or '').strip()
+        customer_id = _get_or_create_stripe_customer(user_id)
+        success_url = url_for('billing_success', _external=True) + '?session_id={CHECKOUT_SESSION_ID}'
+        cancel_url = url_for('billing_cancelled', _external=True)
+        subscription_data = {}
+        if int(billing_policy.get('trial_days') or 0) > 0:
+            subscription_data['trial_period_days'] = int(billing_policy['trial_days'])
+
+        params = {
+            'mode': 'subscription',
+            'line_items': [{'price': stripe_price_id, 'quantity': 1}],
+            'customer': customer_id,
+            'success_url': success_url,
+            'cancel_url': cancel_url,
+            'allow_promotion_codes': True,
+            'metadata': {'app_user_id': user_id},
+        }
+        if subscription_data:
+            params['subscription_data'] = subscription_data
+
+        checkout_session = stripe.checkout.Session.create(**params)
+        return jsonify({
+            'success': True,
+            'checkout_url': checkout_session.url,
+        })
+    except Exception as e:
+        logging.error('api_billing_checkout_session failed: %s', e, exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': 'Could not start checkout session',
+        }), 500
+
+
+def _check_subscription_eligibility(user_id: int) -> tuple[bool, str|None]:
+    """Validation gate used before opening Stripe checkout.
+
+    Keeps web and mobile behavior consistent.
+    """
+    try:
+        db = get_db()
+        row = db.execute(
+            'SELECT username, email_verified, phone_number, phone_verified, role FROM users WHERE id = ?',
+            (user_id,),
+        ).fetchone()
+        if not row:
+            return False, 'User account not found. Please login again.'
+
+        role = (row['role'] or '').strip().lower()
+        if role == 'admin':
+            return True, None
+
+        email_verified = int(row['email_verified'] or 0) == 1
+        if not email_verified:
+            return False, 'Please verify your email address before subscribing.'
+
+        phone_number = (row['phone_number'] or '').strip()
+        phone_verified = int(row['phone_verified'] or 0) == 1
+        if not phone_number or not phone_verified:
+            return False, 'Please verify your phone number before subscribing.'
+
+        return True, None
+    except Exception as e:
+        logging.warning('Subscription eligibility check failed for user %s: %s', user_id, e)
+        return False, 'Could not validate account eligibility. Please try again.'
 
 @app.route('/billing/success')
 @login_required
@@ -1997,8 +3832,11 @@ def resend_verification():
                     flash('Your email is already verified. You can log in now.', 'success')
                     return redirect(url_for('login'))
                 else:
-                    _send_verification_email(email)
-                    flash('Verification email sent! Please check your inbox.', 'success')
+                    sent_ok = _send_verification_email(email)
+                    if sent_ok:
+                        flash('Verification email sent! Please check your inbox.', 'success')
+                    else:
+                        flash('Could not send verification email right now. Please try again later.', 'error')
             else:
                 # Don't reveal if user exists
                 flash('If that email is registered, we sent a verification link.', 'success')
@@ -2113,6 +3951,13 @@ def auth_google():
         except Exception:
             # Fallback to proper domain instead of IP
             redirect_uri = 'https://api.everydayadvertise.com/auth/google/callback'
+
+        # Preserve desired post-login destination for callback routing.
+        try:
+            nxt = (request.args.get('next') or '').strip()
+            session['oauth_next'] = nxt if nxt else ''
+        except Exception:
+            pass
 
         # CRITICAL: Clean up old OAuth state tokens before starting new flow
         # This prevents state mismatch from accumulated stale states
@@ -2249,6 +4094,11 @@ def auth_google_callback():
             logging.error(f'✗ OAuth: User creation failed completely: {e}')
         nxt = request.args.get('next')
         if not nxt:
+            try:
+                nxt = (session.pop('oauth_next', None) or '').strip()
+            except Exception:
+                nxt = None
+        if not nxt:
             # Check if user has active subscription - redirect new users to subscribe page
             # Skip for admin users
             try:
@@ -2287,6 +4137,205 @@ def auth_google_callback():
             flash('Google login failed. Please try again.', 'error')
         
         return redirect(url_for('login'))
+
+@app.route('/auth/apple')
+def auth_apple():
+    # Ensure Apple client exists; lazily register if env vars are present
+    try:
+        client = None
+        if oauth:
+            if not getattr(oauth, 'apple', None):
+                aid = os.environ.get('APPLE_CLIENT_ID')
+                asecret = os.environ.get('APPLE_CLIENT_SECRET')
+                if aid and asecret:
+                    try:
+                        oauth.register(
+                            name='apple',
+                            client_id=aid,
+                            client_secret=asecret,
+                            server_metadata_url='https://appleid.apple.com/.well-known/openid-configuration',
+                            client_kwargs={'scope': 'openid email name'},
+                        )
+                        logging.info('OAuth: Apple provider lazily registered in route')
+                    except Exception as _e:
+                        logging.warning('OAuth: apple (re)register failed: %s', _e)
+            try:
+                client = oauth.create_client('apple')
+            except Exception:
+                client = None
+
+        if not client:
+            flash('Apple Sign-In not configured', 'error')
+            return redirect(url_for('login'))
+
+        try:
+            redirect_uri = url_for('auth_apple_callback', _external=True)
+            if redirect_uri.startswith('http://'):
+                redirect_uri = redirect_uri.replace('http://', 'https://', 1)
+        except Exception:
+            redirect_uri = 'https://api.everydayadvertise.com/auth/apple/callback'
+
+        try:
+            nxt = (request.args.get('next') or '').strip()
+            session['oauth_next'] = nxt if nxt else ''
+        except Exception:
+            pass
+
+        keys_to_remove = [k for k in session.keys() if k.startswith('_state_apple_')]
+        for key in keys_to_remove:
+            session.pop(key, None)
+
+        nonce = secrets.token_urlsafe(24)
+        session['apple_oauth_nonce'] = nonce
+        session.permanent = True
+
+        return client.authorize_redirect(redirect_uri, nonce=nonce, response_mode='form_post')
+    except Exception as e:
+        logging.warning('Apple auth init failed: %s', e)
+        flash('Apple Sign-In not available', 'error')
+        return redirect(url_for('login'))
+
+@app.route('/auth/apple/callback', methods=['GET', 'POST'])
+def auth_apple_callback():
+    try:
+        if oauth and not getattr(oauth, 'apple', None):
+            aid = os.environ.get('APPLE_CLIENT_ID')
+            asecret = os.environ.get('APPLE_CLIENT_SECRET')
+            if aid and asecret:
+                try:
+                    oauth.register(
+                        name='apple',
+                        client_id=aid,
+                        client_secret=asecret,
+                        server_metadata_url='https://appleid.apple.com/.well-known/openid-configuration',
+                        client_kwargs={'scope': 'openid email name'},
+                    )
+                    logging.info('OAuth: Apple provider lazily registered in callback')
+                except Exception as _e:
+                    logging.warning('OAuth: apple lazy register failed in callback: %s', _e)
+
+        client = oauth.create_client('apple') if oauth else None
+        if not client:
+            flash('Apple Sign-In not configured', 'error')
+            return redirect(url_for('login'))
+
+        token = client.authorize_access_token()
+        nonce = session.pop('apple_oauth_nonce', None)
+        claims = {}
+        try:
+            parsed = client.parse_id_token(token, nonce=nonce)
+            if isinstance(parsed, dict):
+                claims = parsed
+        except Exception as _e:
+            logging.warning('Apple parse_id_token failed: %s', _e)
+
+        user_blob = (request.form.get('user') or '').strip()
+        user_info = {}
+        if user_blob:
+            try:
+                user_info = json.loads(user_blob) or {}
+            except Exception:
+                user_info = {}
+
+        email = (claims.get('email') or user_info.get('email') or '')
+        email = str(email).strip().lower()
+
+        first_name = ((user_info.get('name') or {}).get('firstName') or '').strip()
+        last_name = ((user_info.get('name') or {}).get('lastName') or '').strip()
+        full_name = (f'{first_name} {last_name}').strip() or None
+
+        if not email:
+            flash('Apple login failed: no email returned from Apple', 'error')
+            return redirect(url_for('login'))
+
+        allowed_domain = (os.environ.get('APPLE_ALLOWED_DOMAIN') or '').strip().lower()
+        if allowed_domain and not email.endswith('@' + allowed_domain):
+            flash('Email domain not allowed', 'error')
+            return redirect(url_for('login'))
+
+        user = _upsert_oauth_user(email=email, full_name=full_name, method='apple')
+        session['user'] = user
+        session.permanent = True
+
+        nxt = request.args.get('next')
+        if not nxt:
+            try:
+                nxt = (session.pop('oauth_next', None) or '').strip()
+            except Exception:
+                nxt = None
+
+        if not nxt:
+            try:
+                user_id = session.get('user', {}).get('id')
+                is_admin = session.get('user', {}).get('is_admin', False)
+                if user_id and not is_admin and not _user_has_active_subscription(user_id):
+                    return redirect(url_for('subscribe', welcome=1))
+            except Exception as _sub_e:
+                logging.warning('Failed subscription check for Apple OAuth user %s: %s', email, _sub_e)
+            try:
+                host = request.host or ''
+                if host.startswith('api.') and 'everydayadvertise.com' in host:
+                    return redirect('https://api.everydayadvertise.com/dashboard')
+            except Exception:
+                pass
+            nxt = url_for('dashboard')
+
+        return redirect(nxt)
+    except Exception as e:
+        logging.error('Apple OAuth callback failed: %s', e)
+        flash('Apple login failed. Please try again.', 'error')
+        return redirect(url_for('login'))
+
+@app.route('/auth/mobile/start/<provider>')
+def auth_mobile_start(provider):
+    """Start OAuth for mobile app and redirect back via custom URI with token."""
+    provider = (provider or '').strip().lower()
+    redirect_uri = (request.args.get('redirect_uri') or '').strip()
+    if not redirect_uri:
+        return jsonify({'success': False, 'error': 'redirect_uri is required'}), 400
+
+    if not re.match(r'^[a-zA-Z][a-zA-Z0-9+\-.]*://', redirect_uri):
+        return jsonify({'success': False, 'error': 'invalid redirect_uri'}), 400
+
+    complete_url = url_for('auth_mobile_complete', _external=True)
+    if complete_url.startswith('http://'):
+        complete_url = complete_url.replace('http://', 'https://', 1)
+    next_url = f"{complete_url}?redirect_uri={urllib.parse.quote(redirect_uri, safe='')}"
+
+    if provider == 'google':
+        return redirect(url_for('auth_google', next=next_url))
+
+    if provider == 'apple':
+        return redirect(url_for('auth_apple', next=next_url))
+
+    if provider == 'microsoft':
+        return redirect(url_for('auth_microsoft', next=next_url))
+
+    return jsonify({'success': False, 'error': 'unsupported provider'}), 400
+
+@app.route('/auth/mobile/complete')
+def auth_mobile_complete():
+    """Issue mobile auth token after OAuth login and deep-link back to app."""
+    redirect_uri = (request.args.get('redirect_uri') or '').strip()
+    if not redirect_uri or not re.match(r'^[a-zA-Z][a-zA-Z0-9+\-.]*://', redirect_uri):
+        return redirect(url_for('dashboard'))
+
+    user = session.get('user') or {}
+    if not user:
+        return redirect(f"{redirect_uri}?status=error&error=not_authenticated")
+
+    try:
+        token = _issue_mobile_auth_token(user)
+        _cleanup_mobile_auth_tokens()
+        q = {
+            'status': 'success',
+            'token': token,
+            'name': (user.get('name') or ''),
+            'email': (user.get('email') or ''),
+        }
+        return redirect(f"{redirect_uri}?{urllib.parse.urlencode(q)}")
+    except Exception:
+        return redirect(f"{redirect_uri}?status=error&error=token_issue_failed")
 
 @app.route('/auth/microsoft')
 def auth_microsoft():
@@ -3908,6 +5957,8 @@ app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024
 def classify_media(filename: str) -> str:
     """Classify media by extension into image / animated / video.
     Falls back to 'image' if unknown but allowed (future-proofing)."""
+    if isinstance(filename, str) and filename.strip().lower().startswith('youtube:'):
+        return 'video'
     ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
     if ext in VIDEO_EXTENSIONS:
         return 'video'
@@ -4476,7 +6527,13 @@ def superadmin_logout():
 def _collect_user_metrics():
     """Return list of users with counts: stores, screens, online screens."""
     db = get_db()
-    cur = db.execute("SELECT id, username, full_name, link_code, role, COALESCE(is_blocked,0) AS is_blocked, CASE WHEN password_hash IS NULL OR password_hash = '' THEN 0 ELSE 1 END AS has_password FROM users ORDER BY username")
+    cur = db.execute(
+        "SELECT id, username, full_name, link_code, role, phone_number, "
+        "COALESCE(is_blocked,0) AS is_blocked, COALESCE(email_verified,0) AS email_verified, "
+        "COALESCE(phone_verified,0) AS phone_verified, "
+        "CASE WHEN password_hash IS NULL OR password_hash = '' THEN 0 ELSE 1 END AS has_password "
+        "FROM users ORDER BY username"
+    )
     users = []
     now = int(time.time())
     for row in cur.fetchall() or []:
@@ -4503,6 +6560,9 @@ def _collect_user_metrics():
             'is_blocked': int(row['is_blocked'] or 0),
             'has_password': int(row['has_password'] or 0),
             'is_admin': (row['role'] or '').lower() == 'admin',
+            'email_verified': int(row['email_verified'] or 0) == 1,
+            'phone_number': (row['phone_number'] or '').strip(),
+            'phone_verified': int(row['phone_verified'] or 0) == 1,
             'stores_count': len(stores),
             'screens_count': screens_count,
             'online_screens': online,
@@ -4516,6 +6576,8 @@ def superadmin_dashboard():
     try:
         search_query = request.args.get('search', '').strip().lower()
         users = _collect_user_metrics()
+        billing_settings = _get_global_billing_settings()
+        billing_promotion = _get_billing_promotion()
         
         # Filter users by search query
         if search_query:
@@ -4531,10 +6593,493 @@ def superadmin_dashboard():
             'screens': sum(u['screens_count'] for u in users),
             'online': sum(u['online_screens'] for u in users),
         }
-        return render_template('superadmin/dashboard.html', users=users, totals=totals, search_query=search_query)
+        return render_template(
+            'superadmin/dashboard.html',
+            users=users,
+            totals=totals,
+            search_query=search_query,
+            billing_settings=billing_settings,
+            billing_promotion=billing_promotion,
+        )
     except Exception as e:
         logging.error(f'Superadmin dashboard error: {e}', exc_info=True)
         return f'<h1>Error</h1><pre>{str(e)}</pre>', 500
+
+
+@app.route('/superadmin/website', methods=['GET', 'POST'])
+@superadmin_required
+def superadmin_website_editor():
+    if request.method == 'POST':
+        current = _get_homepage_settings()
+        hero_image_path = current.get('hero_image_path')
+        try:
+            if request.form.get('reset_hero_image') == '1':
+                _cleanup_homepage_asset(hero_image_path)
+                hero_image_path = _default_homepage_settings()['hero_image_path']
+            elif 'hero_image' in request.files and request.files['hero_image'].filename:
+                hero_image_path = _save_homepage_image(request.files['hero_image'], hero_image_path)
+
+            payload = _normalize_homepage_settings({
+                'hero_title_line1': request.form.get('hero_title_line1'),
+                'hero_title_line2': request.form.get('hero_title_line2'),
+                'hero_subtitle': request.form.get('hero_subtitle'),
+                'hero_primary_cta_text': request.form.get('hero_primary_cta_text'),
+                'hero_primary_cta_url': request.form.get('hero_primary_cta_url'),
+                'hero_secondary_cta_text': request.form.get('hero_secondary_cta_text'),
+                'hero_secondary_cta_url': request.form.get('hero_secondary_cta_url'),
+                'hero_proof_secondary': request.form.get('hero_proof_secondary'),
+                'hero_proof_tertiary': request.form.get('hero_proof_tertiary'),
+                'hero_image_path': hero_image_path,
+                'promo_enabled': 1 if request.form.get('promo_enabled') == '1' else 0,
+                'promo_text': request.form.get('promo_text'),
+                'promo_bg_color': request.form.get('promo_bg_color'),
+                'promo_text_color': request.form.get('promo_text_color'),
+                'promo_font_size': request.form.get('promo_font_size'),
+                'promo_font_weight': request.form.get('promo_font_weight'),
+                'promo_font_family': request.form.get('promo_font_family'),
+                'promo_font_style': request.form.get('promo_font_style'),
+                'promo_speed': request.form.get('promo_speed'),
+                'promo_height': request.form.get('promo_height'),
+                'promo_text_align': request.form.get('promo_text_align'),
+                'promo_pause_on_hover': 1 if request.form.get('promo_pause_on_hover') == '1' else 0,
+                'promo_direction': request.form.get('promo_direction'),
+                'features_title': request.form.get('features_title'),
+                'features_style': request.form.get('features_style'),
+                'pricing_title': request.form.get('pricing_title'),
+                'pricing_subtitle': request.form.get('pricing_subtitle'),
+                'updated_at': int(time.time()),
+            })
+
+            db = get_db()
+            db.execute(
+                'INSERT OR REPLACE INTO homepage_settings '
+                '(id, hero_title_line1, hero_title_line2, hero_subtitle, hero_primary_cta_text, hero_primary_cta_url, '
+                'hero_secondary_cta_text, hero_secondary_cta_url, hero_proof_secondary, hero_proof_tertiary, '
+                'hero_image_path, promo_enabled, promo_text, promo_bg_color, promo_text_color, promo_font_size, promo_font_weight, promo_font_family, promo_font_style, promo_speed, promo_height, promo_text_align, promo_pause_on_hover, promo_direction, '
+                'features_title, features_style, pricing_title, pricing_subtitle, updated_at) '
+                'VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                (
+                    payload['hero_title_line1'],
+                    payload['hero_title_line2'],
+                    payload['hero_subtitle'],
+                    payload['hero_primary_cta_text'],
+                    payload['hero_primary_cta_url'],
+                    payload['hero_secondary_cta_text'],
+                    payload['hero_secondary_cta_url'],
+                    payload['hero_proof_secondary'],
+                    payload['hero_proof_tertiary'],
+                    payload['hero_image_path'],
+                    payload['promo_enabled'],
+                    payload['promo_text'],
+                    payload['promo_bg_color'],
+                    payload['promo_text_color'],
+                    payload['promo_font_size'],
+                    payload['promo_font_weight'],
+                    payload['promo_font_family'],
+                    payload['promo_font_style'],
+                    payload['promo_speed'],
+                    payload['promo_height'],
+                    payload['promo_text_align'],
+                    payload['promo_pause_on_hover'],
+                    payload['promo_direction'],
+                    payload['features_title'],
+                    payload['features_style'],
+                    payload['pricing_title'],
+                    payload['pricing_subtitle'],
+                    payload['updated_at'],
+                ),
+            )
+            db.commit()
+            flash('Website homepage settings updated.', 'success')
+        except Exception as e:
+            logging.error('Failed to update homepage settings: %s', e, exc_info=True)
+            flash(f'Failed to update homepage settings: {e}', 'error')
+        return redirect(url_for('superadmin_website_editor'))
+
+    try:
+        users = _collect_user_metrics()
+        totals = {
+            'users': len(users),
+            'stores': sum(u['stores_count'] for u in users),
+            'screens': sum(u['screens_count'] for u in users),
+            'online': sum(u['online_screens'] for u in users),
+        }
+        return render_template(
+            'superadmin/website_edit.html',
+            totals=totals,
+            home_content=_get_homepage_settings(),
+            home_features=_get_homepage_features(),
+            home_body_media=_get_homepage_body_media(),
+            home_billing=_get_global_billing_settings(),
+            home_pricing_feature=_public_home_pricing_feature(_get_global_billing_settings()),
+            public_home_url=url_for('home'),
+        )
+    except Exception as e:
+        logging.error('Superadmin website editor error: %s', e, exc_info=True)
+        return f'<h1>Error</h1><pre>{str(e)}</pre>', 500
+
+
+@app.route('/superadmin/website/media/add', methods=['POST'])
+@superadmin_required
+def superadmin_website_media_add():
+    try:
+        uploaded = _save_homepage_body_media(request.files.get('body_media'))
+        caption = (request.form.get('caption') or '').strip()
+        layout_style = (request.form.get('layout_style') or 'full').strip().lower()
+        if layout_style not in ('full', 'half', 'third'):
+            layout_style = 'full'
+        db = get_db()
+        next_sort = db.execute('SELECT COALESCE(MAX(sort_order), 0) + 1 FROM homepage_body_media').fetchone()[0]
+        db.execute(
+            'INSERT INTO homepage_body_media (media_path, media_type, caption, layout_style, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+            (
+                uploaded['media_path'],
+                uploaded['media_type'],
+                caption,
+                layout_style,
+                int(next_sort or 1),
+                int(time.time()),
+            ),
+        )
+        db.commit()
+        flash('Body media added to the homepage.', 'success')
+    except Exception as e:
+        logging.error('Failed to add homepage body media: %s', e, exc_info=True)
+        flash(f'Failed to add homepage body media: {e}', 'error')
+    return redirect(url_for('superadmin_website_editor'))
+
+
+@app.route('/superadmin/website/media/<int:media_id>/update', methods=['POST'])
+@superadmin_required
+def superadmin_website_media_update(media_id: int):
+    try:
+        db = get_db()
+        row = db.execute('SELECT * FROM homepage_body_media WHERE id = ?', (media_id,)).fetchone()
+        if not row:
+            flash('Homepage media item not found.', 'error')
+            return redirect(url_for('superadmin_website_editor'))
+
+        caption = (request.form.get('caption') or '').strip()
+        layout_style = (request.form.get('layout_style') or 'full').strip().lower()
+        if layout_style not in ('full', 'half', 'third'):
+            layout_style = 'full'
+
+        db.execute(
+            'UPDATE homepage_body_media SET caption = ?, layout_style = ? WHERE id = ?',
+            (caption, layout_style, media_id),
+        )
+        db.commit()
+        flash('Homepage media layout updated.', 'success')
+    except Exception as e:
+        logging.error('Failed to update homepage body media: %s', e, exc_info=True)
+        flash(f'Failed to update homepage body media: {e}', 'error')
+    return redirect(url_for('superadmin_website_editor'))
+
+
+@app.route('/superadmin/website/media/<int:media_id>/delete', methods=['POST'])
+@superadmin_required
+def superadmin_website_media_delete(media_id: int):
+    try:
+        db = get_db()
+        row = db.execute('SELECT * FROM homepage_body_media WHERE id = ?', (media_id,)).fetchone()
+        if not row:
+            flash('Homepage media item not found.', 'error')
+            return redirect(url_for('superadmin_website_editor'))
+        item = _normalize_homepage_body_media_row(dict(row))
+        db.execute('DELETE FROM homepage_body_media WHERE id = ?', (media_id,))
+        db.commit()
+        _cleanup_homepage_asset(item.get('media_path'))
+        flash('Homepage media item removed.', 'success')
+    except Exception as e:
+        logging.error('Failed to delete homepage body media: %s', e, exc_info=True)
+        flash(f'Failed to delete homepage body media: {e}', 'error')
+    return redirect(url_for('superadmin_website_editor'))
+
+
+@app.route('/superadmin/website/media/<int:media_id>/move', methods=['POST'])
+@superadmin_required
+def superadmin_website_media_move(media_id: int):
+    direction = (request.form.get('direction') or '').strip().lower()
+    if direction not in ('up', 'down'):
+        flash('Invalid media move direction.', 'error')
+        return redirect(url_for('superadmin_website_editor'))
+
+    try:
+        db = get_db()
+        rows = db.execute(
+            'SELECT id, sort_order FROM homepage_body_media ORDER BY sort_order ASC, id ASC'
+        ).fetchall()
+        items = [_normalize_homepage_body_media_row(dict(row)) for row in rows]
+        current_index = next((index for index, item in enumerate(items) if item['id'] == media_id), None)
+        if current_index is None:
+            flash('Homepage media item not found.', 'error')
+            return redirect(url_for('superadmin_website_editor'))
+
+        if direction == 'up':
+            target_index = current_index - 1
+        else:
+            target_index = current_index + 1
+
+        if target_index < 0 or target_index >= len(items):
+            return redirect(url_for('superadmin_website_editor'))
+
+        current_item = items[current_index]
+        target_item = items[target_index]
+        db.execute('UPDATE homepage_body_media SET sort_order = ? WHERE id = ?', (target_item['sort_order'], current_item['id']))
+        db.execute('UPDATE homepage_body_media SET sort_order = ? WHERE id = ?', (current_item['sort_order'], target_item['id']))
+        db.commit()
+        flash('Homepage media order updated.', 'success')
+    except Exception as e:
+        logging.error('Failed to reorder homepage body media: %s', e, exc_info=True)
+        flash(f'Failed to reorder homepage body media: {e}', 'error')
+    return redirect(url_for('superadmin_website_editor'))
+
+
+@app.route('/superadmin/website/feature/add', methods=['POST'])
+@superadmin_required
+def superadmin_website_feature_add():
+    try:
+        icon_kind = (request.form.get('icon_kind') or 'emoji').strip().lower()
+        if icon_kind not in ('emoji', 'image'):
+            icon_kind = 'emoji'
+        icon_value = (request.form.get('icon_value') or '').strip() or ('✨' if icon_kind == 'emoji' else 'store_screens.webp')
+        title = (request.form.get('title') or '').strip() or 'New Feature'
+        description = (request.form.get('description') or '').strip() or 'Describe this feature here.'
+        db = get_db()
+        next_sort = db.execute('SELECT COALESCE(MAX(sort_order), 0) + 1 FROM homepage_features').fetchone()[0]
+        db.execute(
+            'INSERT INTO homepage_features (icon_kind, icon_value, title, description, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+            (icon_kind, icon_value, title, description, int(next_sort or 1), int(time.time())),
+        )
+        db.commit()
+        flash('Homepage feature added.', 'success')
+    except Exception as e:
+        logging.error('Failed to add homepage feature: %s', e, exc_info=True)
+        flash(f'Failed to add homepage feature: {e}', 'error')
+    return redirect(url_for('superadmin_website_editor'))
+
+
+@app.route('/superadmin/website/feature/<int:feature_id>/update', methods=['POST'])
+@superadmin_required
+def superadmin_website_feature_update(feature_id: int):
+    try:
+        db = get_db()
+        row = db.execute('SELECT * FROM homepage_features WHERE id = ?', (feature_id,)).fetchone()
+        if not row:
+            flash('Homepage feature not found.', 'error')
+            return redirect(url_for('superadmin_website_editor'))
+
+        icon_kind = (request.form.get('icon_kind') or 'emoji').strip().lower()
+        if icon_kind not in ('emoji', 'image'):
+            icon_kind = 'emoji'
+        icon_value = (request.form.get('icon_value') or '').strip() or ('✨' if icon_kind == 'emoji' else 'store_screens.webp')
+        title = (request.form.get('title') or '').strip() or 'Feature'
+        description = (request.form.get('description') or '').strip() or 'Describe this feature here.'
+
+        db.execute(
+            'UPDATE homepage_features SET icon_kind = ?, icon_value = ?, title = ?, description = ? WHERE id = ?',
+            (icon_kind, icon_value, title, description, feature_id),
+        )
+        db.commit()
+        flash('Homepage feature updated.', 'success')
+    except Exception as e:
+        logging.error('Failed to update homepage feature: %s', e, exc_info=True)
+        flash(f'Failed to update homepage feature: {e}', 'error')
+    return redirect(url_for('superadmin_website_editor'))
+
+
+@app.route('/superadmin/website/feature/<int:feature_id>/delete', methods=['POST'])
+@superadmin_required
+def superadmin_website_feature_delete(feature_id: int):
+    try:
+        db = get_db()
+        db.execute('DELETE FROM homepage_features WHERE id = ?', (feature_id,))
+        db.commit()
+        flash('Homepage feature removed.', 'success')
+    except Exception as e:
+        logging.error('Failed to delete homepage feature: %s', e, exc_info=True)
+        flash(f'Failed to delete homepage feature: {e}', 'error')
+    return redirect(url_for('superadmin_website_editor'))
+
+
+@app.route('/superadmin/website/feature/<int:feature_id>/move', methods=['POST'])
+@superadmin_required
+def superadmin_website_feature_move(feature_id: int):
+    direction = (request.form.get('direction') or '').strip().lower()
+    if direction not in ('up', 'down'):
+        flash('Invalid feature move direction.', 'error')
+        return redirect(url_for('superadmin_website_editor'))
+
+    try:
+        db = get_db()
+        rows = db.execute('SELECT id, sort_order FROM homepage_features ORDER BY sort_order ASC, id ASC').fetchall()
+        items = [_normalize_homepage_feature_row(dict(row)) for row in rows]
+        current_index = next((index for index, item in enumerate(items) if item['id'] == feature_id), None)
+        if current_index is None:
+            flash('Homepage feature not found.', 'error')
+            return redirect(url_for('superadmin_website_editor'))
+
+        target_index = current_index - 1 if direction == 'up' else current_index + 1
+        if target_index < 0 or target_index >= len(items):
+            return redirect(url_for('superadmin_website_editor'))
+
+        current_item = items[current_index]
+        target_item = items[target_index]
+        db.execute('UPDATE homepage_features SET sort_order = ? WHERE id = ?', (target_item['sort_order'], current_item['id']))
+        db.execute('UPDATE homepage_features SET sort_order = ? WHERE id = ?', (current_item['sort_order'], target_item['id']))
+        db.commit()
+        flash('Homepage feature order updated.', 'success')
+    except Exception as e:
+        logging.error('Failed to reorder homepage feature: %s', e, exc_info=True)
+        flash(f'Failed to reorder homepage feature: {e}', 'error')
+    return redirect(url_for('superadmin_website_editor'))
+
+
+@app.route('/superadmin/billing/settings', methods=['POST'])
+@superadmin_required
+def superadmin_update_billing_settings():
+    try:
+        price_per_screen = max(0.0, float(request.form.get('price_per_screen') or 0))
+    except Exception:
+        flash('Price per screen must be a valid number', 'error')
+        return redirect(url_for('superadmin_dashboard'))
+
+    try:
+        trial_days = max(0, int(request.form.get('trial_days') or 0))
+    except Exception:
+        flash('Trial days must be a whole number', 'error')
+        return redirect(url_for('superadmin_dashboard'))
+
+    try:
+        free_screens = max(0, int(request.form.get('free_screens') or 0))
+    except Exception:
+        flash('Free screens must be a whole number', 'error')
+        return redirect(url_for('superadmin_dashboard'))
+
+    price_display = (request.form.get('price_display') or '').strip() or _format_price_display(price_per_screen)
+    stripe_price_id = (request.form.get('stripe_price_id') or '').strip()
+    apply_existing = request.form.get('apply_existing_users') == '1'
+
+    try:
+        db = get_db()
+        db.execute(
+            'INSERT OR REPLACE INTO billing_settings '
+            '(id, price_per_screen, price_display, stripe_price_id, trial_days, free_screens, updated_at) '
+            'VALUES (1, ?, ?, ?, ?, ?, ?)',
+            (
+                price_per_screen,
+                price_display,
+                stripe_price_id,
+                trial_days,
+                free_screens,
+                int(time.time()),
+            ),
+        )
+        db.commit()
+
+        _seed_missing_user_billing_policies(source='settings_seed')
+
+        applied_count = 0
+        if apply_existing:
+            applied_count = _apply_global_billing_settings_to_existing_users()
+
+        flash(
+            f'Billing settings saved{" and applied to existing users" if apply_existing else " for new users"}'
+            f'{f" ({applied_count} updated)" if apply_existing else ""}.',
+            'success',
+        )
+    except Exception as e:
+        logging.error('Failed to update billing settings: %s', e, exc_info=True)
+        flash(f'Failed to update billing settings: {e}', 'error')
+
+    return redirect(url_for('superadmin_dashboard'))
+
+
+@app.route('/superadmin/billing/promotion', methods=['POST'])
+@superadmin_required
+def superadmin_update_billing_promotion():
+    enabled = request.form.get('promotion_enabled') == '1'
+    name = (request.form.get('promotion_name') or '').strip()
+    audience = (request.form.get('promotion_audience') or 'new_only').strip()
+    if audience not in ('new_only', 'new_and_existing', 'existing_only'):
+        audience = 'new_only'
+
+    start_date = (request.form.get('promotion_start_date') or '').strip()
+    end_date = (request.form.get('promotion_end_date') or '').strip()
+    if start_date and not _parse_iso_date(start_date):
+        flash('Promotion start date is invalid', 'error')
+        return redirect(url_for('superadmin_dashboard'))
+    if end_date and not _parse_iso_date(end_date):
+        flash('Promotion end date is invalid', 'error')
+        return redirect(url_for('superadmin_dashboard'))
+
+    try:
+        price_per_screen = max(0.0, float(request.form.get('promotion_price_per_screen') or 0))
+        trial_days = max(0, int(request.form.get('promotion_trial_days') or 0))
+        free_screens = max(0, int(request.form.get('promotion_free_screens') or 0))
+    except Exception:
+        flash('Promotion price, trial days, and free screens must use valid numbers', 'error')
+        return redirect(url_for('superadmin_dashboard'))
+
+    price_display = (request.form.get('promotion_price_display') or '').strip() or _format_price_display(price_per_screen)
+    stripe_price_id = (request.form.get('promotion_stripe_price_id') or '').strip()
+    apply_existing_now = request.form.get('promotion_apply_existing_now') == '1'
+
+    promotion = {
+        'enabled': 1 if enabled else 0,
+        'name': name,
+        'audience': audience,
+        'start_date': start_date,
+        'end_date': end_date,
+        'price_per_screen': price_per_screen,
+        'price_display': price_display,
+        'stripe_price_id': stripe_price_id,
+        'trial_days': trial_days,
+        'free_screens': free_screens,
+        'updated_at': int(time.time()),
+    }
+
+    try:
+        db = get_db()
+        db.execute(
+            'INSERT OR REPLACE INTO billing_promotions '
+            '(id, enabled, name, audience, start_date, end_date, price_per_screen, price_display, stripe_price_id, trial_days, free_screens, updated_at) '
+            'VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            (
+                promotion['enabled'],
+                promotion['name'],
+                promotion['audience'],
+                promotion['start_date'],
+                promotion['end_date'],
+                promotion['price_per_screen'],
+                promotion['price_display'],
+                promotion['stripe_price_id'],
+                promotion['trial_days'],
+                promotion['free_screens'],
+                promotion['updated_at'],
+            ),
+        )
+        db.commit()
+
+        applied_count = 0
+        normalized_promotion = _normalize_billing_promotion(promotion)
+        if apply_existing_now and _billing_promotion_applies_to_existing_users(normalized_promotion):
+            applied_count = _apply_billing_policy_to_existing_users(
+                _normalize_billing_settings(normalized_promotion),
+                f'promotion:{name or "campaign"}',
+            )
+
+        flash(
+            f'Promotion settings saved'
+            f'{" and applied to existing users" if applied_count else ""}'
+            f'{f" ({applied_count} updated)" if applied_count else ""}.',
+            'success',
+        )
+    except Exception as e:
+        logging.error('Failed to update billing promotion: %s', e, exc_info=True)
+        flash(f'Failed to update promotion: {e}', 'error')
+
+    return redirect(url_for('superadmin_dashboard'))
 
 @app.route('/superadmin/feedback')
 @superadmin_required
@@ -4599,6 +7144,274 @@ def superadmin_feedback():
         logging.error(f'Superadmin feedback error: {e}', exc_info=True)
         return f'<h1>Error Loading Feedback</h1><p>{str(e)}</p><p>Check server logs for details.</p>', 500
 
+
+@app.route('/superadmin/agents')
+@superadmin_required
+def superadmin_agents():
+    """List all agents with summary stats."""
+    try:
+        db = get_db()
+        agents = db.execute(
+            '''
+            SELECT a.*, u.username, u.full_name, u.email_verified,
+                   COUNT(DISTINCT ae.customer_id) AS customer_count,
+                   COALESCE(SUM(ae.commission_amount), 0) AS total_commissions
+            FROM agents a
+            LEFT JOIN users u ON a.user_id = u.id
+            LEFT JOIN agent_earnings ae ON a.id = ae.agent_id
+            GROUP BY a.id
+            ORDER BY a.created_at DESC, a.id DESC
+            '''
+        ).fetchall()
+
+        agent_list = [dict(row) for row in agents]
+        return render_template('superadmin/agents.html', agents=agent_list)
+    except Exception as e:
+        logging.error('Superadmin agents error: %s', e, exc_info=True)
+        return f'<h1>Error Loading Agents</h1><p>{str(e)}</p>', 500
+
+
+@app.route('/superadmin/agents/create', methods=['GET', 'POST'])
+@superadmin_required
+def superadmin_create_agent():
+    """Create a new agent and their default coupon."""
+    if request.method == 'POST':
+        try:
+            email = (request.form.get('email') or '').strip().lower()
+            full_name = (request.form.get('full_name') or '').strip()
+            agent_code = (request.form.get('agent_code') or '').strip().upper()
+            commission_rate = float(request.form.get('commission_rate', 20) or 20) / 100
+            notes = (request.form.get('notes') or '').strip()
+
+            if not email or not agent_code:
+                flash('Email and agent code are required', 'error')
+                return redirect(request.url)
+
+            db = get_db()
+
+            existing_agent = db.execute('SELECT id FROM agents WHERE agent_code = ?', (agent_code,)).fetchone()
+            if existing_agent:
+                flash(f'Agent code {agent_code} already exists', 'error')
+                return redirect(request.url)
+
+            user = db.execute('SELECT id FROM users WHERE username = ?', (email,)).fetchone()
+            if user:
+                user_id = user['id']
+                db.execute('UPDATE users SET role = ?, full_name = COALESCE(NULLIF(?, \'\'), full_name) WHERE id = ?', ('agent', full_name, user_id))
+                created_account = False
+            else:
+                password_hash = generate_password_hash('changeme123')
+                db.execute(
+                    'INSERT INTO users (username, password_hash, full_name, email_verified, role) VALUES (?, ?, ?, 1, ?)',
+                    (email, password_hash, full_name, 'agent')
+                )
+                user_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+                created_account = True
+
+            now = int(time.time())
+            db.execute(
+                '''
+                INSERT INTO agents (user_id, agent_code, commission_rate, status, notes, created_at, updated_at)
+                VALUES (?, ?, ?, 'active', ?, ?, ?)
+                ''',
+                (user_id, agent_code, commission_rate, notes, now, now)
+            )
+            agent_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+
+            db.execute(
+                '''
+                INSERT INTO agent_coupons (agent_id, coupon_code, discount_type, discount_value, max_uses, current_uses, status, created_at)
+                VALUES (?, ?, 'percentage', 10, -1, 0, 'active', ?)
+                ''',
+                (agent_id, agent_code, now)
+            )
+            db.commit()
+
+            if created_account:
+                flash(f'Agent created. Login for {email}: temporary password is changeme123', 'success')
+            else:
+                flash(f'Agent {agent_code} created for existing user {email}', 'success')
+            return redirect(url_for('superadmin_agent_detail', agent_id=agent_id))
+        except Exception as e:
+            logging.error('Create agent error: %s', e, exc_info=True)
+            flash(f'Error creating agent: {e}', 'error')
+            return redirect(request.url)
+
+    return render_template('superadmin/create_agent.html')
+
+
+@app.route('/superadmin/agents/<int:agent_id>')
+@superadmin_required
+def superadmin_agent_detail(agent_id):
+    """View agent details, coupons, customers, and earnings."""
+    try:
+        db = get_db()
+        agent = db.execute(
+            '''
+            SELECT a.*, u.username, u.full_name, u.phone_number
+            FROM agents a
+            LEFT JOIN users u ON a.user_id = u.id
+            WHERE a.id = ?
+            ''',
+            (agent_id,)
+        ).fetchone()
+
+        if not agent:
+            flash('Agent not found', 'error')
+            return redirect(url_for('superadmin_agents'))
+
+        coupons = db.execute(
+            'SELECT * FROM agent_coupons WHERE agent_id = ? ORDER BY created_at DESC, id DESC',
+            (agent_id,)
+        ).fetchall()
+
+        customers = db.execute(
+            '''
+            SELECT u.id, u.username, u.full_name, u.coupon_used,
+                   s.status AS subscription_status, s.plan_name,
+                   COUNT(ae.id) AS payment_count,
+                   COALESCE(SUM(ae.commission_amount), 0) AS total_earned
+            FROM users u
+            LEFT JOIN subscriptions s ON u.id = s.user_id
+            LEFT JOIN agent_earnings ae ON u.id = ae.customer_id AND ae.agent_id = ?
+            WHERE u.referred_by_agent_id = ?
+            GROUP BY u.id
+            ORDER BY u.id DESC
+            ''',
+            (agent_id, agent_id)
+        ).fetchall()
+
+        earnings = db.execute(
+            '''
+            SELECT ae.*, u.username AS customer_name
+            FROM agent_earnings ae
+            LEFT JOIN users u ON ae.customer_id = u.id
+            WHERE ae.agent_id = ?
+            ORDER BY ae.created_at DESC, ae.id DESC
+            LIMIT 100
+            ''',
+            (agent_id,)
+        ).fetchall()
+
+        current_month_start = int(datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0).timestamp())
+        monthly_earnings = db.execute(
+            'SELECT COALESCE(SUM(commission_amount), 0) AS total FROM agent_earnings WHERE agent_id = ? AND created_at >= ?',
+            (agent_id, current_month_start)
+        ).fetchone()['total']
+
+        earnings_list = []
+        for row in earnings:
+            item = dict(row)
+            created_at = item.get('created_at')
+            item['created_at_text'] = datetime.fromtimestamp(created_at).strftime('%Y-%m-%d %H:%M') if created_at else 'N/A'
+            earnings_list.append(item)
+
+        return render_template(
+            'superadmin/agent_detail.html',
+            agent=dict(agent),
+            coupons=[dict(row) for row in coupons],
+            customers=[dict(row) for row in customers],
+            earnings=earnings_list,
+            monthly_earnings=monthly_earnings,
+        )
+    except Exception as e:
+        logging.error('Agent detail error: %s', e, exc_info=True)
+        flash(f'Error loading agent: {e}', 'error')
+        return redirect(url_for('superadmin_agents'))
+
+
+@app.route('/superadmin/agents/<int:agent_id>/update', methods=['POST'])
+@superadmin_required
+def superadmin_update_agent(agent_id):
+    """Update agent settings."""
+    try:
+        db = get_db()
+        commission_rate = float(request.form.get('commission_rate', 20) or 20) / 100
+        status = (request.form.get('status') or 'active').strip().lower()
+        notes = (request.form.get('notes') or '').strip()
+        now = int(time.time())
+
+        db.execute(
+            'UPDATE agents SET commission_rate = ?, status = ?, notes = ?, updated_at = ? WHERE id = ?',
+            (commission_rate, status, notes, now, agent_id)
+        )
+        db.commit()
+        flash('Agent updated successfully', 'success')
+    except Exception as e:
+        logging.error('Update agent error: %s', e, exc_info=True)
+        flash(f'Error updating agent: {e}', 'error')
+
+    return redirect(url_for('superadmin_agent_detail', agent_id=agent_id))
+
+
+@app.route('/superadmin/agents/<int:agent_id>/add-coupon', methods=['POST'])
+@superadmin_required
+def superadmin_add_agent_coupon(agent_id):
+    """Add a coupon for an agent."""
+    try:
+        db = get_db()
+        coupon_code = (request.form.get('coupon_code') or '').strip().upper()
+        discount_type = (request.form.get('discount_type') or 'percentage').strip().lower()
+        discount_value = float(request.form.get('discount_value', 0) or 0)
+        max_uses = int(request.form.get('max_uses', -1) or -1)
+
+        if not coupon_code:
+            flash('Coupon code is required', 'error')
+            return redirect(url_for('superadmin_agent_detail', agent_id=agent_id))
+
+        existing = db.execute('SELECT id FROM agent_coupons WHERE coupon_code = ?', (coupon_code,)).fetchone()
+        if existing:
+            flash(f'Coupon {coupon_code} already exists', 'error')
+            return redirect(url_for('superadmin_agent_detail', agent_id=agent_id))
+
+        now = int(time.time())
+        db.execute(
+            '''
+            INSERT INTO agent_coupons (agent_id, coupon_code, discount_type, discount_value, max_uses, current_uses, status, created_at)
+            VALUES (?, ?, ?, ?, ?, 0, 'active', ?)
+            ''',
+            (agent_id, coupon_code, discount_type, discount_value, max_uses, now)
+        )
+        db.commit()
+        flash(f'Coupon {coupon_code} added successfully', 'success')
+    except Exception as e:
+        logging.error('Add coupon error: %s', e, exc_info=True)
+        flash(f'Error adding coupon: {e}', 'error')
+
+    return redirect(url_for('superadmin_agent_detail', agent_id=agent_id))
+
+
+@app.route('/superadmin/agents/<int:agent_id>/delete', methods=['POST'])
+@superadmin_required
+def superadmin_delete_agent(agent_id):
+    """Delete an agent and optionally the linked user account."""
+    try:
+        db = get_db()
+        agent = db.execute('SELECT user_id, agent_code FROM agents WHERE id = ?', (agent_id,)).fetchone()
+        if not agent:
+            flash('Agent not found', 'error')
+            return redirect(url_for('superadmin_agents'))
+
+        delete_user = request.form.get('delete_user') == 'yes'
+
+        db.execute('UPDATE users SET referred_by_agent_id = NULL WHERE referred_by_agent_id = ?', (agent_id,))
+        db.execute('DELETE FROM agent_coupons WHERE agent_id = ?', (agent_id,))
+        db.execute('DELETE FROM agent_earnings WHERE agent_id = ?', (agent_id,))
+        db.execute('DELETE FROM agents WHERE id = ?', (agent_id,))
+
+        if delete_user and agent['user_id']:
+            db.execute('DELETE FROM users WHERE id = ?', (agent['user_id'],))
+            flash(f'Agent {agent["agent_code"]} and user account deleted', 'success')
+        else:
+            flash(f'Agent {agent["agent_code"]} deleted', 'success')
+
+        db.commit()
+    except Exception as e:
+        logging.error('Delete agent error: %s', e, exc_info=True)
+        flash(f'Error deleting agent: {e}', 'error')
+
+    return redirect(url_for('superadmin_agents'))
+
 @app.route('/superadmin/users/create', methods=['POST'])
 @superadmin_required
 def superadmin_create_user():
@@ -4618,6 +7431,12 @@ def superadmin_create_user():
         ))
         db.commit()
         try:
+            row = db.execute('SELECT id FROM users WHERE username = ?', (email,)).fetchone()
+            if row:
+                _ensure_user_billing_policy(int(row['id']), source='superadmin_create')
+        except Exception as _billing_e:
+            logging.warning('Failed to ensure billing policy for created user %s: %s', email, _billing_e)
+        try:
             _ensure_user_link_code(email)
         except Exception:
             pass
@@ -4627,6 +7446,89 @@ def superadmin_create_user():
     except Exception as e:
         flash(f'Create failed: {e}', 'error')
     return redirect(url_for('superadmin_dashboard'))
+
+
+@app.route('/superadmin/users/<int:user_id>/resend-email', methods=['POST'])
+@superadmin_required
+def superadmin_resend_email(user_id):
+    try:
+        db = get_db()
+        row = db.execute('SELECT username, email_verified FROM users WHERE id = ?', (user_id,)).fetchone()
+        if not row:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        if int(row['email_verified'] or 0) == 1:
+            return jsonify({'success': False, 'error': 'Email already verified'}), 400
+
+        if _send_verification_email(row['username']):
+            return jsonify({'success': True})
+        return jsonify({'success': False, 'error': 'Failed to send verification email'}), 500
+    except Exception as e:
+        logging.error('superadmin_resend_email failed: %s', e, exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/superadmin/users/<int:user_id>/resend-phone', methods=['POST'])
+@superadmin_required
+def superadmin_resend_phone(user_id):
+    try:
+        if not vonage_client:
+            return jsonify({'success': False, 'error': 'SMS service not configured'}), 503
+
+        db = get_db()
+        user = db.execute(
+            'SELECT username, phone_number, phone_verified, phone_code_sent_at, phone_verification_request_id '
+            'FROM users WHERE id = ?',
+            (user_id,),
+        ).fetchone()
+        if not user:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        if not user['phone_number']:
+            return jsonify({'success': False, 'error': 'User has no phone number'}), 400
+        if int(user['phone_verified'] or 0) == 1:
+            return jsonify({'success': False, 'error': 'Phone already verified'}), 400
+
+        if user['phone_code_sent_at']:
+            last_sent = int(user['phone_code_sent_at'] or 0)
+            now = int(time.time())
+            if now - last_sent < 60:
+                return jsonify({'success': False, 'error': f'Please wait {60 - (now - last_sent)} seconds before requesting a new code'}), 429
+
+        phone = (user['phone_number'] or '').strip()
+        if not phone.startswith('+'):
+            phone = '+' + phone
+        phone = phone.replace(' ', '').replace('-', '')
+
+        import requests
+
+        auth_header = base64.b64encode(f"{VONAGE_API_KEY}:{VONAGE_API_SECRET}".encode()).decode()
+        headers = {
+            'Authorization': f'Basic {auth_header}',
+            'Content-Type': 'application/json',
+        }
+        payload = {
+            'brand': 'EverydayAdvertise',
+            'workflow': [{'channel': 'sms', 'to': phone}],
+            'code_length': 6,
+        }
+        verify_response = requests.post('https://api.nexmo.com/v2/verify', json=payload, headers=headers)
+        response = verify_response.json()
+        if verify_response.status_code not in (200, 202):
+            return jsonify({'success': False, 'error': response.get('title', response.get('detail', 'Verification failed'))}), 500
+
+        request_id = response.get('request_id')
+        if not request_id:
+            return jsonify({'success': False, 'error': 'No request id returned from SMS provider'}), 500
+
+        now = int(time.time())
+        db.execute(
+            'UPDATE users SET phone_verification_request_id = ?, phone_code_sent_at = ? WHERE id = ?',
+            (request_id, now, user_id),
+        )
+        db.commit()
+        return jsonify({'success': True, 'request_id': request_id})
+    except Exception as e:
+        logging.error('superadmin_resend_phone failed: %s', e, exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/superadmin/users/<int:user_id>/block', methods=['POST'])
 @superadmin_required
@@ -4778,7 +7680,8 @@ def superadmin_reset_subscription(user_id):
             return redirect(url_for('superadmin_dashboard'))
         
         now = int(time.time())
-        trial_end = now + (14 * 24 * 3600)  # 14 days trial
+        policy = _get_user_billing_policy(user_id)
+        trial_end = now + (int(policy.get('trial_days') or 14) * 24 * 3600)
         
         # Reset main subscription
         db.execute('''UPDATE subscriptions 
@@ -4806,7 +7709,10 @@ def superadmin_reset_subscription(user_id):
                      WHERE user_id = ?''', (now, trial_end, now, user_id))
         
         db.commit()
-        flash(f'Subscription reset for {user["username"]} - 14 day trial started', 'success')
+        flash(
+            f'Subscription reset for {user["username"]} - {int(policy.get("trial_days") or 14)} day trial started',
+            'success',
+        )
     except Exception as e:
         flash(f'Error resetting subscription: {e}', 'error')
     
@@ -4818,10 +7724,24 @@ def _get_current_username_from_session() -> Optional[str]:
         if not has_request_context():
             return None
         u = session.get('user')
-        if not isinstance(u, dict):
-            return None
-        # Prefer email when present (OAuth), else name/username/login
-        return (u.get('email') or u.get('name') or u.get('username') or u.get('login') or '').strip().lower() or None
+        if isinstance(u, dict):
+            direct = (u.get('email') or u.get('username') or u.get('name') or u.get('login') or '').strip().lower()
+            if _is_valid_identity_value(direct):
+                return direct
+        elif isinstance(u, str):
+            direct = u.strip().lower()
+            if _is_valid_identity_value(direct):
+                return direct
+        found = _deep_find_email_like(u)
+        if _is_valid_identity_value(found):
+            return found
+        uid = _current_user_id()
+        if uid:
+            db = get_db()
+            row = db.execute('SELECT username FROM users WHERE id = ?', (uid,)).fetchone()
+            if row and row['username']:
+                return (row['username'] or '').strip().lower() or None
+        return None
     except Exception:
         return None
 
@@ -5020,17 +7940,19 @@ def account():
     is_canceled = False
     next_billing_date = None
     billing_history = []
+    billing_policy = _get_user_billing_policy(user_id)
     
     try:
         db = get_db()
         
         # Get user details (removed created_at - column doesn't exist)
         user_row = db.execute(
-            'SELECT full_name, phone_number, phone_verified, role FROM users WHERE username = ?',
+            'SELECT full_name, phone_number, phone_verified, role, email_verified FROM users WHERE username = ?',
             (uname,)
         ).fetchone()
         if user_row:
             user_info['full_name'] = user_row['full_name'] or uname
+            user_info['email_verified'] = bool(user_row['email_verified'])
             phone_number = user_row['phone_number']
             phone_verified = bool(user_row['phone_verified'])
         
@@ -5087,7 +8009,7 @@ def account():
                 else:
                     status = 'trialing'
                     period_start = int(time.time())
-                    period_end = period_start + (14 * 24 * 60 * 60)
+                    period_end = period_start + (int(billing_policy.get('trial_days') or 14) * 24 * 60 * 60)
                 
                 # Create missing screen subscriptions
                 for screen in screens_list:
@@ -5149,7 +8071,375 @@ def account():
                          screens_list=screens_list,
                          screen_subscriptions=screen_subscriptions,
                          billing_history=billing_history,
+                         monthly_cost=max(0, screen_count - int(billing_policy.get('free_screens') or 0)) * float(billing_policy.get('price_per_screen') or 0),
+                         price_display=billing_policy['price_display'],
+                         trial_days=billing_policy['trial_days'],
+                         free_screens=billing_policy['free_screens'],
                          build_stamp=BUILD_STAMP)
+
+
+@app.route('/api/account/overview', methods=['GET'])
+@login_required
+def api_account_overview():
+    """Mobile-friendly Account page payload matching website account functionality."""
+    uname = (_get_current_username_from_session() or '').strip().lower() or None
+    user_id = _current_user_id()
+
+    sess_user = session.get('user')
+    is_admin = bool(sess_user.get('is_admin')) if isinstance(sess_user, dict) else False
+    if not uname and isinstance(sess_user, str):
+        cand = sess_user.strip().lower()
+        if '@' in cand and '.' in cand:
+            uname = cand
+
+    if not uname and not user_id:
+        return jsonify({'success': False, 'error': 'auth required'}), 403
+
+    user_info = {'email': uname, 'is_admin': is_admin}
+    account_created = None
+    phone_number = None
+    phone_verified = False
+
+    subscription_info = None
+    has_active = False
+    is_canceled = False
+    next_billing_date = None
+    billing_history = []
+    screen_count = 0
+    screens_list = []
+    screen_subscriptions = []
+
+    try:
+        db = get_db()
+
+        if not user_id and uname:
+            id_row = db.execute('SELECT id FROM users WHERE username = ?', (uname,)).fetchone()
+            if id_row:
+                user_id = id_row['id']
+
+        # Resolve canonical account identity from DB for mobile sessions.
+        db_user_row = None
+        if user_id:
+            db_user_row = db.execute(
+                'SELECT username, email_verified, full_name, phone_number, phone_verified, role FROM users WHERE id = ?',
+                (user_id,)
+            ).fetchone()
+            # Stale/invalid id in session should not produce a blank "success" payload.
+            if not db_user_row:
+                user_id = None
+        elif uname:
+            db_user_row = db.execute(
+                'SELECT username, email_verified, full_name, phone_number, phone_verified, role FROM users WHERE username = ?',
+                (uname,)
+            ).fetchone()
+
+        # If neither username nor valid user id can be resolved, force re-auth.
+        if not db_user_row and not uname and not user_id:
+            return jsonify({'success': False, 'error': 'auth required'}), 403
+
+        if db_user_row:
+            uname = (db_user_row['username'] or uname or '').strip().lower()
+            user_info['email'] = uname
+            user_info['email_verified'] = bool(db_user_row['email_verified'])
+            user_info['full_name'] = db_user_row['full_name'] or uname
+            phone_number = db_user_row['phone_number']
+            phone_verified = bool(db_user_row['phone_verified'])
+        else:
+            user_info['email_verified'] = False
+
+        if not user_info.get('email') and uname:
+            user_info['email'] = uname
+
+        # Backward compatibility: if uname changed during lookup, refresh
+        # account-level contact fields from username as fallback.
+        if uname and phone_number is None:
+            user_row = db.execute(
+                'SELECT phone_number, phone_verified FROM users WHERE username = ?',
+                (uname,)
+            ).fetchone()
+            if user_row:
+                phone_number = user_row['phone_number']
+                phone_verified = bool(user_row['phone_verified'])
+
+        if user_id:
+            sub_row = db.execute(
+                'SELECT status, current_period_end, cancel_at_period_end, plan_name, quantity '
+                'FROM subscriptions WHERE user_id = ? ORDER BY id DESC LIMIT 1',
+                (user_id,)
+            ).fetchone()
+
+            if sub_row:
+                subscription_info = {
+                    'status': sub_row['status'],
+                    'current_period_end': sub_row['current_period_end'],
+                    'plan_name': sub_row['plan_name'],
+                    'quantity': sub_row['quantity'],
+                }
+                has_active = sub_row['status'] in ('active', 'trialing')
+                is_canceled = bool(sub_row['cancel_at_period_end'])
+
+                if sub_row['current_period_end']:
+                    try:
+                        next_billing_date = datetime.fromtimestamp(
+                            int(sub_row['current_period_end'])
+                        ).strftime('%B %d, %Y')
+                    except Exception:
+                        next_billing_date = None
+
+        # IMPORTANT: resolve screens for the actual account username, not only
+        # session key shape, so mobile auth sessions get consistent data.
+        if uname:
+            safe = _safe_key_from_username(uname)
+            cfg = load_store_config_for_user_safe_key(safe) if safe else {'stores': [], 'screens': {}}
+            screens_dict = cfg.get('screens', {}) or {}
+            screen_count = sum(len(store_screens) for store_screens in screens_dict.values())
+            screens_list = []
+            for store_id, store_screens in screens_dict.items():
+                for sid, sdata in (store_screens or {}).items():
+                    screens_list.append({
+                        'id': sid,
+                        'name': (sdata or {}).get('name', sid),
+                        'store_id': store_id,
+                        'type': (sdata or {}).get('type', 'screen'),
+                    })
+        else:
+            screen_count = 0
+            screens_list = []
+
+        if user_id:
+            if screens_list:
+                existing_subs = db.execute(
+                    'SELECT screen_id FROM screen_subscriptions WHERE user_id = ?',
+                    (user_id,)
+                ).fetchall()
+                existing_screen_ids = {row['screen_id'] for row in existing_subs}
+
+                sub_row = db.execute(
+                    'SELECT status, current_period_end, created_at FROM subscriptions WHERE user_id = ?',
+                    (user_id,)
+                ).fetchone()
+
+                if sub_row:
+                    status = sub_row['status']
+                    period_end = sub_row['current_period_end']
+                    period_start = sub_row['created_at'] or int(time.time())
+                else:
+                    status = 'trialing'
+                    period_start = int(time.time())
+                    period_end = period_start + (14 * 24 * 60 * 60)
+
+                for screen in screens_list:
+                    if screen['id'] not in existing_screen_ids:
+                        try:
+                            db.execute(
+                                'INSERT INTO screen_subscriptions '
+                                '(user_id, screen_id, store_id, screen_name, status, '
+                                'current_period_start, current_period_end, cancel_at_period_end, created_at, updated_at) '
+                                'VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)',
+                                (user_id, screen['id'], screen['store_id'], screen['name'], status,
+                                 period_start, period_end, int(time.time()), int(time.time()))
+                            )
+                        except Exception as e:
+                            logging.warning('Auto-create screen subscription failed: %s', e)
+
+                db.commit()
+
+            screen_subscriptions = _get_screen_subscriptions(user_id)
+
+            if _stripe_enabled():
+                try:
+                    customer_id = _get_or_create_stripe_customer(user_id)
+                    if customer_id:
+                        invoices = stripe.Invoice.list(customer=customer_id, limit=10)
+                        for inv in invoices.data:
+                            billing_history.append({
+                                'date': datetime.fromtimestamp(inv.created).strftime('%b %d, %Y'),
+                                'amount': f"${inv.amount_paid / 100:.2f}",
+                                'status': inv.status,
+                                'invoice_pdf': inv.invoice_pdf,
+                                'hosted_invoice_url': inv.hosted_invoice_url,
+                            })
+                except Exception as inv_err:
+                    logging.warning('Failed to fetch billing history for mobile: %s', inv_err)
+
+        billing_policy = _get_user_billing_policy(user_id)
+        free_screens = int(billing_policy.get('free_screens') or 0)
+        billable_screens = max(0, screen_count - free_screens)
+        monthly_cost = float(billable_screens * float(billing_policy.get('price_per_screen') or 0))
+
+        trial_days_left = None
+        is_trial = False
+        if subscription_info and subscription_info.get('status') == 'trialing':
+            is_trial = True
+            try:
+                cpe = subscription_info.get('current_period_end')
+                if cpe:
+                    remaining = max(0, int((int(cpe) - int(time.time())) / (24 * 60 * 60)))
+                    trial_days_left = remaining
+            except Exception:
+                trial_days_left = None
+
+        return jsonify({
+            'success': True,
+            'user_info': user_info,
+            'account_created': account_created,
+            'phone_number': phone_number,
+            'phone_verified': phone_verified,
+            'subscription_info': subscription_info,
+            'has_active': has_active,
+            'is_canceled': is_canceled,
+            'next_billing_date': next_billing_date,
+            'screen_count': screen_count,
+            'monthly_cost': monthly_cost,
+            'screens_list': screens_list,
+            'screen_subscriptions': screen_subscriptions,
+            'billing_history': billing_history,
+            'is_trial': is_trial,
+            'trial_days_left': trial_days_left,
+            'stripe_enabled': _stripe_enabled(),
+            'price_display': billing_policy['price_display'],
+            'trial_days': int(billing_policy['trial_days']),
+            'free_screens': free_screens,
+        })
+    except Exception as e:
+        logging.error('api_account_overview error: %s', e, exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/account/email/resend-verification', methods=['POST'])
+@app.route('/api/account/resend-verification', methods=['POST'])
+@app.route('/api/account/resend_verification', methods=['POST'])
+@app.route('/api/account/resend-verification-email', methods=['POST'])
+@login_required
+def api_resend_verification_email_current_user():
+    """Resend email verification for the logged-in user (mobile-friendly JSON)."""
+    try:
+        uname = _get_current_username_from_session()
+        user_id = _current_user_id()
+
+        data = request.get_json(silent=True) or {}
+        requested_email = (data.get('email') or '').strip().lower()
+
+        if not requested_email and not uname and not user_id:
+            return jsonify({'success': False, 'error': 'auth required'}), 403
+
+        db = get_db()
+        # Use explicitly submitted email as source of truth when provided.
+        # This avoids stale session identity mismatches on mobile.
+        account_email = requested_email
+        if not account_email:
+            account_email = (uname or '').strip().lower()
+        if not account_email and user_id:
+            id_row = db.execute('SELECT username FROM users WHERE id = ?', (user_id,)).fetchone()
+            if id_row and id_row['username']:
+                account_email = (id_row['username'] or '').strip().lower()
+
+        if not account_email:
+            return jsonify({'success': False, 'error': 'auth required'}), 403
+
+        row = db.execute('SELECT email_verified FROM users WHERE username = ?', (account_email,)).fetchone()
+        if not row:
+            return jsonify({'success': False, 'error': 'Account email not found'}), 404
+
+        if int(row['email_verified'] or 0) == 1:
+            return jsonify({'success': True, 'message': 'Your email is already verified.'})
+
+        sent_ok = _send_verification_email(account_email)
+        if not sent_ok:
+            return jsonify({
+                'success': False,
+                'error': 'Could not send verification email right now. Please try again later.',
+            }), 503
+
+        return jsonify({'success': True, 'message': 'Verification email sent'})
+    except Exception as e:
+        logging.error('api_resend_verification_email_current_user failed: %s', e, exc_info=True)
+        return jsonify({'success': False, 'error': 'Failed to resend verification email'}), 500
+
+
+@app.route('/api/billing/portal-session', methods=['POST'])
+@login_required
+def api_billing_portal_session():
+    if not _stripe_enabled():
+        return jsonify({'success': False, 'error': 'Stripe is not configured'}), 400
+    try:
+        user_id = _current_user_id()
+        if not user_id:
+            return jsonify({'success': False, 'error': 'auth required'}), 403
+
+        customer_id = _get_or_create_stripe_customer(user_id)
+        if not customer_id:
+            return jsonify({'success': False, 'error': 'Unable to access billing portal'}), 400
+
+        return_url = url_for('account', _external=True)
+        portal_session = stripe.billing_portal.Session.create(
+            customer=customer_id,
+            return_url=return_url,
+        )
+        return jsonify({'success': True, 'portal_url': portal_session.url})
+    except Exception as e:
+        logging.error('api_billing_portal_session error: %s', e, exc_info=True)
+        return jsonify({'success': False, 'error': 'Unable to create billing portal session'}), 500
+
+
+@app.route('/api/billing/cancel', methods=['POST'])
+@login_required
+def api_billing_cancel():
+    if not _stripe_enabled():
+        return jsonify({'success': False, 'error': 'Stripe is not configured'}), 400
+    try:
+        user_id = _current_user_id()
+        if not user_id:
+            return jsonify({'success': False, 'error': 'auth required'}), 403
+
+        db = get_db()
+        sub_row = db.execute(
+            'SELECT stripe_subscription_id FROM subscriptions WHERE user_id = ? AND status IN ("active", "trialing") ORDER BY id DESC LIMIT 1',
+            (user_id,)
+        ).fetchone()
+
+        if not sub_row or not sub_row['stripe_subscription_id']:
+            return jsonify({'success': False, 'error': 'No active subscription found'}), 404
+
+        updated_sub = stripe.Subscription.modify(
+            sub_row['stripe_subscription_id'],
+            cancel_at_period_end=True,
+        )
+        _sync_subscription_from_stripe(updated_sub)
+        return jsonify({'success': True, 'message': 'Subscription will be cancelled at period end'})
+    except Exception as e:
+        logging.error('api_billing_cancel error: %s', e, exc_info=True)
+        return jsonify({'success': False, 'error': 'Unable to cancel subscription'}), 500
+
+
+@app.route('/api/billing/reactivate', methods=['POST'])
+@login_required
+def api_billing_reactivate():
+    if not _stripe_enabled():
+        return jsonify({'success': False, 'error': 'Stripe is not configured'}), 400
+    try:
+        user_id = _current_user_id()
+        if not user_id:
+            return jsonify({'success': False, 'error': 'auth required'}), 403
+
+        db = get_db()
+        sub_row = db.execute(
+            'SELECT stripe_subscription_id FROM subscriptions WHERE user_id = ? AND cancel_at_period_end = 1 ORDER BY id DESC LIMIT 1',
+            (user_id,)
+        ).fetchone()
+
+        if not sub_row or not sub_row['stripe_subscription_id']:
+            return jsonify({'success': False, 'error': 'No cancelled subscription found'}), 404
+
+        updated_sub = stripe.Subscription.modify(
+            sub_row['stripe_subscription_id'],
+            cancel_at_period_end=False,
+        )
+        _sync_subscription_from_stripe(updated_sub)
+        return jsonify({'success': True, 'message': 'Subscription reactivated'})
+    except Exception as e:
+        logging.error('api_billing_reactivate error: %s', e, exc_info=True)
+        return jsonify({'success': False, 'error': 'Unable to reactivate subscription'}), 500
 
 @app.route('/profile/regenerate_code', methods=['POST'])
 @login_required
@@ -5172,6 +8462,32 @@ def regenerate_code():
 def api_me():
     try:
         uname = _get_current_username_from_session()
+        if not uname:
+            raw_user = session.get('user')
+            if isinstance(raw_user, str):
+                cand = raw_user.strip().lower()
+                if '@' in cand and '.' in cand:
+                    uname = cand
+        if not uname:
+            # Fallback for sessions that only carry user id.
+            try:
+                uid = _current_user_id()
+            except Exception:
+                uid = None
+            if uid:
+                db = get_db()
+                urow = db.execute('SELECT username FROM users WHERE id = ?', (uid,)).fetchone()
+                if urow and urow['username']:
+                    uname = (urow['username'] or '').strip().lower()
+                    try:
+                        user_dict = dict(session.get('user') or {})
+                        if not user_dict.get('name'):
+                            user_dict['name'] = uname
+                        if not user_dict.get('email'):
+                            user_dict['email'] = uname
+                        session['user'] = user_dict
+                    except Exception:
+                        pass
         if not uname:
             return jsonify({'success': False, 'error': 'auth required'}), 403
         db = get_db()
@@ -5913,7 +9229,30 @@ def slice_video_for_multi_screen(input_path, output_dir, base_filename, layout_i
         input_path: Path to original video file
         output_dir: Directory to save sliced videos
         base_filename: Base name for output files (without extension)
-        layout_info: Dict from calculate_screen_layout()
+            try:
+        if isinstance(u, dict):
+            direct = (u.get('email') or u.get('username') or u.get('name') or u.get('login') or '').strip().lower()
+            if direct:
+                return direct
+        elif isinstance(u, str):
+            direct = u.strip().lower()
+            if direct:
+                return direct
+                db = get_db()
+                row = db.execute('SELECT username, role FROM users WHERE id = ?', (parsed_id,)).fetchone()
+                if row and row['username']:
+                    try:
+                        user_dict = dict(session.get('user') or {})
+                        user_dict['id'] = parsed_id
+                        user_dict['name'] = (row['username'] or '').strip().lower()
+                        user_dict['email'] = (row['username'] or '').strip().lower()
+                        user_dict['is_admin'] = ((row['role'] or '').strip().lower() == 'admin')
+                        session['user'] = user_dict
+                    except Exception:
+                        pass
+                    return parsed_id
+            except Exception:
+                pass
         video_info: Dict from detect_video_resolution()
     
     Returns:
@@ -7149,6 +10488,15 @@ def pi_manager():
         
         # Combine data from connected_pis and pi_map
         all_pi_ids = set(list(connected_pis.keys()) + list(pi_map.keys()))
+
+        # Build assigned Pi set for current user config to keep visibility scoped.
+        assigned_pi_ids = set()
+        for store in config.get('stores', []):
+            store_id = store.get('id')
+            for screen_id, screen_data in config.get('screens', {}).get(store_id, {}).items():
+                pi_for_screen = (screen_data or {}).get('pi_id')
+                if pi_for_screen:
+                    assigned_pi_ids.add(str(pi_for_screen))
         
         # Pi offline timeout: consider offline if no heartbeat for 120 seconds (2 minutes)
         # Pis send heartbeats every 30 seconds, so 120s allows up to 3 missed heartbeats
@@ -7159,6 +10507,16 @@ def pi_manager():
         logging.info(f"=== Pi Manager Status Check at {current_time} ===")
         
         for pi_id in all_pi_ids:
+            # Strict user scoping: only show Pi devices that belong to this user's config
+            # or are explicitly tagged with this user's key in runtime state.
+            if ukey:
+                pi_runtime = connected_pis.get(pi_id, {}) or {}
+                runtime_user_key = str(pi_runtime.get('user_key') or '').strip()
+                if runtime_user_key and runtime_user_key != ukey and str(pi_id) not in assigned_pi_ids:
+                    continue
+                if not runtime_user_key and str(pi_id) not in assigned_pi_ids:
+                    continue
+
             # Get last_seen timestamp from connected_pis or pi_map
             last_seen_timestamp = None
             
@@ -7318,12 +10676,6 @@ def pi_manager():
             link_code = ''
         
         # Get available Pi IDs (registered but not yet assigned)
-        assigned_pi_ids = set()
-        for store in config.get('stores', []):
-            store_id = store.get('id')
-            for screen_id, screen_data in config.get('screens', {}).get(store_id, {}).items():
-                if screen_data.get('pi_id'):
-                    assigned_pi_ids.add(screen_data.get('pi_id'))
         
         available_pi_ids = [pi_id for pi_id in all_pi_ids if pi_id not in assigned_pi_ids]
         
@@ -7368,8 +10720,72 @@ def get_pi_status():
         current_time = time_module.time()
         logging.info(f"=== API Pi Status Check at {current_time} ===")
         
+        # User-scoped config and assignments for strict visibility filtering.
+        ukey = _safe_user_key()
+        config = load_store_config_for_user_safe_key(ukey) if ukey else load_store_config()
+        assigned_pi_ids = set()
+        for store in config.get('stores', []):
+            store_id = store.get('id')
+            for _screen_id, screen_data in config.get('screens', {}).get(store_id, {}).items():
+                pi_for_screen = (screen_data or {}).get('pi_id')
+                if pi_for_screen:
+                    assigned_pi_ids.add(str(pi_for_screen))
+
         statuses = {}
+
+        # Build quick store-name lookup and resolve assignments from config.
+        store_name_by_id = {
+            str((s or {}).get('id')): str((s or {}).get('name') or (s or {}).get('id') or '')
+            for s in (config.get('stores', []) or [])
+            if (s or {}).get('id')
+        }
+
+        def _resolve_pi_assignment(pi_id: str):
+            pi_text = str(pi_id or '').strip()
+            if not pi_text:
+                return None
+
+            # Prefer live heartbeat assignment when available.
+            runtime = connected_pis.get(pi_text, {}) or {}
+            runtime_store = str(runtime.get('store_id') or '').strip()
+            runtime_screen = str(runtime.get('screen_id') or '').strip()
+            if runtime_store and runtime_screen:
+                screen_data = (config.get('screens', {})
+                               .get(runtime_store, {})
+                               .get(runtime_screen, {}))
+                return {
+                    'store_id': runtime_store,
+                    'screen_id': runtime_screen,
+                    'store_name': store_name_by_id.get(runtime_store, runtime_store),
+                    'screen_name': str((screen_data or {}).get('name') or runtime_screen),
+                }
+
+            # Fallback to persisted config mapping.
+            for st in (config.get('stores', []) or []):
+                store_id = str((st or {}).get('id') or '').strip()
+                if not store_id:
+                    continue
+                screens = (config.get('screens', {}) or {}).get(store_id, {}) or {}
+                for screen_id, screen_data in screens.items():
+                    mapped_pi = str((screen_data or {}).get('pi_id') or '').strip()
+                    if mapped_pi == pi_text:
+                        return {
+                            'store_id': store_id,
+                            'screen_id': str(screen_id),
+                            'store_name': store_name_by_id.get(store_id, store_id),
+                            'screen_name': str((screen_data or {}).get('name') or screen_id),
+                        }
+            return None
+
         for pi_id, pi_data in connected_pis.items():
+            # Strict user scoping.
+            if ukey:
+                runtime_user_key = str((pi_data or {}).get('user_key') or '').strip()
+                if runtime_user_key and runtime_user_key != ukey and str(pi_id) not in assigned_pi_ids:
+                    continue
+                if not runtime_user_key and str(pi_id) not in assigned_pi_ids:
+                    continue
+
             last_seen_timestamp = pi_data.get('last_seen')
             if last_seen_timestamp and isinstance(last_seen_timestamp, (int, float)):
                 from datetime import datetime
@@ -7382,10 +10798,16 @@ def get_pi_status():
                 is_online = False
                 logging.info(f"API: Pi {pi_id}: No valid timestamp, showing 'Never'")
             
+            assignment = _resolve_pi_assignment(pi_id)
             statuses[pi_id] = {
                 'status': 'online' if is_online else 'offline',
                 'last_seen': last_seen_formatted,
-                'ip': pi_data.get('ip', 'Unknown')
+                'ip': pi_data.get('ip', 'Unknown'),
+                'assigned': assignment is not None,
+                'store_id': (assignment or {}).get('store_id'),
+                'screen_id': (assignment or {}).get('screen_id'),
+                'store_name': (assignment or {}).get('store_name'),
+                'screen_name': (assignment or {}).get('screen_name'),
             }
         
         # Also check pi_id_ip_map for devices not in connected_pis
@@ -7393,11 +10815,19 @@ def get_pi_status():
             with open('pi_id_ip_map.json', 'r') as f:
                 pi_map = json.load(f)
             for pi_id in pi_map.keys():
+                if ukey and str(pi_id) not in assigned_pi_ids:
+                    continue
                 if pi_id not in statuses:
+                    assignment = _resolve_pi_assignment(pi_id)
                     statuses[pi_id] = {
                         'status': 'offline',
                         'last_seen': 'Never',
-                        'ip': pi_map.get(pi_id, 'Unknown')
+                        'ip': pi_map.get(pi_id, 'Unknown'),
+                        'assigned': assignment is not None,
+                        'store_id': (assignment or {}).get('store_id'),
+                        'screen_id': (assignment or {}).get('screen_id'),
+                        'store_name': (assignment or {}).get('store_name'),
+                        'screen_name': (assignment or {}).get('screen_name'),
                     }
         except Exception:
             pass
@@ -8924,12 +12354,15 @@ def check_screen_limit():
         
         current_screen_count = _count_user_screens()
         has_subscription = _user_has_active_subscription()
+        billing_policy = _get_user_billing_policy(_current_user_id())
         
         return jsonify({
             'success': True,
             'screen_count': current_screen_count,
             'has_subscription': has_subscription,
-            'is_admin': is_admin_user
+            'is_admin': is_admin_user,
+            'free_screens': int(billing_policy.get('free_screens') or 0),
+            'price_display': billing_policy['price_display'],
         })
     except Exception as e:
         logging.error(f'Error checking screen limit: {e}')
@@ -8965,14 +12398,15 @@ def add_screen():
             current_screen_count = _count_user_screens()
             has_subscription = _user_has_active_subscription()
             is_admin = session.get('user', {}).get('is_admin', False)
+            billing_policy = _get_user_billing_policy(_current_user_id())
+            free_screens = int(billing_policy.get('free_screens') or 0)
             
             logging.info(f'ADD_SCREEN CHECK: screens={current_screen_count}, has_sub={has_subscription}, is_admin={is_admin}')
         
-            # Require subscription for ALL screens (removed >= 1 check for free screen)
-            if not has_subscription and not is_admin:
+            if not has_subscription and not is_admin and current_screen_count >= free_screens:
                 return jsonify({
                     'error': 'Subscription required',
-                    'message': 'Please subscribe to add screens. Subscription is $5 per screen per month.',
+                    'message': f'Please subscribe to add screens. Subscription is {billing_policy["price_display"]}.',
                     'requires_subscription': True,
                     'current_screens': current_screen_count
                 }), 403
@@ -10164,7 +13598,6 @@ def get_playlist(store_id, screen_id):
                                     fname = None
                             if fname:
                                 se = ((int(time.time()) // 5) + 2) * 5
-                                # Derive a reasonable group id, count, mode, and order so followers can slice too
                                 try:
                                     # Try to find an existing declared sync group for these siblings
                                     sync_groups = (cfg.get('sync_groups') or {})
@@ -11342,6 +14775,19 @@ def update_playlist_item(store_id, screen_id, item_id):
     # Persist in the same per-user config the dashboard is using
     ukey = _safe_user_key()
     cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
+    screens = cfg.get('screens', {}).get(store_id, {})
+    if screen_id not in screens:
+        if '_' in screen_id:
+            short = screen_id.split('_', 1)[1]
+            prefixed = f"{store_id}_{short}"
+            if prefixed in screens:
+                screen_id = prefixed
+            elif short in screens:
+                screen_id = short
+        else:
+            prefixed = f"{store_id}_{screen_id}"
+            if prefixed in screens:
+                screen_id = prefixed
     screen = cfg.get('screens', {}).get(store_id, {}).get(screen_id)
     if not screen:
         return jsonify({'success': False, 'error': 'screen not found'}), 404
@@ -11382,7 +14828,7 @@ def update_playlist_item(store_id, screen_id, item_id):
         }
         return aliases.get(v)
     for item in screen.get('playlist', []):
-        if item['id'] == item_id:
+        if str(item.get('id')) == str(item_id):
             payload = request.get_json() or {}
             # Allow replacing the media file by referencing an existing upload
             if 'file' in payload:
@@ -11544,6 +14990,11 @@ def update_playlist_item(store_id, screen_id, item_id):
         return jsonify({'success': True})
     return jsonify({'success': False, 'error': 'item not found'}), 404
 
+@app.route('/playlist/item/<store_id>/<screen_id>/<item_id>/update', methods=['POST'])
+@login_required
+def update_playlist_item_post(store_id, screen_id, item_id):
+    return update_playlist_item(store_id, screen_id, item_id)
+
 @app.route('/screens/<store_id>', methods=['GET'])
 @login_required
 def get_screens_for_store(store_id: str):
@@ -11588,13 +15039,26 @@ def delete_playlist_item(store_id, screen_id, item_id):
     print(f"DEBUG: DELETE playlist item {store_id} {screen_id} {item_id}")
     ukey = _safe_user_key()
     cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
+    screens = cfg.get('screens', {}).get(store_id, {})
+    if screen_id not in screens:
+        if '_' in screen_id:
+            short = screen_id.split('_', 1)[1]
+            prefixed = f"{store_id}_{short}"
+            if prefixed in screens:
+                screen_id = prefixed
+            elif short in screens:
+                screen_id = short
+        else:
+            prefixed = f"{store_id}_{screen_id}"
+            if prefixed in screens:
+                screen_id = prefixed
     screen = cfg.get('screens', {}).get(store_id, {}).get(screen_id)
     if not screen:
         return jsonify({'success': False, 'error': 'screen not found'}), 404
     # Find the item and determine if it's part of a sync group
     target_item = None
     for it in (screen.get('playlist') or []):
-        if it.get('id') == item_id:
+        if str(it.get('id')) == str(item_id):
             target_item = it
             break
     if not target_item:
@@ -11605,7 +15069,7 @@ def delete_playlist_item(store_id, screen_id, item_id):
         gid = sref.get('group')
         group = (cfg.get('sync_groups') or {}).get(gid)
         # Remove this item from its screen
-        screen['playlist'] = [i for i in screen.get('playlist', []) if i.get('id') != item_id]
+        screen['playlist'] = [i for i in screen.get('playlist', []) if str(i.get('id')) != str(item_id)]
         _enqueue_command_in_cfg(cfg, store_id, screen_id, 'reload')
         if isinstance(group, dict):
             role = sref.get('role')
@@ -11622,7 +15086,7 @@ def delete_playlist_item(store_id, screen_id, item_id):
                         if not tgt:
                             continue
                         before_len = len(tgt.get('playlist') or [])
-                        tgt['playlist'] = [i for i in (tgt.get('playlist') or []) if i.get('id') != mid]
+                        tgt['playlist'] = [i for i in (tgt.get('playlist') or []) if str(i.get('id')) != str(mid)]
                         if len(tgt['playlist']) != before_len:
                             _enqueue_command_in_cfg(cfg, store_id, msid, 'reload')
                     except Exception:
@@ -11647,7 +15111,7 @@ def delete_playlist_item(store_id, screen_id, item_id):
         return jsonify({'success': True})
     else:
         before = len(screen.get('playlist', []))
-        screen['playlist'] = [i for i in screen.get('playlist', []) if i.get('id') != item_id]
+        screen['playlist'] = [i for i in screen.get('playlist', []) if str(i.get('id')) != str(item_id)]
         if len(screen['playlist']) != before:
             _enqueue_command_in_cfg(cfg, store_id, screen_id, 'reload')
             if ukey:
@@ -11657,12 +15121,30 @@ def delete_playlist_item(store_id, screen_id, item_id):
             return jsonify({'success': True})
     return jsonify({'success': False, 'error': 'item not found'}), 404
 
+@app.route('/playlist/item/<store_id>/<screen_id>/<item_id>/delete', methods=['POST'])
+@login_required
+def delete_playlist_item_post(store_id, screen_id, item_id):
+    return delete_playlist_item(store_id, screen_id, item_id)
+
 # ---- Schedule window management endpoints ----
 @app.route('/playlist/item/<store_id>/<screen_id>/<item_id>/schedule', methods=['POST'])
 @login_required
 def add_schedule_window(store_id, screen_id, item_id):
     ukey = _safe_user_key()
     cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
+    screens = cfg.get('screens', {}).get(store_id, {})
+    if screen_id not in screens:
+        if '_' in screen_id:
+            short = screen_id.split('_', 1)[1]
+            prefixed = f"{store_id}_{short}"
+            if prefixed in screens:
+                screen_id = prefixed
+            elif short in screens:
+                screen_id = short
+        else:
+            prefixed = f"{store_id}_{screen_id}"
+            if prefixed in screens:
+                screen_id = prefixed
     screen = cfg.get('screens', {}).get(store_id, {}).get(screen_id)
     if not screen:
         return jsonify({'success': False, 'error': 'screen not found'}), 404
@@ -11682,7 +15164,7 @@ def add_schedule_window(store_id, screen_id, item_id):
         win_enabled = True
     win = {'start': payload.get('start'), 'end': payload.get('end'), 'days': days, 'enabled': win_enabled}
     for it in screen.get('playlist', []):
-        if it.get('id') == item_id:
+        if str(it.get('id')) == str(item_id):
             sched = it.setdefault('schedule', [])
             sched.append(win)
             # If part of a sync group, mirror to all members
@@ -11704,7 +15186,7 @@ def add_schedule_window(store_id, screen_id, item_id):
                             if not tgt:
                                 continue
                             for it2 in (tgt.get('playlist') or []):
-                                if it2.get('id') == mid:
+                                if str(it2.get('id')) == str(mid):
                                     sch2 = it2.setdefault('schedule', [])
                                     sch2.append(dict(win))
                                     _enqueue_command_in_cfg(cfg, store_id, msid, 'reload')
@@ -11726,12 +15208,25 @@ def add_schedule_window(store_id, screen_id, item_id):
 def update_schedule_window(store_id, screen_id, item_id, index):
     ukey = _safe_user_key()
     cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
+    screens = cfg.get('screens', {}).get(store_id, {})
+    if screen_id not in screens:
+        if '_' in screen_id:
+            short = screen_id.split('_', 1)[1]
+            prefixed = f"{store_id}_{short}"
+            if prefixed in screens:
+                screen_id = prefixed
+            elif short in screens:
+                screen_id = short
+        else:
+            prefixed = f"{store_id}_{screen_id}"
+            if prefixed in screens:
+                screen_id = prefixed
     screen = cfg.get('screens', {}).get(store_id, {}).get(screen_id)
     if not screen:
         return jsonify({'success': False, 'error': 'screen not found'}), 404
     payload = request.get_json() or {}
     for it in screen.get('playlist', []):
-        if it.get('id') == item_id:
+        if str(it.get('id')) == str(item_id):
             sched = it.setdefault('schedule', [])
             if 0 <= index < len(sched):
                 if 'start' in payload: sched[index]['start'] = payload.get('start')
@@ -11765,7 +15260,7 @@ def update_schedule_window(store_id, screen_id, item_id, index):
                                 if not tgt:
                                     continue
                                 for it2 in (tgt.get('playlist') or []):
-                                    if it2.get('id') == mid:
+                                    if str(it2.get('id')) == str(mid):
                                         sch2 = it2.setdefault('schedule', [])
                                         if 0 <= index < len(sch2):
                                             if 'start' in payload: sch2[index]['start'] = payload.get('start')
@@ -11795,16 +15290,34 @@ def update_schedule_window(store_id, screen_id, item_id, index):
             return jsonify({'success': False, 'error': 'index out of range'}), 400
     return jsonify({'success': False, 'error': 'item not found'}), 404
 
+@app.route('/playlist/item/<store_id>/<screen_id>/<item_id>/schedule/<int:index>/update', methods=['POST'])
+@login_required
+def update_schedule_window_post(store_id, screen_id, item_id, index):
+    return update_schedule_window(store_id, screen_id, item_id, index)
+
 @app.route('/playlist/item/<store_id>/<screen_id>/<item_id>/schedule/<int:index>', methods=['DELETE'])
 @login_required
 def delete_schedule_window(store_id, screen_id, item_id, index):
     ukey = _safe_user_key()
     cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
+    screens = cfg.get('screens', {}).get(store_id, {})
+    if screen_id not in screens:
+        if '_' in screen_id:
+            short = screen_id.split('_', 1)[1]
+            prefixed = f"{store_id}_{short}"
+            if prefixed in screens:
+                screen_id = prefixed
+            elif short in screens:
+                screen_id = short
+        else:
+            prefixed = f"{store_id}_{screen_id}"
+            if prefixed in screens:
+                screen_id = prefixed
     screen = cfg.get('screens', {}).get(store_id, {}).get(screen_id)
     if not screen:
         return jsonify({'success': False, 'error': 'screen not found'}), 404
     for it in screen.get('playlist', []):
-        if it.get('id') == item_id:
+        if str(it.get('id')) == str(item_id):
             sched = it.setdefault('schedule', [])
             if 0 <= index < len(sched):
                 removed = sched.pop(index)
@@ -11827,7 +15340,7 @@ def delete_schedule_window(store_id, screen_id, item_id, index):
                                 if not tgt:
                                     continue
                                 for it2 in (tgt.get('playlist') or []):
-                                    if it2.get('id') == mid:
+                                    if str(it2.get('id')) == str(mid):
                                         sch2 = it2.setdefault('schedule', [])
                                         if 0 <= index < len(sch2):
                                             sch2.pop(index)
@@ -11845,6 +15358,11 @@ def delete_schedule_window(store_id, screen_id, item_id, index):
                 return jsonify({'success': True, 'removed': removed})
             return jsonify({'success': False, 'error': 'index out of range'}), 400
     return jsonify({'success': False, 'error': 'item not found'}), 404
+
+@app.route('/playlist/item/<store_id>/<screen_id>/<item_id>/schedule/<int:index>/delete', methods=['POST'])
+@login_required
+def delete_schedule_window_post(store_id, screen_id, item_id, index):
+    return delete_schedule_window(store_id, screen_id, item_id, index)
 
 # ---- Legacy fixed-path alias: redirect /playlist/1881/... to current master store id ----
 @app.route('/playlist/1881/<screen_id>')
@@ -13122,6 +16640,7 @@ def handle_pi_heartbeat(data):
                     # Convert username (email) to safe key and get config path
                     safe_key = username.lower().replace('@', '_at_')
                     safe_key = ''.join(c for c in safe_key if (c.isalnum() or c in '._-'))
+                    connected_pis[pi_id]['user_key'] = safe_key
                     config_path = _config_path_for_user_safe_key(safe_key)
                     
                     try:
@@ -14319,6 +17838,76 @@ def get_pi_location():
             'success': False,
             'message': f'Error: {str(e)}'
         }), 500
+
+@app.route('/api/pi-map-locations', methods=['GET'])
+@login_required
+def pi_map_locations():
+    """Return Pi devices with coordinates for the global map view in Pi Manager."""
+    try:
+        now_ts = time.time()
+        PI_OFFLINE_TIMEOUT = 120
+
+        # Load user-scoped config so map only shows current account's devices.
+        ukey = _safe_user_key()
+        config = load_store_config_for_user_safe_key(ukey) if ukey else load_store_config()
+
+        stores_by_id = {
+            str(s.get('id')): str(s.get('name') or s.get('id') or '')
+            for s in (config.get('stores') or [])
+        }
+
+        out = []
+        for store_id, screens in (config.get('screens') or {}).items():
+            if not isinstance(screens, dict):
+                continue
+            for screen_id, screen_data in screens.items():
+                if not isinstance(screen_data, dict):
+                    continue
+
+                pi_id = str(screen_data.get('pi_id') or '').strip()
+                if not pi_id:
+                    continue
+
+                lat = screen_data.get('latitude')
+                lng = screen_data.get('longitude')
+                try:
+                    lat = float(lat) if lat is not None else None
+                    lng = float(lng) if lng is not None else None
+                except Exception:
+                    lat, lng = None, None
+
+                # If no coordinates, skip in the map API payload.
+                if lat is None or lng is None:
+                    continue
+
+                pi_runtime = connected_pis.get(pi_id, {}) or {}
+                last_seen_raw = pi_runtime.get('last_seen')
+                if isinstance(last_seen_raw, (int, float)):
+                    is_online = (now_ts - float(last_seen_raw)) < PI_OFFLINE_TIMEOUT
+                    last_seen = datetime.fromtimestamp(float(last_seen_raw)).strftime('%Y-%m-%d %I:%M:%S %p')
+                else:
+                    is_online = False
+                    last_seen = 'Never'
+
+                out.append({
+                    'pi_id': pi_id,
+                    'store_id': str(store_id),
+                    'store_name': stores_by_id.get(str(store_id), str(store_id)),
+                    'screen_id': str(screen_id),
+                    'screen_name': str(screen_data.get('name') or screen_id),
+                    'location_label': str(screen_data.get('location_name') or ''),
+                    'address': str(screen_data.get('address') or ''),
+                    'latitude': lat,
+                    'longitude': lng,
+                    'status': 'online' if is_online else 'offline',
+                    'last_seen': last_seen,
+                    'ip': str(pi_runtime.get('ip') or 'Unknown')
+                })
+
+        return jsonify({'success': True, 'devices': out})
+    except Exception as e:
+        logging.error(f'Error in pi_map_locations: {e}')
+        return jsonify({'success': False, 'error': str(e), 'devices': []}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5002))  # Use 5002 since 5000 seems blocked

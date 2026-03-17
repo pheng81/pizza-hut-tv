@@ -33,15 +33,27 @@ class StoreItem {
 }
 
 class ScreenItem {
-  ScreenItem({required this.id, required this.name});
+  ScreenItem({
+    required this.id,
+    required this.name,
+    this.rotation = 0,
+    this.protected = false,
+  });
 
   final String id;
   final String name;
+  final int rotation;
+  final bool protected;
 
   factory ScreenItem.fromJson(String id, Map<String, dynamic> json) {
+    final rawRotation = int.tryParse('${json['rotation'] ?? 0}') ?? 0;
+    final normalizedRotation =
+        <int>{0, 90, 180, 270}.contains(rawRotation) ? rawRotation : 0;
     return ScreenItem(
       id: id,
       name: (json['name'] ?? id).toString(),
+      rotation: normalizedRotation,
+      protected: (json['protected'] ?? false) == true,
     );
   }
 }

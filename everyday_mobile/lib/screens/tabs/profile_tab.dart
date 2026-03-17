@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../account_page.dart';
 import '../../models/app_models.dart';
 import '../../services/api_client.dart';
 
@@ -136,60 +137,160 @@ class _ProfileTabState extends State<ProfileTab> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
     return Padding(
       padding: const EdgeInsets.all(16),
       child: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               children: [
-                Text('Profile', style: Theme.of(context).textTheme.titleLarge),
-                const SizedBox(height: 8),
-                if (_profile != null) ...[
-                  Text('Username: ${_profile!.username}'),
-                  Text('Link code: ${_profile!.linkCode ?? '-'}'),
-                ],
-                if (_message != null)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              height: 34,
+                              width: 34,
+                              decoration: BoxDecoration(
+                                color: scheme.primaryContainer,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(
+                                Icons.person,
+                                color: scheme.onPrimaryContainer,
+                                size: 18,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Text('Account', style: theme.textTheme.titleMedium),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        if (_profile != null) ...[
+                          Text('Username: ${_profile!.username}'),
+                          const SizedBox(height: 4),
+                          Text('Link code: ${_profile!.linkCode ?? '-'}'),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                FilledButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => AccountPage(
+                          apiClient: widget.apiClient,
+                          initialUsername: _profile?.username,
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.account_balance_wallet_outlined),
+                  label: const Text('Open Account Center'),
+                ),
+                if (_message != null) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: scheme.surfaceContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     child: Text(_message!),
                   ),
-                TextField(
-                  controller: _nameController,
-                  decoration: const InputDecoration(labelText: 'Full name'),
+                ],
+                const SizedBox(height: 10),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Update Name', style: theme.textTheme.titleMedium),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: _nameController,
+                          decoration:
+                              const InputDecoration(labelText: 'Full name'),
+                        ),
+                        const SizedBox(height: 10),
+                        FilledButton(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFF2563EB),
+                            foregroundColor: Colors.white,
+                          ),
+                          onPressed: _updateName,
+                          child: const Text('Save Name'),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 8),
-                FilledButton(
-                  onPressed: _updateName,
-                  child: const Text('Update Name'),
+                const SizedBox(height: 10),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Change Password',
+                            style: theme.textTheme.titleMedium),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: _currentPasswordController,
+                          obscureText: true,
+                          decoration: const InputDecoration(
+                              labelText: 'Current password'),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _newPasswordController,
+                          obscureText: true,
+                          decoration:
+                              const InputDecoration(labelText: 'New password'),
+                        ),
+                        const SizedBox(height: 10),
+                        FilledButton(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFF16A34A),
+                            foregroundColor: Colors.white,
+                          ),
+                          onPressed: _changePassword,
+                          child: const Text('Update Password'),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _currentPasswordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: 'Current password'),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _newPasswordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: 'New password'),
-                ),
-                const SizedBox(height: 8),
-                FilledButton(
-                  onPressed: _changePassword,
-                  child: const Text('Change Password'),
-                ),
-                const SizedBox(height: 8),
-                OutlinedButton(
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF7C3AED),
+                    side: const BorderSide(color: Color(0xFF7C3AED)),
+                  ),
                   onPressed: _regenerateCode,
-                  child: const Text('Regenerate Link Code'),
+                  icon: const Icon(Icons.pin_outlined),
+                  label: const Text('Regenerate Link Code'),
                 ),
                 const SizedBox(height: 8),
-                OutlinedButton(
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: scheme.error,
+                    side: BorderSide(color: scheme.error),
+                  ),
                   onPressed: () async {
                     await widget.onLogout();
                   },
-                  child: const Text('Logout'),
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Logout'),
                 ),
               ],
             ),

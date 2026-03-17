@@ -214,7 +214,10 @@
     }
     input[type="text"], 
     input[type="password"],
-    input[type="email"] {
+    input[type="email"],
+    input[type="number"],
+    input[type="date"],
+    select {
       width: 100%; 
       padding: 10px 12px; 
       border: 1px solid #cbd5e0; 
@@ -256,12 +259,60 @@
       flex: 1;
       min-width: 300px;
     }
+    .flash-stack {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .flash {
+      padding: 12px 14px;
+      border: 1px solid;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .flash--success {
+      background: #f0fdf4;
+      border-color: #86efac;
+      color: #166534;
+    }
+    .flash--error {
+      background: #fef2f2;
+      border-color: #fca5a5;
+      color: #b91c1c;
+    }
+    .settings-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .field-group {
+      display: grid;
+      gap: 6px;
+    }
+    .settings-grid .full {
+      grid-column: 1 / -1;
+    }
+    .field-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: #475569;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .help {
+      color: #718096;
+      font-size: 12px;
+      line-height: 1.6;
+    }
     @media(max-width: 960px) {
       .stats {
         grid-template-columns: 1fr;
       }
       .header-stats {
         display: none;
+      }
+      .settings-grid {
+        grid-template-columns: 1fr;
       }
       .search-bar {
         flex-direction: column;
@@ -300,12 +351,24 @@
         </div>
       </div>
       <div style="display: flex; gap: 12px;">
+        <a href="/superadmin/website" class="btn btn--ghost">Website Edit</a>
+        <a href="/superadmin/agents" class="btn btn--ghost">👥 Agents</a>
         <a href="/superadmin/feedback" class="btn btn--ghost">📊 Feedback</a>
         <a href="/superadmin/logout" class="btn btn--ghost">Logout</a>
       </div>
     </div>
   </header>
   <main>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-stack">
+          {% for category, message in messages %}
+            <div class="flash {{ 'flash--success' if category == 'success' else 'flash--error' }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
     <div class="grid">
       <section class="card">
         <h2>Quick Stats</h2>
@@ -345,6 +408,128 @@
       </section>
     </div>
 
+    <section class="card" style="margin-bottom: 20px;">
+      <h2>Subscription Settings</h2>
+      <form method="post" action="/superadmin/billing/settings">
+        <div class="settings-grid">
+          <div class="field-group">
+            <label class="field-label" for="price_per_screen">Price Per Screen Per Month</label>
+            <input id="price_per_screen" type="number" step="0.01" min="0" name="price_per_screen" value="{{ billing_settings.price_per_screen }}" placeholder="5.00" required>
+            <div class="help">This is the monthly charge for each billable screen. Example: <strong>5.0</strong> means $5 per screen each month.</div>
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="trial_days">Free Trial Days</label>
+            <input id="trial_days" type="number" min="0" name="trial_days" value="{{ billing_settings.trial_days }}" placeholder="14" required>
+            <div class="help">This is how many free days a user gets before billing starts. Example: <strong>14</strong> means a 14-day free trial.</div>
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="free_screens">Free Screens Allowed</label>
+            <input id="free_screens" type="number" min="0" name="free_screens" value="{{ billing_settings.free_screens }}" placeholder="0" required>
+            <div class="help">This is how many screens a user can have without needing a subscription. Example: <strong>0</strong> means no free screens.</div>
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="stripe_price_id">Stripe Price ID</label>
+            <input id="stripe_price_id" type="text" name="stripe_price_id" value="{{ billing_settings.stripe_price_id or '' }}" placeholder="price_...">
+            <div class="help">Required if you want Stripe to charge the new amount for active paid subscriptions.</div>
+          </div>
+          <div class="field-group full">
+            <label class="field-label" for="price_display">Price Text Shown To Users</label>
+            <input id="price_display" type="text" name="price_display" value="{{ billing_settings.price_display }}" placeholder="$5 per screen / month">
+            <div class="help">This is the text users see on the website and mobile app.</div>
+          </div>
+          <div class="checkbox-wrapper full">
+            <input type="checkbox" name="apply_existing_users" id="apply_existing_users" value="1">
+            <label for="apply_existing_users">Apply these new settings to existing registered users too</label>
+          </div>
+          <div class="help full">
+            New users will automatically get the latest settings. If you tick the box above, all existing users will be updated to the new fee, trial length, and free-screen allowance too. To change active Stripe billing amounts, enter the Stripe price ID for the new plan before saving.
+          </div>
+          <button class="btn btn--primary full" type="submit">Save Subscription Settings</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card" style="margin-bottom: 20px;">
+      <h2>Promotion Campaign</h2>
+      <form method="post" action="/superadmin/billing/promotion">
+        <div class="settings-grid">
+          <div class="checkbox-wrapper full">
+            <input type="checkbox" name="promotion_enabled" id="promotion_enabled" value="1" {% if billing_promotion.enabled %}checked{% endif %}>
+            <label for="promotion_enabled">Enable promotional pricing campaign</label>
+          </div>
+
+          <div class="field-group full">
+            <label class="field-label" for="promotion_name">Promotion Name</label>
+            <input id="promotion_name" type="text" name="promotion_name" value="{{ billing_promotion.name or '' }}" placeholder="New customer launch promo">
+            <div class="help">Example: <strong>New customer launch promo</strong> or <strong>April special</strong>.</div>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" for="promotion_audience">Who Gets This Promotion</label>
+            <select id="promotion_audience" name="promotion_audience">
+              <option value="new_only" {% if billing_promotion.audience == 'new_only' %}selected{% endif %}>New customers only</option>
+              <option value="new_and_existing" {% if billing_promotion.audience == 'new_and_existing' %}selected{% endif %}>New and existing customers</option>
+              <option value="existing_only" {% if billing_promotion.audience == 'existing_only' %}selected{% endif %}>Existing customers only</option>
+            </select>
+            <div class="help">Example: choose <strong>New customers only</strong> if you want to advertise a lower price without changing old customers.</div>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" for="promotion_start_date">Promotion Start Date</label>
+            <input id="promotion_start_date" type="date" name="promotion_start_date" value="{{ billing_promotion.start_date or '' }}">
+            <div class="help">The promotion becomes active for matching users from this date.</div>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" for="promotion_end_date">Promotion End Date</label>
+            <input id="promotion_end_date" type="date" name="promotion_end_date" value="{{ billing_promotion.end_date or '' }}">
+            <div class="help">Leave blank if the promotion should stay active until you change it manually.</div>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" for="promotion_price_per_screen">Promotion Price Per Screen</label>
+            <input id="promotion_price_per_screen" type="number" step="0.01" min="0" name="promotion_price_per_screen" value="{{ billing_promotion.price_per_screen }}" placeholder="3.50" required>
+            <div class="help">Example: set <strong>3.5</strong> if you want a $3.50 promotional monthly price.</div>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" for="promotion_trial_days">Promotion Trial Days</label>
+            <input id="promotion_trial_days" type="number" min="0" name="promotion_trial_days" value="{{ billing_promotion.trial_days }}" placeholder="30" required>
+            <div class="help">You can offer a longer trial during the campaign.</div>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" for="promotion_free_screens">Promotion Free Screens</label>
+            <input id="promotion_free_screens" type="number" min="0" name="promotion_free_screens" value="{{ billing_promotion.free_screens }}" placeholder="1" required>
+            <div class="help">Example: set <strong>1</strong> if new users should get the first screen free during this promotion.</div>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" for="promotion_stripe_price_id">Promotion Stripe Price ID</label>
+            <input id="promotion_stripe_price_id" type="text" name="promotion_stripe_price_id" value="{{ billing_promotion.stripe_price_id or '' }}" placeholder="price_...">
+            <div class="help">Needed if Stripe should bill the promotional amount.</div>
+          </div>
+
+          <div class="field-group full">
+            <label class="field-label" for="promotion_price_display">Promotion Text Shown To Users</label>
+            <input id="promotion_price_display" type="text" name="promotion_price_display" value="{{ billing_promotion.price_display or '' }}" placeholder="$3.50 per screen / month for new customers">
+            <div class="help">Example: <strong>$3.50 per screen / month for new customers until June 30</strong>.</div>
+          </div>
+
+          <div class="checkbox-wrapper full">
+            <input type="checkbox" name="promotion_apply_existing_now" id="promotion_apply_existing_now" value="1">
+            <label for="promotion_apply_existing_now">Change matching existing customers now too</label>
+          </div>
+
+          <div class="help full">
+            Example: if you are promoting a new lower price for <strong>new customers only</strong>, current and old customers keep their current price. They only change if you choose an audience that includes existing customers and tick <strong>Change matching existing customers now too</strong>.
+          </div>
+
+          <button class="btn btn--primary full" type="submit">Save Promotion Campaign</button>
+        </div>
+      </form>
+    </section>
+
     <section class="card">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; flex-wrap:wrap; gap:16px">
         <h2 style="margin:0">All Users</h2>
@@ -364,6 +549,9 @@
             <th>User Email</th>
             <th>Full Name</th>
             <th>Link Code</th>
+            <th>Email Verified</th>
+            <th>Phone Number</th>
+            <th>Phone Verified</th>
             <th>Stores</th>
             <th>Screens</th>
             <th>Online</th>
@@ -378,6 +566,31 @@
               <td>{{ u.username }}</td>
               <td>{{ u.full_name or '—' }}</td>
               <td><span class="pill">{{ u.link_code or '—' }}</span></td>
+              <td>
+                {% if u.email_verified %}
+                  <span style="color: #10b981; font-weight: 600;">✓ Verified</span>
+                {% else %}
+                  <span style="color: #f59e0b; font-weight: 600;">✗ Not Verified</span>
+                  <button onclick="resendEmailVerification({{ u.id }}, '{{ u.username }}')" class="btn btn--primary" style="margin-left: 8px; padding: 4px 8px; font-size: 11px;">
+                    Resend Email
+                  </button>
+                {% endif %}
+              </td>
+              <td>{{ u.phone_number or '—' }}</td>
+              <td>
+                {% if u.phone_number %}
+                  {% if u.phone_verified %}
+                    <span style="color: #10b981; font-weight: 600;">✓ Verified</span>
+                  {% else %}
+                    <span style="color: #f59e0b; font-weight: 600;">✗ Not Verified</span>
+                    <button onclick="resendPhoneVerification({{ u.id }}, '{{ u.phone_number or '' }}')" class="btn btn--primary" style="margin-left: 8px; padding: 4px 8px; font-size: 11px;">
+                      Send SMS Code
+                    </button>
+                  {% endif %}
+                {% else %}
+                  <span style="color: #94a3b8;">—</span>
+                {% endif %}
+              </td>
               <td><strong>{{ u.stores_count }}</strong></td>
               <td><strong>{{ u.screens_count }}</strong></td>
               <td><strong style="color:#48bb78">{{ u.online_screens }}</strong></td>
@@ -410,5 +623,77 @@
       </div>
     </section>
   </main>
+
+  <script>
+    async function resendEmailVerification(userId, username) {
+      if (!confirm(`Send verification email to ${username}?`)) return;
+
+      const btn = event.target;
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+
+      try {
+        const response = await fetch(`/superadmin/users/${userId}/resend-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json();
+
+        if (data.success) {
+          btn.textContent = '✓ Email Sent!';
+          btn.style.background = '#10b981';
+          setTimeout(() => {
+            btn.disabled = false;
+            btn.textContent = originalText;
+            btn.style.background = '';
+          }, 3000);
+          return;
+        }
+
+        alert('Error: ' + (data.error || 'Failed to send verification email'));
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+
+    async function resendPhoneVerification(userId, phoneNumber) {
+      if (!confirm(`Send SMS verification code to ${phoneNumber}?`)) return;
+
+      const btn = event.target;
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+
+      try {
+        const response = await fetch(`/superadmin/users/${userId}/resend-phone`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json();
+
+        if (data.success) {
+          btn.textContent = '✓ SMS Sent!';
+          btn.style.background = '#10b981';
+          setTimeout(() => {
+            btn.disabled = false;
+            btn.textContent = originalText;
+            btn.style.background = '';
+          }, 3000);
+          return;
+        }
+
+        alert('Error: ' + (data.error || 'Failed to send SMS code'));
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  </script>
 </body>
 </html>
