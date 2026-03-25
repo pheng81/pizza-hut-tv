@@ -6,7 +6,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
-import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 
 import '../account_page.dart';
 import '../../models/app_models.dart';
@@ -1283,6 +1282,7 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
     'sun'
   ];
   static const Map<int, String> _effectById = {
+    0: '',
     1: 'cut',
     2: 'fade',
     3: 'dissolve',
@@ -1321,6 +1321,7 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
   bool _showNewWindowForm = false;
   bool _quickActionBusy = false;
   int _screenRotation = 0;
+  bool _screenMuted = false;
   File? _pickedFile;
   List<Map<String, dynamic>> _playlist = const [];
 
@@ -1592,9 +1593,11 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
       );
       final screens = await widget.apiClient.getScreens(widget.storeId);
       int rotation = _screenRotation;
+      bool muted = _screenMuted;
       for (final screen in screens) {
         if (screen.id == widget.screenId) {
           rotation = screen.rotation;
+          muted = screen.muted;
           break;
         }
       }
@@ -1604,6 +1607,7 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
       setState(() {
         _playlist = playlist;
         _screenRotation = rotation;
+        _screenMuted = muted;
         if (_selectedItemId != null &&
             !_playlist.any((p) => p['id']?.toString() == _selectedItemId)) {
           _selectedItemId = null;
@@ -2343,6 +2347,34 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
     }
   }
 
+  Future<void> _quickToggleMute() async {
+    setState(() {
+      _quickActionBusy = true;
+    });
+    try {
+      final newMuted = !_screenMuted;
+      await widget.apiClient.updateScreenMute(
+        storeId: widget.storeId,
+        screenId: widget.screenId,
+        muted: newMuted,
+      );
+      if (mounted) {
+        setState(() {
+          _screenMuted = newMuted;
+        });
+      }
+      _showSheetMessage(_screenMuted ? '🔇 Screen muted' : '🔊 Screen unmuted');
+    } catch (e) {
+      _showSheetMessage(e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _quickActionBusy = false;
+        });
+      }
+    }
+  }
+
   Future<void> _quickRotate() async {
     setState(() {
       _quickActionBusy = true;
@@ -2438,7 +2470,7 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
         return fromName;
       }
     }
-    return 1;
+    return 0;
   }
 
   List<Map<String, dynamic>> _scheduleWindows() {
@@ -2913,7 +2945,7 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
     String? selectedLibraryFile;
     bool enabled = true;
     bool repeat = true;
-    int effectId = 1;
+    int effectId = 0;
     Set<String> days = <String>{};
     String? localError;
     bool creating = false;
@@ -3083,18 +3115,29 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
                       Wrap(
                         spacing: 6,
                         runSpacing: 6,
-                        children: List.generate(10, (index) {
-                          final id = index + 1;
-                          return ChoiceChip(
-                            label: Text('$id'),
-                            selected: effectId == id,
+                        children: [
+                          ChoiceChip(
+                            label: const Text('·'),
+                            selected: effectId == 0,
                             onSelected: creating
                                 ? null
                                 : (_) => setModalState(() {
-                                      effectId = id;
+                                      effectId = 0;
                                     }),
-                          );
-                        }),
+                          ),
+                          ...List.generate(10, (index) {
+                            final id = index + 1;
+                            return ChoiceChip(
+                              label: Text('$id'),
+                              selected: effectId == id,
+                              onSelected: creating
+                                  ? null
+                                  : (_) => setModalState(() {
+                                        effectId = id;
+                                      }),
+                            );
+                          }),
+                        ],
                       ),
                       const SizedBox(height: 10),
                       const Text('Days'),
@@ -3765,6 +3808,21 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
                                   ),
                                   const SizedBox(width: 6),
                                   _buildQuickActionButton(
+                                    tooltip: _screenMuted
+                                        ? 'Unmute Screen'
+                                        : 'Mute Screen',
+                                    icon: _screenMuted
+                                        ? Icons.volume_off
+                                        : Icons.volume_up,
+                                    background: _screenMuted
+                                        ? const Color(0xFF6B7280)
+                                        : const Color(0xFF059669),
+                                    onPressed: (_saving || _quickActionBusy)
+                                        ? null
+                                        : _quickToggleMute,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  _buildQuickActionButton(
                                     tooltip: 'Display',
                                     icon: Icons.open_in_browser,
                                     background: const Color(0xFF0EA5E9),
@@ -3922,21 +3980,35 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
                             Wrap(
                               spacing: 8,
                               runSpacing: 8,
-                              children: List.generate(10, (index) {
-                                final effectId = index + 1;
-                                return ChoiceChip(
-                                  label: Text('$effectId'),
-                                  selected: effectId == _itemEffectId,
+                              children: [
+                                ChoiceChip(
+                                  label: const Text('·'),
+                                  selected: _itemEffectId == 0,
                                   onSelected: _saving
                                       ? null
                                       : (_) {
                                           setState(() {
-                                            _itemEffectId = effectId;
+                                            _itemEffectId = 0;
                                           });
                                           _queueAutoSave();
                                         },
-                                );
-                              }),
+                                ),
+                                ...List.generate(10, (index) {
+                                  final effectId = index + 1;
+                                  return ChoiceChip(
+                                    label: Text('$effectId'),
+                                    selected: effectId == _itemEffectId,
+                                    onSelected: _saving
+                                        ? null
+                                        : (_) {
+                                            setState(() {
+                                              _itemEffectId = effectId;
+                                            });
+                                            _queueAutoSave();
+                                          },
+                                  );
+                                }),
+                              ],
                             ),
                             const SizedBox(height: 12),
                             _buildSectionCaption('Active Days'),
@@ -4338,7 +4410,6 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
 
 class _VideoPreview extends StatefulWidget {
   const _VideoPreview({
-    super.key,
     required this.url,
     this.headers = const {},
   });

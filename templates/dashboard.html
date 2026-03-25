@@ -690,6 +690,10 @@
     .rotate-btn { background:#6366f1; color:#fff; }
     .rotate-btn:hover { background:#4f51e8; }
     .upload-btn:active, .delete-btn:active, .rotate-btn:active { transform:translateY(1px); box-shadow:0 0 0 rgba(0,0,0,0); }
+    .mute-btn { background:#059669; color:#fff; font-size:12px; line-height:1; padding:6px 12px; border-radius:6px; border:none; cursor:pointer; display:inline-flex; align-items:center; gap:4px; margin:0; box-shadow:none; transition:.18s background,.18s box-shadow,.18s transform; }
+    .mute-btn.muted { background:#6b7280; }
+    .mute-btn:hover { filter:brightness(1.1); }
+    .mute-btn:active { transform:translateY(1px); }
     .button-row { display:flex; align-items:center; gap:10px; flex-wrap:nowrap; margin:10px 0 4px; }
         
         .orientation-controls {
@@ -1803,6 +1807,7 @@
                 </div>
                 <div class="sep"></div>
                 <a class="item" href="#" onclick="openLibraryManager(); return false;">Manage Library</a>
+                <a class="item" href="{{ url_for('menu_studio') }}">Menu Studio</a>
                 <a class="item" href="{{ url_for('profile') }}">Profile</a>
                 <a class="item" href="{{ url_for('logout') }}">Log out</a>
             </div>
@@ -1852,6 +1857,10 @@
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z"></path></svg>
                 <span>Manage Library</span>
             </button>
+            <a class="action-item" href="{{ url_for('menu_studio') }}" title="Menu Studio">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4z"></path><path d="M9 4v16"></path><path d="M14 9h6"></path><path d="M14 13h6"></path><path d="M14 17h4"></path></svg>
+                <span>Menu Studio</span>
+            </a>
             <button class="action-item danger" id="drawer-delete-store-btn" onclick="deleteCurrentStore()" title="Delete selected store">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path></svg>
                 <span>Delete Store</span>
@@ -3461,6 +3470,7 @@ allowfullscreen></iframe></div>`;
                     <button class="upload-btn" onclick="openAutoSliceModal('${screenId}')" style="flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 10px; font-size:clamp(10px, 2vw, 12px); background:#28a745;" title="Auto-slice multi-screen videos">✂️ Auto-Slice</button>
                     <button class="upload-btn" onclick="openYouTubeModal('${screenId}')" title="Add YouTube video to schedule" style="flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 10px; font-size:clamp(10px, 2vw, 12px); background:#FF0000;">▶️ YouTube</button>
                     <button class="rotate-btn" type="button" onclick="rotateScreen('${screenId}')" title="Rotate image 90°" style="flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 10px; font-size:clamp(10px, 2vw, 12px);">⤾ Rotate</button>
+                    <button id="mute-btn-${screenId}" class="mute-btn${screenData.muted ? ' muted' : ''}" type="button" onclick="toggleScreenMute('${screenId}')" title="${screenData.muted ? 'Unmute screen sound' : 'Mute screen sound'}" style="flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 10px; font-size:clamp(10px, 2vw, 12px);">${screenData.muted ? '🔇' : '🔊'}</button>
                     <span id="rotation-indicator-${screenId}" class="rotation-indicator rotate-${rotation}" title="Current rotation" style="flex:0 0 18px; width:18px; height:18px;"></span>
                     <input type="file" class="file-input" id="file-${screenId}" style="display:none;"
                            accept="image/*,video/*" onchange="uploadFile('${screenId}', this)">
@@ -4834,6 +4844,35 @@ allowfullscreen></iframe></div>`;
             });
         }
         
+        function toggleScreenMute(screenId) {
+            const screensData = allStoresData.screens[currentStoreId] || {};
+            const currentData = screensData[screenId];
+            if (!currentData) { alert('Screen data not found'); return; }
+            const newMuted = !currentData.muted;
+            fetch('/update_screen_mute', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ store_id: currentStoreId, screen_id: screenId, muted: newMuted })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    // Update in-memory state
+                    currentData.muted = newMuted;
+                    // Update button appearance
+                    const btn = document.getElementById(`mute-btn-${screenId}`);
+                    if (btn) {
+                        btn.textContent = newMuted ? '🔇' : '🔊';
+                        btn.title = newMuted ? 'Unmute screen sound' : 'Mute screen sound';
+                        btn.classList.toggle('muted', newMuted);
+                    }
+                } else {
+                    alert('❌ Error: ' + (data.error || 'Failed to update mute'));
+                }
+            })
+            .catch(err => alert('❌ Failed: ' + err.message));
+        }
+
         // Load screens dynamically when page loads
         document.addEventListener('DOMContentLoaded', function() {
             initializeDashboard();

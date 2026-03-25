@@ -854,6 +854,10 @@
 			}
 			
 			const u = (typeof item === 'string') ? item : (item.url || item.file || '');
+			// youtube: items must be passed through as-is — they are handled in showItem, not fetched as files
+			if(u && (u.startsWith('youtube:') || u.match(/youtube:[a-zA-Z0-9_-]{11}/))){
+				return u;
+			}
 			if(/^https?:\/\//i.test(u)){
 				// Keep absolute URL (CDN) for both images and videos; upgrade to HTTPS if needed for non-localhost
 				if(!u.includes('127.0.0.1') && !u.includes('localhost')){
@@ -893,6 +897,7 @@
 		let idx = 0;
 		let timer = null;
 		let lastFetchTs = 0;
+		let screenMuted = true; // default true for autoplay; updated from server /playlist response
 		let currentItemKey = '';
 		let forceAdvanceNow = false;
 		const PLAYLIST_REFRESH_MIN_MS = 3000; // INSTANT REFRESH: Faster refresh for immediate schedule changes
@@ -1173,6 +1178,7 @@
 					playlistSignature = newSignature;
 					if(typeof j.orientation === 'string'){ orientationMode = j.orientation; }
 					if(typeof j.rotation === 'number'){ displayRotation = (j.rotation||0); }
+					if(typeof j.muted === 'boolean'){ screenMuted = j.muted; }
 					applyOrientation();
 					if(idx >= playlist.length) idx = 0;
 					// If the currently showing item is no longer present (e.g., schedule switch), advance immediately
@@ -1277,7 +1283,7 @@
 				console.log('📹 [PRELOAD] Starting video preload for:', url);
 				var v=document.createElement('video');
 				v.autoplay=false; 
-				v.muted=true; 
+				v.muted=screenMuted; 
 				v.playsInline = true;
 				
 				// 🚀 SMART PRELOADING: Use brand config if available, fallback to metadata
@@ -1834,7 +1840,7 @@
 				
 				// Create iframe for YouTube
 				const iframe = document.createElement('iframe');
-				iframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&controls=0&modestbranding=1`;
+				iframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=${screenMuted?1:0}&loop=1&playlist=${videoId}&controls=0&modestbranding=1`;
 				iframe.className = 'media';
 				iframe.style.width = '100%';
 				iframe.style.height = '100%';

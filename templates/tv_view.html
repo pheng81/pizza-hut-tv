@@ -321,6 +321,7 @@
 		let idx = 0;
 		let timer = null;
 		let lastFetchTs = 0;
+		let screenMuted = true; // default muted (required for autoplay); updated from server
 
 		// Track items we have already probed/reported to avoid duplicates
 		const probedKeys = new Set();
@@ -496,6 +497,7 @@
 					playlist = j.playlist;
 					if(typeof j.orientation === 'string'){ orientationMode = j.orientation; }
 					if(typeof j.rotation === 'number'){ displayRotation = (j.rotation||0); }
+					if(typeof j.muted === 'boolean'){ screenMuted = j.muted; }
 					applyOrientation();
 					if(idx >= playlist.length) idx = 0;
 					// Proactively probe status for unknown/stale items so the dashboard turns green fast
@@ -856,6 +858,35 @@
 			const url = mediaUrl(item);
 			if(!url){ return; }
 			
+			const type = (item && item.media_type ? String(item.media_type) : '').toLowerCase();
+			if (type === 'web') {
+				const iframe = document.createElement('iframe');
+				iframe.src = url;
+				iframe.className = 'media';
+				iframe.style.width = '100%';
+				iframe.style.height = '100%';
+				iframe.style.border = 'none';
+				iframe.allow = 'autoplay; fullscreen';
+				iframe.referrerPolicy = 'no-referrer-when-downgrade';
+				clearNode(back);
+				back.appendChild(iframe);
+				back.classList.add('fade');
+				back.classList.remove('hidden');
+				requestAnimationFrame(() => {
+					back.classList.add('visible');
+					back.classList.remove('fade');
+					front.classList.add('fade');
+					front.classList.remove('visible');
+					setTimeout(() => {
+						front.classList.add('hidden');
+						front.classList.remove('fade');
+						swapLayers();
+					}, 1100);
+				});
+				postClientEvent('play_ok', item, null);
+				return;
+			}
+			
 			// 🎬 YOUTUBE: Check for YouTube format (supports both direct and CDN-prefixed URLs)
 			const youtubeMatch = String(url).match(/youtube:([a-zA-Z0-9_-]{11})/);
 			if (youtubeMatch) {
@@ -865,7 +896,7 @@
 				
 				// Create iframe for YouTube
 				const iframe = document.createElement('iframe');
-				iframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&controls=0&modestbranding=1`;
+				iframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=${screenMuted?1:0}&loop=1&playlist=${videoId}&controls=0&modestbranding=1`;
 				iframe.className = 'media';
 				iframe.style.width = '100%';
 				iframe.style.height = '100%';
@@ -899,7 +930,6 @@
 			}
 			
 			// Prefer extension-based detection; only trust media_type if URL doesn't look like an image
-			const type = (item.media_type || '').toLowerCase();
 			const isVid = (
 				isVideoByName(url) ||
 				(type === 'video' && !/\.(png|jpe?g|gif|webp|svg)(\?|#|$)/i.test(String(url)))
@@ -977,7 +1007,7 @@
 					// Respect the repeat flag from dashboard
 					node.loop = (item.repeat !== false); // default true unless explicitly disabled
 					node.autoplay = true; 
-					node.muted = true; 
+					node.muted = screenMuted; 
 					node.playsInline = true;
 				}
 				// prepare back layer
@@ -1010,7 +1040,7 @@
 						// Respect the repeat flag from dashboard (fallback path)
 						node.loop = (item.repeat !== false); // default true unless explicitly disabled
 						node.autoplay = true; 
-						node.muted = true; 
+						node.muted = screenMuted; 
 						node.playsInline = true;
 					}
 						clearNode(back); back.appendChild(node);
@@ -1509,6 +1539,13 @@
 						applyOrientation();
 					}
 					
+					// Check for muted changes
+					if(typeof data.muted === 'boolean' && data.muted !== screenMuted){
+						dbg(`POLL: Muted changed to ${data.muted}`);
+						screenMuted = data.muted;
+						// Apply immediately to any currently playing video
+						try{ const v = front && front.querySelector('video'); if(v) v.muted = screenMuted; }catch{}
+					}
 					// Check for orientation changes
 					const serverOrientation = data.orientation || 'default';
 					if (serverOrientation !== orientationMode) {

@@ -470,6 +470,49 @@ def init_db():
     except Exception as _homepage_features_e:
         logging.warning('Homepage features table init failed: %s', _homepage_features_e)
 
+    try:
+        db.execute(
+            'CREATE TABLE IF NOT EXISTS menu_studio_projects ('
+            'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+            'user_id INTEGER NOT NULL, '
+            'name TEXT NOT NULL, '
+            'aspect TEXT, '
+            'share_token TEXT, '
+            'project_json TEXT NOT NULL, '
+            'created_at INTEGER NOT NULL, '
+            'updated_at INTEGER NOT NULL, '
+            'FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE'
+            ')'
+        )
+        db.execute('CREATE INDEX IF NOT EXISTS idx_menu_studio_projects_user ON menu_studio_projects(user_id, updated_at DESC)')
+        try:
+            columns = {row['name'] for row in db.execute('PRAGMA table_info(menu_studio_projects)').fetchall()}
+            if 'share_token' not in columns:
+                db.execute('ALTER TABLE menu_studio_projects ADD COLUMN share_token TEXT')
+        except Exception:
+            pass
+        db.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_menu_studio_projects_share_token ON menu_studio_projects(share_token)')
+        db.commit()
+    except Exception as _menu_studio_projects_e:
+        logging.warning('Menu Studio projects table init failed: %s', _menu_studio_projects_e)
+
+    # Studio Elements — admin-uploaded custom stickers/overlays for Menu Studio
+    try:
+        db.execute(
+            'CREATE TABLE IF NOT EXISTS studio_elements ('
+            'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+            'name TEXT NOT NULL, '
+            'category TEXT NOT NULL DEFAULT "sticker", '
+            'url TEXT NOT NULL, '
+            'file_key TEXT, '
+            'sort_order INTEGER NOT NULL DEFAULT 0, '
+            'created_at INTEGER NOT NULL'
+            ')'
+        )
+        db.commit()
+    except Exception as _studio_elements_e:
+        logging.warning('Studio elements table init failed: %s', _studio_elements_e)
+
 init_db()
 
 # Stripe configuration (optional; only active when API keys exist)
@@ -1794,6 +1837,57 @@ def _current_user_id() -> int|None:
     except Exception as _e:
         logging.warning('Failed to resolve user id: %s', _e)
     return None
+
+def _format_unix_ts(ts_value) -> str:
+    try:
+        return datetime.fromtimestamp(int(ts_value), timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
+    except Exception:
+        return ''
+
+def _menu_studio_project_payload(row) -> dict:
+    data = dict(row)
+    return {
+        'id': int(data.get('id') or 0),
+        'name': (data.get('name') or 'Untitled Project').strip() or 'Untitled Project',
+        'aspect': (data.get('aspect') or '16:9').strip() or '16:9',
+        'share_token': (data.get('share_token') or '').strip(),
+        'created_at': int(data.get('created_at') or 0),
+        'updated_at': int(data.get('updated_at') or 0),
+        'created_at_text': _format_unix_ts(data.get('created_at')),
+        'updated_at_text': _format_unix_ts(data.get('updated_at')),
+    }
+
+def _ensure_menu_studio_share_token(project_id: int) -> str:
+    db = get_db()
+    row = db.execute('SELECT share_token FROM menu_studio_projects WHERE id = ?', (project_id,)).fetchone()
+    existing = ((row['share_token'] if row else '') or '').strip()
+    if existing:
+        return existing
+    token = secrets.token_urlsafe(18)
+    db.execute('UPDATE menu_studio_projects SET share_token = ? WHERE id = ?', (token, project_id))
+    db.commit()
+    return token
+
+def _menu_studio_publish_item(project_row, duration: int = 12) -> dict:
+    payload = _menu_studio_project_payload(project_row)
+    token = payload.get('share_token') or _ensure_menu_studio_share_token(payload['id'])
+    public_url = url_for('menu_studio_published', share_token=token, _external=True).replace('http://', 'https://')
+    return {
+        'id': str(uuid.uuid4()),
+        'file': public_url,
+        'url': public_url,
+        'enabled': True,
+        'start': None,
+        'end': None,
+        'schedule': [],
+        'duration': max(5, int(duration or 12)),
+        'repeat': True,
+        'link_next': False,
+        'media_type': 'web',
+        'project_id': payload['id'],
+        'project_name': payload['name'],
+        'published_token': token,
+    }
 
 def _record_subscription_status(user_id: int, status: str, stripe_subscription_id: str|None,
                                  price_id: str|None, plan_name: str|None, quantity: int|None,
@@ -7145,6 +7239,137 @@ def superadmin_feedback():
         return f'<h1>Error Loading Feedback</h1><p>{str(e)}</p><p>Check server logs for details.</p>', 500
 
 
+# ────────────────────────────────────────────────────────
+# Superadmin: Studio Elements manager
+# ────────────────────────────────────────────────────────
+
+_ALLOWED_ELEMENT_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'}
+
+def _allowed_element_file(filename: str) -> bool:
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in _ALLOWED_ELEMENT_EXTENSIONS
+
+
+@app.route('/superadmin/studio-elements', methods=['GET'])
+@superadmin_required
+def superadmin_studio_elements():
+    """Admin page: view and manage custom elements for Menu Studio."""
+    try:
+        db = get_db()
+        elements = db.execute(
+            'SELECT * FROM studio_elements ORDER BY category, sort_order, id'
+        ).fetchall()
+        elements = [dict(r) for r in elements]
+        users = _collect_user_metrics()
+        totals = {
+            'users': len(users),
+            'stores': sum(u['stores_count'] for u in users),
+            'screens': sum(u['screens_count'] for u in users),
+            'online': sum(u['online_screens'] for u in users),
+        }
+        return render_template(
+            'superadmin/studio_elements.html',
+            elements=elements,
+            totals=totals,
+        )
+    except Exception as e:
+        logging.error('Superadmin studio elements error: %s', e, exc_info=True)
+        return f'<h1>Error</h1><pre>{e}</pre>', 500
+
+
+@app.route('/superadmin/studio-elements/upload', methods=['POST'])
+@superadmin_required
+def superadmin_studio_elements_upload():
+    """Upload a new custom element image."""
+    name = (request.form.get('name') or '').strip()
+    category = (request.form.get('category') or 'sticker').strip()
+    if category not in ('sticker', 'overlay', 'shape', 'logo'):
+        category = 'sticker'
+    if not name:
+        flash('Name is required.', 'error')
+        return redirect(url_for('superadmin_studio_elements'))
+    if 'image' not in request.files or not request.files['image'].filename:
+        flash('An image file is required.', 'error')
+        return redirect(url_for('superadmin_studio_elements'))
+    f = request.files['image']
+    if not _allowed_element_file(f.filename):
+        flash('Invalid file type. Allowed: PNG, JPG, GIF, SVG, WebP.', 'error')
+        return redirect(url_for('superadmin_studio_elements'))
+    ext = f.filename.rsplit('.', 1)[1].lower()
+    filename = f"studio_elements/{uuid.uuid4()}.{ext}"
+    try:
+        if r2_enabled():
+            from io import BytesIO
+            data = f.read()
+            content_type = f.content_type or 'image/png'
+            r2_put_bytes(filename, data, content_type=content_type)
+            url = build_public_url(filename)
+        else:
+            dest_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'studio_elements')
+            os.makedirs(dest_dir, exist_ok=True)
+            dest = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            f.save(dest)
+            url = build_public_url(filename)
+        db = get_db()
+        db.execute(
+            'INSERT INTO studio_elements (name, category, url, file_key, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+            (name, category, url, filename, 0, int(time.time()))
+        )
+        db.commit()
+        flash(f'Element "{name}" uploaded successfully.', 'success')
+    except Exception as e:
+        logging.error('Studio element upload failed: %s', e, exc_info=True)
+        flash(f'Upload failed: {e}', 'error')
+    return redirect(url_for('superadmin_studio_elements'))
+
+
+@app.route('/superadmin/studio-elements/<int:element_id>/delete', methods=['POST'])
+@superadmin_required
+def superadmin_studio_elements_delete(element_id: int):
+    """Delete a custom element."""
+    try:
+        db = get_db()
+        row = db.execute('SELECT * FROM studio_elements WHERE id = ?', (element_id,)).fetchone()
+        if row:
+            file_key = row['file_key']
+            if file_key:
+                if r2_enabled():
+                    try:
+                        r2_delete_object(file_key)
+                    except Exception:
+                        pass
+                else:
+                    local_path = os.path.join(app.config['UPLOAD_FOLDER'], file_key)
+                    try:
+                        if os.path.exists(local_path):
+                            os.remove(local_path)
+                    except Exception:
+                        pass
+            db.execute('DELETE FROM studio_elements WHERE id = ?', (element_id,))
+            db.commit()
+            flash('Element deleted.', 'success')
+        else:
+            flash('Element not found.', 'error')
+    except Exception as e:
+        logging.error('Studio element delete failed: %s', e, exc_info=True)
+        flash(f'Delete failed: {e}', 'error')
+    return redirect(url_for('superadmin_studio_elements'))
+
+
+@app.route('/api/studio/elements', methods=['GET'])
+@login_required
+def api_studio_elements():
+    """Return all custom studio elements as JSON for Menu Studio."""
+    try:
+        db = get_db()
+        rows = db.execute(
+            'SELECT id, name, category, url FROM studio_elements ORDER BY category, sort_order, id'
+        ).fetchall()
+        return jsonify({'success': True, 'elements': [dict(r) for r in rows]})
+    except Exception as e:
+        logging.error('API studio elements error: %s', e, exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/superadmin/agents')
 @superadmin_required
 def superadmin_agents():
@@ -9737,6 +9962,24 @@ except Exception:
     Image = None  # Pillow optional; we'll fallback to original
     ImageOps = None
 
+try:
+    from rembg import remove as rembg_remove, new_session as rembg_session  # type: ignore
+    _REMBG_AVAILABLE = True
+except Exception:
+    rembg_remove = None  # type: ignore
+    rembg_session = None  # type: ignore
+    _REMBG_AVAILABLE = False
+
+# Lazy-cached rembg sessions keyed by model name (loaded on first use)
+_REMBG_SESSIONS: dict = {}
+
+def _get_rembg_session(model: str):
+    """Return a cached rembg session for the given model, loading it on first call."""
+    if model not in _REMBG_SESSIONS and rembg_session is not None:
+        _REMBG_SESSIONS[model] = rembg_session(model)
+    return _REMBG_SESSIONS.get(model)
+
+
 @app.route('/thumb/<int:width>/<path:filename>')
 def thumbnail(width: int, filename: str):
     """Return a cached thumbnail for an uploaded image.
@@ -10380,6 +10623,284 @@ def dashboard():
         import traceback
         traceback.print_exc()
         return f"Error: {e}", 500
+
+@app.route('/menu-studio')
+@login_required
+def menu_studio():
+    """Interactive menu composition studio."""
+    try:
+        try:
+            logo_path = os.path.join(os.path.dirname(__file__), 'static', 'ea-logo.svg')
+            asset_bust = int(os.path.getmtime(logo_path)) if os.path.exists(logo_path) else int(time.time())
+        except Exception:
+            asset_bust = 0
+
+        try:
+            u = session.get('user') or {}
+            uname = (u.get('email') or u.get('name') or u.get('username') or '').strip()
+            link_code = _ensure_user_link_code(uname) if uname else ''
+        except Exception:
+            uname = ''
+            link_code = ''
+
+        resp = make_response(render_template(
+            'menu_studio.html',
+            media_base_url=get_media_base_url(),
+            asset_bust=asset_bust,
+            build_stamp=BUILD_STAMP,
+            git_commit=GIT_COMMIT,
+            user_email=uname,
+            link_code=link_code,
+        ))
+        try:
+            resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        except Exception:
+            pass
+        return resp
+    except Exception as e:
+        logging.error('Menu studio route error: %s', e, exc_info=True)
+        return f"Error: {e}", 500
+
+@app.route('/api/menu-studio/projects', methods=['GET'])
+@login_required
+def list_menu_studio_projects():
+    try:
+        user_id = _current_user_id()
+        if not user_id:
+            return jsonify({'success': False, 'error': 'auth required'}), 403
+        db = get_db()
+        rows = db.execute(
+            'SELECT id, name, aspect, created_at, updated_at '
+            'FROM menu_studio_projects WHERE user_id = ? '
+            'ORDER BY updated_at DESC, id DESC',
+            (user_id,)
+        ).fetchall()
+        return jsonify({'success': True, 'projects': [_menu_studio_project_payload(row) for row in rows]})
+    except Exception as e:
+        logging.error('Failed to list Menu Studio projects: %s', e, exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/menu-studio/projects/<int:project_id>', methods=['GET'])
+@login_required
+def get_menu_studio_project(project_id: int):
+    try:
+        user_id = _current_user_id()
+        if not user_id:
+            return jsonify({'success': False, 'error': 'auth required'}), 403
+        db = get_db()
+        row = db.execute(
+            'SELECT * FROM menu_studio_projects WHERE id = ? AND user_id = ?',
+            (project_id, user_id)
+        ).fetchone()
+        if not row:
+            return jsonify({'success': False, 'error': 'Project not found'}), 404
+        payload = _menu_studio_project_payload(row)
+        try:
+            payload['project'] = json.loads((row['project_json'] or '').strip() or '{}')
+        except Exception:
+            payload['project'] = {}
+        return jsonify({'success': True, 'project': payload})
+    except Exception as e:
+        logging.error('Failed to load Menu Studio project %s: %s', project_id, e, exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/menu-studio/projects', methods=['POST'])
+@login_required
+def save_menu_studio_project():
+    try:
+        user_id = _current_user_id()
+        if not user_id:
+            return jsonify({'success': False, 'error': 'auth required'}), 403
+
+        data = request.get_json(force=True) or {}
+        raw_name = (data.get('name') or '').strip()
+        name = raw_name[:120] if raw_name else 'Untitled Project'
+        project = data.get('project')
+        if not isinstance(project, dict):
+            return jsonify({'success': False, 'error': 'project payload required'}), 400
+
+        aspect = (data.get('aspect') or project.get('aspect') or '16:9').strip()[:20]
+        project_json = json.dumps(project, ensure_ascii=True, separators=(',', ':'))
+        now_ts = int(time.time())
+
+        db = get_db()
+        project_id = data.get('id')
+        if project_id is not None:
+            try:
+                project_id = int(project_id)
+            except Exception:
+                return jsonify({'success': False, 'error': 'invalid project id'}), 400
+            existing = db.execute(
+                'SELECT id FROM menu_studio_projects WHERE id = ? AND user_id = ?',
+                (project_id, user_id)
+            ).fetchone()
+            if not existing:
+                return jsonify({'success': False, 'error': 'Project not found'}), 404
+            db.execute(
+                'UPDATE menu_studio_projects '
+                'SET name = ?, aspect = ?, project_json = ?, updated_at = ? '
+                'WHERE id = ? AND user_id = ?',
+                (name, aspect, project_json, now_ts, project_id, user_id)
+            )
+            db.commit()
+        else:
+            db.execute(
+                'INSERT INTO menu_studio_projects (user_id, name, aspect, project_json, created_at, updated_at) '
+                'VALUES (?, ?, ?, ?, ?, ?)',
+                (user_id, name, aspect, project_json, now_ts, now_ts)
+            )
+            db.commit()
+            project_id = int(db.execute('SELECT last_insert_rowid()').fetchone()[0])
+
+        row = db.execute(
+            'SELECT id, name, aspect, created_at, updated_at '
+            'FROM menu_studio_projects WHERE id = ? AND user_id = ?',
+            (project_id, user_id)
+        ).fetchone()
+        return jsonify({'success': True, 'project': _menu_studio_project_payload(row)})
+    except Exception as e:
+        logging.error('Failed to save Menu Studio project: %s', e, exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/menu-studio/projects/<int:project_id>', methods=['DELETE'])
+@login_required
+def delete_menu_studio_project(project_id: int):
+    try:
+        user_id = _current_user_id()
+        if not user_id:
+            return jsonify({'success': False, 'error': 'auth required'}), 403
+        db = get_db()
+        row = db.execute(
+            'SELECT id FROM menu_studio_projects WHERE id = ? AND user_id = ?',
+            (project_id, user_id)
+        ).fetchone()
+        if not row:
+            return jsonify({'success': False, 'error': 'Project not found'}), 404
+        db.execute('DELETE FROM menu_studio_projects WHERE id = ? AND user_id = ?', (project_id, user_id))
+        db.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        logging.error('Failed to delete Menu Studio project %s: %s', project_id, e, exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/menu-studio/targets', methods=['GET'])
+@login_required
+def menu_studio_targets():
+    try:
+        ukey = _safe_user_key()
+        config = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
+        stores_out = []
+        for store in (config.get('stores') or []):
+            store_id = store.get('id')
+            if not store_id:
+                continue
+            screens = []
+            for screen_id, screen_data in (config.get('screens', {}).get(store_id, {}) or {}).items():
+                screens.append({
+                    'id': screen_id,
+                    'name': (screen_data or {}).get('name') or screen_id,
+                    'rotation': int((screen_data or {}).get('rotation') or 0),
+                })
+            screens.sort(key=lambda item: item['name'])
+            stores_out.append({
+                'id': store_id,
+                'name': store.get('name') or store_id,
+                'screens': screens,
+            })
+        return jsonify({'success': True, 'stores': stores_out, 'master_store_id': config.get('master_store_id')})
+    except Exception as e:
+        logging.error('Failed to load Menu Studio targets: %s', e, exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/menu-studio/published/<share_token>')
+def menu_studio_published(share_token: str):
+    try:
+        token = (share_token or '').strip()
+        if not token:
+            return 'Not found', 404
+        db = get_db()
+        row = db.execute('SELECT * FROM menu_studio_projects WHERE share_token = ?', (token,)).fetchone()
+        if not row:
+            return 'Not found', 404
+        payload = _menu_studio_project_payload(row)
+        try:
+            project = json.loads((row['project_json'] or '').strip() or '{}')
+        except Exception:
+            project = {}
+        resp = make_response(render_template(
+            'menu_studio_published.html',
+            project=project,
+            project_name=payload['name'],
+            project_aspect=payload['aspect'],
+            build_stamp=BUILD_STAMP,
+            git_commit=GIT_COMMIT,
+        ))
+        try:
+            resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        except Exception:
+            pass
+        return resp
+    except Exception as e:
+        logging.error('Failed to render published Menu Studio project: %s', e, exc_info=True)
+        return 'Error', 500
+
+@app.route('/api/menu-studio/publish', methods=['POST'])
+@login_required
+def publish_menu_studio_project():
+    try:
+        user_id = _current_user_id()
+        if not user_id:
+            return jsonify({'success': False, 'error': 'auth required'}), 403
+        data = request.get_json(force=True) or {}
+        project_id = int(data.get('project_id') or 0)
+        store_id = (data.get('store_id') or '').strip()
+        screen_id = (data.get('screen_id') or '').strip()
+        duration = int(data.get('duration') or 12)
+        append = bool(data.get('append', True))
+        if not project_id or not store_id or not screen_id:
+            return jsonify({'success': False, 'error': 'project_id, store_id, and screen_id are required'}), 400
+
+        db = get_db()
+        project_row = db.execute(
+            'SELECT * FROM menu_studio_projects WHERE id = ? AND user_id = ?',
+            (project_id, user_id)
+        ).fetchone()
+        if not project_row:
+            return jsonify({'success': False, 'error': 'Project not found'}), 404
+
+        ukey = _safe_user_key()
+        config = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
+        screens = (config.get('screens') or {}).get(store_id, {})
+        if screen_id not in screens:
+            return jsonify({'success': False, 'error': 'screen not found'}), 404
+
+        item = _menu_studio_publish_item(project_row, duration)
+        screen_obj = screens[screen_id]
+        playlist = screen_obj.setdefault('playlist', [])
+        if append:
+            playlist.append(item)
+        else:
+            screen_obj['playlist'] = [item]
+            playlist = screen_obj['playlist']
+        screen_obj['file'] = item['file']
+        _enqueue_command_in_cfg(config, store_id, screen_id, 'reload')
+
+        if ukey:
+            save_store_config_for_user_safe_key(ukey, config)
+        else:
+            save_store_config(config)
+
+        return jsonify({
+            'success': True,
+            'item': item,
+            'store_id': store_id,
+            'screen_id': screen_id,
+            'playlist_length': len(playlist),
+            'message': f"Published {project_row['name']} to {screen_id}",
+        })
+    except Exception as e:
+        logging.error('Failed to publish Menu Studio project: %s', e, exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/admin/dashboard')
 @login_required
@@ -11395,7 +11916,54 @@ def update_rotation():
         print(f"Error updating rotation: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/update_orientation', methods=['POST'])
+@app.route('/update_screen_mute', methods=['POST'])
+@login_required
+def update_screen_mute():
+    """Toggle mute/unmute for a screen — TV app respects this in YouTube & video playback"""
+    try:
+        data = request.get_json()
+        store_id = data.get('store_id')
+        screen_id = data.get('screen_id')
+        muted = bool(data.get('muted', False))
+
+        if not store_id or not screen_id:
+            return jsonify({'error': 'store_id and screen_id required'}), 400
+
+        ukey = _safe_user_key()
+        config = load_store_config_for_user_safe_key(ukey) if ukey else load_store_config()
+        ns, nid = _normalize_screen_ref(config, str(store_id), str(screen_id))
+        if not ns or not nid:
+            return jsonify({'error': 'Screen not found'}), 404
+
+        config['screens'][ns][nid]['muted'] = muted
+
+        # Mirror to global config so TV devices without user_code see the change
+        try:
+            global_cfg = load_store_config()
+            gscreens = global_cfg.setdefault('screens', {}).setdefault(ns, {})
+            if nid not in gscreens:
+                gscreens[nid] = {}
+            gscreens[nid]['muted'] = muted
+            save_store_config(global_cfg)
+        except Exception as e:
+            app.logger.debug(f"mirror muted to global failed (non-fatal): {e}")
+
+        if ukey:
+            save_store_config_for_user_safe_key(ukey, config)
+        else:
+            save_store_config(config)
+
+        # Notify TV client to reload playlist so it picks up the new mute flag immediately
+        try:
+            payload = {'store_id': ns, 'screen_id': nid, 'reason': 'mute_changed'}
+            socketio.emit('reload_client', payload, namespace='/')
+        except Exception as e:
+            app.logger.debug(f"reload_client emit (mute) failed (non-fatal): {e}")
+
+        return jsonify({'success': True, 'muted': muted})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @login_required
 def update_orientation():
     """Update screen orientation settings"""
@@ -13240,6 +13808,9 @@ def get_playlist(store_id, screen_id):
         removed = 0
         for item in original:
             f = item.get('file')
+            if (item.get('media_type') or '').lower() == 'web':
+                cleaned.append(item)
+                continue
             if f:
                 path = os.path.join(app.config['UPLOAD_FOLDER'], f)
                 if not os.path.exists(path):
@@ -13738,8 +14309,9 @@ def get_playlist(store_id, screen_id):
             rotation = 0
     except Exception:
         rotation = 0
+    muted = bool(screen.get('muted', False))
     return (
-    {'success': True, 'playlist': out, 'queue_len': len(screen.get('cmd_queue', [])), 'events_recent': len(screen.get('events', [])), 'orientation': orientation_mode, 'rotation': rotation},
+    {'success': True, 'playlist': out, 'queue_len': len(screen.get('cmd_queue', [])), 'events_recent': len(screen.get('events', [])), 'orientation': orientation_mode, 'rotation': rotation, 'muted': muted},
         200,
         {'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'}
     )
@@ -13852,6 +14424,189 @@ def list_library():
         return payload, 200, {'Cache-Control': 'public, max-age=60'}
     except Exception as e:
         logging.exception('list_library error: %s', e)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ---- File delete (single file by full key) ----
+@app.route('/library/file/delete', methods=['POST'])
+@login_required
+def lib_file_delete():
+    """Delete a single file from the current user's library.
+    Body JSON: { "key": "<full object key>" }
+    The key must begin with the user's own namespace prefix to prevent cross-user deletion.
+    """
+    try:
+        data = request.get_json(force=True) or {}
+        key = (data.get('key') or '').strip().replace('\\', '/')
+        if not key:
+            return jsonify({'success': False, 'error': 'key required'}), 400
+        user_root = _user_content_prefix()
+        if not user_root:
+            return jsonify({'success': False, 'error': 'auth required'}), 403
+        # Security: ensure the key belongs to this user's namespace
+        if not (key == user_root or key.startswith(user_root + '/')):
+            return jsonify({'success': False, 'error': 'forbidden'}), 403
+        # Reject directory traversal sequences
+        if '..' in key:
+            return jsonify({'success': False, 'error': 'forbidden'}), 403
+        # Derive parent prefix for cache busting
+        parts = key.split('/')
+        parent_ui = '/'.join(parts[len(user_root.split('/')):len(parts) - 1])
+        if r2_enabled():
+            try:
+                r2_delete_object(key)
+            except Exception as e:
+                return jsonify({'success': False, 'error': str(e)}), 500
+        else:
+            path = os.path.join(app.config['UPLOAD_FOLDER'], key)
+            if os.path.isfile(path):
+                try:
+                    os.remove(path)
+                except Exception as e:
+                    return jsonify({'success': False, 'error': str(e)}), 500
+        # Bust library cache for parent prefix and root
+        try:
+            for ck in (f"{user_root}|{parent_ui or '__root__'}", f"{user_root}|__root__"):
+                _LIB_CACHE.pop(ck, None)
+        except Exception:
+            pass
+        return jsonify({'success': True})
+    except Exception as e:
+        logging.exception('lib_file_delete error')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ---- AI Background Removal ----
+@app.route('/remove-bg', methods=['POST'])
+@login_required
+def remove_bg():
+    """Remove background from an image using BiRefNet (rembg).
+    Accepts JSON body: { "url": "<image url hosted on this app>", "model": "birefnet-general" }
+    Returns: { success, url, name }
+    """
+    if not _REMBG_AVAILABLE:
+        return jsonify({'success': False, 'error': 'Background removal not available on this server. Please ask admin to install rembg.'}), 503
+
+    try:
+        data = request.get_json(force=True) or {}
+        model = str(data.get('model') or 'isnet-general-use').strip()
+        # Whitelist allowed models to prevent arbitrary model injection
+        ALLOWED_MODELS = {
+            'isnet-general-use',
+            'u2net',
+            'u2net_human_seg',
+            'silueta',
+        }
+        if model not in ALLOWED_MODELS:
+            model = 'isnet-general-use'
+
+        user_root = _user_content_prefix()
+        if not user_root:
+            return jsonify({'success': False, 'error': 'auth required'}), 403
+
+        img_bytes = None
+        original_ext = 'png'
+
+        # Accept a URL from our own media domain, or a direct file upload
+        src_url = str(data.get('url') or '').strip()
+        if src_url:
+            # Normalise relative URLs to absolute using the request host
+            if src_url.startswith('/'):
+                src_url = request.host_url.rstrip('/') + src_url
+            # Security: only allow URLs that belong to this application (our own CDN/R2 or local static)
+            media_base = get_media_base_url().rstrip('/')
+            app_host = request.host_url.rstrip('/')
+            allowed_prefixes = (media_base, app_host + '/static/', app_host + '/media/')
+            if not any(src_url.startswith(p) for p in allowed_prefixes):
+                return jsonify({'success': False, 'error': 'Only images hosted on this platform can be processed.'}), 400
+            # Try reading directly from disk first (faster, no HTTP round-trip)
+            try:
+                _local_path = None
+                _static_prefix = app_host + '/static/uploads/'
+                if src_url.startswith(_static_prefix):
+                    _rel = src_url[len(_static_prefix):]
+                    _local_path = os.path.join(app.config['UPLOAD_FOLDER'], _rel)
+                if _local_path and os.path.isfile(_local_path):
+                    with open(_local_path, 'rb') as _lf:
+                        img_bytes = _lf.read()
+                else:
+                    import urllib.request as _ur
+                    req = _ur.Request(src_url, headers={'User-Agent': 'PizzaHutTV-BgRemover/1.0'})
+                    with _ur.urlopen(req, timeout=20) as resp:
+                        img_bytes = resp.read()
+                ext_guess = src_url.rsplit('.', 1)[-1].lower().split('?')[0] if '.' in src_url else 'jpg'
+                original_ext = ext_guess if ext_guess in ('jpg', 'jpeg', 'png', 'webp') else 'jpg'
+            except Exception as fetch_e:
+                return jsonify({'success': False, 'error': f'Could not fetch image: {fetch_e}'}), 400
+        elif 'file' in request.files:
+            f = request.files['file']
+            img_bytes = f.read()
+            ext_guess = (f.filename or '').rsplit('.', 1)[-1].lower()
+            original_ext = ext_guess if ext_guess in ('jpg', 'jpeg', 'png', 'webp') else 'jpg'
+        else:
+            return jsonify({'success': False, 'error': 'Provide a "url" field or upload a file.'}), 400
+
+        if not img_bytes:
+            return jsonify({'success': False, 'error': 'Empty image data.'}), 400
+
+        # Run background removal
+        session = _get_rembg_session(model)
+        from io import BytesIO as _BytesIO
+        raw_img = img_bytes
+        if session is not None:
+            try:
+                result_bytes = rembg_remove(raw_img, session=session, post_process_mask=True)
+            except TypeError:
+                # older rembg that doesn't support post_process_mask
+                result_bytes = rembg_remove(raw_img, session=session)
+        else:
+            try:
+                result_bytes = rembg_remove(raw_img, post_process_mask=True)
+            except TypeError:
+                result_bytes = rembg_remove(raw_img)
+
+        # Post-process: threshold at 200 so only pixels rembg was highly confident
+        # about are kept as opaque. Anything < 200 (background uncertainty zone) → 0.
+        # This eliminates ghost background caused by rembg assigning alpha 128–190 to bg areas.
+        try:
+            from PIL import Image as _PILImage, ImageFilter as _PILFilter
+            import numpy as _np
+            _pil_rgba = _PILImage.open(_BytesIO(result_bytes)).convert('RGBA')
+            _r, _g, _b, _a = _pil_rgba.split()
+            # 1-pixel erosion to trim colour-contaminated edge fringe
+            _a = _a.filter(_PILFilter.MinFilter(3))
+            # Threshold: rembg scores < 200 = uncertain/background → fully transparent
+            _a_np = _np.array(_a, dtype=_np.uint8)
+            _a_np = _np.where(_a_np >= 200, _np.uint8(255), _np.uint8(0))
+            _a = _PILImage.fromarray(_a_np.astype(_np.uint8), mode='L')
+            _clean_rgba = _PILImage.merge('RGBA', (_r, _g, _b, _a))
+            _post_buf = _BytesIO()
+            _clean_rgba.save(_post_buf, format='PNG')
+            result_bytes = _post_buf.getvalue()
+        except Exception:
+            pass  # fall through with unprocessed result if PIL step fails
+
+        # Save result as PNG (rembg always produces RGBA PNG)
+        out_filename = f"{uuid.uuid4()}_nobg.png"
+        dest_key = _join_prefix_key(user_root, out_filename)
+        if r2_enabled():
+            r2_put_bytes(dest_key, result_bytes, content_type='image/png')
+        else:
+            local_dir = os.path.join(app.config['UPLOAD_FOLDER'], user_root)
+            os.makedirs(local_dir, exist_ok=True)
+            out_path = os.path.join(local_dir, out_filename)
+            with open(out_path, 'wb') as fout:
+                fout.write(result_bytes)
+
+        # Bust library cache so new file appears immediately
+        try:
+            for ck in (f"{user_root}|__root__",):
+                _LIB_CACHE.pop(ck, None)
+        except Exception:
+            pass
+
+        public_url = build_public_url(dest_key)
+        return jsonify({'success': True, 'url': public_url, 'name': dest_key, 'model': model})
+    except Exception as e:
+        logging.exception('remove_bg error')
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # ---- Folder management (create / rename / delete) ----

@@ -40,8 +40,9 @@ env/
 *.log
 
 # Database (including timestamped backups)
-# Keep database.db and store_config so local dev works!
-# database.db  # COMMENTED OUT - we want to track the local copy
+# Live server data — synced back by deploy script, never commit
+database.db
+store_config__*.json
 *.db.backup-*
 database_to_restore.db
 database_restored.db

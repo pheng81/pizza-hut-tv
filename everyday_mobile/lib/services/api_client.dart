@@ -949,6 +949,27 @@ class ApiClient {
     return int.tryParse('${data['rotation'] ?? rotation}') ?? rotation;
   }
 
+  Future<bool> updateScreenMute({
+    required String storeId,
+    required String screenId,
+    required bool muted,
+  }) async {
+    final response = await _dio.post(
+      '/update_screen_mute',
+      data: {
+        'store_id': storeId,
+        'screen_id': screenId,
+        'muted': muted,
+      },
+    );
+    final data = _asMap(response.data);
+    if (data['success'] != true) {
+      throw Exception(
+          (data['error'] ?? 'Failed to update mute setting').toString());
+    }
+    return (data['muted'] ?? muted) == true;
+  }
+
   Future<Map<String, dynamic>> getSliceJobStatus(String jobId) async {
     final response = await _dio.get('/slice_job_status/$jobId');
     final data = _asMap(response.data);

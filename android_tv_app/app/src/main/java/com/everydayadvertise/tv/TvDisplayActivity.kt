@@ -45,6 +45,8 @@ class TvDisplayActivity : AppCompatActivity() {
     var exoPlayer: com.google.android.exoplayer2.ExoPlayer? = null
     // Keep a reference to legacy VideoView so we can hide/stop it properly
     var legacyVideoView: VideoView? = null
+    // WebView used for YouTube IFrame embeds
+    var youTubeWebView: android.webkit.WebView? = null
     // Small persistent debug overlay
     var debugOverlay: TextView? = null
     // Manual controls hooks
@@ -57,6 +59,8 @@ class TvDisplayActivity : AppCompatActivity() {
     // Track current rotation and orientation to detect dashboard changes
     var currentRotation: Int = 0
     var currentOrientation: String = "default"
+    // Screen-level mute flag — toggled from the mobile app's speaker button
+    var screenMuted: Boolean = false
     // Store references to media views for rotation
     var mainImageView: ImageView? = null
     // Secondary image view to enable crossfade transitions (Pi-style dissolve)
@@ -264,6 +268,7 @@ class TvDisplayActivity : AppCompatActivity() {
         } catch (_: Exception) {}
         exoPlayer = null
         legacyVideoView?.let { try { it.stopPlayback() } catch (_: Exception) {}; it.visibility = ImageView.GONE }
+        youTubeWebView?.let { try { it.loadUrl("about:blank"); it.removeAllViews() } catch (_: Exception) {}; it.visibility = android.view.View.GONE }
         super.onDestroy()
     }
 
@@ -292,72 +297,135 @@ class TvDisplayActivity : AppCompatActivity() {
         // Decide which view becomes the new front layer
         val (front, back) = if (usePrimaryAsFront) Pair(b, a) else Pair(a, b)
         try {
+            // Cancel any running animations and reset leftover transform state on both views
+            try { front.animate().cancel() } catch (_: Exception) {}
+            try { back.animate().cancel() } catch (_: Exception) {}
+            front.translationX = 0f; front.translationY = 0f
+            front.scaleX = 1f; front.scaleY = 1f; front.alpha = 0f
+            back.translationX = 0f; back.translationY = 0f
+            back.scaleX = 1f; back.scaleY = 1f; back.alpha = 1f
+
             // Prepare front with new content
             setupFront(front)
             // Apply rotation to view layer for animated assets; for static bitmaps we pre-rotate so keep 0
             try { front.rotation = rotationDegrees } catch (_: Exception) {}
-            
+
+            // Use parent/root dimensions for slides so width is never 0 (views may be GONE when measured)
+            val rootW = try { (front.parent as? android.view.View)?.width?.takeIf { it > 0 } ?: front.rootView.width } catch (_: Exception) { 1920 }
+            val rootH = try { (front.parent as? android.view.View)?.height?.takeIf { it > 0 } ?: front.rootView.height } catch (_: Exception) { 1080 }
+
             // Apply transition effect based on effect parameter
             val effectName = (effect ?: "fade").lowercase()
             when {
                 effectName.contains("slide-l") || effectName.contains("slide_l") || effectName == "slide-left" -> {
-                    // Slide from right to left
+                    // New image slides in from right; old image slides out to left
                     front.alpha = 1f
-                    front.translationX = front.width.toFloat()
+                    front.translationX = rootW.toFloat()
                     front.visibility = View.VISIBLE
                     front.animate().translationX(0f).setDuration(durationMs).withEndAction {
                         try { back.setImageDrawable(null) } catch (_: Exception) {}
                         back.visibility = View.GONE
+                        back.translationX = 0f
+                    }.start()
+                    if (back.visibility == View.VISIBLE && back.drawable != null) {
+                        back.animate().translationX(-rootW.toFloat()).setDuration(durationMs).start()
+                    } else {
+                        back.visibility = View.GONE
                     }
                 }
                 effectName.contains("slide-r") || effectName.contains("slide_r") || effectName == "slide-right" -> {
-                    // Slide from left to right
+                    // New image slides in from left; old image slides out to right
                     front.alpha = 1f
-                    front.translationX = -front.width.toFloat()
+                    front.translationX = -rootW.toFloat()
                     front.visibility = View.VISIBLE
                     front.animate().translationX(0f).setDuration(durationMs).withEndAction {
                         try { back.setImageDrawable(null) } catch (_: Exception) {}
+                        back.visibility = View.GONE
+                        back.translationX = 0f
+                    }.start()
+                    if (back.visibility == View.VISIBLE && back.drawable != null) {
+                        back.animate().translationX(rootW.toFloat()).setDuration(durationMs).start()
+                    } else {
+                        back.visibility = View.GONE
+                    }
+                }
+                effectName.contains("slide-up") || effectName.contains("slide_up") -> {
+                    // New image slides in from bottom; old image slides out upward
+                    front.alpha = 1f
+                    front.translationY = rootH.toFloat()
+                    front.visibility = View.VISIBLE
+                    front.animate().translationY(0f).setDuration(durationMs).withEndAction {
+                        try { back.setImageDrawable(null) } catch (_: Exception) {}
+                        back.visibility = View.GONE
+                        back.translationY = 0f
+                    }.start()
+                    if (back.visibility == View.VISIBLE && back.drawable != null) {
+                        back.animate().translationY(-rootH.toFloat()).setDuration(durationMs).start()
+                    } else {
+                        back.visibility = View.GONE
+                    }
+                }
+                effectName.contains("slide-down") || effectName.contains("slide_down") -> {
+                    // New image slides in from top; old image slides out downward
+                    front.alpha = 1f
+                    front.translationY = -rootH.toFloat()
+                    front.visibility = View.VISIBLE
+                    front.animate().translationY(0f).setDuration(durationMs).withEndAction {
+                        try { back.setImageDrawable(null) } catch (_: Exception) {}
+                        back.visibility = View.GONE
+                        back.translationY = 0f
+                    }.start()
+                    if (back.visibility == View.VISIBLE && back.drawable != null) {
+                        back.animate().translationY(rootH.toFloat()).setDuration(durationMs).start()
+                    } else {
                         back.visibility = View.GONE
                     }
                 }
                 effectName.contains("zoom-in") || effectName.contains("zoom_in") -> {
                     // Zoom in from 80% to 100%
-                    front.alpha = 0f
                     front.scaleX = 0.8f
                     front.scaleY = 0.8f
+                    front.alpha = 0f
                     front.visibility = View.VISIBLE
                     front.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(durationMs).withEndAction {
                         try { back.setImageDrawable(null) } catch (_: Exception) {}
                         back.visibility = View.GONE
-                    }
+                    }.start()
                     if (back.visibility == View.VISIBLE && back.drawable != null) {
                         back.animate().alpha(0f).setDuration(durationMs).start()
+                    } else {
+                        back.visibility = View.GONE
                     }
                 }
                 effectName.contains("zoom-out") || effectName.contains("zoom_out") -> {
                     // Zoom out from 120% to 100%
-                    front.alpha = 0f
                     front.scaleX = 1.2f
                     front.scaleY = 1.2f
+                    front.alpha = 0f
                     front.visibility = View.VISIBLE
                     front.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(durationMs).withEndAction {
                         try { back.setImageDrawable(null) } catch (_: Exception) {}
                         back.visibility = View.GONE
-                    }
+                    }.start()
                     if (back.visibility == View.VISIBLE && back.drawable != null) {
                         back.animate().alpha(0f).setDuration(durationMs).start()
+                    } else {
+                        back.visibility = View.GONE
                     }
                 }
+                effectName == "cut" -> {
+                    // Instant cut — no animation
+                    front.alpha = 1f
+                    front.visibility = View.VISIBLE
+                    try { back.setImageDrawable(null) } catch (_: Exception) {}
+                    back.visibility = View.GONE
+                }
                 else -> {
-                    // Default fade transition
+                    // Default: fade / dissolve
                     front.alpha = 0f
-                    front.translationX = 0f
-                    front.scaleX = 1f
-                    front.scaleY = 1f
                     front.visibility = View.VISIBLE
                     if (back.drawable == null) {
                         back.visibility = View.GONE
-                        back.alpha = 0f
                     } else {
                         back.visibility = View.VISIBLE
                         back.alpha = 1f
@@ -365,7 +433,7 @@ class TvDisplayActivity : AppCompatActivity() {
                     front.animate().alpha(1f).setDuration(durationMs).withEndAction {
                         try { back.setImageDrawable(null) } catch (_: Exception) {}
                         back.visibility = View.GONE
-                    }
+                    }.start()
                     if (back.visibility == View.VISIBLE) {
                         back.animate().alpha(0f).setDuration(durationMs).start()
                     }
@@ -1030,7 +1098,91 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
         currentItemFile = file
         // Record the moment we switched to a new item for watchdog purposes
         try { lastAdvanceAtMs = android.os.SystemClock.elapsedRealtime() } catch (_: Exception) {}
+        // ── YouTube IFrame embed via WebView ─────────────────────────────────
+        if (file.startsWith("youtube:")) {
+            val videoId = file.removePrefix("youtube:").trim()
+            if (videoId.isEmpty()) { showAndSchedule(); return }
+            imageView.visibility = ImageView.GONE
+            secondaryImageView?.visibility = ImageView.GONE
+            playerView.visibility = ImageView.GONE
+            legacyVideoView?.visibility = ImageView.GONE
+            try { exoPlayer?.stop(); exoPlayer?.clearMediaItems() } catch (_: Exception) {}
+            binding.message.bringToFront()
+            try { debugOverlay?.bringToFront() } catch (_: Exception) {}
+            try { transitionOverlay?.bringToFront() } catch (_: Exception) {}
+            val activity = this
+            val wv = youTubeWebView ?: run {
+                val newWv = android.webkit.WebView(activity).apply {
+                    layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                    visibility = android.view.View.GONE
+                    settings.javaScriptEnabled = true
+                    @Suppress("SetJavaScriptEnabled")
+                    settings.mediaPlaybackRequiresUserGesture = false
+                    settings.domStorageEnabled = true
+                    settings.loadWithOverviewMode = true
+                    settings.useWideViewPort = true
+                    settings.allowContentAccess = true
+                    settings.allowFileAccess = true
+                    // Chrome UA required; also spoof desktop so YouTube doesn't restrict player config
+                    settings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                    // WebChromeClient needed for HTML5 video/audio playback in WebView
+                    webChromeClient = android.webkit.WebChromeClient()
+                    webViewClient = android.webkit.WebViewClient()
+                }
+                binding.root.addView(newWv, 0)
+                youTubeWebView = newWv
+                newWv
+            }
+            wv.visibility = android.view.View.VISIBLE
+            wv.bringToFront()
+            binding.message.bringToFront()
+            // Use youtube-nocookie.com (more permissive) + origin param matching the base URL
+            // WebChromeClient + loadDataWithBaseURL together unlock HTML5 autoplay in WebView
+            val muteParam = if (screenMuted) "1" else "0"
+            val ytHtml = """<!DOCTYPE html><html><head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>*{margin:0;padding:0;background:#000}html,body{width:100%;height:100%;overflow:hidden}#p{position:absolute;top:0;left:0;width:100%;height:100%}</style>
+</head><body>
+<div id="p"></div>
+<script>
+var s=document.createElement('script');
+s.src='https://www.youtube.com/iframe_api';
+document.head.appendChild(s);
+var player;
+function onYouTubeIframeAPIReady(){
+  player=new YT.Player('p',{
+    width:'100%',height:'100%',
+    videoId:'$videoId',
+    playerVars:{autoplay:1,mute:$muteParam,controls:0,rel:0,playsinline:1,iv_load_policy:3,modestbranding:1},
+    events:{
+      onReady:function(e){e.target.playVideo();},
+      onStateChange:function(e){
+        if(e.data===0){e.target.seekTo(0,true);e.target.playVideo();}
+        if(e.data===-1){setTimeout(function(){e.target.playVideo();},300);}
+      }
+    }
+  });
+}
+</script>
+</body></html>""".trimIndent()
+            wv.loadDataWithBaseURL("https://www.youtube-nocookie.com", ytHtml, "text/html", "utf-8", null)
+            revealWithQuickFade()
+            lifecycleScope.launch(Dispatchers.IO) {
+                try { ApiClient.service.postClientEvent(com.everydayadvertise.tv.api.ClientEventReq(storeId, screenId, "load_ok", file = file, itemId = next.id)) } catch (_: Exception) {}
+            }
+            startItemOkPing(storeId, screenId, file, next.id)
+            val durMs = (next.duration ?: 30).coerceAtLeast(5) * 1000L
+            currentItemDurationMs = durMs
+            cancelScheduled()
+            scheduledRotation = Runnable {
+                try { wv.visibility = android.view.View.GONE; wv.loadUrl("about:blank") } catch (_: Exception) {}
+                showAndSchedule()
+            }
+            imageView.postDelayed(scheduledRotation!!, durMs)
+            return
+        }
         if (isVideo(file)) {
+            youTubeWebView?.let { try { it.visibility = android.view.View.GONE; it.loadUrl("about:blank") } catch (_: Exception) {} }
             imageView.visibility = ImageView.GONE
             secondaryImageView?.visibility = ImageView.GONE
             playerView.visibility = ImageView.VISIBLE
@@ -1113,6 +1265,8 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
             }
             try {
                 val player = ensurePlayer()
+                // Apply screen mute setting before playback starts
+                player.volume = if (screenMuted) 0f else 1f
                 // Attach listeners only once
                 // Prepare new source
                 currentVideoFile = file
@@ -1303,8 +1457,10 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
             // Image / animated
             try { exoPlayer?.stop(); exoPlayer?.clearMediaItems() } catch (_: Exception) {}
         legacyVideoView?.let { try { it.stopPlayback() } catch (_: Exception) {}; it.visibility = ImageView.GONE }
+        youTubeWebView?.let { try { it.visibility = android.view.View.GONE; it.loadUrl("about:blank") } catch (_: Exception) {} }
             playerView.visibility = ImageView.GONE
-            imageView.visibility = ImageView.VISIBLE
+            // Do NOT pre-show imageView here — crossfadeToImage manages visibility.
+            // Pre-showing caused stale drawables to flash or slide out when coming from video.
             binding.message.bringToFront()
             try { debugOverlay?.bringToFront() } catch (_: Exception) {}
             try { transitionOverlay?.bringToFront() } catch (_: Exception) {}
@@ -1384,6 +1540,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                 val success = jsonObj.optBoolean("success", false)
                 val newOrientation = jsonObj.optString("orientation", "default")
                 val newRotation = jsonObj.optInt("rotation", 0)
+                val newMuted = jsonObj.optBoolean("muted", false)
                 
                 // Parse playlist array
                 val original = mutableListOf<com.everydayadvertise.tv.api.PlaylistItem>()
@@ -1510,6 +1667,49 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                     currentOrientation = newOrientation
                     currentRotation = newRotation
                     applyRotation(totalRotation)
+                }
+
+                // Apply mute setting — reload YouTube embed if it changed
+                if (newMuted != screenMuted) {
+                    android.util.Log.d("TvDisplayActivity", "Mute changed: $screenMuted -> $newMuted")
+                    screenMuted = newMuted
+                    // Update ExoPlayer volume immediately
+                    try { exoPlayer?.volume = if (screenMuted) 0f else 1f } catch (_: Exception) {}
+                    // Reload YouTube WebView with updated mute flag if it's currently playing
+                    try {
+                        val wv = youTubeWebView
+                        if (wv != null && wv.visibility == android.view.View.VISIBLE && currentItemFile?.startsWith("youtube:") == true) {
+                            val vid = currentItemFile!!.removePrefix("youtube:").trim()
+                            val muteParam = if (screenMuted) "1" else "0"
+                            val ytHtml = """<!DOCTYPE html><html><head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>*{margin:0;padding:0;background:#000}html,body{width:100%;height:100%;overflow:hidden}#p{position:absolute;top:0;left:0;width:100%;height:100%}</style>
+</head><body>
+<div id="p"></div>
+<script>
+var s=document.createElement('script');
+s.src='https://www.youtube.com/iframe_api';
+document.head.appendChild(s);
+var player;
+function onYouTubeIframeAPIReady(){
+  player=new YT.Player('p',{
+    width:'100%',height:'100%',
+    videoId:'$vid',
+    playerVars:{autoplay:1,mute:$muteParam,controls:0,rel:0,playsinline:1,iv_load_policy:3,modestbranding:1},
+    events:{
+      onReady:function(e){e.target.playVideo();},
+      onStateChange:function(e){
+        if(e.data===0){e.target.seekTo(0,true);e.target.playVideo();}
+        if(e.data===-1){setTimeout(function(){e.target.playVideo();},300);}
+      }
+    }
+  });
+}
+</script>
+</body></html>""".trimIndent()
+                            wv.loadDataWithBaseURL("https://www.youtube-nocookie.com", ytHtml, "text/html", "utf-8", null)
+                        }
+                    } catch (_: Exception) {}
                 }
                 
                 originalItems = original

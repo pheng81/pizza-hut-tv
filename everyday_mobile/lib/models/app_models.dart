@@ -38,12 +38,14 @@ class ScreenItem {
     required this.name,
     this.rotation = 0,
     this.protected = false,
+    this.muted = false,
   });
 
   final String id;
   final String name;
   final int rotation;
   final bool protected;
+  final bool muted;
 
   factory ScreenItem.fromJson(String id, Map<String, dynamic> json) {
     final rawRotation = int.tryParse('${json['rotation'] ?? 0}') ?? 0;
@@ -54,6 +56,7 @@ class ScreenItem {
       name: (json['name'] ?? id).toString(),
       rotation: normalizedRotation,
       protected: (json['protected'] ?? false) == true,
+      muted: (json['muted'] ?? false) == true,
     );
   }
 }
