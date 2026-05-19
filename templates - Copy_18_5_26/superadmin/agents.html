@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agents - Super Admin</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --header: #2d3748;
+      --accent: #2563eb;
+      --success-bg: #dcfce7;
+      --success-text: #166534;
+      --danger-bg: #fee2e2;
+      --danger-text: #991b1b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    body.embedded-mode {
+      background: transparent;
+    }
+    header {
+      background: var(--header);
+      color: white;
+      padding: 20px 32px;
+    }
+    .header-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .brand { font-size: 22px; font-weight: 700; }
+    .actions { display: flex; gap: 12px; flex-wrap: wrap; }
+    .btn {
+      display: inline-block;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+      border: 1px solid transparent;
+      cursor: pointer;
+    }
+    .btn--ghost { color: white; border-color: rgba(255,255,255,0.35); background: transparent; }
+    .btn--ghost:hover { background: rgba(255,255,255,0.08); }
+    .btn--primary { color: white; background: var(--header); }
+    main { max-width: 1200px; margin: 0 auto; padding: 28px 32px 40px; }
+    body.embedded-mode main { max-width: none; margin: 0; padding: 0; }
+    body.embedded-mode h1 { margin-bottom: 4px; }
+    body.embedded-mode p.lead { margin-bottom: 18px; }
+    body.embedded-mode .stats-grid { gap: 12px; margin-bottom: 18px; }
+    body.embedded-mode .stat-card {
+      background: linear-gradient(180deg, rgba(248, 250, 252, 0.88), rgba(255, 255, 255, 0.74));
+      border-color: rgba(148, 163, 184, 0.16);
+      border-radius: 10px;
+      padding: 18px;
+    }
+    body.embedded-mode .card {
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      padding: 0;
+    }
+    body.embedded-mode .card-head {
+      margin-bottom: 12px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+    }
+    h1 { font-size: 28px; margin-bottom: 8px; }
+    p.lead { color: var(--muted); margin-bottom: 24px; }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 18px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 20px;
+    }
+    .stat-label { color: var(--muted); font-size: 12px; text-transform: uppercase; font-weight: 700; margin-bottom: 8px; }
+    .stat-value { font-size: 30px; font-weight: 800; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 20px;
+    }
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--header);
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 12px 10px; border-bottom: 1px solid var(--border); font-size: 14px; }
+    th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
+    .status {
+      display: inline-block;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      border-radius: 6px;
+    }
+    .status--active { background: var(--success-bg); color: var(--success-text); }
+    .status--inactive { background: var(--danger-bg); color: var(--danger-text); }
+    .empty { color: var(--muted); padding: 18px 0; }
+    @media (max-width: 980px) {
+      .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 720px) {
+      .header-content, .card-head { flex-direction: column; align-items: flex-start; }
+      .stats-grid { grid-template-columns: 1fr; }
+      table, thead, tbody, th, td, tr { display: block; }
+      thead { display: none; }
+      td { padding-left: 0; }
+    }
+  </style>
+</head>
+<body class="{{ 'embedded-mode' if embedded else '' }}">
+  {% set embedded_query = '?embedded=1' if embedded else '' %}
+  {% set dashboard_href = '/superadmin/dashboard#panel-agents' %}
+  {% if embedded_query %}
+    {% set dashboard_href = dashboard_href ~ embedded_query %}
+  {% endif %}
+  {% if not embedded %}
+  <header>
+    <div class="header-content">
+      <div class="brand">Agents</div>
+      <div class="actions">
+        <a href="{{ dashboard_href }}" class="btn btn--ghost">Back To Dashboard</a>
+        <a href="/superadmin/agents/create{{ embedded_query }}" class="btn btn--ghost">Create Agent</a>
+        <a href="/superadmin/logout" class="btn btn--ghost">Logout</a>
+      </div>
+    </div>
+  </header>
+  {% endif %}
+  <main>
+    <h1>Agent Management</h1>
+    <p class="lead">Manage agents, coupon codes, and referral earnings.</p>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total Agents</div>
+        <div class="stat-value">{{ agents|length }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Active Agents</div>
+        <div class="stat-value">{{ agents|selectattr('status', 'equalto', 'active')|list|length }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Referred Customers</div>
+        <div class="stat-value">{{ agents|sum(attribute='customer_count') }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Commissions</div>
+        <div class="stat-value">${{ "%.2f"|format(agents|sum(attribute='total_commissions')) }}</div>
+      </div>
+    </div>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Agents</h2>
+        <a href="/superadmin/agents/create{{ embedded_query }}" class="btn btn--primary">Create Agent</a>
+      </div>
+      {% if agents %}
+      <table>
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Name / Email</th>
+            <th>Commission</th>
+            <th>Customers</th>
+            <th>Commissions</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for agent in agents %}
+          <tr>
+            <td><strong>{{ agent.agent_code }}</strong></td>
+            <td>
+              {% if agent.full_name %}
+              {{ agent.full_name }}<br>
+              <small>{{ agent.username }}</small>
+              {% else %}
+              {{ agent.username or 'N/A' }}
+              {% endif %}
+            </td>
+            <td>{{ "%.1f"|format(agent.commission_rate * 100) }}%</td>
+            <td>{{ agent.customer_count }}</td>
+            <td>${{ "%.2f"|format(agent.total_commissions) }}</td>
+            <td>
+              <span class="status status--{{ 'active' if agent.status == 'active' else 'inactive' }}">{{ agent.status|capitalize }}</span>
+            </td>
+            <td><a href="/superadmin/agents/{{ agent.id }}{{ embedded_query }}" class="btn btn--primary">View</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="empty">No agents found.</div>
+      {% endif %}
+    </section>
+  </main>
+</body>
+</html>

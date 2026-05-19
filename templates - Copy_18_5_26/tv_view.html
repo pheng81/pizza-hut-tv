@@ -1,0 +1,1609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<style>
+		html, body { height:100%; margin:0; background:#000; color:#fff; }
+	/* CRASH FIX: Disable problematic GPU features that cause context loss */
+	#stage { 
+		position:fixed; inset:0; width:100vw; height:100vh; overflow:hidden; background:#000; 
+		--layer-fade: 1s; --motion-dur: 1s; transform-origin: 50% 50%; 
+		/* REMOVED: backface-visibility and transform-style that cause GPU issues */
+	}
+	.layer { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#000; overflow:hidden; }
+	.hidden { display:none; }
+	/* Make media fill the layer and crop to cover (no letterboxing) */
+	.media { 
+		width:100%; height:100%; object-fit:cover; background:#000; max-width:none; max-height:none; 
+		/* CRASH FIX: Remove GPU-intensive properties */
+		flex-shrink:0; 
+	}
+	/* Simplify video hints - remove GPU-intensive properties */
+	video.media { 
+		/* REMOVED: opacity:0.9999, will-change, transform:translateZ(0) - causes GPU memory issues */
+	}
+		.fade { opacity:0; transition: opacity var(--layer-fade) ease; }
+		.visible { opacity:1; }
+		.enter-slide-l { transform: translateX(8%); opacity:0; }
+		.enter-slide-r { transform: translateX(-8%); opacity:0; }
+		.enter-zoom-in { transform: scale(1.08); opacity:0; }
+		.enter-zoom-out { transform: scale(0.92); opacity:0; }
+		/* Continuous rotation effect */
+		.enter-rotate { animation: spin 10s linear infinite; }
+		@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+		.anim { transition: transform var(--motion-dur) ease, opacity var(--motion-dur) ease; /* REMOVED will-change to prevent GPU issues */ }
+		#overlay { position:fixed; left:10px; bottom:10px; color:#9aa7ff; font:12px/1.4 system-ui,Segoe UI,Roboto,Ubuntu,Arial; opacity:.22; pointer-events:none; white-space:pre-line; }
+		/* Rotation test controls - only show when ?debug=1 */
+		#rotation-controls { position:fixed; top:10px; right:10px; background:rgba(0,0,0,0.8); padding:10px; border-radius:5px; display:none; }
+		#rotation-controls button { margin:2px; padding:5px 10px; background:#4CAF50; color:white; border:none; border-radius:3px; cursor:pointer; }
+		#rotation-controls button:hover { background:#45a049; }
+		/* Visual rotation indicator */
+		#rotation-indicator { position:fixed; top:50%; left:50%; width:100px; height:50px; background:linear-gradient(45deg, #ff6b6b, #4ecdc4); margin:-25px 0 0 -50px; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:bold; font-size:14px; border-radius:10px; display:none; transition: transform 0.5s ease; transform-origin: center center; }
+		#rotation-indicator.show { display:flex; }
+	</style>
+</head>
+<body>
+	<div id="stage">
+		<div class="layer" id="layerA"></div>
+		<div class="layer" id="layerB"></div>
+	</div>
+	
+	<!-- Rotation test controls (only visible when ?debug=1) -->
+	<div id="rotation-controls">
+		<div style="color:#fff;font-size:12px;margin-bottom:5px;">🔄 Rotation Test:</div>
+		<button onclick="testRotation(0)">0°</button>
+		<button onclick="testRotation(90)">90°</button>
+		<button onclick="testRotation(180)">180°</button>
+		<button onclick="testRotation(270)">270°</button>
+		<br>
+		<button onclick="testAutoRotation()" style="margin-top:5px;">Auto Test</button>
+		<button onclick="resetRotation()">Reset</button>
+	</div>
+	
+	<!-- Visual rotation indicator (always shows rotation state when debug=1) -->
+	<div id="rotation-indicator">0°</div>		<!-- Provide template vars as JSON so JS linter doesn't choke on Jinja syntax -->
+	<script id="tv-data" type="application/json">{"store_id": {{ store_id|tojson }}, "screen_id": {{ screen_id|tojson }}, "initial_file": {{ active_file|tojson }}, "media_base_url": {{ (media_base_url or '')|tojson }}}</script>
+		<script>
+			const __tvCfg = JSON.parse(document.getElementById('tv-data')?.textContent || '{}');
+			// Query params helper
+			const __params = (()=>{ try{ return new URLSearchParams(location.search); }catch{return new URLSearchParams(); } })();
+			// Ensure we always talk to HTTPS origin. If we don't have one (e.g., file://),
+			// fall back to the public domain.
+			const DEFAULT_ORIGIN = 'https://api.everydayadvertise.com';
+			const ORIGIN = (window.location && window.location.origin)
+				? (window.location.origin.startsWith('http:')
+					? window.location.origin.replace(/^http:/, 'https:')
+					: window.location.origin)
+				: DEFAULT_ORIGIN;
+			// If we're on our domain but over http, enforce https.
+			try {
+				if (location.protocol === 'http:' && /(^|\.)everydayadvertise\.com$/i.test(location.hostname)) {
+					location.replace('https:' + location.href.slice(5));
+				}
+			} catch {}
+			const storeId = __tvCfg.store_id;
+			const screenId = __tvCfg.screen_id;
+			const initialFile = __tvCfg.initial_file;
+			const MEDIA_BASE_URL = (function(){ try{ let b = __tvCfg.media_base_url || ''; if(b && !/\/$/.test(b)) b += '/'; return b; }catch{return '';} })();
+			
+			// Debug helper to print overlay when ?debug=1 (MOVED TO TOP TO PREVENT CRASHES)
+			const __dbgEnabled = (()=>{ try{ return (new URLSearchParams(location.search)).get('debug')==='1'; }catch{return false;} })();
+			function dbg(msg){ try{ if(!__dbgEnabled) return; let el = document.getElementById('overlay'); if(!el){ el = document.createElement('div'); el.id='overlay'; document.body.appendChild(el);} const now = new Date(); el.textContent = `[${now.toLocaleTimeString()}] ${msg}`; }catch{} }
+			
+			// Show rotation test controls in debug mode
+			if (__dbgEnabled) {
+				setTimeout(() => {
+					try {
+						const controls = document.getElementById('rotation-controls');
+						const indicator = document.getElementById('rotation-indicator');
+						if (controls) controls.style.display = 'block';
+						if (indicator) indicator.classList.add('show');
+					} catch {}
+				}, 100);
+			}
+			
+			// CRASH PREVENTION: Global error handlers and memory management
+			window.addEventListener('error', (event) => {
+				try {
+					console.error('Global Error:', event.error);
+					dbg(`ERROR: ${event.error?.message || 'Unknown error'} at ${event.filename}:${event.lineno}`);
+					
+					// Force memory cleanup on errors
+					if (typeof gc !== 'undefined') {
+						try { gc(); } catch {}
+					}
+				} catch {}
+			});
+			
+			window.addEventListener('unhandledrejection', (event) => {
+				try {
+					console.error('Unhandled Promise Rejection:', event.reason);
+					dbg(`PROMISE ERROR: ${event.reason?.message || 'Promise rejection'}`);
+					event.preventDefault(); // Prevent crash
+				} catch {}
+			});
+			
+			// CRITICAL FIX: ULTRA-AGGRESSIVE MEMORY MANAGEMENT for Android TV
+			// Reduced from 15s to 5s to prevent memory accumulation
+			setInterval(() => {
+				try {
+					// Force garbage collection more frequently
+					if (typeof gc !== 'undefined') {
+						gc();
+						dbg(`MEMORY: Forced garbage collection`);
+					}
+					
+					// Clean up all video elements - Android TV can only handle 1 active video
+					const videos = document.querySelectorAll('video');
+					videos.forEach((v, index) => {
+						try {
+							// Keep only the 1 currently playing video
+							const isPlaying = !v.paused && !v.ended && v.readyState > 2;
+							if (!v.parentNode || v.parentNode === document.body || (index > 0 && !isPlaying)) {
+								v.pause();
+								v.removeAttribute('src');
+								v.load();
+								if (v.parentNode) v.parentNode.removeChild(v);
+								dbg(`MEMORY: Cleaned up video ${index}`);
+							}
+						} catch {}
+					});
+					
+					// Limit image cache size aggressively - keep max 3 images
+					const images = document.querySelectorAll('img');
+					images.forEach((img, index) => {
+						try {
+							if (!img.parentNode || (img.parentNode === document.body && !img.id) || index > 2) {
+								img.src = '';
+								if (img.parentNode) img.parentNode.removeChild(img);
+								dbg(`MEMORY: Cleaned up image ${index}`);
+							}
+						} catch {}
+					});
+					
+					// Clear any unused canvas elements (GPU memory hogs)
+					const canvases = document.querySelectorAll('canvas');
+					canvases.forEach((canvas, index) => {
+						try {
+							if (!canvas.parentNode || index > 0) { // Keep max 1 canvas
+								const ctx = canvas.getContext('2d');
+								if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+								if (canvas.parentNode) canvas.parentNode.removeChild(canvas);
+								dbg(`MEMORY: Cleaned up canvas ${index}`);
+							}
+						} catch {}
+					});
+					
+					// Log memory usage if available
+					if (performance && performance.memory) {
+						const mem = performance.memory;
+						const usedMB = (mem.usedJSHeapSize/1024/1024).toFixed(1);
+						const totalMB = (mem.totalJSHeapSize/1024/1024).toFixed(1);
+						
+						// Only log occasionally to reduce debug spam
+						if (Math.random() < 0.2) { // 20% of the time
+							dbg(`MEMORY: ${usedMB}MB / ${totalMB}MB`);
+						}
+						
+						// Force cleanup if using too much memory (lowered threshold)
+						if (mem.usedJSHeapSize > 80 * 1024 * 1024) { // >80MB (was 100MB)
+							dbg(`MEMORY: HIGH USAGE ${usedMB}MB - forcing cleanup`);
+							if (typeof gc !== 'undefined') gc();
+						}
+					}
+					
+				} catch (e) {
+					dbg(`MEMORY: Cleanup error: ${e.message}`);
+				}
+			}, 5000); // CRITICAL: 5 seconds instead of 15 to prevent crashes
+
+		const videoExt = ['mp4','webm','ogg','mov','avi','mkv','m4v'];
+		function isVideoByName(name){
+			if(!name) return false;
+			const base = String(name).split('?')[0].split('#')[0];
+			const ext = (base.split('.').pop()||'').toLowerCase();
+			return videoExt.includes(ext);
+		}
+	function mediaUrl(item){
+		if(!item) return '';
+		if(typeof item === 'string') {
+			if (/^https?:\/\//i.test(item)) {
+				const abs = item.replace(/^http:/, 'https:');
+				// If same-origin absolute like https://api.../FILENAME, rewrite to proper path
+				try{
+					const u = new URL(abs);
+					const same = u.host === (new URL(ORIGIN)).host;
+					if(same && /^\/[A-Za-z0-9._-]+$/.test(u.pathname)){
+						const fname = u.pathname.slice(1);
+						const isVid = isVideoByName(fname);
+						return `${ORIGIN}${isVid?'/media/':'/static/uploads/'}${fname}`;
+					}
+				}catch{}
+				return abs;
+			}
+			const fname = item.startsWith('/') ? item.slice(1) : item;
+			const isVid = isVideoByName(fname);
+			// Prefer CDN base for both images and videos when available
+			if (MEDIA_BASE_URL) {
+				return `${MEDIA_BASE_URL}${fname}`;
+			}
+			const rel = `/${isVid? 'media' : 'static/uploads'}/${fname}`;
+			return `${ORIGIN}${rel}`;
+		}
+		
+		// Enhanced sync group support: prioritize slice URLs for synchronized playback
+		if (item.sync_ref && item.sync_ref.group) {
+			dbg(`sync item: group=${item.sync_ref.group} role=${item.sync_ref.role} order=${item.sync_ref.order}`);
+		}
+		
+		// For slice-aware videos, prioritize slice_url or preferred_url
+		if (item.slice_aware && (item.slice_url || item.preferred_url)) {
+			const sliceUrl = item.slice_url || item.preferred_url;
+			return sliceUrl.replace(/^http:/, 'https:');
+		}
+		
+		// Also check for direct slice_url on sync items
+		if (item.slice_url) {
+			return item.slice_url.replace(/^http:/, 'https:');
+		}
+		
+		const u = item.url || item.file || '';
+		if (/^https?:\/\//i.test(u)) {
+			const abs = u.replace(/^http:/, 'https:');
+			try{
+				const uu = new URL(abs);
+				const same = uu.host === (new URL(ORIGIN)).host;
+				if(same && /^\/[A-Za-z0-9._-]+$/.test(uu.pathname)){
+					const fname = uu.pathname.slice(1);
+					const isVid = isVideoByName(fname);
+					return `${ORIGIN}${isVid?'/media/':'/static/uploads/'}${fname}`;
+				}
+			}catch{}
+			return abs;
+		}
+		const fname2 = (u.startsWith('/') ? u.slice(1) : u);
+		// Prefer CDN base when available
+		if (MEDIA_BASE_URL) {
+			return `${MEDIA_BASE_URL}${fname2}`;
+		}
+		const isVid2 = isVideoByName(fname2);
+		const rel = `/${isVid2? 'media' : 'static/uploads'}/${fname2}`;
+		return `${ORIGIN}${rel}`;
+		}
+		
+		// CRASH PREVENTION: Safe DOM element access
+		const stage = (() => {
+			try {
+				const el = document.getElementById('stage');
+				if (!el) {
+					dbg('CRITICAL: stage element not found in DOM');
+					throw new Error('stage element missing');
+				}
+				return el;
+			} catch (e) {
+				dbg(`CRITICAL: failed to get stage element: ${e.message}`);
+				throw e;
+			}
+		})();
+		
+		const layerA = (() => {
+			try {
+				const el = document.getElementById('layerA');
+				if (!el) {
+					dbg('CRITICAL: layerA element not found in DOM');
+					throw new Error('layerA element missing');
+				}
+				return el;
+			} catch (e) {
+				dbg(`CRITICAL: failed to get layerA element: ${e.message}`);
+				throw e;
+			}
+		})();
+		
+		const layerB = (() => {
+			try {
+				const el = document.getElementById('layerB');
+				if (!el) {
+					dbg('CRITICAL: layerB element not found in DOM');
+					throw new Error('layerB element missing');
+				}
+				return el;
+			} catch (e) {
+				dbg(`CRITICAL: failed to get layerB element: ${e.message}`);
+				throw e;
+			}
+		})();
+		
+		let front = layerA, back = layerB;
+
+		let playlist = [];
+		let idx = 0;
+		let timer = null;
+		let lastFetchTs = 0;
+		let screenMuted = true; // default muted (required for autoplay); updated from server
+
+		// Track items we have already probed/reported to avoid duplicates
+		const probedKeys = new Set();
+		const reportedOk = new Set();
+
+		// --- Enhanced client reporting for dashboard status lights and debugging ---
+		async function postClientEvent(ev, item, err){
+			try{
+				const f = (typeof item === 'string') ? item : (item?.file || fileNameFrom(item) || '');
+				const id = (typeof item === 'object') ? (item?.id || null) : null;
+				const payload = { 
+					store_id: storeId, 
+					screen_id: screenId, 
+					event: ev, 
+					file: f || null, 
+					item_id: id, 
+					error: err ? String(err).slice(0,200) : null,
+					timestamp: Math.floor(Date.now() / 1000),
+					user_agent: navigator.userAgent || 'unknown'
+				};
+				
+				dbg(`event: ${ev} ${f ? `file=${f}` : ''} ${err ? `error=${err}` : ''}`);
+				
+				await fetch(`${ORIGIN}/api/client_event`, {
+					method: 'POST', 
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(payload)
+				}).catch(e => {
+					dbg(`failed to report event: ${e.message}`);
+				});
+			}catch(e){
+				dbg(`postClientEvent exception: ${e.message}`);
+			}
+		}
+
+		// Heartbeat so server knows this screen is active
+		async function sendHeartbeat(){
+			try{
+				await fetch(`${ORIGIN}/api/screen_heartbeat`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ store_id: storeId, screen_id: screenId }) });
+			}catch{}
+		}
+		// Kick immediately and every 30s
+		sendHeartbeat(); setInterval(sendHeartbeat, 30000);
+
+		let orientationMode = 'default';
+		let displayRotation = 0; // 0|90|180|270
+		let __currentTotalRotation = 0; // track current stage rotation for sizing decisions
+		let __baseRotation = 0; // rotation computed from server orientation/rotation only
+		const qpAutoOrient = (function(){ try{ const v = __params.get('autoorient'); if(v===null) return true; return v==='1'||v.toLowerCase()==='true'; }catch{return true;} })();
+		// Optional overrides for rapid debugging on Android TV without changing server
+		const qpOrientation = (function(){ try{ const v = (__params.get('orientation')||'').toLowerCase(); return (v==='vertical'||v==='portrait')?'vertical': (v==='horizontal'||v==='landscape')?'horizontal': null; }catch{return null;} })();
+		const qpRotOffset = (function(){ try{ return parseInt(__params.get('rot')||'0',10)||0; }catch{return 0;} })();
+		const qpNoRotate = (function(){ try{ const v = (__params.get('norotate')||''); return v==='1'||v.toLowerCase()==='true'; }catch{return false;} })();
+		function applyOrientation(totalOverride){
+			try{
+				// Ensure stage element exists
+				if (!stage) {
+					dbg('applyOrientation: stage element not found');
+					return;
+				}
+				
+				// Allow URL overrides for quick field testing
+				const effOrientation = qpOrientation || orientationMode;
+				// Base rotation from orientation flag, then add display rotation from dashboard
+				let base = (String(effOrientation||'default') === 'vertical') ? 90 : 0;
+				let total = ((base + (Number(displayRotation)||0) + (qpRotOffset||0)) % 360 + 360) % 360;
+				if(qpNoRotate){ total = 0; }
+				__baseRotation = total;
+				if(typeof totalOverride === 'number' && !isNaN(totalOverride)){
+					total = ((Number(totalOverride) % 360) + 360) % 360;
+				}
+
+				// CRASH FIX: Simplified orientation handling without complex scaling
+				const vw = Math.max(100, window.innerWidth || 100);
+				const vh = Math.max(100, window.innerHeight || 100);
+				
+				// Simple approach: let CSS handle viewport fitting naturally
+				// No complex scaling calculations that can cause memory issues
+				dbg(`ROTATION: Screen dimensions: ${vw}x${vh}`);
+				
+				// CRASH FIX: Use safe CSS-only rotation approach (no GPU transforms)
+				let scale = 1; // Keep it simple - no complex scaling
+				const transformString = `rotate(${total}deg)`;
+				const origin = 'center center';
+				
+				try {
+					dbg(`ROTATION: Applying safe CSS rotation: ${total}° scale: ${scale.toFixed(3)}`);
+					
+					// Instead of complex transforms, use simple CSS rotation
+					if (total === 0) {
+						// Normal orientation
+						stage.style.transform = '';
+						stage.style.width = '100vw';
+						stage.style.height = '100vh';
+						stage.style.left = '0';
+						stage.style.top = '0';
+						dbg(`ROTATION: Normal orientation applied`);
+					} else if (total === 90) {
+						// Portrait mode - simple 90° rotation
+						stage.style.transform = 'rotate(90deg)';
+						stage.style.transformOrigin = 'center center';
+						dbg(`ROTATION: 90° rotation applied`);
+					} else if (total === 180) {
+						// Upside down
+						stage.style.transform = 'rotate(180deg)';
+						stage.style.transformOrigin = 'center center';
+						dbg(`ROTATION: 180° rotation applied`);
+					} else if (total === 270) {
+						// Landscape flipped
+						stage.style.transform = 'rotate(270deg)';
+						stage.style.transformOrigin = 'center center';
+						dbg(`ROTATION: 270° rotation applied`);
+					} else {
+						// Custom angle - use simple rotate only
+						stage.style.transform = `rotate(${total}deg)`;
+						stage.style.transformOrigin = 'center center';
+						dbg(`ROTATION: Custom ${total}° rotation applied`);
+					}
+					
+					__currentTotalRotation = total;
+					
+					// Update visual indicator
+					try {
+						const indicator = document.getElementById('rotation-indicator');
+						if (indicator && __dbgEnabled) {
+							indicator.textContent = `${total}°`;
+							indicator.style.transform = `rotate(${total}deg)`;
+						}
+					} catch {}
+					
+					// Verify transform was applied with delay
+					setTimeout(() => {
+						const appliedTransform = stage.style.transform || stage.style.webkitTransform || 'none';
+						const computedStyle = window.getComputedStyle ? window.getComputedStyle(stage) : null;
+						const computedTransform = computedStyle ? (computedStyle.transform || computedStyle.webkitTransform) : 'none';
+						
+						dbg(`ROTATION: Style transform: ${appliedTransform}`);
+						dbg(`ROTATION: Computed transform: ${computedTransform}`);
+						
+						if ((appliedTransform === 'none' || appliedTransform === '') && 
+							(computedTransform === 'none' || computedTransform === '')) {
+							dbg(`ROTATION: ERROR - Transform not applied! Trying body fallback...`);
+							
+							// Last resort: apply to body
+							try {
+								document.body.style.transform = transformString;
+								document.body.style.transformOrigin = origin;
+								dbg(`ROTATION: Applied to body as fallback`);
+							} catch (bodyErr) {
+								dbg(`ROTATION: Body fallback also failed: ${bodyErr.message}`);
+							}
+						} else {
+							dbg(`ROTATION: Transform successfully applied`);
+						}
+					}, 200);
+				} catch (e) {
+					dbg(`ROTATION: Transform application failed: ${e.message}`);
+				}
+
+				// After orientation changes, re-apply cover sizing for active media (Android WebView quirk)
+				try{ adjustActiveMediaCover(); }catch{}
+				dbg(`ROTATION: orientation=${effOrientation} base=${base} rot=${displayRotation} qpRot=${qpRotOffset} total=${total} scale=${scale.toFixed(3)} vw=${vw} vh=${vh}`);
+			}catch(e){
+				dbg(`applyOrientation failed: ${e.message}`);
+			}
+		}
+
+		async function fetchPlaylist(){
+			try{
+				const r = await fetch(`${ORIGIN}/playlist/${storeId}/${screenId}`);
+				const j = await r.json();
+				if(j && j.success && Array.isArray(j.playlist)){
+					playlist = j.playlist;
+					if(typeof j.orientation === 'string'){ orientationMode = j.orientation; }
+					if(typeof j.rotation === 'number'){ displayRotation = (j.rotation||0); }
+					if(typeof j.muted === 'boolean'){ screenMuted = j.muted; }
+					applyOrientation();
+					if(idx >= playlist.length) idx = 0;
+					// Proactively probe status for unknown/stale items so the dashboard turns green fast
+					scheduleStatusProbes(playlist);
+				}
+			}catch(e){ /* keep current on error */ }
+			lastFetchTs = Date.now();
+		}
+
+		function keyFor(item){
+			const id = (item && item.id) ? String(item.id) : '';
+			const f = fileNameFrom(item);
+			return id || f || '';
+		}
+
+		function isStale(last){
+			if(!last || !last.ts) return true;
+			const ageSec = Math.floor(Date.now()/1000) - Number(last.ts||0);
+			return (last.state !== 'ok') || ageSec > 90; // slightly lenient window vs dashboard 60s
+		}
+
+		// Lightweight probes that avoid full playback but verify availability
+		function probeImage(url, timeoutMs=2500){
+			return new Promise((resolve)=>{
+				const img = new Image();
+				let done = false;
+				const finish = (ok)=>{ if(done) return; done = true; try{ img.onload=null; img.onerror=null; }catch{}; resolve(!!ok); };
+				const to = setTimeout(()=>{ clearTimeout(to); finish(false); }, timeoutMs);
+				img.onload = ()=>{ clearTimeout(to); finish(true); };
+				img.onerror = ()=>{ clearTimeout(to); finish(false); };
+				img.src = url;
+			});
+		}
+
+		function probeVideo(url, timeoutMs=3000){
+			return new Promise((resolve)=>{
+				const v = document.createElement('video');
+				v.preload = 'metadata'; v.muted = true; v.playsInline = true;
+				let done = false;
+				const finish = (ok)=>{ if(done) return; done = true; try{ v.removeAttribute('src'); v.load(); }catch{}; resolve(!!ok); };
+				const onMeta = ()=>{ cleanup(); finish(true); };
+				const onErr = ()=>{ cleanup(); finish(false); };
+				function cleanup(){ v.removeEventListener('loadedmetadata', onMeta); v.removeEventListener('error', onErr); if(to) clearTimeout(to); }
+				v.addEventListener('loadedmetadata', onMeta);
+				v.addEventListener('error', onErr);
+				const to = setTimeout(()=>{ cleanup(); finish(false); }, timeoutMs);
+				v.src = url; try{ v.load(); }catch{}
+			});
+		}
+
+		function sameHost(u1, u2){ try { return (new URL(u1)).host === (new URL(u2)).host; } catch { return false; } }
+
+		async function probeItemStatus(item){
+			const k = keyFor(item); if(!k) return;
+			if(probedKeys.has(k)) return; // avoid duplicate probes in short time
+			probedKeys.add(k);
+			// Skip if we already reported ok from this viewer
+			if(reportedOk.has(k)) return;
+			const url = mediaUrl(item);
+			if(!url) return;
+			const type = (item.media_type || '').toLowerCase();
+			const isVid = type === 'video' || isVideoByName(url);
+			// Build fallback to our origin if cross-origin
+			let fallbackUrl = '';
+			if(!sameHost(url, ORIGIN)){
+				const fname = fileNameFrom(item);
+				if(fname){ fallbackUrl = isVid ? `${ORIGIN}/media/${encodeURIComponent(fname)}` : `${ORIGIN}/static/uploads/${encodeURIComponent(fname)}`; }
+			}
+			let ok = false;
+			try{
+				ok = isVid ? await probeVideo(url) : await probeImage(url);
+				if(!ok && fallbackUrl){ ok = isVid ? await probeVideo(fallbackUrl) : await probeImage(fallbackUrl); }
+			}catch{ ok = false; }
+			if(ok){ reportedOk.add(k); postClientEvent('load_ok', item, null); }
+			else { postClientEvent('load_fail', item, 'probe failed'); }
+		}
+
+		function scheduleStatusProbes(list){
+			if(!Array.isArray(list) || !list.length) return;
+			let delay = 200; // small staggering to avoid bursts
+			for(const it of list){
+				try{
+					if(isStale(it.last_status)){
+						setTimeout(()=>{ probeItemStatus(it); }, delay);
+						delay += 300; // space probes ~0.3s apart
+					}
+				}catch{}
+			}
+		}
+
+		function preloadImage(url){
+			return new Promise((resolve,reject)=>{
+				try {
+					// CRASH FIX: Safer image loading with strict memory limits
+					const img = new Image();
+					
+					// CRITICAL: Set strict size limits to prevent massive allocations
+					img.style.maxWidth = '1920px'; // Cap at 1080p max
+					img.style.maxHeight = '1080px';
+					
+					let to = setTimeout(()=>{ 
+						try {
+							img.onload = null; 
+							img.onerror = null; 
+							img.src = ''; // Clear source to free memory
+						} catch {}
+						dbg(`IMAGE: Timeout ${url.slice(-50)}`);
+						reject(new Error('image timeout')); 
+					}, 3000); // Reduced timeout to 3s
+					
+					img.onload = () => { 
+						clearTimeout(to); 
+						const size = `${img.naturalWidth}x${img.naturalHeight}`;
+						
+						// CRITICAL: Reject if image is too large
+						if (img.naturalWidth * img.naturalHeight > 2073600) { // >1920x1080
+							dbg(`IMAGE: TOO LARGE ${size} - rejecting ${url.slice(-50)}`);
+							img.src = '';
+							reject(new Error('image too large'));
+							return;
+						}
+						
+						dbg(`IMAGE: Loaded ${size} ${url.slice(-50)}`);
+						resolve(img); 
+					};
+					img.onerror = (e) => { 
+						clearTimeout(to); 
+						dbg(`IMAGE: Failed ${url.slice(-50)}`);
+						reject(e||new Error('image error')); 
+					};
+					
+					img.crossOrigin = 'anonymous';
+					img.src = url;
+				} catch (e) {
+					dbg(`IMAGE: Creation failed: ${e.message}`);
+					reject(e);
+				}
+			});
+		}
+		// CRITICAL FIX: Sequential loading queue to prevent simultaneous allocations
+		let loadingQueue = Promise.resolve();
+		let activeVideoLoads = 0;
+		const MAX_CONCURRENT_VIDEO_LOADS = 1; // Only 1 video at a time on Android TV
+		
+		function preloadVideo(url){
+			// Queue this load to prevent parallel video allocations
+			return new Promise((outerResolve, outerReject) => {
+				loadingQueue = loadingQueue.finally(() => {
+					// Check if too many videos are loading
+					if (activeVideoLoads >= MAX_CONCURRENT_VIDEO_LOADS) {
+						dbg(`VIDEO: Queue full, waiting for slot`);
+						return new Promise(resolve => setTimeout(resolve, 1000))
+							.then(() => preloadVideoInternal(url))
+							.then(outerResolve, outerReject);
+					}
+					
+					return preloadVideoInternal(url).then(outerResolve, outerReject);
+				});
+			});
+		}
+		
+		function preloadVideoInternal(url){
+			activeVideoLoads++;
+			return new Promise((resolve,reject)=>{
+				try {
+					// CRASH FIX: Safer video creation with memory management
+					const v = document.createElement('video');
+					
+					// CRITICAL: Reduce memory usage with conservative settings
+					v.autoplay = false; 
+					v.muted = true; 
+					v.playsInline = true; 
+					v.preload = 'none'; // CRITICAL: Changed from 'metadata' to 'none' - load nothing until needed
+					v.crossOrigin = 'anonymous';
+					
+					// CRASH PREVENTION: Add strict size limits to prevent huge allocations
+					if (v.style) {
+						v.style.maxWidth = '1920px'; // Cap at 1080p max
+						v.style.maxHeight = '1080px';
+					}
+					
+					const onReady = ()=>{ 
+						cleanup(); 
+						activeVideoLoads--;
+						dbg(`VIDEO: Loaded ${url.slice(-50)} [${activeVideoLoads} active]`);
+						resolve(v); 
+					};
+					const onErr = (e)=>{ 
+						cleanup(); 
+						activeVideoLoads--;
+						dbg(`VIDEO: Failed ${url.slice(-50)}`);
+						reject(e||new Error('video error')); 
+					};
+					
+					function cleanup(){ 
+						try {
+							v.removeEventListener('canplay', onReady); 
+							v.removeEventListener('loadedmetadata', onReady);
+							v.removeEventListener('error', onErr); 
+							if (to) clearTimeout(to); 
+						} catch {}
+					}
+					
+					v.addEventListener('loadedmetadata', onReady); // Use metadata instead of canplay
+					v.addEventListener('error', onErr);
+					
+					// Shorter timeout to prevent memory accumulation
+					const to = setTimeout(()=>{ 
+						cleanup(); 
+						activeVideoLoads--;
+						dbg(`VIDEO: Timeout ${url.slice(-50)}`);
+						reject(new Error('video timeout')); 
+					}, 4000); // Reduced from 5000ms
+					
+					v.src = url; 
+					try{ 
+						v.load(); // Load metadata only (preload='none')
+					}catch(e) {
+						dbg(`VIDEO: Load exception: ${e.message}`);
+						cleanup();
+						activeVideoLoads--;
+						reject(e);
+					}
+				} catch (e) {
+					activeVideoLoads--;
+					dbg(`VIDEO: Creation failed: ${e.message}`);
+					reject(e);
+				}
+			});
+		}
+
+
+
+		// Force true cover sizing on Android WebView where object-fit may be ignored for <video>
+		function applyCoverSizing(node, naturalW, naturalH){
+			try{
+				if(!node) return;
+				// Size against the physical viewport; stage scaling handles rotation coverage
+				const cw = Math.max(1, window.innerWidth || document.documentElement.clientWidth || stage.clientWidth || 1920);
+				const ch = Math.max(1, window.innerHeight || document.documentElement.clientHeight || stage.clientHeight || 1080);
+				const rMedia = (naturalW>0 && naturalH>0) ? (naturalW/naturalH) : 1;
+				const rCont = cw / ch;
+				// Compute pixel box for real cover sizing
+				let targetW, targetH;
+				if (rMedia < rCont) { // container wider -> fill width
+					targetW = cw; targetH = cw / Math.max(0.0001, rMedia);
+				} else { // container taller -> fill height
+					targetH = ch; targetW = ch * rMedia;
+				}
+				// Reset and apply absolute centered pixel sizing
+				node.style.objectFit = '';
+				node.style.maxWidth = 'none';
+				node.style.maxHeight = 'none';
+				node.style.width = Math.ceil(targetW) + 'px';
+				node.style.height = Math.ceil(targetH) + 'px';
+				node.style.position = 'absolute';
+				node.style.left = '50%';
+				node.style.top = '50%';
+				node.style.transform = 'translate(-50%, -50%) translateZ(0)';
+				node.style.objectPosition = 'center center';
+				node.style.flexShrink = '0';
+				dbg(`cover cw=${cw} ch=${ch} n=${naturalW}x${naturalH} -> ${Math.ceil(targetW)}x${Math.ceil(targetH)} rM=${rMedia.toFixed(3)} rC=${rCont.toFixed(3)}`);
+			} catch {}
+		}
+
+		function ensureVideoOverlayDisabled(node){
+			try{
+				if(!node || node.tagName !== 'VIDEO') return;
+				// Prevent video surface overlay promotion so CSS sizing/clipping works
+				node.style.opacity = '0.9999';
+				node.style.willChange = 'transform, opacity';
+				node.style.transform = (node.style.transform || '') + ' translateZ(0)';
+				node.style.backgroundColor = '#000';
+			} catch {}
+		}
+
+		function adjustActiveMediaCover(){
+			try{
+				const activeLayer = front; // currently visible
+				const node = activeLayer && activeLayer.firstElementChild;
+				if(!node) return;
+				if(node.tagName === 'VIDEO'){
+					const nw = Number(node.videoWidth)||0;
+					const nh = Number(node.videoHeight)||0;
+					if(nw>0 && nh>0){ applyCoverSizing(node, nw, nh); }
+				} else if (node.tagName === 'IMG'){
+					const nw = Number(node.naturalWidth)||0;
+					const nh = Number(node.naturalHeight)||0;
+					if(nw>0 && nh>0){ applyCoverSizing(node, nw, nh); }
+				}
+			}catch{}
+		}
+
+	function effectClassFor(item){
+		try{
+			const e = String(item && item.effect || '').toLowerCase();
+			if(!e) return '';
+			switch(e){
+				case '1': case 'cut': return ''; // instant cut (no effect)
+				case '2': case 'fade': return ''; // default fade (handled by crossfade)
+				case '3': case 'dissolve': return ''; // dissolve is similar to fade
+				case '4': case 'slide-l': case 'slide-left': return 'enter-slide-l';
+				case '5': case 'slide-r': case 'slide-right': return 'enter-slide-r';
+				case '6': case 'slide-up': return 'enter-slide-l'; // reuse slide-l for up
+				case '7': case 'slide-down': return 'enter-slide-r'; // reuse slide-r for down  
+				case '8': case 'zoom-in': return 'enter-zoom-in';
+				case '9': case 'zoom-out': return 'enter-zoom-out';
+				case '10': case 'wipe-lr': case 'wipe': return 'enter-slide-l'; // wipe similar to slide
+				case 'rotate': return 'enter-rotate';
+				default: return ''; // fade fallback
+			}
+		}catch{ return ''; }
+	}		function hostOf(u){ try { return (new URL(u)).host; } catch { return ''; } }
+		function fileNameFrom(item){
+			if(!item) return '';
+			if(typeof item === 'string'){
+				try{ const u = new URL(item); return (u.pathname.split('/').pop()||''); }catch{ return (item.split('/').pop()||''); }
+			}
+			const f = item.file || '';
+			if(f) return String(f).split('/').pop()||'';
+			const u = item.url || '';
+			try{ const p = new URL(u).pathname; return (p.split('/').pop()||''); }catch{ return (String(u).split('/').pop()||''); }
+		}
+
+		// CRITICAL FIX: Immediate cleanup with memory release
+		function clearNode(node){ 
+			try {
+				// Clean up video/image elements before removing
+				const children = Array.from(node.childNodes);
+				for (const child of children) {
+					try {
+						if (child.tagName === 'VIDEO') {
+							child.pause();
+							child.removeAttribute('src');
+							child.load();
+							dbg(`CLEANUP: Cleared video from layer`);
+						} else if (child.tagName === 'IMG') {
+							child.src = '';
+							dbg(`CLEANUP: Cleared image from layer`);
+						}
+					} catch {}
+					
+					try {
+						node.removeChild(child);
+					} catch {}
+				}
+				
+				// Force immediate GC if available
+				if (typeof gc !== 'undefined' && Math.random() < 0.3) { // 30% chance
+					setTimeout(() => { try { gc(); } catch {} }, 100);
+				}
+			} catch {}
+		}
+
+		function swapLayers(){ const t = front; front = back; back = t; }
+
+		async function showItem(item){
+			const url = mediaUrl(item);
+			if(!url){ return; }
+			
+			const type = (item && item.media_type ? String(item.media_type) : '').toLowerCase();
+			if (type === 'web') {
+				const iframe = document.createElement('iframe');
+				iframe.src = url;
+				iframe.className = 'media';
+				iframe.style.width = '100%';
+				iframe.style.height = '100%';
+				iframe.style.border = 'none';
+				iframe.allow = 'autoplay; fullscreen';
+				iframe.referrerPolicy = 'no-referrer-when-downgrade';
+				clearNode(back);
+				back.appendChild(iframe);
+				back.classList.add('fade');
+				back.classList.remove('hidden');
+				requestAnimationFrame(() => {
+					back.classList.add('visible');
+					back.classList.remove('fade');
+					front.classList.add('fade');
+					front.classList.remove('visible');
+					setTimeout(() => {
+						front.classList.add('hidden');
+						front.classList.remove('fade');
+						swapLayers();
+					}, 1100);
+				});
+				postClientEvent('play_ok', item, null);
+				return;
+			}
+			
+			// 🎬 YOUTUBE: Check for YouTube format (supports both direct and CDN-prefixed URLs)
+			const youtubeMatch = String(url).match(/youtube:([a-zA-Z0-9_-]{11})/);
+			if (youtubeMatch) {
+				const videoId = youtubeMatch[1];
+				console.log('▶️ [YOUTUBE] Detected YouTube video:', videoId);
+				dbg(`YouTube: ${videoId}`);
+				
+				// Create iframe for YouTube
+				const iframe = document.createElement('iframe');
+				iframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=${screenMuted?1:0}&loop=1&playlist=${videoId}&controls=0&modestbranding=1`;
+				iframe.className = 'media';
+				iframe.style.width = '100%';
+				iframe.style.height = '100%';
+				iframe.style.border = 'none';
+				iframe.style.objectFit = 'contain';
+				iframe.allow = 'autoplay; encrypted-media';
+				iframe.allowFullscreen = true;
+				
+				// Add iframe to display
+				clearNode(back);
+				back.appendChild(iframe);
+				back.classList.add('fade');
+				back.classList.remove('hidden');
+				
+				// Smooth transition
+				requestAnimationFrame(() => {
+					back.classList.add('visible');
+					back.classList.remove('fade');
+					front.classList.add('fade');
+					front.classList.remove('visible');
+					
+					setTimeout(() => {
+						front.classList.add('hidden');
+						front.classList.remove('fade');
+						swapLayers();
+					}, 1100);
+				});
+				
+				console.log('✅ [YOUTUBE] YouTube video loaded successfully');
+				return;
+			}
+			
+			// Prefer extension-based detection; only trust media_type if URL doesn't look like an image
+			const isVid = (
+				isVideoByName(url) ||
+				(type === 'video' && !/\.(png|jpe?g|gif|webp|svg)(\?|#|$)/i.test(String(url)))
+			);
+			const thisHost = hostOf(url);
+			const ourHost = hostOf(ORIGIN);
+			// Build a local fallback if primary URL is external and fails
+			let fallbackUrl = '';
+			if(thisHost && ourHost && thisHost !== ourHost){
+				const fname = fileNameFrom(item);
+				if(fname){
+					fallbackUrl = isVid ? `${ORIGIN}/media/${encodeURIComponent(fname)}`
+										 : `${ORIGIN}/static/uploads/${encodeURIComponent(fname)}`;
+				}
+			}
+			try{
+				const node = isVid ? await preloadVideo(url) : await preloadImage(url);
+				node.className = 'media';
+				// Force consistent cover behavior across platforms; allow optional ?fit=contain for testing
+				let fit = 'cover';
+				try{
+					const params = new URLSearchParams(location.search);
+					const fitParam = params.get('fit');
+					if(fitParam){ fit = (fitParam.toLowerCase()==='contain')?'contain':'cover'; }
+				}catch{}
+				if(fit === 'contain'){
+					node.style.objectFit = 'contain';
+					node.style.objectPosition = 'center center';
+					// Reset absolute sizing if previously applied
+					node.style.position = '';
+					node.style.left = '';
+					node.style.top = '';
+					node.style.width = '100%';
+					node.style.height = '100%';
+				} else {
+					// Prefer explicit sizing over object-fit for Android WebView
+					if(isVid){
+						// Try to keep video in WebView compositor path (avoid overlay)
+						ensureVideoOverlayDisabled(node);
+						const tryApply = ()=>{ try{ applyCoverSizing(node, Number(node.videoWidth)||0, Number(node.videoHeight)||0); }catch{} };
+						node.addEventListener('loadedmetadata', tryApply, { once:true });
+						node.addEventListener('resize', tryApply);
+						// In case metadata already loaded
+						tryApply();
+					} else {
+						applyCoverSizing(node, Number(node.naturalWidth)||0, Number(node.naturalHeight)||0);
+					}
+				}
+
+				// Smart auto-orientation: if media shape mismatches viewport shape, rotate stage 90° to maximize coverage
+				try{
+					if(qpAutoOrient){
+						const vw = Math.max(1, window.innerWidth || document.documentElement.clientWidth || 1920);
+						const vh = Math.max(1, window.innerHeight || document.documentElement.clientHeight || 1080);
+						const isViewportLandscape = vw >= vh;
+						const mW = isVid ? (Number(node.videoWidth)||0) : (Number(node.naturalWidth)||0);
+						const mH = isVid ? (Number(node.videoHeight)||0) : (Number(node.naturalHeight)||0);
+						if(mW>0 && mH>0){
+							const isMediaLandscape = mW >= mH;
+							let desired = __baseRotation;
+							if(isViewportLandscape && !isMediaLandscape && (__baseRotation % 180 === 0)){
+								// Landscape screen showing portrait media but base rotation is 0/180 -> rotate 90
+								desired = (__baseRotation + 90) % 360;
+							} else if(!isViewportLandscape && isMediaLandscape && (__baseRotation % 180 !== 0)){
+								// Portrait screen showing landscape media but base rotation is 90/270 -> rotate back to 0
+								desired = (__baseRotation + 270) % 360; // -90
+							}
+							if(desired !== __currentTotalRotation){ applyOrientation(desired); }
+						}
+					}
+				}catch{}
+				const eff = effectClassFor(item);
+				if(eff){ node.classList.add('anim'); node.classList.add(eff); }
+				if(isVid){ 
+					// Respect the repeat flag from dashboard
+					node.loop = (item.repeat !== false); // default true unless explicitly disabled
+					node.autoplay = true; 
+					node.muted = screenMuted; 
+					node.playsInline = true;
+				}
+				// prepare back layer
+				clearNode(back); back.appendChild(node);
+				back.classList.add('fade'); back.classList.remove('hidden');
+				// start video after in DOM (for some platforms)
+				if(isVid){ setTimeout(()=>{ try{ node.play().catch(()=>{});}catch{} }, 0); }
+				// crossfade
+					requestAnimationFrame(()=>{
+					back.classList.add('visible'); back.classList.remove('fade');
+					front.classList.add('fade'); front.classList.remove('visible');
+					requestAnimationFrame(()=>{
+						if(eff){ node.classList.remove('enter-slide-l','enter-slide-r','enter-zoom-in','enter-zoom-out'); node.style.opacity=''; }
+					});
+					setTimeout(()=>{ front.classList.add('hidden'); front.classList.remove('fade'); swapLayers(); }, 1100);
+						// Re-apply sizing after swap to avoid any WebView reflow quirks
+						setTimeout(()=>{ try{ adjustActiveMediaCover(); }catch{} }, 60);
+				});
+				// Report successful playback start
+				postClientEvent('play_ok', item, null);
+			}catch(e){
+				// Try fallback via our origin if available
+				if(fallbackUrl){
+					try{
+						const node = isVid ? await preloadVideo(fallbackUrl) : await preloadImage(fallbackUrl);
+						node.className = 'media';
+					const eff = effectClassFor(item);
+					if(eff){ node.classList.add('anim'); node.classList.add(eff); }
+					if(isVid){ 
+						// Respect the repeat flag from dashboard (fallback path)
+						node.loop = (item.repeat !== false); // default true unless explicitly disabled
+						node.autoplay = true; 
+						node.muted = screenMuted; 
+						node.playsInline = true;
+					}
+						clearNode(back); back.appendChild(node);
+						back.classList.add('fade'); back.classList.remove('hidden');
+						if(isVid){ setTimeout(()=>{ try{ node.play().catch(()=>{});}catch{} }, 0); }
+						requestAnimationFrame(()=>{
+							back.classList.add('visible'); back.classList.remove('fade');
+							front.classList.add('fade'); front.classList.remove('visible');
+							requestAnimationFrame(()=>{
+								if(eff){ node.classList.remove('enter-slide-l','enter-slide-r','enter-zoom-in','enter-zoom-out'); node.style.opacity=''; }
+							});
+							setTimeout(()=>{ front.classList.add('hidden'); front.classList.remove('fade'); swapLayers(); }, 1100);
+						});
+						// Report success via fallback
+						postClientEvent('play_ok', item, null);
+						return;
+					}catch(_f){ /* swallow */ }
+				}
+				// Report failure (skip rendering)
+				postClientEvent('play_fail', item, (e && e.message) ? e.message : 'media load failed');
+			}
+		}
+
+		// Handle playlist navigation with link_next and repeat logic
+		function nextIndex(activeItems, currentIdx){ 
+			if(!Array.isArray(activeItems) || !activeItems.length) return 0; 
+			
+			const currentItem = activeItems[currentIdx];
+			
+			// If link_next is true, try to stay on the same item
+			if(currentItem && currentItem.link_next) {
+				return currentIdx; // repeat current item
+			}
+			
+			// Otherwise advance to next active item
+			return (currentIdx + 1) % activeItems.length; 
+		}
+
+		// Enhanced command polling for all dashboard functions
+		async function pollCommands(){
+			try{
+				const r = await fetch(`${ORIGIN}/api/commands?store_id=${encodeURIComponent(storeId)}&screen_id=${encodeURIComponent(screenId)}&limit=10&pop=1`);
+				const j = await r.json();
+				const commands = j && j.success ? (Array.isArray(j) ? j : (j.commands || [])) : [];
+				
+				for(const c of commands){
+					if(!c || !c.type) continue;
+					
+					switch(c.type){
+						case 'reload':
+							dbg('cmd: reload playlist');
+							await fetchPlaylist(); 
+							idx = 0;
+							if(timer){ clearTimeout(timer); timer = null; }
+							setTimeout(tick, 100); // restart immediately
+							break;
+							
+						case 'retry_item':
+							dbg(`cmd: retry item ${c.item_id || c.file || 'unknown'}`);
+							// Find and immediately show the requested item
+							if(c.item_id){
+								const retryIdx = playlist.findIndex(it => String(it.id) === String(c.item_id));
+								if(retryIdx >= 0){ idx = retryIdx; if(timer){ clearTimeout(timer); timer = null; } setTimeout(tick, 50); }
+							} else if(c.file){
+								const retryIdx = playlist.findIndex(it => fileNameFrom(it) === c.file || it.file === c.file);
+								if(retryIdx >= 0){ idx = retryIdx; if(timer){ clearTimeout(timer); timer = null; } setTimeout(tick, 50); }
+							}
+							break;
+							
+						case 'flush_cache':
+							dbg('cmd: flush cache');
+							// Clear any cached elements and force fresh loads
+							probedKeys.clear();
+							reportedOk.clear();
+							break;
+							
+						default:
+							dbg(`cmd: unknown type ${c.type}`);
+							break;
+					}
+				}
+			}catch(e){
+				// Silent - don't spam console on network issues
+			}
+		}
+
+		// Check if an item is currently scheduled to play (respects dashboard scheduling)
+		function isItemActiveNow(item){
+			if(!item || !item.enabled) return false;
+			
+			const now = new Date();
+			const dayOfWeek = ['sun','mon','tue','wed','thu','fri','sat'][now.getDay()];
+			
+			// Check primary schedule window
+			const primaryAllowed = !Array.isArray(item.days) || !item.days.length || item.days.includes(dayOfWeek);
+			const inPrimaryWindow = checkTimeWindow(now, item.start, item.end);
+			if(primaryAllowed && inPrimaryWindow) return true;
+			
+			// Check extra schedule windows
+			if(Array.isArray(item.schedule)){
+				for(const win of item.schedule){
+					if(!win.enabled) continue;
+					const winAllowed = !Array.isArray(win.days) || !win.days.length || win.days.includes(dayOfWeek);
+					const inWinWindow = checkTimeWindow(now, win.start, win.end);
+					if(winAllowed && inWinWindow) return true;
+				}
+			}
+			
+			return false;
+		}
+		
+		function checkTimeWindow(now, start, end){
+			if(!start && !end) return true; // no time constraints
+			
+			const parseTime = (timeStr) => {
+				if(!timeStr) return null;
+				let time = timeStr;
+				let date = null;
+				
+				// Handle ISO format (YYYY-MM-DDTHH:MM:SS)
+				if(timeStr.includes('T')){
+					const parts = timeStr.split('T');
+					date = parts[0];
+					time = parts[1];
+				}
+				
+				// If we have a date, create full datetime
+				if(date){
+					try{ return new Date(timeStr); }catch{ return null; }
+				}
+				
+				// Time-only: apply to today
+				const timeParts = time.split(':');
+				const hours = parseInt(timeParts[0] || '0', 10);
+				const minutes = parseInt(timeParts[1] || '0', 10);
+				const seconds = parseInt(timeParts[2] || '0', 10);
+				
+				const result = new Date(now);
+				result.setHours(hours, minutes, seconds, 0);
+				return result;
+			};
+			
+			const startTime = parseTime(start);
+			const endTime = parseTime(end);
+			
+			if(startTime && endTime){
+				// Handle day crossing (end < start means crosses midnight)
+				if(endTime < startTime){
+					return now >= startTime || now <= endTime;
+				} else {
+					return now >= startTime && now <= endTime;
+				}
+			} else if(startTime){
+				return now >= startTime;
+			} else if(endTime){
+				return now <= endTime;
+			}
+			
+			return true; // no constraints
+		}
+
+		async function tick(){
+			if(!playlist.length){ await fetchPlaylist(); }
+			if(!playlist.length){ timer = setTimeout(tick, 1500); return; }
+			
+			// Find the current active item (respects scheduling like the server)
+			let activeItems = playlist.filter(isItemActiveNow);
+			if(!activeItems.length){
+				dbg('no active items in schedule, waiting...');
+				// Check again in 30 seconds
+				timer = setTimeout(tick, 30000);
+				return;
+			}
+			
+			// Use modulo to cycle through active items only
+			if(idx >= activeItems.length) idx = 0;
+			const item = activeItems[idx];
+			const dur = Math.max(1, parseInt(item.duration||10));
+			
+			dbg(`showing item ${item.id || 'no-id'} (${fileNameFrom(item)}) dur=${dur}s active=${activeItems.length}/${playlist.length}`);
+			
+			// Preload the next active item (unless current item links to itself)
+			const nextIdx = nextIndex(activeItems, idx);
+			const next = activeItems[nextIdx];
+			if(next && next !== item){ 
+				const u = mediaUrl(next); 
+				if(u){ 
+					const pre = isVideoByName(u) ? preloadVideo(u) : preloadImage(u); 
+					pre.catch(()=>{}); 
+				}
+			}
+			
+			await showItem(item);
+			idx = nextIdx;
+			
+			// Periodic refresh of playlist (check for schedule/item changes)
+			if(Date.now() - lastFetchTs > 15000){ fetchPlaylist(); }
+			
+			// Poll commands more frequently for better dashboard responsiveness
+			if(Math.random() < 0.4){ pollCommands(); }
+			
+			timer = setTimeout(tick, dur*1000);
+		}
+
+	// Enhanced initialization with better error handling and debug info
+	window.addEventListener('resize', ()=>{ 
+		try{ 
+			applyOrientation(); 
+			adjustActiveMediaCover(); 
+			dbg(`resize: ${window.innerWidth}x${window.innerHeight}`);
+		}catch{} 
+	});
+	
+	(async function init(){
+		try {
+			dbg(`init: store=${storeId} screen=${screenId} origin=${ORIGIN}`);
+			
+			// Wait for DOM to be fully ready
+			if (document.readyState !== 'complete') {
+				await new Promise(resolve => {
+					if (document.readyState === 'complete') resolve();
+					else window.addEventListener('load', resolve, { once: true });
+				});
+			}
+			
+			if(initialFile){ 
+				try{ 
+					dbg(`showing initial file: ${initialFile}`);
+					await showItem({file: initialFile}); 
+				}catch(e){ 
+					dbg(`initial file failed: ${e.message}`);
+				} 
+			}
+			
+			// CRASH FIX: Disable automatic rotation testing to prevent GPU stress
+			// Only apply initial orientation without testing animations
+			setTimeout(() => {
+				try {
+					dbg(`INIT: Applying initial orientation only`);
+					applyOrientation(); // Just set initial orientation, no testing
+					dbg(`INIT: Initial orientation applied successfully`);
+				} catch (e) {
+					dbg(`INIT: Initial orientation failed: ${e.message}`);
+				}
+			}, 1000); // Longer delay to ensure everything is ready
+			
+			// Start main playback loop with delay to ensure everything is ready
+			setTimeout(() => {
+				try {
+					tick();
+				} catch (e) {
+					dbg(`tick() startup failed: ${e.message}`);
+					// Retry after delay
+					setTimeout(() => { try { tick(); } catch {} }, 1000);
+				}
+			}, 1000);
+		} catch (e) {
+			dbg(`initialization failed: ${e.message}`);
+		}
+		
+		// Enhanced visibility handling - pause when hidden, resume when visible
+		document.addEventListener('visibilitychange', ()=>{ 
+			if(document.hidden){ 
+				dbg('hidden: pausing playback');
+				if(timer){ clearTimeout(timer); timer=null; }
+				// Pause any playing video
+				try{
+					const activeVideo = front?.querySelector('video');
+					if(activeVideo) activeVideo.pause();
+				}catch{}
+			} else { 
+				dbg('visible: resuming playback');
+				// Resume any paused video
+				try{
+					const activeVideo = front?.querySelector('video');
+					if(activeVideo) activeVideo.play().catch(()=>{});
+				}catch{}
+				if(!timer) tick(); 
+			} 
+		});
+		
+		// Handle page unload gracefully
+		window.addEventListener('beforeunload', ()=>{
+			if(timer){ clearTimeout(timer); timer = null; }
+		});
+		
+		// Rotation test functions (for debug mode)
+		window.testRotation = function(degrees) {
+			try {
+				dbg(`MANUAL TEST: Rotating to ${degrees}°`);
+				applyOrientation(degrees);
+			} catch (e) {
+				dbg(`MANUAL TEST: Rotation to ${degrees}° failed: ${e.message}`);
+			}
+		};
+		
+		window.testAutoRotation = function() {
+			const rotations = [0, 90, 180, 270, 0];
+			let i = 0;
+			dbg(`AUTO TEST: Starting auto rotation test`);
+			
+			function nextRotation() {
+				if (i < rotations.length) {
+					try {
+						dbg(`AUTO TEST: Step ${i + 1}/5 - Rotating to ${rotations[i]}°`);
+						applyOrientation(rotations[i]);
+						i++;
+						setTimeout(nextRotation, 2000);
+					} catch (e) {
+						dbg(`AUTO TEST: Failed at step ${i + 1}: ${e.message}`);
+					}
+				} else {
+					dbg(`AUTO TEST: Completed all rotation tests`);
+				}
+			}
+			
+			nextRotation();
+		};
+		
+		window.resetRotation = function() {
+			try {
+				dbg(`MANUAL TEST: Resetting rotation`);
+				displayRotation = 0;
+				orientationMode = 'default';
+				applyOrientation();
+			} catch (e) {
+				dbg(`MANUAL TEST: Reset failed: ${e.message}`);
+			}
+		};
+		
+		// Enhanced WebSocket connection with Android TV optimizations
+		let websocketAttempts = 0;
+		let websocketConnected = false;
+		const MAX_WEBSOCKET_ATTEMPTS = 3;
+		
+		function connectWebSocket() {
+			try {
+				websocketAttempts++;
+				
+				// After 3 failed attempts, rely on polling only
+				if (websocketAttempts > MAX_WEBSOCKET_ATTEMPTS) {
+					dbg(`SOCKET: Max attempts (${MAX_WEBSOCKET_ATTEMPTS}) reached, falling back to polling only`);
+					return;
+				}
+				
+				// Load Socket.IO library dynamically if not already loaded
+				if (typeof io === 'undefined') {
+					dbg(`SOCKET: Loading Socket.IO library (attempt ${websocketAttempts})`);
+					const script = document.createElement('script');
+					script.src = `${ORIGIN}/socket.io/socket.io.js`;
+					script.timeout = 10000; // 10 second timeout
+					
+					const timeoutId = setTimeout(() => {
+						dbg('SOCKET: Library load timeout, falling back to polling');
+						script.onerror();
+					}, 10000);
+					
+					script.onload = () => {
+						clearTimeout(timeoutId);
+						dbg('SOCKET: Socket.IO library loaded, connecting...');
+						connectWebSocket();
+					};
+					script.onerror = () => {
+						clearTimeout(timeoutId);
+						dbg(`SOCKET: Failed to load Socket.IO library (attempt ${websocketAttempts})`);
+						// Quick fallback - don't retry WebSocket immediately
+						setTimeout(() => {
+							if (websocketAttempts <= MAX_WEBSOCKET_ATTEMPTS) {
+								connectWebSocket();
+							}
+						}, 5000 * websocketAttempts); // Exponential backoff
+					};
+					document.head.appendChild(script);
+					return;
+				}
+				
+				dbg(`SOCKET: Connecting to ${ORIGIN} (attempt ${websocketAttempts})`);
+				
+				// Android TV optimized connection settings
+				const socket = io(ORIGIN, {
+					transports: ['polling'], // Start with polling only for Android TV reliability
+					timeout: 15000, // Shorter timeout for Android TV
+					reconnection: false, // Disable auto-reconnection to avoid memory leaks
+					forceNew: true, // Force new connection each time
+					upgrade: false // Don't upgrade to WebSocket to avoid connection issues
+				});
+				
+				// Connection timeout handler
+				const connectionTimeout = setTimeout(() => {
+					dbg(`SOCKET: Connection timeout after 15 seconds`);
+					try {
+						socket.disconnect();
+					} catch {}
+				}, 15000);
+				
+				socket.on('connect', () => {
+					clearTimeout(connectionTimeout);
+					websocketConnected = true;
+					websocketAttempts = 0; // Reset attempts on success
+					dbg('SOCKET: Connected to server via polling transport');
+				});
+				
+				socket.on('disconnect', (reason) => {
+					clearTimeout(connectionTimeout);
+					websocketConnected = false;
+					dbg(`SOCKET: Disconnected: ${reason}`);
+				});
+				
+				socket.on('reload_client', (data) => {
+					try {
+						dbg(`SOCKET: Received reload_client: ${JSON.stringify(data)}`);
+						
+						// Check if this reload is for us
+						const targetStore = data.store_id || data.storeId;
+						const targetScreen = data.screen_id || data.screenId;
+						
+						if (!targetStore || !targetScreen || 
+							(String(targetStore) === String(storeId) && String(targetScreen) === String(screenId))) {
+							
+							const reason = data.reason || 'unknown';
+							dbg(`SOCKET: Processing reload for ${targetStore}/${targetScreen}, reason: ${reason}`);
+							
+							// Handle rotation updates specifically
+							if (reason === 'rotation' && typeof data.rotation === 'number') {
+								dbg(`SOCKET: Rotation update received - ${data.rotation}°`);
+								displayRotation = data.rotation;
+								applyOrientation();
+								return; // Don't reload playlist for rotation changes
+							}
+							
+							// Handle orientation changes
+							if (reason === 'orientation' && typeof data.orientation === 'string') {
+								dbg(`SOCKET: Orientation update received - ${data.orientation}`);
+								orientationMode = data.orientation;
+								applyOrientation();
+								return; // Don't reload playlist for orientation changes
+							}
+							
+							// For other changes, reload playlist
+							dbg(`SOCKET: Reloading playlist due to: ${reason}`);
+							fetchPlaylist();
+						} else {
+							dbg(`SOCKET: Ignoring reload for ${targetStore}/${targetScreen} (we are ${storeId}/${screenId})`);
+						}
+						
+					} catch (e) {
+						dbg(`SOCKET: Error processing reload_client: ${e.message}`);
+					}
+				});
+				
+				socket.on('connect_error', (error) => {
+					dbg(`SOCKET: Connection error: ${error.message}`);
+				});
+				
+				// Store socket reference for potential cleanup
+				window.__tvSocket = socket;
+				
+			} catch (e) {
+				dbg(`SOCKET: Failed to connect: ${e.message}`);
+				// Retry in 10 seconds if initial connection fails
+				setTimeout(() => {
+					try {
+						connectWebSocket();
+					} catch (retryError) {
+						dbg(`SOCKET: Retry failed: ${retryError.message}`);
+					}
+				}, 10000);
+			}
+		}
+		
+		// Enhanced polling - primary mechanism for Android TV reliability
+		async function pollForUpdates() {
+			try {
+				// Use shorter timeout for Android TV
+				const controller = new AbortController();
+				const timeoutId = setTimeout(() => controller.abort(), 5000);
+				
+				const response = await fetch(`${ORIGIN}/playlist/${storeId}/${screenId}`, {
+					signal: controller.signal,
+					cache: 'no-cache' // Ensure fresh data
+				});
+				clearTimeout(timeoutId);
+				
+				if (!response.ok) {
+					throw new Error(`HTTP ${response.status}`);
+				}
+				
+				const data = await response.json();
+				
+				if (data && data.success) {
+					// Check for rotation changes
+					const serverRotation = Number(data.rotation || 0);
+					if (serverRotation !== displayRotation) {
+						dbg(`POLL: Rotation changed from ${displayRotation}° to ${serverRotation}°`);
+						displayRotation = serverRotation;
+						applyOrientation();
+					}
+					
+					// Check for muted changes
+					if(typeof data.muted === 'boolean' && data.muted !== screenMuted){
+						dbg(`POLL: Muted changed to ${data.muted}`);
+						screenMuted = data.muted;
+						// Apply immediately to any currently playing video
+						try{ const v = front && front.querySelector('video'); if(v) v.muted = screenMuted; }catch{}
+					}
+					// Check for orientation changes
+					const serverOrientation = data.orientation || 'default';
+					if (serverOrientation !== orientationMode) {
+						dbg(`POLL: Orientation changed from ${orientationMode} to ${serverOrientation}`);
+						orientationMode = serverOrientation;
+						applyOrientation();
+					}
+					
+					// Log polling success occasionally
+					if (Math.random() < 0.1) { // 10% of the time
+						dbg(`POLL: Successfully checked for updates (rotation: ${serverRotation}°, orientation: ${serverOrientation})`);
+					}
+				}
+			} catch (e) {
+				if (e.name === 'AbortError') {
+					dbg(`POLL: Request timeout (>5s)`);
+				} else {
+					dbg(`POLL: Error checking for updates: ${e.message}`);
+				}
+			}
+		}
+		
+		// Start connections after initialization with Android TV optimizations
+		setTimeout(() => {
+			// Try WebSocket first but don't rely on it for Android TV
+			try {
+				connectWebSocket();
+			} catch (e) {
+				dbg(`SOCKET: Startup failed: ${e.message}`);
+			}
+			
+			// Primary mechanism: Aggressive polling for Android TV reliability
+			// Start immediately, then every 3 seconds for near real-time response
+			pollForUpdates();
+			setInterval(pollForUpdates, 3000);
+			
+			// Additional memory cleanup for Android TV
+			setInterval(() => {
+				try {
+					// Close any failed WebSocket connections
+					if (window.__tvSocket && !websocketConnected) {
+						try {
+							window.__tvSocket.disconnect();
+							window.__tvSocket = null;
+						} catch {}
+					}
+					
+					// Force browser memory cleanup
+					if (window.gc) {
+						window.gc();
+					}
+				} catch {}
+			}, 60000); // Every minute
+			
+		}, 1000); // Start sooner for better responsiveness
+		
+		dbg('initialization complete');
+	})();
+	</script>
+</body>
+</html>

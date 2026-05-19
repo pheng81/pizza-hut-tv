@@ -1,0 +1,2435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Super Admin Dashboard</title>
+  <style>
+    :root {
+      --bg: #edf2f7;
+      --bg-soft: #f8fafc;
+      --surface: #ffffff;
+      --surface-soft: #f9fbfd;
+      --surface-muted: #f3f6fa;
+      --text: #111827;
+      --muted: #6b7280;
+      --line: rgba(148, 163, 184, 0.24);
+      --line-strong: rgba(148, 163, 184, 0.34);
+      --accent: #22a06b;
+      --accent-strong: #15803d;
+      --blue: #3b82f6;
+      --blue-soft: rgba(59, 130, 246, 0.12);
+      --orange: #fb923c;
+      --purple: #8b5cf6;
+      --success: #16a34a;
+      --success-soft: rgba(22, 163, 74, 0.12);
+      --danger: #dc2626;
+      --danger-soft: rgba(220, 38, 38, 0.12);
+      --warning: #d97706;
+      --warning-soft: rgba(217, 119, 6, 0.14);
+      --shadow-lg: 0 24px 60px rgba(15, 23, 42, 0.08);
+      --shadow-md: 0 16px 40px rgba(15, 23, 42, 0.06);
+      --shadow-sm: 0 8px 20px rgba(15, 23, 42, 0.05);
+      --radius-xl: 30px;
+      --radius-lg: 22px;
+      --radius-md: 18px;
+      --radius-sm: 14px;
+      --website-preview-gutter: 140px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      color: var(--text);
+      line-height: 1.5;
+      background:
+        radial-gradient(circle at top left, rgba(34, 160, 107, 0.1), transparent 22%),
+        radial-gradient(circle at top right, rgba(59, 130, 246, 0.1), transparent 18%),
+        linear-gradient(180deg, #f5f8fc 0%, #edf2f7 46%, #e9eff6 100%);
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .page-shell {
+      max-width: 1540px;
+      margin: 0 auto;
+      padding: 22px;
+      position: relative;
+      overflow: visible;
+    }
+
+
+    .dashboard-shell {
+      display: grid;
+      grid-template-columns: 272px minmax(0, 1fr);
+      gap: 22px;
+      align-items: start;
+      position: relative;
+      z-index: 1;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 22px;
+      min-height: calc(100vh - 44px);
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid rgba(255, 255, 255, 0.95);
+      border-radius: 18px;
+      box-shadow: var(--shadow-lg);
+      padding: 22px 18px;
+      display: grid;
+      gap: 18px;
+      backdrop-filter: blur(14px);
+      overflow: hidden;
+    }
+
+    .sidebar > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .brand-lockup {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 6px 6px 14px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+    }
+
+    .brand-mark {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(180deg, #2dd4bf, #3b82f6);
+      color: #ffffff;
+      font-weight: 700;
+      font-size: 15px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    }
+
+    .brand-meta,
+    .nav-label,
+    .metric-label,
+    .section-kicker,
+    .field-label,
+    .table-title-meta,
+    .meta-pill,
+    .pill,
+    th,
+    .detail-label,
+    .verification-label,
+    .legend-value-label,
+    .mini-card-label,
+    .chart-label,
+    .insight-meta {
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .brand-meta {
+      color: var(--muted);
+      margin-bottom: 2px;
+    }
+
+    .brand-name {
+      font-size: 19px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .sidebar-nav {
+      display: grid;
+      gap: 14px;
+    }
+
+    .nav-group {
+      display: grid;
+      gap: 8px;
+    }
+
+    .nav-label {
+      color: #94a3b8;
+      padding: 0 8px;
+    }
+
+    .nav-link {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      color: #475569;
+      font-size: 14px;
+      font-weight: 600;
+      transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
+    }
+
+    .nav-link:hover {
+      background: #f7fafc;
+      color: var(--text);
+      transform: translateX(2px);
+    }
+
+    .nav-link.is-active {
+      background: linear-gradient(180deg, #22a06b, #188f60);
+      color: #ffffff;
+      box-shadow: 0 14px 28px rgba(34, 160, 107, 0.18);
+    }
+
+    .nav-link span:last-child {
+      color: inherit;
+      opacity: 0.76;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .sidebar-card {
+      border-radius: 12px;
+      background: linear-gradient(180deg, #f7fbff, #eef5fb);
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      padding: 18px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .sidebar-card h3 {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .mini-card-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .mini-card {
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.86);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      padding: 12px;
+      display: grid;
+      gap: 6px;
+    }
+
+    .mini-card-value {
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .sidebar-links {
+      display: grid;
+      gap: 8px;
+    }
+
+    .sidebar-links a {
+      font-size: 13px;
+      color: #475569;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 18px;
+      width: 100%;
+    }
+
+    .view-section:not(.is-view-active) {
+      display: none !important;
+    }
+
+    .view-section.is-view-active {
+      display: block;
+    }
+
+    .view-section.view-section--grid.is-view-active {
+      display: grid;
+    }
+
+    .workspace-topbar {
+      background: rgba(255, 255, 255, 0.94);
+      border: 1px solid rgba(255, 255, 255, 0.96);
+      border-radius: 16px;
+      box-shadow: var(--shadow-md);
+      padding: 22px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+
+    .workspace-eyebrow {
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      font-size: 11px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .workspace-topbar h1 {
+      font-size: clamp(28px, 3vw, 36px);
+      line-height: 1.05;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin-bottom: 6px;
+    }
+
+    .workspace-copy {
+      max-width: 740px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .workspace-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .toolbar-pill,
+    .admin-chip,
+    .panel-badge,
+    .legend-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: #f7fafc;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      color: #475569;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .admin-chip {
+      background: linear-gradient(180deg, #111827, #1f2937);
+      color: #ffffff;
+      border-color: transparent;
+    }
+
+    .admin-chip strong {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: rgba(255, 255, 255, 0.18);
+      font-size: 11px;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .metric-card {
+      background: rgba(255, 255, 255, 0.94);
+      border: 1px solid rgba(255, 255, 255, 0.96);
+      border-radius: 12px;
+      box-shadow: var(--shadow-sm);
+      padding: 20px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .metric-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .metric-label {
+      color: #94a3b8;
+      margin-bottom: 6px;
+    }
+
+    .metric-value {
+      font-size: clamp(28px, 3vw, 36px);
+      line-height: 1;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+    }
+
+    .metric-meta {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .metric-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 0 6px rgba(148, 163, 184, 0.08);
+      flex: 0 0 auto;
+    }
+
+    .metric-card.users .metric-dot { color: var(--accent); }
+    .metric-card.stores .metric-dot { color: var(--blue); }
+    .metric-card.screens .metric-dot { color: var(--purple); }
+    .metric-card.online .metric-dot { color: var(--orange); }
+
+    .sparkline {
+      width: 100%;
+      height: 36px;
+    }
+
+    .insight-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr);
+      gap: 18px;
+    }
+
+    .operations-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .side-stack {
+      display: grid;
+      gap: 18px;
+    }
+
+    .panel {
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.96);
+      border-radius: 16px;
+      box-shadow: var(--shadow-md);
+      padding: 22px;
+      position: relative;
+      overflow: hidden;
+      width: 100%;
+    }
+
+    .panel::before {
+      content: '';
+      position: absolute;
+      inset: 0 0 auto;
+      height: 4px;
+      background: linear-gradient(90deg, #22a06b, #3b82f6, #8b5cf6);
+      opacity: 0.9;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+      padding-right: 56px;
+    }
+
+    .section-kicker,
+    .table-title-meta,
+    .insight-meta,
+    .field-label,
+    .detail-label {
+      color: #94a3b8;
+      margin-bottom: 6px;
+    }
+
+    .section-title {
+      font-size: clamp(22px, 2.2vw, 30px);
+      line-height: 1.08;
+      letter-spacing: -0.03em;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .section-copy {
+      color: var(--muted);
+      font-size: 13px;
+      max-width: 760px;
+    }
+
+    .panel-tools {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .panel-corner-toggle {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      background: #f8fafc;
+      color: #475569;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      line-height: 1;
+      padding: 0;
+      box-shadow: var(--shadow-sm);
+      z-index: 2;
+      cursor: pointer;
+    }
+
+    .panel-corner-toggle:hover {
+      background: #ffffff;
+      transform: translateY(-1px);
+    }
+
+    .panel-content {
+      display: block;
+    }
+
+    .settings-shell {
+      display: grid;
+      grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+      gap: 20px;
+      align-items: start;
+    }
+
+    .settings-sidebar {
+      display: grid;
+      gap: 14px;
+      padding: 18px;
+      border-radius: 12px;
+      background: linear-gradient(180deg, #f8fbff, #eef4fb);
+      border: 1px solid rgba(148, 163, 184, 0.16);
+    }
+
+    .settings-sidebar-title {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+    }
+
+    .settings-sidebar-copy {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.65;
+    }
+
+    .settings-note-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .settings-note {
+      padding: 12px 14px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.84);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+    }
+
+    .settings-note strong {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      color: var(--text);
+    }
+
+    .settings-note span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .settings-form {
+      min-width: 0;
+    }
+
+    .embedded-frame-shell {
+      border-radius: 0;
+      border: 0;
+      overflow: hidden;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .embedded-frame-empty {
+      min-height: 420px;
+      display: grid;
+      place-items: center;
+      padding: 28px;
+      border: 1px dashed rgba(148, 163, 184, 0.28);
+      background: linear-gradient(180deg, rgba(248, 250, 252, 0.9), rgba(255, 255, 255, 0.76));
+      color: var(--muted);
+      text-align: center;
+      border-radius: 12px;
+    }
+
+    .embedded-frame-empty strong {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--text);
+      font-size: 18px;
+      letter-spacing: -0.02em;
+    }
+
+    .embedded-editor-frame {
+      width: 100%;
+      min-height: 1760px;
+      height: calc(100vh - 160px);
+      border: 0;
+      display: block;
+      background: transparent;
+    }
+
+    .panel.is-collapsed .panel-header {
+      margin-bottom: 0;
+    }
+
+    .panel.is-collapsed .section-copy,
+    .panel.is-collapsed .panel-content {
+      display: none;
+    }
+
+    .chart-card {
+      display: grid;
+      gap: 18px;
+    }
+
+    .chart-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .legend-chip::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .legend-chip.primary { color: var(--accent); }
+    .legend-chip.secondary { color: var(--blue); }
+
+    .chart-surface {
+      border-radius: 12px;
+      background: linear-gradient(180deg, #fbfdff, #f2f7fb);
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      padding: 18px;
+      overflow: hidden;
+    }
+
+    .trend-chart {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .grid-line {
+      stroke: rgba(148, 163, 184, 0.22);
+      stroke-width: 1;
+    }
+
+    .axis-label {
+      fill: #94a3b8;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .data-fill {
+      fill: url(#pulseFill);
+    }
+
+    .data-line {
+      fill: none;
+      stroke: var(--accent);
+      stroke-width: 4;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .ghost-line {
+      fill: none;
+      stroke: rgba(59, 130, 246, 0.55);
+      stroke-width: 3;
+      stroke-dasharray: 7 8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .data-point {
+      fill: #ffffff;
+      stroke: var(--accent);
+      stroke-width: 3;
+    }
+
+    .chart-caption {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .chart-label {
+      color: #94a3b8;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .chart-value {
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    .coverage-layout {
+      display: grid;
+      gap: 18px;
+      align-items: center;
+    }
+
+    .donut-block {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .donut-ring {
+      width: 220px;
+      height: 220px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: conic-gradient(var(--accent) 0 var(--coverage), rgba(148, 163, 184, 0.18) var(--coverage) 100%);
+      position: relative;
+      box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.12);
+    }
+
+    .donut-ring::after {
+      content: '';
+      position: absolute;
+      inset: 24px;
+      border-radius: 50%;
+      background: linear-gradient(180deg, #ffffff, #f7fafc);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    }
+
+    .donut-center {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      display: grid;
+      gap: 4px;
+    }
+
+    .donut-center strong {
+      font-size: 34px;
+      line-height: 1;
+      letter-spacing: -0.04em;
+    }
+
+    .donut-center span {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .coverage-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .coverage-item,
+    .status-overview-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: var(--surface-soft);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+    }
+
+    .coverage-item strong,
+    .status-overview-item strong {
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .legend-value {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #475569;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .legend-swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: currentColor;
+      flex: 0 0 auto;
+    }
+
+    .legend-value.is-accent { color: var(--accent); }
+    .legend-value.is-blue { color: var(--blue); }
+    .legend-value.is-danger { color: var(--danger); }
+    .legend-value.is-warning { color: var(--warning); }
+
+    .status-overview {
+      display: grid;
+      gap: 12px;
+      margin-top: 4px;
+    }
+
+    .form-grid,
+    .settings-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .form-grid .full,
+    .settings-grid .full {
+      grid-column: 1 / -1;
+    }
+
+    .field-group {
+      display: grid;
+      gap: 8px;
+    }
+
+    input[type="text"],
+    input[type="password"],
+    input[type="email"],
+    input[type="number"],
+    input[type="date"],
+    select {
+      width: 100%;
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      border-radius: 16px;
+      background: #ffffff;
+      color: var(--text);
+      padding: 13px 15px;
+      font-size: 14px;
+      transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+    }
+
+    input:focus,
+    select:focus {
+      outline: none;
+      border-color: rgba(59, 130, 246, 0.42);
+      box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.12);
+      transform: translateY(-1px);
+    }
+
+    .help {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .checkbox-wrapper {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 14px 16px;
+      background: var(--surface-soft);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      border-radius: 18px;
+    }
+
+    .checkbox-wrapper input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      margin-top: 2px;
+      accent-color: var(--accent);
+      cursor: pointer;
+      flex: 0 0 auto;
+    }
+
+    .checkbox-wrapper label {
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 11px 16px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+      transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease, border-color 0.16s ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+    }
+
+    .btn--primary {
+      background: linear-gradient(180deg, var(--accent), var(--accent-strong));
+      color: #ffffff;
+      box-shadow: 0 12px 24px rgba(34, 160, 107, 0.18);
+    }
+
+    .btn--ghost {
+      background: #ffffff;
+      border-color: rgba(148, 163, 184, 0.22);
+      color: #334155;
+    }
+
+    .btn--secondary {
+      background: #f8fafc;
+      border-color: rgba(148, 163, 184, 0.18);
+      color: #334155;
+    }
+
+    .btn--danger {
+      background: var(--danger);
+      color: #ffffff;
+      box-shadow: 0 12px 24px rgba(220, 38, 38, 0.16);
+    }
+
+    .btn--success {
+      background: var(--success);
+      color: #ffffff;
+      box-shadow: 0 12px 24px rgba(22, 163, 74, 0.16);
+    }
+
+    .btn--dark {
+      background: #111827;
+      color: #ffffff;
+    }
+
+    .btn--tiny {
+      padding: 8px 12px;
+      font-size: 11px;
+    }
+
+    .flash-stack {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      display: grid;
+      gap: 12px;
+      z-index: 9999;
+      max-width: 420px;
+      pointer-events: none;
+    }
+
+    .flash {
+      padding: 14px 16px;
+      border-radius: 12px;
+      border: 1px solid;
+      font-weight: 600;
+      font-size: 14px;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+      animation: slideIn 0.3s ease;
+      pointer-events: auto;
+      cursor: pointer;
+    }
+
+    .flash--success {
+      background: #f0fdf4;
+      border-color: #86efac;
+      color: #166534;
+    }
+
+    .flash--error {
+      background: #fef2f2;
+      border-color: #fca5a5;
+      color: #b91c1c;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateX(400px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    @keyframes slideOut {
+      from {
+        opacity: 1;
+        transform: translateX(0);
+      }
+      to {
+        opacity: 0;
+        transform: translateX(400px);
+      }
+    }
+
+    .flash.dismissing {
+      animation: slideOut 0.3s ease forwards;
+    }
+
+    .directory-topbar {
+      display: grid;
+      grid-template-columns: minmax(250px, 1fr) minmax(520px, 760px);
+      gap: 16px;
+      align-items: start;
+      margin-bottom: 20px;
+    }
+
+    .directory-heading {
+      display: grid;
+      gap: 8px;
+    }
+
+    .directory-subtitle {
+      color: var(--muted);
+      font-size: 14px;
+      max-width: 680px;
+    }
+
+    .search-bar {
+      display: grid;
+      grid-template-columns: minmax(220px, 1.6fr) minmax(140px, 0.9fr) minmax(150px, 0.9fr) auto auto;
+      gap: 10px;
+      align-items: center;
+      padding: 12px;
+      border-radius: 12px;
+      background: var(--surface-muted);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+    }
+
+    .search-bar .btn {
+      min-width: 98px;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border-radius: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      background: #ffffff;
+    }
+
+    .table-wrap--directory {
+      max-height: 860px;
+    }
+
+    table {
+      width: 100%;
+      min-width: 1120px;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    th,
+    td {
+      text-align: left;
+      padding: 16px;
+      vertical-align: top;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+    }
+
+    th {
+      background: #f8fafc;
+      color: #94a3b8;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+
+    tbody tr {
+      transition: background 0.16s ease;
+    }
+
+    tbody tr:hover {
+      background: rgba(34, 160, 107, 0.04);
+    }
+
+    .user-identity {
+      display: grid;
+      gap: 6px;
+    }
+
+    .user-primary {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .user-secondary,
+    .muted {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .user-meta-row,
+    .status-stack,
+    .row-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .meta-pill,
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      background: #f8fafc;
+      color: #64748b;
+      white-space: nowrap;
+    }
+
+    .pill--good {
+      color: var(--success);
+      background: var(--success-soft);
+      border-color: rgba(22, 163, 74, 0.22);
+    }
+
+    .pill--bad {
+      color: var(--danger);
+      background: var(--danger-soft);
+      border-color: rgba(220, 38, 38, 0.22);
+    }
+
+    .pill--admin {
+      color: var(--warning);
+      background: var(--warning-soft);
+      border-color: rgba(217, 119, 6, 0.22);
+    }
+
+    .verification-stack {
+      display: grid;
+      gap: 8px;
+      min-width: 240px;
+    }
+
+    .verification-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+    }
+
+    .verification-row:last-child {
+      padding-bottom: 0;
+      border-bottom: 0;
+    }
+
+    .verification-label {
+      color: #94a3b8;
+      min-width: 92px;
+    }
+
+    .verify-good {
+      color: var(--success);
+      font-weight: 700;
+    }
+
+    .verify-warn {
+      color: var(--warning);
+      font-weight: 700;
+    }
+
+    .usage-metrics {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      min-width: 250px;
+    }
+
+    .usage-stat {
+      display: grid;
+      gap: 4px;
+      min-width: 58px;
+    }
+
+    .usage-stat strong {
+      display: block;
+      font-size: 24px;
+      line-height: 1;
+      font-weight: 700;
+    }
+
+    .usage-stat.online strong {
+      color: var(--accent);
+    }
+
+    .empty-state {
+      padding: 40px 24px;
+      text-align: center;
+      color: var(--muted);
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.64);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      z-index: 1000;
+    }
+
+    .modal-backdrop.is-open {
+      display: flex;
+    }
+
+    .modal-card {
+      width: min(760px, 100%);
+      background: var(--surface);
+      border: 1px solid rgba(255, 255, 255, 0.72);
+      border-radius: 16px;
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+      padding: 24px;
+    }
+
+    .modal-title {
+      font-size: 26px;
+      line-height: 1.1;
+      color: #991b1b;
+      margin-bottom: 10px;
+      font-weight: 700;
+    }
+
+    .modal-copy {
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+
+    .warning-panel {
+      background: #fff7ed;
+      border: 1px solid #fdba74;
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 18px;
+      color: #9a3412;
+      font-size: 13px;
+      line-height: 1.65;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .detail-item {
+      background: var(--surface-soft);
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      border-radius: 10px;
+      padding: 14px;
+    }
+
+    .detail-value {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+      word-break: break-word;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    @media (max-width: 1320px) {
+      :root {
+        --website-preview-gutter: 100px;
+      }
+
+      .dashboard-shell,
+      .operations-grid,
+      .insight-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .gutter-brand-watermark {
+        display: none;
+      }
+
+      .sidebar {
+        position: relative;
+        top: 0;
+        min-height: auto;
+      }
+
+      .sidebar-nav {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .directory-topbar {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 1040px) {
+      .metric-grid,
+      .form-grid,
+      .settings-grid,
+      .mini-card-grid,
+      .detail-grid,
+      .chart-caption {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .settings-shell {
+        grid-template-columns: 1fr;
+      }
+
+      .embedded-editor-frame {
+        height: 1600px;
+        min-height: 1600px;
+      }
+
+      .search-bar {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .search-bar input {
+        grid-column: 1 / -1;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .page-shell {
+        padding: 14px;
+      }
+
+      .sidebar-nav,
+      .metric-grid,
+      .form-grid,
+      .settings-grid,
+      .detail-grid,
+      .mini-card-grid,
+      .chart-caption,
+      .search-bar {
+        grid-template-columns: 1fr;
+      }
+
+      .workspace-topbar,
+      .panel,
+      .sidebar,
+      .modal-card {
+        border-radius: 24px;
+      }
+
+      .workspace-toolbar {
+        justify-content: flex-start;
+      }
+
+      .donut-ring {
+        width: 190px;
+        height: 190px;
+      }
+
+      .donut-ring::after {
+        inset: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  {% set visible_total = displayed_users_count or 0 %}
+  {% set stats = namespace(blocked=0, admin=0, unverified=0) %}
+  {% for u in users %}
+    {% if u.is_blocked %}{% set stats.blocked = stats.blocked + 1 %}{% endif %}
+    {% if u.is_admin %}{% set stats.admin = stats.admin + 1 %}{% endif %}
+    {% if not u.email_verified %}{% set stats.unverified = stats.unverified + 1 %}{% endif %}
+  {% endfor %}
+  {% set active_visible = visible_total - stats.blocked %}
+  {% if active_visible < 0 %}{% set active_visible = 0 %}{% endif %}
+  {% set coverage_pct = ((visible_total / matching_users_count) * 100) if matching_users_count else 0 %}
+  {% set chart_values = [totals.users or 0, totals.stores or 0, totals.screens or 0, totals.online or 0, visible_total or 0, matching_users_count or 0, active_visible or 0, stats.admin or 0, stats.unverified or 0] %}
+  {% set chart_peak = ((chart_values|max) if chart_values else 1) or 1 %}
+  {% set users_y = 228 - ((totals.users or 0) / chart_peak * 160) %}
+  {% set stores_y = 228 - ((totals.stores or 0) / chart_peak * 160) %}
+  {% set screens_y = 228 - ((totals.screens or 0) / chart_peak * 160) %}
+  {% set online_y = 228 - ((totals.online or 0) / chart_peak * 160) %}
+  {% set visible_y = 228 - ((visible_total or 0) / chart_peak * 160) %}
+  {% set matching_y = 228 - ((matching_users_count or 0) / chart_peak * 160) %}
+  {% set active_y = 228 - ((active_visible or 0) / chart_peak * 160) %}
+  {% set admin_y = 228 - ((stats.admin or 0) / chart_peak * 160) %}
+  {% set unverified_y = 228 - ((stats.unverified or 0) / chart_peak * 160) %}
+
+  <div class="page-shell">
+    <div class="dashboard-shell">
+      <aside class="sidebar">
+        <nav class="sidebar-nav">
+          <div class="nav-group">
+            <div class="nav-label">Workspace</div>
+            <a href="#top" class="nav-link is-active" data-dashboard-nav data-view-target="dashboard"><span>Dashboard</span><span>Live</span></a>
+            <a href="#panel-directory" class="nav-link" data-dashboard-nav data-view-target="directory"><span>User Directory</span><span>{{ displayed_users_count }}</span></a>
+            <a href="#panel-create" class="nav-link" data-dashboard-nav data-view-target="create"><span>Create User</span><span>New</span></a>
+            <a href="#panel-billing" class="nav-link" data-dashboard-nav data-view-target="billing"><span>Billing</span><span>Plan</span></a>
+            <a href="#panel-promo" class="nav-link" data-dashboard-nav data-view-target="campaigns"><span>Campaigns</span><span>Promo</span></a>
+          </div>
+
+          <div class="nav-group">
+            <div class="nav-label">Tools</div>
+            <a href="/superadmin/website" class="nav-link"><span>Website Edit</span><span>Direct</span></a>
+            <a href="/superadmin/studio-elements" class="nav-link"><span>Studio Elements</span><span>Edit</span></a>
+            <a href="#panel-agents" class="nav-link" data-dashboard-nav data-view-target="agents"><span>Agents</span><span>Manage</span></a>
+            <a href="#panel-feedback" class="nav-link" data-dashboard-nav data-view-target="feedback"><span>Feedback</span><span>Inbox</span></a>
+            <a href="/superadmin/logout" class="nav-link"><span>Logout</span><span>Exit</span></a>
+          </div>
+        </nav>
+
+        <div class="sidebar-card">
+          <div>
+            <div class="nav-label" style="padding: 0; color: #94a3b8;">Snapshot</div>
+            <h3>Platform at a glance</h3>
+          </div>
+          <div class="mini-card-grid">
+            <div class="mini-card">
+              <div class="mini-card-label">Users</div>
+              <div class="mini-card-value">{{ totals.users }}</div>
+            </div>
+            <div class="mini-card">
+              <div class="mini-card-label">Online</div>
+              <div class="mini-card-value">{{ totals.online }}</div>
+            </div>
+            <div class="mini-card">
+              <div class="mini-card-label">Matching</div>
+              <div class="mini-card-value">{{ matching_users_count }}</div>
+            </div>
+            <div class="mini-card">
+              <div class="mini-card-label">Shown</div>
+              <div class="mini-card-value">{{ displayed_users_count }}</div>
+            </div>
+          </div>
+          <div class="sidebar-links">
+            <a href="#panel-directory" data-view-target="directory">Newest users stay limited by default with scroll.</a>
+            <a href="#panel-billing" data-view-target="billing">Pricing and promotions stay on the same screen.</a>
+          </div>
+        </div>
+      </aside>
+
+      <main class="workspace" id="top">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <div class="flash-stack">
+              {% for category, message in messages %}
+                <div class="flash {{ 'flash--success' if category == 'success' else 'flash--error' }}">{{ message }}</div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+
+        <header class="workspace-topbar view-section" data-view-section="dashboard">
+          <div>
+            <div class="workspace-eyebrow">Administration Dashboard</div>
+            <h1>Analytics-style control for users, pricing, and campaigns.</h1>
+            <p class="workspace-copy">This layout keeps the dashboard compact: summary metrics first, insight panels next, then the user directory as the main workspace with create, billing, and promotion controls stacked to the side.</p>
+          </div>
+          <div class="workspace-toolbar">
+            <div class="toolbar-pill">Filter: {{ user_filter|replace('_', ' ')|title }}</div>
+            <div class="toolbar-pill">Limit: {{ 'All' if limit_option == 'all' else limit_option }}</div>
+            <div class="admin-chip"><strong>SA</strong> Super Admin</div>
+            <a href="#panel-directory" class="btn btn--primary" data-view-target="directory">Open Directory</a>
+          </div>
+        </header>
+
+        <section class="metric-grid view-section view-section--grid" data-view-section="dashboard">
+          <article class="metric-card users">
+            <div class="metric-head">
+              <div>
+                <div class="metric-label">Registered Users</div>
+                <div class="metric-value">{{ totals.users }}</div>
+                <div class="metric-meta">All account records in the system.</div>
+              </div>
+              <span class="metric-dot"></span>
+            </div>
+            <svg class="sparkline" viewBox="0 0 140 36" aria-hidden="true">
+              <polyline fill="none" stroke="rgba(34, 160, 107, 0.2)" stroke-width="9" stroke-linecap="round" points="8,24 42,18 74,20 106,13 132,10"></polyline>
+              <polyline fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" points="8,24 42,18 74,20 106,13 132,10"></polyline>
+            </svg>
+          </article>
+
+          <article class="metric-card stores">
+            <div class="metric-head">
+              <div>
+                <div class="metric-label">Connected Stores</div>
+                <div class="metric-value">{{ totals.stores }}</div>
+                <div class="metric-meta">Store configurations tied to active accounts.</div>
+              </div>
+              <span class="metric-dot"></span>
+            </div>
+            <svg class="sparkline" viewBox="0 0 140 36" aria-hidden="true">
+              <polyline fill="none" stroke="rgba(59, 130, 246, 0.2)" stroke-width="9" stroke-linecap="round" points="8,26 40,22 72,17 104,17 132,12"></polyline>
+              <polyline fill="none" stroke="var(--blue)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" points="8,26 40,22 72,17 104,17 132,12"></polyline>
+            </svg>
+          </article>
+
+          <article class="metric-card screens">
+            <div class="metric-head">
+              <div>
+                <div class="metric-label">Managed Screens</div>
+                <div class="metric-value">{{ totals.screens }}</div>
+                <div class="metric-meta">All screens currently tracked across users.</div>
+              </div>
+              <span class="metric-dot"></span>
+            </div>
+            <svg class="sparkline" viewBox="0 0 140 36" aria-hidden="true">
+              <polyline fill="none" stroke="rgba(139, 92, 246, 0.2)" stroke-width="9" stroke-linecap="round" points="8,28 40,24 72,16 104,12 132,8"></polyline>
+              <polyline fill="none" stroke="var(--purple)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" points="8,28 40,24 72,16 104,12 132,8"></polyline>
+            </svg>
+          </article>
+
+          <article class="metric-card online">
+            <div class="metric-head">
+              <div>
+                <div class="metric-label">Live Screens</div>
+                <div class="metric-value">{{ totals.online }}</div>
+                <div class="metric-meta">Screens reporting activity right now.</div>
+              </div>
+              <span class="metric-dot"></span>
+            </div>
+            <svg class="sparkline" viewBox="0 0 140 36" aria-hidden="true">
+              <polyline fill="none" stroke="rgba(251, 146, 60, 0.2)" stroke-width="9" stroke-linecap="round" points="8,26 40,28 72,21 104,14 132,12"></polyline>
+              <polyline fill="none" stroke="var(--orange)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" points="8,26 40,28 72,21 104,14 132,12"></polyline>
+            </svg>
+          </article>
+        </section>
+
+        <section class="insight-grid view-section view-section--grid" data-view-section="dashboard">
+          <section class="panel" data-panel-key="platform-overview" id="panel-overview">
+            <button class="panel-corner-toggle" type="button" data-panel-toggle aria-expanded="true" aria-label="Collapse platform overview panel">-</button>
+            <div class="panel-header">
+              <div>
+                <div class="section-kicker">Analytics View</div>
+                <h2 class="section-title">Platform overview</h2>
+                <p class="section-copy">A compact status chart using the current totals and the active directory result set, styled like a dashboard instead of a form page.</p>
+              </div>
+              <div class="panel-tools">
+                <div class="panel-badge">Live Snapshot</div>
+              </div>
+            </div>
+
+            <div class="panel-content chart-card">
+              <div class="chart-legend">
+                <div class="legend-chip primary">System totals</div>
+                <div class="legend-chip secondary">Current results</div>
+              </div>
+
+              <div class="chart-surface">
+                <svg class="trend-chart" viewBox="0 0 640 290" role="img" aria-label="Platform overview chart">
+                  <defs>
+                    <linearGradient id="pulseFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stop-color="rgba(34, 160, 107, 0.22)"></stop>
+                      <stop offset="100%" stop-color="rgba(34, 160, 107, 0.02)"></stop>
+                    </linearGradient>
+                  </defs>
+
+                  <line class="grid-line" x1="36" y1="52" x2="604" y2="52"></line>
+                  <line class="grid-line" x1="36" y1="98" x2="604" y2="98"></line>
+                  <line class="grid-line" x1="36" y1="144" x2="604" y2="144"></line>
+                  <line class="grid-line" x1="36" y1="190" x2="604" y2="190"></line>
+                  <line class="grid-line" x1="36" y1="236" x2="604" y2="236"></line>
+
+                  <path class="data-fill" d="M 52 {{ users_y|round(1) }} L 178 {{ stores_y|round(1) }} L 304 {{ screens_y|round(1) }} L 430 {{ online_y|round(1) }} L 556 {{ visible_y|round(1) }} L 556 236 L 52 236 Z"></path>
+                  <polyline class="data-line" points="52,{{ users_y|round(1) }} 178,{{ stores_y|round(1) }} 304,{{ screens_y|round(1) }} 430,{{ online_y|round(1) }} 556,{{ visible_y|round(1) }}"></polyline>
+                  <polyline class="ghost-line" points="52,{{ matching_y|round(1) }} 178,{{ visible_y|round(1) }} 304,{{ active_y|round(1) }} 430,{{ admin_y|round(1) }} 556,{{ unverified_y|round(1) }}"></polyline>
+
+                  <circle class="data-point" cx="52" cy="{{ users_y|round(1) }}" r="6"></circle>
+                  <circle class="data-point" cx="178" cy="{{ stores_y|round(1) }}" r="6"></circle>
+                  <circle class="data-point" cx="304" cy="{{ screens_y|round(1) }}" r="6"></circle>
+                  <circle class="data-point" cx="430" cy="{{ online_y|round(1) }}" r="6"></circle>
+                  <circle class="data-point" cx="556" cy="{{ visible_y|round(1) }}" r="6"></circle>
+
+                  <text class="axis-label" x="36" y="258">Users</text>
+                  <text class="axis-label" x="162" y="258">Stores</text>
+                  <text class="axis-label" x="284" y="258">Screens</text>
+                  <text class="axis-label" x="420" y="258">Online</text>
+                  <text class="axis-label" x="544" y="258">Shown</text>
+                </svg>
+
+                <div class="chart-caption">
+                  <div>
+                    <span class="chart-label">Users</span>
+                    <div class="chart-value">{{ totals.users }}</div>
+                  </div>
+                  <div>
+                    <span class="chart-label">Stores</span>
+                    <div class="chart-value">{{ totals.stores }}</div>
+                  </div>
+                  <div>
+                    <span class="chart-label">Screens</span>
+                    <div class="chart-value">{{ totals.screens }}</div>
+                  </div>
+                  <div>
+                    <span class="chart-label">Online</span>
+                    <div class="chart-value">{{ totals.online }}</div>
+                  </div>
+                  <div>
+                    <span class="chart-label">Shown</span>
+                    <div class="chart-value">{{ displayed_users_count }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel" data-panel-key="directory-coverage" id="panel-coverage">
+            <button class="panel-corner-toggle" type="button" data-panel-toggle aria-expanded="true" aria-label="Collapse directory coverage panel">-</button>
+            <div class="panel-header">
+              <div>
+                <div class="section-kicker">Directory Focus</div>
+                <h2 class="section-title">Coverage and status</h2>
+                <p class="section-copy">Shows how much of the current result set is visible right now and highlights the key account statuses in the displayed list.</p>
+              </div>
+              <div class="panel-tools">
+                <div class="panel-badge">Result Set</div>
+              </div>
+            </div>
+
+            <div class="panel-content coverage-layout">
+              <div class="donut-block">
+                <div class="donut-ring" style="--coverage: {{ coverage_pct|round(2) }}%;">
+                  <div class="donut-center">
+                    <strong>{{ coverage_pct|round(0) }}%</strong>
+                    <span>of matching users shown</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="coverage-list">
+                <div class="coverage-item">
+                  <div class="legend-value is-accent"><span class="legend-swatch"></span><span>Displayed now</span></div>
+                  <strong>{{ displayed_users_count }}</strong>
+                </div>
+                <div class="coverage-item">
+                  <div class="legend-value is-blue"><span class="legend-swatch"></span><span>Matching total</span></div>
+                  <strong>{{ matching_users_count }}</strong>
+                </div>
+                <div class="coverage-item">
+                  <div class="legend-value is-warning"><span class="legend-swatch"></span><span>Active visible</span></div>
+                  <strong>{{ active_visible }}</strong>
+                </div>
+                <div class="coverage-item">
+                  <div class="legend-value is-danger"><span class="legend-swatch"></span><span>Blocked visible</span></div>
+                  <strong>{{ stats.blocked }}</strong>
+                </div>
+              </div>
+
+              <div class="status-overview">
+                <div class="status-overview-item">
+                  <div>
+                    <div class="legend-value-label">Admins in view</div>
+                    <div class="muted">Accounts with admin privileges in the current list.</div>
+                  </div>
+                  <strong>{{ stats.admin }}</strong>
+                </div>
+                <div class="status-overview-item">
+                  <div>
+                    <div class="legend-value-label">Email pending</div>
+                    <div class="muted">Visible users that still need email verification.</div>
+                  </div>
+                  <strong>{{ stats.unverified }}</strong>
+                </div>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section class="panel view-section is-view-active" data-view-section="directory" data-panel-key="user-directory" id="panel-directory">
+            <button class="panel-corner-toggle" type="button" data-panel-toggle aria-expanded="true" aria-label="Collapse user directory panel">-</button>
+            <div class="panel-header">
+              <div>
+                <div class="table-title-meta">User Directory</div>
+                <h2 class="section-title">Recent users with search and filters</h2>
+                <p class="section-copy">
+                  {{ totals.users }} total account{{ '' if totals.users == 1 else 's' }}.
+                  {% if matching_users_count == displayed_users_count %}
+                    Showing {{ displayed_users_count }} {% if search_query or user_filter != 'all' %}matching {% endif %}user{{ '' if displayed_users_count == 1 else 's' }}.
+                  {% else %}
+                    Showing {{ displayed_users_count }} of {{ matching_users_count }} matching users, newest first.
+                  {% endif %}
+                </p>
+              </div>
+              <div class="panel-tools">
+                <div class="panel-badge">Scrollable Directory</div>
+              </div>
+            </div>
+
+            <div class="panel-content">
+              <div class="directory-topbar">
+                <div class="directory-heading">
+                  <div class="insight-meta">Latest accounts first</div>
+                  <div class="directory-subtitle">The table stays contained, defaults to the latest 10 users, and still supports filtering, search, and quick account actions.</div>
+                </div>
+
+                <form method="get" action="/superadmin/dashboard" class="search-bar">
+                  <input type="text" name="search" placeholder="Search by name, email, ID or code..." value="{{ search_query or '' }}">
+                  <select name="filter" aria-label="Filter users">
+                    <option value="all" {% if user_filter == 'all' %}selected{% endif %}>All users</option>
+                    <option value="active" {% if user_filter == 'active' %}selected{% endif %}>Active only</option>
+                    <option value="blocked" {% if user_filter == 'blocked' %}selected{% endif %}>Blocked only</option>
+                    <option value="admin" {% if user_filter == 'admin' %}selected{% endif %}>Admins only</option>
+                    <option value="unverified" {% if user_filter == 'unverified' %}selected{% endif %}>Email unverified</option>
+                  </select>
+                  <select name="limit" aria-label="Users to show">
+                    <option value="10" {% if limit_option == '10' %}selected{% endif %}>Last 10 users</option>
+                    <option value="25" {% if limit_option == '25' %}selected{% endif %}>Last 25 users</option>
+                    <option value="50" {% if limit_option == '50' %}selected{% endif %}>Last 50 users</option>
+                    <option value="all" {% if limit_option == 'all' %}selected{% endif %}>Show all</option>
+                  </select>
+                  <button class="btn btn--dark" type="submit">Search</button>
+                  {% if search_query or user_filter != 'all' or limit_option != '10' %}
+                    <a href="/superadmin/dashboard" class="btn btn--secondary">Clear</a>
+                  {% endif %}
+                </form>
+              </div>
+
+              <div class="table-wrap table-wrap--directory">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Account</th>
+                      <th>Verification</th>
+                      <th>Usage</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for u in users %}
+                      <tr>
+                        <td>
+                          <div class="user-identity">
+                            <div class="user-primary">{{ u.full_name or 'Unnamed account' }}</div>
+                            <div class="user-secondary">{{ u.username }}</div>
+                            <div class="user-meta-row">
+                              <span class="meta-pill">ID #{{ u.id }}</span>
+                              <span class="meta-pill">Code {{ u.link_code or '-' }}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <div class="verification-stack">
+                            <div class="verification-row">
+                              <div class="verification-label">Email</div>
+                              {% if u.email_verified %}
+                                <span class="verify-good">Verified</span>
+                              {% else %}
+                                <span class="verify-warn">Not verified</span>
+                                <button onclick='resendEmailVerification(event, {{ u.id }}, {{ (u.username or "")|tojson }})' class="btn btn--secondary btn--tiny" type="button">Resend Email</button>
+                              {% endif %}
+                            </div>
+                            <div class="verification-row">
+                              <div class="verification-label">Phone</div>
+                              {% if u.phone_number %}
+                                <span class="muted">{{ u.phone_number }}</span>
+                                {% if u.phone_verified %}
+                                  <span class="verify-good">Verified</span>
+                                {% else %}
+                                  <span class="verify-warn">Not verified</span>
+                                  <button onclick='resendPhoneVerification(event, {{ u.id }}, {{ (u.phone_number or "")|tojson }})' class="btn btn--secondary btn--tiny" type="button">Send SMS Code</button>
+                                {% endif %}
+                              {% else %}
+                                <span class="muted">No phone number on file</span>
+                              {% endif %}
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <div class="usage-metrics">
+                            <div class="usage-stat">
+                              <div class="field-label">Stores</div>
+                              <strong>{{ u.stores_count }}</strong>
+                            </div>
+                            <div class="usage-stat">
+                              <div class="field-label">Screens</div>
+                              <strong>{{ u.screens_count }}</strong>
+                            </div>
+                            <div class="usage-stat online">
+                              <div class="field-label">Online</div>
+                              <strong>{{ u.online_screens }}</strong>
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <div class="status-stack">
+                            {% if u.is_blocked %}
+                              <span class="pill pill--bad">Blocked</span>
+                            {% else %}
+                              <span class="pill pill--good">Active</span>
+                            {% endif %}
+                            {% if u.is_admin %}
+                              <span class="pill pill--admin">Admin</span>
+                            {% else %}
+                              <span class="pill">User</span>
+                            {% endif %}
+                          </div>
+                        </td>
+                        <td>
+                          <div class="row-actions">
+                            <a href="#panel-user-detail" class="btn btn--dark" data-user-detail-link data-user-detail-src="/superadmin/users/{{ u.id }}?embedded=1">Details</a>
+                            {% if u.is_blocked %}
+                              <form method="post" action="/superadmin/users/{{ u.id }}/unblock">
+                                <button class="btn btn--success" type="submit">Unblock</button>
+                              </form>
+                            {% else %}
+                              <form method="post" action="/superadmin/users/{{ u.id }}/block">
+                                <button class="btn btn--secondary" type="submit">Block</button>
+                              </form>
+                            {% endif %}
+                            <form method="post" action="/superadmin/users/{{ u.id }}/delete" class="delete-user-form">
+                              <button
+                                class="btn btn--danger"
+                                type="button"
+                                onclick="openDeleteWarning(this)"
+                                data-user-id="{{ u.id }}"
+                                data-username="{{ u.username }}"
+                                data-full-name="{{ u.full_name or 'Not set' }}"
+                                data-link-code="{{ u.link_code or 'Not set' }}"
+                                data-status="{{ 'Blocked' if u.is_blocked else 'Active' }}"
+                                data-role="{{ 'Admin' if u.is_admin else 'User' }}"
+                                data-stores="{{ u.stores_count }}"
+                                data-screens="{{ u.screens_count }}"
+                                data-online="{{ u.online_screens }}"
+                                data-email-verified="{{ 'Verified' if u.email_verified else 'Not verified' }}"
+                                data-phone="{{ u.phone_number or 'Not set' }}"
+                                data-phone-verified="{{ 'Verified' if u.phone_verified else 'Not verified' }}"
+                              >Delete</button>
+                            </form>
+                          </div>
+                        </td>
+                      </tr>
+                    {% else %}
+                      <tr>
+                        <td colspan="5">
+                          <div class="empty-state">No users matched the current search.</div>
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+        </section>
+
+        <section class="panel view-section" data-view-section="create" data-panel-key="create-user" id="panel-create">
+              <button class="panel-corner-toggle" type="button" data-panel-toggle aria-expanded="true" aria-label="Collapse create account panel">-</button>
+              <div class="panel-header">
+                <div>
+                  <div class="section-kicker">User Intake</div>
+                  <h2 class="section-title">Create account</h2>
+                  <p class="section-copy">A compact account creation form that stays beside the user table instead of occupying the full dashboard width.</p>
+                </div>
+                <div class="panel-tools">
+                  <div class="panel-badge">Quick Add</div>
+                </div>
+              </div>
+
+              <div class="panel-content">
+                <form method="post" action="/superadmin/users/create">
+                  <div class="form-grid">
+                    <div class="field-group full">
+                      <label class="field-label" for="create_full_name">Full Name</label>
+                      <input id="create_full_name" type="text" name="full_name" placeholder="Optional display name">
+                    </div>
+                    <div class="field-group full">
+                      <label class="field-label" for="create_username">Email Address</label>
+                      <input id="create_username" type="email" name="username" placeholder="name@example.com" required>
+                    </div>
+                    <div class="field-group full">
+                      <label class="field-label" for="create_password">Temporary Password</label>
+                      <input id="create_password" type="password" name="password" placeholder="Minimum 6 characters" required minlength="6">
+                    </div>
+                    <div class="checkbox-wrapper full">
+                      <input type="checkbox" name="is_admin" id="is_admin" value="1">
+                      <label for="is_admin">Grant admin privileges on creation</label>
+                    </div>
+                    <button class="btn btn--primary full" type="submit">Create User</button>
+                  </div>
+                </form>
+              </div>
+        </section>
+
+        <section class="panel view-section" data-view-section="billing" data-panel-key="subscription-settings" id="panel-billing">
+              <button class="panel-corner-toggle" type="button" data-panel-toggle aria-expanded="true" aria-label="Collapse subscription settings panel">-</button>
+              <div class="panel-header">
+                <div>
+                  <div class="section-kicker">Billing</div>
+                  <h2 class="section-title">Subscription</h2>
+                </div>
+                <div class="panel-tools">
+                  <div class="panel-badge">Recurring</div>
+                </div>
+              </div>
+
+              <div class="panel-content">
+                <div class="settings-shell">
+                  <aside class="settings-sidebar">
+                    <div>
+                      <div class="section-kicker">Subscription</div>
+                      <div class="settings-sidebar-title">Subscription settings</div>
+                    </div>
+                    <div class="settings-sidebar-copy">This section sits under Billing and controls the default subscription plan for new customers. The pricing text, trial length, and free screen allowance stay grouped here so the settings read more clearly.</div>
+                    <div class="settings-note-list">
+                      <div class="settings-note">
+                        <strong>Default plan</strong>
+                        <span>Set the monthly per-screen charge and the customer-facing pricing copy shown in the product.</span>
+                      </div>
+                      <div class="settings-note">
+                        <strong>Trial rules</strong>
+                        <span>Control how many free days and how many free screens a new account receives before billing starts.</span>
+                      </div>
+                      <div class="settings-note">
+                        <strong>Existing users</strong>
+                        <span>Nothing changes for current accounts unless you explicitly choose to apply the update to them.</span>
+                      </div>
+                    </div>
+                  </aside>
+
+                  <form method="post" action="/superadmin/billing/settings" class="settings-form">
+                    <div class="settings-grid">
+                      <div class="field-group">
+                        <label class="field-label" for="price_per_screen">Price Per Screen Per Month</label>
+                        <input id="price_per_screen" type="number" step="0.01" min="0" name="price_per_screen" value="{{ billing_settings.price_per_screen }}" placeholder="5.00" required>
+                        <div class="help">Example: <strong>5.0</strong> means each billable screen is charged $5 per month.</div>
+                      </div>
+                      <div class="field-group">
+                        <label class="field-label" for="trial_days">Free Trial Days</label>
+                        <input id="trial_days" type="number" min="0" name="trial_days" value="{{ billing_settings.trial_days }}" placeholder="14" required>
+                        <div class="help">Example: <strong>14</strong> gives new customers a 14-day trial.</div>
+                      </div>
+                      <div class="field-group">
+                        <label class="field-label" for="free_screens">Free Screens Allowed</label>
+                        <input id="free_screens" type="number" min="0" name="free_screens" value="{{ billing_settings.free_screens }}" placeholder="0" required>
+                        <div class="help">Example: <strong>1</strong> keeps the first screen free.</div>
+                      </div>
+                      <div class="field-group">
+                        <label class="field-label" for="stripe_price_id">Stripe Price ID</label>
+                        <input id="stripe_price_id" type="text" name="stripe_price_id" value="{{ billing_settings.stripe_price_id or '' }}" placeholder="price_...">
+                        <div class="help">Provide this when Stripe should bill the new amount.</div>
+                      </div>
+                      <div class="field-group full">
+                        <label class="field-label" for="price_display">Price Text Shown To Users</label>
+                        <input id="price_display" type="text" name="price_display" value="{{ billing_settings.price_display }}" placeholder="$5 per screen / month">
+                      </div>
+                      <div class="checkbox-wrapper full">
+                        <input type="checkbox" name="apply_existing_users" id="apply_existing_users" value="1">
+                        <label for="apply_existing_users">Apply these subscription settings to existing registered users too</label>
+                      </div>
+                      <div class="help full">Existing users only change when you explicitly choose to apply the update.</div>
+                      <button class="btn btn--primary full" type="submit">Save Subscription Settings</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+        </section>
+
+        <section class="panel view-section" data-view-section="campaigns" data-panel-key="promotion-campaign" id="panel-promo" data-default-collapsed="true">
+              <button class="panel-corner-toggle" type="button" data-panel-toggle aria-expanded="true" aria-label="Collapse promotion campaign panel">-</button>
+              <div class="panel-header">
+                <div>
+                  <div class="section-kicker">Campaign Mode</div>
+                  <h2 class="section-title">Promotion campaign</h2>
+                  <p class="section-copy">Time-bound pricing offers for new users, existing users, or both without changing the default plan unless you choose to.</p>
+                </div>
+                <div class="panel-tools">
+                  <div class="panel-badge">Targeted Offer</div>
+                </div>
+              </div>
+
+              <div class="panel-content">
+                <form method="post" action="/superadmin/billing/promotion">
+                  <div class="settings-grid">
+                    <div class="checkbox-wrapper full">
+                      <input type="checkbox" name="promotion_enabled" id="promotion_enabled" value="1" {% if billing_promotion.enabled %}checked{% endif %}>
+                      <label for="promotion_enabled">Enable promotional pricing campaign</label>
+                    </div>
+
+                    <div class="field-group full">
+                      <label class="field-label" for="promotion_name">Promotion Name</label>
+                      <input id="promotion_name" type="text" name="promotion_name" value="{{ billing_promotion.name or '' }}" placeholder="New customer launch promo">
+                    </div>
+
+                    <div class="field-group">
+                      <label class="field-label" for="promotion_audience">Who Gets This Promotion</label>
+                      <select id="promotion_audience" name="promotion_audience">
+                        <option value="new_only" {% if billing_promotion.audience == 'new_only' %}selected{% endif %}>New customers only</option>
+                        <option value="new_and_existing" {% if billing_promotion.audience == 'new_and_existing' %}selected{% endif %}>New and existing customers</option>
+                        <option value="existing_only" {% if billing_promotion.audience == 'existing_only' %}selected{% endif %}>Existing customers only</option>
+                      </select>
+                    </div>
+
+                    <div class="field-group">
+                      <label class="field-label" for="promotion_start_date">Promotion Start Date</label>
+                      <input id="promotion_start_date" type="date" name="promotion_start_date" value="{{ billing_promotion.start_date or '' }}">
+                    </div>
+
+                    <div class="field-group">
+                      <label class="field-label" for="promotion_end_date">Promotion End Date</label>
+                      <input id="promotion_end_date" type="date" name="promotion_end_date" value="{{ billing_promotion.end_date or '' }}">
+                    </div>
+
+                    <div class="field-group">
+                      <label class="field-label" for="promotion_price_per_screen">Promotion Price Per Screen</label>
+                      <input id="promotion_price_per_screen" type="number" step="0.01" min="0" name="promotion_price_per_screen" value="{{ billing_promotion.price_per_screen }}" placeholder="3.50" required>
+                    </div>
+
+                    <div class="field-group">
+                      <label class="field-label" for="promotion_trial_days">Promotion Trial Days</label>
+                      <input id="promotion_trial_days" type="number" min="0" name="promotion_trial_days" value="{{ billing_promotion.trial_days }}" placeholder="30" required>
+                    </div>
+
+                    <div class="field-group">
+                      <label class="field-label" for="promotion_free_screens">Promotion Free Screens</label>
+                      <input id="promotion_free_screens" type="number" min="0" name="promotion_free_screens" value="{{ billing_promotion.free_screens }}" placeholder="1" required>
+                    </div>
+
+                    <div class="field-group">
+                      <label class="field-label" for="promotion_stripe_price_id">Promotion Stripe Price ID</label>
+                      <input id="promotion_stripe_price_id" type="text" name="promotion_stripe_price_id" value="{{ billing_promotion.stripe_price_id or '' }}" placeholder="price_...">
+                    </div>
+
+                    <div class="field-group full">
+                      <label class="field-label" for="promotion_price_display">Promotion Text Shown To Users</label>
+                      <input id="promotion_price_display" type="text" name="promotion_price_display" value="{{ billing_promotion.price_display or '' }}" placeholder="$3.50 per screen / month for new customers">
+                    </div>
+
+                    <div class="checkbox-wrapper full">
+                      <input type="checkbox" name="promotion_apply_existing_now" id="promotion_apply_existing_now" value="1">
+                      <label for="promotion_apply_existing_now">Change matching existing customers now too</label>
+                    </div>
+
+                    <div class="help full">Existing customers stay on their current plan unless the audience includes them and you explicitly apply the promotion now.</div>
+                    <button class="btn btn--primary full" type="submit">Save Promotion Campaign</button>
+                  </div>
+                </form>
+              </div>
+        </section>
+
+        <section class="panel view-section" data-view-section="agents" data-panel-key="agents-manager" id="panel-agents">
+              <button class="panel-corner-toggle" type="button" data-panel-toggle aria-expanded="true" aria-label="Collapse agents panel">-</button>
+              <div class="panel-content">
+                <div class="embedded-frame-shell">
+                  <iframe class="embedded-editor-frame" src="/superadmin/agents?embedded=1" title="Agents manager"></iframe>
+                </div>
+              </div>
+        </section>
+
+        <section class="panel view-section" data-view-section="feedback" data-panel-key="feedback-inbox" id="panel-feedback">
+              <button class="panel-corner-toggle" type="button" data-panel-toggle aria-expanded="true" aria-label="Collapse feedback panel">-</button>
+              <div class="panel-content">
+                <div class="embedded-frame-shell">
+                  <iframe class="embedded-editor-frame" src="/superadmin/feedback?embedded=1" title="Feedback inbox"></iframe>
+                </div>
+              </div>
+        </section>
+
+        <section class="panel view-section" data-view-section="user-detail" data-panel-key="user-detail" id="panel-user-detail">
+              <button class="panel-corner-toggle" type="button" data-panel-toggle aria-expanded="true" aria-label="Collapse user detail panel">-</button>
+              <div class="panel-content">
+                <div class="embedded-frame-shell">
+                  <div class="embedded-frame-empty" id="userDetailPlaceholder">
+                    <div>
+                      <strong>Select a user to inspect</strong>
+                      The full account record, billing state, stores, screens, and password reset actions will open here inside the dashboard.
+                    </div>
+                  </div>
+                  <iframe class="embedded-editor-frame" id="userDetailFrame" title="User detail" style="display:none;"></iframe>
+                </div>
+              </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="deleteWarningModal" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="deleteWarningTitle">
+      <div class="modal-title" id="deleteWarningTitle">Delete user account</div>
+      <div class="modal-copy">Review the account details below before permanently deleting this user.</div>
+      <div class="warning-panel">
+        This action permanently removes the user account, deletes local user data, and attempts to cancel any active billing records first. The deletion cannot be undone.
+      </div>
+      <div class="detail-grid" id="deleteWarningDetails"></div>
+      <div class="modal-actions">
+        <button class="btn btn--secondary" type="button" onclick="closeDeleteWarning()">Cancel</button>
+        <button class="btn btn--danger" type="button" id="deleteWarningConfirm">Delete User</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let activeDeleteForm = null;
+
+    function getManagedPanels() {
+      return Array.from(document.querySelectorAll('[data-panel-key]'));
+    }
+
+    function persistPanelState(panel, collapsed) {
+      if (!panel || !panel.dataset.panelKey) {
+        return;
+      }
+      window.localStorage.setItem(`superadmin-panel:${panel.dataset.panelKey}`, collapsed ? 'collapsed' : 'open');
+    }
+
+    function setPanelCollapsed(panel, collapsed) {
+      const toggle = panel.querySelector('[data-panel-toggle]');
+      panel.classList.toggle('is-collapsed', collapsed);
+      if (toggle) {
+        toggle.textContent = collapsed ? '+' : '-';
+        toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        toggle.setAttribute('aria-label', collapsed ? 'Open panel' : 'Collapse panel');
+      }
+    }
+
+    function initPanelToggles() {
+      getManagedPanels().forEach((panel) => {
+        const toggle = panel.querySelector('[data-panel-toggle]');
+        const panelKey = panel.dataset.panelKey;
+        const defaultCollapsed = panel.dataset.defaultCollapsed === 'true';
+        const storageKey = `superadmin-panel:${panelKey}`;
+
+        const storedState = window.localStorage.getItem(storageKey);
+        const collapsed = storedState === null ? defaultCollapsed : storedState === 'collapsed';
+
+        setPanelCollapsed(panel, collapsed);
+
+        if (!toggle) {
+          return;
+        }
+
+        toggle.addEventListener('click', () => {
+          const nextCollapsed = !panel.classList.contains('is-collapsed');
+          setPanelCollapsed(panel, nextCollapsed);
+          persistPanelState(panel, nextCollapsed);
+        });
+      });
+    }
+
+    function getDashboardSections() {
+      return Array.from(document.querySelectorAll('[data-view-section]'));
+    }
+
+    function setDashboardView(viewName) {
+      getDashboardSections().forEach((section) => {
+        section.classList.toggle('is-view-active', section.dataset.viewSection === viewName);
+      });
+
+      document.querySelectorAll('[data-dashboard-nav]').forEach((link) => {
+        const isActive = link.dataset.viewTarget === viewName;
+        link.classList.toggle('is-active', isActive);
+        if (isActive) {
+          link.setAttribute('aria-current', 'page');
+        } else {
+          link.removeAttribute('aria-current');
+        }
+      });
+
+      window.localStorage.setItem('superadmin-active-view', viewName);
+    }
+
+    function initDashboardViews() {
+      const sections = getDashboardSections();
+      const availableViews = new Set(sections.map((section) => section.dataset.viewSection));
+      const hashViewMap = {
+        '#top': 'dashboard',
+        '#panel-directory': 'directory',
+        '#panel-create': 'create',
+        '#panel-billing': 'billing',
+        '#panel-promo': 'campaigns',
+        '#panel-agents': 'agents',
+        '#panel-feedback': 'feedback',
+        '#panel-user-detail': 'user-detail'
+      };
+      const storedView = window.localStorage.getItem('superadmin-active-view');
+      const hashView = hashViewMap[window.location.hash];
+      const initialView = availableViews.has(hashView)
+        ? hashView
+        : (availableViews.has(storedView) ? storedView : 'dashboard');
+
+      setDashboardView(initialView);
+
+      document.querySelectorAll('[data-view-target]').forEach((trigger) => {
+        trigger.addEventListener('click', (event) => {
+          const nextView = trigger.dataset.viewTarget;
+          if (!availableViews.has(nextView)) {
+            return;
+          }
+          event.preventDefault();
+          setDashboardView(nextView);
+        });
+      });
+
+      initUserDetailView();
+    }
+
+    function setUserDetailFrame(src) {
+      const frame = document.getElementById('userDetailFrame');
+      const placeholder = document.getElementById('userDetailPlaceholder');
+      if (!frame) {
+        return;
+      }
+      if (!src) {
+        window.localStorage.removeItem('superadmin-user-detail-src');
+        frame.removeAttribute('src');
+        frame.style.display = 'none';
+        if (placeholder) {
+          placeholder.hidden = false;
+        }
+        return;
+      }
+
+      if (frame.getAttribute('src') !== src) {
+        frame.setAttribute('src', src);
+      }
+      frame.style.display = 'block';
+      if (placeholder) {
+        placeholder.hidden = true;
+      }
+      window.localStorage.setItem('superadmin-user-detail-src', src);
+    }
+
+    function initUserDetailView() {
+      const storedSrc = window.localStorage.getItem('superadmin-user-detail-src');
+      if (storedSrc) {
+        setUserDetailFrame(storedSrc);
+      }
+
+      document.querySelectorAll('[data-user-detail-link]').forEach((link) => {
+        link.addEventListener('click', (event) => {
+          event.preventDefault();
+          const src = link.dataset.userDetailSrc;
+          if (!src) {
+            return;
+          }
+          setUserDetailFrame(src);
+          setDashboardView('user-detail');
+        });
+      });
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }[char]));
+    }
+
+    function openDeleteWarning(button) {
+      activeDeleteForm = button.closest('form');
+      const detailsRoot = document.getElementById('deleteWarningDetails');
+      const details = [
+        ['User ID', button.dataset.userId],
+        ['Email', button.dataset.username],
+        ['Full Name', button.dataset.fullName],
+        ['Link Code', button.dataset.linkCode],
+        ['Status', button.dataset.status],
+        ['Role', button.dataset.role],
+        ['Stores', button.dataset.stores],
+        ['Screens', button.dataset.screens],
+        ['Online Screens', button.dataset.online],
+        ['Email Verified', button.dataset.emailVerified],
+        ['Phone', button.dataset.phone],
+        ['Phone Verified', button.dataset.phoneVerified]
+      ];
+
+      detailsRoot.innerHTML = details.map(([label, value]) => `
+        <div class="detail-item">
+          <div class="detail-label">${escapeHtml(label)}</div>
+          <div class="detail-value">${escapeHtml(value || 'Not set')}</div>
+        </div>
+      `).join('');
+
+      document.getElementById('deleteWarningModal').classList.add('is-open');
+      document.getElementById('deleteWarningModal').setAttribute('aria-hidden', 'false');
+    }
+
+    function closeDeleteWarning() {
+      activeDeleteForm = null;
+      document.getElementById('deleteWarningModal').classList.remove('is-open');
+      document.getElementById('deleteWarningModal').setAttribute('aria-hidden', 'true');
+    }
+
+    document.getElementById('deleteWarningConfirm').addEventListener('click', () => {
+      if (activeDeleteForm) {
+        activeDeleteForm.submit();
+      }
+    });
+
+    document.getElementById('deleteWarningModal').addEventListener('click', (event) => {
+      if (event.target.id === 'deleteWarningModal') {
+        closeDeleteWarning();
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        closeDeleteWarning();
+      }
+    });
+
+    initPanelToggles();
+    initDashboardViews();
+
+    async function resendEmailVerification(event, userId, username) {
+      event.preventDefault();
+      if (!confirm(`Send verification email to ${username}?`)) return;
+
+      const btn = event.currentTarget;
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+
+      try {
+        const response = await fetch(`/superadmin/users/${userId}/resend-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json();
+
+        if (data.success) {
+          btn.textContent = 'Email Sent';
+          btn.style.background = '#16a34a';
+          btn.style.color = '#ffffff';
+          setTimeout(() => {
+            btn.disabled = false;
+            btn.textContent = originalText;
+            btn.style.background = '';
+            btn.style.color = '';
+          }, 3000);
+          return;
+        }
+
+        alert('Error: ' + (data.error || 'Failed to send verification email'));
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+
+    async function resendPhoneVerification(event, userId, phoneNumber) {
+      event.preventDefault();
+      if (!confirm(`Send SMS verification code to ${phoneNumber}?`)) return;
+
+      const btn = event.currentTarget;
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+
+      try {
+        const response = await fetch(`/superadmin/users/${userId}/resend-phone`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json();
+
+        if (data.success) {
+          btn.textContent = 'SMS Sent';
+          btn.style.background = '#16a34a';
+          btn.style.color = '#ffffff';
+          setTimeout(() => {
+            btn.disabled = false;
+            btn.textContent = originalText;
+            btn.style.background = '';
+            btn.style.color = '';
+          }, 3000);
+          return;
+        }
+
+        alert('Error: ' + (data.error || 'Failed to send SMS code'));
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+
+    // Auto-dismiss notifications after 2 seconds
+    (function () {
+      const flashStack = document.querySelector('.flash-stack');
+      if (!flashStack) {
+        return;
+      }
+
+      const flashes = Array.from(flashStack.querySelectorAll('.flash'));
+      flashes.forEach((flash) => {
+        const dismissTimer = setTimeout(() => {
+          flash.classList.add('dismissing');
+          setTimeout(() => {
+            flash.remove();
+            if (flashStack.children.length === 0) {
+              flashStack.remove();
+            }
+          }, 300); // Wait for animation to finish
+        }, 2000); // 2 second delay before dismissing
+
+        // Allow clicking to dismiss immediately
+        flash.addEventListener('click', () => {
+          clearTimeout(dismissTimer);
+          flash.classList.add('dismissing');
+          setTimeout(() => {
+            flash.remove();
+            if (flashStack.children.length === 0) {
+              flashStack.remove();
+            }
+          }, 300);
+        });
+      });
+    }());
+  </script>
+</body>
+</html>

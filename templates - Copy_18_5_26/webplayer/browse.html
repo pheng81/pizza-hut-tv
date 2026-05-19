@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Choose Screen</title>
+  <!-- Socket.IO for real-time communication -->
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <style>
+    :root{
+      --bg:#0b0f14; --panel:#0f141a; --border:#18202a; --text:#e6eef7; --muted:#95a3b5; --accent:#3b82f6; --accent-hover:#2563eb; --radius:12px;
+    }
+    html,body{height:100%;margin:0}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Arial,sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column}
+    header{padding:14px 16px;background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-direction:column}
+    header .code{font-weight:800;letter-spacing:3px}
+    main{flex:1;display:flex;gap:14px;padding:14px}
+    .panel{flex:1;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;display:flex;flex-direction:column}
+    .panel h2{margin:0;padding:12px 14px;border-bottom:1px solid var(--border);font-size:16px;background:#101720}
+    ul{list-style:none;margin:0;padding:0}
+    li{border-bottom:1px solid #14202c}
+    li button{width:100%;text-align:left;background:transparent;border:0;color:#dbe7f3;padding:14px 16px;font-size:16px;cursor:pointer;box-sizing:border-box;border-radius:0}
+    li button:hover, li button:focus{background:#0f1a25;outline:none;box-shadow:inset 0 0 0 2px rgba(59,130,246,.35)}
+  </style>
+</head>
+<body>
+  <header style="display:flex;align-items:center;justify-content:center;flex-direction:column;">
+    <div>TV code: <span class="code" id="code"></span> • Store: <span id="store"></span></div>
+    <div id="mobile-banner" style="display:none;margin-top:8px;padding:8px 16px;background:#10b981;color:#fff;border-radius:8px;font-size:14px;">
+      📱 Selecting on your phone - will sync to TV
+    </div>
+  </header>
+  <main>
+    <div class="panel" style="flex:1.2">
+      <h2>Screens</h2>
+      <ul id="screens" class="screens"></ul>
+    </div>
+  </main>
+  <script>
+    function getQuery(){
+      var q = {};
+      try{
+        var s = window.location.search || '';
+        if(s && s.charAt(0)==='?') s = s.slice(1);
+        var parts = s.split('&');
+        for(var i=0;i<parts.length;i++){
+          var kv = parts[i].split('=');
+          var k = decodeURIComponent(kv[0]||'');
+          var v = decodeURIComponent((kv[1]||'').replace(/\+/g,' '));
+          if(k) q[k]=v;
+        }
+      }catch(e){}
+      return q;
+    }
+    var params = getQuery();
+    var code = params.code || '';
+    var storeId = (params.store_id||'').replace(/\s+/g,'');
+    var sessionId = params.session; // Get session from URL
+    var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    
+    document.getElementById('code').textContent = code;
+    document.getElementById('store').textContent = storeId || '-';
+    if(!(code.length===4 && /^[0-9]{4}$/.test(code)) || !storeId){ window.location.href = '/webplayer'; }
+
+    var screensEl = document.getElementById('screens');
+    var data = null;
+
+    function el(tag, attrs, text){
+      var e = document.createElement(tag);
+      attrs = attrs || {};
+      for(var k in attrs){ if(attrs.hasOwnProperty(k)) e.setAttribute(k, attrs[k]); }
+      if(text) e.textContent = text;
+      return e;
+    }
+
+    function renderScreens(){
+      screensEl.innerHTML = '';
+      
+      // DEBUG: Log data structure to console
+      console.log('DEBUG renderScreens - storeId:', storeId);
+      console.log('DEBUG renderScreens - data:', data);
+      console.log('DEBUG renderScreens - data.screens:', data ? data.screens : 'no data');
+      console.log('DEBUG renderScreens - data.screens[storeId]:', (data && data.screens) ? data.screens[storeId] : 'no screens');
+      
+      var sc = (data && data.screens && data.screens[storeId]) ? data.screens[storeId] : {};
+      
+      console.log('DEBUG renderScreens - filtered screens (sc):', sc);
+      console.log('DEBUG renderScreens - number of screens:', Object.keys(sc).length);
+      
+      var entries = [];
+      for(var k in sc){ if(sc.hasOwnProperty(k)) entries.push([k, sc[k]]); }
+      if(!entries.length){
+        var li = el('li'); li.appendChild(el('button',{},'No screens found for this store')); screensEl.appendChild(li); return;
+      }
+      for(var i=0;i<entries.length;i++){
+        var sid = entries[i][0]; var obj = entries[i][1];
+        var li = el('li');
+        var btn = el('button');
+        btn.textContent = sid + (obj && obj.name ? ' — ' + obj.name : '');
+        (function(sid){ 
+          btn.addEventListener('click', function(){ 
+            var playUrl = '/webplayer/play?store_id=' + encodeURIComponent(storeId) + '&screen_id=' + encodeURIComponent(sid) + '&code=' + encodeURIComponent(code);
+            
+            // If mobile with session, send selection to TV
+            if (sessionId && isMobile) {
+              try {
+                if (window.mobileSocket) {
+                  window.mobileSocket.emit('send_screen_selection', { 
+                    session_id: sessionId, 
+                    screen_id: sid,
+                    store_id: storeId
+                  });
+                }
+                // Also push via HTTP so TVs polling can pick it up
+                try{
+                  fetch('/api/selection_session_push', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ session_id: sessionId, store_id: storeId, screen_id: sid }) });
+                }catch(_){}
+              } catch(e) {}
+            }
+            
+            // Navigate (both mobile and TV)
+            window.location.href = playUrl + (sessionId ? '&session=' + encodeURIComponent(sessionId) : '');
+          }); 
+        })(sid);
+        li.appendChild(btn); screensEl.appendChild(li);
+      }
+      try{ var first = screensEl.querySelector('button'); if(first) first.focus(); }catch(e){}
+    }
+
+    (function init(){
+      function onData(){ if(!data || !data.success){ alert((data && data.error) ? data.error : 'Code invalid'); window.location.href = '/webplayer'; return; } renderScreens(); }
+      var url = '/api/stores_by_code/' + encodeURIComponent(code);
+      if(window.fetch){
+        try{ fetch(url, { cache:'no-store' }).then(function(r){ return r.json(); }).then(function(j){ data=j; onData(); }).catch(function(){ alert('Failed to load screens for this code'); window.location.href = '/webplayer'; }); }catch(e){ alert('Failed to load screens for this code'); window.location.href = '/webplayer'; }
+      } else {
+        try{ var xhr = new XMLHttpRequest(); xhr.open('GET', url, true); xhr.onreadystatechange=function(){ if(xhr.readyState===4){ try{ data = JSON.parse(xhr.responseText); onData(); }catch(e){ alert('Failed to load screens'); window.location.href='/webplayer'; } } }; xhr.onerror=function(){ alert('Network error'); window.location.href='/webplayer'; }; xhr.send(); }catch(e){ alert('Failed to load screens'); window.location.href='/webplayer'; }
+      }
+    })();
+    
+    // Mobile-to-TV screen selection sync
+    if (sessionId) {
+      try {
+        var socket = io();
+        
+        if (isMobile) {
+          // Mobile mode - show banner and connect to send screen selection
+          document.getElementById('mobile-banner').style.display = 'block';
+          window.mobileSocket = socket; // Store for click handler
+        } else {
+          // TV mode - connect to receive screen selection
+          socket.emit('join_session', { session_id: sessionId });
+          
+          socket.on('screen_selected', function(data) {
+            if (data.session_id === sessionId && data.screen_id) {
+              // Auto-navigate to selected screen
+              var playUrl = '/webplayer/play?store_id=' + encodeURIComponent(data.store_id || storeId) + '&screen_id=' + encodeURIComponent(data.screen_id) + '&code=' + encodeURIComponent(code);
+              window.location.href = playUrl + '&session=' + encodeURIComponent(sessionId);
+            }
+          });
+
+          // HTTP polling fallback in TV mode: check last selection every second for 90s
+          (function pollSelection(){
+            var tries=0;
+            function tick(){
+              tries++; if(tries>90) return;
+              fetch('/api/selection_session_poll/' + encodeURIComponent(sessionId), { cache:'no-store' })
+                .then(function(r){ return r.json(); })
+                .then(function(j){ if(j && j.success && j.selection && j.selection.screen_id){
+                  var sel = j.selection;
+                  var playUrl = '/webplayer/play?store_id=' + encodeURIComponent(sel.store_id || storeId) + '&screen_id=' + encodeURIComponent(sel.screen_id) + '&code=' + encodeURIComponent(code);
+                  window.location.href = playUrl + '&session=' + encodeURIComponent(sessionId);
+                } else { setTimeout(tick, 1000); } })
+                .catch(function(){ setTimeout(tick, 1200); });
+            }
+            tick();
+          })();
+        }
+      } catch(e) {}
+    }
+  </script>
+</body>
+</html>

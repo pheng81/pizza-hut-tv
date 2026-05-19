@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>{{ project_name or 'Menu Studio' }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Space+Grotesk:wght@400;500;700&family=Bebas+Neue&family=Oswald:wght@400;600;700&family=Montserrat:wght@400;600;700;800&family=Playfair+Display:wght@400;700&family=Roboto:wght@400;500;700&family=Lato:wght@400;700&family=Poppins:wght@400;600;700;800&family=Anton&family=Permanent+Marker&family=Abril+Fatface&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --stage-ratio: 16 / 9;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+            color: #fff;
+            font-family: 'Segoe UI', Arial, sans-serif;
+        }
+
+        body {
+            display: grid;
+            place-items: center;
+        }
+
+        .viewport {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: #000;
+        }
+
+        .stage {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #111;
+            background-position: center;
+            background-size: cover;
+            touch-action: none;
+        }
+
+        .stage-base {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+        }
+
+        .stage-base-media {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+            transform-origin: center center;
+        }
+
+        .stage-base-overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+        }
+
+        .layer {
+            position: absolute;
+            overflow: visible;
+            transform-origin: center center;
+        }
+
+        .layer-inner {
+            width: 100%;
+            height: 100%;
+            border-radius: inherit;
+        }
+
+        .layer-text {
+            display: flex;
+            align-items: center;
+            white-space: pre-wrap;
+            word-break: break-word;
+            line-height: 1;
+            padding: 10px 14px;
+            text-shadow: 0 4px 20px rgba(0, 0, 0, 0.24);
+        }
+
+        .layer-box {
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+
+        .layer-box.glass {
+            backdrop-filter: blur(18px);
+            background: linear-gradient(160deg, rgba(255,255,255,0.26), rgba(255,255,255,0.08));
+        }
+
+        .layer-image img,
+        .layer-image video {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: cover;
+            border-radius: inherit;
+        }
+
+        .anim-pulse { animation: layerPulse var(--anim-duration, 6s) ease-in-out infinite; }
+        .anim-float { animation: layerFloat var(--anim-duration, 6s) ease-in-out infinite; }
+        .anim-slide-up { animation: layerSlideUp var(--anim-duration, 7s) ease-in-out infinite; }
+        .anim-breathe { animation: layerBreathe var(--anim-duration, 7s) ease-in-out infinite; }
+        .anim-spin { animation: layerSpin var(--anim-duration, 12s) linear infinite; }
+        .anim-wiggle { animation: layerWiggle var(--anim-duration, 5s) ease-in-out infinite; }
+
+        @keyframes layerPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        @keyframes layerFloat {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-18px); }
+        }
+
+        @keyframes layerSlideUp {
+            0%, 100% { transform: translateY(14px); opacity: 0.85; }
+            50% { transform: translateY(-12px); opacity: 1; }
+        }
+
+        @keyframes layerBreathe {
+            0%, 100% { transform: scale(0.98); opacity: 0.85; }
+            50% { transform: scale(1.02); opacity: 1; }
+        }
+
+        @keyframes layerSpin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes layerWiggle {
+            0%, 100% { transform: rotate(0deg); }
+            20% { transform: rotate(-2.8deg); }
+            40% { transform: rotate(2.2deg); }
+            60% { transform: rotate(-1.2deg); }
+            80% { transform: rotate(1deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="viewport">
+        <div id="stage" class="stage"></div>
+    </div>
+
+    <script id="menu-studio-project" type="application/json">{{ project | tojson | safe }}</script>
+    <script>
+        const project = (() => {
+            try {
+                return JSON.parse(document.getElementById('menu-studio-project').textContent || '{}');
+            } catch {
+                return {};
+            }
+        })();
+
+        const aspectMap = {
+            '16:9': { width: 1280, height: 720 },
+            '9:16': { width: 900, height: 1600 },
+            '1:1': { width: 1080, height: 1080 }
+        };
+
+        function transparentableFill(fill) {
+            return fill === '#00000000' ? 'transparent' : (fill || 'transparent');
+        }
+
+        function shadowStyle(shadow) {
+            if (shadow === 'none') return 'none';
+            if (shadow === 'strong') return '0 24px 40px rgba(0, 0, 0, 0.22)';
+            return '0 14px 28px rgba(0, 0, 0, 0.16)';
+        }
+
+        function hexToRgba(hex, alpha) {
+            const clean = String(hex || '#000000').replace('#', '');
+            const expanded = clean.length === 3 ? clean.split('').map((char) => char + char).join('') : clean;
+            const int = parseInt(expanded, 16);
+            const r = (int >> 16) & 255;
+            const g = (int >> 8) & 255;
+            const b = int & 255;
+            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        }
+
+        function escapeCssUrl(value) {
+            return String(value || '')
+                .replace(/\\/g, '\\\\')
+                .replace(/'/g, "\\'")
+                .replace(/"/g, '\\"');
+        }
+
+        function render() {
+            const stage = document.getElementById('stage');
+            const aspect = aspectMap[project.aspect || '{{ project_aspect or "16:9" }}'] || aspectMap['16:9'];
+            stage.style.backgroundColor = project.backgroundColor || '#111';
+            stage.style.background = `linear-gradient(145deg, ${project.backgroundColor || '#111'}, ${hexToRgba(project.backgroundOverlay || '#000000', 0.25)})`;
+            stage.innerHTML = '';
+
+            const baseMedia = project.baseMedia || (project.backgroundImage ? { src: project.backgroundImage, fit: 'cover', type: /\.(mp4|webm|ogg|mov|m4v)(\?|$)/i.test(project.backgroundImage) ? 'video' : 'image' } : null);
+            if (baseMedia && baseMedia.src) {
+                const baseWrap = document.createElement('div');
+                baseWrap.className = 'stage-base';
+                const media = document.createElement(baseMedia.type === 'video' ? 'video' : 'img');
+                media.className = 'stage-base-media';
+                media.src = baseMedia.src;
+                if (media.tagName === 'VIDEO') {
+                    media.autoplay = true;
+                    media.loop = true;
+                    media.muted = true;
+                    media.playsInline = true;
+                } else {
+                    media.alt = project_name || 'base media';
+                }
+                media.style.objectFit = baseMedia.fit || 'cover';
+                media.style.filter = `brightness(${baseMedia.brightness || 1}) contrast(${baseMedia.contrast || 1}) saturate(${baseMedia.saturate || 1}) blur(${baseMedia.blur || 0}px)`;
+                media.style.transform = `translate(${baseMedia.offsetX || 0}px, ${baseMedia.offsetY || 0}px) scale(${baseMedia.scale || 1}) rotate(${baseMedia.rotation || 0}deg)`;
+                baseWrap.appendChild(media);
+
+                const overlay = document.createElement('div');
+                overlay.className = 'stage-base-overlay';
+                overlay.style.background = `linear-gradient(0deg, ${hexToRgba(project.backgroundOverlay || '#000000', 0.24)}, ${hexToRgba(project.backgroundOverlay || '#000000', 0.24)})`;
+                baseWrap.appendChild(overlay);
+                stage.appendChild(baseWrap);
+            }
+
+            const layers = Array.isArray(project.layers) ? [...project.layers].sort((a, b) => (a.z || 0) - (b.z || 0)) : [];
+            layers.forEach((layer) => {
+                const node = document.createElement('div');
+                node.className = 'layer';
+                node.style.left = `${((layer.x || 0) / aspect.width) * 100}%`;
+                node.style.top = `${((layer.y || 0) / aspect.height) * 100}%`;
+                node.style.width = `${((layer.w || 0) / aspect.width) * 100}%`;
+                node.style.height = `${((layer.h || 0) / aspect.height) * 100}%`;
+                node.style.borderRadius = `${layer.radius || 0}px`;
+                node.style.opacity = String(layer.opacity ?? 1);
+                node.style.transform = `rotate(${layer.rotation || 0}deg)`;
+                node.style.zIndex = String(layer.z || 1);
+
+                if (layer.type === 'text') {
+                    const inner = document.createElement('div');
+                    inner.className = `layer-inner layer-text ${layer.animation && layer.animation !== 'none' ? 'anim-' + layer.animation : ''}`;
+                    inner.textContent = layer.text || '';
+                    inner.style.background = transparentableFill(layer.fill);
+                    inner.style.color = layer.color || '#fff';
+                    inner.style.fontSize = `${(layer.fontSize || 48) / aspect.height * 100}vh`;
+                    inner.style.fontWeight = String(layer.fontWeight || '700');
+                    inner.style.fontFamily = layer.fontFamily || 'system-ui';
+                    inner.style.borderRadius = `${layer.radius || 0}px`;
+                    inner.style.boxShadow = shadowStyle(layer.shadow);
+                    inner.style.setProperty('--anim-duration', `${layer.duration || 6}s`);
+                    node.appendChild(inner);
+                } else if (layer.type === 'image') {
+                    const inner = document.createElement('div');
+                    inner.className = `layer-inner layer-image ${layer.animation && layer.animation !== 'none' ? 'anim-' + layer.animation : ''}`;
+                    inner.style.setProperty('--anim-duration', `${layer.duration || 6}s`);
+                    const media = document.createElement(layer.src && /\.(mp4|webm|ogg|mov)(\?|$)/i.test(layer.src) ? 'video' : 'img');
+                    if (media.tagName === 'VIDEO') {
+                        media.src = layer.src || '';
+                        media.autoplay = true;
+                        media.loop = true;
+                        media.muted = true;
+                        media.playsInline = true;
+                    } else {
+                        media.src = layer.src || '';
+                        media.alt = layer.name || 'image';
+                    }
+                    media.style.objectFit = layer.fit || 'cover';
+                    inner.appendChild(media);
+                    node.appendChild(inner);
+                } else {
+                    const inner = document.createElement('div');
+                    inner.className = `layer-inner layer-box ${layer.variant === 'glass' ? 'glass' : ''} ${layer.animation && layer.animation !== 'none' ? 'anim-' + layer.animation : ''}`;
+                    inner.style.background = transparentableFill(layer.fill);
+                    inner.style.boxShadow = shadowStyle(layer.shadow);
+                    inner.style.setProperty('--anim-duration', `${layer.duration || 6}s`);
+                    node.appendChild(inner);
+                }
+
+                stage.appendChild(node);
+            });
+        }
+
+        render();
+    </script>
+</body>
+</html>

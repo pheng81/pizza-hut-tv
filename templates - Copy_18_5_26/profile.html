@@ -1,0 +1,77 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>User Profile</title>
+	<style>
+		body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;padding:24px;background:#f7f7fb;color:#111}
+		.card{max-width:560px;margin:20px auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.06)}
+		.hdr{padding:16px 20px;border-bottom:1px solid #f0f0f5;font-weight:600}
+		.body{padding:18px 20px}
+		.row{display:flex;align-items:center;justify-content:space-between;margin:12px 0}
+		.label{color:#555}
+		.code{font-size:28px;font-weight:700;letter-spacing:4px}
+		.btn{background:#111;color:#fff;border:0;border-radius:8px;padding:8px 12px;cursor:pointer}
+		.btn:disabled{opacity:.6;cursor:default}
+		.muted{color:#666}
+		.note{font-size:12px;color:#666;margin-top:10px}
+		.topnav{display:flex;justify-content:space-between;align-items:center;padding:8px 12px}
+		a{color:#0366d6;text-decoration:none}
+	</style>
+	<script>
+		async function regen(){
+			const btn = document.getElementById('regenBtn');
+			btn.disabled = true;
+			try{
+				const r = await fetch('/profile/regenerate_code', {method:'POST'});
+				const j = await r.json();
+				if(j && j.success){
+					document.getElementById('code').textContent = j.link_code;
+				}else{
+					alert((j && j.error) || 'Failed to regenerate');
+				}
+			}catch(e){ alert('Network error'); }
+			finally{ btn.disabled = false; }
+		}
+	</script>
+	<meta http-equiv="Cache-Control" content="no-store" />
+	<meta http-equiv="Pragma" content="no-cache" />
+	<meta http-equiv="Expires" content="0" />
+</head>
+<body>
+	<div class="card">
+		<div class="hdr">Profile</div>
+		<div class="body">
+			<div class="row"><div class="label">Full name</div><div>{{ full_name or '-' }}</div></div>
+			<div class="row"><div class="label">Username / Email</div><div>{{ username or '-' }}</div></div>
+			<div class="row"><div class="label">Phone number</div><div>{{ phone_number or 'Not set' }}</div></div>
+			<div class="row">
+				<div class="label">Subscription</div>
+				<div>
+					{% if subscription_status %}
+						<span style="color:{{ '#16a34a' if subscription_status in ['active','trialing'] else '#dc2626' }};font-weight:600">{{ subscription_status|title }}</span>
+						{% if screen_count %}<div class="note">{{ screen_count }} screen(s)</div>{% endif %}
+					{% else %}
+						<span style="color:#dc2626">No active subscription</span>
+					{% endif %}
+					<div style="margin-top:8px"><a href="/subscribe">Manage subscription →</a></div>
+				</div>
+			</div>
+			<div style="border-top:1px solid #f0f0f5;margin:16px 0;padding-top:16px">
+				<div class="row">
+					<div>
+						<div class="label">Android TV pairing code</div>
+						<div id="code" class="code">{{ link_code or '----' }}</div>
+						<div class="note">Use this 4-digit code on your Android TV to list your stores and screens.</div>
+					</div>
+					<div>
+						<button id="regenBtn" class="btn" onclick="regen()">Regenerate</button>
+					</div>
+				</div>
+			</div>
+			<div class="row"><a href="/dashboard">← Back to dashboard</a><span class="muted">build {{ build_stamp }}</span></div>
+		</div>
+	</div>
+</body>
+</html>

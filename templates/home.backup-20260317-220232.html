@@ -1,0 +1,1732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>EverydayAdvertise - The Most Advanced Digital Menu System</title>
+  <link rel="icon" href="{{ url_for('static', filename='ea_logo_official.svg') }}" type="image/svg+xml">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    :root {
+      --primary: #007AFF;
+      --secondary: #5856D6;
+      --text-dark: #1d1d1f;
+      --text-gray: #6e6e73;
+      --bg-light: #ffffff;
+      --bg-gray: #f5f5f7;
+      --accent-green: #30d158;
+      --accent-orange: #ff9500;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #ffffff;
+      color: var(--text-dark);
+      line-height: 1.6;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    
+    /* Header/Navigation - Apple Style */
+    header {
+      position: sticky;
+      top: 0;
+      background: rgba(255, 255, 255, 0.8);
+      backdrop-filter: saturate(180%) blur(20px);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+      padding: 12px 0;
+      z-index: 1000;
+      transition: all 0.3s ease;
+    }
+    
+    header.on-hero {
+      background: rgba(255, 255, 255, 0.8);
+      backdrop-filter: saturate(180%) blur(20px);
+      border-bottom-color: rgba(0, 0, 0, 0.08);
+      position: sticky;
+    }
+    
+    nav {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 0 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: #1d1d1f;
+      font-weight: 600;
+      font-size: 29px;
+      letter-spacing: -0.01em;
+    }
+    
+    .brand img {
+      height: 45px;
+      image-rendering: -webkit-optimize-contrast;
+      image-rendering: crisp-edges;
+    }
+    
+    .nav-links {
+      display: flex;
+      gap: 32px;
+      align-items: center;
+    }
+    
+    .nav-links a {
+      text-decoration: none;
+      color: #1d1d1f;
+      font-size: 14px;
+      font-weight: 400;
+      transition: color 0.3s ease;
+      letter-spacing: -0.01em;
+    }
+    
+    header.on-hero .nav-links a {
+      color: #1d1d1f;
+    }
+    
+    header.on-hero .brand {
+      color: #1d1d1f;
+    }
+    
+    .nav-links a:hover {
+      color: #0071e3;
+    }
+    
+    .btn-login {
+      background: #0071e3;
+      color: white;
+      padding: 8px 16px;
+      border-radius: 980px;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 400;
+      transition: all 0.3s ease;
+      letter-spacing: -0.01em;
+    }
+    
+    .btn-login:hover {
+      background: #0077ed;
+      transform: scale(1.02);
+    }
+
+    .promo-ticker {
+      width: 100%;
+      overflow: hidden;
+      background: var(--promo-bg, #111827);
+      color: var(--promo-color, #ffffff);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+      min-height: var(--promo-height, 52px);
+      display: flex;
+      align-items: center;
+    }
+
+    .promo-ticker.font-system-ui {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    }
+
+    .promo-ticker.font-display {
+      font-family: 'SF Pro Display', 'Segoe UI', sans-serif;
+    }
+
+    .promo-ticker.font-serif {
+      font-family: Georgia, 'Times New Roman', serif;
+    }
+
+    .promo-ticker.font-monospace {
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+    }
+
+    .promo-ticker__viewport {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 0 16px;
+      overflow: hidden;
+      white-space: nowrap;
+      width: 100%;
+    }
+
+    .promo-ticker__track {
+      display: inline-flex;
+      align-items: center;
+      gap: 48px;
+      min-width: max-content;
+      animation: promoMarquee linear infinite;
+      animation-duration: var(--promo-speed, 24s);
+      font-size: var(--promo-size, 18px);
+      font-weight: var(--promo-weight, 700);
+      font-style: var(--promo-style, normal);
+      letter-spacing: 0.02em;
+      text-transform: none;
+    }
+
+    .promo-ticker.align-left .promo-ticker__item {
+      text-align: left;
+      justify-content: flex-start;
+    }
+
+    .promo-ticker.align-center .promo-ticker__item {
+      text-align: center;
+      justify-content: center;
+    }
+
+    .promo-ticker.align-right .promo-ticker__item {
+      text-align: right;
+      justify-content: flex-end;
+    }
+
+    .promo-ticker.direction-right .promo-ticker__track {
+      animation-name: promoMarqueeReverse;
+    }
+
+    .promo-ticker.pause-on-hover:hover .promo-ticker__track {
+      animation-play-state: paused;
+    }
+
+    .promo-ticker__item {
+      display: inline-flex;
+      align-items: center;
+      gap: 48px;
+      padding-right: 48px;
+      min-width: max-content;
+    }
+
+    .promo-ticker__bullet {
+      opacity: 0.5;
+    }
+
+    @keyframes promoMarquee {
+      from { transform: translateX(0); }
+      to { transform: translateX(-50%); }
+    }
+
+    @keyframes promoMarqueeReverse {
+      from { transform: translateX(-50%); }
+      to { transform: translateX(0); }
+    }
+    
+    /* Hero Section - Apple Design Language */
+    .hero {
+      max-width: none;
+      width: 100%;
+      margin: 0;
+      padding: 60px 40px 60px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      max-width: 1200px;
+      margin: 0 auto;
+      gap: 60px;
+      align-items: center;
+      background: transparent;
+      border: none;
+      border-radius: 0;
+      box-shadow: none;
+    }
+    
+    .hero-content {
+      text-align: left;
+      position: relative;
+      padding-left: 0;
+    }
+    
+    .hero-video {
+      justify-self: end;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 25px 70px rgba(0, 0, 0, 0.2);
+      transition: transform 0.4s ease, box-shadow 0.4s ease;
+      width: 100%;
+      max-width: 450px;
+      background: #000;
+      border: none;
+      position: relative;
+      margin-right: 0;
+    }
+    
+    /* Device mock with inset previews */
+    .device-mock {
+      position: relative;
+      aspect-ratio: 1 / 1;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,.2);
+      background: #000;
+      border: none;
+    }
+    
+    .device-mock .device-bg {
+      position: absolute;
+      inset: 0;
+    }
+    
+    .device-mock .device-bg img,
+    .device-mock .device-bg video {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    
+    .device-mock .inset-row {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      right: 16px;
+      height: 24%;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      z-index: 2;
+    }
+    
+    .device-mock .inset {
+      position: relative;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 8px 24px rgba(0,0,0,.4);
+      border: 2px solid rgba(255,255,255,.3);
+      background: #000;
+    }
+    
+    .device-mock .inset video,
+    .device-mock .inset img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    
+    .hero-video:hover {
+      transform: scale(1.02) translateY(-4px);
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.3);
+    }
+
+    .homepage-body-media {
+      max-width: 1200px;
+      margin: 0 auto 24px;
+      padding: 0 40px;
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 24px;
+    }
+
+    .homepage-body-media-card {
+      background: #ffffff;
+      border-radius: 28px;
+      overflow: hidden;
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      grid-column: span 12;
+    }
+
+    .homepage-body-media-card.layout-half {
+      grid-column: span 6;
+    }
+
+    .homepage-body-media-card.layout-third {
+      grid-column: span 4;
+    }
+
+    .homepage-body-media-card img,
+    .homepage-body-media-card video {
+      width: 100%;
+      display: block;
+      max-height: 720px;
+      object-fit: cover;
+      background: #000;
+    }
+
+    .homepage-body-media-caption {
+      padding: 16px 20px;
+      color: var(--text-gray);
+      font-size: 16px;
+      line-height: 1.5;
+      background: rgba(255, 255, 255, 0.92);
+    }
+    
+    .hero-video video {
+      width: 100%;
+      display: block;
+    }
+
+    /* Desktop-only tweaks */
+    @media (min-width: 1024px) {
+      .hero-video {
+        transform: scale(1);
+      }
+      .hero-video:hover {
+        transform: scale(1.02) translateY(-4px);
+      }
+    }
+    
+    .hero h1 {
+      font-size: clamp(39px, 5.5vw, 60px);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      margin-bottom: 32px;
+      color: #1d1d1f;
+      background: linear-gradient(135deg, #1d1d1f 0%, #4a4a4f 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero h1 .nowrap {
+      white-space: normal;
+    }
+    
+    @media (min-width: 1024px) {
+      .hero h1 .nowrap {
+        white-space: nowrap;
+      }
+    }
+    
+    @keyframes gradient-shift {
+      0%, 100% {
+        background-position: 0% 50%;
+      }
+      50% {
+        background-position: 100% 50%;
+      }
+    }
+    
+    .hero .subtitle {
+      font-size: 21px;
+      color: #6e6e73;
+      max-width: 420px;
+      margin-bottom: 28px;
+      font-weight: 400;
+      line-height: 1.5;
+      letter-spacing: -0.005em;
+    }
+    
+    .hero-cta {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      justify-content: flex-start;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    
+    .btn-primary {
+      background: #0071e3;
+      color: white;
+      padding: 12px 28px;
+      border-radius: 980px;
+      text-decoration: none;
+      font-size: 22px;
+      font-weight: 500;
+      transition: all 0.3s ease;
+      box-shadow: none;
+      position: relative;
+      overflow: hidden;
+      border: none;
+    }
+    
+    .btn-primary::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+      transition: left 0.5s;
+    }
+    
+    .btn-primary:hover::before {
+      left: 100%;
+    }
+    
+    .btn-primary:hover {
+      background: #0077ed;
+      transform: scale(1.02);
+    }
+    
+    .btn-secondary {
+      background: transparent;
+      color: #0071e3;
+      padding: 12px 28px;
+      border-radius: 980px;
+      text-decoration: none;
+      font-size: 22px;
+      font-weight: 500;
+      border: 1.5px solid #0071e3;
+      transition: all 0.3s ease;
+    }
+    
+    .btn-secondary:hover {
+      background: #0071e3;
+      color: white;
+      transform: scale(1.02);
+    }
+
+    /* Micro proof line under hero CTAs */
+    .micro-proof {
+      color: #6e6e73;
+      font-size: 14px;
+      margin-top: 24px;
+      font-weight: 400;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+    
+    .micro-proof span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .micro-proof span::before {
+      content: '✓';
+      color: #34c759;
+      font-weight: 600;
+      font-size: 16px;
+    }
+    
+    .trust-badge {
+      display: inline-flex;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      padding: 14px 28px;
+      border-radius: 50px;
+      font-size: 15px;
+      color: var(--text-gray);
+      margin-bottom: 32px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+      animation: float 3s ease-in-out infinite;
+    }
+    
+    @keyframes float {
+      0%, 100% {
+        transform: translateY(0px);
+      }
+      50% {
+        transform: translateY(-10px);
+      }
+    }
+    
+    .trust-badge strong {
+      color: var(--text-dark);
+      font-weight: 700;
+    }
+    
+    /* World's First Badge */
+    .worlds-first-badge {
+      position: relative;
+      display: inline-block;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px 46px;
+      border-radius: 60px;
+      font-size: 21px;
+      font-weight: 800;
+      margin: 28px 0 36px 0;
+      box-shadow: 0 12px 40px rgba(102, 126, 234, 0.6);
+      animation: pulse-glow 2.5s ease-in-out infinite;
+      overflow: hidden;
+      border: 3px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .worlds-first-badge::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: linear-gradient(
+        45deg,
+        transparent,
+        rgba(255, 255, 255, 0.4),
+        transparent
+      );
+      animation: shine 3s ease-in-out infinite;
+    }
+    
+    .worlds-first-badge .badge-text {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .worlds-first-badge .globe-icon {
+      font-size: 28px;
+      animation: spin-globe 5s linear infinite;
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+    }
+    
+    @keyframes pulse-glow {
+      0%, 100% {
+        box-shadow: 0 12px 40px rgba(102, 126, 234, 0.6), 0 0 0 0 rgba(102, 126, 234, 0.4);
+        transform: scale(1);
+      }
+      50% {
+        box-shadow: 0 16px 50px rgba(102, 126, 234, 0.9), 0 0 0 10px rgba(102, 126, 234, 0);
+        transform: scale(1.03);
+      }
+    }
+    
+    @keyframes shine {
+      0% {
+        transform: translateX(-100%) translateY(-100%) rotate(45deg);
+      }
+      100% {
+        transform: translateX(100%) translateY(100%) rotate(45deg);
+      }
+    }
+    
+    @keyframes spin-globe {
+      0%, 100% {
+        transform: rotateY(0deg);
+      }
+      50% {
+        transform: rotateY(180deg);
+      }
+    }
+    
+    /* Pricing GIF */
+    .pricing-gif {
+      margin: 20px 0 28px 0;
+      display: inline-block;
+    }
+    
+    .pricing-gif img {
+      height: 500px;
+      width: auto;
+      display: block;
+      border-radius: 50px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    }
+    
+    /* Professional Pricing Section */
+    .pricing-section {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      padding: 80px 40px;
+      margin: 60px 0;
+    }
+    
+    .pricing-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      text-align: center;
+    }
+    
+    .pricing-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 32px;
+      margin-top: 48px;
+    }
+    
+    .pricing-header h2 {
+      font-size: 48px;
+      font-weight: 700;
+      color: var(--text-dark);
+      margin-bottom: 16px;
+    }
+    
+    .pricing-header p {
+      font-size: 20px;
+      color: var(--text-gray);
+      margin-bottom: 48px;
+    }
+    
+    .pricing-card {
+      background: white;
+      border-radius: 24px;
+      padding: 48px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+      border: 2px solid rgba(0, 122, 255, 0.1);
+    }
+    
+    .price-amount {
+      font-size: 72px;
+      font-weight: 800;
+      color: var(--primary);
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+    
+    .price-amount .currency {
+      font-size: 48px;
+      vertical-align: super;
+    }
+    
+    .price-period {
+      font-size: 20px;
+      color: var(--text-gray);
+      margin-bottom: 32px;
+    }
+    
+    .pricing-features {
+      list-style: none;
+      padding: 0;
+      margin: 32px 0;
+      text-align: left;
+    }
+    
+    .pricing-features li {
+      padding: 12px 0;
+      font-size: 18px;
+      color: var(--text-dark);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    }
+    
+    .pricing-features li:last-child {
+      border-bottom: none;
+    }
+    
+    .pricing-features li::before {
+      content: "✓";
+      color: var(--accent-green);
+      font-weight: bold;
+      margin-right: 12px;
+      font-size: 20px;
+    }
+    
+    .pricing-cta {
+      margin-top: 32px;
+    }
+    
+    .pricing-cta .btn-primary {
+      font-size: 20px;
+      padding: 18px 56px;
+    }
+    
+    .pricing-note {
+      margin-top: 24px;
+      font-size: 14px;
+      color: var(--text-gray);
+    }
+    
+    .pricing-card.enterprise {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .pricing-card.enterprise::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 200px;
+      height: 200px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 50%;
+      transform: translate(50%, -50%);
+    }
+    
+    .pricing-card.enterprise .price-amount {
+      color: white;
+    }
+    
+    .pricing-card.enterprise .price-period {
+      color: rgba(255, 255, 255, 0.9);
+    }
+    
+    .pricing-card.enterprise .pricing-features li {
+      color: rgba(255, 255, 255, 0.95);
+    }
+    
+    .pricing-card.enterprise .pricing-features li::before {
+      color: #4ade80;
+    }
+    
+    .pricing-card.enterprise .btn-primary {
+      background: white;
+      color: #667eea;
+    }
+    
+    .pricing-card.enterprise .btn-primary:hover {
+      background: rgba(255, 255, 255, 0.9);
+      transform: translateY(-2px);
+    }
+    
+    .pricing-card.enterprise .pricing-note {
+      color: rgba(255, 255, 255, 0.8);
+    }
+    
+    .enterprise-badge {
+      display: inline-block;
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 16px;
+    }
+    
+    @media (max-width: 768px) {
+      .pricing-cards-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    
+    /* Features Section */
+    .features {
+      max-width: 1200px;
+      margin: 100px auto;
+      padding: 0 40px;
+    }
+    
+    .section-title {
+      text-align: center;
+      font-size: 48px;
+      font-weight: 700;
+      margin-bottom: 60px;
+      color: var(--text-dark);
+    }
+    
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 40px;
+      margin-bottom: 80px;
+    }
+    
+    .feature-card {
+      background: transparent;
+      backdrop-filter: none;
+      padding: 8px 8px 8px 0;
+      border-radius: 0;
+      box-shadow: none;
+      transition: all 0.3s;
+    }
+
+    .features.features-cards .feature-card {
+      background: rgba(255, 255, 255, 0.7);
+      backdrop-filter: blur(10px);
+      padding: 40px;
+      border-radius: 20px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    }
+    
+    .feature-card:hover {
+      transform: none;
+      box-shadow: none;
+    }
+
+    .features.features-cards .feature-card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+    }
+    
+    .feature-icon {
+      font-size: 48px;
+      margin-bottom: 20px;
+    }
+    
+    .feature-card h3 {
+      font-size: 24px;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+    
+    .feature-card p {
+      color: var(--text-gray);
+      font-size: 16px;
+      line-height: 1.6;
+    }
+    
+    /* Platform Support */
+    .platforms {
+      background: transparent;
+      color: var(--text-dark);
+      padding: 100px 40px;
+    }
+    
+    .platforms .section-title {
+      color: var(--text-dark);
+    }
+    
+    .platform-grid {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 30px;
+    }
+    
+    .platform-item {
+      text-align: center;
+      padding: 18px 12px;
+      background: transparent;
+      backdrop-filter: none;
+      border: none;
+      border-radius: 0;
+      box-shadow: none;
+      transition: all 0.3s;
+    }
+    
+    .platform-item:hover {
+      background: transparent;
+      backdrop-filter: none;
+      transform: none;
+      box-shadow: none;
+    }
+    
+    .platform-item .icon {
+      font-size: 56px;
+      margin-bottom: 16px;
+    }
+    
+    .platform-item h4 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    
+    .platform-item p {
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.7);
+    }
+    
+    /* CTA Section */
+    .cta-section {
+      max-width: 1000px;
+      margin: 100px auto;
+      padding: 80px 40px;
+      text-align: center;
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      border-radius: 30px;
+      color: white;
+    }
+    
+    .cta-section h2 {
+      font-size: 48px;
+      font-weight: 700;
+      margin-bottom: 20px;
+    }
+    
+    .cta-section p {
+      font-size: 20px;
+      margin-bottom: 40px;
+      opacity: 0.9;
+    }
+    
+    .cta-section .btn-white {
+      background: white;
+      color: var(--primary);
+      padding: 16px 50px;
+      border-radius: 30px;
+      text-decoration: none;
+      font-size: 18px;
+      font-weight: 600;
+      display: inline-block;
+      transition: all 0.3s;
+    }
+    
+    .cta-section .btn-white:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    }
+    
+    /* Footer */
+    footer {
+      background: var(--bg-gray);
+      padding: 60px 40px 30px;
+    }
+    
+    .footer-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      text-align: center;
+    }
+    
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 40px;
+      margin-bottom: 30px;
+    }
+    
+    .footer-links a {
+      color: var(--text-gray);
+      text-decoration: none;
+      font-size: 14px;
+    }
+    
+    .footer-links a:hover {
+      color: var(--primary);
+    }
+    
+    .footer-bottom {
+      color: var(--text-gray);
+      font-size: 12px;
+      padding-top: 20px;
+      border-top: 1px solid rgba(0, 0, 0, 0.1);
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+      .brand img { height: 56px; }
+      .hero h1 {
+        font-size: 35px;
+      }
+      
+      .hero .subtitle {
+        font-size: 18px;
+      }
+      
+      .hero-cta {
+        flex-direction: row;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+      
+      /* Make buttons smaller on mobile */
+      .btn-primary {
+        padding: 10px 22px;
+        font-size: 21px;
+        font-weight: 600;
+      }
+      
+      .btn-secondary {
+        padding: 10px 22px;
+        font-size: 21px;
+        font-weight: 600;
+      }
+      
+      /* Compact micro-proof on mobile */
+      .micro-proof {
+        font-size: 12px;
+        margin-top: 12px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: center;
+      }
+      
+      .section-title {
+        font-size: 32px;
+      }
+      
+      .cta-section h2 {
+        font-size: 32px;
+      }
+      
+      nav {
+        padding: 0 20px;
+      }
+      
+      .brand {
+        color: #1d1d1f !important;
+      }
+      
+      .nav-links {
+        display: flex !important;
+        gap: 16px;
+      }
+      
+      .nav-links a:not(.btn-login) {
+        display: none;
+      }
+      
+      .btn-login {
+        display: inline-block;
+        padding: 8px 20px;
+        font-size: 14px;
+      }
+      
+      /* Hero responsive */
+      .hero {
+        grid-template-columns: 1fr;
+        gap: 40px;
+        padding: 40px 20px 50px;
+      }
+      header { padding: 10px 0; }
+      
+      .hero-content {
+        text-align: center;
+      }
+      
+      .hero-cta {
+        justify-content: center;
+      }
+      
+      .hero h1 {
+        font-size: 35px;
+      }
+      
+      .hero .subtitle {
+        font-size: 18px;
+        max-width: 100%;
+      }
+      .hero-video { width: 85%; max-width: 380px; margin: 0 auto; }
+      .homepage-body-media {
+        padding: 0 20px;
+        grid-template-columns: 1fr;
+      }
+
+      .homepage-body-media-card,
+      .homepage-body-media-card.layout-half,
+      .homepage-body-media-card.layout-third {
+        grid-column: auto;
+      }
+    }
+    
+    /* Animations */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .animate-in {
+      animation: fadeInUp 0.8s ease-out;
+    }
+    
+    /* Logo Intro Animation */
+    .logo-intro {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #0b0b0f;
+      display: grid;
+      place-items: center;
+      z-index: 9999;
+      opacity: 1;
+      transition: opacity 0.6s ease-out;
+    }
+    
+    .logo-intro.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    
+    .logo-intro .frame {
+      width: min(90vw, 900px);
+      aspect-ratio: 3 / 1;
+    }
+    
+    .logo-intro svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    
+    @media (max-width: 768px) {
+      .logo-intro svg {
+        width: 95vw;
+      }
+    }
+    
+    /* Brand Logo Marquee Styles */
+    .brand-marquee-section {
+      background: transparent;
+      padding: 80px 0;
+      overflow: hidden;
+    }
+    
+    .brand-marquee-title {
+      text-align: center;
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text-dark);
+      margin-bottom: 50px;
+    }
+    
+    .brand-marquee {
+      position: relative;
+      width: 100%;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.5);
+      backdrop-filter: blur(10px);
+      padding: 40px 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.6);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.6);
+    }
+    
+    .brand-marquee::before,
+    .brand-marquee::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      width: 100px;
+      height: 100%;
+      z-index: 2;
+      pointer-events: none;
+    }
+    
+    .brand-marquee::before {
+      left: 0;
+      background: linear-gradient(to right, rgba(255, 255, 255, 0.8), transparent);
+    }
+    
+    .brand-marquee::after {
+      right: 0;
+      background: linear-gradient(to left, rgba(255, 255, 255, 0.8), transparent);
+    }
+    
+    .brand-track {
+      display: flex;
+      width: max-content;
+      animation: scroll-brands 40s linear infinite;
+    }
+    
+    .brand-logo-item {
+      flex-shrink: 0;
+      width: 200px;
+      height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 40px;
+      filter: grayscale(100%) opacity(0.7);
+      transition: all 0.3s ease;
+    }
+    
+    .brand-logo-item:hover {
+      filter: grayscale(0%) opacity(1);
+      transform: scale(1.1);
+    }
+    
+    .brand-logo-item img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+    
+    @keyframes scroll-brands {
+      0% {
+        transform: translateX(0);
+      }
+      100% {
+        transform: translateX(-50%);
+      }
+    }
+    
+    .brand-marquee:hover .brand-track {
+      animation-play-state: paused;
+    }
+    
+    @media (max-width: 768px) {
+      .brand-logo-item {
+        width: 150px;
+        height: 80px;
+        margin: 0 30px;
+      }
+      
+      .brand-marquee-title {
+        font-size: 24px;
+      }
+    }
+  </style>
+  
+  <!-- AI Assistant Styles -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='ai-assistant/ai-chat.css') }}?v={{ asset_bust or 0 }}">
+</head>
+<body>
+  <!-- Logo Intro Animation v4.0 - SVG Gradient Animation CENTERED -->
+  <div class="logo-intro" id="logoIntro" data-version="4.0">
+    <div class="frame">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 320" width="100%" height="100%"
+           xmlns:xlink="http://www.w3.org/1999/xlink">
+        <defs>
+          <g id="logoShape">
+            <title id="title">Everyday Advertise</title>
+            <desc id="desc">Brand wordmark for Everyday Advertise with a pink-to-blue gradient fill.</desc>
+            <defs>
+              <linearGradient id="eaGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#ff2d84"/>
+                <stop offset="50%" stop-color="#b544ff"/>
+                <stop offset="100%" stop-color="#3c6cff"/>
+              </linearGradient>
+              <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur in="SourceAlpha" stdDeviation="4" result="blur"/>
+                <feOffset dx="0" dy="2" result="offset"/>
+                <feComponentTransfer>
+                  <feFuncA type="linear" slope="0.25"/>
+                </feComponentTransfer>
+                <feMerge>
+                  <feMergeNode/>
+                  <feMergeNode in="SourceGraphic"/>
+                </feMerge>
+              </filter>
+            </defs>
+
+            <rect width="100%" height="100%" fill="none"/>
+
+            <g style="filter:url(#softShadow)">
+              <text x="50%" y="45%" fill="url(#eaGrad)"
+                    font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+                    font-weight="800" font-size="160" letter-spacing="1"
+                    text-anchor="middle" dominant-baseline="middle">
+                <tspan x="50%" dy="0">Everyday</tspan>
+                <tspan x="50%" dy="120">Advertise</tspan>
+              </text>
+            </g>
+          </g>
+
+          <filter id="toWhite" color-interpolation-filters="sRGB">
+            <feColorMatrix type="matrix"
+              values="0 0 0 0 1
+                      0 0 0 0 1
+                      0 0 0 0 1
+                      0 0 0 1 0" />
+          </filter>
+
+          <mask id="logoMask" maskUnits="objectBoundingBox">
+            <g filter="url(#toWhite)">
+              <use xlink:href="#logoShape"/>
+            </g>
+          </mask>
+
+          <clipPath id="wipeClip" clipPathUnits="objectBoundingBox">
+            <rect id="wipeRect" x="-0.1" y="-0.05" width="0.0" height="1.1">
+              <animate attributeName="x" values="-0.1;0;0" dur="1.2s" fill="freeze" begin="0.2s" />
+              <animate attributeName="width" values="0;1.2;1.2" dur="1.2s" fill="freeze" begin="0.2s" />
+            </rect>
+          </clipPath>
+
+          <linearGradient id="flowGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%"  stop-color="#ff6a00" />
+            <stop offset="25%" stop-color="#ff00d4" />
+            <stop offset="50%" stop-color="#6a00ff" />
+            <stop offset="75%" stop-color="#00d4ff" />
+            <stop offset="100%" stop-color="#00ff88" />
+            <animateTransform attributeName="gradientTransform" type="translate"
+                              from="-1 0" to="1 0" dur="3.2s" repeatCount="indefinite" />
+          </linearGradient>
+
+          <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="blur"/>
+            <feMerge><feMergeNode in="blur"/></feMerge>
+          </filter>
+
+          <style>
+            @keyframes fadeZoom {
+              0%   { opacity: 0; transform: scale(0.90); }
+              60%  { opacity: 1; transform: scale(1.02); }
+              100% { opacity: 1; transform: scale(1.00); }
+            }
+            @keyframes pulse { 
+              0%,100% { filter: saturate(1); }
+              50%     { filter: saturate(1.2); }
+            }
+            .intro { animation: fadeZoom 1.0s ease-out forwards; transform-origin: 50% 50%; }
+            .flow  { animation: pulse 3.2s ease-in-out infinite; }
+          </style>
+        </defs>
+
+        <g class="intro" opacity="0.0">
+          <rect width="100%" height="100%" fill="url(#flowGrad)" filter="url(#softGlow)"
+                mask="url(#logoMask)">
+            <animate attributeName="opacity" values="0;0.6;0.2" dur="1.4s" fill="freeze" begin="0.1s" />
+          </rect>
+        </g>
+
+        <g class="intro flow">
+          <rect width="100%" height="100%" fill="url(#flowGrad)"
+                mask="url(#logoMask)" clip-path="url(#wipeClip)" />
+        </g>
+      </svg>
+    </div>
+  </div>
+  
+  <!-- Header -->
+  <header class="on-hero">
+    <nav>
+      <a class="brand" href="/">
+        <img src="{{ url_for('static', filename='ea-logo.svg') }}?v={{ asset_bust or 0 }}" alt="EverydayAdvertise">
+      </a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#platforms">Platforms</a>
+        <a href="{{ url_for('superadmin_login') }}">Super Admin</a>
+        <a href="{{ url_for('login') }}" class="btn-login">Login</a>
+      </div>
+    </nav>
+  </header>
+
+  {% if home_content.promo_enabled and home_promo_messages %}
+  <section class="promo-ticker font-{{ home_content.promo_font_family }} align-{{ home_content.promo_text_align }} direction-{{ home_content.promo_direction }} {% if home_content.promo_pause_on_hover %}pause-on-hover{% endif %}" style="--promo-bg: {{ home_content.promo_bg_color }}; --promo-color: {{ home_content.promo_text_color }}; --promo-size: {{ home_content.promo_font_size }}px; --promo-weight: {{ home_content.promo_font_weight }}; --promo-style: {{ home_content.promo_font_style }}; --promo-speed: {{ home_content.promo_speed }}s; --promo-height: {{ home_content.promo_height }}px;">
+    <div class="promo-ticker__viewport">
+      <div class="promo-ticker__track">
+        {% for _ in range(2) %}
+          {% for promo_message in home_promo_messages %}
+          <span class="promo-ticker__item">{{ promo_message }}{% if not loop.last or _ == 0 %}<span class="promo-ticker__bullet">•</span>{% endif %}</span>
+          {% endfor %}
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- Hero Section -->
+  <section class="hero animate-in">
+    <div class="hero-content">
+      
+      
+      <h1>{{ home_content.hero_title_line1 or 'The Most Advanced' }}<br><span class="nowrap">{{ home_content.hero_title_line2 or 'Digital Menu System' }}</span></h1>
+      <p class="subtitle">{{ home_content.hero_subtitle or 'User-friendly. Powerful. Perfectly synchronized.' }}</p>
+      
+      <div class="hero-cta">
+        <a href="{{ home_content.hero_primary_cta_url or url_for('login') }}" class="btn-primary">{{ home_content.hero_primary_cta_text or 'Get Started Free' }}</a>
+        <a href="{{ home_content.hero_secondary_cta_url or '#features' }}" class="btn-secondary">{{ home_content.hero_secondary_cta_text or 'See Features' }}</a>
+      </div>
+      
+      <p class="micro-proof">
+        ✓ {{ home_pricing_feature or 'Free trial period' }}  &nbsp; ✓ {{ home_content.hero_proof_secondary or 'Setup in 5 minutes' }}  &nbsp; ✓ {{ home_content.hero_proof_tertiary or '24/7 Support' }}
+      </p>
+    </div>
+    
+    <div class="hero-video">
+      <div class="device-mock">
+        <div class="device-bg">
+          <img src="{{ url_for('static', filename=(home_content.hero_image_path or 'imag2.png')) }}?v={{ asset_bust or 0 }}" alt="EverydayAdvertise dashboard preview">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {% if home_body_media %}
+  <section class="homepage-body-media">
+    {% for media_item in home_body_media %}
+    <div class="homepage-body-media-card layout-{{ media_item.layout_style }}">
+      {% if media_item.media_type == 'video' %}
+      <video controls playsinline preload="metadata">
+        <source src="{{ url_for('static', filename=media_item.media_path) }}?v={{ asset_bust or 0 }}">
+      </video>
+      {% else %}
+      <img src="{{ url_for('static', filename=media_item.media_path) }}?v={{ asset_bust or 0 }}" alt="Website body media">
+      {% endif %}
+      {% if media_item.caption %}
+      <div class="homepage-body-media-caption">{{ media_item.caption }}</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  <!-- Pricing Section -->
+  <section class="pricing-section">
+    <div class="pricing-container">
+      <div class="pricing-header">
+        <h2>{{ home_content.pricing_title or 'Simple, Transparent Pricing' }}</h2>
+        <p>{{ home_content.pricing_subtitle or 'No hidden fees. No long-term contracts. Cancel anytime.' }}</p>
+      </div>
+      
+      <div class="pricing-cards-grid">
+        <!-- Standard Pricing Card -->
+        <div class="pricing-card">
+          <div class="price-amount">
+            <span class="currency">$</span>{{ home_price_amount or '5' }}
+          </div>
+          <div class="price-period">{{ home_price_period or 'per screen / month' }}</div>
+          
+          <ul class="pricing-features">
+            <li>Unlimited content updates</li>
+            <li>Perfect screen synchronization</li>
+            <li>Cloud-based management</li>
+            <li>24/7 technical support</li>
+            <li>No setup fees</li>
+            <li>{{ home_pricing_feature or 'Free trial period' }}</li>
+          </ul>
+          
+          <div class="pricing-cta">
+            <a href="{{ url_for('login') }}" class="btn-primary">Start Free Trial</a>
+          </div>
+          
+          <p class="pricing-note">
+            {{ home_pricing_note or 'Try it free for 14 days. No credit card required.' }}
+          </p>
+        </div>
+        
+        <!-- Enterprise Pricing Card -->
+        <div class="pricing-card enterprise">
+          <div class="enterprise-badge">Enterprise</div>
+          <div class="price-amount">
+            Custom
+          </div>
+          <div class="price-period" style="visibility: hidden;">placeholder</div>
+          
+          <ul class="pricing-features">
+            <li>Full white-label software</li>
+            <li>Your own branding</li>
+            <li>Complete source code access</li>
+            <li>Self-hosted or cloud options</li>
+            <li>Dedicated support team</li>
+            <li>Custom feature development</li>
+          </ul>
+          
+          <div class="pricing-cta">
+            <a href="mailto:sales@everydayadvertise.com" class="btn-primary">Contact Us</a>
+          </div>
+          
+          <p class="pricing-note">
+            Perfect for businesses wanting their own branded solution.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Section -->
+  <section class="features {% if home_content.features_style == 'cards' %}features-cards{% else %}features-flat{% endif %}" id="features">
+    <h2 class="section-title">{{ home_content.features_title }}</h2>
+    
+    <div class="feature-grid">
+      {% for feature_item in home_features %}
+      <div class="feature-card">
+        <div class="feature-icon">
+          {% if feature_item.icon_kind == 'image' %}
+          <img src="{{ url_for('static', filename=feature_item.icon_value) }}?v={{ asset_bust or 0 }}" alt="{{ feature_item.title }}" style="width: 80px; height: 80px; object-fit: contain; border-radius: 8px;">
+          {% else %}
+          {{ feature_item.icon_value }}
+          {% endif %}
+        </div>
+        <h3>{{ feature_item.title }}</h3>
+        <p>{{ feature_item.description }}</p>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <!-- Brand Logo Marquee Section -->
+  <section class="brand-marquee-section">
+    <h2 class="brand-marquee-title">🌟 Trusted by Leading TV Brands Worldwide</h2>
+    <div class="brand-marquee">
+      <div class="brand-track">
+        <!-- First set of logos -->
+        <div class="brand-logo-item"><img src="{{ url_for('static', filename='brands/sony.png') }}?v={{ asset_bust or 0 }}" alt="Sony"></div>
+        <div class="brand-logo-item"><img src="{{ url_for('static', filename='brands/samsung.jpg') }}?v={{ asset_bust or 0 }}" alt="Samsung"></div>
+        <div class="brand-logo-item"><img src="{{ url_for('static', filename='brands/panasonic.png') }}?v={{ asset_bust or 0 }}" alt="Panasonic"></div>
+        <div class="brand-logo-item"><img src="{{ url_for('static', filename='brands/philips.png') }}?v={{ asset_bust or 0 }}" alt="Philips"></div>
+        <div class="brand-logo-item"><img src="{{ url_for('static', filename='brands/toshiba.png') }}?v={{ asset_bust or 0 }}" alt="Toshiba"></div>
+        <div class="brand-logo-item"><img src="{{ url_for('static', filename='brands/sharp.png') }}?v={{ asset_bust or 0 }}" alt="Sharp"></div>
+        <div class="brand-logo-item"><img src="{{ url_for('static', filename='brands/jvc.png') }}?v={{ asset_bust or 0 }}" alt="JVC"></div>
+        <div class="brand-logo-item"><img src="{{ url_for('static', filename='brands/tcl.webp') }}?v={{ asset_bust or 0 }}" alt="TCL"></div>
+        <div class="brand-logo-item"><img src="{{ url_for('static', filename='brands/hisense.png') }}?v={{ asset_bust or 0 }}" alt="Hisense"></div>
+        <div class="brand-logo-item"><img src="{{ url_for('static', filename='brands/haier.png') }}?v={{ asset_bust or 0 }}" alt="Haier"></div>
+        <div class="brand-logo-item"><img src="{{ url_for('static', filename='brands/konka.png') }}?v={{ asset_bust or 0 }}" alt="Konka"></div>
+        <div class="brand-logo-item"><img src="{{ url_for('static', filename='brands/changhong.png') }}?v={{ asset_bust or 0 }}" alt="Changhong"></div>
+        
+        <!-- Duplicate set for seamless loop -->
+        <div class="brand-logo-item"><img src="{{ url_for('static', filename='brands/sony.png') }}?v={{ asset_bust or 0 }}" alt="Sony"></div>
+        <div class="brand-logo-item"><img src="{{ url_for('static', filename='brands/samsung.jpg') }}?v={{ asset_bust or 0 }}" alt="Samsung"></div>
+        <div class="brand-logo-item"><img src="{{ url_for('static', filename='brands/panasonic.png') }}?v={{ asset_bust or 0 }}" alt="Panasonic"></div>
+        <div class="brand-logo-item"><img src="{{ url_for('static', filename='brands/philips.png') }}?v={{ asset_bust or 0 }}" alt="Philips"></div>
+        <div class="brand-logo-item"><img src="{{ url_for('static', filename='brands/toshiba.png') }}?v={{ asset_bust or 0 }}" alt="Toshiba"></div>
+        <div class="brand-logo-item"><img src="{{ url_for('static', filename='brands/sharp.png') }}?v={{ asset_bust or 0 }}" alt="Sharp"></div>
+        <div class="brand-logo-item"><img src="{{ url_for('static', filename='brands/jvc.png') }}?v={{ asset_bust or 0 }}" alt="JVC"></div>
+        <div class="brand-logo-item"><img src="{{ url_for('static', filename='brands/tcl.webp') }}?v={{ asset_bust or 0 }}" alt="TCL"></div>
+        <div class="brand-logo-item"><img src="{{ url_for('static', filename='brands/hisense.png') }}?v={{ asset_bust or 0 }}" alt="Hisense"></div>
+        <div class="brand-logo-item"><img src="{{ url_for('static', filename='brands/haier.png') }}?v={{ asset_bust or 0 }}" alt="Haier"></div>
+        <div class="brand-logo-item"><img src="{{ url_for('static', filename='brands/konka.png') }}?v={{ asset_bust or 0 }}" alt="Konka"></div>
+        <div class="brand-logo-item"><img src="{{ url_for('static', filename='brands/changhong.png') }}?v={{ asset_bust or 0 }}" alt="Changhong"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Platform Support Section -->
+  <section id="platforms" class="platforms">
+    <h2 class="section-title">Works On Every Platform</h2>
+    <p style="text-align: center; color: var(--text-gray); font-size: 18px; margin-bottom: 60px; max-width: 700px; margin-left: auto; margin-right: auto;">
+      From budget-friendly Raspberry Pi to premium Android TV boxes. Your content, your choice.
+    </p>
+    
+    <div class="platform-grid">
+      <div class="platform-item">
+        <div class="icon"><img src="{{ url_for('static', filename='pi_raspberry.png') }}?v={{ asset_bust or 0 }}" alt="Raspberry Pi" style="width: 104px; height: 104px; object-fit: contain;"></div>
+        <h4>Raspberry Pi</h4>
+        <p>Most affordable option. Full features for under $100</p>
+      </div>
+      
+      <div class="platform-item">
+        <div class="icon"><img src="{{ url_for('static', filename='android_tv.webp') }}?v={{ asset_bust or 0 }}" alt="Android TV" style="width: 104px; height: 104px; object-fit: contain;" onerror="this.style.display='none'; this.parentElement.innerHTML='📺';"></div>
+        <h4>Android TV</h4>
+        <p>Premium performance with Android TV boxes</p>
+      </div>
+      
+      <div class="platform-item">
+        <div class="icon"><img src="{{ url_for('static', filename='fire_tv.webp') }}?v={{ asset_bust or 0 }}" alt="Fire TV Stick" style="width: 104px; height: 104px; object-fit: contain;"></div>
+        <h4>Fire TV Stick</h4>
+        <p>Easy setup with Amazon Fire devices</p>
+      </div>
+      
+      <div class="platform-item">
+        <div class="icon">🌐</div>
+        <h4>Web Browser</h4>
+        <p>Works in Chrome, Safari, Edge, Firefox</p>
+      </div>
+      
+      <div class="platform-item">
+        <div class="icon">📱</div>
+        <h4>Android App</h4>
+        <p>Native app for Android tablets & phones</p>
+      </div>
+      
+      <div class="platform-item">
+        <div class="icon">💻</div>
+        <h4>Smart TVs</h4>
+        <p>Direct support for modern smart TVs</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Section -->
+  <section class="cta-section" style="margin-left: 40px; margin-right: 40px;">
+    <h2>Ready to Transform Your Menu?</h2>
+    <p>Join hundreds of restaurants using the world's most advanced digital menu system</p>
+    <a href="{{ url_for('login') }}" class="btn-white">Start Free Trial</a>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-content">
+      <div class="footer-links">
+        <a href="{{ url_for('login') }}">Dashboard</a>
+        <a href="{{ url_for('superadmin_login') }}">Super Admin</a>
+        <a href="/healthz">System Status</a>
+        <a href="#features">Features</a>
+        <a href="#platforms">Platforms</a>
+      </div>
+      <div class="footer-bottom">
+        © 2025 EverydayAdvertise. Built with ❤️ for restaurants worldwide.<br>
+        Build {{ build_stamp or '' }}{% if git_commit %} • {{ git_commit }}{% endif %}
+      </div>
+    </div>
+  </footer>
+
+  <!-- Logo Intro Script -->
+  <script>
+    // AGGRESSIVE cache busting - check for SVG animation
+    var logoIntro = document.getElementById('logoIntro');
+    var svg = logoIntro ? logoIntro.querySelector('svg') : null;
+    var hasAnimation = svg ? svg.querySelector('.intro.flow') : null;
+    
+    // Force reload if we don't have the animated SVG
+    if (!hasAnimation) {
+      console.log('⚠️ Old text logo detected, forcing hard reload...');
+      // Clear ALL caches
+      if ('caches' in window) {
+        caches.keys().then(function(names) {
+          names.forEach(function(name) { caches.delete(name); });
+        });
+      }
+      // Clear localStorage
+      try { localStorage.clear(); } catch(e) {}
+      // Force hard reload with timestamp
+      window.location.href = window.location.href.split('?')[0] + '?t=' + Date.now();
+      throw new Error('Reloading to clear cache');
+    }
+    
+    console.log('✅ Animated SVG logo v3.0 loaded correctly');
+    
+    // Hide logo intro after animation completes
+    setTimeout(function() {
+      console.log('Starting logo fade out');
+      if (logoIntro) {
+        logoIntro.classList.add('hidden');
+        // Remove from DOM completely after fade out
+        setTimeout(function() {
+          console.log('Logo intro removed');
+          logoIntro.remove();
+        }, 700);
+      }
+    }, 3500); // Show for 3.5 seconds to let the full animation play
+
+    // Force video autoplay for ALL videos
+    window.addEventListener('DOMContentLoaded', function() {
+      console.log('🎬 Initializing video autoplay...');
+      
+      // Get all videos on the page
+      var videos = document.querySelectorAll('video');
+      console.log('Found ' + videos.length + ' videos');
+      
+      videos.forEach(function(video, index) {
+        // Ensure muted for autoplay policy
+        video.muted = true;
+        
+        // Attempt to play
+        video.play().then(function() {
+          console.log('✅ Video ' + (index + 1) + ' playing successfully');
+        }).catch(function(error) {
+          console.log('⚠️ Video ' + (index + 1) + ' autoplay failed:', error);
+          
+          // If autoplay fails, try again after user interaction
+          document.addEventListener('click', function tryPlayOnClick() {
+            video.play().then(function() {
+              console.log('✅ Video ' + (index + 1) + ' playing after user click');
+            }).catch(function(e) {
+              console.log('❌ Video ' + (index + 1) + ' play failed even after click:', e);
+            });
+          }, { once: true });
+        });
+        
+        // Add error handler
+        video.addEventListener('error', function(e) {
+          console.error('❌ Video ' + (index + 1) + ' error:', e);
+          console.error('Video src:', video.querySelector('source')?.src);
+        });
+        
+        // Log when video loads
+        video.addEventListener('loadeddata', function() {
+          console.log('✅ Video ' + (index + 1) + ' loaded');
+        });
+      });
+    });
+  </script>
+
+  <!-- AI Assistant Script -->
+  <script src="{{ url_for('static', filename='ai-assistant/ai-chat.js') }}?v={{ asset_bust or 0 }}"></script>
+
+  <script>
+    // Switch header style: transparent over hero at top, sticky/solid after scroll
+    (function(){
+      var header = document.querySelector('header');
+      if (!header) return;
+      function update(){
+        if (window.scrollY <= 10) {
+          if (!header.classList.contains('on-hero')) header.classList.add('on-hero');
+        } else {
+          header.classList.remove('on-hero');
+        }
+      }
+      window.addEventListener('scroll', update, { passive: true });
+      window.addEventListener('resize', update);
+      document.addEventListener('DOMContentLoaded', update);
+      update();
+    })();
+  </script>
+
+  {% include '_cookie_consent.html' %}
+</body>
+</html>

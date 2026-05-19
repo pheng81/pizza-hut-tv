@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Web Player — TV Code</title>
+<!-- Preconnect to CDNs for faster resource loading -->
+<link rel="preconnect" href="https://cdn.socket.io" crossorigin>
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+<!-- Load scripts normally (removing defer to fix loading spinner stuck issue) -->
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  /* Loading spinner */
+  .page-loader{position:fixed;inset:0;background:#0b0f14;display:flex;align-items:center;justify-content:center;z-index:999;transition:opacity .3s}
+  .page-loader.hidden{opacity:0;pointer-events:none}
+  .spinner{width:40px;height:40px;border:3px solid #1b2632;border-top-color:#3b82f6;border-radius:50%;animation:spin 0.8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+<style>
+  :root{
+    --bg:#0b0f14;          /* deep slate */
+    --panel:#0f141a;       /* elevated surface */
+    --border:#1b2632;      /* soft outline (slightly brighter for contrast) */
+    --text:#e6eef7;        /* near-white with blue tint */
+    --muted:#95a3b5;       /* cool-muted */
+    --accent:#3b82f6;      /* blue accent */
+    --accent-hover:#2563eb;/* darker hover */
+    --radius:12px;
+    --safe-margin:var(--tv-safe-margin, 0);
+  }
+  html,body{height:100%;margin:0}
+  body{
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Arial,sans-serif;
+    display:grid;grid-template-rows:1fr auto;min-height:100vh;
+    background:var(--bg);color:var(--text);
+    padding:calc(env(safe-area-inset-top,0px) + 0px) calc(env(safe-area-inset-right,0px) + 0px) calc(env(safe-area-inset-bottom,0px) + 0px) calc(env(safe-area-inset-left,0px) + 0px);
+  }
+  /* Center intro exactly like home page - use grid with place-items */
+  .intro{position:fixed;inset:0;display:grid;place-items:center;background:#0b0b0b;z-index:10;transition:opacity .6s ease-out}
+  .intro[data-hidden="1"]{opacity:0;pointer-events:none}
+  /* Simple, safe intro animation for older TV browsers (Tizen): scale+fade in */
+  @keyframes tizenIntro { from { opacity:0; transform: scale(0.97); } to { opacity:1; transform: scale(1); } }
+
+  /* Flat, dark card with smaller TV-friendly sizing */
+  .panel{
+    background:transparent; /* flatten */
+    border:0;               /* remove outline */
+    border-radius:var(--radius);
+    padding:clamp(18px, 3.0vw, 24px);
+    max-width:min(520px, 88vw);
+    width:min(88vw, 520px);
+    margin:clamp(5vh, 10vh, 12vh) auto;
+    box-shadow:none; /* flat look */
+  }
+  h1{
+    margin:0 0 12px;
+    font-size:clamp(22px, 3.0vw, 28px);
+    font-weight:900;
+    text-align:center;
+    letter-spacing:0.2px;
+  }
+  p{margin:0 0 14px;color:var(--muted);font-size:clamp(13px, 1.8vw, 14px);text-align:center}
+  label{display:block;font-size:clamp(12px, 1.6vw, 13px);color:#cfcfcf;margin:10px 0 8px}
+  input{
+    width:100%;
+    padding:clamp(12px, 2.2vw, 14px) clamp(14px, 2.4vw, 16px);
+    background:#000;
+    border:1px solid #232323;
+    border-radius:10px;
+    color:#fff;outline:none;text-align:center;letter-spacing:2px;font-weight:700;
+    font-size:clamp(16px, 2.4vw, 18px);box-sizing:border-box
+  }
+  input::placeholder{color:#7c7c7c}
+  input:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(59,130,246,.18)}
+  .btn{
+    margin-top:14px;width:100%;
+    padding:clamp(12px, 2.4vw, 14px) clamp(16px, 2.8vw, 18px);
+    border:none;border-radius:10px;background:var(--accent);color:#0a0f14;font-weight:800;cursor:pointer;
+    font-size:clamp(14px, 2.2vw, 16px);box-sizing:border-box;letter-spacing:.3px
+  }
+  .btn:hover{background:var(--accent-hover)}
+  .note{margin-top:12px;font-size:clamp(11px, 1.6vw, 12px);color:#9a9a9a;text-align:center}
+
+  /* QR container – flat, subdued, and scaled for TVs */
+  #qr-section{
+    text-align:center;margin:12px 0;padding:12px;
+    background:transparent; /* flatten nested layer */
+    border:0; border-radius:10px;
+  }
+  #qrcode{display:inline-block;padding:12px;background:#fff;border-radius:10px; position:relative}
+  #qrcode canvas, #qrcode img{ width:clamp(140px, 22vw, 186px); height:auto; image-rendering:crisp-edges; }
+  /* Centered logo overlay inside the QR code */
+  #qrcode .qr-logo{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:clamp(36px, 18%, 56px); height:clamp(36px, 18%, 56px); border-radius:12px; background:#ffffff; display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 2px #ffffff; }
+  #qrcode .qr-logo svg{ width:82%; height:82%; display:block }
+
+  /* Subtle focus ring for remote/keyboard */
+  :focus{ outline:none }
+  .panel :focus-visible{ outline:3px solid rgba(59,130,246,.35); outline-offset:3px; border-radius:10px; }
+
+  /* Reduce overall scale on very large displays (TVs) */
+  @media (min-width: 1600px) and (min-height: 900px){
+    .panel{ max-width:960px; }
+  }
+
+  /* Two-column responsive layout */
+  .pair-grid{ display:grid; grid-template-columns: 1fr; gap:18px; align-items:start; position:relative; }
+  .pair-left, .pair-right{ display:flex; flex-direction:column; }
+  .pair-right{ max-width:420px; }
+  .pair-right .btn{ margin-top:12px; }
+  /* Segmented 4-digit styling for the existing single input */
+  #code.code-input{ letter-spacing:0.35em; font-variant-numeric:tabular-nums; caret-color:var(--accent); }
+  /* draw internal separators at 25/50/75% to hint four slots */
+  #code.code-input{
+    background-image:
+      linear-gradient(to right, transparent calc(25% - 0.5px), rgba(59,130,246,.22) calc(25% - 0.5px), rgba(59,130,246,.22) calc(25% + 0.5px), transparent calc(25% + 0.5px)),
+      linear-gradient(to right, transparent calc(50% - 0.5px), rgba(59,130,246,.22) calc(50% - 0.5px), rgba(59,130,246,.22) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
+      linear-gradient(to right, transparent calc(75% - 0.5px), rgba(59,130,246,.22) calc(75% - 0.5px), rgba(59,130,246,.22) calc(75% + 0.5px), transparent calc(75% + 0.5px));
+    background-repeat:no-repeat;
+    background-size:100% 100%;
+  }
+  @media (min-width: 900px){
+    .pair-grid{ grid-template-columns: 1.1fr 0.9fr; gap:28px; align-items:center; }
+    /* Vertical divider centered in the column gap */
+    .pair-grid::before{
+      content:"";
+      position:absolute;
+      top:8px; bottom:8px;
+      /* Place at center of 28px gap: (width - gap) * 0.55 + gap/2 */
+      left: calc((100% - 28px) * 0.55 + 14px);
+      width:2px;
+      background: linear-gradient(to bottom, transparent 0%, #223041 10%, #223041 90%, transparent 100%);
+      opacity:0.95;
+      border-radius:2px;
+      pointer-events:none;
+    }
+    .panel{ max-width:960px; }
+  }
+</style>
+</head>
+<body>
+  <!-- Loading spinner -->
+  <div class="page-loader" id="pageLoader">
+    <div class="spinner"></div>
+  </div>
+  
+  <div class="intro" id="intro">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 320" width="100%" height="100%" xmlns:xlink="http://www.w3.org/1999/xlink" style="width:min(90vw,900px);height:auto;aspect-ratio:3/1">
+      <defs>
+        <g id="logoShape">
+          <title>Everyday Advertise</title>
+          <defs>
+            <linearGradient id="eaGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#ff2d84"/>
+              <stop offset="50%" stop-color="#b544ff"/>
+              <stop offset="100%" stop-color="#3c6cff"/>
+            </linearGradient>
+            <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur in="SourceAlpha" stdDeviation="4" result="blur"/>
+              <feOffset dx="0" dy="2" result="offset"/>
+              <feComponentTransfer><feFuncA type="linear" slope="0.25"/></feComponentTransfer>
+              <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+          <rect width="100%" height="100%" fill="none"/>
+          <g style="filter:url(#softShadow)">
+            <text x="50%" y="45%" fill="url(#eaGrad)" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-weight="800" font-size="160" letter-spacing="1" text-anchor="middle" dominant-baseline="middle">
+              <tspan x="50%" dy="0">Everyday</tspan>
+              <tspan x="50%" dy="120">Advertise</tspan>
+            </text>
+          </g>
+        </g>
+        <filter id="toWhite" color-interpolation-filters="sRGB">
+          <feColorMatrix type="matrix" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1 0"/>
+        </filter>
+        <mask id="logoMask" maskUnits="objectBoundingBox">
+          <g filter="url(#toWhite)"><use xlink:href="#logoShape"/></g>
+        </mask>
+        <clipPath id="wipeClip" clipPathUnits="objectBoundingBox">
+          <rect id="wipeRect" x="-0.1" y="-0.05" width="0.0" height="1.1">
+            <animate attributeName="x" values="-0.1;0;0" dur="1.2s" fill="freeze" begin="0.2s"/>
+            <animate attributeName="width" values="0;1.2;1.2" dur="1.2s" fill="freeze" begin="0.2s"/>
+          </rect>
+        </clipPath>
+        <linearGradient id="flowGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#ff6a00"/>
+          <stop offset="25%" stop-color="#ff00d4"/>
+          <stop offset="50%" stop-color="#6a00ff"/>
+          <stop offset="75%" stop-color="#00d4ff"/>
+          <stop offset="100%" stop-color="#00ff88"/>
+          <animateTransform attributeName="gradientTransform" type="translate" from="-1 0" to="1 0" dur="3.2s" repeatCount="indefinite"/>
+        </linearGradient>
+        <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="blur"/>
+          <feMerge><feMergeNode in="blur"/></feMerge>
+        </filter>
+        <style>
+          @keyframes fadeZoom{0%{opacity:0;transform:scale(0.90)}60%{opacity:1;transform:scale(1.02)}100%{opacity:1;transform:scale(1.00)}}
+          @keyframes pulse{0%,100%{filter:saturate(1)}50%{filter:saturate(1.2)}}
+          .intro-anim{animation:fadeZoom 1.0s ease-out forwards;transform-origin:50% 50%}
+          .flow{animation:pulse 3.2s ease-in-out infinite}
+        </style>
+      </defs>
+      <g class="intro-anim" opacity="0.0">
+        <rect width="100%" height="100%" fill="url(#flowGrad)" filter="url(#softGlow)" mask="url(#logoMask)">
+          <animate attributeName="opacity" values="0;0.6;0.2" dur="1.4s" fill="freeze" begin="0.1s"/>
+        </rect>
+      </g>
+      <g class="intro-anim flow">
+        <rect width="100%" height="100%" fill="url(#flowGrad)" mask="url(#logoMask)" clip-path="url(#wipeClip)"/>
+      </g>
+    </svg>
+  </div>
+  <div class="panel" id="step1">
+    <h1>Enter your Android TV pairing code</h1>
+    <p>Type the 4-digit code from your TV app or profile page.</p>
+    
+    <!-- Two-column layout: QR on left, input + submit on right -->
+    <div class="pair-grid">
+      <div class="pair-left">
+        <!-- QR Section (left) -->
+        <div id="qr-section">
+          <div style="font-size:14px;color:#bbb;margin-bottom:12px;">📱 Scan with your phone to enter code</div>
+          <div id="qrcode" style="display:inline-block;padding:12px;background:#fff;border-radius:8px;"></div>
+          <div style="font-size:12px;color:#999;margin-top:12px;">Code entered on phone will appear here automatically</div>
+        </div>
+      </div>
+      <div class="pair-right">
+        <label for="code">4-digit code</label>
+  <input id="code" class="code-input" maxlength="4" pattern="\d{4}" inputmode="numeric" placeholder="4-digit code (e.g. 1126)" />
+        <button class="btn" id="go">Link Code</button>
+        <div class="note">Next you'll enter the store code and pick a screen.</div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // Hide loading spinner immediately when page starts executing
+    (function() {
+      var loader = document.getElementById('pageLoader');
+      if (loader) {
+        setTimeout(function() { loader.classList.add('hidden'); }, 100);
+      }
+    })();
+    
+    // Enforce HTTPS on our domain for some TV browsers
+    try{ if (location.protocol === 'http:' && /(^|\.)everydayadvertise\.com$/i.test(location.hostname)) { location.replace('https:' + location.href.slice(5)); } }catch(e){}
+
+    // Simple intro hide function
+    function hideIntro(force){
+      try{
+        var intro = document.getElementById('intro');
+        if(!intro) return;
+        var hidden = intro.getAttribute('data-hidden');
+        if(hidden === '1' && !force) return;
+        intro.setAttribute('data-hidden','1');
+        setTimeout(function(){ 
+          try{ 
+            intro.style.display='none'; 
+            if(intro.parentNode) intro.parentNode.removeChild(intro); 
+          }catch(e){} 
+        }, 700);
+        try{ var c=document.getElementById('code'); if(c && typeof c.focus==='function'){ c.focus(); } }catch(e){}
+      }catch(e){}
+    }
+    
+    // Hide intro after animation completes (2.5 seconds)
+    setTimeout(function(){ hideIntro(false); }, 2500);
+    // Safety fallbacks
+    setTimeout(function(){ hideIntro(true); }, 4000);
+    setTimeout(function(){ hideIntro(true); }, 6000);
+    
+    // Handle visibility changes
+    try{ document.addEventListener('visibilitychange', function(){ if(!document.hidden){ setTimeout(function(){ hideIntro(false); }, 1200); } }); }catch(e){}
+        var codeEl = document.getElementById('code');
+    try{
+      codeEl.addEventListener('input', function(){ try{ codeEl.value = codeEl.value.replace(/[^0-9]/g,'').slice(0,4); }catch(e){} });
+      codeEl.addEventListener('keyup', function(){ try{ codeEl.value = codeEl.value.replace(/[^0-9]/g,'').slice(0,4); }catch(e){} });
+      codeEl.addEventListener('change', function(){ try{ codeEl.value = codeEl.value.replace(/[^0-9]/g,'').slice(0,4); }catch(e){} });
+    }catch(e){}
+
+    function go(){
+      try{
+        var c = (codeEl.value || '').replace(/\s+/g,'');
+        if(!(c.length===4 && /^[0-9]{4}$/.test(c))){ alert('Please enter your 4-digit TV code.'); return; }
+        var url = '/api/stores_by_code/' + encodeURIComponent(c);
+        
+        // Preserve session ID when navigating to next page
+        var urlParams = new URLSearchParams(window.location.search);
+        var sessionParam = urlParams.get('session');
+        
+        // Use sessionParam from URL if available, otherwise use sessionId variable (for TV mode)
+        var activeSession = sessionParam || (typeof sessionId !== 'undefined' ? sessionId : null);
+        
+        var nextUrl = '/webplayer/store?code=' + encodeURIComponent(c);
+        if (activeSession) {
+          nextUrl += '&session=' + encodeURIComponent(activeSession);
+        }
+        
+        function onOk(){ try{ window.location.href = nextUrl; }catch(e){} }
+        function onFail(msg){ alert(msg || 'TV code not valid'); }
+        if(window.fetch){
+          try{
+            fetch(url, { cache:'no-store' }).then(function(r){ return r.json(); }).then(function(j){ if(j && j.success){ onOk(); } else { onFail(j && j.error); } }).catch(function(){ onFail('Could not verify code. Check your connection.'); });
+          }catch(e){ onFail('Could not verify code.'); }
+        } else {
+          try{
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', url, true);
+            xhr.onreadystatechange = function(){ if(xhr.readyState===4){ try{ var j = JSON.parse(xhr.responseText); if(j && j.success){ onOk(); } else { onFail(j && j.error); } }catch(e){ onFail('Could not verify code.'); } } };
+            xhr.onerror = function(){ onFail('Network error.'); };
+            xhr.send();
+          }catch(e){ onFail('Could not verify code.'); }
+        }
+      }catch(e){ alert('Unexpected error.'); }
+    }
+    try{ document.getElementById('go').addEventListener('click', go); }catch(e){}
+    try{ document.addEventListener('keydown', function(e){ e=e||window.event; if((e.key||e.keyCode)==='Enter' || e.keyCode===13){ go(); } }); }catch(e){}
+    
+    // Generate QR Code for mobile access with session ID
+    var sessionId = 'tv_' + Math.random().toString(36).substring(2, 15);
+    
+    // Robust device detection: treat TVs (including Fire TV) as TV, not mobile
+    var ua = (navigator.userAgent || '');
+    var isFireTV = /\bAFT\w*\b|AmazonWebAppPlatform|Silk\//i.test(ua) || /Fire\s?TV/i.test(ua);
+    var isAndroidTV = /Android\s?TV|BRAVIA|SHIELD|Chromecast|GoogleTV|Nexus\s?Player|MiBOX/i.test(ua);
+    var isSmartTV = /SmartTV|Tizen|Web0S|webOS|NetCast|HbbTV|Vewd|DTV|InettvBrowser|Hisense|PhilipsTV|Panasonic/i.test(ua) || /\bTV\b/i.test(ua);
+    var isTV = !!(isFireTV || isAndroidTV || isSmartTV);
+    // Mobile if classic mobile UA AND not a TV
+    var isMobile = (/iPhone|iPad|iPod|Android/i.test(ua)) && !isTV;
+    
+    // Check if this is a mobile device with a session ID in URL
+    var urlParams = new URLSearchParams(window.location.search);
+    var targetSessionId = urlParams.get('session');
+    
+    try{
+      // Show QR when: TV device OR desktop (non-mobile), and not already in a mobile-session handoff
+      if (!targetSessionId && (isTV || !isMobile)) {
+        // TV/Desktop mode - show QR code with session ID
+        var currentUrl = window.location.origin + window.location.pathname + '?session=' + sessionId;
+        var qrContainer = document.getElementById("qrcode");
+        var qr = new QRCode(qrContainer, {
+          text: currentUrl,
+          width: 200,
+          height: 200,
+          colorDark: "#000000",
+          colorLight: "#ffffff",
+          correctLevel: QRCode.CorrectLevel.M
+        });
+        
+        // Insert brand logo overlay in the center of the QR
+        try{
+          var logo = document.createElement('div');
+          logo.className = 'qr-logo';
+          logo.innerHTML = '\n            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">\n              <defs>\n                <linearGradient id="eaSmallGrad" x1="0%" y1="0%" x2="100%" y2="0%">\n                  <stop offset="0%" stop-color="#ff2d84"/>\n                  <stop offset="50%" stop-color="#b544ff"/>\n                  <stop offset="100%" stop-color="#3c6cff"/>\n                </linearGradient>\n              </defs>\n              <rect x="0" y="0" width="100" height="100" rx="18" fill="url(#eaSmallGrad)"/>\n              <g transform="translate(12,64)">\n                <path d="M0 -28 H34 v8 H8 v6 H30 v8 H8 v6 H34 v8 H0 Z" fill="#ffffff"/>\n                <path d="M46 -28 H66 q8 0 13 5 t5 13 q0 8 -5 13 t-13 5 H54 v10 H46 Z M54 -16 v18 h12 q4 0 6 -3 t2 -6 q0 -4 -2 -6 t-6 -3 Z" fill="#ffffff"/>\n              </g>\n            </svg>\n          ';
+          qrContainer.appendChild(logo);
+        }catch(_){}
+        
+        // Connect WebSocket to receive code from mobile
+        var socket = io();
+        socket.emit('join_session', { session_id: sessionId });
+        
+        socket.on('code_entered', function(data) {
+          if (data.session_id === sessionId && data.code) {
+            document.getElementById('code').value = data.code;
+            // Auto-submit after receiving code
+            setTimeout(function() { go(); }, 500);
+          }
+        });
+      } else {
+        // Mobile mode or has session ID - hide QR, show input prominently
+        document.getElementById('qr-section').style.display = 'none';
+        
+        if (targetSessionId) {
+          // This is mobile scanning QR - connect to send code to TV
+          var socket = io();
+          var codeInput = document.getElementById('code');
+          
+          // Send code to TV as user types
+          codeInput.addEventListener('input', function() {
+            var code = codeInput.value;
+            if (code.length === 4) {
+              socket.emit('send_code', { 
+                session_id: targetSessionId, 
+                code: code 
+              });
+              // Show success message
+              var note = document.querySelector('.note');
+              note.textContent = '✓ Code sent to TV! Advancing...';
+              note.style.color = '#10b981';
+              
+              // Auto-advance mobile to next page after sending code
+              setTimeout(function() {
+                // Verify code and advance
+                var url = '/api/stores_by_code/' + encodeURIComponent(code);
+                fetch(url, { cache:'no-store' })
+                  .then(function(r){ return r.json(); })
+                  .then(function(j){ 
+                    if(j && j.success){ 
+                      // Keep session ID and advance to store page
+                      window.location.href = '/webplayer/store?code=' + encodeURIComponent(code) + '&session=' + encodeURIComponent(targetSessionId);
+                    } else {
+                      alert(j && j.error || 'TV code not valid');
+                    }
+                  })
+                  .catch(function(){ 
+                    alert('Could not verify code.');
+                  });
+              }, 800);
+            }
+          });
+        }
+      }
+    }catch(e){
+      // If QR code library fails, hide the QR section
+      try{ document.getElementById('qr-section').style.display = 'none'; }catch(e2){}
+    }
+  </script>
+</body>
+</html>

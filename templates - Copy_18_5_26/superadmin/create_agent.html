@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Create Agent</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fb; color: #1f2937; }
+    body.embedded-mode { background: transparent; }
+    header { background: #2d3748; color: white; padding: 20px 32px; }
+    .header-content { max-width: 900px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .btn { display: inline-block; padding: 10px 14px; font-size: 13px; font-weight: 700; text-decoration: none; border: 1px solid rgba(255,255,255,0.35); color: white; }
+    main { max-width: 900px; margin: 0 auto; padding: 28px 32px 40px; }
+    body.embedded-mode main { max-width: none; margin: 0; padding: 0; }
+    .card { background: white; border: 1px solid #e2e8f0; padding: 24px; }
+    body.embedded-mode .card { background: transparent; border: 0; border-radius: 0; padding: 0; }
+    h1 { font-size: 28px; margin-bottom: 8px; }
+    p { color: #64748b; margin-bottom: 20px; }
+    .flash { padding: 12px 14px; margin-bottom: 16px; border: 1px solid #fecaca; background: #fef2f2; color: #991b1b; }
+    form { display: grid; gap: 16px; }
+    label { font-size: 12px; font-weight: 700; color: #475569; text-transform: uppercase; }
+    input, textarea { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e0; font-size: 14px; }
+    textarea { min-height: 90px; resize: vertical; }
+    .help { font-size: 12px; color: #64748b; }
+    .actions { display: flex; gap: 12px; flex-wrap: wrap; }
+    .btn-primary { background: #2d3748; border: none; color: white; cursor: pointer; }
+    .btn-secondary { background: white; border: 1px solid #cbd5e0; color: #1f2937; cursor: pointer; }
+  </style>
+</head>
+<body class="{{ 'embedded-mode' if embedded else '' }}">
+  {% set embedded_query = '?embedded=1' if embedded else '' %}
+  {% if not embedded %}
+  <header>
+    <div class="header-content">
+      <div>Create Agent</div>
+      <a href="/superadmin/agents{{ embedded_query }}" class="btn">Back To Agents</a>
+    </div>
+  </header>
+  {% endif %}
+  <main>
+    <div class="card">
+      <h1>Create Agent</h1>
+      <p>Create a new agent account and matching default coupon.</p>
+      {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+        <div class="flash">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+      {% endwith %}
+      <form method="post">
+        <div>
+          <label for="agent_code">Agent Code</label>
+          <input id="agent_code" name="agent_code" type="text" required>
+          <div class="help">Used as the agent code and default coupon code.</div>
+        </div>
+        <div>
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" required>
+          <div class="help">If the user does not exist, a new account is created with temporary password `changeme123`.</div>
+        </div>
+        <div>
+          <label for="full_name">Full Name</label>
+          <input id="full_name" name="full_name" type="text">
+        </div>
+        <div>
+          <label for="commission_rate">Commission Rate (%)</label>
+          <input id="commission_rate" name="commission_rate" type="number" value="20" min="0" max="100" step="0.1">
+        </div>
+        <div>
+          <label for="notes">Notes</label>
+          <textarea id="notes" name="notes"></textarea>
+        </div>
+        <div class="actions">
+          <button class="btn btn-primary" type="submit">Create Agent</button>
+          <a href="/superadmin/agents{{ embedded_query }}" class="btn btn-secondary">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </main>
+</body>
+</html>

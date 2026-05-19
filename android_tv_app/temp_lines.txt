@@ -1,0 +1,5 @@
+﻿                    binding.message.text = "" // Hide items loaded message
+                    // If rotation hasnâ€™t started or was cancelled, kick it off
+                    if (scheduledRotation == null || currentItemFile == null || (imageView.drawable == null && playerView.visibility != ImageView.VISIBLE)) {
+                        showAndSchedule()
+                    }

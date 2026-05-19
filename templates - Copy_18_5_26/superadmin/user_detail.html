@@ -1,0 +1,1150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>User Details - {{ user.username }}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Space+Grotesk:wght@400;500;700&display=swap');
+
+    :root {
+      --bg: #f7f1e8;
+      --surface: rgba(255, 252, 247, 0.88);
+      --surface-strong: #fffdf9;
+      --surface-dark: #19212c;
+      --line: rgba(28, 36, 46, 0.12);
+      --text: #17202a;
+      --muted: #5c6773;
+      --accent: #d96b2b;
+      --accent-strong: #b74d12;
+      --success: #177d5f;
+      --success-soft: rgba(23, 125, 95, 0.13);
+      --danger: #c83f3f;
+      --danger-soft: rgba(200, 63, 63, 0.12);
+      --warning: #9b5c11;
+      --warning-soft: rgba(193, 124, 31, 0.14);
+      --shadow: 0 30px 70px rgba(25, 33, 44, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(217, 107, 43, 0.18), transparent 30%),
+        radial-gradient(circle at top right, rgba(23, 125, 95, 0.14), transparent 28%),
+        linear-gradient(180deg, #f3ece2 0%, #f7f1e8 50%, #f9f4ec 100%);
+      color: var(--text);
+      line-height: 1.55;
+      min-height: 100vh;
+    }
+
+    body.embedded-mode {
+      background: transparent;
+      min-height: auto;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    .page-shell {
+      max-width: 1520px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    body.embedded-mode .page-shell {
+      max-width: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .topbar {
+      background:
+        linear-gradient(135deg, rgba(16, 23, 35, 0.94), rgba(31, 40, 55, 0.92)),
+        linear-gradient(120deg, rgba(217, 107, 43, 0.24), transparent 55%);
+      color: #fff9f1;
+      border-radius: 34px;
+      padding: 28px;
+      box-shadow: var(--shadow);
+      margin-bottom: 22px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .topbar::before {
+      content: '';
+      position: absolute;
+      inset: auto -60px -120px auto;
+      width: 320px;
+      height: 320px;
+      border-radius: 50%;
+      background: rgba(217, 107, 43, 0.18);
+      filter: blur(12px);
+    }
+
+    .topbar-row,
+    .hero-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 20px;
+      flex-wrap: wrap;
+      position: relative;
+      z-index: 1;
+    }
+
+    .brand-lockup {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .brand-mark {
+      width: 58px;
+      height: 58px;
+      border-radius: 18px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, #f6c391, #d96b2b);
+      color: #1b1f26;
+      font-weight: 700;
+      font-size: 20px;
+    }
+
+    .eyebrow,
+    .section-kicker,
+    .info-label,
+    .table-label,
+    .pill,
+    th,
+    .detail-label {
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .eyebrow {
+      color: rgba(255, 249, 241, 0.68);
+      margin-bottom: 4px;
+    }
+
+    .brand-title {
+      font-size: 22px;
+      font-weight: 700;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 18px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 700;
+      transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+      white-space: nowrap;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+    }
+
+    .btn--ghost {
+      color: #fff9f1;
+      border-color: rgba(255, 255, 255, 0.2);
+      background: transparent;
+    }
+
+    .btn--ghost:hover {
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .btn--primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+      color: #fff7f0;
+      box-shadow: 0 12px 24px rgba(183, 77, 18, 0.18);
+    }
+
+    .btn--dark {
+      background: var(--surface-dark);
+      color: #fff9f1;
+    }
+
+    .btn--success {
+      background: var(--success);
+      color: #f5fffb;
+    }
+
+    .btn--warning {
+      background: rgba(23, 32, 42, 0.06);
+      border-color: var(--line);
+      color: var(--text);
+    }
+
+    .btn--danger {
+      background: var(--danger);
+      color: #fff8f8;
+    }
+
+    .hero-row {
+      margin-top: 28px;
+    }
+
+    .hero-copy {
+      flex: 1 1 620px;
+      max-width: 820px;
+    }
+
+    .hero-copy h1 {
+      font-family: 'Fraunces', Georgia, serif;
+      font-size: clamp(34px, 5vw, 56px);
+      line-height: 1.02;
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      margin-bottom: 12px;
+    }
+
+    .hero-copy p {
+      font-size: 16px;
+      color: rgba(255, 249, 241, 0.78);
+      max-width: 660px;
+    }
+
+    .hero-note {
+      flex: 0 1 300px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 24px;
+      padding: 18px;
+      backdrop-filter: blur(8px);
+    }
+
+    .hero-note strong {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+
+    .hero-note p {
+      font-size: 13px;
+      color: rgba(255, 249, 241, 0.74);
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 28px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .metric-card {
+      padding: 18px;
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(6px);
+    }
+
+    .metric-value {
+      font-family: 'Fraunces', Georgia, serif;
+      font-size: clamp(28px, 4vw, 42px);
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+
+    .metric-label {
+      color: rgba(255, 249, 241, 0.68);
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .content-grid {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 22px;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid rgba(255, 255, 255, 0.75);
+      border-radius: 30px;
+      padding: 26px;
+      box-shadow: 0 18px 45px rgba(25, 33, 44, 0.08);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .panel::before {
+      content: '';
+      position: absolute;
+      inset: 0 0 auto;
+      height: 5px;
+      background: linear-gradient(90deg, rgba(217, 107, 43, 0.9), rgba(23, 125, 95, 0.7));
+      opacity: 0.85;
+    }
+
+    .panel-account,
+    .panel-password,
+    .panel-subscription {
+      grid-column: span 6;
+    }
+
+    body.embedded-mode .topbar {
+      display: none;
+    }
+
+    body.embedded-mode .panel {
+      border-radius: 16px;
+      box-shadow: none;
+      background: rgba(255, 255, 255, 0.78);
+      border-color: rgba(148, 163, 184, 0.16);
+    }
+
+    .panel-wide {
+      grid-column: 1 / -1;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    .section-kicker {
+      color: var(--accent-strong);
+      margin-bottom: 8px;
+    }
+
+    .section-title {
+      font-family: 'Fraunces', Georgia, serif;
+      font-size: clamp(22px, 3vw, 32px);
+      line-height: 1.08;
+      letter-spacing: -0.03em;
+      margin-bottom: 8px;
+    }
+
+    .section-copy {
+      color: var(--muted);
+      max-width: 760px;
+      font-size: 14px;
+    }
+
+    .panel-badge {
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .flash-stack {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      display: grid;
+      gap: 12px;
+      z-index: 9999;
+      max-width: 420px;
+      pointer-events: none;
+    }
+
+    .flash {
+      padding: 14px 16px;
+      border-radius: 12px;
+      border: 1px solid;
+      font-weight: 600;
+      font-size: 14px;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+      animation: slideIn 0.3s ease;
+      pointer-events: auto;
+      cursor: pointer;
+    }
+
+    .flash--success {
+      background: #f0fdf4;
+      border-color: #86efac;
+      color: #166534;
+    }
+
+    .flash--error {
+      background: #fef2f2;
+      border-color: #fca5a5;
+      color: #b91c1c;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateX(400px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    @keyframes slideOut {
+      from {
+        opacity: 1;
+        transform: translateX(0);
+      }
+      to {
+        opacity: 0;
+        transform: translateX(400px);
+      }
+    }
+
+    .flash.dismissing {
+      animation: slideOut 0.3s ease forwards;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .info-item,
+    .detail-item {
+      padding: 14px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.78);
+    }
+
+    .info-label,
+    .detail-label {
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .info-value,
+    .detail-value {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+      word-break: break-word;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 7px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(23, 32, 42, 0.05);
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .pill--good {
+      color: var(--success);
+      background: var(--success-soft);
+      border-color: rgba(23, 125, 95, 0.2);
+    }
+
+    .pill--bad {
+      color: var(--danger);
+      background: var(--danger-soft);
+      border-color: rgba(200, 63, 63, 0.2);
+    }
+
+    .pill--warning {
+      color: var(--warning);
+      background: var(--warning-soft);
+      border-color: rgba(193, 124, 31, 0.2);
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 22px;
+      padding-top: 22px;
+      border-top: 1px solid rgba(28, 36, 46, 0.08);
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: rgba(255, 255, 255, 0.6);
+    }
+
+    table {
+      width: 100%;
+      min-width: 900px;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th,
+    td {
+      text-align: left;
+      padding: 18px 16px;
+      vertical-align: top;
+      border-bottom: 1px solid rgba(28, 36, 46, 0.08);
+    }
+
+    th {
+      background: rgba(23, 32, 42, 0.04);
+      color: var(--muted);
+    }
+
+    tbody tr:hover {
+      background: rgba(217, 107, 43, 0.04);
+    }
+
+    .empty-state {
+      padding: 40px 24px;
+      text-align: center;
+      color: var(--muted);
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.64);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      z-index: 1000;
+    }
+
+    .modal-backdrop.is-open {
+      display: flex;
+    }
+
+    .modal-card {
+      width: min(760px, 100%);
+      background: var(--surface-strong);
+      border: 1px solid rgba(255, 255, 255, 0.72);
+      border-radius: 28px;
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+      padding: 28px;
+    }
+
+    .modal-title {
+      font-family: 'Fraunces', Georgia, serif;
+      font-size: 28px;
+      line-height: 1.1;
+      color: #991b1b;
+      margin-bottom: 10px;
+    }
+
+    .modal-copy {
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+
+    .warning-panel {
+      background: #fff7ed;
+      border: 1px solid #fdba74;
+      border-radius: 18px;
+      padding: 14px 16px;
+      margin-bottom: 18px;
+      color: #9a3412;
+      font-size: 13px;
+      line-height: 1.65;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    @media (max-width: 1180px) {
+      .panel-account,
+      .panel-password,
+      .panel-subscription {
+        grid-column: 1 / -1;
+      }
+
+      .metric-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 860px) {
+      .page-shell {
+        padding: 16px;
+      }
+
+      .topbar,
+      .panel,
+      .modal-card {
+        border-radius: 24px;
+      }
+
+      .info-grid,
+      .detail-grid,
+      .metric-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-copy h1 {
+        font-size: 38px;
+      }
+    }
+  </style>
+</head>
+<body class="{{ 'embedded-mode' if embedded else '' }}">
+  {% set total_screens = namespace(count=0) %}
+  {% for store_id, screens in config.screens.items() %}
+    {% set total_screens.count = total_screens.count + (screens | length) %}
+  {% endfor %}
+
+  <div class="page-shell">
+    <header class="topbar">
+      <div class="topbar-row">
+        <div class="brand-lockup">
+          <div class="brand-mark">U</div>
+          <div>
+            <div class="eyebrow">User Profile</div>
+            <div class="brand-title">{{ user.username }}</div>
+          </div>
+        </div>
+        <a href="/superadmin/dashboard" class="btn btn--ghost">Back to Dashboard</a>
+      </div>
+
+      <div class="hero-row">
+        <div class="hero-copy">
+          <div class="section-kicker" style="color: rgba(255, 249, 241, 0.68);">Account Review</div>
+          <h1>Inspect billing, screens, and account state without leaving the control deck.</h1>
+          <p>This page now uses the same visual system as the redesigned dashboard, so the user record, subscription controls, and deletion flow feel like one continuous admin surface.</p>
+        </div>
+        <div class="hero-note">
+          <strong>Current State</strong>
+          <p>{% if user.is_blocked %}This user is currently blocked.{% else %}This user is active.{% endif %} {% if subscription %}Subscription status: {{ subscription.status }}.{% else %}No subscription is attached to this account.{% endif %}</p>
+        </div>
+      </div>
+
+      <div class="metric-grid">
+        <div class="metric-card">
+          <div class="metric-value">{{ config.stores | length }}</div>
+          <div class="metric-label">Stores</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value">{{ total_screens.count }}</div>
+          <div class="metric-label">Screens</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value">{{ screen_subs | length }}</div>
+          <div class="metric-label">Screen Subscriptions</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value">{{ cancellations | length }}</div>
+          <div class="metric-label">Cancellations</div>
+        </div>
+      </div>
+    </header>
+
+    <main class="content-grid">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="flash-stack">
+            {% for category, message in messages %}
+              <div class="flash {{ 'flash--success' if category == 'success' else 'flash--error' }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      <section class="panel panel-account">
+        <div class="panel-header">
+          <div>
+            <div class="section-kicker">Identity</div>
+            <h2 class="section-title">User information</h2>
+            <p class="section-copy">Core account details, account status, and administrator actions are grouped here so you can audit the account before changing it.</p>
+          </div>
+          <div class="panel-badge">Account Snapshot</div>
+        </div>
+
+        <div class="info-grid">
+          <div class="info-item">
+            <div class="info-label">User ID</div>
+            <div class="info-value">{{ user.id }}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Email</div>
+            <div class="info-value">{{ user.username }}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Email Verified</div>
+            <div class="info-value">
+              {% if user.email_verified %}
+                <span class="pill pill--good">Verified</span>
+              {% else %}
+                <span class="pill pill--bad">Not verified</span>
+              {% endif %}
+            </div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Full Name</div>
+            <div class="info-value">{{ user.full_name or 'Not set' }}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Phone Number</div>
+            <div class="info-value">{{ user.phone_number or 'Not set' }}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Phone Verified</div>
+            <div class="info-value">
+              {% if user.phone_number %}
+                {% if user.phone_verified %}
+                  <span class="pill pill--good">Verified</span>
+                {% else %}
+                  <span class="pill pill--bad">Not verified</span>
+                {% endif %}
+              {% else %}
+                <span class="pill">No phone</span>
+              {% endif %}
+            </div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Link Code</div>
+            <div class="info-value">{{ user.link_code or 'Not set' }}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Account Status</div>
+            <div class="info-value">
+              {% if user.is_blocked %}
+                <span class="pill pill--bad">Blocked</span>
+              {% else %}
+                <span class="pill pill--good">Active</span>
+              {% endif %}
+            </div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Role</div>
+            <div class="info-value">
+              {% if user.role and user.role.lower() == 'admin' %}
+                <span class="pill pill--warning">Admin</span>
+              {% else %}
+                <span class="pill">User</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <div class="action-buttons">
+          {% if user.is_blocked %}
+            <form method="post" action="/superadmin/users/{{ user.id }}/unblock">
+              <button class="btn btn--success" type="submit">Unblock User</button>
+            </form>
+          {% else %}
+            <form method="post" action="/superadmin/users/{{ user.id }}/block">
+              <button class="btn btn--warning" type="submit">Block User</button>
+            </form>
+          {% endif %}
+          <form method="post" action="/superadmin/users/{{ user.id }}/delete" id="deleteUserForm">
+            <button
+              class="btn btn--danger"
+              type="button"
+              onclick="openDeleteWarning(this)"
+              data-user-id="{{ user.id }}"
+              data-username="{{ user.username }}"
+              data-full-name="{{ user.full_name or 'Not set' }}"
+              data-link-code="{{ user.link_code or 'Not set' }}"
+              data-status="{{ 'Blocked' if user.is_blocked else 'Active' }}"
+              data-role="{{ 'Admin' if user.role and user.role.lower() == 'admin' else 'User' }}"
+              data-stores="{{ config.stores | length }}"
+              data-screens="{{ total_screens.count }}"
+              data-screen-subscriptions="{{ screen_subs | length }}"
+              data-subscription="{{ subscription.status if subscription else 'No subscription' }}"
+            >Delete User</button>
+          </form>
+        </div>
+      </section>
+
+      <section class="panel panel-password">
+        <div class="panel-header">
+          <div>
+            <div class="section-kicker">Access Recovery</div>
+            <h2 class="section-title">Password reset links</h2>
+            <p class="section-copy">Send a one-time password reset link to the user by email or SMS without leaving the dashboard. The reset link expires in 1 hour.</p>
+          </div>
+          <div class="panel-badge">Recovery Actions</div>
+        </div>
+
+        <div class="info-grid">
+          <div class="info-item">
+            <div class="info-label">Email Delivery</div>
+            <div class="info-value">{{ user.username }}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">SMS Delivery</div>
+            <div class="info-value">{{ user.phone_number or 'No phone number on file' }}</div>
+          </div>
+        </div>
+
+        <div class="action-buttons">
+          <form method="post" action="/superadmin/users/{{ user.id }}/send-reset-link">
+            <input type="hidden" name="channel" value="email">
+            <button class="btn btn--primary" type="submit">Send Reset Link To Email</button>
+          </form>
+          {% if user.phone_number %}
+            <form method="post" action="/superadmin/users/{{ user.id }}/send-reset-link">
+              <input type="hidden" name="channel" value="sms">
+              <button class="btn btn--success" type="submit">Send Reset Link To SMS</button>
+            </form>
+          {% else %}
+            <div class="info-item" style="flex: 1 1 100%;">
+              <div class="info-label">SMS Status</div>
+              <div class="info-value">Add a phone number to this account before sending a reset link by SMS.</div>
+            </div>
+          {% endif %}
+        </div>
+      </section>
+
+      <section class="panel panel-subscription">
+        <div class="panel-header">
+          <div>
+            <div class="section-kicker">Billing</div>
+            <h2 class="section-title">Subscription details</h2>
+            <p class="section-copy">Review the Stripe subscription state, billing period, and cancellation setting before making changes.</p>
+          </div>
+          <div class="panel-badge">Payment State</div>
+        </div>
+
+        {% if subscription %}
+          <div class="info-grid">
+            <div class="info-item">
+              <div class="info-label">Status</div>
+              <div class="info-value">
+                {% if subscription.status == 'active' %}
+                  <span class="pill pill--good">Active</span>
+                {% elif subscription.status == 'trialing' %}
+                  <span class="pill pill--warning">Trial</span>
+                {% elif subscription.status == 'canceled' %}
+                  <span class="pill pill--bad">Canceled</span>
+                {% else %}
+                  <span class="pill">{{ subscription.status }}</span>
+                {% endif %}
+              </div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">Stripe ID</div>
+              <div class="info-value">{{ subscription.stripe_subscription_id or 'N/A' }}</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">Current Period Start</div>
+              <div class="info-value">{{ subscription.current_period_start | format_timestamp if subscription.current_period_start else 'N/A' }}</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">Next Billing</div>
+              <div class="info-value">{{ subscription.current_period_end | format_timestamp if subscription.current_period_end else 'N/A' }}</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">Cancel At Period End</div>
+              <div class="info-value">{{ 'Yes' if subscription.cancel_at_period_end else 'No' }}</div>
+            </div>
+          </div>
+
+          <div class="action-buttons">
+            <form method="post" action="/superadmin/users/{{ user.id }}/cancel-subscription" onsubmit="return confirm('Cancel this user\'s subscription?')">
+              <button class="btn btn--danger" type="submit">Cancel Subscription</button>
+            </form>
+            <form method="post" action="/superadmin/users/{{ user.id }}/reset-subscription" onsubmit="return confirm('Reset subscription to 14-day trial?')">
+              <button class="btn btn--success" type="submit">Reset Subscription (14-Day Trial)</button>
+            </form>
+          </div>
+        {% else %}
+          <div class="empty-state">
+            <p>No subscription found for this user.</p>
+            <form method="post" action="/superadmin/users/{{ user.id }}/reset-subscription" style="margin-top:20px">
+              <button class="btn btn--primary" type="submit">Create Trial Subscription</button>
+            </form>
+          </div>
+        {% endif %}
+      </section>
+
+      <section class="panel panel-wide">
+        <div class="panel-header">
+          <div>
+            <div class="table-label">Screen Billing</div>
+            <h2 class="section-title">Screen subscriptions</h2>
+            <p class="section-copy">A screen-level view of active, trialing, or canceled subscriptions associated with this account.</p>
+          </div>
+          <div class="panel-badge">{{ screen_subs | length }} total</div>
+        </div>
+
+        {% if screen_subs %}
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Screen ID</th>
+                  <th>Screen Name</th>
+                  <th>Store ID</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th>Current Period End</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for sub in screen_subs %}
+                  <tr>
+                    <td>{{ sub.screen_id }}</td>
+                    <td>{{ sub.screen_name or 'N/A' }}</td>
+                    <td>{{ sub.store_id }}</td>
+                    <td>
+                      {% if sub.status == 'active' %}
+                        <span class="pill pill--good">Active</span>
+                      {% elif sub.status == 'trialing' %}
+                        <span class="pill pill--warning">Trial</span>
+                      {% elif sub.status == 'canceled' %}
+                        <span class="pill pill--bad">Canceled</span>
+                      {% else %}
+                        <span class="pill">{{ sub.status }}</span>
+                      {% endif %}
+                    </td>
+                    <td>{{ sub.created_at | format_timestamp if sub.created_at else 'N/A' }}</td>
+                    <td>{{ sub.current_period_end | format_timestamp if sub.current_period_end else 'N/A' }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="empty-state">No screen subscriptions</div>
+        {% endif %}
+      </section>
+
+      <section class="panel panel-wide">
+        <div class="panel-header">
+          <div>
+            <div class="table-label">Inventory</div>
+            <h2 class="section-title">Stores and screens</h2>
+            <p class="section-copy">Store footprint and screen allocation for this user, grouped with the totals above for faster auditing.</p>
+          </div>
+          <div class="panel-badge">{{ config.stores | length }} stores</div>
+        </div>
+
+        <div class="info-grid" style="margin-bottom: 22px;">
+          <div class="info-item">
+            <div class="info-label">Total Stores</div>
+            <div class="info-value">{{ config.stores | length }}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Total Screens</div>
+            <div class="info-value">{{ total_screens.count }}</div>
+          </div>
+        </div>
+
+        {% if config.stores %}
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Store ID</th>
+                  <th>Store Name</th>
+                  <th>Screens</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for store in config.stores %}
+                  <tr>
+                    <td>{{ store.id }}</td>
+                    <td>{{ store.name }}</td>
+                    <td>{{ config.screens.get(store.id | string, {}) | length }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="empty-state">No stores configured for this user.</div>
+        {% endif %}
+      </section>
+
+      <section class="panel panel-wide">
+        <div class="panel-header">
+          <div>
+            <div class="table-label">Retention Signals</div>
+            <h2 class="section-title">Cancellation history</h2>
+            <p class="section-copy">Historical cancellation reasons and written feedback, useful when diagnosing churn or handling billing support.</p>
+          </div>
+          <div class="panel-badge">{{ cancellations | length }} entries</div>
+        </div>
+
+        {% if cancellations %}
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Screen ID</th>
+                  <th>Screen Name</th>
+                  <th>Reason</th>
+                  <th>Feedback</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for cancel in cancellations %}
+                  <tr>
+                    <td>{{ cancel.canceled_at | format_timestamp if cancel.canceled_at else 'N/A' }}</td>
+                    <td>{{ cancel.screen_id }}</td>
+                    <td>{{ cancel.screen_name or 'N/A' }}</td>
+                    <td><span class="pill">{{ cancel.reason }}</span></td>
+                    <td>{{ cancel.feedback_text or '—' }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="empty-state">No cancellation history</div>
+        {% endif %}
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="deleteWarningModal" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="deleteWarningTitle">
+      <div class="modal-title" id="deleteWarningTitle">Delete user account</div>
+      <div class="modal-copy">Review the account details below before deleting this user.</div>
+      <div class="warning-panel">
+        This permanently removes the account, user config, local uploads, avatar, and related billing rows. If active Stripe subscriptions exist, the system will try to cancel them before the delete proceeds. This action cannot be undone.
+      </div>
+      <div class="detail-grid" id="deleteWarningDetails"></div>
+      <div class="modal-actions">
+        <button class="btn btn--warning" type="button" onclick="closeDeleteWarning()">Cancel</button>
+        <button class="btn btn--danger" type="button" id="deleteWarningConfirm">Delete User</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let activeDeleteForm = null;
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>\"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }[char]));
+    }
+
+    function openDeleteWarning(button) {
+      activeDeleteForm = document.getElementById('deleteUserForm');
+      const details = [
+        ['User ID', button.dataset.userId],
+        ['Email', button.dataset.username],
+        ['Full Name', button.dataset.fullName],
+        ['Link Code', button.dataset.linkCode],
+        ['Status', button.dataset.status],
+        ['Role', button.dataset.role],
+        ['Subscription', button.dataset.subscription],
+        ['Stores', button.dataset.stores],
+        ['Screens', button.dataset.screens],
+        ['Screen Subscriptions', button.dataset.screenSubscriptions]
+      ];
+
+      document.getElementById('deleteWarningDetails').innerHTML = details.map(([label, value]) => `
+        <div class="detail-item">
+          <div class="detail-label">${escapeHtml(label)}</div>
+          <div class="detail-value">${escapeHtml(value || 'Not set')}</div>
+        </div>
+      `).join('');
+
+      document.getElementById('deleteWarningModal').classList.add('is-open');
+      document.getElementById('deleteWarningModal').setAttribute('aria-hidden', 'false');
+    }
+
+    function closeDeleteWarning() {
+      activeDeleteForm = null;
+      document.getElementById('deleteWarningModal').classList.remove('is-open');
+      document.getElementById('deleteWarningModal').setAttribute('aria-hidden', 'true');
+    }
+
+    document.getElementById('deleteWarningConfirm').addEventListener('click', () => {
+      if (activeDeleteForm) {
+        activeDeleteForm.submit();
+      }
+    });
+
+    document.getElementById('deleteWarningModal').addEventListener('click', (event) => {
+      if (event.target.id === 'deleteWarningModal') {
+        closeDeleteWarning();
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        closeDeleteWarning();
+      }
+    });
+
+    // Auto-dismiss notifications after 2 seconds
+    (function () {
+      const flashStack = document.querySelector('.flash-stack');
+      if (!flashStack) {
+        return;
+      }
+
+      const flashes = Array.from(flashStack.querySelectorAll('.flash'));
+      flashes.forEach((flash) => {
+        const dismissTimer = setTimeout(() => {
+          flash.classList.add('dismissing');
+          setTimeout(() => {
+            flash.remove();
+            if (flashStack.children.length === 0) {
+              flashStack.remove();
+            }
+          }, 300); // Wait for animation to finish
+        }, 2000); // 2 second delay before dismissing
+
+        // Allow clicking to dismiss immediately
+        flash.addEventListener('click', () => {
+          clearTimeout(dismissTimer);
+          flash.classList.add('dismissing');
+          setTimeout(() => {
+            flash.remove();
+            if (flashStack.children.length === 0) {
+              flashStack.remove();
+            }
+          }, 300);
+        });
+      });
+    }());
+  </script>
+</body>
+</html>

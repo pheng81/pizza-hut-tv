@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Web Player — Store Code</title>
+  <style>
+    html,body{height:100%;margin:0}
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Arial,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#000;color:#f4f4f4}
+  .card{background:#0d0d0d;border:none;border-radius:12px;padding:28px;max-width:560px;width:min(92vw,560px);box-shadow:0 8px 30px rgba(0,0,0,.5)}
+    h1{margin:0 0 12px;font-size:26px;text-align:center}
+    p{margin:0 0 16px;color:#bbb;font-size:15px;text-align:center}
+    label{display:block;font-size:14px;color:#ccc;margin:12px 0 8px}
+  input{width:100%;padding:16px 18px;background:#000;border:1px solid #333;border-radius:10px;color:#fff;outline:none;text-align:center;letter-spacing:1px;font-weight:700;font-size:18px;box-sizing:border-box}
+    input::placeholder{color:#8a8a8a}
+  input:focus{border-color:#c8102e;box-shadow:none}
+  .btn{margin-top:18px;width:100%;padding:16px 18px;border:none;border-radius:10px;background:#c8102e;color:#fff;font-weight:700;cursor:pointer;font-size:16px;box-sizing:border-box}
+    .btn:hover{background:#ac0e29}
+    .note{margin-top:14px;font-size:12px;color:#9a9a9a;text-align:center}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Enter store code</h1>
+    <p>TV code: <strong id="tvcode"></strong></p>
+  <label for="store">Store code</label>
+  <input id="store" maxlength="8" inputmode="numeric" placeholder="Store code (e.g. 1000)" />
+  <button class="btn" id="go">Continue</button>
+    <div class="note">You’ll choose a screen next.</div>
+  </div>
+  <script>
+    function getQuery(){
+      var q = {};
+      try{
+        var s = window.location.search || '';
+        if(s && s.charAt(0)==='?') s = s.slice(1);
+        var parts = s.split('&');
+        for(var i=0;i<parts.length;i++){
+          var kv = parts[i].split('=');
+          var k = decodeURIComponent(kv[0]||'');
+          var v = decodeURIComponent((kv[1]||'').replace(/\+/g,' '));
+          if(k) q[k]=v;
+        }
+      }catch(e){}
+      return q;
+    }
+    var params = getQuery();
+    var code = (params.code||'').replace(/\s+/g,'');
+    if(!(code.length===4 && /^[0-9]{4}$/.test(code))){ window.location.href = '/webplayer'; }
+    document.getElementById('tvcode').textContent = code;
+    var storeEl = document.getElementById('store');
+    try{ storeEl.addEventListener('input', function(){ storeEl.value = storeEl.value.replace(/[^0-9]/g,'').slice(0,8); }); }catch(e){}
+    function go(){
+      var s = (storeEl.value||'').replace(/\s+/g,'');
+      if(!s){ alert('Please enter your store code.'); return; }
+      var url = '/webplayer/browse?code=' + encodeURIComponent(code) + '&store_id=' + encodeURIComponent(s);
+      window.location.href = url;
+    }
+    try{ document.getElementById('go').addEventListener('click', go); }catch(e){}
+    try{ document.addEventListener('keydown', function(e){ e=e||window.event; if((e.key||e.keyCode)==='Enter' || e.keyCode===13){ go(); } }); }catch(e){}
+    setTimeout(function(){ try{ storeEl.focus(); }catch(e){} }, 50);
+  </script>
+</body>
+</html>

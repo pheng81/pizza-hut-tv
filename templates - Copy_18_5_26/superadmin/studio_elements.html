@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Studio Elements Manager</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f7fb;
+      color: #1f2937;
+      line-height: 1.5;
+    }
+    header {
+      background: #2d3748;
+      padding: 20px 40px;
+      border-bottom: 3px solid #1a202c;
+    }
+    .header-content {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      max-width: 1400px;
+      margin: 0 auto;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .brand { color: white; font-size: 20px; font-weight: 700; }
+    .header-stats { display: flex; gap: 28px; color: white; }
+    .header-stat { text-align: center; }
+    .header-stat-value { font-size: 24px; font-weight: 700; }
+    .header-stat-label { font-size: 11px; opacity: 0.8; text-transform: uppercase; }
+    .header-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+    .btn {
+      border: none; padding: 9px 14px;
+      font-size: 12px; font-weight: 700;
+      text-decoration: none; cursor: pointer;
+      display: inline-block; white-space: nowrap;
+      border-radius: 4px;
+    }
+    .btn--ghost { background: transparent; color: white; border: 1px solid rgba(255,255,255,0.35); }
+    .btn--ghost:hover { background: rgba(255,255,255,0.08); }
+    .btn--primary { background: #4f6ef7; color: white; }
+    .btn--primary:hover { background: #3b5be0; }
+    .btn--danger { background: #ef4444; color: white; }
+    .btn--danger:hover { background: #dc2626; }
+    main { max-width: 1200px; margin: 0 auto; padding: 28px 40px 60px; }
+
+    .page-head { margin-bottom: 28px; }
+    .page-head h1 { font-size: 26px; font-weight: 800; margin-bottom: 6px; }
+    .page-head p { color: #6b7280; font-size: 14px; }
+
+    .flash-stack { 
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      display: grid;
+      gap: 12px;
+      z-index: 9999;
+      max-width: 420px;
+      pointer-events: none;
+    }
+    .flash { 
+      padding: 14px 16px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      border: 1px solid;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+      animation: slideIn 0.3s ease;
+      pointer-events: auto;
+      cursor: pointer;
+    }
+    .flash--success { 
+      background: #f0fdf4;
+      color: #166534;
+      border-color: #86efac;
+    }
+    .flash--error { 
+      background: #fef2f2;
+      color: #b91c1c;
+      border-color: #fca5a5;
+    }
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateX(400px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+    @keyframes slideOut {
+      from {
+        opacity: 1;
+        transform: translateX(0);
+      }
+      to {
+        opacity: 0;
+        transform: translateX(400px);
+      }
+    }
+    .flash.dismissing {
+      animation: slideOut 0.3s ease forwards;
+    }
+
+    .two-col { display: grid; grid-template-columns: 360px 1fr; gap: 28px; align-items: start; }
+    @media (max-width: 860px) { .two-col { grid-template-columns: 1fr; } }
+
+    .card {
+      background: white; border: 1px solid #e5e7eb;
+      border-radius: 12px; padding: 24px;
+    }
+    .card h2 { font-size: 16px; font-weight: 700; margin-bottom: 16px; color: #111827; }
+
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #6b7280; margin-bottom: 5px; }
+    .form-group input[type=text],
+    .form-group select {
+      width: 100%; border: 1px solid #d1d5db; border-radius: 8px;
+      padding: 9px 12px; font-size: 14px; color: #111827;
+      background: white;
+    }
+    .form-group input[type=file] { font-size: 14px; }
+    .form-group .hint { font-size: 11px; color: #9ca3af; margin-top: 4px; }
+
+    .upload-preview-area {
+      border: 2px dashed #d1d5db; border-radius: 10px;
+      padding: 18px; text-align: center;
+      cursor: pointer; transition: border-color 0.15s;
+    }
+    .upload-preview-area:hover { border-color: #4f6ef7; }
+    .upload-preview-area p { color: #9ca3af; font-size: 13px; margin-top: 8px; }
+    #previewImg { max-width: 100%; max-height: 120px; border-radius: 6px; display: none; margin: 8px auto 0; }
+
+    /* Elements grid */
+    .section-head {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .section-head h2 { font-size: 16px; font-weight: 700; color: #111827; }
+    .section-head .count { font-size: 12px; color: #6b7280; background: #f3f4f6; padding: 3px 10px; border-radius: 20px; }
+
+    .category-group { margin-bottom: 28px; }
+    .category-label {
+      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+      color: #9ca3af; margin-bottom: 10px; padding-bottom: 6px;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .elements-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      gap: 10px;
+    }
+    .element-card {
+      background: white; border: 1px solid #e5e7eb; border-radius: 10px;
+      padding: 10px 8px; text-align: center; position: relative;
+    }
+    .element-card img {
+      width: 60px; height: 60px; object-fit: contain;
+      border-radius: 6px; background: #f9fafb;
+      display: block; margin: 0 auto 6px;
+    }
+    .element-card .el-name {
+      font-size: 11px; font-weight: 600; color: #374151;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .element-card .el-cat {
+      font-size: 10px; color: #9ca3af; margin-bottom: 8px;
+    }
+    .element-card form { margin-top: 6px; }
+    .element-card .del-btn {
+      font-size: 11px; color: #ef4444; border: 1px solid #fca5a5;
+      background: #fff; border-radius: 6px; padding: 3px 10px;
+      cursor: pointer; width: 100%;
+    }
+    .element-card .del-btn:hover { background: #fee2e2; }
+
+    .empty-msg { color: #9ca3af; font-size: 14px; padding: 20px 0; }
+    .cat-pill {
+      display: inline-block; font-size: 10px; font-weight: 700;
+      padding: 2px 8px; border-radius: 20px; margin-bottom: 6px;
+    }
+    .cat-sticker  { background: #dbeafe; color: #1d4ed8; }
+    .cat-overlay  { background: #fef3c7; color: #92400e; }
+    .cat-shape    { background: #ede9fe; color: #5b21b6; }
+    .cat-logo     { background: #d1fae5; color: #065f46; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-content">
+      <div class="brand">Studio Elements</div>
+      <div class="header-stats">
+        <div class="header-stat">
+          <div class="header-stat-value">{{ totals.users }}</div>
+          <div class="header-stat-label">Users</div>
+        </div>
+        <div class="header-stat">
+          <div class="header-stat-value">{{ totals.stores }}</div>
+          <div class="header-stat-label">Stores</div>
+        </div>
+        <div class="header-stat">
+          <div class="header-stat-value">{{ totals.screens }}</div>
+          <div class="header-stat-label">Screens</div>
+        </div>
+        <div class="header-stat">
+          <div class="header-stat-value">{{ totals.online }}</div>
+          <div class="header-stat-label">Online</div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <a href="/superadmin/dashboard" class="btn btn--ghost">Back To Dashboard</a>
+        <a href="/superadmin/website" class="btn btn--ghost">Website Edit</a>
+        <a href="/superadmin/logout" class="btn btn--ghost">Logout</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-stack">
+          {% for category, message in messages %}
+            <div class="flash {{ 'flash--success' if category == 'success' else 'flash--error' }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <div class="page-head">
+      <h1>Studio Elements Manager</h1>
+      <p>Upload custom PNG, JPG, SVG, GIF or WebP images to appear in the <strong>Elements</strong> panel of Menu Studio for all users.</p>
+    </div>
+
+    <div class="two-col">
+
+      <!-- Upload form -->
+      <div class="card">
+        <h2>Upload New Element</h2>
+        <form method="post" action="/superadmin/studio-elements/upload" enctype="multipart/form-data">
+          <div class="form-group">
+            <label>Display Name</label>
+            <input type="text" name="name" placeholder="e.g. Gold Star, Sale Badge, Arrow…" required>
+          </div>
+          <div class="form-group">
+            <label>Category</label>
+            <select name="category">
+              <option value="sticker">Sticker / Emoji</option>
+              <option value="overlay">Overlay / Filter</option>
+              <option value="shape">Shape / Frame</option>
+              <option value="logo">Logo / Brand</option>
+            </select>
+            <span class="hint">Where the element will appear in the Elements panel.</span>
+          </div>
+          <div class="form-group">
+            <label>Image File</label>
+            <div class="upload-preview-area" onclick="document.getElementById('elementFileInput').click()">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <p>Click to choose image<br><small>PNG, JPG, GIF, SVG, WebP</small></p>
+              <img id="previewImg" alt="preview">
+            </div>
+            <input id="elementFileInput" type="file" name="image" accept="image/png,image/jpeg,image/gif,image/svg+xml,image/webp" required style="display:none" onchange="previewFile(this)">
+          </div>
+          <button type="submit" class="btn btn--primary" style="width:100%;padding:11px;font-size:14px">Upload Element</button>
+        </form>
+      </div>
+
+      <!-- Current elements -->
+      <div>
+        <div class="section-head">
+          <h2>Uploaded Elements</h2>
+          <span class="count">{{ elements|length }} total</span>
+        </div>
+
+        {% if elements %}
+          {% set categories = ['sticker','overlay','shape','logo'] %}
+          {% set cat_labels = {'sticker':'Stickers & Emoji','overlay':'Overlays & Filters','shape':'Shapes & Frames','logo':'Logos & Branding'} %}
+          {% for cat in categories %}
+            {% set cat_items = elements | selectattr('category','equalto',cat) | list %}
+            {% if cat_items %}
+              <div class="category-group">
+                <div class="category-label">{{ cat_labels[cat] }}</div>
+                <div class="elements-grid">
+                  {% for el in cat_items %}
+                    <div class="element-card">
+                      <img src="{{ el.url }}" alt="{{ el.name }}" loading="lazy">
+                      <div class="el-name" title="{{ el.name }}">{{ el.name }}</div>
+                      <span class="cat-pill cat-{{ el.category }}">{{ el.category }}</span>
+                      <form method="post" action="/superadmin/studio-elements/{{ el.id }}/delete" onsubmit="return confirm('Delete {{ el.name }}?')">
+                        <button type="submit" class="del-btn">Delete</button>
+                      </form>
+                    </div>
+                  {% endfor %}
+                </div>
+              </div>
+            {% endif %}
+          {% endfor %}
+        {% else %}
+          <p class="empty-msg">No custom elements uploaded yet. Upload your first one using the form on the left.</p>
+        {% endif %}
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    function previewFile(input) {
+      const img = document.getElementById('previewImg');
+      if (input.files && input.files[0]) {
+        const file = input.files[0];
+        // SVGs may not render via object URL in all browsers; show filename only
+        if (file.type === 'image/svg+xml') {
+          img.style.display = 'none';
+          input.closest('.upload-preview-area').querySelector('p').textContent = file.name;
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = e => {
+          img.src = e.target.result;
+          img.style.display = 'block';
+          input.closest('.upload-preview-area').querySelector('p').textContent = file.name;
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+
+    // Auto-dismiss notifications after 2 seconds
+    (function () {
+      const flashStack = document.querySelector('.flash-stack');
+      if (!flashStack) {
+        return;
+      }
+
+      const flashes = Array.from(flashStack.querySelectorAll('.flash'));
+      flashes.forEach((flash) => {
+        const dismissTimer = setTimeout(() => {
+          flash.classList.add('dismissing');
+          setTimeout(() => {
+            flash.remove();
+            if (flashStack.children.length === 0) {
+              flashStack.remove();
+            }
+          }, 300); // Wait for animation to finish
+        }, 2000); // 2 second delay before dismissing
+
+        // Allow clicking to dismiss immediately
+        flash.addEventListener('click', () => {
+          clearTimeout(dismissTimer);
+          flash.classList.add('dismissing');
+          setTimeout(() => {
+            flash.remove();
+            if (flashStack.children.length === 0) {
+              flashStack.remove();
+            }
+          }, 300);
+        });
+      });
+    }());
+  </script>
+</body>
+</html>
