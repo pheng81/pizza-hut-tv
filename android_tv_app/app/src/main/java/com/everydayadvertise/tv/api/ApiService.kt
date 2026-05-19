@@ -28,9 +28,9 @@ interface ApiService {
 
 	// Pairing: fetch stores for a user by 4-digit code
 	@GET("api/stores_by_code/{code}")
-	suspend fun getStoresByCode(
+	suspend fun getStoresByCodeRaw(
 		@Path("code") code: String
-	): CodeStoresResponse
+	): String
 
 	@POST("api/screen_heartbeat")
 	suspend fun sendHeartbeat(@Body body: HeartbeatReq): HeartbeatResp

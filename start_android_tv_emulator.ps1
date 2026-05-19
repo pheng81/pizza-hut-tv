@@ -14,7 +14,7 @@ Write-Host
 
 # Configuration
 $avdName = $AvdName
-$packageName = "com.pizzahut.tv"
+$packageName = "com.everydayadvertise.tv"
 $apkPath = "android_tv_app\app\build\outputs\apk\debug\app-debug.apk"
 
 function Fail([string]$message) {

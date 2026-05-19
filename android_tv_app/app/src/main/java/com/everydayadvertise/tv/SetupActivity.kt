@@ -392,8 +392,14 @@ class SetupActivity : AppCompatActivity() {
 							}
 						} catch (_: Exception) { /* ignore, proceed to API call */ }
 					}
-					val resp = withContext(Dispatchers.IO) { ApiClient.service.getStoresByCode(code) }
-					if (!resp.success) { codeStatus.text = resp.error ?: "Invalid code"; return@launch }
+					val raw = withContext(Dispatchers.IO) { ApiClient.service.getStoresByCodeRaw(code) }
+					val parsed = runCatching { JSONObject(raw) }.getOrNull()
+					val ok = parsed?.optBoolean("success", false) ?: false
+					if (!ok) {
+						val err = parsed?.optString("error")?.takeIf { !it.isNullOrBlank() } ?: "Invalid code"
+						codeStatus.text = err
+						return@launch
+					}
 					verifiedCode = code
 					prefs.edit().putString(PairCodeHolder.KEY_PAIR_CODE, code).putString("sessionId", sessionId).apply()
 					codeStatus.text = "Code linked"

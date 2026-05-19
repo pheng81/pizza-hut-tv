@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:geocoding/geocoding.dart' as geocoding;
+import 'package:geolocator/geolocator.dart';
 
 import '../../models/app_models.dart';
 import '../../services/api_client.dart';
@@ -367,49 +369,47 @@ class _DeviceManagerTabState extends State<DeviceManagerTab> {
   }
 
   Future<void> _setLocation(String piId) async {
-    String initial = '';
+    String initialName = '';
+    String initialAddress = '';
+    double? initialLatitude;
+    double? initialLongitude;
     try {
       final data = await widget.apiClient.getPiLocation(piId);
-      initial = (data['location_name'] ?? '').toString();
+      initialName = (data['location_name'] ?? '').toString();
+      initialAddress = (data['address'] ?? '').toString();
+      initialLatitude = double.tryParse((data['latitude'] ?? '').toString());
+      initialLongitude = double.tryParse((data['longitude'] ?? '').toString());
     } catch (_) {
       // Keep empty initial value if location not available.
     }
 
-    final controller = TextEditingController(text: initial);
-    final result = await showDialog<String>(
+    final result = await showDialog<_PiLocationDraft>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Set Location'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            labelText: 'Location name',
-            hintText: 'Example: Front counter',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
-            child: const Text('Save'),
-          ),
-        ],
+      builder: (_) => _PiLocationDialog(
+        initialLocationName: initialName,
+        initialAddress: initialAddress,
+        initialLatitude: initialLatitude,
+        initialLongitude: initialLongitude,
       ),
     );
 
-    if (result == null || result.isEmpty) {
+    if (result == null) {
       return;
     }
 
     await _runPiAction(piId, () async {
-      await widget.apiClient.updatePiLocationName(
+      await widget.apiClient.updatePiLocation(
         piId: piId,
-        locationName: result,
+        locationName: result.locationName,
+        address: result.address,
+        latitude: result.latitude,
+        longitude: result.longitude,
       );
-      _showMessage('Location updated for $piId.');
+      _showMessage(
+        result.hasCoordinates
+            ? 'Location and coordinates updated for $piId.'
+            : 'Location updated for $piId.',
+      );
     });
   }
 
@@ -434,7 +434,7 @@ class _DeviceManagerTabState extends State<DeviceManagerTab> {
     if (selectedScreenId != null) {
       initialPreview = await _loadScreenPreview(
         storeId: selectedStoreId,
-        screenId: selectedScreenId!,
+        screenId: selectedScreenId,
       );
     }
 
@@ -1625,7 +1625,7 @@ class _DeviceManagerTabState extends State<DeviceManagerTab> {
                                                   ? GestureDetector(
                                                       onTap: () =>
                                                           _showPreviewDialog(
-                                                        imageUrl: preview!.url,
+                                                        imageUrl: preview.url,
                                                         title:
                                                             'Preview • $piId',
                                                       ),
@@ -1822,7 +1822,7 @@ class _DeviceManagerTabState extends State<DeviceManagerTab> {
                                               ? GestureDetector(
                                                   onTap: () =>
                                                       _showPreviewDialog(
-                                                    imageUrl: preview!.url,
+                                                    imageUrl: preview.url,
                                                     title:
                                                         'Preview • $store • $screen',
                                                   ),
@@ -1928,7 +1928,7 @@ class _DeviceManagerTabState extends State<DeviceManagerTab> {
                                     onPressed: busy
                                         ? null
                                         : () => _setLocation(deviceId),
-                                    child: const Text('Rename Pi'),
+                                    child: const Text('Set Location'),
                                   ),
                                   OutlinedButton(
                                     onPressed:
@@ -2011,6 +2011,380 @@ class _ScreenPreview {
 
   final String url;
   final String label;
+}
+
+class _PiLocationDraft {
+  const _PiLocationDraft({
+    required this.locationName,
+    required this.address,
+    this.latitude,
+    this.longitude,
+  });
+
+  final String locationName;
+  final String address;
+  final double? latitude;
+  final double? longitude;
+
+  bool get hasCoordinates => latitude != null && longitude != null;
+}
+
+class _PiLocationDialog extends StatefulWidget {
+  const _PiLocationDialog({
+    required this.initialLocationName,
+    required this.initialAddress,
+    this.initialLatitude,
+    this.initialLongitude,
+  });
+
+  final String initialLocationName;
+  final String initialAddress;
+  final double? initialLatitude;
+  final double? initialLongitude;
+
+  @override
+  State<_PiLocationDialog> createState() => _PiLocationDialogState();
+}
+
+class _PiLocationDialogState extends State<_PiLocationDialog> {
+  late final TextEditingController _locationNameController;
+  late final TextEditingController _addressController;
+  double? _latitude;
+  double? _longitude;
+  bool _usingCurrentLocation = false;
+  bool _searchingAddress = false;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _locationNameController =
+        TextEditingController(text: widget.initialLocationName);
+    _addressController = TextEditingController(text: widget.initialAddress);
+    _latitude = widget.initialLatitude;
+    _longitude = widget.initialLongitude;
+  }
+
+  @override
+  void dispose() {
+    _locationNameController.dispose();
+    _addressController.dispose();
+    super.dispose();
+  }
+
+  String _formatPlacemark(geocoding.Placemark placemark) {
+    final parts = <String>[];
+
+    void addPart(String? value) {
+      final clean = value?.trim() ?? '';
+      if (clean.isEmpty || parts.contains(clean)) {
+        return;
+      }
+      parts.add(clean);
+    }
+
+    addPart(placemark.name);
+    addPart(placemark.street);
+    addPart(placemark.subLocality);
+    addPart(placemark.locality);
+    addPart(placemark.administrativeArea);
+    addPart(placemark.postalCode);
+    addPart(placemark.country);
+    return parts.join(', ');
+  }
+
+  Future<String> _reverseGeocode(double latitude, double longitude) async {
+    final placemarks = await geocoding.placemarkFromCoordinates(
+      latitude,
+      longitude,
+    );
+    if (placemarks.isEmpty) {
+      return '';
+    }
+    return _formatPlacemark(placemarks.first);
+  }
+
+  Future<void> _useCurrentLocation() async {
+    setState(() {
+      _usingCurrentLocation = true;
+      _error = null;
+    });
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        throw Exception('Location services are turned off on this device.');
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        throw Exception('Location permission is required to use current GPS.');
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+      final address =
+          await _reverseGeocode(position.latitude, position.longitude);
+
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _latitude = position.latitude;
+        _longitude = position.longitude;
+        if (address.isNotEmpty) {
+          _addressController.text = address;
+        }
+        if (_locationNameController.text.trim().isEmpty) {
+          _locationNameController.text =
+              address.isNotEmpty ? address : 'Current location';
+        }
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _error = error.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _usingCurrentLocation = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _searchAddress() async {
+    final query = _addressController.text.trim();
+    if (query.isEmpty) {
+      setState(() {
+        _error = 'Enter an address or store location to search.';
+      });
+      return;
+    }
+
+    setState(() {
+      _searchingAddress = true;
+      _error = null;
+    });
+
+    try {
+      final locations = await geocoding.locationFromAddress(query);
+      if (locations.isEmpty) {
+        throw Exception('No matching address was found.');
+      }
+      final location = locations.first;
+      final formatted =
+          await _reverseGeocode(location.latitude, location.longitude);
+
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _latitude = location.latitude;
+        _longitude = location.longitude;
+        _addressController.text = formatted.isNotEmpty ? formatted : query;
+        if (_locationNameController.text.trim().isEmpty) {
+          _locationNameController.text =
+              formatted.isNotEmpty ? formatted : query;
+        }
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _error = error.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _searchingAddress = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _save() async {
+    final locationName = _locationNameController.text.trim();
+    final address = _addressController.text.trim();
+
+    if (locationName.isEmpty && address.isEmpty) {
+      setState(() {
+        _error = 'Enter a location name, address, or use current GPS.';
+      });
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    try {
+      double? nextLatitude = _latitude;
+      double? nextLongitude = _longitude;
+      String nextAddress = address;
+
+      if ((nextLatitude == null || nextLongitude == null) &&
+          address.isNotEmpty) {
+        final locations = await geocoding.locationFromAddress(address);
+        if (locations.isNotEmpty) {
+          nextLatitude = locations.first.latitude;
+          nextLongitude = locations.first.longitude;
+          final formatted = await _reverseGeocode(nextLatitude, nextLongitude);
+          if (formatted.isNotEmpty) {
+            nextAddress = formatted;
+          }
+        }
+      }
+
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop(
+        _PiLocationDraft(
+          locationName: locationName.isNotEmpty
+              ? locationName
+              : (nextAddress.isNotEmpty ? nextAddress : 'Unknown Location'),
+          address: nextAddress,
+          latitude: nextLatitude,
+          longitude: nextLongitude,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _error = error.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final coordinatesText = (_latitude != null && _longitude != null)
+        ? '${_latitude!.toStringAsFixed(6)}, ${_longitude!.toStringAsFixed(6)}'
+        : 'No coordinates selected yet';
+
+    return AlertDialog(
+      title: const Text('Set Location'),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: _locationNameController,
+                decoration: const InputDecoration(
+                  labelText: 'Location label',
+                  hintText: 'Example: Front counter',
+                ),
+                textCapitalization: TextCapitalization.words,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _addressController,
+                decoration: const InputDecoration(
+                  labelText: 'Address or place',
+                  hintText: 'Search a street address or suburb',
+                ),
+                minLines: 1,
+                maxLines: 2,
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed:
+                        (_usingCurrentLocation || _searchingAddress || _saving)
+                            ? null
+                            : _useCurrentLocation,
+                    icon: _usingCurrentLocation
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.my_location_outlined),
+                    label: const Text('Use current GPS'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed:
+                        (_usingCurrentLocation || _searchingAddress || _saving)
+                            ? null
+                            : _searchAddress,
+                    icon: _searchingAddress
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.search),
+                    label: const Text('Find address'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Coordinates',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                coordinatesText,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _error!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _saving ? null : _save,
+          child: Text(_saving ? 'Saving...' : 'Save'),
+        ),
+      ],
+    );
+  }
 }
 
 class _DeviceLibraryPickerSheet extends StatefulWidget {

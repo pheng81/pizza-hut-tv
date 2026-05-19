@@ -69,6 +69,26 @@ def _apply_r2_env_overrides():
 
 _apply_r2_env_overrides()
 
+
+def _allowed_request_hosts() -> set[str]:
+    raw_hosts = (os.environ.get('ALLOWED_HOSTS') or '').strip()
+    if raw_hosts:
+        hosts = {
+            host.strip().lower()
+            for host in raw_hosts.split(',')
+            if host.strip()
+        }
+    else:
+        hosts = {
+            'everydayadvertise.com',
+            'www.everydayadvertise.com',
+            'api.everydayadvertise.com',
+            'localhost',
+            '127.0.0.1',
+            '::1',
+        }
+    return hosts
+
 # Optional boto3 for R2 (S3-compatible)
 try:
     import boto3
@@ -128,6 +148,16 @@ def get_db():
     db = sqlite3.connect(_db_path())
     db.row_factory = sqlite3.Row
     return db
+
+def _table_exists(db: sqlite3.Connection, table_name: str) -> bool:
+    try:
+        row = db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name = ?",
+            (table_name,),
+        ).fetchone()
+        return row is not None
+    except Exception:
+        return False
 
 def init_db():
     db = get_db()
@@ -247,7 +277,7 @@ def init_db():
             'current_period_end INTEGER, '
             'trial_end INTEGER, '
             'cancel_at_period_end INTEGER DEFAULT 0, '
-            'created_at INTEGER DEFAULT (strftime("%s", "now")), '
+            'created_at INTEGER, '
             'updated_at INTEGER, '
             'UNIQUE(user_id), '
             'FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE'
@@ -270,7 +300,7 @@ def init_db():
             'current_period_start INTEGER, '
             'current_period_end INTEGER, '
             'cancel_at_period_end INTEGER DEFAULT 0, '
-            'created_at INTEGER DEFAULT (strftime("%s", "now")), '
+            'created_at INTEGER, '
             'updated_at INTEGER, '
             'UNIQUE(user_id, screen_id, store_id), '
             'FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE'
@@ -290,7 +320,7 @@ def init_db():
             'screen_name TEXT, '
             'reason TEXT, '
             'feedback_text TEXT, '
-            'canceled_at INTEGER DEFAULT (strftime("%s", "now")), '
+            'canceled_at INTEGER, '
             'FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE'
             ')'
         )
@@ -360,6 +390,10 @@ def init_db():
             'hero_proof_secondary TEXT, '
             'hero_proof_tertiary TEXT, '
             'hero_image_path TEXT, '
+            'hero_media_shape TEXT, '
+            'hero_media_size TEXT, '
+            'hero_media_fit_mode TEXT, '
+            'hero_rotate_on_refresh INTEGER, '
             'promo_enabled INTEGER, '
             'promo_text TEXT, '
             'promo_bg_color TEXT, '
@@ -375,6 +409,33 @@ def init_db():
             'promo_direction TEXT, '
             'features_title TEXT, '
             'features_style TEXT, '
+            'body_media_display_size TEXT, '
+            'body_media_width_mode TEXT, '
+            'body_media_max_width INTEGER, '
+            'body_media_side_padding INTEGER, '
+            'body_media_fit_mode TEXT, '
+            'body_media_surface_style TEXT, '
+            'body_media_corner_radius INTEGER, '
+            'body_media_frame_bg_color TEXT, '
+            'body_media_media_bg_color TEXT, '
+            'body_media_video_display_size TEXT, '
+            'body_media_video_width_mode TEXT, '
+            'body_media_video_max_width INTEGER, '
+            'body_media_video_side_padding INTEGER, '
+            'body_media_video_fit_mode TEXT, '
+            'body_media_video_surface_style TEXT, '
+            'body_media_video_corner_radius INTEGER, '
+            'body_media_video_frame_bg_color TEXT, '
+            'body_media_video_media_bg_color TEXT, '
+            'body_media_carousel_display_size TEXT, '
+            'body_media_carousel_width_mode TEXT, '
+            'body_media_carousel_max_width INTEGER, '
+            'body_media_carousel_side_padding INTEGER, '
+            'body_media_carousel_fit_mode TEXT, '
+            'body_media_carousel_surface_style TEXT, '
+            'body_media_carousel_corner_radius INTEGER, '
+            'body_media_carousel_frame_bg_color TEXT, '
+            'body_media_carousel_media_bg_color TEXT, '
             'pricing_title TEXT, '
             'pricing_subtitle TEXT, '
             'updated_at INTEGER'
@@ -429,6 +490,99 @@ def init_db():
         if 'promo_direction' not in homepage_settings_columns:
             db.execute('ALTER TABLE homepage_settings ADD COLUMN promo_direction TEXT')
             db.commit()
+        if 'hero_media_shape' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN hero_media_shape TEXT')
+            db.commit()
+        if 'hero_media_size' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN hero_media_size TEXT')
+            db.commit()
+        if 'hero_media_fit_mode' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN hero_media_fit_mode TEXT')
+            db.commit()
+        if 'hero_rotate_on_refresh' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN hero_rotate_on_refresh INTEGER')
+            db.commit()
+        if 'body_media_display_size' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN body_media_display_size TEXT')
+            db.commit()
+        if 'body_media_width_mode' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN body_media_width_mode TEXT')
+            db.commit()
+        if 'body_media_max_width' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN body_media_max_width INTEGER')
+            db.commit()
+        if 'body_media_side_padding' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN body_media_side_padding INTEGER')
+            db.commit()
+        if 'body_media_fit_mode' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN body_media_fit_mode TEXT')
+            db.commit()
+        if 'body_media_surface_style' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN body_media_surface_style TEXT')
+            db.commit()
+        if 'body_media_corner_radius' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN body_media_corner_radius INTEGER')
+            db.commit()
+        if 'body_media_frame_bg_color' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN body_media_frame_bg_color TEXT')
+            db.commit()
+        if 'body_media_media_bg_color' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN body_media_media_bg_color TEXT')
+            db.commit()
+        if 'body_media_video_display_size' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN body_media_video_display_size TEXT')
+            db.commit()
+        if 'body_media_video_width_mode' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN body_media_video_width_mode TEXT')
+            db.commit()
+        if 'body_media_video_max_width' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN body_media_video_max_width INTEGER')
+            db.commit()
+        if 'body_media_video_side_padding' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN body_media_video_side_padding INTEGER')
+            db.commit()
+        if 'body_media_video_fit_mode' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN body_media_video_fit_mode TEXT')
+            db.commit()
+        if 'body_media_video_surface_style' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN body_media_video_surface_style TEXT')
+            db.commit()
+        if 'body_media_video_corner_radius' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN body_media_video_corner_radius INTEGER')
+            db.commit()
+        if 'body_media_video_frame_bg_color' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN body_media_video_frame_bg_color TEXT')
+            db.commit()
+        if 'body_media_video_media_bg_color' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN body_media_video_media_bg_color TEXT')
+            db.commit()
+        if 'body_media_carousel_display_size' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN body_media_carousel_display_size TEXT')
+            db.commit()
+        if 'body_media_carousel_width_mode' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN body_media_carousel_width_mode TEXT')
+            db.commit()
+        if 'body_media_carousel_max_width' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN body_media_carousel_max_width INTEGER')
+            db.commit()
+        if 'body_media_carousel_side_padding' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN body_media_carousel_side_padding INTEGER')
+            db.commit()
+        if 'body_media_carousel_fit_mode' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN body_media_carousel_fit_mode TEXT')
+            db.commit()
+        if 'body_media_carousel_surface_style' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN body_media_carousel_surface_style TEXT')
+            db.commit()
+        if 'body_media_carousel_corner_radius' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN body_media_carousel_corner_radius INTEGER')
+            db.commit()
+        if 'body_media_carousel_frame_bg_color' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN body_media_carousel_frame_bg_color TEXT')
+            db.commit()
+        if 'body_media_carousel_media_bg_color' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN body_media_carousel_media_bg_color TEXT')
+            db.commit()
     except Exception as _homepage_e:
         logging.warning('Homepage settings table init failed: %s', _homepage_e)
 
@@ -440,6 +594,7 @@ def init_db():
             'media_type TEXT NOT NULL, '
             'caption TEXT, '
             'layout_style TEXT NOT NULL DEFAULT "full", '
+            'edge_to_edge INTEGER NOT NULL DEFAULT 0, '
             'sort_order INTEGER NOT NULL DEFAULT 0, '
             'created_at INTEGER NOT NULL'
             ')'
@@ -451,8 +606,24 @@ def init_db():
         if 'layout_style' not in homepage_body_media_columns:
             db.execute('ALTER TABLE homepage_body_media ADD COLUMN layout_style TEXT NOT NULL DEFAULT "full"')
             db.commit()
+        if 'edge_to_edge' not in homepage_body_media_columns:
+            db.execute('ALTER TABLE homepage_body_media ADD COLUMN edge_to_edge INTEGER NOT NULL DEFAULT 0')
+            db.commit()
     except Exception as _homepage_media_e:
         logging.warning('Homepage body media table init failed: %s', _homepage_media_e)
+
+    try:
+        db.execute(
+            'CREATE TABLE IF NOT EXISTS homepage_hero_media ('
+            'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+            'media_path TEXT NOT NULL, '
+            'sort_order INTEGER NOT NULL DEFAULT 0, '
+            'created_at INTEGER NOT NULL'
+            ')'
+        )
+        db.commit()
+    except Exception as _homepage_hero_media_e:
+        logging.warning('Homepage hero media table init failed: %s', _homepage_hero_media_e)
 
     try:
         db.execute(
@@ -771,6 +942,10 @@ def _default_homepage_settings() -> dict:
         'hero_proof_secondary': 'Setup in 5 minutes',
         'hero_proof_tertiary': '24/7 Support',
         'hero_image_path': 'imag2.png',
+        'hero_media_shape': 'landscape',
+        'hero_media_size': 'large',
+        'hero_media_fit_mode': 'cover',
+        'hero_rotate_on_refresh': 0,
         'promo_enabled': 0,
         'promo_text': 'Launch special: 14-day free trial + first screen free. Setup in minutes.',
         'promo_bg_color': '#111827',
@@ -786,9 +961,219 @@ def _default_homepage_settings() -> dict:
         'promo_direction': 'left',
         'features_title': 'Why Choose EverydayAdvertise?',
         'features_style': 'flat',
+        'body_media_display_size': 'standard',
+        'body_media_width_mode': 'contained',
+        'body_media_max_width': 1200,
+        'body_media_side_padding': 40,
+        'body_media_fit_mode': 'contain',
+        'body_media_surface_style': 'card',
+        'body_media_corner_radius': 0,
+        'body_media_frame_bg_color': '#ffffff',
+        'body_media_media_bg_color': '#000000',
+        'body_media_video_display_size': 'standard',
+        'body_media_video_width_mode': 'contained',
+        'body_media_video_max_width': 1200,
+        'body_media_video_side_padding': 40,
+        'body_media_video_fit_mode': 'contain',
+        'body_media_video_surface_style': 'card',
+        'body_media_video_corner_radius': 0,
+        'body_media_video_frame_bg_color': '#ffffff',
+        'body_media_video_media_bg_color': '#000000',
+        'body_media_carousel_display_size': 'standard',
+        'body_media_carousel_width_mode': 'contained',
+        'body_media_carousel_max_width': 1200,
+        'body_media_carousel_side_padding': 40,
+        'body_media_carousel_fit_mode': 'contain',
+        'body_media_carousel_surface_style': 'card',
+        'body_media_carousel_corner_radius': 0,
+        'body_media_carousel_frame_bg_color': '#ffffff',
+        'body_media_carousel_media_bg_color': '#000000',
         'pricing_title': 'Simple, Transparent Pricing',
         'pricing_subtitle': 'No hidden fees. No long-term contracts. Cancel anytime.',
         'updated_at': int(time.time()),
+    }
+
+
+_HOMEPAGE_SETTINGS_FIELDS = (
+    'hero_title_line1',
+    'hero_title_line2',
+    'hero_subtitle',
+    'hero_primary_cta_text',
+    'hero_primary_cta_url',
+    'hero_secondary_cta_text',
+    'hero_secondary_cta_url',
+    'hero_proof_secondary',
+    'hero_proof_tertiary',
+    'hero_image_path',
+    'hero_media_shape',
+    'hero_media_size',
+    'hero_media_fit_mode',
+    'hero_rotate_on_refresh',
+    'promo_enabled',
+    'promo_text',
+    'promo_bg_color',
+    'promo_text_color',
+    'promo_font_size',
+    'promo_font_weight',
+    'promo_font_family',
+    'promo_font_style',
+    'promo_speed',
+    'promo_height',
+    'promo_text_align',
+    'promo_pause_on_hover',
+    'promo_direction',
+    'features_title',
+    'features_style',
+    'body_media_display_size',
+    'body_media_width_mode',
+    'body_media_max_width',
+    'body_media_side_padding',
+    'body_media_fit_mode',
+    'body_media_surface_style',
+    'body_media_corner_radius',
+    'body_media_frame_bg_color',
+    'body_media_media_bg_color',
+    'body_media_video_display_size',
+    'body_media_video_width_mode',
+    'body_media_video_max_width',
+    'body_media_video_side_padding',
+    'body_media_video_fit_mode',
+    'body_media_video_surface_style',
+    'body_media_video_corner_radius',
+    'body_media_video_frame_bg_color',
+    'body_media_video_media_bg_color',
+    'body_media_carousel_display_size',
+    'body_media_carousel_width_mode',
+    'body_media_carousel_max_width',
+    'body_media_carousel_side_padding',
+    'body_media_carousel_fit_mode',
+    'body_media_carousel_surface_style',
+    'body_media_carousel_corner_radius',
+    'body_media_carousel_frame_bg_color',
+    'body_media_carousel_media_bg_color',
+    'pricing_title',
+    'pricing_subtitle',
+    'updated_at',
+)
+
+
+def _write_homepage_settings(db, payload: dict, conflict_action: str = 'REPLACE'):
+    columns = ('id', *_HOMEPAGE_SETTINGS_FIELDS)
+    placeholders = ', '.join(['?'] * len(columns))
+    db.execute(
+        f"INSERT OR {conflict_action} INTO homepage_settings ({', '.join(columns)}) VALUES ({placeholders})",
+        (1, *(payload[field] for field in _HOMEPAGE_SETTINGS_FIELDS)),
+    )
+
+
+def _normalize_hex_color(value, default: str) -> str:
+    text = (value or '').strip()
+    if not text:
+        return default
+    if not text.startswith('#'):
+        text = f'#{text}'
+    if not re.fullmatch(r'#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?', text):
+        return default
+    if len(text) == 4:
+        text = '#' + ''.join(ch * 2 for ch in text[1:])
+    return text.lower()
+
+
+def _normalize_homepage_media_profile_settings(data: dict, defaults: dict, prefix: str, normalized: dict):
+    display_key = f'{prefix}_display_size'
+    width_key = f'{prefix}_width_mode'
+    max_width_key = f'{prefix}_max_width'
+    side_padding_key = f'{prefix}_side_padding'
+    fit_key = f'{prefix}_fit_mode'
+    surface_key = f'{prefix}_surface_style'
+    radius_key = f'{prefix}_corner_radius'
+    frame_bg_key = f'{prefix}_frame_bg_color'
+    media_bg_key = f'{prefix}_media_bg_color'
+
+    display_size = (data.get(display_key) or defaults[display_key]).strip().lower()
+    if display_size not in ('compact', 'standard', 'large'):
+        display_size = defaults[display_key]
+    normalized[display_key] = display_size
+
+    width_mode = (data.get(width_key) or defaults[width_key]).strip().lower()
+    if width_mode not in ('contained', 'custom', 'edge-to-edge'):
+        width_mode = defaults[width_key]
+    normalized[width_key] = width_mode
+
+    raw_max_width = data.get(max_width_key)
+    if raw_max_width in (None, ''):
+        raw_max_width = defaults[max_width_key]
+    try:
+        normalized[max_width_key] = min(2560, max(720, int(raw_max_width)))
+    except Exception:
+        normalized[max_width_key] = defaults[max_width_key]
+
+    raw_side_padding = data.get(side_padding_key)
+    if raw_side_padding in (None, ''):
+        raw_side_padding = defaults[side_padding_key]
+    try:
+        normalized[side_padding_key] = min(160, max(0, int(raw_side_padding)))
+    except Exception:
+        normalized[side_padding_key] = defaults[side_padding_key]
+
+    fit_mode = (data.get(fit_key) or defaults[fit_key]).strip().lower()
+    if fit_mode not in ('cover', 'contain'):
+        fit_mode = defaults[fit_key]
+    normalized[fit_key] = fit_mode
+
+    surface_style = (data.get(surface_key) or defaults[surface_key]).strip().lower()
+    if surface_style not in ('card', 'flat', 'transparent'):
+        surface_style = defaults[surface_key]
+    normalized[surface_key] = surface_style
+
+    raw_radius = data.get(radius_key)
+    if raw_radius in (None, ''):
+        raw_radius = defaults[radius_key]
+    try:
+        normalized[radius_key] = min(48, max(0, int(raw_radius)))
+    except Exception:
+        normalized[radius_key] = defaults[radius_key]
+
+    normalized[frame_bg_key] = _normalize_hex_color(data.get(frame_bg_key), defaults[frame_bg_key])
+    normalized[media_bg_key] = _normalize_hex_color(data.get(media_bg_key), defaults[media_bg_key])
+
+
+def _homepage_media_profile_payload(settings: dict, prefix: str) -> dict:
+    width_mode = (settings.get(f'{prefix}_width_mode') or 'contained').strip().lower()
+    raw_max_width = settings.get(f'{prefix}_max_width')
+    if raw_max_width in (None, ''):
+        raw_max_width = 1200
+    try:
+        max_width = int(raw_max_width)
+    except Exception:
+        max_width = 1200
+    raw_side_padding = settings.get(f'{prefix}_side_padding')
+    if raw_side_padding in (None, ''):
+        raw_side_padding = 40
+    try:
+        side_padding = int(raw_side_padding)
+    except Exception:
+        side_padding = 40
+    shell_max_width = 'none' if width_mode == 'edge-to-edge' else (f'{max_width}px' if width_mode == 'custom' else '1200px')
+    return {
+        'display_size': (settings.get(f'{prefix}_display_size') or 'standard').strip().lower(),
+        'width_mode': width_mode,
+        'max_width': max_width,
+        'side_padding': side_padding,
+        'fit_mode': (settings.get(f'{prefix}_fit_mode') or 'contain').strip().lower(),
+        'surface_style': (settings.get(f'{prefix}_surface_style') or 'card').strip().lower(),
+        'corner_radius': max(0, int(settings.get(f'{prefix}_corner_radius') or 0)),
+        'frame_bg_color': _normalize_hex_color(settings.get(f'{prefix}_frame_bg_color'), '#ffffff'),
+        'media_bg_color': _normalize_hex_color(settings.get(f'{prefix}_media_bg_color'), '#000000'),
+        'shell_max_width': shell_max_width,
+    }
+
+
+def _get_homepage_body_media_profiles(settings: dict) -> dict:
+    return {
+        'image': _homepage_media_profile_payload(settings, 'body_media'),
+        'video': _homepage_media_profile_payload(settings, 'body_media_video'),
+        'carousel': _homepage_media_profile_payload(settings, 'body_media_carousel'),
     }
 
 
@@ -807,6 +1192,9 @@ def _normalize_homepage_settings(row) -> dict:
         'hero_proof_secondary',
         'hero_proof_tertiary',
         'hero_image_path',
+        'hero_media_shape',
+        'hero_media_size',
+        'hero_media_fit_mode',
         'promo_text',
         'promo_bg_color',
         'promo_text_color',
@@ -821,6 +1209,16 @@ def _normalize_homepage_settings(row) -> dict:
     ):
         value = (data.get(key) or '').strip()
         normalized[key] = value or defaults[key]
+    if normalized['hero_media_shape'] not in ('landscape', 'square', 'portrait'):
+        normalized['hero_media_shape'] = defaults['hero_media_shape']
+    if normalized['hero_media_size'] not in ('medium', 'large', 'xlarge'):
+        normalized['hero_media_size'] = defaults['hero_media_size']
+    if normalized['hero_media_fit_mode'] not in ('cover', 'contain'):
+        normalized['hero_media_fit_mode'] = defaults['hero_media_fit_mode']
+    try:
+        normalized['hero_rotate_on_refresh'] = 1 if int(data.get('hero_rotate_on_refresh') or 0) == 1 else 0
+    except Exception:
+        normalized['hero_rotate_on_refresh'] = defaults['hero_rotate_on_refresh']
     try:
         normalized['promo_enabled'] = 1 if int(data.get('promo_enabled') or 0) == 1 else 0
     except Exception:
@@ -855,6 +1253,9 @@ def _normalize_homepage_settings(row) -> dict:
     if features_style not in ('flat', 'cards'):
         features_style = defaults['features_style']
     normalized['features_style'] = features_style
+    _normalize_homepage_media_profile_settings(data, defaults, 'body_media', normalized)
+    _normalize_homepage_media_profile_settings(data, defaults, 'body_media_video', normalized)
+    _normalize_homepage_media_profile_settings(data, defaults, 'body_media_carousel', normalized)
     try:
         normalized['updated_at'] = int(data.get('updated_at') or defaults['updated_at'])
     except Exception:
@@ -865,44 +1266,7 @@ def _normalize_homepage_settings(row) -> dict:
 def _ensure_homepage_settings_seeded():
     db = get_db()
     defaults = _default_homepage_settings()
-    db.execute(
-        'INSERT OR IGNORE INTO homepage_settings '
-        '(id, hero_title_line1, hero_title_line2, hero_subtitle, hero_primary_cta_text, hero_primary_cta_url, '
-        'hero_secondary_cta_text, hero_secondary_cta_url, hero_proof_secondary, hero_proof_tertiary, '
-        'hero_image_path, promo_enabled, promo_text, promo_bg_color, promo_text_color, promo_font_size, promo_font_weight, promo_font_family, promo_font_style, promo_speed, promo_height, promo_text_align, promo_pause_on_hover, promo_direction, '
-        'features_title, features_style, pricing_title, pricing_subtitle, updated_at) '
-        'VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        (
-            defaults['hero_title_line1'],
-            defaults['hero_title_line2'],
-            defaults['hero_subtitle'],
-            defaults['hero_primary_cta_text'],
-            defaults['hero_primary_cta_url'],
-            defaults['hero_secondary_cta_text'],
-            defaults['hero_secondary_cta_url'],
-            defaults['hero_proof_secondary'],
-            defaults['hero_proof_tertiary'],
-            defaults['hero_image_path'],
-            defaults['promo_enabled'],
-            defaults['promo_text'],
-            defaults['promo_bg_color'],
-            defaults['promo_text_color'],
-            defaults['promo_font_size'],
-            defaults['promo_font_weight'],
-            defaults['promo_font_family'],
-            defaults['promo_font_style'],
-            defaults['promo_speed'],
-            defaults['promo_height'],
-            defaults['promo_text_align'],
-            defaults['promo_pause_on_hover'],
-            defaults['promo_direction'],
-            defaults['features_title'],
-            defaults['features_style'],
-            defaults['pricing_title'],
-            defaults['pricing_subtitle'],
-            defaults['updated_at'],
-        ),
-    )
+    _write_homepage_settings(db, defaults, 'IGNORE')
     db.commit()
 
 
@@ -998,8 +1362,12 @@ def _normalize_homepage_body_media_row(row) -> dict:
     media_type = (data.get('media_type') or classify_media(media_path or 'placeholder.png')).strip() or 'image'
     caption = (data.get('caption') or '').strip()
     layout_style = (data.get('layout_style') or 'full').strip().lower()
-    if layout_style not in ('full', 'half', 'third'):
+    if layout_style not in ('full', 'half', 'third', 'quarter', 'slice', 'carousel'):
         layout_style = 'full'
+    try:
+        edge_to_edge = bool(int(data.get('edge_to_edge') or 0))
+    except Exception:
+        edge_to_edge = False
     try:
         media_id = int(data.get('id') or 0)
     except Exception:
@@ -1018,6 +1386,7 @@ def _normalize_homepage_body_media_row(row) -> dict:
         'media_type': media_type,
         'caption': caption,
         'layout_style': layout_style,
+        'edge_to_edge': edge_to_edge,
         'sort_order': sort_order,
         'created_at': created_at,
     }
@@ -1033,6 +1402,213 @@ def _get_homepage_body_media() -> list[dict]:
     except Exception as e:
         logging.warning('Failed to load homepage body media: %s', e)
         return []
+
+
+def _normalize_homepage_hero_media_row(row) -> dict:
+    data = dict(row or {})
+    media_path = (data.get('media_path') or '').replace('\\', '/').strip()
+    try:
+        media_id = int(data.get('id') or 0)
+    except Exception:
+        media_id = 0
+    try:
+        sort_order = int(data.get('sort_order') or 0)
+    except Exception:
+        sort_order = 0
+    try:
+        created_at = int(data.get('created_at') or time.time())
+    except Exception:
+        created_at = int(time.time())
+    return {
+        'id': media_id,
+        'media_path': media_path,
+        'sort_order': sort_order,
+        'created_at': created_at,
+    }
+
+
+def _get_homepage_hero_media() -> list[dict]:
+    try:
+        db = get_db()
+        rows = db.execute(
+            'SELECT * FROM homepage_hero_media ORDER BY sort_order ASC, id ASC'
+        ).fetchall()
+        return [_normalize_homepage_hero_media_row(dict(row)) for row in rows]
+    except Exception as e:
+        logging.warning('Failed to load homepage hero media: %s', e)
+        return []
+
+
+def _save_homepage_hero_media(file_storage) -> dict:
+    uploaded = _save_homepage_body_media(file_storage)
+    media_type = (uploaded.get('media_type') or '').strip().lower()
+    if media_type not in ('image', 'animated'):
+        _cleanup_homepage_asset(uploaded.get('media_path'))
+        raise ValueError('Hero rotation media must be image files only.')
+    return {
+        'media_path': uploaded.get('media_path', ''),
+        'media_type': media_type,
+    }
+
+
+def _build_home_hero_rotation_images(home_content: dict, hero_media: list[dict], asset_bust: int) -> list[str]:
+    hero_path = (home_content.get('hero_image_path') or 'imag2.png').strip()
+    cache_suffix = f'?v={asset_bust or 0}'
+    pool: list[str] = []
+    seen_paths: set[str] = set()
+
+    for item in hero_media or []:
+        media_path = (item.get('media_path') or '').strip()
+        if not media_path or media_path in seen_paths:
+            continue
+        seen_paths.add(media_path)
+        pool.append(url_for('static', filename=media_path) + cache_suffix)
+        if len(pool) >= 24:
+            return pool
+
+    if hero_path and not pool:
+        pool.append(url_for('static', filename=hero_path) + cache_suffix)
+
+    return pool
+
+
+def _build_homepage_body_media_blocks(items: list[dict]) -> list[dict]:
+    blocks: list[dict] = []
+    pending_carousel: list[dict] = []
+    pending_row: list[dict] = []
+    pending_row_layout = ''
+    pending_row_target_size = 0
+
+    def row_profile(row_items: list[dict]) -> str:
+        if row_items and all((item.get('media_type') or '').strip().lower() == 'video' for item in row_items):
+            return 'video'
+        return 'image'
+
+    def flush_carousel():
+        nonlocal pending_carousel
+        if not pending_carousel:
+            return
+        blocks.append({
+            'kind': 'carousel',
+            'items': pending_carousel,
+            'edge_to_edge': any(item.get('edge_to_edge') for item in pending_carousel),
+            'profile': 'carousel',
+        })
+        pending_carousel = []
+
+    def flush_row():
+        nonlocal pending_row, pending_row_layout, pending_row_target_size
+        if not pending_row:
+            return
+        blocks.append({
+            'kind': 'row',
+            'items': pending_row,
+            'profile': row_profile(pending_row),
+        })
+        pending_row = []
+        pending_row_layout = ''
+        pending_row_target_size = 0
+
+    for item in items or []:
+        layout_style = (item.get('layout_style') or '').strip().lower()
+        if layout_style == 'carousel':
+            flush_row()
+            pending_carousel.append(item)
+            continue
+
+        flush_carousel()
+        row_group_size = _homepage_row_group_size(layout_style)
+        if layout_style in ('full', 'slice'):
+            flush_row()
+            blocks.append({
+                'kind': 'row',
+                'items': [item],
+                'profile': row_profile([item]),
+            })
+            continue
+
+        if row_group_size > 0:
+            if pending_row and (pending_row_layout != layout_style or pending_row_target_size != row_group_size):
+                flush_row()
+            pending_row_layout = layout_style
+            pending_row_target_size = row_group_size
+            pending_row.append(item)
+            if len(pending_row) >= row_group_size:
+                flush_row()
+            continue
+
+        flush_row()
+        blocks.append({
+            'kind': 'row',
+            'items': [item],
+            'profile': row_profile([item]),
+        })
+
+    flush_row()
+    flush_carousel()
+    return blocks
+
+
+def _homepage_row_group_size(layout_style: str | None) -> int:
+    normalized = (layout_style or '').strip().lower()
+    if normalized == 'half':
+        return 2
+    if normalized == 'third':
+        return 3
+    if normalized == 'quarter':
+        return 4
+    return 0
+
+
+def _apply_homepage_row_layout_group(db: sqlite3.Connection, focus_media_id: int, layout_style: str | None) -> int:
+    target_size = _homepage_row_group_size(layout_style)
+    if target_size <= 0:
+        return 0
+
+    rows = db.execute(
+        'SELECT id, sort_order, layout_style FROM homepage_body_media ORDER BY sort_order ASC, id ASC'
+    ).fetchall()
+    ordered_items = [dict(row) for row in rows]
+    standard_items = [
+        item for item in ordered_items
+        if (item.get('layout_style') or '').strip().lower() not in ('full', 'slice', 'carousel')
+    ]
+    focus_index = next((index for index, item in enumerate(standard_items) if int(item.get('id') or 0) == focus_media_id), -1)
+    if focus_index < 0:
+        return 0
+
+    chosen_indexes = {focus_index}
+    while len(chosen_indexes) < min(target_size, len(standard_items)):
+        current_indexes = sorted(chosen_indexes)
+        left_index = current_indexes[0] - 1
+        right_index = current_indexes[-1] + 1
+        left_distance = focus_index - left_index if left_index >= 0 else None
+        right_distance = right_index - focus_index if right_index < len(standard_items) else None
+
+        if left_distance is None and right_distance is None:
+            break
+        if right_distance is None or (left_distance is not None and left_distance <= right_distance):
+            chosen_indexes.add(left_index)
+        else:
+            chosen_indexes.add(right_index)
+
+    grouped_standard_items = [standard_items[index] for index in sorted(chosen_indexes)]
+    grouped_ids = [int(item.get('id') or 0) for item in grouped_standard_items if int(item.get('id') or 0) > 0]
+    if not grouped_ids:
+        return 0
+
+    for grouped_id in grouped_ids:
+        db.execute('UPDATE homepage_body_media SET layout_style = ? WHERE id = ?', (layout_style, grouped_id))
+
+    original_order_ids = [int(item.get('id') or 0) for item in ordered_items if int(item.get('id') or 0) > 0]
+    insert_index = min((index for index, item_id in enumerate(original_order_ids) if item_id in grouped_ids), default=0)
+    reordered_ids = [item_id for item_id in original_order_ids if item_id not in grouped_ids]
+    reordered_ids[insert_index:insert_index] = grouped_ids
+
+    for next_sort, item_id in enumerate(reordered_ids, start=1):
+        db.execute('UPDATE homepage_body_media SET sort_order = ? WHERE id = ?', (next_sort, item_id))
+
+    return len(grouped_ids)
 
 
 def _cleanup_homepage_asset(rel_path: str | None):
@@ -1617,6 +2193,21 @@ def _hydrate_session_from_mobile_auth_header():
         session.permanent = True
     except Exception:
         pass
+
+
+@app.before_request
+def _enforce_canonical_request_host():
+    host = (request.host or '').split(':', 1)[0].strip().lower().rstrip('.')
+    if not host:
+        return None
+
+    if host in _allowed_request_hosts():
+        return None
+
+    if request.method in ('GET', 'HEAD'):
+        return Response('Gone', status=410, mimetype='text/plain')
+
+    return jsonify({'success': False, 'error': 'Host not allowed'}), 421
 
 def _stripe_enabled() -> bool:
     try:
@@ -2807,6 +3398,75 @@ def _parse_reset_token_row(row) -> bool:
         return False
 
 
+def _build_password_reset_links(token: str) -> tuple[str, str]:
+    tok = (token or '').strip()
+    try:
+        reset_url = url_for('reset_password', token=tok, _external=True, _scheme='https')
+    except Exception:
+        host = 'https://api.everydayadvertise.com'
+        reset_url = f'{host}/reset/{tok}'
+    app_reset_url = f'everydaymobile://reset-password?token={urllib.parse.quote(tok, safe="")}'
+    return reset_url, app_reset_url
+
+
+def _send_password_reset_email_message(email: str, reset_url: str, app_reset_url: str) -> dict:
+    clean_email = (email or '').strip().lower()
+    subject = 'Reset your EverydayAdvertise password'
+    body = (
+        'We received a request to reset your password.\n\n'
+        f'Open in the mobile app:\n{app_reset_url}\n\n'
+        f'Or use the website link:\n{reset_url}\n\n'
+        "If you didn't request this, you can ignore this email. The link expires in 1 hour."
+    )
+
+    if not _mail_configured():
+        return {'success': False, 'error': 'Email service is not configured.', 'status': 503}
+
+    if send_email(clean_email, subject, body):
+        return {'success': True, 'message': f'Password reset link sent to {clean_email}.'}
+
+    return {'success': False, 'error': 'Failed to send reset email.', 'status': 500}
+
+
+def _send_password_reset_sms_message(phone_number: str, reset_url: str) -> dict:
+    phone = (phone_number or '').strip()
+    if not phone:
+        return {'success': False, 'error': 'No phone number is set for this user.', 'status': 400}
+
+    if not VONAGE_API_KEY or not VONAGE_API_SECRET or not VONAGE_FROM_NUMBER:
+        return {'success': False, 'error': 'SMS service is not configured.', 'status': 503}
+
+    if not phone.startswith('+'):
+        phone = '+' + phone
+    phone = phone.replace(' ', '').replace('-', '')
+
+    text = f'Reset your EverydayAdvertise password: {reset_url} (expires in 1 hour)'
+
+    try:
+        import requests
+
+        response = requests.post(
+            'https://rest.nexmo.com/sms/json',
+            data={
+                'api_key': VONAGE_API_KEY,
+                'api_secret': VONAGE_API_SECRET,
+                'to': phone,
+                'from': VONAGE_FROM_NUMBER,
+                'text': text,
+            },
+            timeout=15,
+        )
+        payload = response.json() if response.text else {}
+        message = ((payload.get('messages') or [{}])[0] or {})
+        if str(message.get('status')) == '0':
+            return {'success': True, 'message': f'Password reset link sent to {phone}.'}
+        error_text = message.get('error-text') or payload.get('error-text') or 'SMS provider rejected the message.'
+        return {'success': False, 'error': f'Failed to send SMS reset link: {error_text}', 'status': 500}
+    except Exception as e:
+        logging.error('Password reset SMS failed: %s', e, exc_info=True)
+        return {'success': False, 'error': f'Failed to send SMS reset link: {e}', 'status': 500}
+
+
 def _request_password_reset(email: str) -> dict:
     clean_email = (email or '').strip().lower()
     if not clean_email:
@@ -2834,32 +3494,19 @@ def _request_password_reset(email: str) -> dict:
                 'status': 500,
             }
 
-        try:
-            reset_url = url_for('reset_password', token=token, _external=True, _scheme='https')
-        except Exception:
-            host = 'https://api.everydayadvertise.com'
-            reset_url = f'{host}/reset/{token}'
-
-        app_reset_url = f'everydaymobile://reset-password?token={urllib.parse.quote(token, safe="")}'
-        body = (
-            'We received a request to reset your password.\n\n'
-            f'Open in the mobile app:\n{app_reset_url}\n\n'
-            f'Or use the website link:\n{reset_url}\n\n'
-            "If you didn't request this, you can ignore this email. The link expires in 1 hour."
-        )
-        subject = 'Reset your EverydayAdvertise password'
+        reset_url, app_reset_url = _build_password_reset_links(token)
 
         if _mail_configured():
             logging.info('Attempting SMTP send to %s (host=%s)', clean_email, os.environ.get('SMTP_HOST'))
-            ok = send_email(clean_email, subject, body)
-            if ok:
+            result = _send_password_reset_email_message(clean_email, reset_url, app_reset_url)
+            if result.get('success'):
                 return {
                     'success': True,
                     'message': 'If that email exists, we sent a reset link.',
                 }
             return {
                 'success': False,
-                'error': 'Failed to send email. Try again later.',
+                'error': result.get('error') or 'Failed to send email. Try again later.',
                 'status': 500,
             }
 
@@ -3238,6 +3885,48 @@ def logout():
     return redirect(url_for('home'))
 
 # ---------------------- Public homepage ----------------------
+@app.route('/google76a98fd4b777e49d.html')
+def google_site_verification_file():
+    return send_file(
+        os.path.join(BASE_DIR, 'google76a98fd4b777e49d.html'),
+        mimetype='text/html',
+    )
+
+
+@app.route('/robots.txt')
+def robots_txt():
+    body = '\n'.join([
+        'User-agent: *',
+        'Allow: /',
+        'Sitemap: https://everydayadvertise.com/sitemap.xml',
+        '',
+    ])
+    resp = make_response(body)
+    resp.mimetype = 'text/plain'
+    return resp
+
+
+@app.route('/sitemap.xml')
+def sitemap_xml():
+    urls = [
+        'https://everydayadvertise.com/',
+        'https://everydayadvertise.com/login',
+        'https://everydayadvertise.com/signup',
+        'https://everydayadvertise.com/privacy-policy',
+        'https://everydayadvertise.com/terms-of-service',
+    ]
+    lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+    for loc in urls:
+        lines.extend([
+            '  <url>',
+            f'    <loc>{loc}</loc>',
+            '    <priority>1.0</priority>' if loc.endswith('/') else '    <priority>0.6</priority>',
+            '  </url>',
+        ])
+    lines.append('</urlset>')
+    return Response('\n'.join(lines), mimetype='application/xml')
+
+
 @app.route('/')
 def home():
     home_billing = _get_global_billing_settings()
@@ -3256,6 +3945,9 @@ def home():
     home_promo_messages = _get_homepage_promo_messages(home_content)
     home_features = _get_homepage_features()
     home_body_media = _get_homepage_body_media()
+    home_hero_media = _get_homepage_hero_media()
+    home_body_media_blocks = _build_homepage_body_media_blocks(home_body_media)
+    home_body_media_profiles = _get_homepage_body_media_profiles(home_content)
 
     try:
         # Serve the primary homepage template and keep cache-busting tied to
@@ -3278,6 +3970,18 @@ def home():
         selected_home_template = 'home.html'
         asset_bust = 0
         page_version = '4000'
+    hero_rotation_images = _build_home_hero_rotation_images(home_content, home_hero_media, asset_bust)
+    hero_primary_image = url_for('static', filename=(home_content.get('hero_image_path') or 'imag2.png')) + f'?v={asset_bust or 0}'
+    hero_rotation_cookie_value = None
+    if home_content.get('hero_rotate_on_refresh') and hero_rotation_images:
+        try:
+            previous_index = int(request.cookies.get('home_hero_rotation_index') or '-1')
+        except (TypeError, ValueError):
+            previous_index = -1
+        next_index = (previous_index + 1) % len(hero_rotation_images)
+        hero_primary_image = hero_rotation_images[next_index]
+        hero_rotation_cookie_value = str(next_index)
+
     resp = make_response(render_template(
         selected_home_template,
         build_stamp=BUILD_STAMP,
@@ -3289,6 +3993,11 @@ def home():
         home_promo_messages=home_promo_messages,
         home_features=home_features,
         home_body_media=home_body_media,
+        home_hero_media=home_hero_media,
+        home_body_media_blocks=home_body_media_blocks,
+        home_body_media_profiles=home_body_media_profiles,
+        hero_rotation_images=hero_rotation_images,
+        hero_primary_image=hero_primary_image,
         home_price_amount=home_price_amount,
         home_price_period=home_price_period,
         home_pricing_feature=home_pricing_feature,
@@ -3303,6 +4012,13 @@ def home():
         import hashlib
         etag = hashlib.md5(str(int(_t.time())).encode()).hexdigest()
         resp.headers['ETag'] = etag
+    except Exception:
+        pass
+    try:
+        if hero_rotation_cookie_value is not None:
+            resp.set_cookie('home_hero_rotation_index', hero_rotation_cookie_value, max_age=31536000, samesite='Lax')
+        else:
+            resp.delete_cookie('home_hero_rotation_index', samesite='Lax')
     except Exception:
         pass
     return resp
@@ -3717,10 +4433,11 @@ def remove_screen():
         
         # Save cancellation feedback
         try:
+            now = int(time.time())
             db.execute(
-                'INSERT INTO cancellation_feedback (user_id, username, screen_id, screen_name, reason, feedback_text) '
-                'VALUES (?, ?, ?, ?, ?, ?)',
-                (user_id, username, screen_id, screen_name, reason, feedback)
+                'INSERT INTO cancellation_feedback (user_id, username, screen_id, screen_name, reason, feedback_text, canceled_at) '
+                'VALUES (?, ?, ?, ?, ?, ?, ?)',
+                (user_id, username, screen_id, screen_name, reason, feedback, now)
             )
             db.commit()
             logging.info(f'Saved cancellation feedback for {screen_id}: {reason}')
@@ -4941,6 +5658,139 @@ def build_public_url(filename: str) -> str | None:
     except Exception:
         pass
     return get_media_base_url() + filename
+
+# --- Optional YouTube -> cached MP4 bridge for TV clients ---
+YOUTUBE_CACHE_FOLDER = os.path.join('static', 'cache', 'youtube')
+os.makedirs(YOUTUBE_CACHE_FOLDER, exist_ok=True)
+_youtube_cache_lock = threading.Lock()
+_youtube_cache_jobs: dict[str, float] = {}
+
+
+def _youtube_id_from_value(v: str | None) -> str | None:
+    try:
+        s = str(v or '').strip()
+        m = re.search(r'youtube:([A-Za-z0-9_-]{11})', s)
+        if m:
+            return m.group(1)
+    except Exception:
+        pass
+    return None
+
+
+def _youtube_cache_rel(video_id: str) -> str:
+    return f"cache/youtube/{video_id}.mp4"
+
+
+def _youtube_cache_abs(video_id: str) -> str:
+    return os.path.join(YOUTUBE_CACHE_FOLDER, f"{video_id}.mp4")
+
+
+def _download_youtube_clip(video_id: str) -> None:
+    """Best-effort background download of YouTube video into static cache.
+    If yt-dlp is unavailable or download fails, silently skip.
+    """
+    try:
+        out_path = _youtube_cache_abs(video_id)
+        if os.path.exists(out_path) and os.path.getsize(out_path) > 100_000:
+            return
+
+        # Avoid duplicate workers per id
+        with _youtube_cache_lock:
+            now = time.time()
+            last = _youtube_cache_jobs.get(video_id)
+            if last and (now - last) < 180:
+                return
+            _youtube_cache_jobs[video_id] = now
+
+        ytdlp = shutil.which('yt-dlp') or shutil.which('yt-dlp.exe')
+        if not ytdlp:
+            logging.info("yt-dlp not found; skipping YouTube cache bridge for %s", video_id)
+            return
+
+        tmp_tpl = os.path.join(YOUTUBE_CACHE_FOLDER, f"{video_id}.%(ext)s")
+        url = f"https://www.youtube.com/watch?v={video_id}"
+
+        cmd = [
+            ytdlp,
+            '--no-playlist',
+            '--quiet',
+            '--no-warnings',
+            '-f', 'best[ext=mp4][height<=720]/best[ext=mp4]/best',
+            '-o', tmp_tpl,
+        ]
+
+        # Optional anti-bot helpers (configure via env on server):
+        # - YTDLP_JS_RUNTIME=node
+        # - YTDLP_COOKIES_FILE=/path/to/youtube_cookies.txt
+        # - YTDLP_COOKIES_FROM_BROWSER=chrome or firefox
+        # - YTDLP_EXTRA_ARGS="--extractor-args youtube:player_client=tv,android"
+        js_runtime = (os.environ.get('YTDLP_JS_RUNTIME') or '').strip()
+        if js_runtime:
+            cmd += ['--js-runtimes', js_runtime]
+
+        cookies_file = (os.environ.get('YTDLP_COOKIES_FILE') or '').strip()
+        if cookies_file:
+            cmd += ['--cookies', cookies_file]
+
+        cookies_from_browser = (os.environ.get('YTDLP_COOKIES_FROM_BROWSER') or '').strip()
+        if cookies_from_browser:
+            cmd += ['--cookies-from-browser', cookies_from_browser]
+
+        # YouTube sometimes blocks default web client; allow override to TV/Android client.
+        cmd += ['--extractor-args', 'youtube:player_client=tv,android,web']
+
+        extra = (os.environ.get('YTDLP_EXTRA_ARGS') or '').strip()
+        if extra:
+            try:
+                import shlex
+                cmd += shlex.split(extra)
+            except Exception:
+                pass
+
+        cmd.append(url)
+
+        # Keep this non-blocking for requests: download in worker thread only.
+        proc = subprocess.run(cmd, timeout=180, capture_output=True, text=True)
+        if proc.returncode != 0:
+            err_tail = (proc.stderr or proc.stdout or '')[-1200:]
+            logging.warning("YouTube cache download failed for %s (code=%s): %s", video_id, proc.returncode, err_tail)
+            return
+
+        # yt-dlp may produce .webm or .mkv if constraints are unmet; normalize by picking best match.
+        cand = None
+        for ext in ('mp4', 'mkv', 'webm', 'm4v'):
+            p = os.path.join(YOUTUBE_CACHE_FOLDER, f"{video_id}.{ext}")
+            if os.path.exists(p) and os.path.getsize(p) > 100_000:
+                cand = p
+                break
+        if cand and cand != out_path:
+            try:
+                shutil.move(cand, out_path)
+            except Exception:
+                pass
+    except Exception as e:
+        logging.warning("YouTube cache worker error for %s: %s", video_id, e)
+
+
+def resolve_youtube_cached_url(file_value: str | None, start_background: bool = True) -> str | None:
+    """Return /static URL for a cached YouTube MP4 if available.
+    Optionally starts a background download job when missing.
+    """
+    video_id = _youtube_id_from_value(file_value)
+    if not video_id:
+        return None
+
+    out_path = _youtube_cache_abs(video_id)
+    if os.path.exists(out_path) and os.path.getsize(out_path) > 100_000:
+        return '/static/' + _youtube_cache_rel(video_id).replace('\\\\', '/')
+
+    if start_background:
+        try:
+            t = threading.Thread(target=_download_youtube_clip, args=(video_id,), daemon=True)
+            t.start()
+        except Exception:
+            pass
+    return None
 
 def _cdn_thumb_url(kind: str, width: int, rel_path: str) -> Optional[str]:
     """Return CDN URL for a generated asset if R2 is enabled.
@@ -6669,29 +7519,60 @@ def _collect_user_metrics():
 def superadmin_dashboard():
     try:
         search_query = request.args.get('search', '').strip().lower()
-        users = _collect_user_metrics()
+        user_filter = request.args.get('filter', 'all').strip().lower()
+        limit_option = request.args.get('limit', '10').strip().lower()
+        limit_map = {
+            '10': 10,
+            '25': 25,
+            '50': 50,
+            'all': None,
+        }
+        if user_filter not in {'all', 'active', 'blocked', 'admin', 'unverified'}:
+            user_filter = 'all'
+        if limit_option not in limit_map:
+            limit_option = '10'
+
+        all_users = sorted(_collect_user_metrics(), key=lambda user: int(user.get('id') or 0), reverse=True)
         billing_settings = _get_global_billing_settings()
         billing_promotion = _get_billing_promotion()
-        
-        # Filter users by search query
+
+        users = all_users
+        if user_filter == 'active':
+            users = [u for u in users if not u['is_blocked']]
+        elif user_filter == 'blocked':
+            users = [u for u in users if u['is_blocked']]
+        elif user_filter == 'admin':
+            users = [u for u in users if u['is_admin']]
+        elif user_filter == 'unverified':
+            users = [u for u in users if not u['email_verified']]
+
         if search_query:
-            users = [u for u in users if 
-                    search_query in u['username'].lower() or 
+            users = [u for u in users if
+                    search_query in u['username'].lower() or
                     search_query in (u['full_name'] or '').lower() or
                     search_query in str(u['id']) or
                     search_query in (u['link_code'] or '').lower()]
-        
+
+        matching_users_count = len(users)
+        limit_value = limit_map[limit_option]
+        if limit_value is not None:
+            users = users[:limit_value]
+
         totals = {
-            'users': len(users),
-            'stores': sum(u['stores_count'] for u in users),
-            'screens': sum(u['screens_count'] for u in users),
-            'online': sum(u['online_screens'] for u in users),
+            'users': len(all_users),
+            'stores': sum(u['stores_count'] for u in all_users),
+            'screens': sum(u['screens_count'] for u in all_users),
+            'online': sum(u['online_screens'] for u in all_users),
         }
         return render_template(
             'superadmin/dashboard.html',
             users=users,
             totals=totals,
             search_query=search_query,
+            user_filter=user_filter,
+            limit_option=limit_option,
+            matching_users_count=matching_users_count,
+            displayed_users_count=len(users),
             billing_settings=billing_settings,
             billing_promotion=billing_promotion,
         )
@@ -6703,17 +7584,27 @@ def superadmin_dashboard():
 @app.route('/superadmin/website', methods=['GET', 'POST'])
 @superadmin_required
 def superadmin_website_editor():
+    embedded = request.args.get('embedded') == '1'
     if request.method == 'POST':
         current = _get_homepage_settings()
         hero_image_path = current.get('hero_image_path')
+        extra_hero_uploads = []
+        added_hero_rotation_count = 0
         try:
             if request.form.get('reset_hero_image') == '1':
                 _cleanup_homepage_asset(hero_image_path)
                 hero_image_path = _default_homepage_settings()['hero_image_path']
-            elif 'hero_image' in request.files and request.files['hero_image'].filename:
-                hero_image_path = _save_homepage_image(request.files['hero_image'], hero_image_path)
+            else:
+                hero_uploads = [
+                    file for file in request.files.getlist('hero_image')
+                    if file and getattr(file, 'filename', '')
+                ]
+                if hero_uploads:
+                    hero_image_path = _save_homepage_image(hero_uploads[0], hero_image_path)
+                    extra_hero_uploads = hero_uploads[1:]
 
             payload = _normalize_homepage_settings({
+                **current,
                 'hero_title_line1': request.form.get('hero_title_line1'),
                 'hero_title_line2': request.form.get('hero_title_line2'),
                 'hero_subtitle': request.form.get('hero_subtitle'),
@@ -6724,6 +7615,10 @@ def superadmin_website_editor():
                 'hero_proof_secondary': request.form.get('hero_proof_secondary'),
                 'hero_proof_tertiary': request.form.get('hero_proof_tertiary'),
                 'hero_image_path': hero_image_path,
+                'hero_media_shape': request.form.get('hero_media_shape'),
+                'hero_media_size': request.form.get('hero_media_size'),
+                'hero_media_fit_mode': request.form.get('hero_media_fit_mode'),
+                'hero_rotate_on_refresh': 1 if request.form.get('hero_rotate_on_refresh') == '1' else 0,
                 'promo_enabled': 1 if request.form.get('promo_enabled') == '1' else 0,
                 'promo_text': request.form.get('promo_text'),
                 'promo_bg_color': request.form.get('promo_bg_color'),
@@ -6745,50 +7640,30 @@ def superadmin_website_editor():
             })
 
             db = get_db()
-            db.execute(
-                'INSERT OR REPLACE INTO homepage_settings '
-                '(id, hero_title_line1, hero_title_line2, hero_subtitle, hero_primary_cta_text, hero_primary_cta_url, '
-                'hero_secondary_cta_text, hero_secondary_cta_url, hero_proof_secondary, hero_proof_tertiary, '
-                'hero_image_path, promo_enabled, promo_text, promo_bg_color, promo_text_color, promo_font_size, promo_font_weight, promo_font_family, promo_font_style, promo_speed, promo_height, promo_text_align, promo_pause_on_hover, promo_direction, '
-                'features_title, features_style, pricing_title, pricing_subtitle, updated_at) '
-                'VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                (
-                    payload['hero_title_line1'],
-                    payload['hero_title_line2'],
-                    payload['hero_subtitle'],
-                    payload['hero_primary_cta_text'],
-                    payload['hero_primary_cta_url'],
-                    payload['hero_secondary_cta_text'],
-                    payload['hero_secondary_cta_url'],
-                    payload['hero_proof_secondary'],
-                    payload['hero_proof_tertiary'],
-                    payload['hero_image_path'],
-                    payload['promo_enabled'],
-                    payload['promo_text'],
-                    payload['promo_bg_color'],
-                    payload['promo_text_color'],
-                    payload['promo_font_size'],
-                    payload['promo_font_weight'],
-                    payload['promo_font_family'],
-                    payload['promo_font_style'],
-                    payload['promo_speed'],
-                    payload['promo_height'],
-                    payload['promo_text_align'],
-                    payload['promo_pause_on_hover'],
-                    payload['promo_direction'],
-                    payload['features_title'],
-                    payload['features_style'],
-                    payload['pricing_title'],
-                    payload['pricing_subtitle'],
-                    payload['updated_at'],
-                ),
-            )
+            if extra_hero_uploads:
+                next_sort = int(db.execute('SELECT COALESCE(MAX(sort_order), 0) FROM homepage_hero_media').fetchone()[0] or 0)
+                for extra_upload in extra_hero_uploads:
+                    saved = _save_homepage_hero_media(extra_upload)
+                    next_sort += 1
+                    db.execute(
+                        'INSERT INTO homepage_hero_media (media_path, sort_order, created_at) VALUES (?, ?, ?)',
+                        (
+                            saved['media_path'],
+                            next_sort,
+                            int(time.time()),
+                        ),
+                    )
+                    added_hero_rotation_count += 1
+            _write_homepage_settings(db, payload)
             db.commit()
-            flash('Website homepage settings updated.', 'success')
+            message = 'Website homepage settings updated.'
+            if added_hero_rotation_count > 0:
+                message += f' Added {added_hero_rotation_count} hero rotation image{"s" if added_hero_rotation_count != 1 else ""}.'
+            flash(message, 'success')
         except Exception as e:
             logging.error('Failed to update homepage settings: %s', e, exc_info=True)
             flash(f'Failed to update homepage settings: {e}', 'error')
-        return redirect(url_for('superadmin_website_editor'))
+        return _superadmin_website_editor_redirect()
 
     try:
         users = _collect_user_metrics()
@@ -6800,9 +7675,11 @@ def superadmin_website_editor():
         }
         return render_template(
             'superadmin/website_edit.html',
+            embedded=embedded,
             totals=totals,
             home_content=_get_homepage_settings(),
             home_features=_get_homepage_features(),
+            home_hero_media=_get_homepage_hero_media(),
             home_body_media=_get_homepage_body_media(),
             home_billing=_get_global_billing_settings(),
             home_pricing_feature=_public_home_pricing_feature(_get_global_billing_settings()),
@@ -6813,6 +7690,87 @@ def superadmin_website_editor():
         return f'<h1>Error</h1><pre>{str(e)}</pre>', 500
 
 
+def _superadmin_website_editor_redirect(hash_fragment: str | None = None):
+    target_fragment = (hash_fragment or request.form.get('return_to') or request.args.get('return_to') or '').strip()
+    if target_fragment and not target_fragment.startswith('#'):
+        target_fragment = f'#{target_fragment}'
+    embedded = request.args.get('embedded')
+    if embedded != '1':
+        referrer = (request.referrer or '').strip()
+        if referrer:
+            try:
+                parsed = urllib.parse.urlparse(referrer)
+                if parsed.path == url_for('superadmin_website_editor'):
+                    query = urllib.parse.parse_qs(parsed.query)
+                    embedded = (query.get('embedded') or [''])[0]
+            except Exception:
+                embedded = ''
+    if embedded == '1':
+        return redirect(url_for('superadmin_website_editor', embedded='1') + target_fragment)
+    return redirect(url_for('superadmin_website_editor') + target_fragment)
+
+
+def _superadmin_agents_redirect(endpoint='superadmin_agents', **values):
+    embedded = request.args.get('embedded')
+    if embedded != '1':
+        referrer = (request.referrer or '').strip()
+        if referrer:
+            try:
+                parsed = urllib.parse.urlparse(referrer)
+                if parsed.path.startswith('/superadmin/agents'):
+                    query = urllib.parse.parse_qs(parsed.query)
+                    embedded = (query.get('embedded') or [''])[0]
+            except Exception:
+                embedded = ''
+    if embedded == '1':
+        values['embedded'] = '1'
+    return redirect(url_for(endpoint, **values))
+
+
+def _superadmin_user_route_context(user_id: int | None = None) -> tuple[bool, bool]:
+    embedded = request.args.get('embedded') == '1'
+    detail_view = False
+    referrer = (request.referrer or '').strip()
+    if referrer:
+        try:
+            parsed = urllib.parse.urlparse(referrer)
+            query = urllib.parse.parse_qs(parsed.query)
+            if not embedded:
+                embedded = (query.get('embedded') or [''])[0] == '1'
+            if user_id is not None and parsed.path == url_for('superadmin_user_detail', user_id=user_id):
+                detail_view = True
+        except Exception:
+            pass
+    return detail_view, embedded
+
+
+def _superadmin_user_detail_redirect(user_id: int):
+    _, embedded = _superadmin_user_route_context(user_id)
+    values = {'user_id': user_id}
+    if embedded:
+        values['embedded'] = '1'
+    return redirect(url_for('superadmin_user_detail', **values))
+
+
+def _superadmin_dashboard_redirect(hash_fragment: str = '#panel-directory'):
+    target = url_for('superadmin_dashboard') + (hash_fragment or '')
+    _, embedded = _superadmin_user_route_context()
+    if embedded:
+        escaped = json.dumps(target)
+        return Response(
+            f'<!DOCTYPE html><html><body><script>if (window.top && window.top !== window) {{ window.top.location = {escaped}; }} else {{ window.location = {escaped}; }}</script></body></html>',
+            mimetype='text/html',
+        )
+    return redirect(target)
+
+
+def _superadmin_user_post_action_redirect(user_id: int, dashboard_hash: str = '#panel-directory'):
+    detail_view, _ = _superadmin_user_route_context(user_id)
+    if detail_view:
+        return _superadmin_user_detail_redirect(user_id)
+    return redirect(url_for('superadmin_dashboard') + dashboard_hash)
+
+
 @app.route('/superadmin/website/media/add', methods=['POST'])
 @superadmin_required
 def superadmin_website_media_add():
@@ -6820,27 +7778,140 @@ def superadmin_website_media_add():
         uploaded = _save_homepage_body_media(request.files.get('body_media'))
         caption = (request.form.get('caption') or '').strip()
         layout_style = (request.form.get('layout_style') or 'full').strip().lower()
-        if layout_style not in ('full', 'half', 'third'):
+        if layout_style not in ('full', 'half', 'third', 'quarter', 'slice', 'carousel'):
             layout_style = 'full'
+        edge_to_edge = 1 if request.form.get('edge_to_edge') == '1' else 0
         db = get_db()
         next_sort = db.execute('SELECT COALESCE(MAX(sort_order), 0) + 1 FROM homepage_body_media').fetchone()[0]
         db.execute(
-            'INSERT INTO homepage_body_media (media_path, media_type, caption, layout_style, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+            'INSERT INTO homepage_body_media (media_path, media_type, caption, layout_style, edge_to_edge, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
             (
                 uploaded['media_path'],
                 uploaded['media_type'],
                 caption,
                 layout_style,
+                edge_to_edge,
                 int(next_sort or 1),
                 int(time.time()),
             ),
         )
+        created_media_id = int(db.execute('SELECT last_insert_rowid()').fetchone()[0])
+        grouped_count = _apply_homepage_row_layout_group(db, created_media_id, layout_style)
         db.commit()
-        flash('Body media added to the homepage.', 'success')
+        if grouped_count > 1:
+            flash(f'Body media added and grouped into a {layout_style} row with {grouped_count} items.', 'success')
+        else:
+            flash('Body media added to the homepage.', 'success')
     except Exception as e:
         logging.error('Failed to add homepage body media: %s', e, exc_info=True)
         flash(f'Failed to add homepage body media: {e}', 'error')
-    return redirect(url_for('superadmin_website_editor'))
+    return _superadmin_website_editor_redirect()
+
+
+@app.route('/superadmin/website/hero-media/add', methods=['POST'])
+@superadmin_required
+def superadmin_website_hero_media_add():
+    try:
+        uploads = [f for f in request.files.getlist('hero_media_files') if f and getattr(f, 'filename', '')]
+        if not uploads:
+            single = request.files.get('hero_media_files')
+            if single and getattr(single, 'filename', ''):
+                uploads = [single]
+
+        if not uploads:
+            flash('Please choose one or more image files.', 'error')
+            return _superadmin_website_editor_redirect('#hero-media-manager')
+
+        db = get_db()
+        next_sort = int(db.execute('SELECT COALESCE(MAX(sort_order), 0) FROM homepage_hero_media').fetchone()[0] or 0)
+        created = 0
+
+        for uploaded_file in uploads:
+            payload = _save_homepage_hero_media(uploaded_file)
+            next_sort += 1
+            db.execute(
+                'INSERT INTO homepage_hero_media (media_path, sort_order, created_at) VALUES (?, ?, ?)',
+                (
+                    payload['media_path'],
+                    next_sort,
+                    int(time.time()),
+                ),
+            )
+            created += 1
+
+        db.commit()
+        flash(f'{created} hero rotation image{"s" if created != 1 else ""} added.', 'success')
+    except Exception as e:
+        logging.error('Failed to add hero rotation media: %s', e, exc_info=True)
+        flash(f'Failed to add hero rotation image(s): {e}', 'error')
+    return _superadmin_website_editor_redirect('#hero-media-manager')
+
+
+@app.route('/superadmin/website/hero-media/<int:media_id>/delete', methods=['POST'])
+@superadmin_required
+def superadmin_website_hero_media_delete(media_id: int):
+    try:
+        db = get_db()
+        row = db.execute('SELECT * FROM homepage_hero_media WHERE id = ?', (media_id,)).fetchone()
+        if not row:
+            flash('Hero rotation image not found.', 'error')
+            return _superadmin_website_editor_redirect('#hero-media-manager')
+
+        item = _normalize_homepage_hero_media_row(dict(row))
+        db.execute('DELETE FROM homepage_hero_media WHERE id = ?', (media_id,))
+        db.commit()
+        _cleanup_homepage_asset(item.get('media_path'))
+        flash('Hero rotation image removed.', 'success')
+    except Exception as e:
+        logging.error('Failed to delete hero rotation image: %s', e, exc_info=True)
+        flash(f'Failed to delete hero rotation image: {e}', 'error')
+    return _superadmin_website_editor_redirect('#hero-media-manager')
+
+
+@app.route('/superadmin/website/body-media/display-size', methods=['POST'])
+@superadmin_required
+def superadmin_website_body_media_display_size_update():
+    try:
+        db = get_db()
+        current = _get_homepage_settings()
+        payload = _normalize_homepage_settings({
+            **current,
+            'body_media_display_size': request.form.get('body_media_display_size'),
+            'body_media_width_mode': request.form.get('body_media_width_mode'),
+            'body_media_max_width': request.form.get('body_media_max_width'),
+            'body_media_side_padding': request.form.get('body_media_side_padding'),
+            'body_media_fit_mode': request.form.get('body_media_fit_mode'),
+            'body_media_surface_style': request.form.get('body_media_surface_style'),
+            'body_media_corner_radius': request.form.get('body_media_corner_radius'),
+            'body_media_frame_bg_color': request.form.get('body_media_frame_bg_color'),
+            'body_media_media_bg_color': request.form.get('body_media_media_bg_color'),
+            'body_media_video_display_size': request.form.get('body_media_video_display_size'),
+            'body_media_video_width_mode': request.form.get('body_media_video_width_mode'),
+            'body_media_video_max_width': request.form.get('body_media_video_max_width'),
+            'body_media_video_side_padding': request.form.get('body_media_video_side_padding'),
+            'body_media_video_fit_mode': request.form.get('body_media_video_fit_mode'),
+            'body_media_video_surface_style': request.form.get('body_media_video_surface_style'),
+            'body_media_video_corner_radius': request.form.get('body_media_video_corner_radius'),
+            'body_media_video_frame_bg_color': request.form.get('body_media_video_frame_bg_color'),
+            'body_media_video_media_bg_color': request.form.get('body_media_video_media_bg_color'),
+            'body_media_carousel_display_size': request.form.get('body_media_carousel_display_size'),
+            'body_media_carousel_width_mode': request.form.get('body_media_carousel_width_mode'),
+            'body_media_carousel_max_width': request.form.get('body_media_carousel_max_width'),
+            'body_media_carousel_side_padding': request.form.get('body_media_carousel_side_padding'),
+            'body_media_carousel_fit_mode': request.form.get('body_media_carousel_fit_mode'),
+            'body_media_carousel_surface_style': request.form.get('body_media_carousel_surface_style'),
+            'body_media_carousel_corner_radius': request.form.get('body_media_carousel_corner_radius'),
+            'body_media_carousel_frame_bg_color': request.form.get('body_media_carousel_frame_bg_color'),
+            'body_media_carousel_media_bg_color': request.form.get('body_media_carousel_media_bg_color'),
+            'updated_at': int(time.time()),
+        })
+        _write_homepage_settings(db, payload)
+        db.commit()
+        flash('Homepage media display settings updated by section.', 'success')
+    except Exception as e:
+        logging.error('Failed to update homepage media display size: %s', e, exc_info=True)
+        flash(f'Failed to update homepage media display settings: {e}', 'error')
+    return _superadmin_website_editor_redirect('#body-media-manager')
 
 
 @app.route('/superadmin/website/media/<int:media_id>/update', methods=['POST'])
@@ -6851,23 +7922,28 @@ def superadmin_website_media_update(media_id: int):
         row = db.execute('SELECT * FROM homepage_body_media WHERE id = ?', (media_id,)).fetchone()
         if not row:
             flash('Homepage media item not found.', 'error')
-            return redirect(url_for('superadmin_website_editor'))
+            return _superadmin_website_editor_redirect()
 
         caption = (request.form.get('caption') or '').strip()
         layout_style = (request.form.get('layout_style') or 'full').strip().lower()
-        if layout_style not in ('full', 'half', 'third'):
+        if layout_style not in ('full', 'half', 'third', 'quarter', 'slice', 'carousel'):
             layout_style = 'full'
+        edge_to_edge = 1 if request.form.get('edge_to_edge') == '1' else 0
 
         db.execute(
-            'UPDATE homepage_body_media SET caption = ?, layout_style = ? WHERE id = ?',
-            (caption, layout_style, media_id),
+            'UPDATE homepage_body_media SET caption = ?, layout_style = ?, edge_to_edge = ? WHERE id = ?',
+            (caption, layout_style, edge_to_edge, media_id),
         )
+        grouped_count = _apply_homepage_row_layout_group(db, media_id, layout_style)
         db.commit()
-        flash('Homepage media layout updated.', 'success')
+        if grouped_count > 1:
+            flash(f'Homepage media layout updated and grouped into a {layout_style} row with {grouped_count} items.', 'success')
+        else:
+            flash('Homepage media layout updated.', 'success')
     except Exception as e:
         logging.error('Failed to update homepage body media: %s', e, exc_info=True)
         flash(f'Failed to update homepage body media: {e}', 'error')
-    return redirect(url_for('superadmin_website_editor'))
+    return _superadmin_website_editor_redirect()
 
 
 @app.route('/superadmin/website/media/<int:media_id>/delete', methods=['POST'])
@@ -6878,7 +7954,7 @@ def superadmin_website_media_delete(media_id: int):
         row = db.execute('SELECT * FROM homepage_body_media WHERE id = ?', (media_id,)).fetchone()
         if not row:
             flash('Homepage media item not found.', 'error')
-            return redirect(url_for('superadmin_website_editor'))
+            return _superadmin_website_editor_redirect()
         item = _normalize_homepage_body_media_row(dict(row))
         db.execute('DELETE FROM homepage_body_media WHERE id = ?', (media_id,))
         db.commit()
@@ -6887,7 +7963,7 @@ def superadmin_website_media_delete(media_id: int):
     except Exception as e:
         logging.error('Failed to delete homepage body media: %s', e, exc_info=True)
         flash(f'Failed to delete homepage body media: {e}', 'error')
-    return redirect(url_for('superadmin_website_editor'))
+    return _superadmin_website_editor_redirect()
 
 
 @app.route('/superadmin/website/media/<int:media_id>/move', methods=['POST'])
@@ -6896,7 +7972,7 @@ def superadmin_website_media_move(media_id: int):
     direction = (request.form.get('direction') or '').strip().lower()
     if direction not in ('up', 'down'):
         flash('Invalid media move direction.', 'error')
-        return redirect(url_for('superadmin_website_editor'))
+        return _superadmin_website_editor_redirect()
 
     try:
         db = get_db()
@@ -6907,7 +7983,7 @@ def superadmin_website_media_move(media_id: int):
         current_index = next((index for index, item in enumerate(items) if item['id'] == media_id), None)
         if current_index is None:
             flash('Homepage media item not found.', 'error')
-            return redirect(url_for('superadmin_website_editor'))
+            return _superadmin_website_editor_redirect()
 
         if direction == 'up':
             target_index = current_index - 1
@@ -6915,7 +7991,7 @@ def superadmin_website_media_move(media_id: int):
             target_index = current_index + 1
 
         if target_index < 0 or target_index >= len(items):
-            return redirect(url_for('superadmin_website_editor'))
+            return _superadmin_website_editor_redirect()
 
         current_item = items[current_index]
         target_item = items[target_index]
@@ -6926,7 +8002,7 @@ def superadmin_website_media_move(media_id: int):
     except Exception as e:
         logging.error('Failed to reorder homepage body media: %s', e, exc_info=True)
         flash(f'Failed to reorder homepage body media: {e}', 'error')
-    return redirect(url_for('superadmin_website_editor'))
+    return _superadmin_website_editor_redirect()
 
 
 @app.route('/superadmin/website/feature/add', methods=['POST'])
@@ -6950,7 +8026,7 @@ def superadmin_website_feature_add():
     except Exception as e:
         logging.error('Failed to add homepage feature: %s', e, exc_info=True)
         flash(f'Failed to add homepage feature: {e}', 'error')
-    return redirect(url_for('superadmin_website_editor'))
+    return _superadmin_website_editor_redirect()
 
 
 @app.route('/superadmin/website/feature/<int:feature_id>/update', methods=['POST'])
@@ -6961,7 +8037,7 @@ def superadmin_website_feature_update(feature_id: int):
         row = db.execute('SELECT * FROM homepage_features WHERE id = ?', (feature_id,)).fetchone()
         if not row:
             flash('Homepage feature not found.', 'error')
-            return redirect(url_for('superadmin_website_editor'))
+            return _superadmin_website_editor_redirect()
 
         icon_kind = (request.form.get('icon_kind') or 'emoji').strip().lower()
         if icon_kind not in ('emoji', 'image'):
@@ -6979,7 +8055,7 @@ def superadmin_website_feature_update(feature_id: int):
     except Exception as e:
         logging.error('Failed to update homepage feature: %s', e, exc_info=True)
         flash(f'Failed to update homepage feature: {e}', 'error')
-    return redirect(url_for('superadmin_website_editor'))
+    return _superadmin_website_editor_redirect()
 
 
 @app.route('/superadmin/website/feature/<int:feature_id>/delete', methods=['POST'])
@@ -6993,7 +8069,7 @@ def superadmin_website_feature_delete(feature_id: int):
     except Exception as e:
         logging.error('Failed to delete homepage feature: %s', e, exc_info=True)
         flash(f'Failed to delete homepage feature: {e}', 'error')
-    return redirect(url_for('superadmin_website_editor'))
+    return _superadmin_website_editor_redirect()
 
 
 @app.route('/superadmin/website/feature/<int:feature_id>/move', methods=['POST'])
@@ -7002,7 +8078,7 @@ def superadmin_website_feature_move(feature_id: int):
     direction = (request.form.get('direction') or '').strip().lower()
     if direction not in ('up', 'down'):
         flash('Invalid feature move direction.', 'error')
-        return redirect(url_for('superadmin_website_editor'))
+        return _superadmin_website_editor_redirect()
 
     try:
         db = get_db()
@@ -7011,11 +8087,11 @@ def superadmin_website_feature_move(feature_id: int):
         current_index = next((index for index, item in enumerate(items) if item['id'] == feature_id), None)
         if current_index is None:
             flash('Homepage feature not found.', 'error')
-            return redirect(url_for('superadmin_website_editor'))
+            return _superadmin_website_editor_redirect()
 
         target_index = current_index - 1 if direction == 'up' else current_index + 1
         if target_index < 0 or target_index >= len(items):
-            return redirect(url_for('superadmin_website_editor'))
+            return _superadmin_website_editor_redirect()
 
         current_item = items[current_index]
         target_item = items[target_index]
@@ -7026,7 +8102,7 @@ def superadmin_website_feature_move(feature_id: int):
     except Exception as e:
         logging.error('Failed to reorder homepage feature: %s', e, exc_info=True)
         flash(f'Failed to reorder homepage feature: {e}', 'error')
-    return redirect(url_for('superadmin_website_editor'))
+    return _superadmin_website_editor_redirect()
 
 
 @app.route('/superadmin/billing/settings', methods=['POST'])
@@ -7180,6 +8256,7 @@ def superadmin_update_billing_promotion():
 def superadmin_feedback():
     """View all cancellation feedback"""
     try:
+        embedded = request.args.get('embedded') == '1'
         db = get_db()
         
         # Ensure table exists with proper error handling
@@ -7200,7 +8277,7 @@ def superadmin_feedback():
                     'screen_name TEXT, '
                     'reason TEXT, '
                     'feedback_text TEXT, '
-                    'canceled_at INTEGER DEFAULT (strftime("%s", "now"))'
+                    'canceled_at INTEGER'
                     ')'
                 )
                 db.commit()
@@ -7233,7 +8310,7 @@ def superadmin_feedback():
                 logging.error(f'Row processing error: {row_err}')
                 continue
         
-        return render_template('superadmin/feedback.html', feedbacks=feedback_list)
+        return render_template('superadmin/feedback.html', feedbacks=feedback_list, embedded=embedded)
     except Exception as e:
         logging.error(f'Superadmin feedback error: {e}', exc_info=True)
         return f'<h1>Error Loading Feedback</h1><p>{str(e)}</p><p>Check server logs for details.</p>', 500
@@ -7375,6 +8452,7 @@ def api_studio_elements():
 def superadmin_agents():
     """List all agents with summary stats."""
     try:
+        embedded = request.args.get('embedded') == '1'
         db = get_db()
         agents = db.execute(
             '''
@@ -7390,7 +8468,7 @@ def superadmin_agents():
         ).fetchall()
 
         agent_list = [dict(row) for row in agents]
-        return render_template('superadmin/agents.html', agents=agent_list)
+        return render_template('superadmin/agents.html', agents=agent_list, embedded=embedded)
     except Exception as e:
         logging.error('Superadmin agents error: %s', e, exc_info=True)
         return f'<h1>Error Loading Agents</h1><p>{str(e)}</p>', 500
@@ -7400,6 +8478,7 @@ def superadmin_agents():
 @superadmin_required
 def superadmin_create_agent():
     """Create a new agent and their default coupon."""
+    embedded = request.args.get('embedded') == '1'
     if request.method == 'POST':
         try:
             email = (request.form.get('email') or '').strip().lower()
@@ -7456,13 +8535,13 @@ def superadmin_create_agent():
                 flash(f'Agent created. Login for {email}: temporary password is changeme123', 'success')
             else:
                 flash(f'Agent {agent_code} created for existing user {email}', 'success')
-            return redirect(url_for('superadmin_agent_detail', agent_id=agent_id))
+            return _superadmin_agents_redirect('superadmin_agent_detail', agent_id=agent_id)
         except Exception as e:
             logging.error('Create agent error: %s', e, exc_info=True)
             flash(f'Error creating agent: {e}', 'error')
             return redirect(request.url)
 
-    return render_template('superadmin/create_agent.html')
+    return render_template('superadmin/create_agent.html', embedded=embedded)
 
 
 @app.route('/superadmin/agents/<int:agent_id>')
@@ -7470,6 +8549,7 @@ def superadmin_create_agent():
 def superadmin_agent_detail(agent_id):
     """View agent details, coupons, customers, and earnings."""
     try:
+        embedded = request.args.get('embedded') == '1'
         db = get_db()
         agent = db.execute(
             '''
@@ -7483,7 +8563,7 @@ def superadmin_agent_detail(agent_id):
 
         if not agent:
             flash('Agent not found', 'error')
-            return redirect(url_for('superadmin_agents'))
+            return _superadmin_agents_redirect()
 
         coupons = db.execute(
             'SELECT * FROM agent_coupons WHERE agent_id = ? ORDER BY created_at DESC, id DESC',
@@ -7538,11 +8618,12 @@ def superadmin_agent_detail(agent_id):
             customers=[dict(row) for row in customers],
             earnings=earnings_list,
             monthly_earnings=monthly_earnings,
+            embedded=embedded,
         )
     except Exception as e:
         logging.error('Agent detail error: %s', e, exc_info=True)
         flash(f'Error loading agent: {e}', 'error')
-        return redirect(url_for('superadmin_agents'))
+        return _superadmin_agents_redirect()
 
 
 @app.route('/superadmin/agents/<int:agent_id>/update', methods=['POST'])
@@ -7566,7 +8647,7 @@ def superadmin_update_agent(agent_id):
         logging.error('Update agent error: %s', e, exc_info=True)
         flash(f'Error updating agent: {e}', 'error')
 
-    return redirect(url_for('superadmin_agent_detail', agent_id=agent_id))
+    return _superadmin_agents_redirect('superadmin_agent_detail', agent_id=agent_id)
 
 
 @app.route('/superadmin/agents/<int:agent_id>/add-coupon', methods=['POST'])
@@ -7582,12 +8663,12 @@ def superadmin_add_agent_coupon(agent_id):
 
         if not coupon_code:
             flash('Coupon code is required', 'error')
-            return redirect(url_for('superadmin_agent_detail', agent_id=agent_id))
+            return _superadmin_agents_redirect('superadmin_agent_detail', agent_id=agent_id)
 
         existing = db.execute('SELECT id FROM agent_coupons WHERE coupon_code = ?', (coupon_code,)).fetchone()
         if existing:
             flash(f'Coupon {coupon_code} already exists', 'error')
-            return redirect(url_for('superadmin_agent_detail', agent_id=agent_id))
+            return _superadmin_agents_redirect('superadmin_agent_detail', agent_id=agent_id)
 
         now = int(time.time())
         db.execute(
@@ -7603,7 +8684,7 @@ def superadmin_add_agent_coupon(agent_id):
         logging.error('Add coupon error: %s', e, exc_info=True)
         flash(f'Error adding coupon: {e}', 'error')
 
-    return redirect(url_for('superadmin_agent_detail', agent_id=agent_id))
+    return _superadmin_agents_redirect('superadmin_agent_detail', agent_id=agent_id)
 
 
 @app.route('/superadmin/agents/<int:agent_id>/delete', methods=['POST'])
@@ -7615,7 +8696,7 @@ def superadmin_delete_agent(agent_id):
         agent = db.execute('SELECT user_id, agent_code FROM agents WHERE id = ?', (agent_id,)).fetchone()
         if not agent:
             flash('Agent not found', 'error')
-            return redirect(url_for('superadmin_agents'))
+            return _superadmin_agents_redirect()
 
         delete_user = request.form.get('delete_user') == 'yes'
 
@@ -7635,7 +8716,7 @@ def superadmin_delete_agent(agent_id):
         logging.error('Delete agent error: %s', e, exc_info=True)
         flash(f'Error deleting agent: {e}', 'error')
 
-    return redirect(url_for('superadmin_agents'))
+    return _superadmin_agents_redirect()
 
 @app.route('/superadmin/users/create', methods=['POST'])
 @superadmin_required
@@ -7762,7 +8843,7 @@ def superadmin_block_user(user_id):
     db.execute('UPDATE users SET is_blocked = 1 WHERE id = ?', (user_id,))
     db.commit()
     flash('User blocked', 'success')
-    return redirect(url_for('superadmin_dashboard'))
+    return _superadmin_user_post_action_redirect(user_id)
 
 @app.route('/superadmin/users/<int:user_id>/unblock', methods=['POST'])
 @superadmin_required
@@ -7771,7 +8852,119 @@ def superadmin_unblock_user(user_id):
     db.execute('UPDATE users SET is_blocked = 0 WHERE id = ?', (user_id,))
     db.commit()
     flash('User unblocked', 'success')
-    return redirect(url_for('superadmin_dashboard'))
+    return _superadmin_user_post_action_redirect(user_id)
+
+def _delete_user_local_artifacts(username: str | None) -> None:
+    safe_key = _safe_key_from_username(username)
+    if not safe_key:
+        return
+
+    try:
+        cfg_path = _config_path_for_user_safe_key(safe_key)
+        for path in (cfg_path, cfg_path + '.lock'):
+            if os.path.exists(path):
+                os.remove(path)
+    except Exception as e:
+        logging.warning('Failed to remove config for %s: %s', username, e)
+
+    try:
+        uploads_root = app.config.get('UPLOAD_FOLDER') or UPLOAD_FOLDER
+        uploads_prefix = os.path.join(uploads_root, 'users', safe_key)
+        if os.path.exists(uploads_prefix):
+            shutil.rmtree(uploads_prefix, ignore_errors=True)
+    except Exception as e:
+        logging.warning('Failed to remove uploads for %s: %s', username, e)
+
+    try:
+        avatar_path = os.path.join(AVATAR_FOLDER, f'{safe_key}.png')
+        if os.path.exists(avatar_path):
+            os.remove(avatar_path)
+    except Exception as e:
+        logging.warning('Failed to remove avatar for %s: %s', username, e)
+
+def _delete_user_account(user_id: int) -> str:
+    db = get_db()
+    row = db.execute('SELECT id, username FROM users WHERE id = ?', (user_id,)).fetchone()
+    if not row:
+        raise ValueError('User not found')
+
+    username = ((row['username'] or '').strip().lower())
+
+    existing_tables = {
+        table_name
+        for table_name in (
+            'subscriptions',
+            'screen_subscriptions',
+            'cancellation_feedback',
+            'user_billing_policy',
+            'menu_studio_projects',
+        )
+        if _table_exists(db, table_name)
+    }
+
+    active_main_subs = []
+    if 'subscriptions' in existing_tables:
+        active_main_subs = db.execute(
+            'SELECT stripe_subscription_id FROM subscriptions '
+            'WHERE user_id = ? AND status IN ("active", "trialing") AND COALESCE(stripe_subscription_id, "") != ""',
+            (user_id,),
+        ).fetchall()
+
+    active_screen_subs = []
+    if 'screen_subscriptions' in existing_tables:
+        active_screen_subs = db.execute(
+            'SELECT id FROM screen_subscriptions '
+            'WHERE user_id = ? AND status IN ("active", "trialing") AND COALESCE(stripe_subscription_id, "") != ""',
+            (user_id,),
+        ).fetchall()
+
+    if (active_main_subs or active_screen_subs) and not _stripe_enabled():
+        raise RuntimeError('Stripe is not configured; cannot safely delete a user with active subscriptions')
+
+    stripe_errors = []
+    if _stripe_enabled():
+        for sub_row in active_main_subs:
+            stripe_sub_id = (sub_row['stripe_subscription_id'] or '').strip()
+            if not stripe_sub_id:
+                continue
+            try:
+                stripe.Subscription.delete(stripe_sub_id)
+            except Exception as e:
+                stripe_errors.append(f'main subscription {stripe_sub_id}: {e}')
+
+        for sub_row in active_screen_subs:
+            if not _cancel_screen_subscription(int(sub_row['id']), immediate=True):
+                stripe_errors.append(f'screen subscription #{sub_row["id"]}')
+
+    if stripe_errors:
+        preview = '; '.join(stripe_errors[:3])
+        raise RuntimeError(f'Could not cancel active Stripe billing: {preview}')
+
+    try:
+        db.execute('BEGIN')
+        for table_name in existing_tables:
+            db.execute(f'DELETE FROM {table_name} WHERE user_id = ?', (user_id,))
+        db.execute('DELETE FROM users WHERE id = ?', (user_id,))
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    _delete_user_local_artifacts(username)
+    return username
+
+@app.route('/superadmin/users/<int:user_id>/delete', methods=['POST'])
+@superadmin_required
+def superadmin_delete_user(user_id):
+    try:
+        username = _delete_user_account(user_id)
+        flash(f'User {username} deleted', 'success')
+    except (ValueError, RuntimeError) as e:
+        flash(str(e), 'error')
+    except Exception as e:
+        logging.error('Superadmin delete user failed: %s', e, exc_info=True)
+        flash(f'Delete failed: {e}', 'error')
+    return _superadmin_dashboard_redirect('#panel-directory')
 
 @app.route('/superadmin/users/<int:user_id>/password', methods=['POST'])
 @superadmin_required
@@ -7779,12 +8972,41 @@ def superadmin_reset_password(user_id):
     pwd = request.form.get('password') or ''
     if len(pwd) < 6:
         flash('Password must be at least 6 characters', 'error')
-        return redirect(url_for('superadmin_dashboard'))
+        return _superadmin_user_post_action_redirect(user_id)
     db = get_db()
     db.execute('UPDATE users SET password_hash = ? WHERE id = ?', (generate_password_hash(pwd), user_id))
     db.commit()
     flash('Password updated', 'success')
-    return redirect(url_for('superadmin_dashboard'))
+    return _superadmin_user_post_action_redirect(user_id)
+
+
+@app.route('/superadmin/users/<int:user_id>/send-reset-link', methods=['POST'])
+@superadmin_required
+def superadmin_send_password_reset_link(user_id):
+    channel = (request.form.get('channel') or 'email').strip().lower()
+    try:
+        db = get_db()
+        user = db.execute('SELECT username, phone_number FROM users WHERE id = ?', (user_id,)).fetchone()
+        if not user:
+            flash('User not found', 'error')
+            return _superadmin_user_post_action_redirect(user_id)
+
+        token = _issue_password_reset_token(user['username'])
+        if not token:
+            flash('Could not create a reset link right now.', 'error')
+            return _superadmin_user_post_action_redirect(user_id)
+
+        reset_url, app_reset_url = _build_password_reset_links(token)
+        if channel == 'sms':
+            result = _send_password_reset_sms_message(user['phone_number'], reset_url)
+        else:
+            result = _send_password_reset_email_message(user['username'], reset_url, app_reset_url)
+
+        flash(result.get('message') if result.get('success') else result.get('error') or 'Could not send reset link.', 'success' if result.get('success') else 'error')
+    except Exception as e:
+        logging.error('superadmin_send_password_reset_link failed: %s', e, exc_info=True)
+        flash(f'Could not send reset link: {e}', 'error')
+    return _superadmin_user_post_action_redirect(user_id)
 
 @app.route('/superadmin/users/<int:user_id>/rename', methods=['POST'])
 @superadmin_required
@@ -7793,7 +9015,7 @@ def superadmin_rename_user(user_id):
     full_name = (request.form.get('full_name') or '').strip()
     if not email:
         flash('Username required', 'error')
-        return redirect(url_for('superadmin_dashboard'))
+        return _superadmin_user_post_action_redirect(user_id)
     try:
         db = get_db()
         # Fetch current username to rename config files if needed
@@ -7817,20 +9039,21 @@ def superadmin_rename_user(user_id):
         flash('Username already exists', 'error')
     except Exception as e:
         flash(f'Update failed: {e}', 'error')
-    return redirect(url_for('superadmin_dashboard'))
+    return _superadmin_user_post_action_redirect(user_id)
 
 @app.route('/superadmin/users/<int:user_id>')
 @superadmin_required
 def superadmin_user_detail(user_id):
     try:
         db = get_db()
+        embedded = request.args.get('embedded') == '1'
         logging.info(f"[SUPERADMIN] Loading details for user_id={user_id}")
         
         user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
         if not user:
             logging.warning(f"[SUPERADMIN] User {user_id} not found")
             flash('User not found', 'error')
-            return redirect(url_for('superadmin_dashboard'))
+            return _superadmin_dashboard_redirect('#panel-directory')
         
         logging.info(f"[SUPERADMIN] User found: {user['username']}")
         
@@ -7864,11 +9087,12 @@ def superadmin_user_detail(user_id):
                              subscription=subscription,
                              config=cfg,
                              screen_subs=screen_subs,
-                             cancellations=cancellations)
+                             cancellations=cancellations,
+                             embedded=embedded)
     except Exception as e:
         logging.error(f"[SUPERADMIN] Fatal error in user_detail for user_id={user_id}: {e}", exc_info=True)
         flash(f'Error loading user details: {str(e)}', 'error')
-        return redirect(url_for('superadmin_dashboard'))
+        return _superadmin_dashboard_redirect('#panel-directory')
 
 @app.route('/superadmin/users/<int:user_id>/cancel-subscription', methods=['POST'])
 @superadmin_required
@@ -7878,7 +9102,7 @@ def superadmin_cancel_subscription(user_id):
         user = db.execute('SELECT username FROM users WHERE id = ?', (user_id,)).fetchone()
         if not user:
             flash('User not found', 'error')
-            return redirect(url_for('superadmin_dashboard'))
+            return _superadmin_dashboard_redirect('#panel-directory')
         
         # Cancel main subscription
         db.execute('''UPDATE subscriptions 
@@ -7892,7 +9116,7 @@ def superadmin_cancel_subscription(user_id):
     except Exception as e:
         flash(f'Error canceling subscription: {e}', 'error')
     
-    return redirect(url_for('superadmin_user_detail', user_id=user_id))
+    return _superadmin_user_detail_redirect(user_id)
 
 @app.route('/superadmin/users/<int:user_id>/reset-subscription', methods=['POST'])
 @superadmin_required
@@ -7902,7 +9126,7 @@ def superadmin_reset_subscription(user_id):
         user = db.execute('SELECT username FROM users WHERE id = ?', (user_id,)).fetchone()
         if not user:
             flash('User not found', 'error')
-            return redirect(url_for('superadmin_dashboard'))
+            return _superadmin_dashboard_redirect('#panel-directory')
         
         now = int(time.time())
         policy = _get_user_billing_policy(user_id)
@@ -7941,7 +9165,7 @@ def superadmin_reset_subscription(user_id):
     except Exception as e:
         flash(f'Error resetting subscription: {e}', 'error')
     
-    return redirect(url_for('superadmin_user_detail', user_id=user_id))
+    return _superadmin_user_detail_redirect(user_id)
 
 def _get_current_username_from_session() -> Optional[str]:
     try:
@@ -8151,6 +9375,7 @@ def account():
     """Full account dashboard with subscriptions, billing, screens, and phone management"""
     uname = _get_current_username_from_session()
     user_id = _current_user_id()
+    embedded = request.args.get('embedded') == '1'
     logging.info(f'ACCOUNT PAGE: username={uname}, user_id={user_id}')
     
     # User info
@@ -8300,7 +9525,8 @@ def account():
                          price_display=billing_policy['price_display'],
                          trial_days=billing_policy['trial_days'],
                          free_screens=billing_policy['free_screens'],
-                         build_stamp=BUILD_STAMP)
+                         build_stamp=BUILD_STAMP,
+                         embedded=embedded)
 
 
 @app.route('/api/account/overview', methods=['GET'])
@@ -8796,42 +10022,17 @@ def api_profile_delete_account():
         current = data.get('current_password') or ''
         uname = _get_current_username_from_session()
         db = get_db()
-        row = db.execute('SELECT password_hash FROM users WHERE username = ?', (uname,)).fetchone()
+        row = db.execute('SELECT id, password_hash FROM users WHERE username = ?', (uname,)).fetchone()
         ph = row['password_hash'] if row else None
         if not ph or not check_password_hash(ph, current):
             return jsonify({'success': False, 'error': 'current password incorrect'}), 400
-        # Remove per-user config file and any local uploads under users/<k>/
-        try:
-            safe_key = _safe_key_from_username(uname)
-            if safe_key:
-                cfg_file = f"store_config__{safe_key}.json"
-                if os.path.exists(cfg_file):
-                    try:
-                        os.remove(cfg_file)
-                    except Exception:
-                        pass
-                # Remove local uploads prefix folders if present
-                uploads_root = os.path.join('static', 'uploads')
-                prefix = os.path.join(uploads_root, 'users', safe_key)
-                if os.path.exists(prefix):
-                    import shutil
-                    try:
-                        shutil.rmtree(prefix, ignore_errors=True)
-                    except Exception:
-                        pass
-                # Remove avatar file
-                try:
-                    avatar_path = os.path.join('static', 'uploads', 'avatars', f'{safe_key}.png')
-                    if os.path.exists(avatar_path):
-                        os.remove(avatar_path)
-                except Exception:
-                    pass
-        except Exception:
-            pass
-        db.execute('DELETE FROM users WHERE username = ?', (uname,))
-        db.commit()
+        _delete_user_account(int(row['id']))
         session.clear()
         return jsonify({'success': True})
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 404
+    except RuntimeError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -10594,13 +11795,47 @@ def dashboard():
         except Exception:
             asset_bust = 0
         # Compute user info for header menu (email + pairing code)
+        dashboard_display_name = ''
+        dashboard_subscription_status = None
+        dashboard_subscription_plan = None
+        dashboard_total_screens = sum(len(s) for s in config.get('screens', {}).values())
+        dashboard_total_stores = len(config.get('stores', []))
         try:
             u = session.get('user') or {}
             uname = (u.get('email') or u.get('name') or u.get('username') or '').strip()
+            dashboard_display_name = (u.get('full_name') or u.get('name') or '').strip()
+            if not dashboard_display_name and uname:
+                raw_name = uname.split('@', 1)[0].replace('.', ' ').replace('_', ' ').replace('-', ' ')
+                dashboard_display_name = ' '.join(part.capitalize() for part in raw_name.split())
             link_code = _ensure_user_link_code(uname) if uname else ''
+
+            if uname:
+                db = get_db()
+                row = db.execute(
+                    'SELECT full_name, subscription_status, subscription_plan FROM users WHERE username = ?',
+                    (uname,)
+                ).fetchone()
+                if row:
+                    if row['full_name']:
+                        dashboard_display_name = str(row['full_name']).strip()
+                    dashboard_subscription_status = row['subscription_status'] if 'subscription_status' in row.keys() else None
+                    dashboard_subscription_plan = row['subscription_plan'] if 'subscription_plan' in row.keys() else None
+
+                user_id = _current_user_id()
+                if user_id and (not dashboard_subscription_status or not dashboard_subscription_plan):
+                    sub_row = db.execute(
+                        'SELECT status, plan_name FROM subscriptions WHERE user_id = ? ORDER BY id DESC LIMIT 1',
+                        (user_id,)
+                    ).fetchone()
+                    if sub_row:
+                        dashboard_subscription_status = dashboard_subscription_status or sub_row['status']
+                        dashboard_subscription_plan = dashboard_subscription_plan or sub_row['plan_name']
         except Exception:
             uname = ''
             link_code = ''
+        if not dashboard_display_name:
+            dashboard_display_name = 'there'
+        google_maps_api_key = (os.environ.get('GOOGLE_MAPS_API_KEY') or '').strip()
         # After computing asset_bust, render the template
         resp = make_response(render_template(
             'dashboard.html',
@@ -10610,7 +11845,13 @@ def dashboard():
             build_stamp=BUILD_STAMP,
             git_commit=GIT_COMMIT,
             user_email=uname,
-            link_code=link_code
+            link_code=link_code,
+            dashboard_display_name=dashboard_display_name,
+            dashboard_subscription_status=dashboard_subscription_status,
+            dashboard_subscription_plan=dashboard_subscription_plan,
+            dashboard_total_screens=dashboard_total_screens,
+            dashboard_total_stores=dashboard_total_stores,
+            google_maps_api_key=google_maps_api_key,
         ))
         # Avoid CDN/browser caching the admin dashboard HTML
         try:
@@ -11199,6 +12440,8 @@ def pi_manager():
         # Get available Pi IDs (registered but not yet assigned)
         
         available_pi_ids = [pi_id for pi_id in all_pi_ids if pi_id not in assigned_pi_ids]
+        google_maps_api_key = (os.environ.get('GOOGLE_MAPS_API_KEY') or '').strip()
+        embedded = request.args.get('embedded') == '1'
         
         resp = make_response(render_template(
             'pi_manager.html',
@@ -11213,6 +12456,8 @@ def pi_manager():
             offline_count=offline_count,
             user_email=uname,
             link_code=link_code,
+            google_maps_api_key=google_maps_api_key,
+            embedded=embedded,
             build_stamp=BUILD_STAMP,
             git_commit=GIT_COMMIT
         ))
@@ -13903,6 +15148,27 @@ def get_playlist(store_id, screen_id):
                 print(f"DEBUG: Base media URL resolved: {base_url}")
             else:
                 print("DEBUG: Base URL missing (no file?)")
+
+            # Optional professional path for TV clients:
+            # if playlist item is youtube:VIDEO_ID and a cached MP4 is ready,
+            # serve the cached MP4 URL so Android TV can use ExoPlayer instead of WebView iframe.
+            try:
+                fval = str(it.get('file') or '')
+                if fval.lower().startswith('youtube:'):
+                    ua_tv_tokens = ('android', 'okhttp', 'exoplayer', 'bravia', 'smart-tv', 'smarttv', 'aft')
+                    ua_effective_l = (ua_effective or '').lower()
+                    is_tv_like = any(tok in ua_effective_l for tok in ua_tv_tokens)
+                    if is_tv_like:
+                        yt_cached = resolve_youtube_cached_url(fval, start_background=True)
+                        if yt_cached:
+                            # Prefer absolute URL for client consistency
+                            it['url'] = url_for('static', filename=_youtube_cache_rel(_youtube_id_from_value(fval) or '').replace('\\\\','/'), _external=True)
+                            it['media_type'] = 'video'
+                            print(f"DEBUG: Using cached YouTube MP4 for TV client: {it['url']}")
+                        else:
+                            print(f"DEBUG: YouTube cache miss for {fval}; background download started")
+            except Exception as e_ytcache:
+                print(f"WARNING: YouTube cache resolve failed: {e_ytcache}")
 
             # Ensure the effect is serialized explicitly for clients
             if 'effect' in item and isinstance(item.get('effect'), str):
@@ -18620,9 +19886,6 @@ def pi_map_locations():
                     continue
 
                 pi_id = str(screen_data.get('pi_id') or '').strip()
-                if not pi_id:
-                    continue
-
                 lat = screen_data.get('latitude')
                 lng = screen_data.get('longitude')
                 try:
@@ -18635,7 +19898,7 @@ def pi_map_locations():
                 if lat is None or lng is None:
                     continue
 
-                pi_runtime = connected_pis.get(pi_id, {}) or {}
+                pi_runtime = connected_pis.get(pi_id, {}) or {} if pi_id else {}
                 last_seen_raw = pi_runtime.get('last_seen')
                 if isinstance(last_seen_raw, (int, float)):
                     is_online = (now_ts - float(last_seen_raw)) < PI_OFFLINE_TIMEOUT

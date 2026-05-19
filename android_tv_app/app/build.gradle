@@ -20,8 +20,8 @@ android {
 		applicationId 'com.everydayadvertise.tv'
 		minSdk 21
 		targetSdk 35
-		versionCode = 48
-		versionName "1.6"
+		versionCode = 50
+		versionName "1.8"
 	// Allow overriding BASE URL at build time (e.g. -PPHTV_BASE_URL="https://everydayadvertise.com/")
 	def suppliedBase = project.findProperty('PHTV_BASE_URL') as String
 	def defaultProd = 'https://everydayadvertise.com/'

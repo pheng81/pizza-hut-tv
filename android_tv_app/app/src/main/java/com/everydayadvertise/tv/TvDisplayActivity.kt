@@ -997,11 +997,13 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
         scheduledRotation?.let {
             imageView.removeCallbacks(it)
             playerView.removeCallbacks(it)
+            binding.root.removeCallbacks(it)
         }
         scheduledRotation = null
         videoStallWatch?.let {
             imageView.removeCallbacks(it)
             playerView.removeCallbacks(it)
+            binding.root.removeCallbacks(it)
         }
         videoStallWatch = null
         // Intentionally DO NOT cancel scheduleTick here.
@@ -1094,52 +1096,175 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
             return
         }
     val file = next.file!!
+        val hasYoutubeProxyMp4 = file.startsWith("youtube:") &&
+            !next.url.isNullOrBlank() &&
+            next.url!!.startsWith("http", true) &&
+            next.url!!.contains("/static/cache/youtube/") &&
+            next.url!!.endsWith(".mp4", true)
         android.util.Log.d("TvDisplayActivity", "showAndSchedule -> ${file} (idx=${state.index-1}/${state.items.size})")
+        if (file.startsWith("youtube:")) {
+            if (hasYoutubeProxyMp4) {
+                android.util.Log.d("TvDisplayActivity", "YOUTUBE_PATH=cached_mp4 url=${next.url}")
+            } else {
+                android.util.Log.d("TvDisplayActivity", "YOUTUBE_PATH=iframe id=${file.removePrefix("youtube:").trim()}")
+            }
+        }
         currentItemFile = file
         // Record the moment we switched to a new item for watchdog purposes
         try { lastAdvanceAtMs = android.os.SystemClock.elapsedRealtime() } catch (_: Exception) {}
         // ── YouTube IFrame embed via WebView ─────────────────────────────────
-        if (file.startsWith("youtube:")) {
+        if (file.startsWith("youtube:") && !hasYoutubeProxyMp4) {
             val videoId = file.removePrefix("youtube:").trim()
             if (videoId.isEmpty()) { showAndSchedule(); return }
-            imageView.visibility = ImageView.GONE
-            secondaryImageView?.visibility = ImageView.GONE
-            playerView.visibility = ImageView.GONE
-            legacyVideoView?.visibility = ImageView.GONE
-            try { exoPlayer?.stop(); exoPlayer?.clearMediaItems() } catch (_: Exception) {}
+            // Clear transient status text so no placeholder label appears before playback starts
+            binding.message.text = ""
             binding.message.bringToFront()
             try { debugOverlay?.bringToFront() } catch (_: Exception) {}
             try { transitionOverlay?.bringToFront() } catch (_: Exception) {}
-            val activity = this
-            val wv = youTubeWebView ?: run {
-                val newWv = android.webkit.WebView(activity).apply {
-                    layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                    visibility = android.view.View.GONE
-                    settings.javaScriptEnabled = true
-                    @Suppress("SetJavaScriptEnabled")
-                    settings.mediaPlaybackRequiresUserGesture = false
-                    settings.domStorageEnabled = true
-                    settings.loadWithOverviewMode = true
-                    settings.useWideViewPort = true
-                    settings.allowContentAccess = true
-                    settings.allowFileAccess = true
-                    // Chrome UA required; also spoof desktop so YouTube doesn't restrict player config
-                    settings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                    // WebChromeClient needed for HTML5 video/audio playback in WebView
-                    webChromeClient = android.webkit.WebChromeClient()
-                    webViewClient = android.webkit.WebViewClient()
-                }
-                binding.root.addView(newWv, 0)
-                youTubeWebView = newWv
-                newWv
+
+            val durMs = (next.duration ?: 30).coerceAtLeast(5) * 1000L
+            currentItemDurationMs = durMs
+            // hqdefault is consistently available; maxresdefault is often missing and causes delay.
+            val thumbUrl = "https://img.youtube.com/vi/$videoId/hqdefault.jpg"
+
+            fun stopVideoPipelines() {
+                try { exoPlayer?.stop(); exoPlayer?.clearMediaItems() } catch (_: Exception) {}
+                legacyVideoView?.let { try { it.stopPlayback() } catch (_: Exception) {}; it.visibility = ImageView.GONE }
+                playerView.visibility = ImageView.GONE
             }
-            wv.visibility = android.view.View.VISIBLE
-            wv.bringToFront()
-            binding.message.bringToFront()
-            // Use youtube-nocookie.com (more permissive) + origin param matching the base URL
-            // WebChromeClient + loadDataWithBaseURL together unlock HTML5 autoplay in WebView
-            val muteParam = if (screenMuted) "1" else "0"
-            val ytHtml = """<!DOCTYPE html><html><head>
+
+            // Fallback: show YouTube thumbnail image when WebView can't play the video.
+            // This handles real Android TV devices where WebView-based YouTube embedding is
+            // blocked, missing, or crashes (older System WebView / restricted TV builds).
+            fun showYouTubeThumbnailFallback(reason: String) {
+                android.util.Log.w("TvDisplayActivity", "YouTube WebView unavailable ($reason); showing thumbnail for $videoId")
+                cancelScheduled()
+                try { youTubeWebView?.let { it.visibility = android.view.View.GONE; it.loadUrl("about:blank") } } catch (_: Exception) {}
+                stopVideoPipelines()
+                binding.message.text = "YT ${videoId.take(11)}"
+                imageView.visibility = ImageView.VISIBLE
+                secondaryImageView?.visibility = ImageView.GONE
+                binding.message.bringToFront()
+                try { debugOverlay?.bringToFront() } catch (_: Exception) {}
+                try { transitionOverlay?.bringToFront() } catch (_: Exception) {}
+                // YouTube thumbnail URL — always available, no WebView needed
+                loadAnimatedOrStatic(thumbUrl, next.id, thumbUrl, next.effect) { _ ->
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        try { ApiClient.service.postClientEvent(com.everydayadvertise.tv.api.ClientEventReq(storeId, screenId, "load_ok", file = file, itemId = next.id)) } catch (_: Exception) {}
+                    }
+                    startItemOkPing(storeId, screenId, file, next.id)
+                    cancelScheduled()
+                    scheduledRotation = Runnable { showAndSchedule() }
+                    imageView.postDelayed(scheduledRotation!!, durMs)
+                }
+            }
+
+            val activity = this
+            // Track whether loadDataWithBaseURL was called so error handlers know WebView is active
+            var webViewLoaded = false
+            var youtubeRevealed = false
+
+            // Bridge frame: keep UI smooth by showing the video thumbnail while WebView buffers.
+            lifecycleScope.launch {
+                try {
+                    val bmp = withContext(Dispatchers.IO) { fetchBitmap(thumbUrl) }
+                    if (bmp != null && !youtubeRevealed) {
+                        stopVideoPipelines()
+                        imageView.visibility = ImageView.VISIBLE
+                        secondaryImageView?.visibility = ImageView.GONE
+                        crossfadeToImage(
+                            setupFront = { iv -> iv.setImageBitmap(bmp) },
+                            rotationDegrees = 0f,
+                            durationMs = 220L,
+                            effect = next.effect
+                        )
+                    }
+                } catch (_: Exception) {}
+            }
+
+            fun revealYoutubeSurface(wv: android.webkit.WebView) {
+                if (youtubeRevealed) return
+                youtubeRevealed = true
+                stopVideoPipelines()
+                imageView.visibility = ImageView.GONE
+                secondaryImageView?.visibility = ImageView.GONE
+                wv.visibility = android.view.View.VISIBLE
+                wv.bringToFront()
+                binding.message.bringToFront()
+                try { debugOverlay?.bringToFront() } catch (_: Exception) {}
+                try { transitionOverlay?.bringToFront() } catch (_: Exception) {}
+            }
+
+            try {
+                val wv = youTubeWebView ?: run {
+                    val newWv = android.webkit.WebView(activity).apply {
+                        layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                        visibility = android.view.View.GONE
+                        settings.javaScriptEnabled = true
+                        @Suppress("SetJavaScriptEnabled")
+                        settings.mediaPlaybackRequiresUserGesture = false
+                        settings.domStorageEnabled = true
+                        settings.loadWithOverviewMode = true
+                        settings.useWideViewPort = true
+                        settings.allowContentAccess = true
+                        settings.allowFileAccess = true
+                        // Chrome UA required; also spoof desktop so YouTube doesn't restrict player config
+                        settings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                        // WebChromeClient needed for HTML5 video/audio playback in WebView
+                        webChromeClient = android.webkit.WebChromeClient()
+                        // Custom client: detect main-frame errors and fall back to thumbnail
+                        webViewClient = object : android.webkit.WebViewClient() {
+                            override fun onReceivedError(
+                                view: android.webkit.WebView?,
+                                request: android.webkit.WebResourceRequest?,
+                                error: android.webkit.WebResourceError?
+                            ) {
+                                if (android.os.Build.VERSION.SDK_INT >= 23 && request?.isForMainFrame == true && webViewLoaded) {
+                                    android.util.Log.w("TvDisplayActivity", "YouTube main-frame error: ${error?.description}")
+                                    runOnUiThread { showYouTubeThumbnailFallback("webview_error_${error?.errorCode}") }
+                                }
+                            }
+
+                            override fun onRenderProcessGone(
+                                view: android.webkit.WebView?,
+                                detail: android.webkit.RenderProcessGoneDetail?
+                            ): Boolean {
+                                android.util.Log.e("TvDisplayActivity", "YouTube WebView render process gone. crashed=${detail?.didCrash()}")
+                                runOnUiThread {
+                                    try {
+                                        // Fully tear down broken WebView instance and recover.
+                                        val broken = youTubeWebView
+                                        if (broken != null) {
+                                            try { (broken.parent as? android.view.ViewGroup)?.removeView(broken) } catch (_: Exception) {}
+                                            try { broken.destroy() } catch (_: Exception) {}
+                                        }
+                                        youTubeWebView = null
+                                    } catch (_: Exception) {}
+                                    showYouTubeThumbnailFallback("render_process_gone")
+                                }
+                                // We handled it; avoid app process crash.
+                                return true
+                            }
+                        }
+                    }
+                    binding.root.addView(newWv, 0)
+                    youTubeWebView = newWv
+                    newWv
+                }
+                wv.visibility = android.view.View.GONE
+                try { wv.removeJavascriptInterface("AndroidBridge") } catch (_: Exception) {}
+                wv.addJavascriptInterface(object {
+                    @android.webkit.JavascriptInterface
+                    fun onVideoReady() {
+                        runOnUiThread {
+                            revealYoutubeSurface(wv)
+                        }
+                    }
+                }, "AndroidBridge")
+                // Use youtube-nocookie.com (more permissive) + origin param matching the base URL
+                // WebChromeClient + loadDataWithBaseURL together unlock HTML5 autoplay in WebView
+                val muteParam = if (screenMuted) "1" else "0"
+                val ytHtml = """<!DOCTYPE html><html><head>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>*{margin:0;padding:0;background:#000}html,body{width:100%;height:100%;overflow:hidden}#p{position:absolute;top:0;left:0;width:100%;height:100%}</style>
 </head><body>
@@ -1155,8 +1280,9 @@ function onYouTubeIframeAPIReady(){
     videoId:'$videoId',
     playerVars:{autoplay:1,mute:$muteParam,controls:0,rel:0,playsinline:1,iv_load_policy:3,modestbranding:1},
     events:{
-      onReady:function(e){e.target.playVideo();},
+            onReady:function(e){e.target.playVideo();},
       onStateChange:function(e){
+                if(e.data===1){if(window.AndroidBridge&&AndroidBridge.onVideoReady){AndroidBridge.onVideoReady();}}
         if(e.data===0){e.target.seekTo(0,true);e.target.playVideo();}
         if(e.data===-1){setTimeout(function(){e.target.playVideo();},300);}
       }
@@ -1165,24 +1291,44 @@ function onYouTubeIframeAPIReady(){
 }
 </script>
 </body></html>""".trimIndent()
-            wv.loadDataWithBaseURL("https://www.youtube-nocookie.com", ytHtml, "text/html", "utf-8", null)
-            revealWithQuickFade()
-            lifecycleScope.launch(Dispatchers.IO) {
-                try { ApiClient.service.postClientEvent(com.everydayadvertise.tv.api.ClientEventReq(storeId, screenId, "load_ok", file = file, itemId = next.id)) } catch (_: Exception) {}
+                wv.loadDataWithBaseURL("https://www.youtube-nocookie.com", ytHtml, "text/html", "utf-8", null)
+                webViewLoaded = true
+                                // Do not reveal WebView early; keep previous image visible until actual PLAYING state.
+                lifecycleScope.launch(Dispatchers.IO) {
+                    try { ApiClient.service.postClientEvent(com.everydayadvertise.tv.api.ClientEventReq(storeId, screenId, "load_ok", file = file, itemId = next.id)) } catch (_: Exception) {}
+                }
+                startItemOkPing(storeId, screenId, file, next.id)
+                cancelScheduled()
+                scheduledRotation = Runnable {
+                    android.util.Log.d("TvDisplayActivity", "Rotate after YouTube duration ${durMs}ms -> next")
+                    try {
+                        wv.visibility = android.view.View.GONE
+                        wv.loadUrl("about:blank")
+                    } catch (_: Exception) {}
+                    showAndSchedule()
+                }
+                binding.root.postDelayed(scheduledRotation!!, durMs)
+            } catch (e: Exception) {
+                // WebView constructor or setup threw — device doesn't support WebView or is OOM.
+                // Report and show thumbnail so the playlist keeps running.
+                android.util.Log.e("TvDisplayActivity", "YouTube WebView exception: ${e.message}", e)
+                lifecycleScope.launch(Dispatchers.IO) {
+                    try { ApiClient.service.postClientEvent(com.everydayadvertise.tv.api.ClientEventReq(storeId, screenId, "load_fail", file = file, itemId = next.id, error = "youtube_webview_exception: ${e.message}")) } catch (_: Exception) {}
+                }
+                showYouTubeThumbnailFallback("exception")
             }
-            startItemOkPing(storeId, screenId, file, next.id)
-            val durMs = (next.duration ?: 30).coerceAtLeast(5) * 1000L
-            currentItemDurationMs = durMs
-            cancelScheduled()
-            scheduledRotation = Runnable {
-                try { wv.visibility = android.view.View.GONE; wv.loadUrl("about:blank") } catch (_: Exception) {}
-                showAndSchedule()
-            }
-            imageView.postDelayed(scheduledRotation!!, durMs)
             return
         }
-        if (isVideo(file)) {
-            youTubeWebView?.let { try { it.visibility = android.view.View.GONE; it.loadUrl("about:blank") } catch (_: Exception) {} }
+        if (isVideo(file) || hasYoutubeProxyMp4) {
+            if (hasYoutubeProxyMp4) {
+                binding.message.text = "YT-MP4 ${file.removePrefix("youtube:").take(11)}"
+            }
+            youTubeWebView?.let {
+                try {
+                    it.visibility = android.view.View.GONE
+                    it.loadUrl("about:blank")
+                } catch (_: Exception) {}
+            }
             imageView.visibility = ImageView.GONE
             secondaryImageView?.visibility = ImageView.GONE
             playerView.visibility = ImageView.VISIBLE
@@ -1191,7 +1337,7 @@ function onYouTubeIframeAPIReady(){
             try { debugOverlay?.bringToFront() } catch (_: Exception) {}
             try { transitionOverlay?.bringToFront() } catch (_: Exception) {}
             // Prefer /media (range streaming) for videos; fallback to static if needed
-            val videoUrlPrimary = ApiClientImageHelper.buildVideoUrl(file)
+            val videoUrlPrimary = if (hasYoutubeProxyMp4) next.url!! else ApiClientImageHelper.buildVideoUrl(file)
             val videoUrlFallback = if (!next.url.isNullOrBlank() && next.url!!.startsWith("http", true)) next.url!! else ApiClientImageHelper.buildImageUrl(file)
             binding.message.text = "VID ${file.take(18)}"
             // Legacy VideoView fallback (added lazily)
@@ -1299,6 +1445,12 @@ function onYouTubeIframeAPIReady(){
                                 }
                                 // Start periodic ok ping while this video item is playing
                                 startItemOkPing(storeId, screenId, f, next.id)
+                                // Prefetch the upcoming item while this video is playing
+                                val upcoming = if (state.items.isNotEmpty()) {
+                                    val idx = if (state.index >= state.items.size) 0 else state.index
+                                    state.items.getOrNull(idx)
+                                } else null
+                                prefetchNext(upcoming)
                             }
                             if (stateCode == com.google.android.exoplayer2.Player.STATE_ENDED) {
                                 // Advance if natural end happens early
@@ -1457,7 +1609,12 @@ function onYouTubeIframeAPIReady(){
             // Image / animated
             try { exoPlayer?.stop(); exoPlayer?.clearMediaItems() } catch (_: Exception) {}
         legacyVideoView?.let { try { it.stopPlayback() } catch (_: Exception) {}; it.visibility = ImageView.GONE }
-        youTubeWebView?.let { try { it.visibility = android.view.View.GONE; it.loadUrl("about:blank") } catch (_: Exception) {} }
+        youTubeWebView?.let {
+            try {
+                it.visibility = android.view.View.GONE
+                it.loadUrl("about:blank")
+            } catch (_: Exception) {}
+        }
             playerView.visibility = ImageView.GONE
             // Do NOT pre-show imageView here — crossfadeToImage manages visibility.
             // Pre-showing caused stale drawables to flash or slide out when coming from video.

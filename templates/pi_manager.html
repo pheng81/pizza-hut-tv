@@ -15,6 +15,9 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
         crossorigin=""></script>
+    {% if google_maps_api_key %}
+    <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key | e }}"></script>
+    {% endif %}
     
     <style>
         * {
@@ -33,10 +36,34 @@
             letter-spacing: -0.022em;
         }
 
+        body.embedded {
+            background: transparent;
+        }
+
         .container {
             max-width: 1180px;
             margin: 0 auto;
             padding: 24px;
+        }
+
+        body.embedded .container {
+            max-width: none;
+            margin: 0;
+            padding: 20px 24px 28px 28px;
+        }
+
+        body.embedded .header {
+            display: none;
+        }
+
+        body.embedded .stats-grid {
+            padding: 0 0 20px;
+        }
+
+        body.embedded .devices-section {
+            border-radius: 0;
+            box-shadow: none;
+            margin-bottom: 0;
         }
 
         /* Header */
@@ -127,7 +154,7 @@
             background: rgba(255,255,255,0.92);
             backdrop-filter: saturate(180%) blur(20px);
             -webkit-backdrop-filter: saturate(180%) blur(20px);
-            border-radius: 18px;
+            border-radius: 0;
             padding: 24px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.04);
             border: 1px solid rgba(0,0,0,0.06);
@@ -167,7 +194,7 @@
         /* Pi Devices Section */
         .devices-section {
             background: transparent;
-            border-radius: 18px;
+            border-radius: 0;
             padding: 0;
         }
 
@@ -307,7 +334,7 @@
 
         .device-card {
             border: 1px solid rgba(0,0,0,0.08);
-            border-radius: 12px;
+            border-radius: 0;
             padding: 16px;
             transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
@@ -322,12 +349,9 @@
             transform: translateY(-2px);
         }
 
-        .device-card.online {
-            border-left: 3px solid #30d158;
-        }
-
+        .device-card.online,
         .device-card.offline {
-            border-left: 3px solid #ff453a;
+            border-left: 1px solid rgba(0,0,0,0.08);
         }
 
         /* Device Card Header */
@@ -993,7 +1017,7 @@
         }
     </style>
 </head>
-<body>
+<body class="{% if embedded %}embedded{% endif %}">
     <div class="container">
         <!-- Header -->
         <div class="header">
@@ -1104,7 +1128,7 @@
                             <div class="device-detail-item">
                                 <strong>✏️ Name</strong>
                                 {% if device.store_id %}
-                                <span class="location-value" onclick="editLocation('{{ device.id }}')">
+                                <span id="location-display-{{ device.id }}" class="location-value" onclick="editLocation('{{ device.id }}')">
                                     {{ device.location if device.location else 'Set name...' }}
                                 </span>
                                 {% else %}
@@ -1254,6 +1278,9 @@
                     <small style="color: #86868b; font-size: 12px; margin-top: 4px; display: block;">
                         Or click directly on the map to pin location
                     </small>
+                    <small id="locationMapSource" style="color: #86868b; font-size: 12px; margin-top: 4px; display: block;">
+                        Map source: checking...
+                    </small>
                 </div>
 
                 <!-- Map Container -->
@@ -1332,6 +1359,9 @@
         frame.src = 'about:blank';
         backdrop.style.display = 'none';
     }
+    </script>
+    <script>
+        const piManagerEmbedded = {% if embedded %}true{% else %}false{% endif %};
     </script>
     <script type="application/json" id="screensData">
 {{ (all_screens if all_screens else {})|tojson }}
@@ -1619,6 +1649,17 @@
         }
 
         function editDevice(piId) {
+            if (piManagerEmbedded) {
+                try {
+                    if (window.parent && window.parent !== window && typeof window.parent.openRemotePiManagerForPi === 'function') {
+                        window.parent.openRemotePiManagerForPi(piId);
+                        return;
+                    }
+                } catch (error) {
+                    console.warn('Falling back to full-page dashboard redirect:', error);
+                }
+            }
+
             // Redirect to dashboard with Remote Pi Manager modal opened and pre-filled
             window.location.href = '/dashboard?open_pi_manager=' + encodeURIComponent(piId);
         }
@@ -1631,8 +1672,95 @@
 
         let locationPickerMap = null;
         let locationMarker = null;
+        let locationPickerGeocoder = null;
         let currentEditingPiId = null;
         let selectedLocation = null;
+
+        function locationPickerGoogleMapsAvailable() {
+            return typeof google !== 'undefined' && !!google.maps;
+        }
+
+        function locationPickerUsesGoogleMaps() {
+            return locationPickerGoogleMapsAvailable() && !!locationPickerMap && typeof locationPickerMap.getCenter === 'function';
+        }
+
+        function updateLocationMapSourceLabel() {
+            const sourceLabel = document.getElementById('locationMapSource');
+            if (!sourceLabel) {
+                return;
+            }
+
+            sourceLabel.textContent = locationPickerGoogleMapsAvailable()
+                ? 'Map source: Google Maps'
+                : 'Map source: OpenStreetMap fallback';
+        }
+
+        function focusLocationPickerMap(lat, lng, zoom = 17) {
+            if (!locationPickerMap) {
+                return;
+            }
+
+            if (locationPickerUsesGoogleMaps()) {
+                locationPickerMap.setCenter({ lat, lng });
+                locationPickerMap.setZoom(zoom);
+                return;
+            }
+
+            locationPickerMap.setView([lat, lng], zoom);
+        }
+
+        function ensureLocationPickerMap() {
+            updateLocationMapSourceLabel();
+
+            if (locationPickerMap) {
+                if (locationPickerUsesGoogleMaps()) {
+                    setTimeout(() => {
+                        try { google.maps.event.trigger(locationPickerMap, 'resize'); } catch {}
+                    }, 50);
+                }
+                return;
+            }
+
+            const defaultLat = -33.8688;
+            const defaultLng = 150.9093;
+
+            if (locationPickerGoogleMapsAvailable()) {
+                locationPickerGeocoder = new google.maps.Geocoder();
+                locationPickerMap = new google.maps.Map(document.getElementById('mapContainer'), {
+                    center: { lat: defaultLat, lng: defaultLng },
+                    zoom: 13,
+                    clickableIcons: false,
+                    fullscreenControl: false,
+                    mapTypeControl: false,
+                    streetViewControl: false,
+                    zoomControl: true,
+                });
+                locationPickerMap.addListener('click', function(event) {
+                    if (event.latLng) {
+                        setLocationPin(event.latLng.lat(), event.latLng.lng());
+                    }
+                });
+                setTimeout(() => {
+                    try { google.maps.event.trigger(locationPickerMap, 'resize'); } catch {}
+                }, 100);
+                return;
+            }
+
+            if (typeof L === 'undefined') {
+                return;
+            }
+
+            locationPickerMap = L.map('mapContainer').setView([defaultLat, defaultLng], 13);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                maxZoom: 19
+            }).addTo(locationPickerMap);
+
+            locationPickerMap.on('click', function(e) {
+                setLocationPin(e.latlng.lat, e.latlng.lng);
+            });
+        }
 
         function openLocationPickerModal(piId) {
             const modal = document.getElementById('locationPickerModal');
@@ -1640,25 +1768,7 @@
             
             // Initialize map if not already done
             setTimeout(() => {
-                if (!locationPickerMap) {
-                    // Default center - Sydney, Australia (near Canley Vale)
-                    const defaultLat = -33.8688;
-                    const defaultLng = 150.9093;
-                    
-                    // Create Leaflet map with OpenStreetMap tiles
-                    locationPickerMap = L.map('mapContainer').setView([defaultLat, defaultLng], 13);
-                    
-                    // Add OpenStreetMap tile layer
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-                        maxZoom: 19
-                    }).addTo(locationPickerMap);
-                    
-                    // Add click handler to map
-                    locationPickerMap.on('click', function(e) {
-                        setLocationPin(e.latlng.lat, e.latlng.lng);
-                    });
-                }
+                ensureLocationPickerMap();
                 
                 // Load existing location if available
                 loadExistingLocation(piId);
@@ -1681,9 +1791,9 @@
                 .then(data => {
                     if (data.success && data.latitude && data.longitude) {
                         setLocationPin(data.latitude, data.longitude, data.address);
-                        locationPickerMap.setView([data.latitude, data.longitude], 17);
-                        if (data.label) {
-                            document.getElementById('locationLabel').value = data.label;
+                        focusLocationPickerMap(Number(data.latitude), Number(data.longitude), 17);
+                        if (data.location_name || data.label) {
+                            document.getElementById('locationLabel').value = data.location_name || data.label;
                         }
                     }
                 })
@@ -1696,6 +1806,24 @@
             const searchTerm = document.getElementById('locationSearch').value.trim();
             if (!searchTerm) {
                 alert('Please enter a search term');
+                return;
+            }
+
+            if (locationPickerGoogleMapsAvailable()) {
+                if (!locationPickerGeocoder) {
+                    locationPickerGeocoder = new google.maps.Geocoder();
+                }
+                locationPickerGeocoder.geocode({ address: searchTerm }, function(results, status) {
+                    if (status === 'OK' && results && results.length) {
+                        const result = results[0];
+                        const lat = result.geometry.location.lat();
+                        const lng = result.geometry.location.lng();
+                        setLocationPin(lat, lng, result.formatted_address || searchTerm);
+                        focusLocationPickerMap(lat, lng, 17);
+                    } else {
+                        alert('Location not found. Try different search terms.');
+                    }
+                });
                 return;
             }
             
@@ -1720,27 +1848,63 @@
         }
 
         function setLocationPin(lat, lng, address = null) {
+            lat = Number(lat);
+            lng = Number(lng);
+
             // Remove existing marker
             if (locationMarker) {
-                locationPickerMap.removeLayer(locationMarker);
+                if (locationPickerUsesGoogleMaps()) {
+                    locationMarker.setMap(null);
+                } else {
+                    locationPickerMap.removeLayer(locationMarker);
+                }
             }
             
-            // Add new marker
-            locationMarker = L.marker([lat, lng], {
-                draggable: true
-            }).addTo(locationPickerMap);
-            
-            // Update marker position on drag
-            locationMarker.on('dragend', function(e) {
-                const pos = e.target.getLatLng();
-                setLocationPin(pos.lat, pos.lng);
-            });
+            if (locationPickerUsesGoogleMaps()) {
+                locationMarker = new google.maps.Marker({
+                    map: locationPickerMap,
+                    position: { lat, lng },
+                    draggable: true,
+                });
+
+                locationMarker.addListener('dragend', function(event) {
+                    if (event.latLng) {
+                        setLocationPin(event.latLng.lat(), event.latLng.lng());
+                    }
+                });
+            } else {
+                // Add new marker
+                locationMarker = L.marker([lat, lng], {
+                    draggable: true
+                }).addTo(locationPickerMap);
+                
+                // Update marker position on drag
+                locationMarker.on('dragend', function(e) {
+                    const pos = e.target.getLatLng();
+                    setLocationPin(pos.lat, pos.lng);
+                });
+            }
+
+            focusLocationPickerMap(lat, lng, 17);
             
             // Store selected location
             selectedLocation = { lat, lng, address };
             
             // Reverse geocode if no address provided
             if (!address) {
+                if (locationPickerGoogleMapsAvailable()) {
+                    if (!locationPickerGeocoder) {
+                        locationPickerGeocoder = new google.maps.Geocoder();
+                    }
+                    locationPickerGeocoder.geocode({ location: { lat, lng } }, function(results, status) {
+                        if (status === 'OK' && results && results.length) {
+                            selectedLocation.address = results[0].formatted_address;
+                        }
+                        updateSelectedLocationDisplay();
+                    });
+                    return;
+                }
+
                 fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`)
                     .then(response => response.json())
                     .then(data => {
@@ -1792,7 +1956,9 @@
                 if (data.success) {
                     // Update display with new name
                     const display = document.getElementById('location-display-' + currentEditingPiId);
-                    display.textContent = label || selectedLocation.address || 'Location Set';
+                    if (display) {
+                        display.textContent = label || selectedLocation.address || 'Set name...';
+                    }
                     closeLocationPickerModal();
                     alert('✅ Location saved successfully!');
                 } else {
@@ -1823,8 +1989,10 @@
                 if (data.success) {
                     // Update display with new name
                     const display = document.getElementById('location-display-' + piId);
-                    display.textContent = locationName || 'Click to set location...';
-                    display.style.display = 'inline';
+                    if (display) {
+                        display.textContent = locationName || 'Set name...';
+                        display.style.display = 'inline';
+                    }
                     input.style.display = 'none';
                 } else {
                     alert('Error updating location: ' + data.message);
@@ -1833,7 +2001,10 @@
             .catch(error => {
                 alert('Error updating location: ' + error);
                 // Still hide input on error
-                document.getElementById('location-display-' + piId).style.display = 'inline';
+                const display = document.getElementById('location-display-' + piId);
+                if (display) {
+                    display.style.display = 'inline';
+                }
                 input.style.display = 'none';
             });
         }

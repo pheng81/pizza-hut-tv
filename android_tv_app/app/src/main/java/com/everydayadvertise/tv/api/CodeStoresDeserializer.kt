@@ -26,17 +26,54 @@ class CodeStoresDeserializer : JsonDeserializer<CodeStoresResponse> {
 			CodeUser(username = it.get("username")?.asString)
 		}
 		
-		// Parse stores array
+		fun asSafeString(el: JsonElement?): String? {
+			if (el == null || el.isJsonNull) return null
+			return try { el.asString } catch (_: Exception) { el.toString().trim('"') }
+		}
+
+		fun asSafeBoolean(el: JsonElement?): Boolean? {
+			if (el == null || el.isJsonNull) return null
+			return try { el.asBoolean } catch (_: Exception) {
+				asSafeString(el)?.lowercase()?.let {
+					when (it) {
+						"1", "true", "yes", "y" -> true
+						"0", "false", "no", "n" -> false
+						else -> null
+					}
+				}
+			}
+		}
+
+		// Parse stores from either array or object map
 		val stores = mutableListOf<StoreInfo>()
-		obj.get("stores")?.asJsonArray?.forEach { storeElement ->
-			try {
-				val store = storeElement.asJsonObject
-				val id = store.get("id")?.asString ?: return@forEach
-				val name = store.get("name")?.asString
-				val isMaster = store.get("is_master")?.asBoolean
-				stores.add(StoreInfo(id = id, name = name, isMaster = isMaster))
-			} catch (e: Exception) {
-				// Skip malformed store entries
+		val storesNode = obj.get("stores")
+		when {
+			storesNode == null || storesNode.isJsonNull -> Unit
+			storesNode.isJsonArray -> {
+				storesNode.asJsonArray.forEach { storeElement ->
+					try {
+						val store = storeElement.asJsonObject
+						val id = asSafeString(store.get("id")) ?: return@forEach
+						val name = asSafeString(store.get("name"))
+						val isMaster = asSafeBoolean(store.get("is_master"))
+						stores.add(StoreInfo(id = id, name = name, isMaster = isMaster))
+					} catch (_: Exception) {
+						// Skip malformed store entries
+					}
+				}
+			}
+			storesNode.isJsonObject -> {
+				storesNode.asJsonObject.entrySet().forEach { (key, value) ->
+					try {
+						val store = value.asJsonObject
+						val id = asSafeString(store.get("id")) ?: key
+						val name = asSafeString(store.get("name"))
+						val isMaster = asSafeBoolean(store.get("is_master"))
+						stores.add(StoreInfo(id = id, name = name, isMaster = isMaster))
+					} catch (_: Exception) {
+						// Skip malformed object-map entries
+					}
+				}
 			}
 		}
 		

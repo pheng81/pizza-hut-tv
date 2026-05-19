@@ -926,7 +926,9 @@
     @media (max-width:700px){ .pl-actions.inline-actions .group .ia-label { min-width:auto; } }
     .pl-actions.inline-actions .group { flex:0 0 auto; }
     .pl-actions.inline-actions .dur-box { display:flex; align-items:center; gap:3px; background:#fff; padding:1px 5px; border:1px solid #c4ccd3; border-radius:12px; box-shadow:none; }
-    .pl-actions.inline-actions .dur-box .dur-display { min-width:20px; text-align:center; font-weight:500; font-size:10px; color:#222; }
+    .pl-actions.inline-actions .dur-box .dur-input { width:44px; height:18px; padding:0 4px; border:1px solid #cfd3d7; border-radius:6px; background:#fff; color:#111; font-size:10px; font-weight:600; text-align:center; box-sizing:border-box; }
+    .pl-actions.inline-actions .dur-box .dur-input:focus { outline:2px solid #93c5fd; outline-offset:0; border-color:#7fb0e0; }
+    .pl-actions.inline-actions .dur-box .dur-unit { font-size:9px; font-weight:600; color:#56616b; }
     /* Flat duration +/- buttons */
     .pl-actions.inline-actions .pl-icon-btn.dur-btn { background:#fff; border-color:#cfd3d7; color:#222; width:18px; height:18px; font-weight:700; font-size:12px; border-radius:4px; }
     .pl-actions.inline-actions .pl-icon-btn.dur-btn:hover { background:#f2f4f7; border-color:#c2c7cc; }
@@ -960,7 +962,7 @@
     /* Plain container without pill look */
     .pl-actions.inline-actions .dur-box.small { height:20px; padding:0; background:transparent; border:none; gap:4px; display:flex; align-items:center; transform: translateX(-4px); }
     .pl-actions.inline-actions .pl-icon-btn.dur-btn { width:16px; height:16px; border-radius:4px; font-size:11px; line-height:1; }
-    .pl-actions.inline-actions .dur-box .dur-display { min-width:18px; font-weight:600; color:#111; font-size:10px; letter-spacing:.1px; }
+    .pl-actions.inline-actions .dur-box .dur-input { width:42px; height:16px; font-size:9px; }
     /* Delete pill alignment */
     .pl-actions.inline-actions .delete-pill.tiny { height:20px; padding:0 6px; display:inline-flex; align-items:center; }
     /* On very narrow screens, allow items to wrap tightly */
@@ -970,7 +972,8 @@
     }
     .pl-actions.inline-actions .dur-box.small { padding:0 3px; gap:2px; white-space:nowrap; }
     .pl-actions.inline-actions .dur-box.small .pl-icon-btn.dur-btn { width:14px; height:14px; font-size:9px; }
-    .pl-actions.inline-actions .dur-box.small .dur-display { font-size:9px; min-width:16px; }
+    .pl-actions.inline-actions .dur-box.small .dur-input { width:40px; height:15px; font-size:9px; }
+    .pl-actions.inline-actions .dur-box.small .dur-unit { font-size:8px; }
     .pl-actions.inline-actions .delete-pill.tiny { height:18px; padding:0 6px; font-size:9px; border-radius:11px; }
     .pl-actions.inline-actions .combo-dur-del { flex-wrap:nowrap; }
     .sched-extra-label { font-size:9px; font-weight:600; color:#444; margin:0 2px -2px; text-transform:uppercase; letter-spacing:.5px; }
@@ -4429,7 +4432,7 @@ allowfullscreen></iframe></div>`;
                                                                                             ${isMasterStore(currentStoreId) ? `<label style='display:inline-flex;align-items:center;gap:6px;margin-left:8px;font-size:11px;color:#444;'><input type='checkbox' data-bind='apply-select' data-item-id='${item.id}'><span>tick</span></label>` : ''}\
                                                                                         </div>\
                                                                                         <div class="group center combo-dur-del">\
-                                                                                            ${item && item.sync_ref && item.sync_ref.role==='follower' && idx===0 ? '<div style="font-size:12px;color:#666;">Duration (sync)</div>' : `<div class=\"dur-box small\"><button class=\"pl-icon-btn dur-btn\" onclick=\"adjustDuration('${screenId}','${item.id}',-1, event)\" aria-label=\"Decrease duration\">−</button><div class=\"dur-display\" id=\"durdisp-${screenId}-${item.id}\">${(item.duration||5)}s</div><button class=\"pl-icon-btn dur-btn\" onclick=\"adjustDuration('${screenId}','${item.id}',1, event)\" aria-label=\"Increase duration\">+</button></div><input id=\"dur-${screenId}-${item.id}\" type=\"hidden\" value=\"${item.duration || 5}\">`}
+                                                                                            ${item && item.sync_ref && item.sync_ref.role==='follower' && idx===0 ? '<div style="font-size:12px;color:#666;">Duration (sync)</div>' : `<div class=\"dur-box small\"><button class=\"pl-icon-btn dur-btn\" onclick=\"adjustDuration('${screenId}','${item.id}',-1, event)\" aria-label=\"Decrease duration\">−</button><input class=\"dur-input\" id=\"dur-${screenId}-${item.id}\" type=\"number\" min=\"1\" step=\"1\" value=\"${item.duration || 5}\" data-prev=\"${item.duration || 5}\" aria-label=\"Duration in seconds\" title=\"Type seconds, then press Enter\" onchange=\"commitDurationInput('${screenId}','${item.id}', event)\" onkeydown=\"handleDurationKeydown('${screenId}','${item.id}', event)\"><span class=\"dur-unit\">s</span><button class=\"pl-icon-btn dur-btn\" onclick=\"adjustDuration('${screenId}','${item.id}',1, event)\" aria-label=\"Increase duration\">+</button></div>`}
                                                                                         </div>\
                                                                                         <div class="group right">\
                                                                                             ${failed ? `<button class=\"delete-pill tiny\" style=\"background:#d35400;border-color:#d35400\" onclick=\"retryItemOnTV('${screenId}','${item.id}',${JSON.stringify(item.file || '')})\">Retry on TV</button>` : ''}
@@ -4672,10 +4675,10 @@ allowfullscreen></iframe></div>`;
                                 <div class="group center combo-dur-del">\
                                     <div class="dur-box small">
                                         <button class="pl-icon-btn dur-btn" onclick="adjustDuration('${screenId}','${item.id}',-1, event)" aria-label="Decrease duration">−</button>
-                                        <div class="dur-display" id="durdisp-${screenId}-${item.id}">${(item.duration||5)}s</div>
+                                        <input class="dur-input" id="dur-${screenId}-${item.id}" type="number" min="1" step="1" value="${item.duration || 5}" data-prev="${item.duration || 5}" aria-label="Duration in seconds" title="Type seconds, then press Enter" onchange="commitDurationInput('${screenId}','${item.id}', event)" onkeydown="handleDurationKeydown('${screenId}','${item.id}', event)">
+                                        <span class="dur-unit">s</span>
                                         <button class="pl-icon-btn dur-btn" onclick="adjustDuration('${screenId}','${item.id}',1, event)" aria-label="Increase duration">+</button>
                                     </div>
-                                    <input id="dur-${screenId}-${item.id}" type="hidden" value="${item.duration || 5}">
                                 </div>\
                                 <div class="group right">\
                                     <button class="delete-pill tiny" onclick="deleteScheduleWindow('${screenId}','${item.id}',${idx})">Delete</button>
@@ -5077,28 +5080,68 @@ allowfullscreen></iframe></div>`;
         }
 
         // --- Duration controls (+/−) ---
+    function getDurationInput(screenId, itemId, ev){
+            let root = null;
+            if(ev && ev.target){ root = ev.target.closest('.pl-actions.inline-actions'); }
+            return root ? root.querySelector(`#dur-${CSS.escape(screenId)}-${CSS.escape(itemId)}`) : document.getElementById(`dur-${screenId}-${itemId}`);
+        }
+
+        function normalizeDurationValue(value, fallback){
+            const parsed = parseInt(value, 10);
+            if(Number.isNaN(parsed)) return Math.max(1, parseInt(fallback, 10) || 1);
+            return Math.max(1, parsed);
+        }
+
+        function persistDurationValue(screenId, itemId, input, next, previous){
+            fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}` ,{
+                method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ duration: next })
+            }).then(r=>r.json()).then(d=>{
+                if(!d.success){
+                    alert('Failed to update duration');
+                    if(input){ input.value = String(previous); input.dataset.prev = String(previous); }
+                    return;
+                }
+                if(input){ input.value = String(next); input.dataset.prev = String(next); }
+            }).catch(()=>{
+                alert('Network error updating duration');
+                if(input){ input.value = String(previous); input.dataset.prev = String(previous); }
+            });
+        }
+
     function adjustDuration(screenId, itemId, delta, ev){
             try{
-        // Prefer scoping to the clicked action row to avoid collisions in extra windows
-        let root = null;
-        if(ev && ev.target){ root = ev.target.closest('.pl-actions.inline-actions'); }
-        const input = root ? root.querySelector(`#dur-${CSS.escape(screenId)}-${CSS.escape(itemId)}`) : document.getElementById(`dur-${screenId}-${itemId}`);
-        const disp  = root ? root.querySelector(`#durdisp-${CSS.escape(screenId)}-${CSS.escape(itemId)}`) : document.getElementById(`durdisp-${screenId}-${itemId}`);
-                let cur = 0;
-                if(input){ const v = parseInt(input.value,10); cur = isNaN(v)? 0 : v; }
-                let next = cur + (parseInt(delta,10)||0);
-                if(next < 1) next = 1; // min 1s
-                if(next > 120) next = 120; // cap at 120s for safety
+                const input = getDurationInput(screenId, itemId, ev);
+                const cur = normalizeDurationValue(input ? input.value : 1, input && input.dataset ? input.dataset.prev : 1);
+                const next = Math.max(1, cur + (parseInt(delta,10)||0));
                 if(input) input.value = String(next);
-                if(disp)  disp.textContent = `${next}s`;
-                fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}`,{
-                    method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ duration: next })
-                }).then(r=>r.json()).then(d=>{
-                    if(!d.success){ alert('Failed to update duration'); if(input){ input.value=String(cur); } if(disp){ disp.textContent=`${cur}s`; } }
-                }).catch(()=>{
-                    alert('Network error updating duration'); if(input){ input.value=String(cur); } if(disp){ disp.textContent=`${cur}s`; }
-                });
+                persistDurationValue(screenId, itemId, input, next, cur);
             }catch(e){ console.error('adjustDuration error', e); }
+        }
+
+        function commitDurationInput(screenId, itemId, ev){
+            try{
+                const input = getDurationInput(screenId, itemId, ev);
+                if(!input) return;
+                const previous = normalizeDurationValue(input.dataset.prev, input.defaultValue || 1);
+                const next = normalizeDurationValue(input.value, previous);
+                input.value = String(next);
+                if(next === previous) return;
+                persistDurationValue(screenId, itemId, input, next, previous);
+            }catch(e){ console.error('commitDurationInput error', e); }
+        }
+
+        function handleDurationKeydown(screenId, itemId, ev){
+            if(!ev) return;
+            if(ev.key === 'Enter'){
+                ev.preventDefault();
+                ev.target.blur();
+            } else if(ev.key === 'Escape'){
+                const input = getDurationInput(screenId, itemId, ev);
+                if(!input) return;
+                input.value = String(normalizeDurationValue(input.dataset.prev, input.defaultValue || 1));
+                ev.preventDefault();
+                ev.target.blur();
+            }
         }
 
         function deletePlaylistItem(screenId, itemId) {

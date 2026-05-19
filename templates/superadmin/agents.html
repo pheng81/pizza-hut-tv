@@ -24,6 +24,9 @@
       background: var(--bg);
       color: var(--text);
     }
+    body.embedded-mode {
+      background: transparent;
+    }
     header {
       background: var(--header);
       color: white;
@@ -52,6 +55,27 @@
     .btn--ghost:hover { background: rgba(255,255,255,0.08); }
     .btn--primary { color: white; background: var(--header); }
     main { max-width: 1200px; margin: 0 auto; padding: 28px 32px 40px; }
+    body.embedded-mode main { max-width: none; margin: 0; padding: 0; }
+    body.embedded-mode h1 { margin-bottom: 4px; }
+    body.embedded-mode p.lead { margin-bottom: 18px; }
+    body.embedded-mode .stats-grid { gap: 12px; margin-bottom: 18px; }
+    body.embedded-mode .stat-card {
+      background: linear-gradient(180deg, rgba(248, 250, 252, 0.88), rgba(255, 255, 255, 0.74));
+      border-color: rgba(148, 163, 184, 0.16);
+      border-radius: 10px;
+      padding: 18px;
+    }
+    body.embedded-mode .card {
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      padding: 0;
+    }
+    body.embedded-mode .card-head {
+      margin-bottom: 12px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+    }
     h1 { font-size: 28px; margin-bottom: 8px; }
     p.lead { color: var(--muted); margin-bottom: 24px; }
     .stats-grid {
@@ -89,6 +113,7 @@
       padding: 4px 10px;
       font-size: 12px;
       font-weight: 700;
+      border-radius: 6px;
     }
     .status--active { background: var(--success-bg); color: var(--success-text); }
     .status--inactive { background: var(--danger-bg); color: var(--danger-text); }
@@ -105,17 +130,24 @@
     }
   </style>
 </head>
-<body>
+<body class="{{ 'embedded-mode' if embedded else '' }}">
+  {% set embedded_query = '?embedded=1' if embedded else '' %}
+  {% set dashboard_href = '/superadmin/dashboard#panel-agents' %}
+  {% if embedded_query %}
+    {% set dashboard_href = dashboard_href ~ embedded_query %}
+  {% endif %}
+  {% if not embedded %}
   <header>
     <div class="header-content">
       <div class="brand">Agents</div>
       <div class="actions">
-        <a href="/superadmin/dashboard" class="btn btn--ghost">Back To Dashboard</a>
-        <a href="/superadmin/agents/create" class="btn btn--ghost">Create Agent</a>
+        <a href="{{ dashboard_href }}" class="btn btn--ghost">Back To Dashboard</a>
+        <a href="/superadmin/agents/create{{ embedded_query }}" class="btn btn--ghost">Create Agent</a>
         <a href="/superadmin/logout" class="btn btn--ghost">Logout</a>
       </div>
     </div>
   </header>
+  {% endif %}
   <main>
     <h1>Agent Management</h1>
     <p class="lead">Manage agents, coupon codes, and referral earnings.</p>
@@ -142,7 +174,7 @@
     <section class="card">
       <div class="card-head">
         <h2>Agents</h2>
-        <a href="/superadmin/agents/create" class="btn btn--primary">Create Agent</a>
+        <a href="/superadmin/agents/create{{ embedded_query }}" class="btn btn--primary">Create Agent</a>
       </div>
       {% if agents %}
       <table>
@@ -175,7 +207,7 @@
             <td>
               <span class="status status--{{ 'active' if agent.status == 'active' else 'inactive' }}">{{ agent.status|capitalize }}</span>
             </td>
-            <td><a href="/superadmin/agents/{{ agent.id }}" class="btn btn--primary">View</a></td>
+            <td><a href="/superadmin/agents/{{ agent.id }}{{ embedded_query }}" class="btn btn--primary">View</a></td>
           </tr>
           {% endfor %}
         </tbody>

@@ -10,6 +10,15 @@
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
     <link rel="preconnect" href="https://cdn.everydayadvertise.com" crossorigin>
     <link rel="dns-prefetch" href="//cdn.everydayadvertise.com">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin=""></script>
+    {% if google_maps_api_key %}
+    <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key | e }}"></script>
+    {% endif %}
     
         <!-- Configuration data for JavaScript -->
         <script type="application/json" id="config-data">{{ config | tojson | safe }}</script>
@@ -305,6 +314,14 @@
     /* Header separator and avatar */
     .stores-title .header-sep { width:2px; height:30px; background:#000; display:inline-block; margin:0 6px; border-radius:1px; }
     .stores-title .header-avatar { width:32px; height:32px; border-radius:50%; object-fit:cover; display:inline-block; vertical-align:middle; background:#f2f2f7; border:1px solid #e5e5ea; }
+    .mobile-drawer .stores-title {
+        font-size: 28px;
+        width: 100%;
+        min-width: 0;
+    }
+    .mobile-drawer .stores-title .brand-logo { max-height: 32px; }
+    .mobile-drawer .stores-title .header-sep { height: 26px; margin: 0 8px; }
+    .mobile-drawer .stores-title .header-avatar { width: 30px; height: 30px; }
         /* Apple-like primary button */
         .stores-header .add-store-btn {
             appearance: none;
@@ -787,20 +804,49 @@
 
     /* Replace modal */
     .rp-overlay { position: fixed; inset:0; background: rgba(0,0,0,0.5); display:none; align-items:center; justify-content:center; z-index: 1000; }
-    .rp-modal { background:#fff; width: 680px; max-width: 95vw; max-height: 85vh; border-radius:8px; overflow:hidden; display:flex; flex-direction:column; }
+    .rp-modal { background:#fff; position:relative; width: 680px; max-width: min(95vw, 1280px); max-height: 92vh; min-width: min(560px, calc(100vw - 24px)); min-height: min(420px, calc(100vh - 24px)); border-radius:8px; overflow:hidden; display:flex; flex-direction:column; }
     .rp-header { padding:12px 14px; background:#f6f7f9; border-bottom:1px solid #e2e5e9; display:flex; align-items:center; justify-content:space-between; }
     .rp-title { font-size:14px; font-weight:600; }
     .rp-close { background:none; border:none; font-size:18px; cursor:pointer; padding:4px; }
     .rp-tabs { display:flex; gap:8px; padding:8px 12px; border-bottom:1px solid #eef1f4; }
     .rp-tab { padding:6px 10px; font-size:12px; border-radius:6px; cursor:pointer; border:1px solid #dcdfe3; background:#fff; }
     .rp-tab.active { background:#0d6efd; color:#fff; border-color:#0d6efd; }
-    .rp-body { padding:10px 12px; overflow:auto; }
+    .rp-body { flex:1; min-height:0; padding:10px 12px; overflow:auto; }
     .rp-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap:10px; }
     .rp-item { border:1px solid #dcdfe3; border-radius:6px; padding:6px; cursor:pointer; display:flex; align-items:center; justify-content:center; height:90px; background:#fafbfc; position:relative; }
     .rp-item img, .rp-item video { max-width:100%; max-height:100%; object-fit:cover; }
     /* Small filename caption so items are identifiable even without posters */
     .rp-item .rp-name { position:absolute; left:6px; right:6px; bottom:6px; background:rgba(0,0,0,0.6); color:#fff; font-size:11px; line-height:1.2; padding:2px 4px; border-radius:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; pointer-events:none; }
     .rp-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; padding:10px 12px; border-top:1px solid #eef1f4; }
+    .rp-resizer {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        width: 22px;
+        height: 22px;
+        cursor: nwse-resize;
+        touch-action: none;
+        background:
+            linear-gradient(135deg, transparent 0 44%, rgba(148, 163, 184, 0.95) 44% 50%, transparent 50% 62%, rgba(148, 163, 184, 0.95) 62% 68%, transparent 68% 80%, rgba(148, 163, 184, 0.95) 80% 86%, transparent 86% 100%);
+        opacity: 0.88;
+    }
+    .rp-resizer:hover {
+        opacity: 1;
+    }
+    .rp-resizer-left {
+        position: absolute;
+        left: 0;
+        top: 56px;
+        bottom: 44px;
+        width: 14px;
+        cursor: ew-resize;
+        touch-action: none;
+        background: linear-gradient(90deg, rgba(148, 163, 184, 0.34), transparent 72%);
+        opacity: 0.72;
+    }
+    .rp-resizer-left:hover {
+        opacity: 1;
+    }
     .rp-help { font-size:12px; color:#6b7280; padding: 2px 2px 10px; }
     .rp-subtitle { font-size:12px; font-weight:700; color:#374151; margin: 8px 2px 6px; text-transform:uppercase; letter-spacing:.04em; }
     .rp-empty { font-size:12px; color:#9ca3af; padding:8px 2px; }
@@ -814,6 +860,8 @@
     .btn { padding:6px 10px; border-radius:6px; border:1px solid #dcdfe3; background:#fff; cursor:pointer; font-size:12px; }
     .btn.primary { background:#0d6efd; color:#fff; border-color:#0d6efd; }
     .btn.danger { background:#dc3545; color:#fff; border-color:#dc3545; }
+    .rp-overlay.dashboard-side-sheet .rp-resizer,
+    .rp-overlay.dashboard-side-sheet .rp-resizer-left { display:none; }
         
         .screen-preview img,
         .screen-preview video {
@@ -931,7 +979,9 @@
     @media (max-width:700px){ .pl-actions.inline-actions .group .ia-label { min-width:auto; } }
     .pl-actions.inline-actions .group { flex:0 0 auto; }
     .pl-actions.inline-actions .dur-box { display:flex; align-items:center; gap:3px; background:#fff; padding:1px 5px; border:1px solid #c4ccd3; border-radius:12px; box-shadow:none; }
-    .pl-actions.inline-actions .dur-box .dur-display { min-width:20px; text-align:center; font-weight:500; font-size:10px; color:#222; }
+    .pl-actions.inline-actions .dur-box .dur-input { width:44px; height:18px; padding:0 4px; border:1px solid #cfd3d7; border-radius:6px; background:#fff; color:#111; font-size:10px; font-weight:600; text-align:center; box-sizing:border-box; }
+    .pl-actions.inline-actions .dur-box .dur-input:focus { outline:2px solid #93c5fd; outline-offset:0; border-color:#7fb0e0; }
+    .pl-actions.inline-actions .dur-box .dur-unit { font-size:9px; font-weight:600; color:#56616b; }
     /* Flat duration +/- buttons */
     .pl-actions.inline-actions .pl-icon-btn.dur-btn { background:#fff; border-color:#cfd3d7; color:#222; width:18px; height:18px; font-weight:700; font-size:12px; border-radius:4px; }
     .pl-actions.inline-actions .pl-icon-btn.dur-btn:hover { background:#f2f4f7; border-color:#c2c7cc; }
@@ -965,7 +1015,7 @@
     /* Plain container without pill look */
     .pl-actions.inline-actions .dur-box.small { height:20px; padding:0; background:transparent; border:none; gap:4px; display:flex; align-items:center; transform: translateX(-4px); }
     .pl-actions.inline-actions .pl-icon-btn.dur-btn { width:16px; height:16px; border-radius:4px; font-size:11px; line-height:1; }
-    .pl-actions.inline-actions .dur-box .dur-display { min-width:18px; font-weight:600; color:#111; font-size:10px; letter-spacing:.1px; }
+    .pl-actions.inline-actions .dur-box .dur-input { width:42px; height:16px; font-size:9px; }
     /* Delete pill alignment */
     .pl-actions.inline-actions .delete-pill.tiny { height:20px; padding:0 6px; display:inline-flex; align-items:center; }
     /* On very narrow screens, allow items to wrap tightly */
@@ -975,7 +1025,8 @@
     }
     .pl-actions.inline-actions .dur-box.small { padding:0 3px; gap:2px; white-space:nowrap; }
     .pl-actions.inline-actions .dur-box.small .pl-icon-btn.dur-btn { width:14px; height:14px; font-size:9px; }
-    .pl-actions.inline-actions .dur-box.small .dur-display { font-size:9px; min-width:16px; }
+    .pl-actions.inline-actions .dur-box.small .dur-input { width:40px; height:15px; font-size:9px; }
+    .pl-actions.inline-actions .dur-box.small .dur-unit { font-size:8px; }
     .pl-actions.inline-actions .delete-pill.tiny { height:18px; padding:0 6px; font-size:9px; border-radius:11px; }
     .pl-actions.inline-actions .combo-dur-del { flex-wrap:nowrap; }
     .sched-extra-label { font-size:9px; font-weight:600; color:#444; margin:0 2px -2px; text-transform:uppercase; letter-spacing:.5px; }
@@ -1106,6 +1157,465 @@
             color: #333;
             font-size: 18px;
             font-weight: 600;
+        }
+
+        .dashboard-main-view {
+            width: 100%;
+            max-width: none;
+        }
+
+        .dashboard-overview {
+            margin: 0;
+            padding: 0;
+            border: 0;
+            background: transparent;
+            box-shadow: none;
+        }
+
+        .dashboard-overview__topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            margin-bottom: 18px;
+        }
+
+        .dashboard-overview__titleblock h1 {
+            margin: 0;
+            color: #111827;
+            font-size: 32px;
+            font-weight: 700;
+            line-height: 1.05;
+            letter-spacing: -0.03em;
+        }
+
+        .dashboard-overview__titleblock p {
+            margin: 8px 0 0;
+            color: #6b7280;
+            font-size: 14px;
+            line-height: 1.55;
+        }
+
+        .dashboard-overview__eyebrow {
+            display: inline-block;
+            margin-bottom: 8px;
+            color: #9ca3af;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .dashboard-overview__link,
+        .overview-panel__action {
+            appearance: none;
+            border: 1px solid #e5e7eb;
+            background: #ffffff;
+            color: #111827;
+            border-radius: 3px;
+            padding: 10px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            white-space: nowrap;
+            box-shadow: none;
+            text-decoration: none;
+        }
+
+        .dashboard-overview__link:hover,
+        .overview-panel__action:hover {
+            background: #f9fafb;
+            border-color: #d1d5db;
+        }
+
+        .dashboard-overview__layout {
+            display: grid;
+            grid-template-columns: minmax(270px, 320px) minmax(190px, 220px) minmax(0, 2.35fr);
+            gap: 20px;
+            align-items: start;
+        }
+
+        .dashboard-overview__left {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .dashboard-overview__info {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .dashboard-content-view[hidden] {
+            display: none !important;
+        }
+
+        .dashboard-screens-view {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .dashboard-overview__stats {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .overview-stat {
+            padding: 18px;
+            border-radius: 3px;
+            background: #f9fafb;
+            border: 1px solid #edf0f2;
+        }
+
+        .overview-stat__label {
+            display: block;
+            margin-bottom: 12px;
+            color: #6b7280;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .overview-stat__value {
+            color: #111827;
+            font-size: 36px;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .overview-stat__meta {
+            margin-top: 8px;
+            color: #6b7280;
+            font-size: 12px;
+        }
+
+        .overview-panel {
+            min-width: 0;
+            border-radius: 3px;
+            border: 1px solid #e7eaee;
+            background: #ffffff;
+            box-shadow: none;
+            overflow: hidden;
+        }
+
+        .overview-panel--stats {
+            padding: 18px;
+        }
+
+        .overview-panel--map {
+            min-height: 780px;
+        }
+
+        .overview-panel--feed {
+            min-height: 0;
+        }
+
+        .overview-panel--info {
+            padding: 18px;
+        }
+
+        .overview-panel__header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 20px 20px 14px;
+        }
+
+        .overview-panel__eyebrow {
+            display: block;
+            margin-bottom: 4px;
+            color: #9ca3af;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .overview-panel__header h3 {
+            margin: 0;
+            color: #111827;
+            font-size: 20px;
+            line-height: 1.2;
+        }
+
+        .overview-panel__header p {
+            margin: 6px 0 0;
+            color: #6b7280;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .overview-panel__summary {
+            align-self: center;
+            padding: 6px 10px;
+            border-radius: 3px;
+            background: #f3f4f6;
+            color: #4b5563;
+            font-size: 12px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .dashboard-map-shell {
+            position: relative;
+            margin: 0 20px 20px;
+            border-radius: 3px;
+            overflow: hidden;
+            border: 1px solid #eef2f5;
+            background: #f8fafc;
+        }
+
+        .dashboard-map {
+            height: 720px;
+            width: 100%;
+        }
+
+        .dashboard-map-empty {
+            position: absolute;
+            top: 14px;
+            left: 14px;
+            max-width: 320px;
+            padding: 10px 12px;
+            text-align: left;
+            background: rgba(255, 255, 255, 0.92);
+            border: 1px solid rgba(226, 232, 240, 0.96);
+            border-radius: 3px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+            color: #4b5563;
+            font-size: 12px;
+            line-height: 1.5;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        .dashboard-map-marker {
+            width: 30px;
+            height: 30px;
+            display: block;
+            filter: drop-shadow(0 6px 14px rgba(15, 23, 42, 0.24));
+        }
+
+        .dashboard-location-list {
+            max-height: 390px;
+            padding: 0 18px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            overflow: auto;
+        }
+
+        .dashboard-location-item {
+            padding: 14px;
+            border-radius: 3px;
+            border: 1px solid #edf0f2;
+            background: #fafbfc;
+        }
+
+        .dashboard-location-item__top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 6px;
+        }
+
+        .dashboard-location-item__store {
+            color: #111827;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .dashboard-location-item__screen {
+            display: block;
+            margin-top: 3px;
+            color: #6b7280;
+            font-size: 12px;
+        }
+
+        .dashboard-location-item__status {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 9px;
+            border-radius: 3px;
+            background: #ffffff;
+            color: #4b5563;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .dashboard-location-item__status::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: currentColor;
+        }
+
+        .dashboard-location-item__status.online {
+            color: #15803d;
+        }
+
+        .dashboard-location-item__status.offline {
+            color: #be123c;
+        }
+
+        .dashboard-location-item__location,
+        .dashboard-location-item__address {
+            color: #4b5563;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .dashboard-location-item__address {
+            margin-top: 4px;
+            color: #6b7280;
+        }
+
+        .dashboard-location-empty {
+            padding: 18px;
+            border-radius: 3px;
+            border: 1px dashed #d8dee6;
+            background: #fafbfc;
+            color: #6b7280;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .overview-info-card__lead {
+            margin: 0;
+            color: #374151;
+            font-size: 16px;
+            line-height: 1.45;
+        }
+
+        .overview-info-card__subtext {
+            margin: 10px 0 0;
+            color: #6b7280;
+            font-size: 13px;
+            line-height: 1.55;
+        }
+
+        .overview-info-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .overview-info-grid {
+            display: grid;
+            gap: 10px;
+        }
+
+        .overview-info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 10px 0;
+            border-bottom: 1px solid #eef2f5;
+            font-size: 13px;
+            color: #4b5563;
+        }
+
+        .overview-info-row:last-child {
+            border-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .overview-info-row:first-child {
+            padding-top: 0;
+        }
+
+        .overview-info-row strong {
+            color: #111827;
+            font-size: 14px;
+            font-weight: 700;
+            text-align: right;
+        }
+
+        .overview-activity-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .overview-activity-item {
+            padding-bottom: 12px;
+            border-bottom: 1px solid #eef2f5;
+        }
+
+        .overview-activity-item:last-child {
+            padding-bottom: 0;
+            border-bottom: 0;
+        }
+
+        .overview-activity-time {
+            display: block;
+            margin-bottom: 4px;
+            color: #9ca3af;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .overview-activity-text {
+            color: #374151;
+            font-size: 13px;
+            line-height: 1.55;
+        }
+
+        @media (max-width: 980px) {
+            .dashboard-overview__topbar,
+            .overview-panel__header {
+                flex-direction: column;
+            }
+
+            .dashboard-overview__layout {
+                grid-template-columns: 1fr;
+            }
+
+            .overview-panel--map {
+                min-height: 0;
+            }
+
+            .dashboard-map {
+                height: 420px;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .dashboard-overview__titleblock h1 {
+                font-size: 26px;
+            }
+
+            .dashboard-overview__stats {
+                grid-template-columns: 1fr;
+            }
+
+            .dashboard-map-shell {
+                margin: 0 16px 16px;
+            }
+
+            .dashboard-map {
+                height: 300px;
+            }
+
+            .dashboard-location-list {
+                padding: 0 16px 16px;
+            }
         }
         
         /* Store Management Styles */
@@ -1238,6 +1748,11 @@
         #addStoreModal .modal-header h3 { margin: 0; font-weight: 700; font-size: 17px; letter-spacing: -0.02em; }
         #addStoreModal .close { position:absolute; right:10px; top:10px; width:28px; height:28px; border-radius: 50%; background: rgba(0,0,0,0.06); display:flex; align-items:center; justify-content:center; color:#555; line-height:1; font-size:18px; }
         #addStoreModal .close:hover { background: rgba(0,0,0,0.12); color:#000; }
+        #addStoreModal .add-store-shell { display:flex; flex-direction:column; gap:18px; }
+        #addStoreModal .add-store-intro { padding: 0 18px; }
+        #addStoreModal .add-store-tabs { padding: 0 18px 10px; display:flex; gap:8px; }
+        #addStoreModal .add-store-tab { padding:6px 10px; border-radius:8px; border:1px solid #dcdfe3; background:#fff; color:#1d1d1f; font-weight:600; cursor:pointer; }
+        #addStoreModal .add-store-tab.active { background:#0d6efd; color:#fff; border-color:#0d6efd; }
         #addStoreModal #addStoreForm { padding: 12px 18px 18px; }
         #addStoreModal .form-group { margin: 12px 0; }
         #addStoreModal .form-group label { font-size: 12px; font-weight: 600; color: #3a3a3c; margin-bottom: 6px; display:block; }
@@ -1657,11 +2172,13 @@
     .mobile-drawer .action-item { display:flex; align-items:center; gap:10px; padding:12px; color:#1d1d1f; text-decoration:none; cursor:pointer; border:none; background:#fff; width:100%; text-align:left; font-weight:600; }
     .mobile-drawer .action-item:last-child { border:none; }
     .mobile-drawer .action-item:hover { background:#f2f2f7; text-decoration:none; }
+    .mobile-drawer .action-item.is-current { background:#eef6ff; color:#0a63c9; }
     .mobile-drawer .action-item .icon { width:18px; height:18px; display:inline-block; }
     .mobile-drawer .action-item .icon path,
     .mobile-drawer .action-item .icon circle { stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; }
     /* No red emphasis for destructive action in drawer */
     .mobile-drawer .action-item.danger { color:#1d1d1f; }
+    .mobile-drawer .menu-divider { height:1px; background:#e5e7eb; margin:4px 0 6px; border-radius:999px; }
     /* Profile panel: overlay from top, covers drawer items */
     .profile-panel { position:absolute; inset:0; background:#fff; transform:translateY(-8px) scaleY(0); transform-origin:top; transition:transform .25s ease, opacity .25s ease; z-index:5; overflow:auto; pointer-events:none; opacity:.0; }
     .profile-panel.open { transform:translateY(0) scaleY(1); pointer-events:auto; opacity:1; }
@@ -1710,18 +2227,389 @@
     .profile-menu .item:hover { background:#f2f2f7; }
     .profile-menu .username { font-weight:600; font-size:13px; color:#111; }
     .profile-menu .sep { height:1px; background:#e5e5ea; margin:6px 0; }
+    .dashboard-workspace {
+        position: fixed;
+        inset: 0;
+        background: #fff;
+        display: none;
+        flex-direction: column;
+        z-index: 1180;
+    }
+    .dashboard-workspace[hidden] {
+        display: none !important;
+    }
+    .dashboard-workspace.is-open {
+        display: flex;
+    }
+    .dashboard-workspace__header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px 20px;
+        border-bottom: 1px solid #e5e7eb;
+        background: rgba(255, 255, 255, 0.96);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+    }
+    .dashboard-workspace__title {
+        font-size: 18px;
+        font-weight: 700;
+        color: #0f172a;
+    }
+    .dashboard-workspace__close {
+        appearance: none;
+        border: 1px solid #d2d2d7;
+        background: #fff;
+        color: #1d1d1f;
+        border-radius: 10px;
+        width: 36px;
+        height: 36px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 20px;
+        line-height: 1;
+    }
+    .dashboard-workspace__close:hover {
+        background: #f2f2f7;
+    }
+    .dashboard-workspace__frame {
+        flex: 1;
+        width: 100%;
+        border: 0;
+        background: #fff;
+    }
+    .dashboard-workspace.dashboard-workspace--clean .dashboard-workspace__header {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        z-index: 4;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+    .dashboard-workspace.dashboard-workspace--clean .dashboard-workspace__title {
+        display: none;
+    }
+    .dashboard-workspace.dashboard-workspace--clean .dashboard-workspace__close {
+        box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
+        background: rgba(255, 255, 255, 0.96);
+    }
+
+    @media (min-width: 1024px) {
+        body {
+            background: #f6f7fb;
+            --dashboard-sidebar-width: 240px;
+        }
+
+        .container {
+            max-width: 100%;
+            margin: 0;
+            padding: 20px 20px 40px calc(var(--dashboard-sidebar-width) + 24px);
+        }
+
+        .stores-section {
+            min-height: calc(100vh - 40px);
+            background: transparent;
+            border-radius: 0;
+            margin-bottom: 0;
+            overflow: visible;
+        }
+
+        .stores-header {
+            display: none;
+        }
+
+        .account-btn {
+            display: none;
+        }
+
+        .drawer-backdrop,
+        .drawer-backdrop.show {
+            display: none !important;
+        }
+
+        .mobile-drawer {
+            top: 0;
+            left: 0;
+            right: auto;
+            width: var(--dashboard-sidebar-width);
+            box-sizing: border-box;
+            height: 100vh;
+            padding: 22px 18px 24px;
+            border-left: 0;
+            border-right: 1px solid #e5e7eb;
+            box-shadow: none;
+            transition: none;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .mobile-drawer.open {
+            left: 0;
+            right: auto;
+        }
+
+        .mobile-drawer .drawer-close {
+            display: none !important;
+        }
+
+        .mobile-drawer .action-list {
+            gap: 4px;
+        }
+
+        .mobile-drawer .action-item {
+            border-radius: 3px;
+        }
+
+        .dashboard-workspace {
+            left: var(--dashboard-sidebar-width);
+            inset: 0 0 0 var(--dashboard-sidebar-width);
+            border-left: 1px solid #e5e7eb;
+            box-shadow: -20px 0 48px rgba(15, 23, 42, 0.08);
+        }
+
+        .modal.dashboard-side-sheet,
+        .rp-overlay.dashboard-side-sheet {
+            inset: 0 0 0 var(--dashboard-sidebar-width);
+            padding: 0 !important;
+            align-items: stretch;
+            justify-content: flex-end;
+            background: rgba(15, 23, 42, 0.12);
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+        }
+
+        .modal.dashboard-side-sheet .modal-content {
+            width: min(760px, 100%);
+            max-width: none !important;
+            max-height: none !important;
+            height: 100vh;
+            margin: 0 0 0 auto !important;
+            box-sizing: border-box;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            transform: none !important;
+            opacity: 1 !important;
+            animation: none !important;
+            overflow-y: auto;
+        }
+
+        #addStoreModal.dashboard-side-sheet .modal-content {
+            width: 100%;
+            min-width: 0;
+            margin: 0 !important;
+            border-left: 1px solid #e5e7eb;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 48px 32px;
+            background: linear-gradient(180deg, #f8fafc 0%, #eef3f8 100%);
+        }
+
+        #addStoreModal.dashboard-side-sheet {
+            justify-content: stretch;
+            background: rgba(241, 245, 249, 0.9);
+        }
+
+        #addStoreModal.dashboard-side-sheet .add-store-shell {
+            width: min(720px, 100%);
+            background: transparent;
+            border: none;
+            border-radius: 0;
+            box-shadow: none;
+            overflow: visible;
+        }
+
+        #addStoreModal.dashboard-side-sheet .modal-header {
+            padding: 0 0 18px;
+            justify-content: flex-start;
+            border-bottom: none;
+        }
+
+        #addStoreModal.dashboard-side-sheet .modal-header h3 {
+            font-size: 30px;
+            line-height: 1.1;
+            letter-spacing: -0.03em;
+        }
+
+        #addStoreModal.dashboard-side-sheet .close {
+            right: 0;
+            top: -4px;
+            width: 34px;
+            height: 34px;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid rgba(203, 213, 225, 0.9);
+        }
+
+        #addStoreModal.dashboard-side-sheet .add-store-intro {
+            padding: 0 0 10px;
+        }
+
+        #addStoreModal.dashboard-side-sheet .helper {
+            font-size: 14px;
+            color: #64748b;
+            margin: 0;
+        }
+
+        #addStoreModal.dashboard-side-sheet .add-store-tabs {
+            padding: 0 0 18px;
+        }
+
+        #addStoreModal.dashboard-side-sheet #addStorePaneSingle,
+        #addStoreModal.dashboard-side-sheet #addStorePaneBulk {
+            padding: 0 0 8px !important;
+        }
+
+        #addStoreModal.dashboard-side-sheet #addStoreForm {
+            padding: 0;
+        }
+
+        #addStoreModal.dashboard-side-sheet .form-group {
+            margin: 0 0 18px;
+        }
+
+        #addStoreModal.dashboard-side-sheet .form-group label {
+            font-size: 13px;
+            margin-bottom: 8px;
+            color: #334155;
+        }
+
+        #addStoreModal.dashboard-side-sheet .form-group input,
+        #addStoreModal.dashboard-side-sheet #bulkStores {
+            border-radius: 16px;
+            border: 1px solid #d8e1ea;
+            padding: 15px 16px;
+            font-size: 16px;
+            background: rgba(255, 255, 255, 0.92);
+            box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+        }
+
+        #addStoreModal.dashboard-side-sheet .modal-buttons {
+            padding: 8px 0 0;
+        }
+
+        #addStoreModal.dashboard-side-sheet .btn-secondary,
+        #addStoreModal.dashboard-side-sheet .btn-primary {
+            min-width: 132px;
+            padding: 12px 18px;
+        }
+
+        @media (max-width: 1023px) {
+            #addStoreModal .add-store-shell {
+                gap: 0;
+            }
+        }
+
+        #storeGroupsModal.dashboard-side-sheet {
+            justify-content: stretch;
+            background: rgba(241, 245, 249, 0.9);
+        }
+
+        #storeGroupsModal.dashboard-side-sheet .modal-content {
+            width: 100% !important;
+            min-width: 0;
+            margin: 0 !important;
+            border-left: 1px solid #e5e7eb;
+            padding: 36px 40px 56px;
+            background: linear-gradient(180deg, #f8fafc 0%, #eef3f8 100%);
+        }
+
+        #storeGroupsModal.dashboard-side-sheet .store-groups-shell {
+            width: 100%;
+        }
+
+        #storeGroupsModal.dashboard-side-sheet .modal-header,
+        #storeGroupsModal.dashboard-side-sheet .store-groups-body {
+            width: min(980px, calc(100% - 72px));
+            max-width: none;
+            margin: 0 auto 0 36px;
+        }
+
+        #storeGroupsModal.dashboard-side-sheet .modal-header {
+            padding: 4px 0 22px;
+            border-bottom: none;
+        }
+
+        #storeGroupsModal.dashboard-side-sheet .store-groups-body {
+            padding: 0 !important;
+        }
+
+        #storeGroupsModal.dashboard-side-sheet .store-groups-note,
+        #storeGroupsModal.dashboard-side-sheet .store-groups-create,
+        #storeGroupsModal.dashboard-side-sheet #groupsList,
+        #storeGroupsModal.dashboard-side-sheet .store-groups-footer {
+            width: 100%;
+        }
+
+        #storeGroupsModal.dashboard-side-sheet #groupsContainer {
+            align-items: flex-start;
+        }
+
+        #storeGroupsModal.dashboard-side-sheet .store-groups-note {
+            margin-bottom: 28px !important;
+            padding: 0 !important;
+            background: transparent !important;
+            border: none !important;
+            border-left: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            color: #64748b !important;
+        }
+
+        #storeGroupsModal.dashboard-side-sheet .store-groups-create {
+            margin-bottom: 28px !important;
+            border-radius: 14px !important;
+            border-color: #dbe4ee !important;
+            box-shadow: 0 14px 32px rgba(15, 23, 42, 0.05);
+        }
+
+        #storeGroupsModal.dashboard-side-sheet .store-groups-footer {
+            margin-top: 28px !important;
+        }
+
+        @media (max-width: 1180px) {
+            #storeGroupsModal.dashboard-side-sheet .modal-header,
+            #storeGroupsModal.dashboard-side-sheet .store-groups-body {
+                width: 100%;
+                margin: 0;
+            }
+        }
+
+        #remotePiManagerModal.dashboard-side-sheet .modal-content {
+            width: min(880px, 100%) !important;
+        }
+
+        .rp-overlay.dashboard-side-sheet .rp-modal {
+            width: min(860px, 100%);
+            max-width: none;
+            max-height: none;
+            height: 100vh;
+            margin-left: auto;
+            border-radius: 0;
+            box-shadow: none;
+        }
+    }
+
+    @media (min-width: 1024px) and (max-width: 1360px) {
+        body {
+            --dashboard-sidebar-width: 224px;
+        }
+
+        .container {
+            padding-left: calc(var(--dashboard-sidebar-width) + 24px);
+        }
+    }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="stores-section">
             <div class="stores-header">
-                        <div class="stores-title">
-                                                        <img class="brand-logo" src="{{ url_for('static', filename='ea-logo.svg') }}?v={{ asset_bust|default(0) }}" alt="Everyday Advertise" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';" />
-                            <span class="header-sep" aria-hidden="true"></span>
-                            <img id="headerAvatar" class="header-avatar" alt="Profile" src="" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'28\' height=\'28\'><rect width=\'100%\' height=\'100%\' rx=\'14\' ry=\'14\' fill=\'%23f2f2f7\' stroke=\'%23e5e5ea\'/></svg>'" />
-                            <span class="title-fallback">Everyday Advertise</span>
-                                                    </div>
                                                     <button class="account-btn" onclick="toggleDrawer(true)" aria-label="Account / More" title="Account / More">
                                                         <span class="account-text">Account / More</span>
                                                         <svg class="chev-down" viewBox="0 0 24 24" aria-hidden="true">
@@ -1731,49 +2619,202 @@
                 <!-- Desktop actions removed; all actions are inside the hamburger menu to match design -->
                 <div class="stores-actions desktop-actions" role="toolbar" aria-label="Header actions" style="display:none"></div>
             </div>
-            
-            <!-- Store Management -->
-            <div class="store-management">
-                <label for="storeSelect">Select Store:</label>
-                <select id="storeSelect" onchange="switchStore(this.value)">
-                    {% for store in config.stores %}
-                    <option value="{{ store.id }}" {% if loop.first %}selected{% endif %}>
-                        {{ store.id }} - {{ store.name }}
-                    </option>
-                    {% endfor %}
-                </select>
-                <div class="store-search" id="storeSearch" aria-expanded="false">
-                    <button class="search-btn" type="button" id="storeSearchBtn" title="Search stores">
-                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-                            <circle cx="11" cy="11" r="7"></circle>
-                            <path d="M20 20l-3.5-3.5"></path>
-                        </svg>
-                    </button>
-                    <input id="storeSearchInput" class="search-input" type="search" placeholder="Search store # or name" autocomplete="off" aria-label="Search stores" />
-                    <div class="results" id="storeSearchResults" role="listbox" aria-label="Store results"></div>
-                </div>
-                <button class="add-store-btn" onclick="showAddStoreDialog()" title="Add Store">
-                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M12 5v14M5 12h14" fill="none"></path>
-                    </svg>
-                    Add Store
-                </button>
-                <button class="delete-store-btn" id="delete-store-btn" onclick="deleteCurrentStore()" title="Delete selected store">
-                    🗑️ Delete Store
-                </button>
-            </div>
 
-            <!-- Mobile compact action row: Add Store | Delete Store | Add Screen -->
-            <div class="mobile-actions" aria-label="Quick actions">
-                <button class="add-store-btn" onclick="showAddStoreDialog()" title="Add Store">➕ Add Store</button>
-                <button class="delete-store-btn" id="delete-store-btn-mobile" onclick="deleteCurrentStore()" title="Delete selected store">🗑️ Delete</button>
-                <button class="add-screen-btn" onclick="addNewScreen('screen')" title="Add Screen">📺 Add Screen</button>
-            </div>
-            
-            
-            
-            <!-- Regular Screens Section -->
-            <div class="screens-section">
+            <section id="dashboardMainView" class="dashboard-content-view dashboard-main-view" aria-label="Dashboard view">
+                <section class="dashboard-overview" aria-label="Dashboard overview">
+                <div class="dashboard-overview__topbar">
+                    <div class="dashboard-overview__titleblock">
+                        <span class="dashboard-overview__eyebrow">Overview</span>
+                        <h1>Dashboard</h1>
+                        <p>A clean snapshot of your account, mapped screens, and the current store network.</p>
+                    </div>
+                    <button class="dashboard-overview__link" type="button" onclick="return openDashboardSection('screens')">Manage Screens</button>
+                </div>
+
+                <div class="dashboard-overview__layout">
+                    <div class="dashboard-overview__left">
+                        <section class="overview-panel overview-panel--stats" aria-labelledby="dashboardStatusTitle">
+                            <div class="overview-panel__header">
+                                <div>
+                                    <span class="overview-panel__eyebrow">Status</span>
+                                    <h3 id="dashboardStatusTitle">Screen status</h3>
+                                    <p>Quick metrics for this account and the currently selected store.</p>
+                                </div>
+                            </div>
+                            <div class="dashboard-overview__stats" aria-label="Overview stats">
+                                <article class="overview-stat">
+                                    <span class="overview-stat__label">Total Stores</span>
+                                    <div class="overview-stat__value" id="overviewTotalStores">0</div>
+                                    <div class="overview-stat__meta">Stores in this account</div>
+                                </article>
+                                <article class="overview-stat">
+                                    <span class="overview-stat__label">Current Store</span>
+                                    <div class="overview-stat__value" id="overviewCurrentScreens">0</div>
+                                    <div class="overview-stat__meta" id="overviewCurrentStoreName">No store selected</div>
+                                </article>
+                                <article class="overview-stat">
+                                    <span class="overview-stat__label">Mapped Screens</span>
+                                    <div class="overview-stat__value" id="overviewMappedScreens">0</div>
+                                    <div class="overview-stat__meta">Saved coordinates</div>
+                                </article>
+                                <article class="overview-stat">
+                                    <span class="overview-stat__label">Online Mapped</span>
+                                    <div class="overview-stat__value" id="overviewOnlineMapped">0</div>
+                                    <div class="overview-stat__meta">Mapped devices online</div>
+                                </article>
+                            </div>
+                        </section>
+
+                        <section class="overview-panel overview-panel--feed" aria-labelledby="dashboardLocationFeedTitle">
+                            <div class="overview-panel__header">
+                                <div>
+                                    <span class="overview-panel__eyebrow">Feed</span>
+                                    <h3 id="dashboardLocationFeedTitle">Tracked locations</h3>
+                                    <p>Mapped screens for this account, with the current store surfaced first.</p>
+                                </div>
+                                <div class="overview-panel__summary" id="dashboardLocationFeedSummary">0 locations</div>
+                            </div>
+                            <div class="dashboard-location-list" id="dashboardLocationList">
+                                <div class="dashboard-location-empty">Loading mapped locations...</div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <div class="dashboard-overview__info">
+                        <section class="overview-panel overview-panel--info" aria-labelledby="dashboardReviewTitle">
+                            <div class="overview-panel__header">
+                                <div>
+                                    <span class="overview-panel__eyebrow">Review Us</span>
+                                    <h3 id="dashboardReviewTitle">Hi, {{ dashboard_display_name }}</h3>
+                                    <p>Use this space for reviews, promos, or account notices as the dashboard grows.</p>
+                                </div>
+                            </div>
+                            <p class="overview-info-card__lead">Help us improve by sharing feedback on G2 or Capterra.</p>
+                            <p class="overview-info-card__subtext">This column is reserved for account-facing information cards, so we can add more notices here later without touching the map layout.</p>
+                            <div class="overview-info-actions">
+                                <a class="overview-panel__action" href="https://www.g2.com/" target="_blank" rel="noopener noreferrer">Review on G2</a>
+                                <a class="overview-panel__action" href="https://www.capterra.com/" target="_blank" rel="noopener noreferrer">Capterra</a>
+                            </div>
+                        </section>
+
+                        <section class="overview-panel overview-panel--info" aria-labelledby="dashboardSubscriptionTitle">
+                            <div class="overview-panel__header">
+                                <div>
+                                    <span class="overview-panel__eyebrow">Subscription</span>
+                                    <h3 id="dashboardSubscriptionTitle">Subscription plan</h3>
+                                    <p>Billing and account limits can sit here alongside the operational dashboard.</p>
+                                </div>
+                            </div>
+                            <div class="overview-info-grid">
+                                <div class="overview-info-row">
+                                    <span>Status</span>
+                                    <strong>{{ (dashboard_subscription_status or 'Not connected')|replace('_', ' ')|title }}</strong>
+                                </div>
+                                <div class="overview-info-row">
+                                    <span>Plan</span>
+                                    <strong>{{ dashboard_subscription_plan or 'Plan details will appear here' }}</strong>
+                                </div>
+                                <div class="overview-info-row">
+                                    <span>Stores</span>
+                                    <strong>{{ dashboard_total_stores }}</strong>
+                                </div>
+                                <div class="overview-info-row">
+                                    <span>Screens</span>
+                                    <strong>{{ dashboard_total_screens }}</strong>
+                                </div>
+                            </div>
+                            <div class="overview-info-actions">
+                                <button class="overview-panel__action" type="button" onclick="return openSidebarWorkspace(null, 'Account', '{{ url_for('account') }}?embedded=1')">Manage Subscription</button>
+                            </div>
+                        </section>
+
+                        <section class="overview-panel overview-panel--info" aria-labelledby="dashboardActivityTitle">
+                            <div class="overview-panel__header">
+                                <div>
+                                    <span class="overview-panel__eyebrow">Activity</span>
+                                    <h3 id="dashboardActivityTitle">Recent activities</h3>
+                                    <p>This area can later be wired to real account events without changing the rest of the dashboard.</p>
+                                </div>
+                            </div>
+                            <div class="overview-activity-list">
+                                <article class="overview-activity-item">
+                                    <span class="overview-activity-time">Just now</span>
+                                    <div class="overview-activity-text">Dashboard loaded for {{ user_email or 'your account' }}.</div>
+                                </article>
+                                <article class="overview-activity-item">
+                                    <span class="overview-activity-time">Live</span>
+                                    <div class="overview-activity-text">Android TV pairing code <strong>{{ link_code or '----' }}</strong> is ready to use.</div>
+                                </article>
+                                <article class="overview-activity-item">
+                                    <span class="overview-activity-time">Current</span>
+                                    <div class="overview-activity-text">This account currently has {{ dashboard_total_stores }} stores and {{ dashboard_total_screens }} screens configured.</div>
+                                </article>
+                            </div>
+                        </section>
+                    </div>
+
+                    <section class="overview-panel overview-panel--map" aria-labelledby="dashboardMapTitle">
+                        <div class="overview-panel__header">
+                            <div>
+                                <span class="overview-panel__eyebrow">Map</span>
+                                <h3 id="dashboardMapTitle">Screen locations</h3>
+                                <p>Mapped screens appear here using the same Pi location data already saved in your account.</p>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <div class="overview-panel__summary" id="dashboardMapSummary">Loading map...</div>
+                                <button class="overview-panel__action" type="button" onclick="return openPiDeviceManager()">Pi Manager</button>
+                            </div>
+                        </div>
+                        <div class="dashboard-map-shell">
+                            <div id="dashboardMap" class="dashboard-map" aria-label="Mapped screen locations"></div>
+                            <div id="dashboardMapEmpty" class="dashboard-map-empty" hidden>Location pins will appear here after screens are assigned coordinates in the Pi manager.</div>
+                        </div>
+                    </section>
+                </div>
+                </section>
+            </section>
+
+            <section id="screensMainView" class="dashboard-content-view dashboard-screens-view" aria-label="Screens view" hidden>
+                <!-- Store Management -->
+                <div class="store-management">
+                    <label for="storeSelect">Select Store:</label>
+                    <select id="storeSelect" onchange="switchStore(this.value)">
+                        {% for store in config.stores %}
+                        <option value="{{ store.id }}" {% if loop.first %}selected{% endif %}>
+                            {{ store.id }} - {{ store.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <div class="store-search" id="storeSearch" aria-expanded="false">
+                        <button class="search-btn" type="button" id="storeSearchBtn" title="Search stores">
+                            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <circle cx="11" cy="11" r="7"></circle>
+                                <path d="M20 20l-3.5-3.5"></path>
+                            </svg>
+                        </button>
+                        <input id="storeSearchInput" class="search-input" type="search" placeholder="Search store # or name" autocomplete="off" aria-label="Search stores" />
+                        <div class="results" id="storeSearchResults" role="listbox" aria-label="Store results"></div>
+                    </div>
+                    <button class="add-store-btn" onclick="showAddStoreDialog()" title="Add Store">
+                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 5v14M5 12h14" fill="none"></path>
+                        </svg>
+                        Add Store
+                    </button>
+                    <button class="delete-store-btn" id="delete-store-btn" onclick="deleteCurrentStore()" title="Delete selected store">
+                        🗑️ Delete Store
+                    </button>
+                </div>
+                
+                <!-- Mobile compact action row: Add Store | Delete Store | Add Screen -->
+                <div class="mobile-actions" aria-label="Quick actions">
+                    <button class="add-store-btn" onclick="showAddStoreDialog()" title="Add Store">➕ Add Store</button>
+                    <button class="delete-store-btn" id="delete-store-btn-mobile" onclick="deleteCurrentStore()" title="Delete selected store">🗑️ Delete</button>
+                    <button class="add-screen-btn" onclick="addNewScreen('screen')" title="Add Screen">📺 Add Screen</button>
+                </div>
+
+                <!-- Regular Screens Section -->
+                <div class="screens-section">
                 <div class="section-header">
                     <div class="section-left">
                         <h3>📺 Regular Screens</h3>
@@ -1799,7 +2840,7 @@
                 <div class="screens-grid" id="screens-grid">
                     <!-- Regular screens will be loaded here -->
                 </div>
-            </div>
+                </div>
             <!-- Profile dropdown (anchored to the Profile button) -->
             <div id="profileMenu" class="profile-menu" role="menu" aria-label="User menu">
                 <div class="item" tabindex="0">
@@ -1813,7 +2854,7 @@
             </div>
             
             <!-- Promo Screens Section -->
-            <div class="promos-section">
+                <div class="promos-section">
                 <div class="section-header">
                     <h3>🎯 Promo Screens</h3>
                     <button class="add-screen-btn" onclick="addNewScreen('promo')">
@@ -1823,19 +2864,33 @@
                 <div class="screens-grid" id="promos-grid">
                     <!-- Promo screens will be loaded here -->
                 </div>
-            </div>
+                </div>
+            </section>
             
             <div style="display: none;">
                 <!-- Legacy static screen loop removed to avoid Jinja errors -->
             </div>
+    </div>
+
+    <div id="dashboardWorkspace" class="dashboard-workspace" hidden aria-hidden="true">
+        <div class="dashboard-workspace__header">
+            <div id="dashboardWorkspaceTitle" class="dashboard-workspace__title">Workspace</div>
+            <button class="dashboard-workspace__close" type="button" onclick="closeDashboardWorkspace()" aria-label="Close workspace">✕</button>
+        </div>
+        <iframe id="dashboardWorkspaceFrame" class="dashboard-workspace__frame" src="about:blank" title="Dashboard workspace"></iframe>
     </div>
     
     <!-- Mobile drawer (hamburger menu) -->
     <div id="drawerBackdrop" class="drawer-backdrop" onclick="toggleDrawer(false)"></div>
     <div id="mobileDrawer" class="mobile-drawer" role="dialog" aria-label="Menu" aria-modal="true">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-            <h4 style="margin:0;">Menu</h4>
-            <button onclick="toggleDrawer(false)" style="background:none;border:none;cursor:pointer;font-size:28px;padding:0;width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:#666;" title="Close menu">
+            <div class="stores-title">
+                <img class="brand-logo" src="{{ url_for('static', filename='ea-logo.svg') }}?v={{ asset_bust|default(0) }}" alt="Everyday Advertise" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';" />
+                <span class="header-sep" aria-hidden="true"></span>
+                <img id="headerAvatar" class="header-avatar" alt="Profile" src="" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'28\' height=\'28\'><rect width=\'100%\' height=\'100%\' rx=\'14\' ry=\'14\' fill=\'%23f2f2f7\' stroke=\'%23e5e5ea\'/></svg>'" />
+                <span class="title-fallback">Everyday Advertise</span>
+            </div>
+            <button class="drawer-close" onclick="toggleDrawer(false)" style="background:none;border:none;cursor:pointer;font-size:28px;padding:0;width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:#666;" title="Close menu">
                 ✕
             </button>
         </div>
@@ -1845,19 +2900,28 @@
         <button class="btn" style="margin-bottom:12px;" onclick="regenerateLinkCode()">Regenerate</button>
         <div class="sep" style="height:1px;background:#e5e5ea;margin:8px 0 12px 0;"></div>
         <div class="action-list" role="menu">
-            <button class="action-item" onclick="showAddStoreDialog()" title="Add Store">
+            <button class="action-item is-current" data-dashboard-view-link="dashboard" onclick="return openDashboardSection('dashboard')" title="Dashboard">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h8V3H3z"></path><path d="M13 21h8v-6h-8z"></path><path d="M13 11h8V3h-8z"></path><path d="M3 21h8v-6H3z"></path></svg>
+                <span>Dashboard</span>
+            </button>
+            <button class="action-item" data-dashboard-view-link="screens" onclick="return openDashboardSection('screens')" title="Screens">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2"></rect><path d="M8 21h8"></path><path d="M12 17v4"></path></svg>
+                <span>Screens</span>
+            </button>
+            <div class="menu-divider" aria-hidden="true"></div>
+            <button class="action-item" onclick="return openSidebarAddStore()" title="Add Store">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
                 <span>Add Store</span>
             </button>
-            <button class="action-item" onclick="openStoreGroupsManager()" title="Manage Store Groups">
+            <button class="action-item" onclick="return openSidebarStoreGroups()" title="Manage Store Groups">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
                 <span>Store Groups</span>
             </button>
-            <button class="action-item" onclick="openLibraryManager()" title="Manage Library">
+            <button class="action-item" onclick="return openSidebarLibrary()" title="Manage Library">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z"></path></svg>
                 <span>Manage Library</span>
             </button>
-            <a class="action-item" href="{{ url_for('menu_studio') }}" title="Menu Studio">
+            <a class="action-item" href="{{ url_for('menu_studio') }}" onclick="return openSidebarWorkspace(event, 'Menu Studio', '{{ url_for('menu_studio') }}')" title="Menu Studio">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4z"></path><path d="M9 4v16"></path><path d="M14 9h6"></path><path d="M14 13h6"></path><path d="M14 17h4"></path></svg>
                 <span>Menu Studio</span>
             </a>
@@ -1865,15 +2929,15 @@
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path></svg>
                 <span>Delete Store</span>
             </button>
-            <button class="action-item" onclick="toggleProfilePanel(true)" title="Profile">
+            <button class="action-item" onclick="return openSidebarWorkspace(event, 'Profile', '{{ url_for('profile') }}')" title="Profile">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c1.5-3.5 5-6 8-6s6.5 2.5 8 6"></path></svg>
                 <span>Profile</span>
             </button>
-            <button class="action-item" onclick="window.location.href='/account'" title="Account">
+            <button class="action-item" onclick="return openSidebarWorkspace(event, 'Account', '{{ url_for('account') }}?embedded=1')" title="Account">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
                 <span>Account</span>
             </button>
-            <button class="action-item" onclick="openPiDeviceManager()" title="Pi Device Manager">
+            <button class="action-item" onclick="return openPiDeviceManager()" title="Pi Device Manager">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
                 <span>Pi Device Manager</span>
             </button>
@@ -1928,15 +2992,114 @@
         if(open){ d.classList.add('open'); b.classList.add('show'); }
         else { d.classList.remove('open'); b.classList.remove('show'); }
     }
+    function isDesktopSidebarLayout(){
+        return window.matchMedia('(min-width: 1024px)').matches;
+    }
+    function closeDashboardWorkspace(){
+        const panel = document.getElementById('dashboardWorkspace');
+        const frame = document.getElementById('dashboardWorkspaceFrame');
+        if(!panel || panel.hidden) return;
+        panel.classList.remove('is-open');
+        panel.classList.remove('dashboard-workspace--clean');
+        panel.hidden = true;
+        panel.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('workspace-open');
+        if(frame){ frame.src = 'about:blank'; }
+    }
+    function closeDashboardTransientPanels(options){
+        const keepWorkspace = options && options.keepWorkspace;
+        if(!keepWorkspace){ closeDashboardWorkspace(); }
+        try { closeAddStoreDialog(); } catch {}
+        try { closeStoreGroupsManager(); } catch {}
+        try { closeReplaceModal(); } catch {}
+        try {
+            const remoteModal = document.getElementById('remotePiManagerModal');
+            if(remoteModal){
+                remoteModal.style.display = 'none';
+                remoteModal.classList.remove('dashboard-side-sheet');
+            }
+        } catch {}
+    }
+    function setDashboardSection(view){
+        const normalized = view === 'screens' ? 'screens' : 'dashboard';
+        const dashboardView = document.getElementById('dashboardMainView');
+        const screensView = document.getElementById('screensMainView');
+        if(dashboardView){ dashboardView.hidden = normalized !== 'dashboard'; }
+        if(screensView){ screensView.hidden = normalized !== 'screens'; }
+        document.querySelectorAll('[data-dashboard-view-link]').forEach((node)=>{
+            node.classList.toggle('is-current', node.getAttribute('data-dashboard-view-link') === normalized);
+        });
+        if(normalized === 'dashboard' && dashboardOverviewMap){
+            setTimeout(()=>{
+                if (dashboardOverviewUsesGoogleMaps()) {
+                    try { google.maps.event.trigger(dashboardOverviewMap, 'resize'); } catch {}
+                    try { renderDashboardOverviewMap(); } catch {}
+                    return;
+                }
+                try { dashboardOverviewMap.invalidateSize(); } catch {}
+            }, 80);
+        }
+        return normalized;
+    }
+    function initializeDashboardSection(){
+        setDashboardSection('dashboard');
+    }
+    function openDashboardSection(view){
+        closeDashboardTransientPanels();
+        setDashboardSection(view);
+        toggleDrawer(false);
+        return false;
+    }
+    function openSidebarWorkspace(event, title, url){
+        if(event && event.preventDefault) event.preventDefault();
+        if(!isDesktopSidebarLayout()){
+            window.location.href = url;
+            return false;
+        }
+        closeDashboardTransientPanels({ keepWorkspace: true });
+        const panel = document.getElementById('dashboardWorkspace');
+        const titleNode = document.getElementById('dashboardWorkspaceTitle');
+        const frame = document.getElementById('dashboardWorkspaceFrame');
+        if(!panel || !titleNode || !frame) return false;
+        titleNode.textContent = title;
+        panel.classList.toggle('dashboard-workspace--clean', /[?&]embedded=1(?:&|$)/.test(url));
+        if(frame.src !== url){ frame.src = url; }
+        panel.hidden = false;
+        panel.setAttribute('aria-hidden', 'false');
+        panel.classList.add('is-open');
+        document.body.classList.add('workspace-open');
+        toggleDrawer(false);
+        return false;
+    }
+    function openSidebarAddStore(){
+        closeDashboardTransientPanels();
+        showAddStoreDialog();
+        return false;
+    }
+    function openSidebarStoreGroups(){
+        closeDashboardTransientPanels();
+        openStoreGroupsManager();
+        return false;
+    }
+    function openSidebarLibrary(){
+        closeDashboardTransientPanels();
+        openLibraryManager();
+        return false;
+    }
     function openUserProfile(){ toggleProfilePanel(true); }
     function openLibraryManager(){
         ensureReplaceModal();
         rpCtx = { screenId: 'SINGLE', itemId: 'SINGLE' }; // neutral context
         rpPrefix = '';
-        document.getElementById('rp-overlay').style.display='flex';
+        const overlay = document.getElementById('rp-overlay');
+        if(overlay){
+            overlay.classList.toggle('dashboard-side-sheet', isDesktopSidebarLayout());
+            overlay.style.display='flex';
+        }
         switchRpTab('lib');
         renderRpBreadcrumb();
         refreshLibrary();
+        toggleDrawer(false);
     }
 
     // Remote Pi Manager functions - v2.2.0-FINAL (Build: {{ build_stamp }})
@@ -1960,15 +3123,38 @@
             }
         }, 100);
     }
+
+    function openRemotePiManagerForPi(piId) {
+        closeDashboardTransientPanels();
+        openRemotePiManager();
+
+        const piIdInput = document.getElementById('piId');
+        if (piIdInput) {
+            piIdInput.value = piId;
+        }
+
+        setTimeout(() => {
+            const connectBtn = document.getElementById('connectPiBtn');
+            if (connectBtn) {
+                connectBtn.click();
+            }
+        }, 300);
+    }
     
     // NEW Pi Device Manager Dashboard
     function openPiDeviceManager() {
         console.log('🚀 Opening Pi Device Manager Dashboard');
+        if (isDesktopSidebarLayout()) {
+            return openSidebarWorkspace(null, 'Pi Device Manager', '/pi-manager?embedded=1');
+        }
         window.location.href = '/pi-manager';
+        return false;
     }
 
     function closeRemotePiManager() {
-        document.getElementById('remotePiManagerModal').style.display = 'none';
+        const modal = document.getElementById('remotePiManagerModal');
+        modal.style.display = 'none';
+        modal.classList.remove('dashboard-side-sheet');
         document.getElementById('remotePiManagerForm').reset();
         document.getElementById('piConfigStatus').style.display = 'none';
         document.getElementById('piConnectionStatus').style.display = 'none';
@@ -2858,6 +4044,384 @@
             });
         }
 
+        let dashboardOverviewMap = null;
+        let dashboardOverviewLayer = null;
+        let dashboardOverviewInfoWindow = null;
+        let dashboardOverviewMarkers = [];
+        let dashboardOverviewDevices = [];
+        const dashboardMarkerIconCache = {};
+
+        function dashboardOverviewUsesGoogleMaps() {
+            return typeof google !== 'undefined' && !!(google.maps) && !!dashboardOverviewMap && typeof dashboardOverviewMap.fitBounds === 'function' && typeof dashboardOverviewMap.getCenter === 'function';
+        }
+
+        function dashboardOverviewGoogleMapsAvailable() {
+            return typeof google !== 'undefined' && !!google.maps;
+        }
+
+        function getDashboardMarkerIconUrl(status) {
+            const normalizedStatus = status === 'online' ? 'online' : 'offline';
+            if (dashboardMarkerIconCache[normalizedStatus]) {
+                return dashboardMarkerIconCache[normalizedStatus];
+            }
+
+            const background = normalizedStatus === 'online'
+                ? `
+                    <defs>
+                        <linearGradient id="markerBg" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#ff2d84"/>
+                            <stop offset="52%" stop-color="#9d45ff"/>
+                            <stop offset="100%" stop-color="#3c6cff"/>
+                        </linearGradient>
+                    </defs>
+                    <rect x="2" y="2" width="60" height="60" rx="18" fill="url(#markerBg)"/>
+                    <rect x="2.5" y="2.5" width="59" height="59" rx="17.5" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/>
+                `
+                : `
+                    <defs>
+                        <linearGradient id="markerBg" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#a7a7ad"/>
+                            <stop offset="55%" stop-color="#595960"/>
+                            <stop offset="100%" stop-color="#2f2f34"/>
+                        </linearGradient>
+                    </defs>
+                    <rect x="2" y="2" width="60" height="60" rx="18" fill="url(#markerBg)"/>
+                    <rect x="2.5" y="2.5" width="59" height="59" rx="17.5" fill="none" stroke="rgba(255,255,255,0.14)" stroke-width="1"/>
+                `;
+
+            const svg = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="${normalizedStatus === 'online' ? 'Online' : 'Offline'} screen">
+                    <filter id="markerShadow" x="-20%" y="-20%" width="140%" height="140%">
+                        <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#0f172a" flood-opacity="0.22"/>
+                    </filter>
+                    <g filter="url(#markerShadow)">
+                        ${background}
+                        <text x="32" y="43" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="28" font-weight="800" fill="#ffffff">ea</text>
+                    </g>
+                </svg>
+            `.trim();
+
+            dashboardMarkerIconCache[normalizedStatus] = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+            return dashboardMarkerIconCache[normalizedStatus];
+        }
+
+        function getDashboardGoogleMarkerIcon(status) {
+            return {
+                url: getDashboardMarkerIconUrl(status),
+                scaledSize: new google.maps.Size(30, 30),
+                anchor: new google.maps.Point(15, 15),
+            };
+        }
+
+        function clearDashboardOverviewMarkers() {
+            if (dashboardOverviewUsesGoogleMaps()) {
+                dashboardOverviewMarkers.forEach((marker) => {
+                    try { marker.setMap(null); } catch {}
+                });
+                dashboardOverviewMarkers = [];
+                return;
+            }
+
+            if (dashboardOverviewLayer) {
+                dashboardOverviewLayer.clearLayers();
+            }
+        }
+
+        function getCurrentStoreScreenCount(storeId) {
+            const screensData = (allStoresData && allStoresData.screens && allStoresData.screens[storeId]) || {};
+            if (!screensData || typeof screensData !== 'object') {
+                return 0;
+            }
+            return Object.keys(screensData).length;
+        }
+
+        function getCurrentStoreName(storeId) {
+            const store = (allStoresData.stores || []).find((item) => item.id === storeId);
+            return store ? store.name : 'No store selected';
+        }
+
+        function updateDashboardOverviewStats() {
+            const totalStores = Array.isArray(allStoresData.stores) ? allStoresData.stores.length : 0;
+            const currentStoreScreens = currentStoreId ? getCurrentStoreScreenCount(currentStoreId) : 0;
+            const mappedScreens = dashboardOverviewDevices.length;
+            const onlineMapped = dashboardOverviewDevices.filter((device) => String(device.status || '').toLowerCase() === 'online').length;
+
+            const totalStoresEl = document.getElementById('overviewTotalStores');
+            const currentScreensEl = document.getElementById('overviewCurrentScreens');
+            const mappedScreensEl = document.getElementById('overviewMappedScreens');
+            const onlineMappedEl = document.getElementById('overviewOnlineMapped');
+            const currentStoreNameEl = document.getElementById('overviewCurrentStoreName');
+
+            if (totalStoresEl) totalStoresEl.textContent = String(totalStores);
+            if (currentScreensEl) currentScreensEl.textContent = String(currentStoreScreens);
+            if (mappedScreensEl) mappedScreensEl.textContent = String(mappedScreens);
+            if (onlineMappedEl) onlineMappedEl.textContent = String(onlineMapped);
+            if (currentStoreNameEl) currentStoreNameEl.textContent = currentStoreId ? getCurrentStoreName(currentStoreId) : 'No store selected';
+        }
+
+        function ensureDashboardOverviewMap() {
+            if (dashboardOverviewMap) {
+                return;
+            }
+
+            const mapNode = document.getElementById('dashboardMap');
+            if (!mapNode) {
+                return;
+            }
+
+            if (dashboardOverviewGoogleMapsAvailable()) {
+                dashboardOverviewMap = new google.maps.Map(mapNode, {
+                    center: { lat: 20, lng: 0 },
+                    zoom: 2,
+                    clickableIcons: false,
+                    fullscreenControl: true,
+                    gestureHandling: 'greedy',
+                    keyboardShortcuts: true,
+                    mapTypeControl: false,
+                    streetViewControl: false,
+                    zoomControl: true,
+                });
+                dashboardOverviewInfoWindow = new google.maps.InfoWindow();
+                return;
+            }
+
+            if (typeof L === 'undefined') {
+                return;
+            }
+
+            dashboardOverviewMap = L.map(mapNode, {
+                zoomControl: true,
+                scrollWheelZoom: true
+            }).setView([20, 0], 2);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                maxZoom: 19
+            }).addTo(dashboardOverviewMap);
+
+            dashboardOverviewLayer = L.layerGroup().addTo(dashboardOverviewMap);
+            setTimeout(() => {
+                try { dashboardOverviewMap.invalidateSize(); } catch {}
+            }, 120);
+        }
+
+        function renderDashboardOverviewMap() {
+            const emptyEl = document.getElementById('dashboardMapEmpty');
+            const summaryEl = document.getElementById('dashboardMapSummary');
+            const currentStoreMapped = currentStoreId
+                ? dashboardOverviewDevices.filter((device) => String(device.store_id) === String(currentStoreId)).length
+                : 0;
+            const currentStoreName = currentStoreId ? getCurrentStoreName(currentStoreId) : '';
+
+            if (summaryEl) {
+                if (!dashboardOverviewDevices.length) {
+                    summaryEl.textContent = 'World map ready';
+                } else if (currentStoreId) {
+                    summaryEl.textContent = `${currentStoreMapped} mapped in ${currentStoreName}`;
+                } else {
+                    summaryEl.textContent = `${dashboardOverviewDevices.length} mapped screens`;
+                }
+            }
+
+            if (!dashboardOverviewDevices.length) {
+                if (emptyEl) {
+                    emptyEl.textContent = 'No mapped screens yet. You can still pan and zoom the world map like Yodeck, then add screen coordinates from Pi Manager when ready.';
+                    emptyEl.hidden = false;
+                }
+                clearDashboardOverviewMarkers();
+                if (dashboardOverviewMap) {
+                    if (dashboardOverviewUsesGoogleMaps()) {
+                        dashboardOverviewMap.setCenter({ lat: 20, lng: 0 });
+                        dashboardOverviewMap.setZoom(2);
+                    } else {
+                        dashboardOverviewMap.setView([20, 0], 2);
+                    }
+                }
+                return;
+            }
+
+            ensureDashboardOverviewMap();
+            if (!dashboardOverviewMap) {
+                return;
+            }
+
+            if (emptyEl) {
+                if (currentStoreId && currentStoreMapped === 0) {
+                    emptyEl.textContent = `No mapped screens in ${currentStoreName} yet. Showing the full account map.`;
+                    emptyEl.hidden = false;
+                } else {
+                    emptyEl.hidden = true;
+                }
+            }
+
+            if (dashboardOverviewUsesGoogleMaps()) {
+                clearDashboardOverviewMarkers();
+
+                const bounds = new google.maps.LatLngBounds();
+                dashboardOverviewDevices.forEach((device) => {
+                    const lat = Number(device.latitude);
+                    const lng = Number(device.longitude);
+                    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+                        return;
+                    }
+
+                    const status = String(device.status || '').toLowerCase() === 'online' ? 'online' : 'offline';
+                    const marker = new google.maps.Marker({
+                        map: dashboardOverviewMap,
+                        position: { lat, lng },
+                        title: String(device.screen_name || device.screen_id || 'Screen'),
+                        icon: getDashboardGoogleMarkerIcon(status),
+                    });
+
+                    marker.addListener('click', () => {
+                        if (!dashboardOverviewInfoWindow) {
+                            return;
+                        }
+                        dashboardOverviewInfoWindow.setContent(
+                            `<strong>${escapeHtml(device.store_name || device.store_id || 'Store')}</strong><br>` +
+                            `${escapeHtml(device.screen_name || device.screen_id || 'Screen')}<br>` +
+                            `${escapeHtml(device.location_label || device.address || 'Mapped location')}<br>` +
+                            `Status: ${status === 'online' ? 'Online' : 'Offline'}`
+                        );
+                        dashboardOverviewInfoWindow.open({ anchor: marker, map: dashboardOverviewMap });
+                    });
+
+                    dashboardOverviewMarkers.push(marker);
+                    bounds.extend({ lat, lng });
+                });
+
+                if (!bounds.isEmpty()) {
+                    dashboardOverviewMap.fitBounds(bounds, 30);
+                    google.maps.event.addListenerOnce(dashboardOverviewMap, 'bounds_changed', () => {
+                        if (dashboardOverviewMap.getZoom() > 12) {
+                            dashboardOverviewMap.setZoom(12);
+                        }
+                    });
+                }
+                return;
+            }
+
+            if (!dashboardOverviewLayer) {
+                return;
+            }
+
+            dashboardOverviewLayer.clearLayers();
+
+            const bounds = [];
+            dashboardOverviewDevices.forEach((device) => {
+                const lat = Number(device.latitude);
+                const lng = Number(device.longitude);
+                if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+                    return;
+                }
+
+                const status = String(device.status || '').toLowerCase() === 'online' ? 'online' : 'offline';
+                const marker = L.marker([lat, lng], {
+                    icon: L.divIcon({
+                        className: '',
+                        html: `<img class="dashboard-map-marker" src="${getDashboardMarkerIconUrl(status)}" alt="${status === 'online' ? 'Online' : 'Offline'} screen">`,
+                        iconSize: [30, 30],
+                        iconAnchor: [15, 15]
+                    })
+                });
+
+                marker.bindPopup(
+                    `<strong>${escapeHtml(device.store_name || device.store_id || 'Store')}</strong><br>` +
+                    `${escapeHtml(device.screen_name || device.screen_id || 'Screen')}<br>` +
+                    `${escapeHtml(device.location_label || device.address || 'Mapped location')}<br>` +
+                    `Status: ${status === 'online' ? 'Online' : 'Offline'}`
+                );
+
+                marker.addTo(dashboardOverviewLayer);
+                bounds.push([lat, lng]);
+            });
+
+            if (bounds.length) {
+                dashboardOverviewMap.fitBounds(bounds, { padding: [30, 30], maxZoom: 12 });
+            }
+        }
+
+        function renderDashboardOverviewList() {
+            const listEl = document.getElementById('dashboardLocationList');
+            const summaryEl = document.getElementById('dashboardLocationFeedSummary');
+            if (!listEl) {
+                return;
+            }
+
+            const devices = dashboardOverviewDevices.slice().sort((left, right) => {
+                const leftCurrent = String(left.store_id) === String(currentStoreId) ? 0 : 1;
+                const rightCurrent = String(right.store_id) === String(currentStoreId) ? 0 : 1;
+                if (leftCurrent !== rightCurrent) {
+                    return leftCurrent - rightCurrent;
+                }
+
+                const leftOnline = String(left.status || '').toLowerCase() === 'online' ? 0 : 1;
+                const rightOnline = String(right.status || '').toLowerCase() === 'online' ? 0 : 1;
+                if (leftOnline !== rightOnline) {
+                    return leftOnline - rightOnline;
+                }
+
+                return String(left.store_name || left.store_id || '').localeCompare(String(right.store_name || right.store_id || ''));
+            });
+
+            if (summaryEl) {
+                summaryEl.textContent = `${devices.length} location${devices.length === 1 ? '' : 's'}`;
+            }
+
+            if (!devices.length) {
+                listEl.innerHTML = '<div class="dashboard-location-empty">No mapped screens are available yet. Use the Pi manager to assign coordinates to a device and it will appear here.</div>';
+                return;
+            }
+
+            listEl.innerHTML = devices.slice(0, 6).map((device) => {
+                const status = String(device.status || '').toLowerCase() === 'online' ? 'online' : 'offline';
+                const locationText = device.location_label || 'Mapped screen location';
+                const addressText = device.address || 'No address saved';
+                return `
+                    <article class="dashboard-location-item">
+                        <div class="dashboard-location-item__top">
+                            <div>
+                                <div class="dashboard-location-item__store">${escapeHtml(device.store_name || device.store_id || 'Store')}</div>
+                                <span class="dashboard-location-item__screen">${escapeHtml(device.screen_name || device.screen_id || 'Screen')}</span>
+                            </div>
+                            <span class="dashboard-location-item__status ${status}">${status}</span>
+                        </div>
+                        <div class="dashboard-location-item__location">${escapeHtml(locationText)}</div>
+                        <div class="dashboard-location-item__address">${escapeHtml(addressText)}</div>
+                    </article>
+                `;
+            }).join('');
+        }
+
+        function refreshDashboardOverview() {
+            updateDashboardOverviewStats();
+            renderDashboardOverviewList();
+            renderDashboardOverviewMap();
+        }
+
+        async function loadDashboardOverviewLocations() {
+            try {
+                const response = await fetch(`/api/pi-map-locations?t=${Date.now()}`, {
+                    headers: { 'Cache-Control': 'no-cache' }
+                });
+                const payload = await response.json();
+                dashboardOverviewDevices = payload && payload.success && Array.isArray(payload.devices)
+                    ? payload.devices
+                    : [];
+            } catch (error) {
+                console.warn('Failed to load dashboard map locations', error);
+                dashboardOverviewDevices = [];
+            }
+
+            refreshDashboardOverview();
+        }
+
+        function initializeDashboardOverview() {
+            ensureDashboardOverviewMap();
+            refreshDashboardOverview();
+            loadDashboardOverviewLocations();
+        }
+
         console.log('Master store ID:', allStoresData.master_store_id);
         console.log('Available stores:', allStoresData.stores.map(s => s.id + ' - ' + s.name));
         
@@ -3636,13 +5200,17 @@ allowfullscreen></iframe></div>`;
         function openStoreGroupsManager(){
             console.log('🏪 Opening Store Groups Manager');
             console.log('📋 Current allStoresData.store_groups:', allStoresData.store_groups);
-            document.getElementById('storeGroupsModal').style.display = 'flex';
+            const modal = document.getElementById('storeGroupsModal');
+            modal.classList.toggle('dashboard-side-sheet', isDesktopSidebarLayout());
+            modal.style.display = 'flex';
             renderStoreGroups();
             toggleDrawer(false);
         }
         
         function closeStoreGroupsManager(){
-            document.getElementById('storeGroupsModal').style.display = 'none';
+            const modal = document.getElementById('storeGroupsModal');
+            modal.style.display = 'none';
+            modal.classList.remove('dashboard-side-sheet');
         }
         
         function createStoreGroup(){
@@ -3740,29 +5308,29 @@ allowfullscreen></iframe></div>`;
                 const storeCount = (group.store_ids || []).length;
                 
                 return `
-                    <div data-group-id="${group.id}" style="border:1px solid #ddd; border-radius:8px; padding:0; background:#fff; overflow:hidden;">
+                    <div data-group-id="${group.id}" style="width:100%; box-sizing:border-box; border:1px solid #ddd; border-radius:8px; padding:0; background:#fff; overflow:hidden;">
                         
                         <!-- Group Header -->
-                        <div style="background:#f8f9fa; padding:16px 18px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #e0e0e0;">
-                            <div style="display:flex; align-items:center; gap:12px; flex:1;">
+                        <div style="background:#f8f9fa; padding:16px 18px; display:flex; flex-direction:column; align-items:stretch; gap:12px; border-bottom:1px solid #e0e0e0; box-sizing:border-box;">
+                            <div style="display:flex; align-items:center; gap:12px; min-width:0;">
                                 <button class="btn" onclick="toggleGroupExpand('${group.id}')" title="Expand/Collapse" 
                                     style="padding:6px 10px; font-size:16px; line-height:1; min-width:32px; background:#fff; border:1px solid #ccc; border-radius:6px;">
                                     <span id="toggle-icon-${group.id}">+</span>
                                 </button>
-                                <div style="flex:1;">
+                                <div style="flex:1; min-width:0;">
                                     <div style="font-size:16px; font-weight:600; color:#333;">${group.name}</div>
                                     <div class="group-store-count" style="font-size:13px; color:#666; margin-top:3px;">
                                         ${storeCount} store${storeCount !== 1 ? 's' : ''}
                                     </div>
                                 </div>
                             </div>
-                            <div style="display:flex; gap:8px;">
+                            <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-start; padding-left:44px;">
                                 <button class="btn" onclick="renameStoreGroup('${group.id}')" 
-                                    style="padding:7px 14px; font-size:13px; background:#fff; border:1px solid #ccc;">
+                                    style="padding:7px 14px; font-size:13px; background:#fff; border:1px solid #ccc; white-space:nowrap;">
                                     Rename
                                 </button>
                                 <button class="btn" onclick="deleteStoreGroup('${group.id}')" 
-                                    style="padding:7px 14px; font-size:13px; background:#fff; border:1px solid #dc3545; color:#dc3545;">
+                                    style="padding:7px 14px; font-size:13px; background:#fff; border:1px solid #dc3545; color:#dc3545; white-space:nowrap;">
                                     Delete
                                 </button>
                             </div>
@@ -5070,7 +6638,7 @@ allowfullscreen></iframe></div>`;
                                                                                             ${isMasterStore(currentStoreId) ? `<label style='display:inline-flex;align-items:center;gap:8px;margin-left:8px;font-size:15px;font-weight:500;color:#1d1d1f;cursor:pointer;'><input type='checkbox' data-bind='apply-select' data-item-id='${item.id}' style='width:18px;height:18px;cursor:pointer;'><span>tick</span></label>` : ''}\
                                                                                         </div>\
                                                                                         <div class="group center combo-dur-del">\
-                                                                                            ${item && item.sync_ref && item.sync_ref.role==='follower' && idx===0 ? '<div style="font-size:12px;color:#666;">Duration (sync)</div>' : `<div class=\"dur-box small\"><button class=\"pl-icon-btn dur-btn\" onclick=\"adjustDuration('${screenId}','${item.id}',-1, event)\" aria-label=\"Decrease duration\">−</button><div class=\"dur-display\" id=\"durdisp-${screenId}-${item.id}\">${(item.duration||5)}s</div><button class=\"pl-icon-btn dur-btn\" onclick=\"adjustDuration('${screenId}','${item.id}',1, event)\" aria-label=\"Increase duration\">+</button></div><input id=\"dur-${screenId}-${item.id}\" type=\"hidden\" value=\"${item.duration || 5}\">`}
+                                                                                            ${item && item.sync_ref && item.sync_ref.role==='follower' && idx===0 ? '<div style="font-size:12px;color:#666;">Duration (sync)</div>' : `<div class=\"dur-box small\"><button class=\"pl-icon-btn dur-btn\" onclick=\"adjustDuration('${screenId}','${item.id}',-1, event)\" aria-label=\"Decrease duration\">−</button><input class=\"dur-input\" id=\"dur-${screenId}-${item.id}\" type=\"number\" min=\"1\" step=\"1\" value=\"${item.duration || 5}\" data-prev=\"${item.duration || 5}\" aria-label=\"Duration in seconds\" title=\"Type seconds, then press Enter\" onchange=\"commitDurationInput('${screenId}','${item.id}', event)\" onkeydown=\"handleDurationKeydown('${screenId}','${item.id}', event)\"><span class=\"dur-unit\">s</span><button class=\"pl-icon-btn dur-btn\" onclick=\"adjustDuration('${screenId}','${item.id}',1, event)\" aria-label=\"Increase duration\">+</button></div>`}
                                                                                         </div>\
                                                                                         <div class="group right">\
                                                                                             ${failed ? `<button class=\"delete-pill tiny\" style=\"background:#d35400;border-color:#d35400\" onclick=\"retryItemOnTV('${screenId}','${item.id}',${JSON.stringify(item.file || '')})\">Retry on TV</button>` : ''}
@@ -5313,10 +6881,10 @@ allowfullscreen></iframe></div>`;
                                 <div class="group center combo-dur-del">\
                                     <div class="dur-box small">
                                         <button class="pl-icon-btn dur-btn" onclick="adjustDuration('${screenId}','${item.id}',-1, event)" aria-label="Decrease duration">−</button>
-                                        <div class="dur-display" id="durdisp-${screenId}-${item.id}">${(item.duration||5)}s</div>
+                                        <input class="dur-input" id="dur-${screenId}-${item.id}" type="number" min="1" step="1" value="${item.duration || 5}" data-prev="${item.duration || 5}" aria-label="Duration in seconds" title="Type seconds, then press Enter" onchange="commitDurationInput('${screenId}','${item.id}', event)" onkeydown="handleDurationKeydown('${screenId}','${item.id}', event)">
+                                        <span class="dur-unit">s</span>
                                         <button class="pl-icon-btn dur-btn" onclick="adjustDuration('${screenId}','${item.id}',1, event)" aria-label="Increase duration">+</button>
                                     </div>
-                                    <input id="dur-${screenId}-${item.id}" type="hidden" value="${item.duration || 5}">
                                 </div>\
                                 <div class="group right">\
                                     <button class="delete-pill tiny" onclick="deleteScheduleWindow('${screenId}','${item.id}',${idx})">Delete</button>
@@ -5718,28 +7286,68 @@ allowfullscreen></iframe></div>`;
         }
 
         // --- Duration controls (+/−) ---
+    function getDurationInput(screenId, itemId, ev){
+            let root = null;
+            if(ev && ev.target){ root = ev.target.closest('.pl-actions.inline-actions'); }
+            return root ? root.querySelector(`#dur-${CSS.escape(screenId)}-${CSS.escape(itemId)}`) : document.getElementById(`dur-${screenId}-${itemId}`);
+        }
+
+        function normalizeDurationValue(value, fallback){
+            const parsed = parseInt(value, 10);
+            if(Number.isNaN(parsed)) return Math.max(1, parseInt(fallback, 10) || 1);
+            return Math.max(1, parsed);
+        }
+
+        function persistDurationValue(screenId, itemId, input, next, previous){
+            fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}` ,{
+                method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ duration: next })
+            }).then(r=>r.json()).then(d=>{
+                if(!d.success){
+                    alert('Failed to update duration');
+                    if(input){ input.value = String(previous); input.dataset.prev = String(previous); }
+                    return;
+                }
+                if(input){ input.value = String(next); input.dataset.prev = String(next); }
+            }).catch(()=>{
+                alert('Network error updating duration');
+                if(input){ input.value = String(previous); input.dataset.prev = String(previous); }
+            });
+        }
+
     function adjustDuration(screenId, itemId, delta, ev){
             try{
-        // Prefer scoping to the clicked action row to avoid collisions in extra windows
-        let root = null;
-        if(ev && ev.target){ root = ev.target.closest('.pl-actions.inline-actions'); }
-        const input = root ? root.querySelector(`#dur-${CSS.escape(screenId)}-${CSS.escape(itemId)}`) : document.getElementById(`dur-${screenId}-${itemId}`);
-        const disp  = root ? root.querySelector(`#durdisp-${CSS.escape(screenId)}-${CSS.escape(itemId)}`) : document.getElementById(`durdisp-${screenId}-${itemId}`);
-                let cur = 0;
-                if(input){ const v = parseInt(input.value,10); cur = isNaN(v)? 0 : v; }
-                let next = cur + (parseInt(delta,10)||0);
-                if(next < 1) next = 1; // min 1s
-                if(next > 120) next = 120; // cap at 120s for safety
+                const input = getDurationInput(screenId, itemId, ev);
+                const cur = normalizeDurationValue(input ? input.value : 1, input && input.dataset ? input.dataset.prev : 1);
+                const next = Math.max(1, cur + (parseInt(delta,10)||0));
                 if(input) input.value = String(next);
-                if(disp)  disp.textContent = `${next}s`;
-                fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}`,{
-                    method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ duration: next })
-                }).then(r=>r.json()).then(d=>{
-                    if(!d.success){ alert('Failed to update duration'); if(input){ input.value=String(cur); } if(disp){ disp.textContent=`${cur}s`; } }
-                }).catch(()=>{
-                    alert('Network error updating duration'); if(input){ input.value=String(cur); } if(disp){ disp.textContent=`${cur}s`; }
-                });
+                persistDurationValue(screenId, itemId, input, next, cur);
             }catch(e){ console.error('adjustDuration error', e); }
+        }
+
+        function commitDurationInput(screenId, itemId, ev){
+            try{
+                const input = getDurationInput(screenId, itemId, ev);
+                if(!input) return;
+                const previous = normalizeDurationValue(input.dataset.prev, input.defaultValue || 1);
+                const next = normalizeDurationValue(input.value, previous);
+                input.value = String(next);
+                if(next === previous) return;
+                persistDurationValue(screenId, itemId, input, next, previous);
+            }catch(e){ console.error('commitDurationInput error', e); }
+        }
+
+        function handleDurationKeydown(screenId, itemId, ev){
+            if(!ev) return;
+            if(ev.key === 'Enter'){
+                ev.preventDefault();
+                ev.target.blur();
+            } else if(ev.key === 'Escape'){
+                const input = getDurationInput(screenId, itemId, ev);
+                if(!input) return;
+                input.value = String(normalizeDurationValue(input.dataset.prev, input.defaultValue || 1));
+                ev.preventDefault();
+                ev.target.blur();
+            }
         }
 
         function deletePlaylistItem(screenId, itemId) {
@@ -5778,6 +7386,7 @@ allowfullscreen></iframe></div>`;
         };
         
         function initializeDashboard() {
+            initializeDashboardSection();
             // Initialize the store dropdown to match currentStoreId
             const storeSelect = document.getElementById('storeSelect');
             storeSelect.value = currentStoreId;
@@ -5788,6 +7397,8 @@ allowfullscreen></iframe></div>`;
                 document.getElementById('current-store-id').textContent = storeData.id;
                 document.getElementById('current-store-name').textContent = storeData.name;
             }
+
+            initializeDashboardOverview();
 
             // Check phone verification status and show popup if needed
             setTimeout(() => {
@@ -6214,6 +7825,48 @@ allowfullscreen></iframe></div>`;
         }
 
                 // ---- Replace modal logic ----
+                let rpResizeState = null;
+                function startRpResize(ev, mode){
+                    const modal = ev && ev.target && ev.target.closest ? ev.target.closest('.rp-modal') : null;
+                    if(!modal) return;
+                    ev.preventDefault();
+                    const rect = modal.getBoundingClientRect();
+                    rpResizeState = {
+                        modal,
+                        mode: mode || 'corner',
+                        startX: ev.clientX,
+                        startY: ev.clientY,
+                        startWidth: rect.width,
+                        startHeight: rect.height,
+                    };
+                    document.body.style.userSelect = 'none';
+                    window.addEventListener('pointermove', onRpResizeMove);
+                    window.addEventListener('pointerup', stopRpResize);
+                    window.addEventListener('pointercancel', stopRpResize);
+                }
+                function onRpResizeMove(ev){
+                    if(!rpResizeState) return;
+                    const maxWidth = Math.min(window.innerWidth - 24, 1280);
+                    const maxHeight = window.innerHeight - 24;
+                    const widthDelta = rpResizeState.mode === 'left'
+                        ? (rpResizeState.startX - ev.clientX)
+                        : (ev.clientX - rpResizeState.startX);
+                    const nextWidth = Math.max(560, Math.min(maxWidth, rpResizeState.startWidth + widthDelta));
+                    const nextHeight = rpResizeState.mode === 'left'
+                        ? rpResizeState.startHeight
+                        : Math.max(420, Math.min(maxHeight, rpResizeState.startHeight + (ev.clientY - rpResizeState.startY)));
+                    rpResizeState.modal.style.width = nextWidth + 'px';
+                    rpResizeState.modal.style.height = nextHeight + 'px';
+                }
+                function stopRpResize(){
+                    if(!rpResizeState) return;
+                    rpResizeState = null;
+                    document.body.style.userSelect = '';
+                    window.removeEventListener('pointermove', onRpResizeMove);
+                    window.removeEventListener('pointerup', stopRpResize);
+                    window.removeEventListener('pointercancel', stopRpResize);
+                }
+                window.startRpResize = startRpResize;
                 function ensureReplaceModal(){
                         if(document.getElementById('rp-overlay')) return;
                         const ov = document.createElement('div'); ov.id='rp-overlay'; ov.className='rp-overlay';
@@ -6223,6 +7876,7 @@ allowfullscreen></iframe></div>`;
                                     <div class="rp-title">Replace Playlist Item</div>
                                     <button class="rp-close" onclick="closeReplaceModal()">×</button>
                                 </div>
+                                <div class="rp-resizer-left" onpointerdown="startRpResize(event, 'left')" aria-hidden="true"></div>
                                 <div class="rp-tabs">
                                     <div class="rp-tab active" id="rp-tab-lib" onclick="switchRpTab('lib')">Choose Existing</div>
                                     <div class="rp-tab" id="rp-tab-upload" onclick="switchRpTab('upload')">Upload New</div>
@@ -6269,6 +7923,7 @@ allowfullscreen></iframe></div>`;
                                 <div class="rp-actions">
                                     <button class="btn" onclick="closeReplaceModal()">Close</button>
                                 </div>
+                                <div class="rp-resizer" onpointerdown="startRpResize(event, 'corner')" aria-hidden="true"></div>
                             </div>`;
                         document.body.appendChild(ov);
                 }
@@ -6294,7 +7949,7 @@ allowfullscreen></iframe></div>`;
                     resetRpUploadUI();
                     renderRpBreadcrumb(); refreshLibrary();
                 }
-                function closeReplaceModal(){ const ov=document.getElementById('rp-overlay'); if(ov) ov.style.display='none'; rpCtx=null; resetRpUploadUI(); }
+                function closeReplaceModal(){ const ov=document.getElementById('rp-overlay'); if(ov){ ov.style.display='none'; ov.classList.remove('dashboard-side-sheet'); } rpCtx=null; resetRpUploadUI(); }
                 function switchRpTab(which){ const lib=document.getElementById('rp-view-lib'); const up=document.getElementById('rp-view-upload'); const t1=document.getElementById('rp-tab-lib'); const t2=document.getElementById('rp-tab-upload'); const isLib=which==='lib'; lib.style.display=isLib?'block':'none'; up.style.display=isLib?'none':'block'; t1.classList.toggle('active',isLib); t2.classList.toggle('active',!isLib); }
                                 function renderRpBreadcrumb(){
                                         const cont = document.getElementById('rp-view-lib');
@@ -7554,6 +9209,8 @@ allowfullscreen></iframe></div>`;
                 
                 console.log('Updated store display to:', storeData.id, storeData.name);
             }
+
+            refreshDashboardOverview();
             
             // Reload screens for the selected store
             loadScreensForStore(storeId);
@@ -7597,6 +9254,7 @@ allowfullscreen></iframe></div>`;
                 console.log('[SYNC][DEFENSIVE] Remapped legacy array to map with keys:', Object.keys(remap));
             }
             console.log('Screens data for store', storeId, ':', screensData);
+            refreshDashboardOverview();
             
             const screensGrid = document.getElementById('screens-grid');
             const promosGrid = document.getElementById('promos-grid');
@@ -7743,16 +9401,9 @@ allowfullscreen></iframe></div>`;
         
         function showAddStoreDialog() {
             const modal = document.getElementById('addStoreModal');
+            modal.classList.toggle('dashboard-side-sheet', isDesktopSidebarLayout());
             modal.classList.add('visible');
-            // default to single tab
-            const singleTab = document.getElementById('addStoreTabSingle');
-            const bulkTab = document.getElementById('addStoreTabBulk');
-            if (singleTab && bulkTab) {
-                singleTab.classList.add('active');
-                bulkTab.classList.remove('active');
-                document.getElementById('addStorePaneSingle').style.display = 'block';
-                document.getElementById('addStorePaneBulk').style.display = 'none';
-            }
+            setAddStoreTab('single');
             // focus first field after animation frame
             requestAnimationFrame(() => {
                 const first = document.getElementById('newStoreId');
@@ -7760,9 +9411,22 @@ allowfullscreen></iframe></div>`;
             });
         }
 
+        function setAddStoreTab(mode) {
+            const singleTab = document.getElementById('addStoreTabSingle');
+            const bulkTab = document.getElementById('addStoreTabBulk');
+            const singlePane = document.getElementById('addStorePaneSingle');
+            const bulkPane = document.getElementById('addStorePaneBulk');
+            const isBulk = mode === 'bulk';
+            if (singleTab) singleTab.classList.toggle('active', !isBulk);
+            if (bulkTab) bulkTab.classList.toggle('active', isBulk);
+            if (singlePane) singlePane.style.display = isBulk ? 'none' : 'block';
+            if (bulkPane) bulkPane.style.display = isBulk ? 'block' : 'none';
+        }
+
         function closeAddStoreDialog() {
             const modal = document.getElementById('addStoreModal');
             modal.classList.remove('visible');
+            modal.classList.remove('dashboard-side-sheet');
             document.getElementById('addStoreForm').reset();
         }
         
@@ -8692,63 +10356,67 @@ allowfullscreen></iframe></div>`;
     <!-- Add Store Modal -->
     <div id="addStoreModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="addStoreTitle" aria-describedby="addStoreDesc">
         <div class="modal-content" role="document">
-            <div class="modal-header">
-                <h3 id="addStoreTitle">Add Store(s)</h3>
-                <button type="button" class="close" aria-label="Close" onclick="closeAddStoreDialog()" title="Close">&times;</button>
-            </div>
-            <div style="padding: 0 18px 10px; display:flex; gap:8px;">
-                <button id="addStoreTabSingle" class="tab active" type="button" style="padding:6px 10px; border-radius:8px; border:1px solid #dcdfe3; background:#0d6efd; color:#fff; font-weight:600;" onclick="document.getElementById('addStorePaneSingle').style.display='block'; document.getElementById('addStorePaneBulk').style.display='none'; this.classList.add('active'); document.getElementById('addStoreTabBulk').classList.remove('active');">Single</button>
-                <button id="addStoreTabBulk" class="tab" type="button" style="padding:6px 10px; border-radius:8px; border:1px solid #dcdfe3; background:#fff; color:#1d1d1f; font-weight:600;" onclick="document.getElementById('addStorePaneSingle').style.display='none'; document.getElementById('addStorePaneBulk').style.display='block'; this.classList.add('active'); document.getElementById('addStoreTabSingle').classList.remove('active');">Bulk</button>
-            </div>
+            <div class="add-store-shell">
+                <div class="modal-header">
+                    <h3 id="addStoreTitle">Add Store(s)</h3>
+                    <button type="button" class="close" aria-label="Close" onclick="closeAddStoreDialog()" title="Close">&times;</button>
+                </div>
+                <div class="add-store-intro">
+                    <p id="addStoreDesc" class="helper">Create a new store entry with a numeric ID and a friendly name.</p>
+                </div>
+                <div class="add-store-tabs">
+                    <button id="addStoreTabSingle" class="add-store-tab active" type="button" onclick="setAddStoreTab('single')">Single</button>
+                    <button id="addStoreTabBulk" class="add-store-tab" type="button" onclick="setAddStoreTab('bulk')">Bulk</button>
+                </div>
 
-            <div id="addStorePaneSingle" style="display:block;">
-                <form id="addStoreForm" onsubmit="event.preventDefault(); addNewStore();">
-                    <p id="addStoreDesc" class="helper" style="padding:0 18px;">Create a new store entry with a numeric ID and a friendly name.</p>
-                    <div class="form-group" style="padding: 0 18px;">
-                        <label for="newStoreId">Store ID</label>
-                        <input type="text" inputmode="numeric" pattern="[0-9]*" id="newStoreId" placeholder="e.g., 1882" required autofocus>
-                    </div>
-                    <div class="form-group" style="padding: 0 18px;">
-                        <label for="newStoreName">Store Name</label>
-                        <input type="text" id="newStoreName" placeholder="e.g., Liverpool Branch" required>
-                    </div>
-                    <div class="modal-buttons">
-                        <button type="button" class="btn-secondary" onclick="closeAddStoreDialog()">Cancel</button>
-                        <button type="submit" class="btn-primary">Add Store</button>
-                    </div>
-                </form>
-            </div>
+                <div id="addStorePaneSingle" style="display:block;">
+                    <form id="addStoreForm" onsubmit="event.preventDefault(); addNewStore();">
+                        <div class="form-group">
+                            <label for="newStoreId">Store ID</label>
+                            <input type="text" inputmode="numeric" pattern="[0-9]*" id="newStoreId" placeholder="e.g., 1882" required autofocus>
+                        </div>
+                        <div class="form-group">
+                            <label for="newStoreName">Store Name</label>
+                            <input type="text" id="newStoreName" placeholder="e.g., Liverpool Branch" required>
+                        </div>
+                        <div class="modal-buttons">
+                            <button type="button" class="btn-secondary" onclick="closeAddStoreDialog()">Cancel</button>
+                            <button type="submit" class="btn-primary">Add Store</button>
+                        </div>
+                    </form>
+                </div>
 
-            <div id="addStorePaneBulk" style="display:none; padding: 0 18px 18px;">
-                <p class="helper">Paste multiple stores, one per line. Format examples: "1882, Liverpool" or "1883\tManchester" or "2001 London West" (first token is ID; the rest is the name).</p>
-                <div class="form-group">
-                    <label for="bulkStores">Stores List</label>
-                    <textarea id="bulkStores" rows="8" style="width:100%; box-sizing:border-box; border-radius: 12px; border: 1px solid rgba(60,60,67,0.29); padding: 10px; font-size: 14px;" placeholder="1882, Liverpool
+                <div id="addStorePaneBulk" style="display:none;">
+                    <p class="helper">Paste multiple stores, one per line. Format examples: "1882, Liverpool" or "1883\tManchester" or "2001 London West" (first token is ID; the rest is the name).</p>
+                    <div class="form-group">
+                        <label for="bulkStores">Stores List</label>
+                        <textarea id="bulkStores" rows="8" style="width:100%; box-sizing:border-box; border-radius: 12px; border: 1px solid rgba(60,60,67,0.29); padding: 10px; font-size: 14px;" placeholder="1882, Liverpool
 1883, Manchester
 2001, London West"></textarea>
-                </div>
-                <div class="modal-buttons" style="padding: 10px 0 0;">
-                    <button type="button" class="btn-secondary" onclick="closeAddStoreDialog()">Cancel</button>
-                    <button type="button" class="btn-primary" onclick="addNewStoresBulk()">Add All</button>
+                    </div>
+                    <div class="modal-buttons" style="padding: 10px 0 0;">
+                        <button type="button" class="btn-secondary" onclick="closeAddStoreDialog()">Cancel</button>
+                        <button type="button" class="btn-primary" onclick="addNewStoresBulk()">Add All</button>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Store Groups Manager Modal -->
-    <div id="storeGroupsModal" class="modal" role="dialog" aria-modal="true">
-        <div class="modal-content" style="max-width: 900px;">
+    <div id="storeGroupsModal" class="modal" role="dialog" aria-modal="true" onclick="if(event.target === this) closeStoreGroupsManager()">
+        <div class="modal-content store-groups-shell" style="max-width: 900px;">
             <div class="modal-header">
                 <h3>🏪 Store Groups Manager</h3>
                 <button type="button" class="close" onclick="closeStoreGroupsManager()">&times;</button>
             </div>
-            <div style="padding:24px;">
-                <p style="color:#666; font-size:14px; margin-bottom:24px; padding:12px 16px; background:#f8f9fa; border-radius:8px; border-left:3px solid #0066cc;">
+            <div class="store-groups-body" style="padding:24px;">
+                <p class="store-groups-note" style="color:#666; font-size:14px; margin-bottom:24px;">
                     Create groups to organize stores by location, region, or category. Use groups for faster bulk operations.
                 </p>
                 
                 <!-- Create New Group Section -->
-                <div style="background:#fff; border:1px solid #ddd; border-radius:8px; padding:20px; margin-bottom:24px;">
+                <div class="store-groups-create" style="background:#fff; border:1px solid #ddd; border-radius:8px; padding:20px; margin-bottom:24px;">
                     <h4 style="margin:0 0 14px 0; font-size:15px; font-weight:600; color:#333;">➕ Create New Group</h4>
                     <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
                         <div style="flex:1; min-width:250px; max-width:450px;">
@@ -8770,6 +10438,10 @@ allowfullscreen></iframe></div>`;
                     <div id="groupsContainer" style="display:flex; flex-direction:column; gap:12px;">
                         <!-- Groups will be rendered here -->
                     </div>
+                </div>
+
+                <div class="store-groups-footer" style="display:flex; justify-content:flex-end; padding-top:20px; margin-top:24px; border-top:1px solid #e5e7eb;">
+                    <button type="button" class="btn-secondary" onclick="closeStoreGroupsManager()">Close</button>
                 </div>
             </div>
         </div>
@@ -8945,20 +10617,7 @@ allowfullscreen></iframe></div>`;
                 // Wait for page to fully load
                 setTimeout(() => {
                     console.log('🔧 Auto-opening Remote Pi Manager for Pi:', piId);
-                    openRemotePiManager();
-                    
-                    // Pre-fill the Pi ID
-                    const piIdInput = document.getElementById('piId');
-                    if (piIdInput) {
-                        piIdInput.value = piId;
-                        // Optionally auto-connect
-                        setTimeout(() => {
-                            const connectBtn = document.getElementById('connectPiBtn');
-                            if (connectBtn) {
-                                connectBtn.click();
-                            }
-                        }, 300);
-                    }
+                    openRemotePiManagerForPi(piId);
                     
                     // Clean up URL
                     const newUrl = window.location.pathname;

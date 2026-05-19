@@ -6,7 +6,11 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>EverydayAdvertise - The Most Advanced Digital Menu System</title>
+  <title>Everyday Advertise | Digital Menu Board Software</title>
+  <meta name="description" content="Everyday Advertise is digital menu board software for restaurants, cafes, bubble tea shops, burger shops and takeaway stores.">
+  <meta name="robots" content="index,follow">
+  <link rel="canonical" href="https://everydayadvertise.com/">
+  <meta property="og:url" content="https://everydayadvertise.com/">
   <link rel="icon" href="{{ url_for('static', filename='ea_logo_official.svg') }}" type="image/svg+xml">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -242,93 +246,344 @@
     
     .hero-video {
       justify-self: end;
-      border-radius: 20px;
-      overflow: hidden;
-      box-shadow: 0 25px 70px rgba(0, 0, 0, 0.2);
-      transition: transform 0.4s ease, box-shadow 0.4s ease;
+      border-radius: 0;
+      overflow: visible;
+      box-shadow: none;
+      transition: transform 0.4s ease;
       width: 100%;
-      max-width: 450px;
-      background: #000;
+      max-width: 700px;
+      background: transparent;
       border: none;
       position: relative;
+      isolation: isolate;
       margin-right: 0;
+      aspect-ratio: var(--hero-media-ratio, 16 / 10);
+    }
+
+    .hero-video::before,
+    .hero-video::after {
+      content: "";
+      position: absolute;
+      pointer-events: none;
+    }
+
+    .hero-video::before {
+      inset: 8% -6%;
+      z-index: -2;
+      border-radius: 36px;
+      background:
+        radial-gradient(circle at 18% 42%, rgba(37, 99, 235, 0.8), transparent 34%),
+        radial-gradient(circle at 78% 28%, rgba(20, 184, 166, 0.72), transparent 36%),
+        radial-gradient(circle at 58% 78%, rgba(244, 63, 94, 0.58), transparent 40%),
+        radial-gradient(circle at 48% 52%, rgba(251, 191, 36, 0.34), transparent 42%);
+      filter: blur(26px);
+      opacity: 1;
+      transform: scale(1);
+      animation: hero-aura-drift 6.4s ease-in-out infinite alternate;
+    }
+
+    .hero-video::after {
+      inset: 8% -10%;
+      z-index: -1;
+      border-radius: 40px;
+      background: linear-gradient(
+        115deg,
+        transparent 14%,
+        rgba(255, 255, 255, 0.2) 24%,
+        rgba(59, 130, 246, 0.7) 38%,
+        rgba(34, 197, 94, 0.52) 50%,
+        rgba(250, 204, 21, 0.46) 62%,
+        rgba(244, 63, 94, 0.3) 72%,
+        transparent 84%
+      );
+      filter: blur(16px);
+      opacity: 1;
+      transform: translateX(-36%) skewX(-14deg);
+      animation: hero-color-sweep 3.9s ease-in-out infinite;
+    }
+
+    .hero-video.size-medium {
+      max-width: 520px;
+    }
+
+    .hero-video.size-large {
+      max-width: 700px;
+    }
+
+    .hero-video.size-xlarge {
+      max-width: 840px;
     }
     
-    /* Device mock with inset previews */
-    .device-mock {
+    .hero-video.shape-landscape {
+      --hero-media-ratio: 16 / 10;
+    }
+
+    .hero-video.shape-square {
+      --hero-media-ratio: 1 / 1;
+    }
+
+    .hero-video.shape-portrait {
+      --hero-media-ratio: 4 / 5;
+    }
+    
+    .hero-video img,
+    .hero-video video {
       position: relative;
-      aspect-ratio: 1 / 1;
-      border-radius: 16px;
-      overflow: hidden;
-      box-shadow: 0 20px 60px rgba(0,0,0,.2);
-      background: #000;
-      border: none;
-    }
-    
-    .device-mock .device-bg {
-      position: absolute;
-      inset: 0;
-    }
-    
-    .device-mock .device-bg img,
-    .device-mock .device-bg video {
-      position: absolute;
-      inset: 0;
+      z-index: 1;
       width: 100%;
       height: 100%;
-      object-fit: cover;
+      object-fit: var(--hero-media-fit, cover);
       display: block;
-    }
-    
-    .device-mock .inset-row {
-      position: absolute;
-      top: 16px;
-      left: 16px;
-      right: 16px;
-      height: 24%;
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-      z-index: 2;
-    }
-    
-    .device-mock .inset {
-      position: relative;
-      border-radius: 10px;
-      overflow: hidden;
-      box-shadow: 0 8px 24px rgba(0,0,0,.4);
-      border: 2px solid rgba(255,255,255,.3);
-      background: #000;
-    }
-    
-    .device-mock .inset video,
-    .device-mock .inset img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
+      background: transparent;
     }
     
     .hero-video:hover {
       transform: scale(1.02) translateY(-4px);
-      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.3);
+    }
+
+    @keyframes hero-aura-drift {
+      0% {
+        transform: translate3d(-2%, -1%, 0) scale(0.98);
+        opacity: 0.9;
+      }
+      50% {
+        transform: translate3d(1%, 3%, 0) scale(1.05);
+        opacity: 0.98;
+      }
+      100% {
+        transform: translate3d(3%, -2%, 0) scale(1.08);
+        opacity: 0.94;
+      }
+    }
+
+    @keyframes hero-color-sweep {
+      0% {
+        transform: translateX(-42%) skewX(-14deg);
+        opacity: 0.26;
+      }
+      20% {
+        opacity: 0.92;
+      }
+      50% {
+        transform: translateX(0%) skewX(-14deg);
+        opacity: 1;
+      }
+      80% {
+        opacity: 0.86;
+      }
+      100% {
+        transform: translateX(38%) skewX(-14deg);
+        opacity: 0.22;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .hero-video::before,
+      .hero-video::after {
+        animation: none;
+      }
     }
 
     .homepage-body-media {
-      max-width: 1200px;
       margin: 0 auto 24px;
-      padding: 0 40px;
       display: grid;
-      grid-template-columns: repeat(12, minmax(0, 1fr));
       gap: 24px;
     }
 
-    .homepage-body-media-card {
-      background: #ffffff;
-      border-radius: 28px;
+    .homepage-body-media-shell {
+      --homepage-media-shell-max-width: 1200px;
+      --homepage-media-side-padding: 40px;
+      --homepage-media-gap: 24px;
+      --homepage-media-grid-height: clamp(180px, 18vw, 240px);
+      --homepage-media-carousel-height: clamp(260px, 34vw, 460px);
+      --homepage-media-full-height: clamp(320px, 42vw, 780px);
+      --homepage-media-slice-height: clamp(220px, 29vw, 360px);
+      --homepage-media-object-fit: cover;
+      --homepage-media-frame-bg: #ffffff;
+      --homepage-media-fill-bg: #000000;
+      --homepage-media-frame-radius: 0px;
+      --homepage-media-frame-border: 1px solid rgba(15, 23, 42, 0.08);
+      --homepage-media-frame-shadow: 0 18px 44px rgba(15, 23, 42, 0.06);
+    }
+
+    .homepage-body-media-shell.surface-flat {
+      --homepage-media-frame-border: 0;
+      --homepage-media-frame-shadow: none;
+    }
+
+    .homepage-body-media-shell.surface-transparent {
+      --homepage-media-frame-bg: transparent;
+      --homepage-media-fill-bg: transparent;
+      --homepage-media-frame-border: 0;
+      --homepage-media-frame-shadow: none;
+    }
+
+    .homepage-body-media-shell.display-size-compact {
+      --homepage-media-shell-max-width: 980px;
+      --homepage-media-side-padding: 28px;
+      --homepage-media-gap: 18px;
+      --homepage-media-grid-height: clamp(150px, 15vw, 200px);
+      --homepage-media-carousel-height: clamp(220px, 28vw, 360px);
+      --homepage-media-full-height: clamp(260px, 34vw, 560px);
+      --homepage-media-slice-height: clamp(180px, 22vw, 280px);
+    }
+
+    .homepage-body-media-shell.display-size-large {
+      --homepage-media-shell-max-width: 1520px;
+      --homepage-media-side-padding: 32px;
+      --homepage-media-gap: 28px;
+      --homepage-media-grid-height: clamp(220px, 22vw, 320px);
+      --homepage-media-carousel-height: clamp(320px, 40vw, 560px);
+      --homepage-media-full-height: clamp(400px, 48vw, 920px);
+      --homepage-media-slice-height: clamp(260px, 34vw, 420px);
+    }
+
+    .homepage-body-media-grid {
+      max-width: var(--homepage-media-shell-max-width);
+      margin: 0 auto;
+      padding: 0 var(--homepage-media-side-padding);
+      box-sizing: border-box;
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: var(--homepage-media-gap);
+    }
+
+    .homepage-body-media-shell.width-edge-to-edge .homepage-body-media-grid {
+      max-width: none;
+      padding: 0;
+    }
+
+    .homepage-body-media-carousel {
+      max-width: var(--homepage-media-shell-max-width);
+      margin: 0 auto;
+      padding: 0 var(--homepage-media-side-padding);
+      box-sizing: border-box;
+    }
+
+    .homepage-body-media-carousel.is-edge-to-edge {
+      max-width: none;
+      padding: 0;
+    }
+
+    .homepage-carousel-shell {
+      position: relative;
+      background: var(--homepage-media-frame-bg);
+      border-radius: var(--homepage-media-frame-radius);
       overflow: hidden;
-      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
-      border: 1px solid rgba(15, 23, 42, 0.08);
+      box-shadow: var(--homepage-media-frame-shadow);
+      border: var(--homepage-media-frame-border);
+    }
+
+    .homepage-body-media-carousel.is-edge-to-edge .homepage-carousel-shell,
+    .homepage-body-media-shell.width-edge-to-edge .homepage-carousel-shell {
+      border-left: 0;
+      border-right: 0;
+      box-shadow: none;
+    }
+
+    .homepage-carousel-track {
+      display: flex;
+      transition: transform 0.45s ease;
+      will-change: transform;
+    }
+
+    .homepage-carousel-slide {
+      min-width: 100%;
+      flex: 0 0 100%;
+      position: relative;
+    }
+
+    .homepage-carousel-slide img,
+    .homepage-carousel-slide video {
+      width: 100%;
+      display: block;
+      height: var(--homepage-media-carousel-height);
+      object-fit: var(--homepage-media-object-fit);
+      background: var(--homepage-media-fill-bg);
+    }
+
+    .homepage-carousel-caption {
+      padding: 16px 20px;
+      color: var(--text-gray);
+      font-size: 16px;
+      line-height: 1.5;
+      background: rgba(255, 255, 255, 0.92);
+    }
+
+    .homepage-body-media-shell.surface-transparent .homepage-carousel-caption {
+      background: transparent;
+    }
+
+    .homepage-carousel-controls {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 18px;
+      pointer-events: none;
+    }
+
+    .homepage-carousel-arrow {
+      width: 46px;
+      height: 46px;
+      border: 0;
+      border-radius: 999px;
+      background: rgba(17, 24, 39, 0.64);
+      color: #ffffff;
+      font-size: 24px;
+      line-height: 1;
+      cursor: pointer;
+      pointer-events: auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(8px);
+    }
+
+    .homepage-carousel-arrow:hover {
+      background: rgba(17, 24, 39, 0.82);
+    }
+
+    .homepage-carousel-dots {
+      position: absolute;
+      left: 50%;
+      bottom: 16px;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.74);
+      backdrop-filter: blur(8px);
+    }
+
+    .homepage-body-media-shell.surface-transparent .homepage-carousel-dots {
+      background: transparent;
+      backdrop-filter: none;
+    }
+
+    .homepage-carousel-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      border: 0;
+      background: rgba(15, 23, 42, 0.22);
+      cursor: pointer;
+      transition: transform 0.18s ease, background 0.18s ease;
+    }
+
+    .homepage-carousel-dot.is-active {
+      background: #0071e3;
+      transform: scale(1.15);
+    }
+
+    .homepage-body-media-card {
+      background: var(--homepage-media-frame-bg);
+      border-radius: var(--homepage-media-frame-radius);
+      overflow: hidden;
+      box-shadow: var(--homepage-media-frame-shadow);
+      border: var(--homepage-media-frame-border);
       grid-column: span 12;
     }
 
@@ -340,13 +595,50 @@
       grid-column: span 4;
     }
 
+    .homepage-body-media-card.layout-quarter {
+      grid-column: span 3;
+    }
+
+    .homepage-body-media-card.layout-slice {
+      grid-column: span 12;
+    }
+
+    .homepage-body-media-shell.width-edge-to-edge .homepage-body-media-card.layout-full {
+      border-left: 0;
+      border-right: 0;
+      box-shadow: none;
+    }
+
     .homepage-body-media-card img,
     .homepage-body-media-card video {
       width: 100%;
       display: block;
       max-height: 720px;
-      object-fit: cover;
-      background: #000;
+      object-fit: var(--homepage-media-object-fit);
+      background: var(--homepage-media-fill-bg);
+    }
+
+    .homepage-body-media-card.layout-full img,
+    .homepage-body-media-card.layout-full video {
+      height: var(--homepage-media-full-height);
+      max-height: none;
+    }
+
+    .homepage-body-media-card.layout-half img,
+    .homepage-body-media-card.layout-half video,
+    .homepage-body-media-card.layout-third img,
+    .homepage-body-media-card.layout-third video,
+    .homepage-body-media-card.layout-quarter img,
+    .homepage-body-media-card.layout-quarter video {
+      height: var(--homepage-media-grid-height);
+      max-height: none;
+    }
+
+    .homepage-body-media-card.layout-slice img,
+    .homepage-body-media-card.layout-slice video {
+      height: var(--homepage-media-slice-height);
+      max-height: none;
+      object-position: center;
     }
 
     .homepage-body-media-caption {
@@ -355,9 +647,16 @@
       font-size: 16px;
       line-height: 1.5;
       background: rgba(255, 255, 255, 0.92);
+      border-top: 1px solid rgba(15, 23, 42, 0.08);
+    }
+
+    .homepage-body-media-shell.surface-transparent .homepage-body-media-caption {
+      background: transparent;
+      border-top: 0;
     }
     
-    .hero-video video {
+    .hero-video video,
+    .hero-video img {
       width: 100%;
       display: block;
     }
@@ -1081,16 +1380,94 @@
         font-size: 18px;
         max-width: 100%;
       }
-      .hero-video { width: 85%; max-width: 380px; margin: 0 auto; }
+      .hero-video {
+        width: 100%;
+        max-width: 540px;
+        margin: 0 auto;
+      }
+      .homepage-body-media-shell {
+        --homepage-media-gap: 16px;
+        --homepage-media-grid-height: clamp(220px, 62vw, 360px);
+        --homepage-media-carousel-height: clamp(240px, 64vw, 420px);
+        --homepage-media-full-height: clamp(240px, 64vw, 420px);
+        --homepage-media-slice-height: clamp(180px, 42vw, 240px);
+      }
       .homepage-body-media {
-        padding: 0 20px;
-        grid-template-columns: 1fr;
+        gap: 20px;
+      }
+
+      .homepage-body-media-grid {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 16px;
+        padding: 0 16px;
+      }
+
+      .homepage-body-media-carousel {
+        padding: 0 16px;
+      }
+
+      .homepage-body-media-shell.width-edge-to-edge .homepage-body-media-grid,
+      .homepage-body-media-carousel.is-edge-to-edge {
+        padding: 0;
       }
 
       .homepage-body-media-card,
       .homepage-body-media-card.layout-half,
-      .homepage-body-media-card.layout-third {
-        grid-column: auto;
+      .homepage-body-media-card.layout-third,
+      .homepage-body-media-card.layout-quarter,
+      .homepage-body-media-card.layout-slice {
+        grid-column: 1 / -1;
+      }
+
+      .homepage-body-media-card.layout-slice img,
+      .homepage-body-media-card.layout-slice video {
+        height: 220px;
+      }
+
+      .homepage-body-media-shell[data-body-media-fit-mode="contain"] .homepage-body-media-card img {
+        height: auto;
+        max-height: none;
+        object-fit: contain;
+      }
+
+      .homepage-body-media-shell[data-body-media-fit-mode="contain"] .homepage-body-media-card.layout-full img,
+      .homepage-body-media-shell[data-body-media-fit-mode="contain"] .homepage-body-media-card.layout-half img,
+      .homepage-body-media-shell[data-body-media-fit-mode="contain"] .homepage-body-media-card.layout-third img,
+      .homepage-body-media-shell[data-body-media-fit-mode="contain"] .homepage-body-media-card.layout-quarter img,
+      .homepage-body-media-shell[data-body-media-fit-mode="contain"] .homepage-body-media-card.layout-slice img {
+        height: auto;
+        max-height: none;
+      }
+
+      .homepage-carousel-shell {
+        border-radius: 0;
+      }
+
+      .homepage-body-media-card.layout-full img,
+      .homepage-body-media-card.layout-full video {
+        height: 220px;
+      }
+
+      .homepage-carousel-slide img,
+      .homepage-carousel-slide video {
+        border-radius: 0;
+        height: 220px;
+      }
+
+      .homepage-body-media-shell[data-body-media-fit-mode="contain"] .homepage-carousel-slide img {
+        height: auto;
+        max-height: min(72vh, 520px);
+        object-fit: contain;
+      }
+
+      .homepage-carousel-controls {
+        padding: 0 10px;
+      }
+
+      .homepage-carousel-arrow {
+        width: 40px;
+        height: 40px;
+        font-size: 20px;
       }
     }
     
@@ -1407,30 +1784,80 @@
       </p>
     </div>
     
-    <div class="hero-video">
-      <div class="device-mock">
-        <div class="device-bg">
-          <img src="{{ url_for('static', filename=(home_content.hero_image_path or 'imag2.png')) }}?v={{ asset_bust or 0 }}" alt="EverydayAdvertise dashboard preview">
-        </div>
-      </div>
+    <div
+      class="hero-video shape-{{ home_content.hero_media_shape or 'landscape' }} size-{{ home_content.hero_media_size or 'large' }}"
+      style="--hero-media-fit: {{ home_content.hero_media_fit_mode or 'cover' }};"
+      data-hero-rotate-on-refresh="{{ 1 if home_content.hero_rotate_on_refresh else 0 }}"
+      data-hero-rotation-pool='{{ hero_rotation_images|tojson }}'
+    >
+      <img id="heroPrimaryImage" src="{{ hero_primary_image }}" alt="EverydayAdvertise dashboard preview">
     </div>
   </section>
 
-  {% if home_body_media %}
+  {% if home_body_media_blocks %}
   <section class="homepage-body-media">
-    {% for media_item in home_body_media %}
-    <div class="homepage-body-media-card layout-{{ media_item.layout_style }}">
-      {% if media_item.media_type == 'video' %}
-      <video controls playsinline preload="metadata">
-        <source src="{{ url_for('static', filename=media_item.media_path) }}?v={{ asset_bust or 0 }}">
-      </video>
+    {% for block in home_body_media_blocks %}
+      {% set profile = home_body_media_profiles[block['profile']] %}
+      <div
+        class="homepage-body-media-shell display-size-{{ profile['display_size'] }} width-{{ profile['width_mode'] }} surface-{{ profile['surface_style'] }}"
+        data-body-media-shell-max-width="{{ profile['shell_max_width'] }}"
+        data-body-media-side-padding="{{ profile['side_padding'] }}"
+        data-body-media-fit-mode="{{ profile['fit_mode'] }}"
+        data-body-media-frame-bg="{{ profile['frame_bg_color'] }}"
+        data-body-media-fill-bg="{{ profile['media_bg_color'] }}"
+        data-body-media-corner-radius="{{ profile['corner_radius'] }}"
+      >
+      {% if block['kind'] == 'carousel' %}
+        <section class="homepage-body-media-carousel{% if block['edge_to_edge'] or profile['width_mode'] == 'edge-to-edge' %} is-edge-to-edge{% endif %}">
+          <div class="homepage-carousel-shell" data-homepage-carousel data-autoplay="true">
+            <div class="homepage-carousel-track" data-carousel-track>
+              {% for media_item in block['items'] %}
+              <div class="homepage-carousel-slide">
+                {% if media_item.media_type == 'video' %}
+                <video controls playsinline preload="metadata">
+                  <source src="{{ url_for('static', filename=media_item.media_path) }}?v={{ asset_bust or 0 }}">
+                </video>
+                {% else %}
+                <img src="{{ url_for('static', filename=media_item.media_path) }}?v={{ asset_bust or 0 }}" alt="Website carousel media {{ loop.index }}">
+                {% endif %}
+                {% if media_item.caption %}
+                <div class="homepage-carousel-caption">{{ media_item.caption }}</div>
+                {% endif %}
+              </div>
+              {% endfor %}
+            </div>
+            {% if block['items']|length > 1 %}
+            <div class="homepage-carousel-controls">
+              <button class="homepage-carousel-arrow" type="button" data-carousel-prev aria-label="Previous slide">&#8249;</button>
+              <button class="homepage-carousel-arrow" type="button" data-carousel-next aria-label="Next slide">&#8250;</button>
+            </div>
+            <div class="homepage-carousel-dots">
+              {% for media_item in block['items'] %}
+              <button class="homepage-carousel-dot{% if loop.first %} is-active{% endif %}" type="button" data-carousel-dot="{{ loop.index0 }}" aria-label="Show slide {{ loop.index }}"></button>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+        </section>
       {% else %}
-      <img src="{{ url_for('static', filename=media_item.media_path) }}?v={{ asset_bust or 0 }}" alt="Website body media">
+        <div class="homepage-body-media-grid">
+          {% for media_item in block['items'] %}
+          <div class="homepage-body-media-card layout-{{ media_item.layout_style }}">
+            {% if media_item.media_type == 'video' %}
+            <video controls playsinline preload="metadata">
+              <source src="{{ url_for('static', filename=media_item.media_path) }}?v={{ asset_bust or 0 }}">
+            </video>
+            {% else %}
+            <img src="{{ url_for('static', filename=media_item.media_path) }}?v={{ asset_bust or 0 }}" alt="Website body media">
+            {% endif %}
+            {% if media_item.caption %}
+            <div class="homepage-body-media-caption">{{ media_item.caption }}</div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
       {% endif %}
-      {% if media_item.caption %}
-      <div class="homepage-body-media-caption">{{ media_item.caption }}</div>
-      {% endif %}
-    </div>
+      </div>
     {% endfor %}
   </section>
   {% endif %}
@@ -1666,6 +2093,82 @@
     // Force video autoplay for ALL videos
     window.addEventListener('DOMContentLoaded', function() {
       console.log('🎬 Initializing video autoplay...');
+
+      document.querySelectorAll('[data-body-media-shell-max-width]').forEach(function(section) {
+        section.style.setProperty('--homepage-media-shell-max-width', section.dataset.bodyMediaShellMaxWidth || '1200px');
+        section.style.setProperty('--homepage-media-side-padding', (section.dataset.bodyMediaSidePadding || '40') + 'px');
+        section.style.setProperty('--homepage-media-object-fit', section.dataset.bodyMediaFitMode || 'cover');
+        section.style.setProperty('--homepage-media-frame-bg', section.dataset.bodyMediaFrameBg || '#ffffff');
+        section.style.setProperty('--homepage-media-fill-bg', section.dataset.bodyMediaFillBg || '#000000');
+        section.style.setProperty('--homepage-media-frame-radius', (section.dataset.bodyMediaCornerRadius || '0') + 'px');
+      });
+
+      document.querySelectorAll('[data-homepage-carousel]').forEach(function(carousel) {
+        var track = carousel.querySelector('[data-carousel-track]');
+        var slides = Array.from(carousel.querySelectorAll('.homepage-carousel-slide'));
+        var dots = Array.from(carousel.querySelectorAll('[data-carousel-dot]'));
+        var prev = carousel.querySelector('[data-carousel-prev]');
+        var next = carousel.querySelector('[data-carousel-next]');
+        var currentIndex = 0;
+        var autoplayTimer = null;
+        var autoplayEnabled = carousel.dataset.autoplay === 'true' && slides.length > 1;
+
+        if (!track || slides.length <= 1) {
+          return;
+        }
+
+        function renderSlide(index) {
+          currentIndex = (index + slides.length) % slides.length;
+          track.style.transform = 'translateX(' + (-100 * currentIndex) + '%)';
+          dots.forEach(function(dot, dotIndex) {
+            dot.classList.toggle('is-active', dotIndex === currentIndex);
+          });
+        }
+
+        function stopAutoplay() {
+          if (autoplayTimer) {
+            window.clearInterval(autoplayTimer);
+            autoplayTimer = null;
+          }
+        }
+
+        function startAutoplay() {
+          if (!autoplayEnabled) {
+            return;
+          }
+          stopAutoplay();
+          autoplayTimer = window.setInterval(function() {
+            renderSlide(currentIndex + 1);
+          }, 4200);
+        }
+
+        if (prev) {
+          prev.addEventListener('click', function() {
+            renderSlide(currentIndex - 1);
+            startAutoplay();
+          });
+        }
+
+        if (next) {
+          next.addEventListener('click', function() {
+            renderSlide(currentIndex + 1);
+            startAutoplay();
+          });
+        }
+
+        dots.forEach(function(dot, index) {
+          dot.addEventListener('click', function() {
+            renderSlide(index);
+            startAutoplay();
+          });
+        });
+
+        carousel.addEventListener('mouseenter', stopAutoplay);
+        carousel.addEventListener('mouseleave', startAutoplay);
+
+        renderSlide(0);
+        startAutoplay();
+      });
       
       // Get all videos on the page
       var videos = document.querySelectorAll('video');

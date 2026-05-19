@@ -21,6 +21,9 @@
       color: #1e293b;
       line-height: 1.6;
     }
+    body.embedded .container {
+      padding-top: 24px;
+    }
     
     /* Header */
     .header {
@@ -410,7 +413,8 @@
     }
   </style>
 </head>
-<body>
+<body{% if embedded %} class="embedded"{% endif %}>
+  {% if not embedded %}
   <!-- Header -->
   <div class="header">
     <div class="header-content">
@@ -424,6 +428,7 @@
       </nav>
     </div>
   </div>
+  {% endif %}
 
   <div class="container">
     <!-- Page Header -->

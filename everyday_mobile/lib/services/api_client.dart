@@ -705,23 +705,40 @@ class ApiClient {
     return data;
   }
 
-  Future<void> updatePiLocationName({
+  Future<void> updatePiLocation({
     required String piId,
     required String locationName,
+    String? address,
+    double? latitude,
+    double? longitude,
   }) async {
-    final response = await _dio.post(
-      '/api/update-pi-location',
-      data: {
-        'pi_id': piId,
-        'location_name': locationName,
-      },
-    );
+    final payload = <String, dynamic>{
+      'pi_id': piId,
+      'location_name': locationName,
+    };
+    final cleanAddress = address?.trim() ?? '';
+    if (cleanAddress.isNotEmpty) {
+      payload['address'] = cleanAddress;
+    }
+    if (latitude != null && longitude != null) {
+      payload['latitude'] = latitude;
+      payload['longitude'] = longitude;
+    }
+
+    final response = await _dio.post('/api/update-pi-location', data: payload);
     final data = _asMap(response.data);
     if (data['success'] != true) {
       throw Exception(
           (data['message'] ?? data['error'] ?? 'Failed to update location')
               .toString());
     }
+  }
+
+  Future<void> updatePiLocationName({
+    required String piId,
+    required String locationName,
+  }) async {
+    await updatePiLocation(piId: piId, locationName: locationName);
   }
 
   Future<void> updatePlaylistItem({
