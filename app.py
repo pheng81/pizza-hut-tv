@@ -10418,6 +10418,96 @@ def save_store_config(config):
         print(f"Error saving configuration: {e}")
         raise
 
+
+def _get_store_entry(config, store_id):
+    try:
+        for store in (config.get('stores') or []):
+            if str(store.get('id')) == str(store_id):
+                return store
+    except Exception:
+        return None
+    return None
+
+
+def _resolve_screen_address_details(config, store_id, screen_id, screen_config=None):
+    try:
+        store = _get_store_entry(config, store_id) or {}
+        screen = screen_config if isinstance(screen_config, dict) else (((config.get('screens') or {}).get(store_id) or {}).get(screen_id) or {})
+        store_address = str(store.get('address') or '').strip()
+        screen_address = str(screen.get('address') or '').strip()
+        location_name = str(screen.get('location_name') or '').strip()
+        effective_address = screen_address or store_address
+        source = 'screen' if screen_address else ('store' if store_address else '')
+        return {
+            'store_name': str(store.get('name') or store_id or ''),
+            'store_address': store_address,
+            'screen_address': screen_address,
+            'effective_address': effective_address,
+            'location_name': location_name,
+            'source': source,
+        }
+    except Exception:
+        return {
+            'store_name': str(store_id or ''),
+            'store_address': '',
+            'screen_address': '',
+            'effective_address': '',
+            'location_name': '',
+            'source': '',
+        }
+
+
+def _get_google_geocode_api_key():
+    return (
+        os.environ.get('GOOGLE_SERVER_API_KEY')
+        or os.environ.get('GOOGLE_MAPS_API_KEY')
+        or ''
+    ).strip()
+
+
+def _geocode_address_to_coordinates(address):
+    normalized = str(address or '').strip()
+    if len(normalized) < 3:
+        return None
+
+    google_maps_api_key = _get_google_geocode_api_key()
+    if not google_maps_api_key:
+        return None
+
+    try:
+        import requests
+
+        response = requests.get(
+            'https://maps.googleapis.com/maps/api/geocode/json',
+            params={
+                'address': normalized,
+                'components': 'country:AU',
+                'region': 'au',
+                'key': google_maps_api_key,
+            },
+            timeout=8,
+        )
+        payload = response.json() if response.content else {}
+        status = str(payload.get('status') or '').strip().upper()
+        if status != 'OK':
+            return None
+
+        result = ((payload.get('results') or [None])[0] or {})
+        location = ((result.get('geometry') or {}).get('location') or {})
+        lat = location.get('lat')
+        lng = location.get('lng')
+        if lat is None or lng is None:
+            return None
+
+        return {
+            'latitude': float(lat),
+            'longitude': float(lng),
+            'formatted_address': str(result.get('formatted_address') or normalized).strip(),
+        }
+    except Exception:
+        app.logger.exception('Address geocode failed for map fallback')
+        return None
+
 def cleanup_slice_cache():
     """Clean up old video slice cache files to prevent disk bloat."""
     try:
@@ -13474,7 +13564,18 @@ def tv_view(store_id, screen_id):
     config = load_store_config()
     screen_config = ensure_playlists_structure(config)['screens'].get(store_id, {}).get(screen_id, {})
     active_file = pick_active_playlist_item(screen_config, config, store_id, screen_id)
-    return render_template('tv_view.html', screen_config=screen_config, screen_id=screen_id, store_id=store_id, active_file=active_file, media_base_url=get_media_base_url())
+    address_details = _resolve_screen_address_details(config, store_id, screen_id, screen_config)
+    return render_template(
+        'tv_view.html',
+        screen_config=screen_config,
+        screen_id=screen_id,
+        store_id=store_id,
+        active_file=active_file,
+        media_base_url=get_media_base_url(),
+        store_name=address_details.get('store_name', ''),
+        display_address=address_details.get('effective_address', ''),
+        display_address_source=address_details.get('source', ''),
+    )
 
 # ---------------------- Web Player (browser-based TV) ----------------------
 @app.route('/webplayer')
@@ -13552,6 +13653,7 @@ def webplayer_play():
         active_file = pick_active_playlist_item(screen_config, load_store_config(), store_id, screen_id)
     except Exception:
         active_file = None
+    address_details = _resolve_screen_address_details(config if isinstance(config, dict) else {}, store_id, screen_id, screen_config)
     # Use legacy template for older Samsung Tizen browsers for maximum compatibility
     try:
         ua = (request.user_agent.string or '')
@@ -13559,7 +13661,17 @@ def webplayer_play():
         ua = ''
     legacy = (request.args.get('legacy') == '1') or (('Tizen' in ua) or ('TizenBrowser' in ua) or ('SMART-TV' in ua) or ('SmartTV' in ua) or ('Maple' in ua))
     template_name = 'webplayer/player_legacy.html' if legacy else 'webplayer/player.html'
-    return render_template(template_name, store_id=store_id, screen_id=screen_id, active_file=active_file, media_base_url=get_media_base_url(), code=code)
+    return render_template(
+        template_name,
+        store_id=store_id,
+        screen_id=screen_id,
+        active_file=active_file,
+        media_base_url=get_media_base_url(),
+        code=code,
+        store_name=address_details.get('store_name', ''),
+        display_address=address_details.get('effective_address', ''),
+        display_address_source=address_details.get('source', ''),
+    )
 
 @app.route('/delete_from_screen', methods=['POST'])
 @login_required
@@ -14595,6 +14707,7 @@ def add_store():
         data = request.get_json()
         store_id = data.get('store_id')
         store_name = data.get('store_name')
+        store_address = str(data.get('address') or '').strip()
         
         if not store_id or not store_name:
             return jsonify({'error': 'Store ID and Store Name are required'}), 400
@@ -14609,7 +14722,8 @@ def add_store():
         # Add new store to stores list
         config['stores'].append({
             'id': store_id,
-            'name': store_name
+            'name': store_name,
+            'address': store_address
         })
         # Start with no screens; UI will show add placeholders for Screen and Promo
         if 'screens' not in config:
@@ -14623,6 +14737,7 @@ def add_store():
             'success': True,
             'store_id': store_id,
             'store_name': store_name,
+            'address': store_address,
             'message': f'Store {store_id} - {store_name} added successfully'
         })
         
@@ -14654,9 +14769,11 @@ def add_stores_bulk():
             try:
                 sid = str((entry.get('store_id') or '').strip())
                 sname = (entry.get('store_name') or '').strip()
+                saddr = str((entry.get('address') or '')).strip()
             except Exception:
                 sid = ''
                 sname = ''
+                saddr = ''
             if not sid or not sname:
                 skipped.append({'id': sid or '(blank)', 'reason': 'missing id or name'})
                 continue
@@ -14670,10 +14787,10 @@ def add_stores_bulk():
                 skipped.append({'id': sid, 'reason': 'duplicate in input'})
                 continue
             # Append to config
-            config.setdefault('stores', []).append({'id': sid, 'name': sname})
+            config.setdefault('stores', []).append({'id': sid, 'name': sname, 'address': saddr})
             config.setdefault('screens', {}).setdefault(sid, {})
             seen_new.add(sid)
-            added.append({'id': sid, 'name': sname})
+            added.append({'id': sid, 'name': sname, 'address': saddr})
 
         if added:
             save_store_config(config)
@@ -14741,6 +14858,96 @@ def delete_store():
     except Exception as e:
         print(f"Error deleting store: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/update_store_address', methods=['POST'])
+@login_required
+def update_store_address():
+    """Update the saved fallback address for a store."""
+    try:
+        data = request.get_json() or {}
+        store_id = str(data.get('store_id') or '').strip()
+        address = str(data.get('address') or '').strip()
+
+        if not store_id:
+            return jsonify({'success': False, 'error': 'Store ID is required'}), 400
+
+        ukey = _safe_user_key()
+        config = load_store_config_for_user_safe_key(ukey) if ukey else load_store_config()
+
+        store = _get_store_entry(config, store_id)
+        if not store:
+            return jsonify({'success': False, 'error': 'Store not found'}), 404
+
+        store['address'] = address
+
+        if ukey:
+            save_store_config_for_user_safe_key(ukey, config)
+        else:
+            save_store_config(config)
+
+        return jsonify({'success': True, 'store_id': store_id, 'address': address})
+    except Exception as e:
+        app.logger.exception('update_store_address failed')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/google_address_search')
+@login_required
+def google_address_search():
+    """Look up address suggestions through Google from the server side."""
+    query = str(request.args.get('q') or '').strip()
+    if len(query) < 3:
+        return jsonify({'success': True, 'provider': 'google', 'results': []})
+
+    google_maps_api_key = _get_google_geocode_api_key()
+    if not google_maps_api_key:
+        return jsonify({'success': False, 'error': 'Google Maps API key is not configured'}), 503
+
+    try:
+        import requests
+
+        response = requests.get(
+            'https://maps.googleapis.com/maps/api/geocode/json',
+            params={
+                'address': query,
+                'components': 'country:AU',
+                'region': 'au',
+                'key': google_maps_api_key,
+            },
+            timeout=8,
+        )
+        payload = response.json() if response.content else {}
+        status = str(payload.get('status') or '').strip().upper()
+        if status not in {'OK', 'ZERO_RESULTS'}:
+            return jsonify({
+                'success': False,
+                'error': payload.get('error_message') or status or 'Google lookup failed',
+                'provider': 'google',
+            }), 502
+
+        seen = set()
+        results = []
+        for item in payload.get('results') or []:
+            formatted_address = str(item.get('formatted_address') or '').strip()
+            if not formatted_address:
+                continue
+            key = formatted_address.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            results.append({
+                'display_name': formatted_address,
+                'place_id': str(item.get('place_id') or '').strip(),
+                'source': 'google',
+            })
+            if len(results) >= 8:
+                break
+
+        return jsonify({'success': True, 'provider': 'google', 'results': results})
+    except Exception as e:
+        app.logger.exception('google_address_search failed')
+        return jsonify({'success': False, 'error': str(e), 'provider': 'google'}), 500
 
 # ---------------- Schedule Filtering Helpers (match Pi client logic) ----------------
 def parse_time_string(time_str, now):
@@ -19873,9 +20080,13 @@ def pi_map_locations():
         config = load_store_config_for_user_safe_key(ukey) if ukey else load_store_config()
 
         stores_by_id = {
-            str(s.get('id')): str(s.get('name') or s.get('id') or '')
+            str(s.get('id')): {
+                'name': str(s.get('name') or s.get('id') or ''),
+                'address': str(s.get('address') or ''),
+            }
             for s in (config.get('stores') or [])
         }
+        geocode_cache = {}
 
         out = []
         for store_id, screens in (config.get('screens') or {}).items():
@@ -19888,13 +20099,27 @@ def pi_map_locations():
                 pi_id = str(screen_data.get('pi_id') or '').strip()
                 lat = screen_data.get('latitude')
                 lng = screen_data.get('longitude')
+                screen_address = str(screen_data.get('address') or '').strip()
+                store_address = str(stores_by_id.get(str(store_id), {}).get('address') or '').strip()
+                effective_address = screen_address or store_address
+                location_name = str(screen_data.get('location_name') or '').strip()
                 try:
                     lat = float(lat) if lat is not None else None
                     lng = float(lng) if lng is not None else None
                 except Exception:
                     lat, lng = None, None
 
-                # If no coordinates, skip in the map API payload.
+                if (lat is None or lng is None) and effective_address:
+                    cache_key = effective_address.lower()
+                    if cache_key not in geocode_cache:
+                        geocode_cache[cache_key] = _geocode_address_to_coordinates(effective_address)
+                    geocoded = geocode_cache.get(cache_key) or {}
+                    lat = geocoded.get('latitude', lat)
+                    lng = geocoded.get('longitude', lng)
+                    if not location_name:
+                        location_name = 'Saved screen address' if screen_address else 'Store address fallback'
+
+                # If there is still no coordinate source, skip in the map API payload.
                 if lat is None or lng is None:
                     continue
 
@@ -19910,11 +20135,12 @@ def pi_map_locations():
                 out.append({
                     'pi_id': pi_id,
                     'store_id': str(store_id),
-                    'store_name': stores_by_id.get(str(store_id), str(store_id)),
+                    'store_name': stores_by_id.get(str(store_id), {}).get('name', str(store_id)),
                     'screen_id': str(screen_id),
                     'screen_name': str(screen_data.get('name') or screen_id),
-                    'location_label': str(screen_data.get('location_name') or ''),
-                    'address': str(screen_data.get('address') or ''),
+                    'location_label': location_name,
+                    'address': effective_address,
+                    'store_address': store_address,
                     'latitude': lat,
                     'longitude': lng,
                     'status': 'online' if is_online else 'offline',

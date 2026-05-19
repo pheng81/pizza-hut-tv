@@ -443,9 +443,138 @@
         
         .store-info {
             display: flex;
-            align-items: center;
+            align-items: flex-start;
+            flex-direction: column;
             gap: 10px;
-            margin-bottom: 20px;
+            margin-bottom: 0;
+        }
+
+        .store-info__identity {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .store-address-editor {
+            width: min(640px, 100%);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 2px;
+            flex-wrap: nowrap;
+        }
+
+        .store-address-editor__input {
+            flex: 1 1 auto;
+            min-width: 180px;
+            height: 40px;
+            border: 1px solid #ccd5df;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.96);
+            color: #1f2937;
+            padding: 0 14px;
+            font-size: 14px;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+        }
+
+        .store-address-editor__input:focus {
+            outline: none;
+            border-color: #93c5fd;
+            box-shadow: 0 0 0 3px rgba(147, 197, 253, 0.28);
+        }
+
+        .store-address-editor__input::placeholder {
+            color: #94a3b8;
+        }
+
+        .store-address-editor__button {
+            height: 40px;
+            border: 1px solid #1d4ed8;
+            border-radius: 12px;
+            background: #ffffff;
+            color: #1d4ed8;
+            padding: 0 14px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .store-address-editor__button:hover {
+            background: #eff6ff;
+        }
+
+        .store-address-editor__hint {
+            margin: 0;
+            color: #6b7280;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .store-address-suggestions {
+            position: absolute;
+            background: #fff;
+            border: 1px solid #dbe4ee;
+            border-radius: 14px;
+            box-shadow: 0 18px 38px rgba(15, 23, 42, 0.18);
+            padding: 6px;
+            max-height: 260px;
+            overflow-y: auto;
+            z-index: 10080;
+        }
+
+        .store-address-suggestions[hidden] {
+            display: none;
+        }
+
+        .store-address-suggestions__item {
+            width: 100%;
+            border: 0;
+            background: transparent;
+            text-align: left;
+            padding: 10px 12px;
+            border-radius: 10px;
+            color: #1f2937;
+            cursor: pointer;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .store-address-suggestions__item:hover,
+        .store-address-suggestions__item:focus-visible {
+            background: #eff6ff;
+            outline: none;
+        }
+
+        .store-address-suggestions__item.is-manual {
+            border: 1px dashed #bfdbfe;
+            background: #f8fbff;
+        }
+
+        .pac-container {
+            z-index: 10060 !important;
+            margin-top: 6px;
+            border: 1px solid #dbe4ee;
+            border-radius: 14px;
+            box-shadow: 0 18px 38px rgba(15, 23, 42, 0.18);
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .pac-item {
+            padding: 10px 14px;
+            font-size: 13px;
+            border-top: 1px solid #eef2f7;
+        }
+
+        .pac-item:first-child {
+            border-top: none;
+        }
+
+        .pac-item:hover,
+        .pac-item-selected {
+            background: #f8fbff;
         }
         
         .store-number {
@@ -499,6 +628,35 @@
         .screen-card.default-mode {
             border-left: none;
             background-color: #e7ebf0;
+        }
+
+        .screen-card-location {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            margin-top: 10px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.5);
+            border: 1px solid rgba(209, 215, 222, 0.9);
+        }
+
+        .screen-card-location__label {
+            color: #64748b;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .screen-card-location__value {
+            color: #1f2937;
+            font-size: 12px;
+            line-height: 1.45;
+        }
+
+        .screen-card-location__value.is-empty {
+            color: #6b7280;
         }
         
         .apply-all-section {
@@ -1271,12 +1429,13 @@
         .section-header {
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: flex-start;
             margin-bottom: 20px;
             padding-bottom: 10px;
             border-bottom: 1px solid #eee;
+            gap: 16px;
         }
-    .section-header .section-left { display:flex; align-items:center; gap:12px; }
+    .section-header .section-left { display:flex; align-items:flex-start; gap:12px; flex-wrap:wrap; }
     .section-header .store-info { margin-bottom: 0; }
     .section-header .store-number { padding:4px 8px; border-radius:6px; font-size:18px; }
     .section-header .store-name { font-size: 18px; font-weight:600; }
@@ -1815,6 +1974,50 @@
     .store-search .result-item:hover, .store-search .result-item.active { background:#f2f2f7; }
     .store-search .id { font-variant-numeric: tabular-nums; min-width:52px; color:#111; font-weight:700; }
     .store-search .name { color:#444; }
+    .store-address-control { position: relative; display: inline-flex; align-items: center; }
+    .store-address-toggle {
+        appearance: none;
+        border: 1px solid #d2d2d7;
+        background: #fff;
+        color: #1d1d1f;
+        border-radius: 8px;
+        width: 36px;
+        height: 36px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+    }
+    .store-address-toggle:hover,
+    .store-address-control.is-open .store-address-toggle { background:#f2f2f7; }
+    .store-address-toggle .icon { width:18px; height:18px; display:inline-block; }
+    .store-address-toggle .icon path,
+    .store-address-toggle .icon circle { stroke: currentColor; stroke-width:1.8; fill:none; stroke-linecap:round; stroke-linejoin:round; }
+    .store-address-popover {
+        position: absolute;
+        top: 44px;
+        left: 0;
+        width: min(560px, calc(100vw - 32px));
+        padding: 14px;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 14px;
+        box-shadow: 0 18px 38px rgba(15, 23, 42, 0.18);
+        display: none;
+        z-index: 60;
+    }
+    .store-address-control.is-open .store-address-popover { display:block; }
+    .store-address-popover .store-address-editor {
+        width: 100%;
+        margin-top: 0;
+    }
+    .store-address-popover .store-address-editor__hint {
+        margin-top: 8px;
+    }
+    .store-address-popover .master-indicator {
+        margin-top: 8px;
+        font-size: 12px;
+    }
         .store-management .add-store-btn {
             background: #0a84ff;
             color: #fff;
@@ -2235,15 +2438,28 @@
                 padding: 6px 10px;
             }
             .store-search.open .search-input { width: 200px; }
+            .store-address-popover {
+                left: auto;
+                right: 0;
+                width: min(320px, calc(100vw - 28px));
+            }
+            .store-address-popover .store-address-editor {
+                flex-wrap: wrap;
+            }
+            .store-address-popover .store-address-editor__button {
+                width: 100%;
+            }
             /* Hide large desktop buttons; we show compact ones in the mobile action row */
             .store-management .add-store-btn, .store-management .delete-store-btn { display:none; }
 
             /* Sections */
-            .section-header { flex-direction: row; align-items: center; gap: 10px; justify-content: space-between; }
-            .section-header .section-left { justify-content: flex-start; }
+            .section-header { flex-direction: row; align-items: flex-start; gap: 10px; justify-content: space-between; }
+            .section-header .section-left { justify-content: flex-start; align-items: flex-start; }
             .section-header .section-left h3 { display: none; }
             .section-header .store-info .store-number,
             .section-header .store-info .store-name { display: none; }
+            .section-header .store-address-editor { width: min(100%, 420px); }
+            .section-header .store-address-editor__button { padding: 0 12px; }
             .section-header .master-indicator { display: flex !important; font-size: 14px; }
             /* Keep Add Screen button visible on mobile */
             .section-header .add-screen-btn { display: inline-flex !important; }
@@ -2924,6 +3140,24 @@
                         <input id="storeSearchInput" class="search-input" type="search" placeholder="Search store # or name" autocomplete="off" aria-label="Search stores" />
                         <div class="results" id="storeSearchResults" role="listbox" aria-label="Store results"></div>
                     </div>
+                    <div class="store-address-control" id="storeAddressControl">
+                        <button class="store-address-toggle" type="button" id="storeAddressToggle" title="Store address" aria-label="Store address" aria-expanded="false" onclick="toggleStoreAddressPopover(event)">
+                            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M12 21s-6-4.35-6-10a6 6 0 1 1 12 0c0 5.65-6 10-6 10Z"></path>
+                                <circle cx="12" cy="11" r="2.5"></circle>
+                            </svg>
+                        </button>
+                        <div class="store-address-popover" id="storeAddressPopover">
+                            <div class="store-address-editor">
+                                <input type="text" id="current-store-address-input" class="store-address-editor__input" placeholder="Search or choose store address" onkeydown="if(event.key==='Enter'){ event.preventDefault(); saveCurrentStoreAddress(); }">
+                                <button type="button" class="store-address-editor__button" onclick="saveCurrentStoreAddress()">Save Address</button>
+                            </div>
+                            <p class="store-address-editor__hint" id="current-store-address-hint">Used when this store has no Pi location yet.</p>
+                            <div class="master-indicator" id="master-indicator" style="display: none; color: #f39c12; font-weight: bold;">
+                                👑 MASTER STORE
+                            </div>
+                        </div>
+                    </div>
                     <button class="add-store-btn" onclick="showAddStoreDialog()" title="Add Store">
                         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
                             <path d="M12 5v14M5 12h14" fill="none"></path>
@@ -2947,18 +3181,6 @@
                 <div class="section-header">
                     <div class="section-left">
                         <h3>📺 Regular Screens</h3>
-                        <div class="store-info" id="current-store-info">
-                            {% if config.stores and config.stores|length > 0 %}
-                            <div class="store-number" id="current-store-id">{{ config.stores[0].id }}</div>
-                            <div class="store-name" id="current-store-name">{{ config.stores[0].name }}</div>
-                            {% else %}
-                            <div class="store-number" id="current-store-id">—</div>
-                            <div class="store-name" id="current-store-name">No stores yet</div>
-                            {% endif %}
-                            <div class="master-indicator" id="master-indicator" style="display: none; color: #f39c12; font-weight: bold;">
-                                👑 MASTER STORE
-                            </div>
-                        </div>
                     </div>
                     <div style="display:flex;gap:8px;align-items:center;">
                         <button class="add-screen-btn" onclick="addNewScreen('screen')">
@@ -4985,6 +5207,317 @@
                 </svg>`;
         }
 
+        function getStoreDataById(storeId){
+            try {
+                return (allStoresData.stores || []).find((store) => String(store.id) === String(storeId)) || null;
+            } catch {
+                return null;
+            }
+        }
+
+        window.dashboardGooglePlacesBlocked = false;
+        window.gm_authFailure = function(){
+            window.dashboardGooglePlacesBlocked = true;
+        };
+
+        function ensureAddressSuggestionBox(){
+            let box = document.getElementById('store-address-suggestions');
+            if (!box) {
+                box = document.createElement('div');
+                box.id = 'store-address-suggestions';
+                box.className = 'store-address-suggestions';
+                box.hidden = true;
+                document.body.appendChild(box);
+            }
+            return box;
+        }
+
+        function hideAddressSuggestionBox(){
+            const box = document.getElementById('store-address-suggestions');
+            if (!box) return;
+            box.hidden = true;
+            box.innerHTML = '';
+            delete box.dataset.inputId;
+        }
+
+        function positionAddressSuggestionBox(box, input){
+            const rect = input.getBoundingClientRect();
+            box.style.left = `${rect.left + window.scrollX}px`;
+            box.style.top = `${rect.bottom + window.scrollY + 8}px`;
+            box.style.width = `${Math.max(rect.width, 280)}px`;
+        }
+
+        function showAddressSuggestionBox(inputId, input, results){
+            const box = ensureAddressSuggestionBox();
+            box.innerHTML = '';
+            const query = input.value.trim();
+            const items = [];
+            if (query) {
+                items.push({
+                    display_name: query,
+                    manual: true
+                });
+            }
+            (results || []).forEach((item) => {
+                const value = String((item && item.display_name) || '').trim();
+                if (!value) return;
+                if (items.some((existing) => String(existing.display_name || '').trim().toLowerCase() === value.toLowerCase())) {
+                    return;
+                }
+                items.push(item);
+            });
+            if (!items.length) {
+                hideAddressSuggestionBox();
+                return;
+            }
+            items.forEach((item) => {
+                if (!item || !item.display_name) return;
+                const option = document.createElement('button');
+                option.type = 'button';
+                option.className = `store-address-suggestions__item${item.manual ? ' is-manual' : ''}`;
+                option.textContent = item.manual ? `Use exactly: ${item.display_name}` : item.display_name;
+                option.addEventListener('mousedown', function(event) {
+                    event.preventDefault();
+                });
+                option.addEventListener('click', function() {
+                    input.value = item.display_name;
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                    hideAddressSuggestionBox();
+                    if (inputId === 'current-store-address-input') {
+                        saveCurrentStoreAddress();
+                    }
+                });
+                box.appendChild(option);
+            });
+            positionAddressSuggestionBox(box, input);
+            box.dataset.inputId = inputId;
+            box.hidden = false;
+        }
+
+        async function fetchGoogleAddressSuggestions(query){
+            const response = await fetch(`/api/google_address_search?q=${encodeURIComponent(query)}`);
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok || !payload.success) {
+                throw new Error(payload.error || 'Google address lookup failed');
+            }
+            return payload.results || [];
+        }
+
+        function initializeGoogleAddressAutocomplete(inputId){
+            const input = document.getElementById(inputId);
+            if (!input) return false;
+            if (input.dataset.googleAutocompleteReady === '1') return true;
+            if (window.dashboardGooglePlacesBlocked) return false;
+            input.setAttribute('autocomplete', 'off');
+            let debounceTimer = null;
+            let requestToken = 0;
+            input.addEventListener('input', function() {
+                if (window.dashboardGooglePlacesBlocked) return;
+                const query = input.value.trim();
+                if (debounceTimer) clearTimeout(debounceTimer);
+                if (query.length < 3) {
+                    hideAddressSuggestionBox();
+                    return;
+                }
+                debounceTimer = setTimeout(async function() {
+                    const currentToken = ++requestToken;
+                    try {
+                        const results = await fetchGoogleAddressSuggestions(query);
+                        if (currentToken !== requestToken || window.dashboardGooglePlacesBlocked) return;
+                        showAddressSuggestionBox(inputId, input, results);
+                    } catch {
+                        if (currentToken !== requestToken) return;
+                        window.dashboardGooglePlacesBlocked = true;
+                        initializeFallbackAddressAutocomplete(inputId);
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                }, 220);
+            });
+            input.addEventListener('focus', function() {
+                if (!window.dashboardGooglePlacesBlocked && input.value.trim().length >= 3) {
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            });
+            input.addEventListener('blur', function() {
+                setTimeout(hideAddressSuggestionBox, 120);
+            });
+            window.addEventListener('resize', hideAddressSuggestionBox);
+            window.addEventListener('scroll', hideAddressSuggestionBox, true);
+            input.dataset.googleAutocompleteReady = '1';
+            return true;
+        }
+
+        function initializeFallbackAddressAutocomplete(inputId){
+            const input = document.getElementById(inputId);
+            if (!input || input.dataset.fallbackAutocompleteReady === '1') return;
+            input.setAttribute('autocomplete', 'off');
+            let debounceTimer = null;
+            let requestToken = 0;
+            input.addEventListener('input', function() {
+                const query = input.value.trim();
+                if (debounceTimer) clearTimeout(debounceTimer);
+                if (query.length < 3) {
+                    hideAddressSuggestionBox();
+                    return;
+                }
+                debounceTimer = setTimeout(async function() {
+                    const currentToken = ++requestToken;
+                    try {
+                        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=8&accept-language=en&countrycodes=au&q=${encodeURIComponent(query)}`);
+                        if (!response.ok) throw new Error('Lookup failed');
+                        const results = await response.json();
+                        if (currentToken !== requestToken) return;
+                        showAddressSuggestionBox(inputId, input, results || []);
+                    } catch {
+                        if (currentToken !== requestToken) return;
+                        hideAddressSuggestionBox();
+                    }
+                }, 220);
+            });
+            input.addEventListener('focus', function() {
+                if (input.value.trim().length >= 3) {
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            });
+            input.addEventListener('blur', function() {
+                setTimeout(hideAddressSuggestionBox, 120);
+            });
+            window.addEventListener('resize', hideAddressSuggestionBox);
+            window.addEventListener('scroll', hideAddressSuggestionBox, true);
+            input.dataset.fallbackAutocompleteReady = '1';
+        }
+
+        function initializeStoreAddressInputs(){
+            ['current-store-address-input', 'newStoreAddress'].forEach(function(inputId) {
+                const hasGoogle = initializeGoogleAddressAutocomplete(inputId);
+                if (!hasGoogle) {
+                    initializeFallbackAddressAutocomplete(inputId);
+                }
+            });
+        }
+
+        function getResolvedScreenAddress(screenData, storeId){
+            const store = getStoreDataById(storeId) || {};
+            const screenAddress = String((screenData && screenData.address) || '').trim();
+            const storeAddress = String(store.address || '').trim();
+            const locationName = String((screenData && screenData.location_name) || '').trim();
+            if (screenAddress) {
+                return {
+                    label: locationName || 'Saved screen address',
+                    address: screenAddress,
+                    source: 'screen'
+                };
+            }
+            if (storeAddress) {
+                return {
+                    label: 'Store address fallback',
+                    address: storeAddress,
+                    source: 'store'
+                };
+            }
+            return {
+                label: 'Address',
+                address: '',
+                source: ''
+            };
+        }
+
+        function updateStoreAddressUi(storeData){
+            const input = document.getElementById('current-store-address-input');
+            const hint = document.getElementById('current-store-address-hint');
+            if (!input || !hint) return;
+            const address = String((storeData && storeData.address) || '').trim();
+            input.value = address;
+            hint.textContent = address
+                ? 'Used automatically when this store has no Pi location yet.'
+                : 'Add a store address so screens can fall back to it before Pi location is assigned.';
+        }
+
+        function updateRenderedStoreAddressFallback(storeId, address){
+            const normalizedStoreId = String(storeId || '');
+            document.querySelectorAll('.screen-card').forEach((card) => {
+                if (String(card.dataset.store || '') !== normalizedStoreId) return;
+                const labelEl = card.querySelector('.screen-card-location__label');
+                const valueEl = card.querySelector('.screen-card-location__value');
+                if (!labelEl || !valueEl) return;
+                const screenId = String(card.id || '').replace(/^card-/, '');
+                const screensForStore = (allStoresData.screens && (allStoresData.screens[storeId] || allStoresData.screens[normalizedStoreId])) || {};
+                const screenData = screensForStore[screenId] || {};
+                const resolved = getResolvedScreenAddress(screenData, normalizedStoreId);
+                labelEl.textContent = resolved.label || 'Address';
+                valueEl.textContent = resolved.address || 'No saved screen or store address';
+                valueEl.classList.toggle('is-empty', !resolved.address);
+            });
+        }
+
+        function setStoreAddressPopoverOpen(isOpen){
+            const control = document.getElementById('storeAddressControl');
+            const toggle = document.getElementById('storeAddressToggle');
+            if (!control || !toggle) return;
+            control.classList.toggle('is-open', !!isOpen);
+            toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            if (isOpen) {
+                const input = document.getElementById('current-store-address-input');
+                if (input) {
+                    setTimeout(() => input.focus(), 0);
+                }
+            }
+        }
+
+        function toggleStoreAddressPopover(event){
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            const control = document.getElementById('storeAddressControl');
+            const isOpen = !!(control && control.classList.contains('is-open'));
+            setStoreAddressPopoverOpen(!isOpen);
+            return false;
+        }
+
+        document.addEventListener('click', function(event) {
+            const control = document.getElementById('storeAddressControl');
+            if (!control || !control.classList.contains('is-open')) return;
+            if (control.contains(event.target)) return;
+            setStoreAddressPopoverOpen(false);
+        });
+
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                setStoreAddressPopoverOpen(false);
+            }
+        });
+
+        async function saveCurrentStoreAddress(){
+            const store = getStoreDataById(currentStoreId);
+            const input = document.getElementById('current-store-address-input');
+            if (!store || !input) return;
+            const address = input.value.trim();
+            try {
+                const response = await fetch('/update_store_address', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ store_id: currentStoreId, address })
+                });
+                const parsed = await readJsonOrText(response);
+                const data = parsed.json || {};
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || (parsed.text || '').slice(0, 180) || `HTTP ${response.status}`);
+                }
+                store.address = address;
+                updateStoreAddressUi(store);
+                updateRenderedStoreAddressFallback(currentStoreId, address);
+                setStoreAddressPopoverOpen(false);
+                loadScreensForStore(currentStoreId);
+                refreshDashboardOverview();
+                showMessage(address ? '📍 Store address saved' : '📍 Store address cleared');
+            } catch (error) {
+                console.error('Failed to save store address:', error);
+                showMessage(`❌ ${error && error.message ? error.message : 'Failed to save store address'}`, '#e74c3c');
+            }
+        }
+
         function updateProtectionStatus(screenId, isProtected) {
             fetch('/update_protection', {
                 method: 'POST',
@@ -5098,6 +5631,7 @@
             const previewClass = getPreviewClass(screenData);
             const rotation = screenData.rotation || 0;
             const canRotate = isMasterStore(storeId) || !!screenData.protected; // Only rotate if master or protected
+            const resolvedAddress = getResolvedScreenAddress(screenData, storeId);
             // Compute logical screen type for persistence (after first underscore)
             const logicalType = screenId.includes('_') ? screenId.substring(screenId.indexOf('_') + 1) : screenId;
             let applyAllState = {};
@@ -5190,6 +5724,11 @@ allowfullscreen></iframe></div>`;
                     <button id="mute-btn-${screenId}" class="mute-btn screen-card-action-btn${screenData.muted ? ' muted' : ''}" type="button" onclick="toggleScreenMute('${screenId}')" title="${screenData.muted ? 'Unmute screen sound' : 'Mute screen sound'}" aria-label="${screenData.muted ? 'Unmute screen sound' : 'Mute screen sound'}">${getMuteActionIconMarkup(screenData.muted)}</button>
                     <input type="file" class="file-input" id="file-${screenId}" style="display:none;"
                            accept="image/*,video/*" onchange="uploadFile('${screenId}', this)">
+                </div>
+
+                <div class="screen-card-location">
+                    <div class="screen-card-location__label">${escapeHtml(resolvedAddress.label)}</div>
+                    <div class="screen-card-location__value${resolvedAddress.address ? '' : ' is-empty'}">${escapeHtml(resolvedAddress.address || 'No saved screen or store address')}</div>
                 </div>
                 
                 <div class="playlist-section" id="playlist-${screenId}" style="margin-top:15px; border:none; background:transparent; padding:0; border-radius:0;">
@@ -6650,7 +7189,14 @@ allowfullscreen></iframe></div>`;
                     const items = data.playlist || [];
                     container.innerHTML = '';
                     if (!items.length) {
-                        container.innerHTML = '<div style="font-size:11px; color:#666;">(No playlist items yet)</div>';
+                        container.innerHTML = `
+                            <div class="schedule-section">
+                                <div class="schedule-header">
+                                    <div class="schedule-title">Schedule</div>
+                                    <button type="button" class="add-slot-btn" onclick="toggleScreenActionMenu(event, '${screenId}')" title="Add media or schedule action">+</button>
+                                </div>
+                                <div style="font-size:11px; color:#666;">(No playlist items yet)</div>
+                            </div>`;
                         return;
                     }
                           const now = new Date();
@@ -7645,6 +8191,7 @@ allowfullscreen></iframe></div>`;
         
         function initializeDashboard() {
             initializeDashboardSection();
+            initializeStoreAddressInputs();
             // Initialize the store dropdown to match currentStoreId
             const storeSelect = document.getElementById('storeSelect');
             storeSelect.value = currentStoreId;
@@ -7652,8 +8199,7 @@ allowfullscreen></iframe></div>`;
             // Update store display
             const storeData = allStoresData.stores.find(store => store.id === currentStoreId);
             if (storeData) {
-                document.getElementById('current-store-id').textContent = storeData.id;
-                document.getElementById('current-store-name').textContent = storeData.name;
+                updateStoreAddressUi(storeData);
             }
 
             initializeDashboardOverview();
@@ -9443,8 +9989,8 @@ allowfullscreen></iframe></div>`;
             const storeData = allStoresData.stores.find(store => store.id === storeId);
             console.log('Found store data:', storeData);
             if (storeData) {
-                document.getElementById('current-store-id').textContent = storeData.id;
-                document.getElementById('current-store-name').textContent = storeData.name;
+                updateStoreAddressUi(storeData);
+                setStoreAddressPopoverOpen(false);
                 
                 // Show/hide master store indicator and update delete button
                 const masterIndicator = document.getElementById('master-indicator');
@@ -9662,6 +10208,7 @@ allowfullscreen></iframe></div>`;
             modal.classList.toggle('dashboard-side-sheet', isDesktopSidebarLayout());
             modal.classList.add('visible');
             setAddStoreTab('single');
+            initializeStoreAddressInputs();
             // focus first field after animation frame
             requestAnimationFrame(() => {
                 const first = document.getElementById('newStoreId');
@@ -9691,6 +10238,7 @@ allowfullscreen></iframe></div>`;
     function addNewStore() {
             const storeId = document.getElementById('newStoreId').value.trim();
             const storeName = document.getElementById('newStoreName').value.trim();
+            const storeAddress = document.getElementById('newStoreAddress').value.trim();
             
             if (!storeId || !storeName) {
                 alert('Please enter both Store ID and Store Name');
@@ -9704,7 +10252,8 @@ allowfullscreen></iframe></div>`;
                 },
                 body: JSON.stringify({
                     store_id: storeId,
-                    store_name: storeName
+                    store_name: storeName,
+                    address: storeAddress
                 })
             })
             .then(response => response.json())
@@ -9717,11 +10266,12 @@ allowfullscreen></iframe></div>`;
                         // Clear form inputs
                         document.getElementById('newStoreId').value = '';
                         document.getElementById('newStoreName').value = '';
+                        document.getElementById('newStoreAddress').value = '';
                         
                         closeAddStoreDialog();
                         
                         // Add the new store to the dropdown dynamically
-                        addStoreToDropdown(storeId, storeName);
+                        addStoreToDropdown(storeId, storeName, storeAddress);
                         
                         // Initialize with no screens; UI will show add placeholders
                         if (!allStoresData.screens) {
@@ -9783,7 +10333,7 @@ allowfullscreen></iframe></div>`;
                 const skipped = data.skipped || [];
                 // Update UI for each added store
                 for (const s of added) {
-                    addStoreToDropdown(s.id, s.name);
+                    addStoreToDropdown(s.id, s.name, s.address || '');
                     if (!allStoresData.screens) allStoresData.screens = {};
                     allStoresData.screens[s.id] = {};
                 }
@@ -9807,12 +10357,12 @@ allowfullscreen></iframe></div>`;
             });
         }
         
-        function addStoreToDropdown(storeId, storeName) {
+        function addStoreToDropdown(storeId, storeName, storeAddress = '') {
             // Add to the stores array in memory
             if (!allStoresData.stores) {
                 allStoresData.stores = [];
             }
-            allStoresData.stores.push({ id: storeId, name: storeName });
+            allStoresData.stores.push({ id: storeId, name: storeName, address: storeAddress });
             
             // Add option to dropdown
             const storeSelect = document.getElementById('storeSelect');
@@ -10636,6 +11186,10 @@ allowfullscreen></iframe></div>`;
                         <div class="form-group">
                             <label for="newStoreName">Store Name</label>
                             <input type="text" id="newStoreName" placeholder="e.g., Liverpool Branch" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="newStoreAddress">Store Address</label>
+                            <input type="text" id="newStoreAddress" placeholder="Search or choose store address">
                         </div>
                         <div class="modal-buttons">
                             <button type="button" class="btn-secondary" onclick="closeAddStoreDialog()">Cancel</button>

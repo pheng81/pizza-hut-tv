@@ -13,6 +13,31 @@
     .fade { opacity:0; transition: opacity 1s ease; }
     .visible { opacity:1; }
     #overlay { position:absolute; left:10px; bottom:10px; font:12px/1.4 Arial, sans-serif; color:#9aa7ff; opacity:.22; }
+    #address-overlay {
+      position: absolute;
+      right: 20px;
+      bottom: 20px;
+      max-width: 44vw;
+      padding: 9px 12px;
+      border-radius: 12px;
+      background: rgba(8, 15, 32, 0.62);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: #f8fafc;
+      font: 500 20px/1.35 Arial, sans-serif;
+      box-shadow: 0 12px 34px rgba(0,0,0,0.32);
+      text-align: right;
+      pointer-events: none;
+    }
+    #address-overlay[hidden] { display: none; }
+    #address-overlay small {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 11px;
+      font-weight: bold;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(226, 232, 240, 0.78);
+    }
   </style>
 </head>
 <body>
@@ -21,6 +46,7 @@
     <div class="layer" id="layerB"></div>
   </div>
   <div id="overlay"></div>
+  <div id="address-overlay" {% if not display_address %}hidden{% endif %}><small>{% if display_address_source == 'store' %}Store Address{% else %}Screen Address{% endif %}</small><span>{{ display_address or '' }}</span></div>
   <script>
     // ES5-only player for older TV browsers
     function isFullscreen(){ try{ return !!(document.fullscreenElement||document.webkitFullscreenElement||document.mozFullScreenElement||document.msFullscreenElement); }catch(e){ return false; } }
@@ -39,6 +65,18 @@
     var storeId = params.store_id||'';
     var screenId = params.screen_id||'';
     var pairCode = params.code||'';
+    var addressOverlay=document.getElementById('address-overlay');
+    if(addressOverlay && !addressOverlay.hidden){
+      setTimeout(function(){
+        try{
+          addressOverlay.style.transition='opacity 0.35s ease';
+          addressOverlay.style.opacity='0';
+          setTimeout(function(){ addressOverlay.hidden = true; }, 350);
+        }catch(e){
+          addressOverlay.hidden = true;
+        }
+      }, 3000);
+    }
     var DEFAULT_ORIGIN = 'https://api.everydayadvertise.com';
     var ORIGIN = (window.location && window.location.origin) ? (window.location.origin.indexOf('http:')===0 ? window.location.origin.replace(/^http:/,'https:') : window.location.origin) : DEFAULT_ORIGIN;
     try{ if(location.protocol==='http:' && /(^|\.)everydayadvertise\.com$/i.test(location.hostname)){ location.replace('https:' + location.href.slice(5)); } }catch(e){}

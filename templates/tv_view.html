@@ -34,6 +34,33 @@
 		@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 		.anim { transition: transform var(--motion-dur) ease, opacity var(--motion-dur) ease; /* REMOVED will-change to prevent GPU issues */ }
 		#overlay { position:fixed; left:10px; bottom:10px; color:#9aa7ff; font:12px/1.4 system-ui,Segoe UI,Roboto,Ubuntu,Arial; opacity:.22; pointer-events:none; white-space:pre-line; }
+		#address-overlay {
+			position: fixed;
+			right: 24px;
+			bottom: 24px;
+			max-width: min(44vw, 560px);
+			padding: 10px 14px;
+			border-radius: 14px;
+			background: rgba(8, 15, 32, 0.62);
+			border: 1px solid rgba(255,255,255,0.15);
+			color: #f8fafc;
+			font: 500 22px/1.35 'Segoe UI', Roboto, Arial, sans-serif;
+			letter-spacing: 0.01em;
+			box-shadow: 0 12px 34px rgba(0,0,0,0.32);
+			pointer-events: none;
+			text-align: right;
+			text-wrap: balance;
+		}
+		#address-overlay[hidden] { display: none; }
+		#address-overlay small {
+			display: block;
+			margin-bottom: 4px;
+			font-size: 12px;
+			font-weight: 700;
+			letter-spacing: 0.08em;
+			text-transform: uppercase;
+			color: rgba(226, 232, 240, 0.78);
+		}
 		/* Rotation test controls - only show when ?debug=1 */
 		#rotation-controls { position:fixed; top:10px; right:10px; background:rgba(0,0,0,0.8); padding:10px; border-radius:5px; display:none; }
 		#rotation-controls button { margin:2px; padding:5px 10px; background:#4CAF50; color:white; border:none; border-radius:3px; cursor:pointer; }
@@ -63,7 +90,8 @@
 	
 	<!-- Visual rotation indicator (always shows rotation state when debug=1) -->
 	<div id="rotation-indicator">0°</div>		<!-- Provide template vars as JSON so JS linter doesn't choke on Jinja syntax -->
-	<script id="tv-data" type="application/json">{"store_id": {{ store_id|tojson }}, "screen_id": {{ screen_id|tojson }}, "initial_file": {{ active_file|tojson }}, "media_base_url": {{ (media_base_url or '')|tojson }}}</script>
+	<div id="address-overlay" {% if not display_address %}hidden{% endif %}><small>{% if display_address_source == 'store' %}Store Address{% else %}Screen Address{% endif %}</small><span>{{ display_address or '' }}</span></div>
+	<script id="tv-data" type="application/json">{"store_id": {{ store_id|tojson }}, "screen_id": {{ screen_id|tojson }}, "store_name": {{ (store_name or '')|tojson }}, "display_address": {{ (display_address or '')|tojson }}, "display_address_source": {{ (display_address_source or '')|tojson }}, "initial_file": {{ active_file|tojson }}, "media_base_url": {{ (media_base_url or '')|tojson }}}</script>
 		<script>
 			const __tvCfg = JSON.parse(document.getElementById('tv-data')?.textContent || '{}');
 			// Query params helper
@@ -86,6 +114,20 @@
 			const screenId = __tvCfg.screen_id;
 			const initialFile = __tvCfg.initial_file;
 			const MEDIA_BASE_URL = (function(){ try{ let b = __tvCfg.media_base_url || ''; if(b && !/\/$/.test(b)) b += '/'; return b; }catch{return '';} })();
+			const addressOverlay = document.getElementById('address-overlay');
+			if (addressOverlay && !addressOverlay.hidden) {
+				setTimeout(() => {
+					try {
+						addressOverlay.style.transition = 'opacity 0.35s ease';
+						addressOverlay.style.opacity = '0';
+						setTimeout(() => {
+							addressOverlay.hidden = true;
+						}, 350);
+					} catch {
+						addressOverlay.hidden = true;
+					}
+				}, 3000);
+			}
 			
 			// Debug helper to print overlay when ?debug=1 (MOVED TO TOP TO PREVENT CRASHES)
 			const __dbgEnabled = (()=>{ try{ return (new URLSearchParams(location.search)).get('debug')==='1'; }catch{return false;} })();
