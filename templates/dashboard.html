@@ -469,8 +469,8 @@
         .promos-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(285px,1fr)); gap:16px; margin:0 0 28px 0; }
         
         .screen-card {
-            background-color: white;
-            border: none;
+            background-color: #e7ebf0;
+            border: 1px solid #d5dbe3;
             border-radius: 8px;
             padding: 16px;
             box-shadow: none;
@@ -488,17 +488,17 @@
         
         .screen-card.vertical-mode {
             border-left: none;
-            background-color: #fdf2f2;
+            background-color: #eceff3;
         }
         
         .screen-card.horizontal-mode {
             border-left: none;
-            background-color: #f2f8fd;
+            background-color: #e9edf2;
         }
         
         .screen-card.default-mode {
             border-left: none;
-            background-color: #f8f9fa;
+            background-color: #e7ebf0;
         }
         
         .apply-all-section {
@@ -704,14 +704,93 @@
     .upload-btn:hover { background:#0b5ed7; }
     .delete-btn { background:#dc3545; color:#fff; }
     .delete-btn:hover { background:#c82333; }
-    .rotate-btn { background:#6366f1; color:#fff; }
-    .rotate-btn:hover { background:#4f51e8; }
     .upload-btn:active, .delete-btn:active, .rotate-btn:active { transform:translateY(1px); box-shadow:0 0 0 rgba(0,0,0,0); }
-    .mute-btn { background:#059669; color:#fff; font-size:12px; line-height:1; padding:6px 12px; border-radius:6px; border:none; cursor:pointer; display:inline-flex; align-items:center; gap:4px; margin:0; box-shadow:none; transition:.18s background,.18s box-shadow,.18s transform; }
-    .mute-btn.muted { background:#6b7280; }
-    .mute-btn:hover { filter:brightness(1.1); }
-    .mute-btn:active { transform:translateY(1px); }
     .button-row { display:flex; align-items:center; gap:10px; flex-wrap:nowrap; margin:10px 0 4px; }
+    .screen-card-action-strip {
+        justify-content: flex-end;
+        gap: 6px;
+    }
+    .screen-card-action-btn {
+        width: 34px;
+        height: 34px;
+        padding: 0;
+        border: none;
+        border-radius: 10px;
+        background: transparent;
+        color: #475569;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: background .18s ease, color .18s ease, transform .18s ease;
+    }
+    .screen-card-action-btn:hover {
+        background: #eef4ff;
+        color: #1d4ed8;
+    }
+    .screen-card-action-btn:active {
+        transform: translateY(1px);
+    }
+    .screen-card-action-btn:focus-visible {
+        outline: 2px solid #93c5fd;
+        outline-offset: 2px;
+    }
+    .screen-card-action-btn svg {
+        width: 18px;
+        height: 18px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.9;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        pointer-events: none;
+    }
+    .rotate-btn {
+        color: #5b21b6;
+    }
+    .rotate-btn:hover {
+        background: #f3e8ff;
+        color: #6d28d9;
+    }
+    .mute-btn {
+        color: #0f766e;
+        font-size: 0;
+        line-height: 0;
+        padding: 0;
+        border-radius: 10px;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: background .18s ease, color .18s ease, transform .18s ease;
+    }
+    .mute-btn:hover {
+        background: #ecfdf5;
+        color: #047857;
+    }
+    .mute-btn.muted {
+        color: #64748b;
+    }
+    .mute-btn.muted:hover {
+        background: #f1f5f9;
+        color: #475569;
+    }
+    .screen-card-action-state {
+        width: 28px;
+        height: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #94a3b8;
+        flex: 0 0 auto;
+    }
+    .screen-card-action-state .rotation-indicator {
+        width: 16px !important;
+        height: 16px !important;
+        opacity: 0.82;
+    }
         
         .orientation-controls {
             display: flex;
@@ -944,6 +1023,56 @@
     .add-slot-btn:hover { background:#e8f2ff; border-color:#8fb8e3; box-shadow:none; }
     .add-slot-btn:active { background:#d9e9f9; transform:translateY(1px); box-shadow:none; }
     .add-slot-btn:focus-visible { outline:none; box-shadow:none; }
+    .screen-action-menu {
+        position: fixed;
+        z-index: 10020;
+        min-width: 188px;
+        padding: 8px;
+        background: rgba(255,255,255,0.98);
+        border: 1px solid #dbe4ee;
+        border-radius: 12px;
+        box-shadow: 0 18px 38px rgba(15, 23, 42, 0.18);
+        opacity: 0;
+        transform: translateY(8px) scale(0.96);
+        transform-origin: top left;
+        pointer-events: none;
+        transition: opacity .18s ease, transform .18s ease;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+    }
+    .screen-action-menu.is-open {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        pointer-events: auto;
+    }
+    .screen-action-menu__button {
+        width: 100%;
+        border: none;
+        background: transparent;
+        border-radius: 8px;
+        padding: 10px 12px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: #1f2937;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        text-align: left;
+        transition: background .16s ease, transform .16s ease;
+    }
+    .screen-action-menu__button:hover {
+        background: #f3f7fb;
+    }
+    .screen-action-menu__button:active {
+        transform: translateY(1px);
+    }
+    .screen-action-menu__icon {
+        width: 22px;
+        text-align: center;
+        font-size: 15px;
+        flex: 0 0 22px;
+    }
     .schedule-primary { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:6px; }
     .schedule-extra-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:6px; }
     .slot-box { position:relative; background:#fdfdfd; border:1px solid #dcdfe3; border-radius:6px; padding:4px 6px 6px; display:flex; flex-direction:column; gap:3px; min-width:0; }
@@ -1132,9 +1261,9 @@
         
         /* Section Layout Styles */
         .screens-section, .promos-section {
-            background: #fff;
-            border-radius: 8px;
-            padding: 20px;
+            background: transparent;
+            border-radius: 0;
+            padding: 0;
             margin-bottom: 20px;
             box-shadow: none;
         }
@@ -4832,6 +4961,30 @@
             }
         }
 
+        function getRotateActionIconMarkup(){
+            return `
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M3 12a9 9 0 1 0 3-6.708"></path>
+                    <path d="M3 3v5h5"></path>
+                </svg>`;
+        }
+
+        function getMuteActionIconMarkup(isMuted){
+            return isMuted
+                ? `
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M11 5 6 9H3v6h3l5 4z"></path>
+                    <path d="m16 9 5 6"></path>
+                    <path d="m21 9-5 6"></path>
+                </svg>`
+                : `
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M11 5 6 9H3v6h3l5 4z"></path>
+                    <path d="M15.5 8.5a5 5 0 0 1 0 7"></path>
+                    <path d="M18.5 6a8.5 8.5 0 0 1 0 12"></path>
+                </svg>`;
+        }
+
         function updateProtectionStatus(screenId, isProtected) {
             fetch('/update_protection', {
                 method: 'POST',
@@ -5029,13 +5182,12 @@ allowfullscreen></iframe></div>`;
                     }
                 </div>
                 
-                <div class="button-row" style="justify-content:center; flex-wrap: nowrap; gap:6px; align-items:center; width:100%;">
-                    <button class="upload-btn" onclick="openReplaceModal('${screenId}','SINGLE')" style="flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 10px; font-size:clamp(10px, 2vw, 12px);">Schedule</button>
-                    <button class="upload-btn" onclick="openAutoSliceModal('${screenId}')" style="flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 10px; font-size:clamp(10px, 2vw, 12px); background:#28a745;" title="Auto-slice multi-screen videos">✂️ Auto-Slice</button>
-                    <button class="upload-btn" onclick="openYouTubeModal('${screenId}')" title="Add YouTube video to schedule" style="flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 10px; font-size:clamp(10px, 2vw, 12px); background:#FF0000;">▶️ YouTube</button>
-                    <button class="rotate-btn" type="button" onclick="rotateScreen('${screenId}')" title="Rotate image 90°" style="flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 10px; font-size:clamp(10px, 2vw, 12px);">⤾ Rotate</button>
-                    <button id="mute-btn-${screenId}" class="mute-btn${screenData.muted ? ' muted' : ''}" type="button" onclick="toggleScreenMute('${screenId}')" title="${screenData.muted ? 'Unmute screen sound' : 'Mute screen sound'}" style="flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 10px; font-size:clamp(10px, 2vw, 12px);">${screenData.muted ? '🔇' : '🔊'}</button>
-                    <span id="rotation-indicator-${screenId}" class="rotation-indicator rotate-${rotation}" title="Current rotation" style="flex:0 0 18px; width:18px; height:18px;"></span>
+                <div class="button-row screen-card-action-strip" style="flex-wrap: nowrap; align-items:center; width:100%;">
+                    <div class="screen-card-action-state" title="Current rotation">
+                        <span id="rotation-indicator-${screenId}" class="rotation-indicator rotate-${rotation}" style="width:16px; height:16px;"></span>
+                    </div>
+                    <button class="rotate-btn screen-card-action-btn" type="button" onclick="rotateScreen('${screenId}')" title="Rotate image 90°" aria-label="Rotate image 90 degrees">${getRotateActionIconMarkup()}</button>
+                    <button id="mute-btn-${screenId}" class="mute-btn screen-card-action-btn${screenData.muted ? ' muted' : ''}" type="button" onclick="toggleScreenMute('${screenId}')" title="${screenData.muted ? 'Unmute screen sound' : 'Mute screen sound'}" aria-label="${screenData.muted ? 'Unmute screen sound' : 'Mute screen sound'}">${getMuteActionIconMarkup(screenData.muted)}</button>
                     <input type="file" class="file-input" id="file-${screenId}" style="display:none;"
                            accept="image/*,video/*" onchange="uploadFile('${screenId}', this)">
                 </div>
@@ -6430,8 +6582,9 @@ allowfullscreen></iframe></div>`;
                     // Update button appearance
                     const btn = document.getElementById(`mute-btn-${screenId}`);
                     if (btn) {
-                        btn.textContent = newMuted ? '🔇' : '🔊';
+                        btn.innerHTML = getMuteActionIconMarkup(newMuted);
                         btn.title = newMuted ? 'Unmute screen sound' : 'Mute screen sound';
+                        btn.setAttribute('aria-label', newMuted ? 'Unmute screen sound' : 'Mute screen sound');
                         btn.classList.toggle('muted', newMuted);
                     }
                 } else {
@@ -6604,7 +6757,7 @@ allowfullscreen></iframe></div>`;
                                         <div class=\"schedule-section\"> 
                                                                                 <div class=\"schedule-header\">
                                             <div class=\"schedule-title\">Schedule</div>
-                                            <button type="button" class="add-slot-btn" onclick="addScheduleWindow('${screenId}','${item.id}')" title="Add schedule window">+</button>
+                                            <button type="button" class="add-slot-btn" onclick="toggleScreenActionMenu(event, '${screenId}')" title="Add media or schedule action">+</button>
                                                                                 </div>
                                                                                                                                                                 <div style="margin-top:4px;font-size:11px;font-weight:600;color:#555;display:flex;align-items:center;gap:6px;">
                                                                                                                                                                     <span style="letter-spacing:.3px;">Repeat:</span>
@@ -6715,6 +6868,111 @@ allowfullscreen></iframe></div>`;
             
             showPopupMenu(options);
         }
+
+        let screenActionMenu = null;
+        let screenActionMenuAnchor = null;
+
+        function ensureScreenActionMenu(){
+            if(screenActionMenu) return screenActionMenu;
+            const menu = document.createElement('div');
+            menu.id = 'screen-action-menu';
+            menu.className = 'screen-action-menu';
+            menu.hidden = true;
+            menu.innerHTML = `
+                <button type="button" class="screen-action-menu__button" data-action="schedule">
+                    <span class="screen-action-menu__icon">📅</span>
+                    <span>Schedule</span>
+                </button>
+                <button type="button" class="screen-action-menu__button" data-action="auto">
+                    <span class="screen-action-menu__icon">✂️</span>
+                    <span>Auto-Slice</span>
+                </button>
+                <button type="button" class="screen-action-menu__button" data-action="youtube">
+                    <span class="screen-action-menu__icon">▶️</span>
+                    <span>YouTube</span>
+                </button>
+            `;
+            menu.addEventListener('click', (event) => {
+                const actionBtn = event.target.closest('[data-action]');
+                if(!actionBtn) return;
+                const screenId = menu.dataset.screenId || '';
+                const action = actionBtn.getAttribute('data-action');
+                closeScreenActionMenu();
+                if(!screenId) return;
+                if(action === 'schedule'){
+                    openReplaceModal(screenId,'SINGLE');
+                } else if(action === 'auto'){
+                    openAutoSliceModal(screenId);
+                } else if(action === 'youtube'){
+                    openYouTubeModal(screenId);
+                }
+            });
+            document.body.appendChild(menu);
+            screenActionMenu = menu;
+            return menu;
+        }
+
+        function positionScreenActionMenu(anchor, menu){
+            if(!anchor || !menu) return;
+            const rect = anchor.getBoundingClientRect();
+            menu.hidden = false;
+            const menuWidth = menu.offsetWidth || 188;
+            const menuHeight = menu.offsetHeight || 132;
+            const gap = 10;
+            let left = rect.right + gap + window.scrollX;
+            let top = rect.top + window.scrollY - 6;
+            const maxLeft = window.scrollX + window.innerWidth - menuWidth - 12;
+            const maxTop = window.scrollY + window.innerHeight - menuHeight - 12;
+            if(left > maxLeft){
+                left = rect.left + window.scrollX - menuWidth - gap;
+            }
+            if(left < window.scrollX + 8){
+                left = window.scrollX + 8;
+            }
+            top = Math.max(window.scrollY + 8, Math.min(top, maxTop));
+            menu.style.left = left + 'px';
+            menu.style.top = top + 'px';
+        }
+
+        function closeScreenActionMenu(){
+            if(!screenActionMenu) return;
+            screenActionMenu.classList.remove('is-open');
+            screenActionMenu.hidden = true;
+            delete screenActionMenu.dataset.screenId;
+            screenActionMenuAnchor = null;
+        }
+
+        function toggleScreenActionMenu(event, screenId){
+            if(event){
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            const anchor = event && event.currentTarget ? event.currentTarget : null;
+            const menu = ensureScreenActionMenu();
+            const alreadyOpen = !menu.hidden && menu.classList.contains('is-open');
+            const sameTarget = alreadyOpen && menu.dataset.screenId === String(screenId) && screenActionMenuAnchor === anchor;
+            if(sameTarget){
+                closeScreenActionMenu();
+                return false;
+            }
+            menu.dataset.screenId = String(screenId);
+            screenActionMenuAnchor = anchor;
+            positionScreenActionMenu(anchor, menu);
+            requestAnimationFrame(() => menu.classList.add('is-open'));
+            return false;
+        }
+
+        document.addEventListener('click', (event) => {
+            if(!screenActionMenu || screenActionMenu.hidden) return;
+            const clickedInsideMenu = screenActionMenu.contains(event.target);
+            const clickedTrigger = event.target.closest('.add-slot-btn');
+            if(!clickedInsideMenu && !clickedTrigger){
+                closeScreenActionMenu();
+            }
+        });
+
+        window.addEventListener('resize', () => closeScreenActionMenu());
+        window.addEventListener('scroll', () => closeScreenActionMenu(), true);
         
         function showPopupMenu(options) {
             // Remove any existing popup
