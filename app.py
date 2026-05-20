@@ -11729,13 +11729,12 @@ def pick_active_playlist_item(screen, parent_config=None, store_id=None, screen_
           - ISO 'YYYY-MM-DDTHH:MM:SS'
           - date-only 'YYYY-MM-DD'
         Rules:
-          - If either side contains a date (absolute), weekday gating is ignored.
+                    - If days are provided, they also gate absolute date ranges.
+                        This allows weekday repeat inside an overall start/end date range.
           - Date-only normalization:
               * start=date with no end -> active for that calendar day (00:00..23:59:59)
               * end=date with no start -> active for that calendar day (00:00..23:59:59)
-          - Overnight:
-              * time-only end < start wraps midnight
-              * same-date absolute end < start -> treat as end + 1 day continuous
+          - End must not be earlier than start. Use the next date for overnight ranges.
         """
         def is_time_only(v):
             return bool(v) and (len(v) <= 8) and (':' in v) and ('-' not in v)
@@ -11744,34 +11743,17 @@ def pick_active_playlist_item(screen, parent_config=None, store_id=None, screen_
         def is_absolute(v):
             return bool(v) and (('T' in v) or is_date_only(v))
 
-        # If either boundary is absolute (has a date), ignore weekday gating
-        if not (is_absolute(raw_s) or is_absolute(raw_e)):
-            if days:
-                wd = ['mon','tue','wed','thu','fri','sat','sun'][now.weekday()]
-                if wd not in days:
-                    return False
+        if days:
+            wd = ['mon','tue','wed','thu','fri','sat','sun'][now.weekday()]
+            if wd not in days:
+                return False
 
         if not (raw_s or raw_e):
             return False
-        ws = parse_time_string(raw_s, now) if raw_s else None
-        we = parse_time_string(raw_e, now) if raw_e else None
-        # Normalize date-only single-sided inputs to same-day window
-        if raw_e and is_date_only(raw_e) and we:
-            we = we.replace(hour=23, minute=59, second=59, microsecond=999999)
-        if (raw_s and is_date_only(raw_s)) and not raw_e and ws:
-            # start is date-only, no end -> clamp end to end-of-day
-            we = ws.replace(hour=23, minute=59, second=59, microsecond=999999)
-        if (raw_e and is_date_only(raw_e)) and not raw_s and we:
-            # end is date-only, no start -> clamp start to start-of-day
-            ws = we.replace(hour=0, minute=0, second=0, microsecond=0)
-
-        time_only = (is_time_only(raw_s) or is_time_only(raw_e))
+        ws, we = _normalized_schedule_bounds(raw_s, raw_e, now)
         if ws and we:
             if we < ws:
-                if not time_only and ws.date() == we.date():
-                    we_plus = we + timedelta(days=1)
-                    return ws <= now <= we_plus
-                return (now >= ws) or (now <= we)
+                return False
             return ws <= now <= we
         if ws and now < ws:
             return False
@@ -15013,6 +14995,36 @@ def parse_time_string(time_str, now):
     return None
 
 
+def _is_date_only_schedule_value(value):
+    value = str(value or '').strip()
+    if not value:
+        return False
+    return (
+        (len(value) == 10 and value.count('-') == 2) or
+        (len(value) == 10 and value.count('/') == 2)
+    )
+
+
+def _normalized_schedule_bounds(start_val, end_val, now=None):
+    now = now or datetime.now()
+    start_dt = parse_time_string(start_val, now) if start_val else None
+    end_dt = parse_time_string(end_val, now) if end_val else None
+    if end_val and _is_date_only_schedule_value(end_val) and end_dt:
+        end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+    if start_val and _is_date_only_schedule_value(start_val) and not end_val and start_dt:
+        end_dt = start_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+    if end_val and _is_date_only_schedule_value(end_val) and not start_val and end_dt:
+        start_dt = end_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+    return start_dt, end_dt
+
+
+def _schedule_range_is_valid(start_val, end_val):
+    start_dt, end_dt = _normalized_schedule_bounds(start_val, end_val)
+    if start_dt and end_dt and end_dt < start_dt:
+        return False
+    return True
+
+
 def is_in_time_window(now, start_str, end_str, days=None, store_tz=None):
     """Check if now is within time window - MATCHES DASHBOARD
     
@@ -15051,20 +15063,12 @@ def is_in_time_window(now, start_str, end_str, days=None, store_tz=None):
         end_time = start_time.replace(hour=23, minute=59, second=59)
     if end_str and len(end_str) == 10 and not start_str and end_time:
         start_time = end_time.replace(hour=0, minute=0, second=0)
-    
-    # Handle overnight wrap (e.g., 22:00 - 02:00)
+
     if start_time and end_time:
-        time_only = (':' in (start_str or '') and len(start_str or '') <= 8)
         if end_time < start_time:
-            if not time_only and start_time.date() == end_time.date():
-                # Same-date absolute: treat as end + 1 day
-                end_time_plus = end_time + timedelta(days=1)
-                return start_time <= now <= end_time_plus
-            # Overnight: active if after start OR before end
-            return now >= start_time or now <= end_time
-        else:
-            # Normal: active if between start and end
-            return start_time <= now <= end_time
+            return False
+        # Normal: active if between start and end
+        return start_time <= now <= end_time
     
     # Single boundary
     if start_time and now < start_time:
@@ -17058,6 +17062,10 @@ def update_playlist_item(store_id, screen_id, item_id):
     for item in screen.get('playlist', []):
         if str(item.get('id')) == str(item_id):
             payload = request.get_json() or {}
+            next_start = payload.get('start') if 'start' in payload else item.get('start')
+            next_end = payload.get('end') if 'end' in payload else item.get('end')
+            if ('start' in payload or 'end' in payload) and not _schedule_range_is_valid(next_start, next_end):
+                return jsonify({'success': False, 'error': 'End must be after start. Choose the next date for overnight schedules.'}), 400
             # Allow replacing the media file by referencing an existing upload
             if 'file' in payload:
                 new_file = payload.get('file')
@@ -17110,8 +17118,10 @@ def update_playlist_item(store_id, screen_id, item_id):
             if 'schedule' in payload and isinstance(payload['schedule'], list):
                 # Sanitize entries; preserve optional per-window 'effect' canonically
                 new_sched = []
-                for win in payload['schedule']:
+                for idx, win in enumerate(payload['schedule']):
                     if isinstance(win, dict):
+                        if not _schedule_range_is_valid(win.get('start'), win.get('end')):
+                            return jsonify({'success': False, 'error': f'Schedule window {idx + 1}: end must be after start. Choose the next date for overnight schedules.'}), 400
                         w = {'start': win.get('start'), 'end': win.get('end')}
                         if 'days' in win and isinstance(win.get('days'), list):
                             w['days'] = [str(d).lower()[:3] for d in win.get('days') if d]
@@ -17457,6 +17467,10 @@ def update_schedule_window(store_id, screen_id, item_id, index):
         if str(it.get('id')) == str(item_id):
             sched = it.setdefault('schedule', [])
             if 0 <= index < len(sched):
+                next_start = payload.get('start') if 'start' in payload else sched[index].get('start')
+                next_end = payload.get('end') if 'end' in payload else sched[index].get('end')
+                if ('start' in payload or 'end' in payload) and not _schedule_range_is_valid(next_start, next_end):
+                    return jsonify({'success': False, 'error': 'End must be after start. Choose the next date for overnight schedules.'}), 400
                 if 'start' in payload: sched[index]['start'] = payload.get('start')
                 if 'end' in payload: sched[index]['end'] = payload.get('end')
                 if 'days' in payload:
@@ -20123,11 +20137,20 @@ def pi_map_locations():
                 if lat is None or lng is None:
                     continue
 
+                active_file = pick_active_playlist_item(screen_data, config, str(store_id), str(screen_id))
+                active_media_type = classify_media(active_file) if active_file else ''
+
                 pi_runtime = connected_pis.get(pi_id, {}) or {} if pi_id else {}
-                last_seen_raw = pi_runtime.get('last_seen')
-                if isinstance(last_seen_raw, (int, float)):
-                    is_online = (now_ts - float(last_seen_raw)) < PI_OFFLINE_TIMEOUT
-                    last_seen = datetime.fromtimestamp(float(last_seen_raw)).strftime('%Y-%m-%d %I:%M:%S %p')
+                runtime_last_seen = pi_runtime.get('last_seen')
+                config_last_seen = screen_data.get('last_seen')
+                timestamps = []
+                for raw_ts in (runtime_last_seen, config_last_seen):
+                    if isinstance(raw_ts, (int, float)):
+                        timestamps.append(float(raw_ts))
+                if timestamps:
+                    effective_last_seen = max(timestamps)
+                    is_online = (now_ts - effective_last_seen) < HEARTBEAT_TIMEOUT
+                    last_seen = datetime.fromtimestamp(effective_last_seen).strftime('%Y-%m-%d %I:%M:%S %p')
                 else:
                     is_online = False
                     last_seen = 'Never'
@@ -20141,6 +20164,8 @@ def pi_map_locations():
                     'location_label': location_name,
                     'address': effective_address,
                     'store_address': store_address,
+                    'active_file': str(active_file or ''),
+                    'active_media_type': str(active_media_type or ''),
                     'latitude': lat,
                     'longitude': lng,
                     'status': 'online' if is_online else 'offline',

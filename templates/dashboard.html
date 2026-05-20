@@ -225,7 +225,7 @@
     
     body {
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        background-color: #f5f5f5;
+        background-color: #eeeeee;
         color: #333;
         margin: 0;
         padding: 0;
@@ -598,7 +598,7 @@
         .promos-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(285px,1fr)); gap:16px; margin:0 0 28px 0; }
         
         .screen-card {
-            background-color: #e7ebf0;
+            background-color: #ffffff;
             border: 1px solid #d5dbe3;
             border-radius: 8px;
             padding: 16px;
@@ -606,6 +606,10 @@
             transition: border 0.3s ease, background-color 0.3s ease;
             position: relative;
             overflow: hidden;
+        }
+        .screen-card.map-focus-target {
+            box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.28), 0 12px 24px rgba(10, 132, 255, 0.14);
+            border-color: #7fb0e0;
         }
         .screen-card:after {
             content: '';
@@ -617,17 +621,17 @@
         
         .screen-card.vertical-mode {
             border-left: none;
-            background-color: #eceff3;
+            background-color: #ffffff;
         }
         
         .screen-card.horizontal-mode {
             border-left: none;
-            background-color: #e9edf2;
+            background-color: #ffffff;
         }
         
         .screen-card.default-mode {
             border-left: none;
-            background-color: #e7ebf0;
+            background-color: #ffffff;
         }
 
         .screen-card-location {
@@ -640,6 +644,16 @@
             background: rgba(255,255,255,0.5);
             border: 1px solid rgba(209, 215, 222, 0.9);
         }
+        .screen-card-location.screen-card-location--inline {
+            flex: 1 1 auto;
+            min-width: 0;
+            margin-top: 0;
+            padding: 0;
+            gap: 1px;
+            background: transparent;
+            border: none;
+            border-radius: 0;
+        }
 
         .screen-card-location__label {
             color: #64748b;
@@ -648,11 +662,18 @@
             letter-spacing: 0.04em;
             text-transform: uppercase;
         }
+        .screen-card-location--inline .screen-card-location__label {
+            display: none;
+        }
 
         .screen-card-location__value {
             color: #1f2937;
             font-size: 12px;
             line-height: 1.45;
+        }
+        .screen-card-location--inline .screen-card-location__value {
+            font-size: 11px;
+            line-height: 1.25;
         }
 
         .screen-card-location__value.is-empty {
@@ -865,8 +886,14 @@
     .upload-btn:active, .delete-btn:active, .rotate-btn:active { transform:translateY(1px); box-shadow:0 0 0 rgba(0,0,0,0); }
     .button-row { display:flex; align-items:center; gap:10px; flex-wrap:nowrap; margin:10px 0 4px; }
     .screen-card-action-strip {
-        justify-content: flex-end;
+        justify-content: space-between;
+        gap: 10px;
+    }
+    .screen-card-action-strip__controls {
+        display: inline-flex;
+        align-items: center;
         gap: 6px;
+        flex: 0 0 auto;
     }
     .screen-card-action-btn {
         width: 34px;
@@ -2647,7 +2674,7 @@
 
     @media (min-width: 1024px) {
         body {
-            background: #f6f7fb;
+            background: #eeeeee;
             --dashboard-sidebar-width: 240px;
         }
 
@@ -4478,6 +4505,281 @@
             }
         }
 
+        function buildDashboardOverviewMarkerEntries(devices) {
+            const groups = new Map();
+
+            devices.forEach((device) => {
+                const lat = Number(device.latitude);
+                const lng = Number(device.longitude);
+                if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+                    return;
+                }
+                const key = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+                if (!groups.has(key)) {
+                    groups.set(key, []);
+                }
+                groups.get(key).push({ device, lat, lng });
+            });
+
+            const entries = [];
+            groups.forEach((group) => {
+                if (group.length === 1) {
+                    entries.push(group[0]);
+                    return;
+                }
+
+                const baseLat = group[0].lat;
+                const cosLat = Math.max(0.2, Math.abs(Math.cos((baseLat * Math.PI) / 180)));
+                const radiusLat = 0.006;
+                const radiusLng = radiusLat / cosLat;
+                group.forEach((item, index) => {
+                    const angle = (Math.PI * 2 * index) / group.length;
+                    const ring = Math.floor(index / 6);
+                    const ringScale = 1 + (ring * 0.35);
+                    entries.push({
+                        device: item.device,
+                        lat: item.lat + (Math.sin(angle) * radiusLat * ringScale),
+                        lng: item.lng + (Math.cos(angle) * radiusLng * ringScale),
+                    });
+                });
+            });
+
+            return entries;
+        }
+
+        function getDashboardPopupPreviewHtml(device) {
+            const file = String(device && device.active_file || '').trim();
+            const piId = escapeHtml(String(device && device.pi_id || '').trim());
+            const previewId = `dashboard-map-preview-${String(device && device.store_id || '').replace(/[^a-zA-Z0-9_-]/g, '_')}-${String(device && device.screen_id || '').replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+            const storeId = escapeHtml(String(device && device.store_id || ''));
+            const screenId = escapeHtml(String(device && device.screen_id || ''));
+            const previewButtonStart = `<button type="button" data-store-id="${storeId}" data-screen-id="${screenId}" onclick="return focusDashboardScreenFromMap(this.dataset.storeId, this.dataset.screenId)" style="display:block; margin:10px 0 8px; padding:0; border:none; border-radius:10px; overflow:hidden; background:transparent; width:180px; text-align:left; cursor:pointer;">`;
+            const previewButtonEnd = `</button>`;
+            if (!file) {
+                if (!piId) {
+                    return '';
+                }
+                return `
+                    ${previewButtonStart}
+                    <div id="${previewId}" data-map-preview-shell="1" data-pi-id="${piId}" style="border-radius:10px; overflow:hidden; background:#f3f4f6; width:180px; height:102px; display:flex; align-items:center; justify-content:center; color:#6b7280; font-size:12px;">Loading Pi preview...</div>
+                    ${previewButtonEnd}
+                `;
+            }
+
+            const mediaType = String((device && device.active_media_type) || guessMediaType(file) || 'image').toLowerCase();
+            const isAbsolute = /^https?:\/\//i.test(file);
+            const safeFile = escapeHtml(file);
+
+            if (mediaType === 'video') {
+                const previewSrc = isAbsolute
+                    ? mediaUrl(file)
+                    : `/vpreview/360/${encodeURIComponent(file)}?v=${Date.now()}`;
+                return `
+                    ${previewButtonStart}
+                    <div style="border-radius:10px; overflow:hidden; background:#101828; width:180px; height:102px;">
+                        <video muted autoplay loop playsinline preload="metadata" style="display:block; width:100%; height:100%; object-fit:cover; background:#101828;" src="${previewSrc}"></video>
+                    </div>
+                    ${previewButtonEnd}
+                `;
+            }
+
+            const imageSrc = isAbsolute ? mediaUrl(file) : `${thumbUrl(file, 360)}?v=${Date.now()}`;
+            return `
+                ${previewButtonStart}
+                <div id="${previewId}" data-map-preview-shell="1" data-pi-id="${piId}" style="border-radius:10px; overflow:hidden; background:#f3f4f6; width:180px; height:102px;">
+                    <img loading="lazy" src="${imageSrc}" data-original="${safeFile}" data-pi-id="${piId}" onerror="return handleDashboardPopupPreviewError(this)" style="display:block; width:100%; height:100%; object-fit:cover; background:#f3f4f6;" alt="Current screen preview">
+                </div>
+                ${previewButtonEnd}
+            `;
+        }
+
+        const dashboardMapScreenshotTargets = Object.create(null);
+        const dashboardMapPreviewTimeouts = Object.create(null);
+
+        function clearDashboardMapPreviewRequest(piId) {
+            const targetPiId = String(piId || '').trim();
+            if (!targetPiId) {
+                return;
+            }
+            if (dashboardMapPreviewTimeouts[targetPiId]) {
+                clearTimeout(dashboardMapPreviewTimeouts[targetPiId]);
+                delete dashboardMapPreviewTimeouts[targetPiId];
+            }
+            if (socket && socket.connected) {
+                socket.emit('stop_live_stream', { pi_id: targetPiId, source: 'dashboard-map' });
+            }
+        }
+
+        function requestDashboardPopupScreenshot(previewId, piId) {
+            const targetId = String(previewId || '').trim();
+            const targetPiId = String(piId || '').trim();
+            if (!targetId || !targetPiId) {
+                return false;
+            }
+
+            const shell = document.getElementById(targetId);
+            if (!shell) {
+                return false;
+            }
+
+            dashboardMapScreenshotTargets[targetPiId] = targetId;
+            if (shell.dataset.screenshotRequested === '1') {
+                return false;
+            }
+            shell.dataset.screenshotRequested = '1';
+            shell.innerHTML = '<div style="display:flex; width:100%; height:100%; align-items:center; justify-content:center; color:#6b7280; font-size:12px; background:#f3f4f6;">Loading Pi preview...</div>';
+            clearDashboardMapPreviewRequest(targetPiId);
+
+            if (!socket || !socket.connected) {
+                shell.innerHTML = '<div style="display:flex; width:100%; height:100%; align-items:center; justify-content:center; color:#6b7280; font-size:12px; background:#f3f4f6;">Preview unavailable</div>';
+                return false;
+            }
+
+            dashboardMapPreviewTimeouts[targetPiId] = setTimeout(() => {
+                const activePreviewId = dashboardMapScreenshotTargets[targetPiId];
+                const activeShell = activePreviewId ? document.getElementById(activePreviewId) : null;
+                delete dashboardMapScreenshotTargets[targetPiId];
+                if (activeShell) {
+                    activeShell.dataset.screenshotRequested = '0';
+                    activeShell.innerHTML = '<div style="display:flex; width:100%; height:100%; align-items:center; justify-content:center; color:#6b7280; font-size:12px; background:#f3f4f6; text-align:center; padding:10px;">Preview unavailable</div>';
+                }
+                clearDashboardMapPreviewRequest(targetPiId);
+            }, 4500);
+
+            socket.emit('start_live_stream', { pi_id: targetPiId, source: 'dashboard-map' });
+            socket.emit('request_screenshot', { pi_id: targetPiId, source: 'dashboard-map' });
+            return false;
+        }
+
+        function handleDashboardPopupPreviewError(img) {
+            try {
+                if (!img) {
+                    return false;
+                }
+                const previewShell = img.closest('[data-map-preview-shell]');
+                const piId = String((previewShell && previewShell.dataset && previewShell.dataset.piId) || (img.dataset && img.dataset.piId) || '').trim();
+                const original = (img.dataset && img.dataset.original) ? String(img.dataset.original) : '';
+                const step = parseInt((img.dataset && img.dataset.fallbackStep) || '0', 10);
+                const tried = !!(img.dataset && img.dataset.fallbackTried === '1');
+
+                if (piId && (tried || step >= 3 || !original)) {
+                    return requestDashboardPopupScreenshot(previewShell && previewShell.id, piId);
+                }
+
+                fallbackToOrigin(img, original);
+            } catch {}
+            return false;
+        }
+
+        function handleDashboardMapScreenshotData(data) {
+            const piId = String(data && data.pi_id || '').trim();
+            const previewId = piId ? dashboardMapScreenshotTargets[piId] : '';
+            if (!previewId) {
+                return false;
+            }
+
+            const shell = document.getElementById(previewId);
+            delete dashboardMapScreenshotTargets[piId];
+            clearDashboardMapPreviewRequest(piId);
+            if (!shell) {
+                return true;
+            }
+
+            shell.dataset.screenshotRequested = '0';
+
+            if (data && data.screenshot) {
+                shell.innerHTML = `<img src="data:image/jpeg;base64,${data.screenshot}" style="display:block; width:100%; height:100%; object-fit:cover; background:#111827;" alt="Current Pi preview">`;
+            } else {
+                const message = escapeHtml(String(data && data.error || 'Preview unavailable'));
+                shell.innerHTML = `<div style="display:flex; width:100%; height:100%; align-items:center; justify-content:center; color:#6b7280; font-size:12px; background:#f3f4f6; text-align:center; padding:10px;">${message}</div>`;
+            }
+            return true;
+        }
+
+        function handleDashboardMapLiveFrame(data) {
+            const piId = String(data && data.pi_id || '').trim();
+            const previewId = piId ? dashboardMapScreenshotTargets[piId] : '';
+            if (!previewId || !(data && data.frame)) {
+                return false;
+            }
+
+            const shell = document.getElementById(previewId);
+            delete dashboardMapScreenshotTargets[piId];
+            clearDashboardMapPreviewRequest(piId);
+            if (!shell) {
+                return true;
+            }
+
+            shell.dataset.screenshotRequested = '0';
+            shell.innerHTML = `<img src="data:image/jpeg;base64,${data.frame}" style="display:block; width:100%; height:100%; object-fit:cover; background:#111827;" alt="Current Pi preview">`;
+            return true;
+        }
+
+        function focusDashboardScreenFromMap(storeId, screenId) {
+            try {
+                if (dashboardOverviewInfoWindow && typeof dashboardOverviewInfoWindow.close === 'function') {
+                    dashboardOverviewInfoWindow.close();
+                }
+            } catch {}
+
+            const targetStoreId = String(storeId || '').trim();
+            const targetScreenId = String(screenId || '').trim();
+            if (!targetStoreId || !targetScreenId) {
+                return false;
+            }
+
+            closeDashboardTransientPanels({ keepWorkspace: true });
+            setDashboardSection('screens');
+
+            const storeSelect = document.getElementById('storeSelect');
+            if (storeSelect) {
+                storeSelect.value = targetStoreId;
+            }
+
+            if (String(currentStoreId || '') !== targetStoreId) {
+                switchStore(targetStoreId);
+            }
+
+            const startedAt = Date.now();
+            const tryFocus = () => {
+                const card = document.getElementById(`card-${targetScreenId}`);
+                const playlist = document.getElementById(`playlist-${targetScreenId}`);
+                const target = playlist || card;
+                if (target) {
+                    document.querySelectorAll('.screen-card.map-focus-target').forEach((node) => node.classList.remove('map-focus-target'));
+                    if (card) {
+                        card.classList.add('map-focus-target');
+                        setTimeout(() => card.classList.remove('map-focus-target'), 3200);
+                    }
+                    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    const focusable = target.querySelector('button, input, select, textarea');
+                    try {
+                        if (focusable && typeof focusable.focus === 'function') {
+                            focusable.focus({ preventScroll: true });
+                        }
+                    } catch {}
+                    return;
+                }
+                if ((Date.now() - startedAt) < 5000) {
+                    requestAnimationFrame(tryFocus);
+                }
+            };
+
+            setTimeout(tryFocus, 140);
+            return false;
+        }
+
+        function getDashboardMapPopupContent(device, status) {
+            return (
+                `<strong>${escapeHtml(device.store_name || device.store_id || 'Store')}</strong><br>` +
+                `${escapeHtml(device.screen_name || device.screen_id || 'Screen')}<br>` +
+                `${getDashboardPopupPreviewHtml(device)}` +
+                `${escapeHtml(device.location_label || device.address || 'Mapped location')}<br>` +
+                `Status: ${status === 'online' ? 'Online' : 'Offline'}<br>` +
+                `<button type="button" data-store-id="${escapeHtml(String(device.store_id || ''))}" data-screen-id="${escapeHtml(String(device.screen_id || ''))}" onclick="return focusDashboardScreenFromMap(this.dataset.storeId, this.dataset.screenId)" style="margin-top:10px; padding:7px 10px; border:1px solid #cdd5df; border-radius:8px; background:#fff; color:#1d1d1f; font-size:12px; font-weight:600; cursor:pointer;">Open schedule</button>`
+            );
+        }
+
         function getCurrentStoreScreenCount(storeId) {
             const screensData = (allStoresData && allStoresData.screens && allStoresData.screens[storeId]) || {};
             if (!screensData || typeof screensData !== 'object') {
@@ -4609,12 +4911,10 @@
                 clearDashboardOverviewMarkers();
 
                 const bounds = new google.maps.LatLngBounds();
-                dashboardOverviewDevices.forEach((device) => {
-                    const lat = Number(device.latitude);
-                    const lng = Number(device.longitude);
-                    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-                        return;
-                    }
+                buildDashboardOverviewMarkerEntries(dashboardOverviewDevices).forEach((entry) => {
+                    const device = entry.device;
+                    const lat = entry.lat;
+                    const lng = entry.lng;
 
                     const status = String(device.status || '').toLowerCase() === 'online' ? 'online' : 'offline';
                     const marker = new google.maps.Marker({
@@ -4628,12 +4928,7 @@
                         if (!dashboardOverviewInfoWindow) {
                             return;
                         }
-                        dashboardOverviewInfoWindow.setContent(
-                            `<strong>${escapeHtml(device.store_name || device.store_id || 'Store')}</strong><br>` +
-                            `${escapeHtml(device.screen_name || device.screen_id || 'Screen')}<br>` +
-                            `${escapeHtml(device.location_label || device.address || 'Mapped location')}<br>` +
-                            `Status: ${status === 'online' ? 'Online' : 'Offline'}`
-                        );
+                        dashboardOverviewInfoWindow.setContent(getDashboardMapPopupContent(device, status));
                         dashboardOverviewInfoWindow.open({ anchor: marker, map: dashboardOverviewMap });
                     });
 
@@ -4659,12 +4954,10 @@
             dashboardOverviewLayer.clearLayers();
 
             const bounds = [];
-            dashboardOverviewDevices.forEach((device) => {
-                const lat = Number(device.latitude);
-                const lng = Number(device.longitude);
-                if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-                    return;
-                }
+            buildDashboardOverviewMarkerEntries(dashboardOverviewDevices).forEach((entry) => {
+                const device = entry.device;
+                const lat = entry.lat;
+                const lng = entry.lng;
 
                 const status = String(device.status || '').toLowerCase() === 'online' ? 'online' : 'offline';
                 const marker = L.marker([lat, lng], {
@@ -4676,12 +4969,7 @@
                     })
                 });
 
-                marker.bindPopup(
-                    `<strong>${escapeHtml(device.store_name || device.store_id || 'Store')}</strong><br>` +
-                    `${escapeHtml(device.screen_name || device.screen_id || 'Screen')}<br>` +
-                    `${escapeHtml(device.location_label || device.address || 'Mapped location')}<br>` +
-                    `Status: ${status === 'online' ? 'Online' : 'Offline'}`
-                );
+                marker.bindPopup(getDashboardMapPopupContent(device, status));
 
                 marker.addTo(dashboardOverviewLayer);
                 bounds.push([lat, lng]);
@@ -5717,18 +6005,19 @@ allowfullscreen></iframe></div>`;
                 </div>
                 
                 <div class="button-row screen-card-action-strip" style="flex-wrap: nowrap; align-items:center; width:100%;">
-                    <div class="screen-card-action-state" title="Current rotation">
-                        <span id="rotation-indicator-${screenId}" class="rotation-indicator rotate-${rotation}" style="width:16px; height:16px;"></span>
+                    <div class="screen-card-location screen-card-location--inline">
+                        <div class="screen-card-location__label">${escapeHtml(resolvedAddress.label)}</div>
+                        <div class="screen-card-location__value${resolvedAddress.address ? '' : ' is-empty'}">${escapeHtml(resolvedAddress.address || 'No saved screen or store address')}</div>
                     </div>
-                    <button class="rotate-btn screen-card-action-btn" type="button" onclick="rotateScreen('${screenId}')" title="Rotate image 90°" aria-label="Rotate image 90 degrees">${getRotateActionIconMarkup()}</button>
-                    <button id="mute-btn-${screenId}" class="mute-btn screen-card-action-btn${screenData.muted ? ' muted' : ''}" type="button" onclick="toggleScreenMute('${screenId}')" title="${screenData.muted ? 'Unmute screen sound' : 'Mute screen sound'}" aria-label="${screenData.muted ? 'Unmute screen sound' : 'Mute screen sound'}">${getMuteActionIconMarkup(screenData.muted)}</button>
-                    <input type="file" class="file-input" id="file-${screenId}" style="display:none;"
-                           accept="image/*,video/*" onchange="uploadFile('${screenId}', this)">
-                </div>
-
-                <div class="screen-card-location">
-                    <div class="screen-card-location__label">${escapeHtml(resolvedAddress.label)}</div>
-                    <div class="screen-card-location__value${resolvedAddress.address ? '' : ' is-empty'}">${escapeHtml(resolvedAddress.address || 'No saved screen or store address')}</div>
+                    <div class="screen-card-action-strip__controls">
+                        <div class="screen-card-action-state" title="Current rotation">
+                            <span id="rotation-indicator-${screenId}" class="rotation-indicator rotate-${rotation}" style="width:16px; height:16px;"></span>
+                        </div>
+                        <button class="rotate-btn screen-card-action-btn" type="button" onclick="rotateScreen('${screenId}')" title="Rotate image 90°" aria-label="Rotate image 90 degrees">${getRotateActionIconMarkup()}</button>
+                        <button id="mute-btn-${screenId}" class="mute-btn screen-card-action-btn${screenData.muted ? ' muted' : ''}" type="button" onclick="toggleScreenMute('${screenId}')" title="${screenData.muted ? 'Unmute screen sound' : 'Mute screen sound'}" aria-label="${screenData.muted ? 'Unmute screen sound' : 'Mute screen sound'}">${getMuteActionIconMarkup(screenData.muted)}</button>
+                        <input type="file" class="file-input" id="file-${screenId}" style="display:none;"
+                               accept="image/*,video/*" onchange="uploadFile('${screenId}', this)">
+                    </div>
                 </div>
                 
                 <div class="playlist-section" id="playlist-${screenId}" style="margin-top:15px; border:none; background:transparent; padding:0; border-radius:0;">
@@ -7253,8 +7542,8 @@ allowfullscreen></iframe></div>`;
                                     const sDate = asDate(sv);
                                     const eDate = asDate(ev);
                                     if(sDate && eDate){
-                                        if(eDate < sDate){ // crosses midnight
-                                            return (now >= sDate) || (now <= eDate);
+                                        if(eDate < sDate){
+                                            return false;
                                         } else {
                                             return now >= sDate && now <= eDate;
                                         }
@@ -7315,6 +7604,7 @@ allowfullscreen></iframe></div>`;
                                                                                     }).join('')}
                                                                                                                                                                     </div>
                                                                                                                                                                 </div>
+                                                                                                                                                                <div style="margin-top:2px;font-size:11px;color:#7a7a7a;">Repeat filters weekdays. Dates set when the schedule starts and stops.</div>
                                                                                 <div class="schedule-primary one-row">
                                                                                     ${item && item.sync_ref && item.sync_ref.role==='follower' && idx===0 ? 
                                                                                         `<div style="padding:12px;background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;text-align:center;color:#666;">
@@ -7567,18 +7857,73 @@ allowfullscreen></iframe></div>`;
             }catch{return ''}
         }
 
+                function buildScheduleDatePayload(startDateInput, startTimeInput, endDateInput, endTimeInput, allowDates){
+                    const normTime = (v)=>{ if(!v) return null; const p=v.split(':').map(x=>x.trim()); if(!p[0]) return null; while(p.length<3) p.push('00'); return p.slice(0,3).map(x=>x.padStart(2,'0')).join(':'); };
+                    const sTimeRaw = startTimeInput ? startTimeInput.value.trim() : '';
+                    const eTimeRaw = endTimeInput ? endTimeInput.value.trim() : '';
+                    const startDateVal = allowDates && startDateInput ? startDateInput.value.trim() : '';
+                    const endDateVal = allowDates && endDateInput ? endDateInput.value.trim() : '';
+                    let sTime = normTime(sTimeRaw);
+                    let eTime = normTime(eTimeRaw);
+                    if(startDateVal && !sTime) sTime = '00:00:00';
+                    if(endDateVal && !eTime) eTime = '00:00:00';
+                    return {
+                        start: (startDateVal && sTime) ? `${startDateVal}T${sTime}` : sTime,
+                        end: (endDateVal && eTime) ? `${endDateVal}T${eTime}` : eTime
+                    };
+                }
+
+                function parseScheduleComparable(val){
+                    if(!val) return null;
+                    try{
+                        if(val.includes('T')){
+                            const d = new Date(val);
+                            return isNaN(d) ? null : d;
+                        }
+                        if(/^\d{4}-\d{2}-\d{2}$/.test(val)){
+                            const d = new Date(`${val}T00:00:00`);
+                            return isNaN(d) ? null : d;
+                        }
+                        const parts = val.split(':');
+                        if(parts.length < 2) return null;
+                        while(parts.length < 3) parts.push('00');
+                        const now = new Date();
+                        return new Date(
+                            now.getFullYear(),
+                            now.getMonth(),
+                            now.getDate(),
+                            parseInt(parts[0], 10) || 0,
+                            parseInt(parts[1], 10) || 0,
+                            parseInt(parts[2], 10) || 0
+                        );
+                    }catch{
+                        return null;
+                    }
+                }
+
+                function validateSchedulePayload(payload, screenId){
+                    if(!payload || !payload.start || !payload.end) return true;
+                    const startDate = parseScheduleComparable(payload.start);
+                    const endDate = parseScheduleComparable(payload.end);
+                    if(startDate && endDate && endDate < startDate){
+                        alert('End must be after start. Choose the next date for overnight schedules.');
+                        if(screenId) setTimeout(()=>refreshPlaylist(screenId), 0);
+                        return false;
+                    }
+                    return true;
+                }
+
                 function updatePlaylistScheduleTime(screenId,itemId,start,end){
                         // Read date inputs to preserve ISO if present
                         const sdEl = document.getElementById(`pstartdate-${screenId}-${itemId}`);
                         const edEl = document.getElementById(`penddate-${screenId}-${itemId}`);
-                        const norm = t=>{ if(!t) return null; const parts=t.split(':').map(x=>x.trim()); if(!parts[0]) return null; while(parts.length<3) parts.push('00'); return parts.slice(0,3).map(x=>x.padStart(2,'0')).join(':'); };
-                        const sTime = norm(start);
-                        const eTime = norm(end);
-                        let startVal = sTime;
-                        let endVal = eTime;
-                        if(sdEl && sdEl.value && sTime) startVal = `${sdEl.value}T${sTime}`;
-                        if(edEl && edEl.value && eTime) endVal = `${edEl.value}T${eTime}`;
-                        fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({start:startVal, end:endVal})})
+                    const tsEl = document.getElementById(`pstart-${screenId}-${itemId}`);
+                    const teEl = document.getElementById(`pend-${screenId}-${itemId}`);
+                    if(tsEl) tsEl.value = start || '';
+                    if(teEl) teEl.value = end || '';
+                        const payload = buildScheduleDatePayload(sdEl, tsEl, edEl, teEl, true);
+                    if(!validateSchedulePayload(payload, screenId)) return;
+                    fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
                             .then(r=>r.json()).then(d=>{ if(!d.success){ alert('Failed to update time'); } else { setTimeout(()=>refreshPlaylist(screenId),150);} });
                 }
                 // New: handle combined date + time (if either date missing, keep legacy time-only format)
@@ -7589,22 +7934,12 @@ allowfullscreen></iframe></div>`;
                         const ts = document.getElementById(`pstart-${screenId}-${itemId}`);
                         const te = document.getElementById(`pend-${screenId}-${itemId}`);
                         if(!ts || !te) return; // nothing to do
-                        const tsv = ts.value.trim();
-                        const tev = te.value.trim();
-                        const dsv = ds? ds.value.trim():'';
-                        const dev = de? de.value.trim():'';
-                        const normTime = (v)=>{ if(!v) return null; const p=v.split(':'); while(p.length<3) p.push('00'); return p.slice(0,3).map(x=>x.padStart(2,'0')).join(':'); };
-                        let sTime = normTime(tsv);
-                        let eTime = normTime(tev);
-                        // If user picked a date but no time yet, default to 00:00:00 so date persists
-                        if(dsv && !sTime) sTime = '00:00:00';
-                        if(dev && !eTime) eTime = '00:00:00';
-                        const sVal = (dsv && sTime) ? `${dsv}T${sTime}` : sTime;
-                        const eVal = (dev && eTime) ? `${dev}T${eTime}` : eTime;
+                        const payload = buildScheduleDatePayload(ds, ts, de, te, true);
+                        if(!validateSchedulePayload(payload, screenId)) return;
                         fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}`,{
                             method:'PATCH',
                             headers:{'Content-Type':'application/json'},
-                            body:JSON.stringify({start:sVal,end:eVal})
+                            body:JSON.stringify(payload)
                         })
                         .then(r=>r.json())
                         .then(d=>{ if(d.success){ setTimeout(()=>refreshPlaylist(screenId),150);} else { alert('Failed to update date/time'); } })
@@ -7638,7 +7973,7 @@ allowfullscreen></iframe></div>`;
                     
                     const now = new Date();
                     const parseISOorTime = v=>{ if(!v) return null; try{ if(v.includes('T')) return new Date(v); if(v.length<=8){ const [H,M,S='00']=v.split(':'); const d=new Date(); d.setHours(+H||0,+M||0,+S||0,0); return d;} if(/^\d{4}-\d{2}-\d{2}$/.test(v)){ return new Date(v+'T00:00:00'); } return new Date(v);}catch(e){return null;}};
-                    const activeWindow = (ws,we)=>{ if(!ws && !we) return false; if(ws && we){ if(we < ws){ const wePlus = new Date(we.getTime()+86400000); return now>=ws && now<=wePlus; } return now>=ws && now<=we; } if(ws) return now>=ws; if(we) return now<=we; return false; };
+                    const activeWindow = (ws,we)=>{ if(!ws && !we) return false; if(ws && we){ if(we < ws){ return false; } return now>=ws && now<=we; } if(ws) return now>=ws; if(we) return now<=we; return false; };
                     const makeRow = (win, idx)=>{
                         let sd='', st='', ed='', et='';
                         if(win.start){ if(win.start.includes('T')){ const p=win.start.split('T'); sd=p[0]; st=p[1]; } else { st=win.start; } }
@@ -7716,6 +8051,7 @@ allowfullscreen></iframe></div>`;
                         body: JSON.stringify({ days: Array.from(days) })
                     }).then(r=>r.json()).then(d=>{
                         if(!d.success){ alert('Failed to update repeat days'); if(el){ el.classList.toggle('active'); el.setAttribute('aria-pressed', el.classList.contains('active') ? 'true' : 'false'); } }
+                        else { setTimeout(()=>refreshPlaylist(screenId), 100); }
                     }).catch(()=>{ if(el){ el.classList.toggle('active'); el.setAttribute('aria-pressed', el.classList.contains('active') ? 'true' : 'false'); } alert('Network error updating days'); });
                 }
                 function addScheduleWindow(screenId,itemId){
@@ -7727,14 +8063,9 @@ allowfullscreen></iframe></div>`;
                     const st=document.getElementById(`sw-${screenId}-${itemId}-${index}-st`);
                     const ed=document.getElementById(`sw-${screenId}-${itemId}-${index}-ed`);
                     const et=document.getElementById(`sw-${screenId}-${itemId}-${index}-et`);
-                    const normTime = v=>{ if(!v) return null; const p=v.split(':').map(x=>x.trim()); if(!p[0]) return null; while(p.length<3) p.push('00'); return p.slice(0,3).map(x=>x.padStart(2,'0')).join(':'); };
-                    let sTime = normTime((st&&st.value)||'');
-                    let eTime = normTime((et&&et.value)||'');
-                    if(sd && sd.value && !sTime) sTime='00:00:00';
-                    if(ed && ed.value && !eTime) eTime='00:00:00';
-                    const sVal = (sd && sd.value && sTime)? `${sd.value}T${sTime}`: sTime;
-                    const eVal = (ed && ed.value && eTime)? `${ed.value}T${eTime}`: eTime;
-                    fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}/schedule/${index}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({start:sVal,end:eVal})})
+                                        const payload = buildScheduleDatePayload(sd, st, ed, et, true);
+                                        if(!validateSchedulePayload(payload, screenId)) return;
+                                        fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}/schedule/${index}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
               .then(r=>r.json()).then(d=>{ if(!d.success){ console.warn('Schedule window update failed',d); alert('Failed to update window time'); } else { setTimeout(()=>refreshPlaylist(screenId),150); } })
               .catch(err=>{ console.error('Window time error',err); alert('Window time error'); });
                 }
@@ -7838,7 +8169,7 @@ allowfullscreen></iframe></div>`;
                 .then(d=>{ 
                     console.log('[SCHEDULE] Server response:', d);
                     if(!d.success){ alert('Failed to update days: ' + (d.error || 'unknown error')); }
-                    else { console.log('[SCHEDULE] ✅ Days updated successfully!'); }
+                    else { console.log('[SCHEDULE] ✅ Days updated successfully!'); setTimeout(()=>refreshPlaylist(screenId), 100); }
                 })
                 .catch(err=>{ 
                     console.error('[SCHEDULE] ERROR saving days:', err); 
@@ -7854,14 +8185,9 @@ allowfullscreen></iframe></div>`;
                     const st=document.getElementById(`sw-${screenId}-${itemId}-${index}-st`);
                     const ed=document.getElementById(`sw-${screenId}-${itemId}-${index}-ed`);
                     const et=document.getElementById(`sw-${screenId}-${itemId}-${index}-et`);
-                    const normTime = v=>{ if(!v) return null; const p=v.split(':').map(x=>x.trim()); if(!p[0]) return null; while(p.length<3) p.push('00'); return p.slice(0,3).map(x=>x.padStart(2,'0')).join(':'); };
-                    let sTime = normTime((st&&st.value)||'');
-                    let eTime = normTime((et&&et.value)||'');
-                    if(sd && sd.value && !sTime) sTime='00:00:00';
-                    if(ed && ed.value && !eTime) eTime='00:00:00';
-                    const sVal = (sd && sd.value && sTime)? `${sd.value}T${sTime}`: sTime;
-                    const eVal = (ed && ed.value && eTime)? `${ed.value}T${eTime}`: eTime;
-                    fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}/schedule/${index}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({start:sVal,end:eVal})})
+                                        const payload = buildScheduleDatePayload(sd, st, ed, et, true);
+                                        if(!validateSchedulePayload(payload, screenId)) return;
+                                        fetch(`/playlist/item/${currentStoreId}/${screenId}/${itemId}/schedule/${index}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
               .then(r=>r.json()).then(d=>{ if(!d.success){ console.warn('Schedule window update failed',d); alert('Failed to update window time'); } else { setTimeout(()=>refreshPlaylist(screenId),150); } })
               .catch(err=>{ console.error('Window time error',err); alert('Window time error'); });
                 }
@@ -8273,20 +8599,49 @@ allowfullscreen></iframe></div>`;
                 if(!Array.isArray(items)) return;
                 const preview = document.getElementById(`preview-${screenId}`);
                 if(!preview) return;
-                // Compute schedule window filtering with day-of-week gating
+                // Match the dashboard row/backend scheduling rules for preview eligibility.
                 const now = new Date();
-                const nowSec = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
-                const parseHMS = t=>{ if(!t) return null; if(t.includes('T')){ try { const d=new Date(t); return d.getHours()*3600+d.getMinutes()*60+d.getSeconds(); } catch{ return null; } } const parts=t.split(':').map(p=>parseInt(p,10)); if(parts.some(isNaN)) return null; while(parts.length<3) parts.push(0); return parts[0]*3600+parts[1]*60+parts[2]; };
                 const dayCodes = ['sun','mon','tue','wed','thu','fri','sat'];
                 const dayCode = dayCodes[now.getDay()];
+                const asDate = (val)=>{
+                    if(!val) return null;
+                    try{
+                        if(val.includes('T')){
+                            const d = new Date(val);
+                            return isNaN(d) ? null : d;
+                        }
+                        if(/^\d{4}-\d{2}-\d{2}$/.test(val)){
+                            const d = new Date(`${val}T00:00:00`);
+                            return isNaN(d) ? null : d;
+                        }
+                        const parts = val.split(':');
+                        if(parts.length < 2) return null;
+                        while(parts.length < 3) parts.push('00');
+                        return new Date(
+                            now.getFullYear(),
+                            now.getMonth(),
+                            now.getDate(),
+                            parseInt(parts[0], 10) || 0,
+                            parseInt(parts[1], 10) || 0,
+                            parseInt(parts[2], 10) || 0
+                        );
+                    }catch{
+                        return null;
+                    }
+                };
                 function intervalActive(startVal,endVal){
-                    const s = parseHMS(startVal);
-                    const e = parseHMS(endVal);
-                    if(s!==null && e!==null){
-                        if(e < s){ return (nowSec >= s) || (nowSec <= e); }
-                        return nowSec >= s && nowSec <= e;
-                    } else if(s!==null){ return nowSec >= s; }
-                    else if(e!==null){ return nowSec <= e; }
+                    const sDate = asDate(startVal);
+                    const eDate = asDate(endVal);
+                    if(sDate && eDate){
+                        if(eDate < sDate){
+                            return false;
+                        }
+                        return now >= sDate && now <= eDate;
+                    } else if(sDate){
+                        return now >= sDate;
+                    } else if(eDate){
+                        return now <= eDate;
+                    }
                     return true;
                 }
                 function daysAllowed(days){
@@ -8296,7 +8651,11 @@ allowfullscreen></iframe></div>`;
                 function inWindow(item){
                     // Evaluate extra schedule windows first respecting each window's own days
                     if(Array.isArray(item.schedule) && item.schedule.length){
-                        for(const w of item.schedule){ if(daysAllowed(w.days) && intervalActive(w.start,w.end)) return true; }
+                        for(const w of item.schedule){
+                            const wEnabled = (typeof w.enabled === 'boolean') ? w.enabled : true;
+                            if(!wEnabled) continue;
+                            if(daysAllowed(w.days) && intervalActive(w.start,w.end)) return true;
+                        }
                         // if windows exist but none active, fall back to primary
                     }
                     // Primary interval requires item.days (if provided) and start/end interval
@@ -8414,6 +8773,7 @@ allowfullscreen></iframe></div>`;
                 let previewUrl = '';
                 let fallbackVid = '';
                 let poster = '';
+                const previewBust = Date.now();
                 if (isVideo) {
                     const raw = (item && (item.url || item.file)) || '';
                     // Derive a relative uploads path (including subfolders) when possible.
@@ -8451,7 +8811,10 @@ allowfullscreen></iframe></div>`;
                         previewUrl = srcUrl; fallbackVid = srcUrl; poster = '';
                     }
                 } else {
-                    srcUrl = mediaUrl(item && (item.url || item.file));
+                    const raw = (item && (item.url || item.file)) || '';
+                    const isAbs = /^https?:\/\//i.test(String(raw));
+                    const baseImgUrl = isAbs ? mediaUrl(raw) : thumbUrl(raw, 600);
+                    srcUrl = baseImgUrl ? `${baseImgUrl}${baseImgUrl.includes('?') ? '&' : '?'}v=${previewBust}` : '';
                 }
                 // Crossfade to avoid blank: preload next, then swap
                 const doSwap = (node)=>{
@@ -8556,8 +8919,13 @@ allowfullscreen></iframe></div>`;
                     }
                 };
                 const swapFallback = ()=>{
-                    const img=document.createElement('img'); img.src=srcUrl; img.alt='Preview';
-                    if (item && item.file && !/^https?:\/\//i.test(String(item.file))) { img.dataset.original = String(item.file); }
+                    const img = document.createElement('img');
+                    img.src = srcUrl;
+                    img.alt = 'Preview';
+                    if (item && item.file && !/^https?:\/\//i.test(String(item.file))) {
+                        img.dataset.original = String(item.file);
+                        img.onerror = function(){ fallbackToOrigin(this, String(item.file)); };
+                    }
                     doSwap(img);
                 };
                 if(isVideo){
@@ -8573,7 +8941,13 @@ allowfullscreen></iframe></div>`;
                         });
                     });
                 } else {
-                    preloadImage(srcUrl).then(img=>{ if (item && item.file && !/^https?:\/\//i.test(String(item.file))) { img.dataset.original = String(item.file); } doSwap(img); }).catch(swapFallback);
+                    preloadImage(srcUrl).then(img=>{
+                        if (item && item.file && !/^https?:\/\//i.test(String(item.file))) {
+                            img.dataset.original = String(item.file);
+                            img.onerror = function(){ fallbackToOrigin(this, String(item.file)); };
+                        }
+                        doSwap(img);
+                    }).catch(swapFallback);
                 }
                 let dur = parseInt(item.duration,10); if(isNaN(dur)||dur<1) dur=10; if(dur>30) dur=30;
                 st.nextAt = Date.now() + dur*1000;
@@ -10885,6 +11259,7 @@ allowfullscreen></iframe></div>`;
             
             // Listen for LIVE FRAMES from Pi (continuous streaming)
             socket.on('live_frame', function(data) {
+                if (handleDashboardMapLiveFrame(data)) return;
                 if (!previewActive) return;
 
                 const imgEl = document.getElementById('piScreenImage');
@@ -10944,7 +11319,8 @@ allowfullscreen></iframe></div>`;
             
             // Legacy screenshot handler (fallback)
             socket.on('screenshot_data', function(data) {
-                if (!previewActive) return;
+                if (handleDashboardMapScreenshotData(data)) return;
+                if (!window.previewActive) return;
 
                 const imgEl = document.getElementById('piScreenImage');
                 const loadingEl = document.getElementById('piScreenLoading');
