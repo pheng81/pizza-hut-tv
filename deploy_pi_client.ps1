@@ -1,14 +1,17 @@
 param(
     [string]$PiUser = "everydayadvertise",
     [string]$PiHost = "raspberrypi",  # Using hostname instead of IP
-    # IMPORTANT: Updated to pizzahut-client directory
-    [string]$RemoteDir = "/home/everydayadvertise/pizzahut-client",
+    [string]$RemoteDir = "",
     [string]$KeyFile = "",
     [string]$ServiceName = "complete_pi_client"
 )
 
 Write-Host "Pizza Hut TV - Pi Client Deployment" -ForegroundColor Cyan
 Write-Host "====================================" -ForegroundColor Cyan
+
+if ([string]::IsNullOrWhiteSpace($RemoteDir)) {
+    $RemoteDir = "/home/${PiUser}/pizzahut-client"
+}
 
  # Build SSH/SCP base with optional key
 $sshArgs = @()
@@ -61,16 +64,24 @@ Write-Host "Ensuring remote directory exists: $RemoteDir" -ForegroundColor Yello
 & ssh @sshArgs $sshTarget "mkdir -p $RemoteDir"
 
 # Upload required files
-$files = @('complete_pi_client.py','pi_mobile_sync_addon.py','seamless_video_player.py','pi_vnc_tunnel.py','transition_engine.py')
-foreach($f in $files){
-    if(-not (Test-Path $f)){
-        Write-Host "Skipping missing file: $f" -ForegroundColor DarkYellow
+$files = @(
+    @{ Source = 'complete_pi_client.py'; Target = 'complete_pi_client.py' },
+    @{ Source = 'pi_mobile_sync_addon.py'; Target = 'pi_mobile_sync_addon.py' },
+    @{ Source = 'pi_deployment/seamless_video_player.py'; Target = 'seamless_video_player.py' },
+    @{ Source = 'pi_vnc_tunnel.py'; Target = 'pi_vnc_tunnel.py' },
+    @{ Source = 'transition_engine.py'; Target = 'transition_engine.py' }
+)
+foreach($file in $files){
+    $source = $file.Source
+    $target = $file.Target
+    if(-not (Test-Path $source)){
+        Write-Host "Skipping missing file: $source" -ForegroundColor DarkYellow
         continue
     }
-    Write-Host "Uploading $f..." -ForegroundColor Yellow
-    & scp @scpArgs $f "${sshTarget}:${RemoteDir}/"
+    Write-Host "Uploading $source as $target..." -ForegroundColor Yellow
+    & scp @scpArgs $source "${sshTarget}:${RemoteDir}/${target}"
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "Failed to upload $f" -ForegroundColor Red
+        Write-Host "Failed to upload $source" -ForegroundColor Red
         exit 1
     }
 }
@@ -78,11 +89,13 @@ Write-Host "Files uploaded successfully!" -ForegroundColor Green
 
 # Also upload directly into /home/<PiUser> because some user services ExecStart from there
 Write-Host "Uploading files to /home/${PiUser} for user service ExecStart" -ForegroundColor Yellow
-foreach($f in $files){
-    if(-not (Test-Path $f)){ continue }
-    & scp @scpArgs $f "${sshTarget}:/home/${PiUser}/"
+foreach($file in $files){
+    $source = $file.Source
+    $target = $file.Target
+    if(-not (Test-Path $source)){ continue }
+    & scp @scpArgs $source "${sshTarget}:/home/${PiUser}/${target}"
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "Warning: Failed to upload $f to /home/${PiUser}" -ForegroundColor DarkYellow
+        Write-Host "Warning: Failed to upload $source to /home/${PiUser}" -ForegroundColor DarkYellow
     }
 }
 Write-Host "Service path files updated (best-effort)." -ForegroundColor Green
