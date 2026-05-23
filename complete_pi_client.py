@@ -150,6 +150,50 @@ def _extract_effect_value(raw: Any) -> Optional[str]:
         return None
 
 
+def _normalize_screen_token(value: Optional[str]) -> str:
+    try:
+        token = (value or '').strip().lower()
+        token = token.replace(' ', '').replace('-', '').replace('__', '_')
+        return token
+    except Exception:
+        return ''
+
+
+def _resolve_equivalent_screen_id(store_screens: Dict, store_id: Optional[str], screen_id: Optional[str]) -> Optional[str]:
+    """Resolve equivalent screen IDs such as prefixed vs unprefixed forms.
+    Examples: 1887_screen2 <-> screen2, 1887 Promo 1 <-> promo1.
+    """
+    try:
+        requested = (screen_id or '').strip()
+        if not requested:
+            return None
+        if requested in store_screens:
+            return requested
+
+        requested_norm = _normalize_screen_token(requested)
+        store_norm = _normalize_screen_token(store_id)
+
+        for candidate in store_screens.keys():
+            candidate_str = str(candidate or '')
+            candidate_norm = _normalize_screen_token(candidate_str)
+            if candidate_norm == requested_norm:
+                return candidate_str
+
+            candidate_short = candidate_norm
+            requested_short = requested_norm
+            prefix = f"{store_norm}_" if store_norm else ''
+            if prefix and candidate_short.startswith(prefix):
+                candidate_short = candidate_short[len(prefix):]
+            if prefix and requested_short.startswith(prefix):
+                requested_short = requested_short[len(prefix):]
+            if candidate_short == requested_short:
+                return candidate_str
+
+        return None
+    except Exception:
+        return None
+
+
 @dataclass
 class PlaylistItem:
     """Playlist item matching webplayer structure."""
@@ -344,13 +388,18 @@ class PiConfigHandler(BaseHTTPRequestHandler):
                 store_screens = user_screens.get(store_id, {})
                 
                 if screen_id not in store_screens:
-                    available_screens = list(store_screens.keys())
-                    self.send_response(400)
-                    self.send_header('Content-Type', 'application/json')
-                    self.end_headers()
-                    response = {'success': False, 'error': f'Screen {screen_id} not found for store {store_id}. Available: {available_screens}'}
-                    self.wfile.write(json.dumps(response).encode('utf-8'))
-                    return
+                    resolved_screen_id = _resolve_equivalent_screen_id(store_screens, store_id, screen_id)
+                    if resolved_screen_id:
+                        logger.info(f"🔁 Normalized screen_id {screen_id} -> {resolved_screen_id} for store {store_id}")
+                        screen_id = resolved_screen_id
+                    else:
+                        available_screens = list(store_screens.keys())
+                        self.send_response(400)
+                        self.send_header('Content-Type', 'application/json')
+                        self.end_headers()
+                        response = {'success': False, 'error': f'Screen {screen_id} not found for store {store_id}. Available: {available_screens}'}
+                        self.wfile.write(json.dumps(response).encode('utf-8'))
+                        return
                 
                 logger.info(f"✅ Configuration verified successfully!")
                 logger.info(f"   User: {api_data.get('user', {}).get('username', 'Unknown')}")
@@ -939,8 +988,13 @@ class CompleteWebplayerClient:
                 store_screens = user_screens.get(store_id, {})
                 
                 if screen_id not in store_screens:
-                    available_screens = list(store_screens.keys())
-                    raise ValueError(f"Screen {screen_id} not found for store {store_id}. Available: {available_screens}")
+                    resolved_screen_id = _resolve_equivalent_screen_id(store_screens, store_id, screen_id)
+                    if resolved_screen_id:
+                        logger.info(f"🔁 Normalized screen_id {screen_id} -> {resolved_screen_id} for store {store_id}")
+                        screen_id = resolved_screen_id
+                    else:
+                        available_screens = list(store_screens.keys())
+                        raise ValueError(f"Screen {screen_id} not found for store {store_id}. Available: {available_screens}")
                 
                 logger.info(f"✅ Configuration verified successfully!")
                 logger.info(f"   User: {api_data.get('user', {}).get('username', 'Unknown')}")
@@ -1962,8 +2016,28 @@ class CompleteWebplayerClient:
         
     def get_media_url(self, item: PlaylistItem) -> str:
         """Get media URL for playlist item like webplayer."""
+        def resolve_playlist_url(raw_url: str) -> str:
+            raw_url = (raw_url or "").strip()
+            if not raw_url:
+                return ""
+            if raw_url.startswith(('http://', 'https://')):
+                return raw_url
+            if raw_url.startswith('/static/') or raw_url.startswith('/media/'):
+                return urljoin(f"{self.server_url}/", raw_url.lstrip('/'))
+
+            filename = raw_url.lstrip('/')
+            is_video = any(filename.lower().endswith(ext) for ext in ['.mp4', '.webm', '.ogg', '.mov', '.avi'])
+            endpoint = 'media' if is_video else 'static/uploads'
+            return f"{self.server_url}/{endpoint}/{filename}"
+
+        try:
+            mode = str(((item.sync_ref or {}).get('mode') or '')).lower()
+            if mode == 'static-slices':
+                return resolve_playlist_url(item.url or item.file or "")
+        except Exception:
+            pass
         if item.slice_url:
-            return item.slice_url
+            return resolve_playlist_url(item.slice_url)
             
         url = item.url or item.file or ""
         
@@ -1975,11 +2049,22 @@ class CompleteWebplayerClient:
             logger.info(f"▶️ YouTube video detected: {video_id} from URL: {url}")
             
             # Get duration from item (for clipping long videos)
-            duration = getattr(item, 'duration', None) or 30  # Default 30 seconds
+            raw_duration = None
+            if isinstance(item, dict):
+                raw_duration = item.get('duration')
+            else:
+                raw_duration = getattr(item, 'duration', None)
+                if raw_duration is None and hasattr(item, 'get'):
+                    try:
+                        raw_duration = item.get('duration')
+                    except Exception:
+                        raw_duration = None
+            duration = raw_duration if raw_duration not in (None, '', 0, 0.0) else 10
             try:
-                duration = int(float(duration))
-            except:
-                duration = 30
+                duration = max(1, int(float(duration)))
+            except Exception:
+                duration = 10
+            logger.info(f"▶️ YouTube clip duration resolved: raw={raw_duration!r}, using={duration}s")
             
             # Download YouTube video to temp file using yt-dlp
             try:
@@ -2072,15 +2157,7 @@ class CompleteWebplayerClient:
                 logger.error(traceback.format_exc())
                 return ""
         
-        if url.startswith('http'):
-            return url
-            
-        # Construct full URL
-        filename = url.lstrip('/')
-        is_video = any(filename.lower().endswith(ext) for ext in ['.mp4', '.webm', '.ogg', '.mov', '.avi'])
-        endpoint = 'media' if is_video else 'static/uploads'
-        
-        return f"{self.server_url}/{endpoint}/{filename}"
+        return resolve_playlist_url(url)
         
     def fetch_playlist(self) -> List[PlaylistItem]:
         """Fetch playlist from server like webplayer."""

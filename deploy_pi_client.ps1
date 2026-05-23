@@ -12,6 +12,10 @@ Write-Host "====================================" -ForegroundColor Cyan
 if ([string]::IsNullOrWhiteSpace($RemoteDir)) {
     $RemoteDir = "/home/${PiUser}/pizzahut-client"
 }
+$remoteDirWasDefault = $true
+if (-not [string]::IsNullOrWhiteSpace($PSBoundParameters['RemoteDir'])) {
+    $remoteDirWasDefault = $false
+}
 
  # Build SSH/SCP base with optional key
 $sshArgs = @()
@@ -25,29 +29,75 @@ $scpArgs += @('-o','StrictHostKeyChecking=no','-o','UserKnownHostsFile=/dev/null
 
 # Test Pi connection with fallbacks
 Write-Host "Testing Pi connection..." -ForegroundColor Yellow
-$hostCandidates = @()
-if ($PiHost) { $hostCandidates += $PiHost }
-if ($PiHost -and -not $PiHost.ToLower().EndsWith('.local')) { $hostCandidates += ("$PiHost.local") }
-$hostCandidates += @('raspberrypi','raspberrypi.local')
-$hostCandidates = $hostCandidates | Select-Object -Unique
+$targetCandidates = @()
+$explicitPiUser = $PSBoundParameters.ContainsKey('PiUser')
+$explicitPiHost = $PSBoundParameters.ContainsKey('PiHost')
+
+function Add-TargetCandidate {
+    param(
+        [string]$User,
+        [string]$HostName
+    )
+
+    if ([string]::IsNullOrWhiteSpace($User) -or [string]::IsNullOrWhiteSpace($HostName)) {
+        return
+    }
+
+    $script:targetCandidates += [PSCustomObject]@{
+        User = $User.Trim()
+        Host = $HostName.Trim()
+    }
+}
+
+Add-TargetCandidate -User $PiUser -HostName $PiHost
+if ($PiHost -and -not $PiHost.ToLower().EndsWith('.local')) {
+    Add-TargetCandidate -User $PiUser -HostName "$PiHost.local"
+}
+
+if (-not ($explicitPiUser -or $explicitPiHost)) {
+    Add-TargetCandidate -User 'everydayadvertise' -HostName 'everydayadvertise'
+    Add-TargetCandidate -User 'everydayadvertise' -HostName 'everydayadvertise.local'
+    Add-TargetCandidate -User 'everydayadvertise0002' -HostName 'everydayadvertise'
+    Add-TargetCandidate -User 'everydayadvertise0002' -HostName 'everydayadvertise.local'
+    Add-TargetCandidate -User $PiUser -HostName 'raspberrypi'
+    Add-TargetCandidate -User $PiUser -HostName 'raspberrypi.local'
+}
+
+$targetCandidates = $targetCandidates | Group-Object User, Host | ForEach-Object { $_.Group[0] }
 
 $connected = $false
 $sshTarget = ""
-foreach($h in $hostCandidates) {
-    $candidate = "$PiUser@$h"
+foreach($target in $targetCandidates) {
+    $candidate = "$($target.User)@$($target.Host)"
     Write-Host " - Trying $candidate" -ForegroundColor Gray
     $null = & ssh @sshArgs $candidate "echo connected" 2>$null
     if ($LASTEXITCODE -eq 0) { $connected = $true; $sshTarget = $candidate; break }
 }
 
+if ($connected) {
+    $resolvedPiUser = ($sshTarget -split '@', 2)[0]
+    $PiUser = $resolvedPiUser
+    if ($remoteDirWasDefault) {
+        $RemoteDir = "/home/${PiUser}/pizzahut-client"
+    }
+}
+
 if (-not $connected) {
     # Prompt for manual host/IP
-    $manual = Read-Host "Cannot connect via defaults. Enter Pi Host/IP (or press Enter to cancel)"
+    $manual = Read-Host "Cannot connect via defaults. Enter Pi Host/IP or user@host (or press Enter to cancel)"
     if ([string]::IsNullOrWhiteSpace($manual)) {
         Write-Host "Cannot connect to Pi. Please check network connection and SSH access" -ForegroundColor Yellow
         exit 1
     }
-    $sshTarget = "$PiUser@$manual"
+    if ($manual.Contains('@')) {
+        $sshTarget = $manual.Trim()
+        $PiUser = ($sshTarget -split '@', 2)[0]
+    } else {
+        $sshTarget = "$PiUser@$manual"
+    }
+    if ($remoteDirWasDefault) {
+        $RemoteDir = "/home/${PiUser}/pizzahut-client"
+    }
     Write-Host " - Trying $sshTarget" -ForegroundColor Gray
     $null = & ssh @sshArgs $sshTarget "echo connected" 2>$null
     if ($LASTEXITCODE -ne 0) {
@@ -62,6 +112,58 @@ Write-Host "Pi connection successful!" -ForegroundColor Green
 # Ensure remote directory exists
 Write-Host "Ensuring remote directory exists: $RemoteDir" -ForegroundColor Yellow
 & ssh @sshArgs $sshTarget "mkdir -p $RemoteDir"
+
+$uploadDirs = New-Object System.Collections.Generic.List[string]
+
+function Add-UploadDir {
+    param([string]$DirPath)
+
+    if ([string]::IsNullOrWhiteSpace($DirPath)) {
+        return
+    }
+
+    $normalized = $DirPath.Trim().TrimEnd('/')
+    if (-not $normalized) {
+        return
+    }
+
+    if (-not $script:uploadDirs.Contains($normalized)) {
+        $script:uploadDirs.Add($normalized)
+    }
+}
+
+Add-UploadDir -DirPath $RemoteDir
+Add-UploadDir -DirPath "/home/${PiUser}"
+
+Write-Host "Inspecting active Pi client runtime paths..." -ForegroundColor Yellow
+$runtimeProcessLines = @(& ssh @sshArgs $sshTarget "ps -eo args | grep complete_pi_client.py | grep -v grep" 2>$null)
+foreach ($line in $runtimeProcessLines) {
+    if ([string]::IsNullOrWhiteSpace($line)) {
+        continue
+    }
+
+    $matches = [regex]::Matches($line, '/home/[^\s"'']+/complete_pi_client\.py|/home/[^\s"'']+/pizzahut-client/complete_pi_client\.py')
+    foreach ($match in $matches) {
+        $runtimeFile = $match.Value
+        if ([string]::IsNullOrWhiteSpace($runtimeFile)) {
+            continue
+        }
+        $runtimeDir = Split-Path -Path $runtimeFile -Parent
+        if ($runtimeDir) {
+            Add-UploadDir -DirPath ($runtimeDir -replace '\\', '/')
+        }
+    }
+}
+
+if ($uploadDirs.Count -gt 0) {
+    Write-Host "Upload targets:" -ForegroundColor Yellow
+    foreach ($dir in $uploadDirs) {
+        Write-Host "  -> $dir" -ForegroundColor Gray
+        & ssh @sshArgs $sshTarget "mkdir -p $dir" 2>$null
+    }
+}
+
+$stageDir = "/home/${PiUser}"
 
 # Upload required files
 $files = @(
@@ -78,27 +180,26 @@ foreach($file in $files){
         Write-Host "Skipping missing file: $source" -ForegroundColor DarkYellow
         continue
     }
-    Write-Host "Uploading $source as $target..." -ForegroundColor Yellow
-    & scp @scpArgs $source "${sshTarget}:${RemoteDir}/${target}"
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "Failed to upload $source" -ForegroundColor Red
-        exit 1
+    foreach ($dir in $uploadDirs) {
+        Write-Host "Uploading $source as $target -> $dir" -ForegroundColor Yellow
+        & scp @scpArgs $source "${sshTarget}:${dir}/${target}"
+        if ($LASTEXITCODE -ne 0) {
+            if ($dir -ne $stageDir -and -not $dir.StartsWith($stageDir + '/')) {
+                Write-Host "Direct upload failed for $dir, trying staged sudo copy..." -ForegroundColor DarkYellow
+                & ssh @sshArgs $sshTarget "sudo mkdir -p $dir && sudo cp ${stageDir}/${target} ${dir}/${target}" 2>$null
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Host "Staged sudo copy succeeded for $dir" -ForegroundColor Green
+                    continue
+                }
+            }
+
+            Write-Host "Failed to upload $source to $dir" -ForegroundColor Red
+            exit 1
+        }
     }
 }
 Write-Host "Files uploaded successfully!" -ForegroundColor Green
-
-# Also upload directly into /home/<PiUser> because some user services ExecStart from there
-Write-Host "Uploading files to /home/${PiUser} for user service ExecStart" -ForegroundColor Yellow
-foreach($file in $files){
-    $source = $file.Source
-    $target = $file.Target
-    if(-not (Test-Path $source)){ continue }
-    & scp @scpArgs $source "${sshTarget}:/home/${PiUser}/${target}"
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "Warning: Failed to upload $source to /home/${PiUser}" -ForegroundColor DarkYellow
-    }
-}
-Write-Host "Service path files updated (best-effort)." -ForegroundColor Green
+Write-Host "Runtime path files updated." -ForegroundColor Green
 
 # Ensure capture dependencies are installed (mss, pillow)
 Write-Host "Installing/ensuring capture dependencies (mss, pillow)..." -ForegroundColor Yellow

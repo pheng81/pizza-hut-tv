@@ -4662,6 +4662,161 @@
 
     // Global variable to store user's stores and screens data
     let userStoresData = null;
+
+    let remotePiConfigDataCache = null;
+
+    function getRemotePiConfigData() {
+        if (remotePiConfigDataCache) {
+            return remotePiConfigDataCache;
+        }
+
+        const configScript = document.getElementById('config-data');
+        if (!configScript) {
+            return null;
+        }
+
+        try {
+            remotePiConfigDataCache = JSON.parse(configScript.textContent || '{}');
+            return remotePiConfigDataCache;
+        } catch (error) {
+            console.error('❌ Failed to parse config-data for Remote Pi fallback:', error);
+            return null;
+        }
+    }
+
+    function getRemotePiFallbackData() {
+        const configData = getRemotePiConfigData();
+        if (!configData) {
+            return null;
+        }
+
+        return {
+            success: true,
+            stores: Array.isArray(configData.stores) ? configData.stores : [],
+            screens: configData.screens || {}
+        };
+    }
+
+    function populateRemotePiStoreOptions(data) {
+        const storeSelect = document.getElementById('piStoreId');
+        if (!storeSelect) {
+            return;
+        }
+
+        const selectedValue = storeSelect.value;
+        storeSelect.innerHTML = '<option value="">Select Store...</option>';
+
+        const stores = Array.isArray(data?.stores) ? data.stores : [];
+        stores.forEach(store => {
+            const opt = document.createElement('option');
+            opt.value = store.id;
+            opt.textContent = store.id + ' - ' + (store.name || 'Store ' + store.id);
+            storeSelect.appendChild(opt);
+        });
+
+        if (selectedValue && Array.from(storeSelect.options).some(opt => opt.value === selectedValue)) {
+            storeSelect.value = selectedValue;
+        }
+    }
+
+    function getRemotePiStoresData() {
+        return window.userStoresData || userStoresData || getRemotePiFallbackData();
+    }
+
+    function setRemotePiStoresData(data) {
+        userStoresData = data;
+        window.userStoresData = data;
+    }
+
+    function updateRemotePiConfigureButtonState() {
+        const submitBtn = document.getElementById('configureRemotePiBtn');
+        if (!submitBtn) {
+            return;
+        }
+
+        const piId = document.getElementById('piId')?.value.trim() || '';
+        const pairCode = document.getElementById('piPairCode')?.value.trim() || '';
+        const storeId = document.getElementById('piStoreId')?.value || '';
+        const screenId = document.getElementById('piScreenId')?.value || '';
+        const ready = Boolean(piId && pairCode.length === 4 && storeId && screenId);
+
+        if (submitBtn.dataset.busy === 'true') {
+            return;
+        }
+
+        submitBtn.disabled = false;
+        submitBtn.style.opacity = ready ? '1' : '0.82';
+        submitBtn.style.cursor = 'pointer';
+        submitBtn.title = ready
+            ? 'Send the selected store and screen to this Pi'
+            : 'Select pairing code, store, and screen before configuring';
+    }
+
+    async function ensureRemotePiConfigSelections() {
+        const pairStep = document.getElementById('stepPairCode');
+        const storeStep = document.getElementById('stepStoreId');
+        const screenStep = document.getElementById('stepScreenId');
+        const pairCodeInput = document.getElementById('piPairCode');
+        const storeSelect = document.getElementById('piStoreId');
+        const screenSelect = document.getElementById('piScreenId');
+        const remotePiStoresData = getRemotePiStoresData();
+
+        if (pairStep) {
+            pairStep.style.display = 'block';
+        }
+        if (storeStep) {
+            storeStep.style.display = 'block';
+        }
+        if (screenStep) {
+            screenStep.style.display = 'block';
+        }
+
+        if (storeSelect && storeSelect.options.length <= 1 && remotePiStoresData?.stores?.length) {
+            populateRemotePiStoreOptions(remotePiStoresData);
+        }
+
+        const pairCode = pairCodeInput?.value.trim() || '';
+        if (pairCode.length === 4) {
+            await showStoreStep();
+        }
+
+        if (storeSelect?.options.length > 1) {
+            if (storeStep) {
+                storeStep.style.display = 'block';
+            }
+            if (!storeSelect.value && storeSelect.options.length === 2) {
+                storeSelect.value = storeSelect.options[1].value;
+            }
+        }
+
+        if (storeSelect?.value) {
+            showScreenStep();
+        }
+
+        if (screenSelect?.options.length > 1) {
+            if (screenStep) {
+                screenStep.style.display = 'block';
+            }
+            if (!screenSelect.value && screenSelect.options.length === 2) {
+                screenSelect.value = screenSelect.options[1].value;
+            }
+        }
+
+        updateRemotePiConfigureButtonState();
+
+        return {
+            piId: document.getElementById('piId')?.value.trim() || '',
+            pairCode: pairCodeInput?.value.trim() || '',
+            storeId: storeSelect?.value || '',
+            screenId: screenSelect?.value || ''
+        };
+    }
+
+    window.getRemotePiStoresData = getRemotePiStoresData;
+    window.setRemotePiStoresData = setRemotePiStoresData;
+    window.updateRemotePiConfigureButtonState = updateRemotePiConfigureButtonState;
+    window.ensureRemotePiConfigSelections = ensureRemotePiConfigSelections;
+    window.populateRemotePiStoreOptions = populateRemotePiStoreOptions;
     
     // Store the logged-in user's pairing code for validation
     const MY_PAIRING_CODE = '{{ link_code or "" }}';
@@ -4695,27 +4850,38 @@
                     console.log('✅ [v2.0] Fetched user data for pair code:', pairCode, data);
                     console.log('📊 [v2.0] Screens in response:', data.screens);
                     console.log('📊 [v2.0] Number of screens for store 1000:', Object.keys(data.screens['1000'] || {}).length);
-                    userStoresData = data;
+                    setRemotePiStoresData(data);
                     
                     // Populate store dropdown with user's actual stores
-                    const storeSelect = document.getElementById('piStoreId');
-                    storeSelect.innerHTML = '<option value="">Select Store...</option>';
-                    
-                    data.stores.forEach(store => {
-                        const opt = document.createElement('option');
-                        opt.value = store.id;
-                        opt.textContent = store.id + ' - ' + (store.name || 'Store ' + store.id);
-                        storeSelect.appendChild(opt);
-                    });
+                    populateRemotePiStoreOptions(data);
                     
                     console.log('✨ [v2.0] Showing store step with', data.stores.length, 'stores');
                     document.getElementById('stepStoreId').style.display = 'block';
+                    updateRemotePiConfigureButtonState();
                 } else {
                     console.error('❌ Failed to fetch stores:', data.error);
+                    const fallbackData = getRemotePiFallbackData();
+                    if (fallbackData?.stores?.length) {
+                        console.warn('⚠️ Falling back to embedded dashboard store data for Remote Pi config');
+                        setRemotePiStoresData(fallbackData);
+                        populateRemotePiStoreOptions(fallbackData);
+                        document.getElementById('stepStoreId').style.display = 'block';
+                        updateRemotePiConfigureButtonState();
+                        return;
+                    }
                     alert('Pairing code not found or invalid: ' + pairCode);
                 }
             } catch (error) {
                 console.error('❌ Error fetching stores:', error);
+                const fallbackData = getRemotePiFallbackData();
+                if (fallbackData?.stores?.length) {
+                    console.warn('⚠️ Falling back to embedded dashboard store data after fetch error');
+                    setRemotePiStoresData(fallbackData);
+                    populateRemotePiStoreOptions(fallbackData);
+                    document.getElementById('stepStoreId').style.display = 'block';
+                    updateRemotePiConfigureButtonState();
+                    return;
+                }
                 alert('Failed to verify pairing code. Please check your connection.');
             }
         }
@@ -4724,15 +4890,17 @@
     function showScreenStep() {
         const storeId = document.getElementById('piStoreId').value;
         console.log('✨ [v2.0] showScreenStep called, store ID:', storeId);
-        console.log('🔍 [v2.0] userStoresData:', userStoresData);
+        const remotePiStoresData = getRemotePiStoresData();
+        console.log('🔍 [v2.0] userStoresData:', remotePiStoresData);
         
-        if (storeId && userStoresData) {
+        if (storeId && remotePiStoresData) {
             // Populate screen dropdown based on user's actual screens for this store
             const screenSelect = document.getElementById('piScreenId');
+            const selectedScreenId = screenSelect.value;
             screenSelect.innerHTML = '<option value="">Select Screen...</option>';
             
             // Get screens for this specific store from the API data
-            const storeScreens = userStoresData.screens[storeId] || {};
+            const storeScreens = remotePiStoresData.screens[storeId] || {};
             const screenIds = Object.keys(storeScreens);
             
             console.log('🎯 [v2.0] Store screens from userStoresData:', storeScreens);
@@ -4775,11 +4943,17 @@
                     
                     console.log(`Added screen option: ${displayName} (value: ${fullScreenId})`);
                 });
+
+                if (selectedScreenId && screenIds.includes(selectedScreenId)) {
+                    screenSelect.value = selectedScreenId;
+                }
             }
             
             console.log('✨ [v2.0] Showing screen step with', screenIds.length, 'screens');
             document.getElementById('stepScreenId').style.display = 'block';
         }
+
+        updateRemotePiConfigureButtonState();
     }
 
 
@@ -4839,11 +5013,8 @@
                 
                 // Auto-load stores if pairing code is pre-filled
                 setTimeout(() => {
-                    const pairCodeInput = document.getElementById('piPairCode');
-                    if (pairCodeInput && pairCodeInput.value && pairCodeInput.value.length === 4) {
-                        console.log('🔄 Pairing code pre-filled after connection, auto-fetching stores...');
-                        showStoreStep();
-                    }
+                    console.log('🔄 Ensuring Remote Pi config fields are ready after connection...');
+                    ensureRemotePiConfigSelections();
                 }, 100);
                 
                 // Store Pi IP address for VNC connection
@@ -4852,6 +5023,7 @@
                 connectBtn.textContent = 'Connected';
                 connectBtn.style.background = '#4caf50';
                 connectBtn.style.borderColor = '#4caf50';
+                updateRemotePiConfigureButtonState();
                 
             } else {
                 // Pi is offline or not found
@@ -4913,6 +5085,7 @@
             document.getElementById('stepPairCode').style.display = 'none';
             document.getElementById('stepStoreId').style.display = 'none';
             document.getElementById('stepScreenId').style.display = 'none';
+            updateRemotePiConfigureButtonState();
             
             connectBtn.disabled = false;
             connectBtn.textContent = 'Retry';
@@ -4923,10 +5096,11 @@
 
     async function configureRemotePi() {
         console.log('🔧 configureRemotePi() function called');
-        const piId = document.getElementById('piId').value.trim();
-        const pairCode = document.getElementById('piPairCode').value.trim();
-        const storeId = document.getElementById('piStoreId').value;
-        const screenId = document.getElementById('piScreenId').value;
+        const selectionState = await ensureRemotePiConfigSelections();
+        const piId = selectionState.piId;
+        const pairCode = selectionState.pairCode;
+        const storeId = selectionState.storeId;
+        const screenId = selectionState.screenId;
         const autoStart = document.getElementById('piAutoStart').checked;
         const statusDiv = document.getElementById('piConfigStatus');
         const submitBtn = document.getElementById('configureRemotePiBtn');
@@ -4935,14 +5109,16 @@
 
         if (!piId || !pairCode || !storeId || !screenId) {
             console.log('❌ Validation failed - missing fields');
-            statusDiv.innerHTML = '<div style="color:#d32f2f; padding:10px; background:#ffebee; border-radius:8px;">❌ Please fill in all required fields</div>';
+            statusDiv.innerHTML = '<div style="color:#d32f2f; padding:10px; background:#ffebee; border-radius:8px;">❌ Select your pairing code, store, and screen before configuring this Pi.</div>';
             statusDiv.style.display = 'block';
+            document.getElementById('stepPairCode').scrollIntoView({ behavior: 'smooth', block: 'center' });
             return;
         }
 
         console.log('✅ All fields validated');
 
         try {
+            submitBtn.dataset.busy = 'true';
             submitBtn.disabled = true;
             submitBtn.textContent = 'Configuring...';
             statusDiv.innerHTML = '<div style="color:#0d6efd; padding:10px; background:#e7f3ff; border-radius:8px;">⏳ Sending configuration via WebSocket...</div>';
@@ -5015,8 +5191,10 @@
             console.error('❌ Remote Pi configuration error:', error);
             statusDiv.innerHTML = '<div style="color:#d32f2f; padding:10px; background:#ffebee; border-radius:8px;">❌ Network error. Please check your connection.</div>';
         } finally {
+            submitBtn.dataset.busy = 'false';
             submitBtn.disabled = false;
             submitBtn.textContent = 'Configure Pi';
+            updateRemotePiConfigureButtonState();
         }
     }
 
@@ -14168,7 +14346,7 @@ allowfullscreen></iframe></div>`;
                 <!-- Step 4: Screen Selection -->
                 <div id="stepScreenId" class="form-group" style="display:none;">
                     <label for="piScreenId">Screen ID *</label>
-                    <select id="piScreenId" style="width:100%; padding:10px; border-radius:10px; border:1px solid rgba(60,60,67,0.29); font-size:14px;">
+                    <select id="piScreenId" style="width:100%; padding:10px; border-radius:10px; border:1px solid rgba(60,60,67,0.29); font-size:14px;" onchange="updateRemotePiConfigureButtonState()">
                         <option value="">Select Screen...</option>
                     </select>
                     <small style="color:#666; font-size:13px;">Which screen content to display</small>
