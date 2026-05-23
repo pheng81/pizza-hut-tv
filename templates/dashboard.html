@@ -3950,68 +3950,32 @@
         }
 
         #storeGroupsModal.dashboard-side-sheet .modal-content {
-            width: min(900px, calc(100vw - 56px)) !important;
-            max-width: 900px !important;
+            width: 100% !important;
             min-width: 0;
             margin: 0 !important;
-            padding: 0;
-            border: 1px solid rgba(203, 213, 225, 0.82);
-            border-radius: 28px !important;
-            background: linear-gradient(180deg, rgba(255,255,255,0.97) 0%, rgba(246,249,252,0.98) 100%);
-            box-shadow: 0 36px 80px rgba(15, 23, 42, 0.16) !important;
-        }
-
-        #storeGroupsModal.dashboard-side-sheet {
-            justify-content: center;
-            align-items: center;
-            padding: 28px;
-            background:
-                radial-gradient(circle at top, rgba(255,255,255,0.72) 0%, rgba(241,245,249,0.9) 42%, rgba(226,232,240,0.94) 100%);
+            border-left: 1px solid #e5e7eb;
+            padding: 36px 40px 56px;
+            background: linear-gradient(180deg, #f8fafc 0%, #eef3f8 100%);
         }
 
         #storeGroupsModal.dashboard-side-sheet .store-groups-shell {
             width: 100%;
-            max-width: none !important;
-            border-radius: 28px;
-            overflow: hidden;
-            background: linear-gradient(160deg, rgba(255,255,255,0.96) 0%, rgba(248,250,252,0.98) 100%);
         }
 
         #storeGroupsModal.dashboard-side-sheet .modal-header,
         #storeGroupsModal.dashboard-side-sheet .store-groups-body {
-            width: 100%;
+            width: min(980px, calc(100% - 72px));
             max-width: none;
-            margin: 0;
+            margin: 0 auto 0 36px;
         }
 
         #storeGroupsModal.dashboard-side-sheet .modal-header {
-            padding: 30px 34px 12px;
+            padding: 4px 0 22px;
             border-bottom: none;
-            align-items: flex-start;
-            background: transparent;
-        }
-
-        #storeGroupsModal.dashboard-side-sheet .modal-header h3 {
-            margin: 0;
-            font-size: 32px;
-            line-height: 1.05;
-            letter-spacing: -0.03em;
-            color: #0f172a;
-        }
-
-        #storeGroupsModal.dashboard-side-sheet .close {
-            top: 24px;
-            right: 24px;
-            width: 38px;
-            height: 38px;
-            background: rgba(255, 255, 255, 0.95);
-            border: 1px solid rgba(203, 213, 225, 0.9);
-            border-radius: 999px;
-            box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
         }
 
         #storeGroupsModal.dashboard-side-sheet .store-groups-body {
-            padding: 6px 34px 30px !important;
+            padding: 0 !important;
         }
 
         #storeGroupsModal.dashboard-side-sheet .store-groups-note,
@@ -4026,70 +3990,25 @@
         }
 
         #storeGroupsModal.dashboard-side-sheet .store-groups-note {
-            margin-bottom: 22px !important;
-            padding: 18px 20px !important;
-            background: linear-gradient(180deg, rgba(248,250,252,0.98) 0%, rgba(241,245,249,0.95) 100%) !important;
-            border: 1px solid rgba(219,228,238,0.95) !important;
+            margin-bottom: 28px !important;
+            padding: 0 !important;
+            background: transparent !important;
+            border: none !important;
             border-left: none !important;
-            border-radius: 18px !important;
-            box-shadow: inset 0 1px 0 rgba(255,255,255,0.82) !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
             color: #64748b !important;
-            line-height: 1.65;
         }
 
         #storeGroupsModal.dashboard-side-sheet .store-groups-create {
-            margin-bottom: 24px !important;
-            padding: 22px !important;
-            border-radius: 20px !important;
+            margin-bottom: 28px !important;
+            border-radius: 14px !important;
             border-color: #dbe4ee !important;
-            background: rgba(255,255,255,0.9) !important;
-            box-shadow: 0 18px 36px rgba(15, 23, 42, 0.06);
-        }
-
-        #storeGroupsModal.dashboard-side-sheet .store-groups-create h4,
-        #storeGroupsModal.dashboard-side-sheet #groupsList h4 {
-            font-size: 18px !important;
-            margin-bottom: 16px !important;
-            color: #0f172a !important;
-        }
-
-        #storeGroupsModal.dashboard-side-sheet #newGroupName {
-            border-radius: 16px !important;
-            border-color: #d8e1ea !important;
-            padding: 14px 16px !important;
-            font-size: 15px !important;
-            box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
-        }
-
-        #storeGroupsModal.dashboard-side-sheet #groupsList {
-            padding: 22px;
-            border-radius: 20px;
-            background: rgba(255,255,255,0.88);
-            border: 1px solid rgba(219,228,238,0.94);
-            box-shadow: 0 18px 36px rgba(15, 23, 42, 0.05);
-        }
-
-        #storeGroupsModal.dashboard-side-sheet #groupsCount {
-            background: rgba(15, 110, 252, 0.12) !important;
-            color: #0f6efc !important;
+            box-shadow: 0 14px 32px rgba(15, 23, 42, 0.05);
         }
 
         #storeGroupsModal.dashboard-side-sheet .store-groups-footer {
-            margin-top: 24px !important;
-            padding-top: 22px !important;
-        }
-
-        #storeGroupsModal.dashboard-side-sheet .btn-secondary,
-        #storeGroupsModal.dashboard-side-sheet .btn-primary {
-            min-width: 140px;
-            padding: 13px 20px;
-            border-radius: 14px;
-        }
-
-        #storeGroupsModal.dashboard-side-sheet .btn-primary {
-            background: linear-gradient(135deg, #0f6efc 0%, #2a8cff 100%) !important;
-            border: none !important;
-            box-shadow: 0 14px 28px rgba(15, 110, 252, 0.24);
+            margin-top: 28px !important;
         }
 
         @media (max-width: 1180px) {
@@ -4100,169 +4019,8 @@
             }
         }
 
-        @media (max-width: 767px) {
-            #storeGroupsModal.dashboard-side-sheet {
-                padding: 16px;
-            }
-
-            #storeGroupsModal.dashboard-side-sheet .modal-content {
-                width: min(100%, calc(100vw - 24px)) !important;
-                border-radius: 22px !important;
-            }
-
-            #storeGroupsModal.dashboard-side-sheet .modal-header {
-                padding: 24px 20px 10px;
-            }
-
-            #storeGroupsModal.dashboard-side-sheet .modal-header h3 {
-                font-size: 28px;
-            }
-
-            #storeGroupsModal.dashboard-side-sheet .store-groups-body {
-                padding: 4px 20px 22px !important;
-            }
-        }
-
         #remotePiManagerModal.dashboard-side-sheet .modal-content {
-            width: min(920px, calc(100vw - 56px)) !important;
-            max-width: 920px !important;
-            height: auto;
-            max-height: calc(100vh - 56px) !important;
-            margin: 0 !important;
-            border: 1px solid rgba(203, 213, 225, 0.82);
-            border-radius: 28px !important;
-            background: linear-gradient(180deg, rgba(255,255,255,0.97) 0%, rgba(246,249,252,0.98) 100%);
-            box-shadow: 0 36px 80px rgba(15, 23, 42, 0.16) !important;
-            overflow: hidden;
-        }
-
-        #remotePiManagerModal.dashboard-side-sheet {
-            justify-content: center;
-            align-items: center;
-            padding: 28px;
-            background:
-                radial-gradient(circle at top, rgba(255,255,255,0.72) 0%, rgba(241,245,249,0.9) 42%, rgba(226,232,240,0.94) 100%);
-        }
-
-        #remotePiManagerModal.dashboard-side-sheet .modal-header {
-            padding: 28px 32px 18px;
-            background: transparent;
-            box-shadow: none;
-        }
-
-        #remotePiManagerModal.dashboard-side-sheet .modal-header h3 {
-            font-size: 32px;
-            line-height: 1.05;
-            letter-spacing: -0.03em;
-            color: #0f172a !important;
-        }
-
-        #remotePiManagerModal.dashboard-side-sheet .close {
-            color: #475569 !important;
-            font-size: 28px;
-            width: 38px;
-            height: 38px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 999px;
-            background: rgba(255, 255, 255, 0.95);
-            border: 1px solid rgba(203, 213, 225, 0.9);
-            box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
-        }
-
-        #remotePiManagerModal.dashboard-side-sheet .modal-content > div {
-            padding: 0 32px 30px !important;
-        }
-
-        #remotePiManagerModal.dashboard-side-sheet .modal-content > div > div {
-            padding: 24px !important;
-            border-radius: 22px !important;
-            background: rgba(255,255,255,0.88) !important;
-            border: 1px solid rgba(219,228,238,0.94);
-            box-shadow: 0 18px 36px rgba(15, 23, 42, 0.06) !important;
-        }
-
-        #remotePiManagerModal.dashboard-side-sheet .helper {
-            font-size: 14px;
-            color: #64748b;
-            line-height: 1.65;
-        }
-
-        #remotePiManagerModal.dashboard-side-sheet .form-group {
-            margin-bottom: 18px;
-        }
-
-        #remotePiManagerModal.dashboard-side-sheet .form-group label {
-            font-size: 13px;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            color: #334155;
-        }
-
-        #remotePiManagerModal.dashboard-side-sheet .form-group input,
-        #remotePiManagerModal.dashboard-side-sheet .form-group select {
-            border-radius: 16px;
-            border-color: #d8e1ea;
-            padding: 14px 16px;
-            font-size: 15px;
-            box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
-        }
-
-        #remotePiManagerModal.dashboard-side-sheet #connectPiBtn,
-        #remotePiManagerModal.dashboard-side-sheet #configureRemotePiBtn,
-        #remotePiManagerModal.dashboard-side-sheet .modal-buttons .btn-secondary {
-            min-height: 48px;
-            border-radius: 14px !important;
-        }
-
-        #remotePiManagerModal.dashboard-side-sheet #connectPiBtn,
-        #remotePiManagerModal.dashboard-side-sheet #configureRemotePiBtn {
-            background: linear-gradient(135deg, #0f6efc 0%, #2a8cff 100%) !important;
-            box-shadow: 0 14px 28px rgba(15, 110, 252, 0.24);
-        }
-
-        #remotePiManagerModal.dashboard-side-sheet #piScreenContainer {
-            border-radius: 18px !important;
-            height: 320px !important;
-            box-shadow: inset 0 2px 8px rgba(15, 23, 42, 0.24);
-        }
-
-        #remotePiManagerModal.dashboard-side-sheet .modal-buttons {
-            margin-top: 8px;
-            gap: 10px !important;
-        }
-
-        @media (max-width: 767px) {
-            #remotePiManagerModal.dashboard-side-sheet {
-                padding: 16px;
-            }
-
-            #remotePiManagerModal.dashboard-side-sheet .modal-content {
-                width: min(100%, calc(100vw - 24px)) !important;
-                max-height: calc(100vh - 24px) !important;
-                border-radius: 22px !important;
-            }
-
-            #remotePiManagerModal.dashboard-side-sheet .modal-header {
-                padding: 22px 20px 14px;
-            }
-
-            #remotePiManagerModal.dashboard-side-sheet .modal-header h3 {
-                font-size: 28px;
-            }
-
-            #remotePiManagerModal.dashboard-side-sheet .modal-content > div {
-                padding: 0 20px 20px !important;
-            }
-
-            #remotePiManagerModal.dashboard-side-sheet .modal-content > div > div {
-                padding: 18px !important;
-            }
-
-            #remotePiManagerModal.dashboard-side-sheet #connectPiBtn {
-                width: 100%;
-            }
+            width: min(880px, 100%) !important;
         }
 
         .rp-overlay.dashboard-side-sheet .rp-modal {
