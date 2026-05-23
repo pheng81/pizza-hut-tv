@@ -164,6 +164,7 @@ if ($uploadDirs.Count -gt 0) {
 }
 
 $stageDir = "/home/${PiUser}"
+$requiredUploadDirs = @($RemoteDir, "/home/${PiUser}") | Select-Object -Unique
 
 # Upload required files
 $files = @(
@@ -191,6 +192,11 @@ foreach($file in $files){
                     Write-Host "Staged sudo copy succeeded for $dir" -ForegroundColor Green
                     continue
                 }
+            }
+
+            if ($requiredUploadDirs -notcontains $dir) {
+                Write-Host "Skipping optional runtime path $dir after upload failure" -ForegroundColor DarkYellow
+                continue
             }
 
             Write-Host "Failed to upload $source to $dir" -ForegroundColor Red
