@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pi Setup</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        :root {
+            --setup-text-strong: #27364a;
+            --setup-text-base: #556274;
+            --setup-text-muted: #798496;
+            --setup-border: #d9dee7;
+            --setup-surface: #ffffff;
+            --setup-surface-muted: #f7f9fc;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            background: #f4f6f8;
+            color: var(--setup-text-base);
+        }
+
+        body.embedded {
+            min-height: auto;
+            background: transparent;
+        }
+
+        .page {
+            max-width: 920px;
+            margin: 0 auto;
+            padding: 32px 20px 48px;
+        }
+
+        body.embedded .page {
+            max-width: none;
+            padding: 20px 20px 36px;
+        }
+
+        .page-nav {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 18px;
+            color: var(--setup-text-muted);
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .page-nav a {
+            color: var(--setup-text-strong);
+            text-decoration: none;
+        }
+
+        .page-nav a:hover {
+            color: #0f6fff;
+        }
+
+        .page-nav-separator {
+            color: #94a3b8;
+        }
+
+        .page-nav-current {
+            color: var(--setup-text-strong);
+        }
+
+        .hero {
+            background: var(--setup-surface);
+            border: 1px solid var(--setup-border);
+            border-radius: 4px;
+            padding: 28px;
+            box-shadow: none;
+        }
+
+        .eyebrow {
+            display: inline-block;
+            padding: 7px 12px;
+            border-radius: 4px;
+            background: #edf1f5;
+            color: var(--setup-text-base);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        h1 {
+            margin: 16px 0 10px;
+            font-size: clamp(28px, 5vw, 42px);
+            line-height: 1.05;
+            color: var(--setup-text-strong);
+        }
+
+        .lead {
+            margin: 0;
+            color: var(--setup-text-base);
+            font-size: 16px;
+            line-height: 1.6;
+            max-width: 720px;
+        }
+
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 14px;
+            margin-top: 22px;
+        }
+
+        .summary-card {
+            padding: 16px;
+            border-radius: 4px;
+            background: var(--setup-surface-muted);
+            border: 1px solid var(--setup-border);
+        }
+
+        .summary-label {
+            display: block;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--setup-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 6px;
+        }
+
+        .summary-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--setup-text-strong);
+        }
+
+        .actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 24px;
+        }
+
+        .button {
+            appearance: none;
+            border: none;
+            border-radius: 4px;
+            padding: 14px 18px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .button-primary {
+            background: #0f6fff;
+            color: #fff;
+            box-shadow: none;
+        }
+
+        .button-secondary {
+            background: #fff;
+            color: var(--setup-text-strong);
+            border: 1px solid var(--setup-border);
+        }
+
+        .section {
+            margin-top: 22px;
+            background: var(--setup-surface);
+            border-radius: 4px;
+            border: 1px solid var(--setup-border);
+            padding: 26px;
+            box-shadow: none;
+        }
+
+        .section h2 {
+            margin: 0 0 14px;
+            font-size: 22px;
+            color: var(--setup-text-strong);
+        }
+
+        .steps {
+            display: grid;
+            gap: 12px;
+        }
+
+        .step {
+            display: grid;
+            grid-template-columns: 42px 1fr;
+            gap: 14px;
+            align-items: flex-start;
+            padding: 14px;
+            border-radius: 4px;
+            background: var(--setup-surface-muted);
+            border: 1px solid var(--setup-border);
+        }
+
+        .step-number {
+            width: 42px;
+            height: 42px;
+            border-radius: 4px;
+            background: #233247;
+            color: white;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 15px;
+        }
+
+        .step-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 4px;
+            color: var(--setup-text-strong);
+        }
+
+        .step-text {
+            color: var(--setup-text-base);
+            line-height: 1.55;
+            font-size: 14px;
+        }
+
+        .command-box {
+            margin-top: 14px;
+            padding: 14px 16px;
+            border-radius: 4px;
+            background: #0f172a;
+            color: #e2e8f0;
+            font-family: Consolas, "SFMono-Regular", monospace;
+            font-size: 13px;
+            overflow-x: auto;
+        }
+
+        .note {
+            margin-top: 14px;
+            padding: 14px 16px;
+            border-radius: 4px;
+            background: #f4f7fb;
+            border: 1px solid #d6e0ed;
+            color: var(--setup-text-base);
+            font-size: 14px;
+            line-height: 1.55;
+        }
+
+        .error {
+            margin-top: 18px;
+            padding: 16px;
+            border-radius: 4px;
+            background: #fff1f2;
+            border: 1px solid rgba(225, 29, 72, 0.18);
+            color: #9f1239;
+        }
+
+        @media (max-width: 640px) {
+            .page {
+                padding: 18px 14px 32px;
+            }
+
+            .hero,
+            .section {
+                padding: 20px;
+                border-radius: 20px;
+            }
+
+            .step {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body class="{% if embedded %}embedded{% endif %}">
+    <div class="page">
+        <div class="page-nav" aria-label="Breadcrumb">
+            <a href="{% if embedded %}/pi-manager?embedded=1&panel=setup{% else %}/pi-manager{% endif %}">Pi Device Manager</a>
+            <span class="page-nav-separator">/</span>
+            <span class="page-nav-current">Pi Setup</span>
+        </div>
+
+        <div class="hero">
+            {% if success %}
+            <span class="eyebrow">Pi setup</span>
+            <h1>Set up this Raspberry Pi without knowing the Pi ID first</h1>
+            <p class="lead">Download the ready-made installer below, run it on the Pi, and the Pi will create its own Pi ID automatically. When it comes online, it should already attach to the selected store and screen.</p>
+
+            <div class="summary">
+                <div class="summary-card">
+                    <span class="summary-label">Store</span>
+                    <span class="summary-value">{{ store_name }} ({{ store_id }})</span>
+                </div>
+                <div class="summary-card">
+                    <span class="summary-label">Screen</span>
+                    <span class="summary-value">{{ screen_name }} ({{ screen_id }})</span>
+                </div>
+            </div>
+
+            <div class="actions">
+                <a class="button button-primary" href="{{ download_url }}">Download Installer</a>
+                <button class="button button-secondary" type="button" onclick="copySetupUrl()">Copy This Setup Link</button>
+            </div>
+
+            <div class="note">
+                You do not need to know the Pi ID yet. The installer creates it on first run, and the dashboard will learn it automatically when the Pi registers.
+            </div>
+            {% else %}
+            <span class="eyebrow">Pi setup</span>
+            <h1>That setup link is not valid anymore</h1>
+            <div class="error">{{ error_message or 'This Pi setup link is invalid. Please generate a new one from Pi Manager.' }}</div>
+            {% endif %}
+        </div>
+
+        {% if success %}
+        <div class="section">
+            <h2>Normal-user steps</h2>
+            <div class="steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <div>
+                        <div class="step-title">Open this page on the Raspberry Pi</div>
+                        <div class="step-text">Use the Pi's browser to open this setup page, then click <strong>Download Installer</strong>. The file will download as <strong>everydayadvertise_tv-installer.sh</strong>.</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div>
+                        <div class="step-title">Run the downloaded installer</div>
+                        <div class="step-text">Open Terminal on the Pi and run the command below. This is the only terminal step left for now.</div>
+                        <div class="command-box">{{ local_command }}</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div>
+                        <div class="step-title">Wait for the Pi to finish setup</div>
+                        <div class="step-text">The installer downloads the EverydayAdvertise TV client, installs dependencies, creates the auto-start service, and preloads the chosen store and screen.</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-number">4</div>
+                    <div>
+                        <div class="step-title">Check Pi Manager</div>
+                        <div class="step-text">After a minute or two, refresh Pi Manager. The new Pi should appear with its new Pi ID and should already be assigned to {{ screen_name }}.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>If something goes wrong</h2>
+            <div class="steps">
+                <div class="step">
+                    <div class="step-number">A</div>
+                    <div>
+                        <div class="step-title">Check the service</div>
+                        <div class="step-text">Run <strong>sudo systemctl status everydayadvertise_tv</strong> on the Pi.</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-number">B</div>
+                    <div>
+                        <div class="step-title">Check the logs</div>
+                        <div class="step-text">Run <strong>journalctl -u everydayadvertise_tv -f</strong> and watch for errors.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        function copySetupUrl() {
+            const url = {{ (setup_url or '')|tojson }};
+            if (!url) {
+                return;
+            }
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url).then(() => {
+                    alert('Setup link copied');
+                }).catch(() => {
+                    alert('Copy failed. Please copy the URL from the address bar.');
+                });
+                return;
+            }
+
+            alert('Please copy the URL from the address bar.');
+        }
+    </script>
+</body>
+</html>

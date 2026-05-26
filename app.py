@@ -30,6 +30,7 @@ from email.message import EmailMessage
 from typing import Optional
 
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response, send_file, make_response, session, has_request_context
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
@@ -1427,6 +1428,42 @@ def _normalize_homepage_hero_media_row(row) -> dict:
     }
 
 
+def _static_media_exists(media_path: str | None) -> bool:
+    normalized = (media_path or '').replace('\\', '/').strip().lstrip('/')
+    if not normalized:
+        return False
+    if normalized.startswith('static/'):
+        normalized = normalized[len('static/'):]
+    static_root = os.path.join(os.path.dirname(__file__), 'static')
+    return os.path.exists(os.path.join(static_root, normalized))
+
+
+def _default_homepage_body_media() -> list[dict]:
+    fallback_items = [
+        {
+            'id': 0,
+            'media_path': 'home_video_sync_03.mp4',
+            'media_type': 'video',
+            'caption': '',
+            'layout_style': 'half',
+            'edge_to_edge': False,
+            'sort_order': 1,
+            'created_at': int(time.time()),
+        },
+        {
+            'id': 0,
+            'media_path': 'digital_menu_focus.jpg',
+            'media_type': 'image',
+            'caption': '',
+            'layout_style': 'half',
+            'edge_to_edge': False,
+            'sort_order': 2,
+            'created_at': int(time.time()),
+        },
+    ]
+    return [item for item in fallback_items if _static_media_exists(item.get('media_path'))]
+
+
 def _get_homepage_hero_media() -> list[dict]:
     try:
         db = get_db()
@@ -1459,15 +1496,18 @@ def _build_home_hero_rotation_images(home_content: dict, hero_media: list[dict],
 
     for item in hero_media or []:
         media_path = (item.get('media_path') or '').strip()
-        if not media_path or media_path in seen_paths:
+        if not media_path or media_path in seen_paths or not _static_media_exists(media_path):
             continue
         seen_paths.add(media_path)
         pool.append(url_for('static', filename=media_path) + cache_suffix)
         if len(pool) >= 24:
             return pool
 
-    if hero_path and not pool:
+    if hero_path and _static_media_exists(hero_path) and not pool:
         pool.append(url_for('static', filename=hero_path) + cache_suffix)
+
+    if not pool:
+        pool.append(url_for('static', filename='imag2.png') + cache_suffix)
 
     return pool
 
@@ -1844,7 +1884,7 @@ except Exception as _log_e:
 
 app = Flask(__name__)
 # Use a strong, consistent secret key for session signing
-app.secret_key = os.environ.get('SECRET_KEY') or 'pizza-hut-tv-oauth-session-key-2025-production'
+app.secret_key = os.environ.get('SECRET_KEY') or 'everydayadvertise-tv-oauth-session-key-2025-production'
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 
 # Template filters
@@ -1877,6 +1917,35 @@ socketio = SocketIO(
 # Track connected Pis via WebSocket
 connected_pis = {}  # { 'pi_id': {'sid': socket_id, 'connected_at': timestamp, 'ip': ip_address} }
 pi_connection_lock = threading.Lock()
+
+
+def _normalize_pi_claim_code(raw_code: Optional[str]) -> str:
+    try:
+        return ''.join(ch for ch in str(raw_code or '').upper() if ch.isalnum())[:12]
+    except Exception:
+        return ''
+
+
+def _pi_runtime_is_assignable(pi_info: Optional[dict]) -> bool:
+    info = pi_info or {}
+    return not bool((info.get('pair_code') or '').strip() and (info.get('store_id') or '').strip() and (info.get('screen_id') or '').strip())
+
+
+def _resolve_connected_pi_by_claim_code(claim_code: Optional[str], *, require_assignable: bool = False) -> tuple[Optional[str], Optional[dict]]:
+    normalized = _normalize_pi_claim_code(claim_code)
+    if not normalized:
+        return None, None
+
+    with pi_connection_lock:
+        for pi_id, pi_info in connected_pis.items():
+            if _normalize_pi_claim_code((pi_info or {}).get('claim_code')) != normalized:
+                continue
+            if require_assignable and not _pi_runtime_is_assignable(pi_info):
+                continue
+            if not (pi_info or {}).get('connected', True):
+                continue
+            return pi_id, dict(pi_info or {})
+    return None, None
 
 # Track connected Android TV devices via heartbeat
 # Key = device_id (session_id or unique identifier)
@@ -3944,8 +4013,10 @@ def home():
     home_content = _get_homepage_settings()
     home_promo_messages = _get_homepage_promo_messages(home_content)
     home_features = _get_homepage_features()
-    home_body_media = _get_homepage_body_media()
-    home_hero_media = _get_homepage_hero_media()
+    home_body_media = [item for item in _get_homepage_body_media() if _static_media_exists(item.get('media_path'))]
+    if not home_body_media:
+        home_body_media = _default_homepage_body_media()
+    home_hero_media = [item for item in _get_homepage_hero_media() if _static_media_exists(item.get('media_path'))]
     home_body_media_blocks = _build_homepage_body_media_blocks(home_body_media)
     home_body_media_profiles = _get_homepage_body_media_profiles(home_content)
 
@@ -3970,8 +4041,11 @@ def home():
         selected_home_template = 'home.html'
         asset_bust = 0
         page_version = '4000'
-    hero_rotation_images = _build_home_hero_rotation_images(home_content, home_hero_media, asset_bust)
-    hero_primary_image = url_for('static', filename=(home_content.get('hero_image_path') or 'imag2.png')) + f'?v={asset_bust or 0}'
+    hero_image_path = (home_content.get('hero_image_path') or 'imag2.png').strip()
+    if not _static_media_exists(hero_image_path):
+        hero_image_path = 'imag2.png'
+    hero_rotation_images = _build_home_hero_rotation_images({**home_content, 'hero_image_path': hero_image_path}, home_hero_media, asset_bust)
+    hero_primary_image = url_for('static', filename=hero_image_path) + f'?v={asset_bust or 0}'
     hero_rotation_cookie_value = None
     if home_content.get('hero_rotate_on_refresh') and hero_rotation_images:
         try:
@@ -6232,10 +6306,10 @@ def screen_heartbeat():
         else:
             logging.debug('HB screen not found: store=%s screen=%s candidate=%s keys=%s', store_id, screen_id, candidate, list(store_screens.keys()))
             return jsonify({'success': False, 'error': 'Screen not found'}), 404
-    # record last_seen epoch seconds
+    # Keep heartbeat status in memory only so frequent client pings do not rewrite
+    # the whole config file and accidentally restore recently deleted screens.
     current_timestamp = int(time.time())
-    store_screens[screen_id]['last_seen'] = current_timestamp
-    logging.debug('HB set last_seen for %s/%s', store_id, screen_id)
+    logging.debug('HB received for %s/%s at %s', store_id, screen_id, current_timestamp)
     
     # Track Android TV device in connected_android_tvs for real-time status
     device_id = data.get('device_id')  # Android TV should send unique device_id
@@ -6258,11 +6332,60 @@ def screen_heartbeat():
     
     logging.info(f'[Android TV] Heartbeat from device {device_id}: {store_id}/{screen_id} @ {client_ip}')
     
-    if user_key:
-        save_store_config_for_user_safe_key(user_key, cfg)
-    else:
-        save_store_config(cfg)
     return jsonify({'success': True})
+
+
+def _get_live_screen_last_seen(user_key, store_id, screen_id):
+    latest = 0
+    now = int(time.time())
+
+    with android_tv_lock:
+        for tv_data in connected_android_tvs.values():
+            if not isinstance(tv_data, dict):
+                continue
+            if str(tv_data.get('user_key') or '') != str(user_key or ''):
+                continue
+            if str(tv_data.get('store_id') or '') != str(store_id):
+                continue
+            if str(tv_data.get('screen_id') or '') != str(screen_id):
+                continue
+            try:
+                seen = int(tv_data.get('last_seen') or 0)
+            except Exception:
+                seen = 0
+            if seen > latest:
+                latest = seen
+
+    try:
+        for pi_data in connected_pis.values():
+            if not isinstance(pi_data, dict):
+                continue
+            if str(pi_data.get('user_key') or '') != str(user_key or ''):
+                continue
+            if str(pi_data.get('store_id') or '') != str(store_id):
+                continue
+            if str(pi_data.get('screen_id') or '') != str(screen_id):
+                continue
+            try:
+                seen = int(pi_data.get('last_seen') or 0)
+            except Exception:
+                seen = 0
+            if seen > latest:
+                latest = seen
+    except Exception:
+        pass
+
+    return latest if latest and (now - latest) < HEARTBEAT_TIMEOUT else 0
+
+
+def _resolve_screen_last_seen(user_key, store_id, screen_id, screen_data):
+    live_last_seen = _get_live_screen_last_seen(user_key, store_id, screen_id)
+    if live_last_seen:
+        return live_last_seen
+    try:
+        return int((screen_data or {}).get('last_seen', 0) or 0)
+    except Exception:
+        return 0
 
 # -------- Public API for TV app: list screens for a store (pair-code or session required) --------
 @app.route('/api/screens/<store_id>', methods=['GET'])
@@ -6329,11 +6452,6 @@ def client_event():
     # Require a pairing code when no dashboard session is present
     if not user_key and not _safe_user_key():
         return jsonify({'success': False, 'error': 'pair code required'}), 403
-    cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(user_key) if user_key else load_store_config())
-    ns, nid = _normalize_screen_ref(cfg, store_id, screen_id)
-    if not ns or not nid:
-        return jsonify({'success': False, 'error': 'screen not found'}), 404
-    scr = cfg['screens'][ns][nid]
     ev = {
         'ts': int(time.time()),
         'event': event,
@@ -6359,6 +6477,21 @@ def client_event():
         except Exception:
             pass
         key = f"file:{v}"
+
+    # Re-load the latest config snapshot before saving runtime event data so a
+    # concurrent delete does not get overwritten by an older in-memory copy.
+    cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(user_key) if user_key else load_store_config())
+    ns, nid = _normalize_screen_ref(cfg, store_id, screen_id)
+    if not ns or not nid:
+        return jsonify({'success': True, 'ignored': 'screen_not_found'})
+    scr = cfg['screens'][ns][nid]
+
+    # Append to bounded events list
+    events = scr.setdefault('events', [])
+    events.append(ev)
+    if len(events) > 100:
+        del events[:-100]
+
     if key:
         last = scr.setdefault('last_item_status', {})
         state = 'ok' if event in ('ok', 'load_ok', 'loaded') else ('fail' if 'fail' in event else event)
@@ -6747,7 +6880,7 @@ def screen_status():
     result = {}
     for store_id, screens in cfg.get('screens', {}).items():
         for sid, sdata in (screens or {}).items():
-            last_seen = int(sdata.get('last_seen', 0) or 0)
+            last_seen = _resolve_screen_last_seen(user_key, store_id, sid, sdata)
             online = (now - last_seen) < HEARTBEAT_TIMEOUT
             result.setdefault(store_id, {})[sid] = 'online' if online else 'offline'
     # Return plain dict to allow decorator to attach ETag
@@ -6768,7 +6901,7 @@ def screen_status_by_store(store_id):
     screens = cfg.get('screens', {}).get(store_id, {}) or {}
     result = {}
     for sid, sdata in screens.items():
-        last_seen = int(sdata.get('last_seen', 0) or 0)
+        last_seen = _resolve_screen_last_seen(user_key, store_id, sid, sdata)
         online = (now - last_seen) < HEARTBEAT_TIMEOUT
         result[sid] = 'online' if online else 'offline'
     logging.debug('STATUS store=%s result=%s', store_id, result)
@@ -7423,6 +7556,355 @@ def _resolve_user_key_by_code(raw_code: Optional[str]) -> Optional[str]:
         return _safe_key_from_username(uname)
     except Exception:
         return None
+
+
+PI_BOOTSTRAP_FILES = {
+    'complete_pi_client.py': os.path.join(BASE_DIR, 'complete_pi_client.py'),
+    'pi_mobile_sync_addon.py': os.path.join(BASE_DIR, 'pi_mobile_sync_addon.py'),
+    'seamless_video_player.py': os.path.join(BASE_DIR, 'pi_deployment', 'seamless_video_player.py'),
+    'pi_vnc_tunnel.py': os.path.join(BASE_DIR, 'pi_vnc_tunnel.py'),
+    'transition_engine.py': os.path.join(BASE_DIR, 'transition_engine.py'),
+}
+
+
+def _resolve_pi_bootstrap_auth() -> tuple[Optional[str], str]:
+    """Allow Pi bootstrap downloads via pairing code, or current session when logged in."""
+    code = (request.headers.get('X-User-Code') or request.args.get('code') or '').strip()
+    user_key = _resolve_user_key_by_code(code)
+    if user_key:
+        return user_key, code
+
+    session_user_key = _safe_user_key()
+    if session_user_key:
+        try:
+            user = session.get('user') or {}
+            username = (
+                user.get('email')
+                or user.get('name')
+                or user.get('username')
+                or user.get('login')
+                or ''
+            ).strip().lower()
+            if username:
+                return session_user_key, _ensure_user_link_code(username)
+        except Exception:
+            pass
+
+    return None, ''
+
+
+def _no_cache_text_response(body: str, *, mimetype: str) -> Response:
+    resp = Response(body, mimetype=mimetype)
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
+    resp.headers['Expires'] = '0'
+    return resp
+
+
+def _validate_pi_bootstrap_target(user_key: str, store_id: str, screen_id: str) -> tuple[bool, str]:
+    if store_id or screen_id:
+        if not (store_id and screen_id):
+            return False, 'Both store_id and screen_id are required together'
+
+        cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(user_key))
+        store_exists = any(str(store.get('id')) == store_id for store in cfg.get('stores', []))
+        if not store_exists:
+            return False, 'Store not found'
+
+        store_screens = cfg.get('screens', {}).get(store_id, {}) or {}
+        if screen_id not in store_screens:
+            return False, 'Screen not found'
+
+    return True, ''
+
+
+def _build_pi_bootstrap_script(pair_code: str, server_url: str, store_id: str = '', screen_id: str = '') -> str:
+    return f"""#!/usr/bin/env bash
+set -euo pipefail
+
+PAIR_CODE=\"{pair_code}\"
+SERVER_URL=\"{server_url}\"
+STORE_ID=\"{store_id}\"
+SCREEN_ID=\"{screen_id}\"
+INSTALL_DIR=\"${{HOME}}/everydayadvertise_tv_client\"
+VENV_DIR=\"${{INSTALL_DIR}}/venv\"
+SERVICE_NAME=\"everydayadvertise_tv\"
+CONFIG_PATH=\"${{HOME}}/.pizza_hut_tv_config.json\"
+
+FILES=(
+  \"complete_pi_client.py\"
+  \"pi_mobile_sync_addon.py\"
+  \"seamless_video_player.py\"
+  \"pi_vnc_tunnel.py\"
+  \"transition_engine.py\"
+)
+
+echo \"== EverydayAdvertise TV Pi installer ==\"
+echo \"Server: $SERVER_URL\"
+echo \"Pairing code: $PAIR_CODE\"
+if [[ -n \"$STORE_ID\" && -n \"$SCREEN_ID\" ]]; then
+    echo \"Store: $STORE_ID\"
+    echo \"Screen: $SCREEN_ID\"
+fi
+
+sudo apt-get update -y
+sudo apt-get install -y \
+  python3 \
+  python3-venv \
+  python3-pip \
+  python3-pygame \
+  python3-pil \
+  ffmpeg \
+  mpv \
+  libmpv2 \
+  x11vnc
+
+mkdir -p \"$INSTALL_DIR\"
+
+fetch_file() {{
+  local file_name=\"$1\"
+  curl -fsSL \
+    -H \"X-User-Code: $PAIR_CODE\" \
+    \"$SERVER_URL/api/pi-bootstrap/file/${{file_name}}?code=${{PAIR_CODE}}\" \
+    -o \"$INSTALL_DIR/${{file_name}}\"
+}}
+
+for file_name in \"${{FILES[@]}}\"; do
+  echo \"Downloading $file_name ...\"
+  fetch_file \"$file_name\"
+done
+
+python3 -m venv --system-site-packages \"$VENV_DIR\"
+\"$VENV_DIR/bin/pip\" install --upgrade pip setuptools wheel
+\"$VENV_DIR/bin/pip\" install \
+  requests \
+  \"python-socketio[client]\" \
+  psutil \
+  pillow \
+  pygame \
+  mss \
+  python-mpv \
+  qrcode
+
+cat > \"$CONFIG_PATH\" <<EOF
+{{
+  \"pair_code\": \"$PAIR_CODE\",
+  \"store_id\": \"$STORE_ID\",
+  \"screen_id\": \"$SCREEN_ID\",
+  \"pi_id\": \"\",
+  \"last_updated\": $(date +%s)
+}}
+EOF
+
+CURRENT_USER=\"$(id -un)\"
+cat > /tmp/${{SERVICE_NAME}}.service <<EOF
+[Unit]
+Description=EverydayAdvertise TV Digital Signage Client
+After=graphical.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=${{CURRENT_USER}}
+SupplementaryGroups=video render
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/${{CURRENT_USER}}/.Xauthority
+Environment=PYTHONUNBUFFERED=1
+WorkingDirectory=$INSTALL_DIR
+ExecStartPre=/bin/sleep 10
+ExecStart=$VENV_DIR/bin/python $INSTALL_DIR/complete_pi_client.py --server $SERVER_URL
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=graphical.target
+EOF
+
+sudo cp /tmp/${{SERVICE_NAME}}.service /etc/systemd/system/${{SERVICE_NAME}}.service
+sudo systemctl daemon-reload
+sudo systemctl enable $SERVICE_NAME
+sudo systemctl restart $SERVICE_NAME
+
+echo
+echo \"Install complete.\"
+if [[ -n \"$STORE_ID\" && -n \"$SCREEN_ID\" ]]; then
+  echo \"The Pi will auto-claim itself for $STORE_ID / $SCREEN_ID after it connects.\"
+else
+    echo \"The Pi should now open the EverydayAdvertise TV client and show its Pi ID.\"
+  echo \"Go back to your dashboard and finish the claim in Remote Pi Manager.\"
+fi
+echo \"Status: sudo systemctl status $SERVICE_NAME\"
+echo \"Logs:   journalctl -u $SERVICE_NAME -f\"
+"""
+
+
+def _pi_setup_serializer() -> URLSafeTimedSerializer:
+    return URLSafeTimedSerializer(app.secret_key, salt='pi-setup-link-v1')
+
+
+def _create_pi_setup_token(pair_code: str, store_id: str, screen_id: str) -> str:
+    return _pi_setup_serializer().dumps({
+        'pair_code': pair_code,
+        'store_id': store_id,
+        'screen_id': screen_id,
+    })
+
+
+def _resolve_pi_setup_token(token: str, max_age: int = 7 * 24 * 60 * 60) -> tuple[Optional[dict], Optional[str]]:
+    try:
+        payload = _pi_setup_serializer().loads(token, max_age=max_age)
+    except SignatureExpired:
+        return None, 'This Pi setup link has expired. Generate a new one from Pi Manager.'
+    except BadSignature:
+        return None, 'Invalid Pi setup link.'
+    except Exception:
+        return None, 'Could not read the Pi setup link.'
+
+    pair_code = str(payload.get('pair_code') or '').strip()
+    store_id = str(payload.get('store_id') or '').strip()
+    screen_id = str(payload.get('screen_id') or '').strip()
+    user_key = _resolve_user_key_by_code(pair_code)
+    if not user_key:
+        return None, 'This Pi setup link is no longer valid.'
+
+    valid, error_message = _validate_pi_bootstrap_target(user_key, store_id, screen_id)
+    if not valid:
+        return None, error_message
+
+    return {
+        'pair_code': pair_code,
+        'store_id': store_id,
+        'screen_id': screen_id,
+        'user_key': user_key,
+    }, None
+
+
+@app.route('/api/pi-bootstrap/file/<path:filename>')
+def api_pi_bootstrap_file(filename):
+    user_key, _pair_code = _resolve_pi_bootstrap_auth()
+    if not user_key:
+        return _no_cache_text_response('Forbidden\n', mimetype='text/plain; charset=utf-8'), 403
+
+    safe_name = os.path.basename((filename or '').strip())
+    file_path = PI_BOOTSTRAP_FILES.get(safe_name)
+    if not file_path or not os.path.isfile(file_path):
+        return _no_cache_text_response('Not found\n', mimetype='text/plain; charset=utf-8'), 404
+
+    resp = send_file(file_path, mimetype='text/plain; charset=utf-8', download_name=safe_name)
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
+    resp.headers['Expires'] = '0'
+    return resp
+
+
+@app.route('/api/pi-bootstrap/install.sh')
+def api_pi_bootstrap_install_script():
+    user_key, pair_code = _resolve_pi_bootstrap_auth()
+    if not user_key or not pair_code:
+        return _no_cache_text_response('Invalid pairing code\n', mimetype='text/plain; charset=utf-8'), 403
+
+    store_id = (request.args.get('store_id') or '').strip()
+    screen_id = (request.args.get('screen_id') or '').strip()
+    valid, error_message = _validate_pi_bootstrap_target(user_key, store_id, screen_id)
+    if not valid:
+        status = 400
+        if error_message == 'Store not found' or error_message == 'Screen not found':
+            status = 404
+        return _no_cache_text_response(error_message + '\n', mimetype='text/plain; charset=utf-8'), status
+
+    server_url = (request.url_root or '').strip().rstrip('/')
+    script = _build_pi_bootstrap_script(pair_code, server_url, store_id, screen_id)
+    return _no_cache_text_response(script, mimetype='text/x-shellscript; charset=utf-8')
+
+
+@app.route('/api/pi-bootstrap/setup-link')
+@login_required
+def api_pi_bootstrap_setup_link():
+    ukey = _safe_user_key()
+    if not ukey:
+        return jsonify({'success': False, 'message': 'Login required'}), 401
+
+    user = session.get('user') or {}
+    username = (
+        user.get('email')
+        or user.get('name')
+        or user.get('username')
+        or user.get('login')
+        or ''
+    ).strip().lower()
+    if not username:
+        return jsonify({'success': False, 'message': 'Could not resolve user pairing code'}), 400
+
+    pair_code = _ensure_user_link_code(username)
+    store_id = (request.args.get('store_id') or '').strip()
+    screen_id = (request.args.get('screen_id') or '').strip()
+    valid, error_message = _validate_pi_bootstrap_target(ukey, store_id, screen_id)
+    if not valid:
+        status = 400
+        if error_message == 'Store not found' or error_message == 'Screen not found':
+            status = 404
+        return jsonify({'success': False, 'message': error_message}), status
+
+    token = _create_pi_setup_token(pair_code, store_id, screen_id)
+    setup_url = url_for('pi_setup_start', token=token, _external=True)
+    download_url = url_for('pi_setup_download_installer', token=token, _external=True)
+    return jsonify({
+        'success': True,
+        'setup_url': setup_url,
+        'download_url': download_url,
+        'local_command': 'bash ~/Downloads/everydayadvertise_tv-installer.sh',
+    })
+
+
+@app.route('/pi-setup/<token>')
+def pi_setup_start(token):
+    embedded = request.args.get('embedded') == '1'
+    payload, error_message = _resolve_pi_setup_token(token)
+    if not payload:
+        return render_template('pi_setup_start.html', success=False, error_message=error_message, embedded=embedded), 400
+
+    cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(payload['user_key']))
+    store_name = payload['store_id']
+    for store in cfg.get('stores', []):
+        if str(store.get('id')) == payload['store_id']:
+            store_name = store.get('name') or payload['store_id']
+            break
+
+    screen_data = (cfg.get('screens', {}).get(payload['store_id'], {}) or {}).get(payload['screen_id'], {}) or {}
+    screen_name = screen_data.get('name') or screen_data.get('screen_name') or payload['screen_id']
+
+    return render_template(
+        'pi_setup_start.html',
+        success=True,
+        store_id=payload['store_id'],
+        store_name=store_name,
+        screen_id=payload['screen_id'],
+        screen_name=screen_name,
+        download_url=url_for('pi_setup_download_installer', token=token),
+        setup_url=url_for('pi_setup_start', token=token, _external=True),
+        local_command='bash ~/Downloads/everydayadvertise_tv-installer.sh',
+        embedded=embedded,
+    )
+
+
+@app.route('/pi-setup/<token>/installer.sh')
+def pi_setup_download_installer(token):
+    payload, error_message = _resolve_pi_setup_token(token)
+    if not payload:
+        return _no_cache_text_response((error_message or 'Invalid Pi setup link') + '\n', mimetype='text/plain; charset=utf-8'), 400
+
+    server_url = (request.url_root or '').strip().rstrip('/')
+    script = _build_pi_bootstrap_script(
+        payload['pair_code'],
+        server_url,
+        payload['store_id'],
+        payload['screen_id'],
+    )
+    resp = _no_cache_text_response(script, mimetype='text/x-shellscript; charset=utf-8')
+    resp.headers['Content-Disposition'] = 'attachment; filename="everydayadvertise_tv-installer.sh"'
+    return resp
 
 # ---------------------- Super Admin auth & dashboard ----------------------
 from functools import wraps as _wraps
@@ -13386,79 +13868,109 @@ def set_orientation_mode():
         ns, nid = _normalize_screen_ref(config, str(store_id), str(screen_id))
         if not ns or not nid:
             return jsonify({'error': 'Screen not found'}), 404
-        if mode == 'vertical':
-            config['screens'][ns][nid]['vertical'] = True
-            config['screens'][ns][nid]['horizontal'] = False
-        elif mode == 'horizontal':
-            config['screens'][ns][nid]['vertical'] = False
-            config['screens'][ns][nid]['horizontal'] = True
-        else:  # default
-            config['screens'][ns][nid]['vertical'] = False
-            config['screens'][ns][nid]['horizontal'] = False
+        def _apply_mode_to_screen(screen_obj):
+            if mode == 'vertical':
+                screen_obj['vertical'] = True
+                screen_obj['horizontal'] = False
+            elif mode == 'horizontal':
+                screen_obj['vertical'] = False
+                screen_obj['horizontal'] = True
+            else:
+                screen_obj['vertical'] = False
+                screen_obj['horizontal'] = False
 
-        # Mirror orientation mode into GLOBAL config
+        target_screen_ids = [nid]
+        try:
+            current_screen = (config.get('screens', {}).get(ns, {}) or {}).get(nid) or {}
+            sync_item = next((it for it in (current_screen.get('playlist') or []) if isinstance(it, dict) and isinstance(it.get('sync_ref'), dict) and it.get('sync_ref', {}).get('group')), None)
+            sync_ref = sync_item.get('sync_ref') if isinstance(sync_item, dict) else None
+            group_id = sync_ref.get('group') if isinstance(sync_ref, dict) else None
+            if group_id:
+                members = (((config.get('sync_groups') or {}).get(group_id) or {}).get('members') or [])
+                grouped_ids = []
+                for member in members:
+                    member_sid = member.get('screen_id')
+                    if not member_sid:
+                        continue
+                    mns, mnid = _normalize_screen_ref(config, ns, str(member_sid))
+                    if mns == ns and mnid and mnid not in grouped_ids:
+                        grouped_ids.append(mnid)
+                if grouped_ids:
+                    target_screen_ids = grouped_ids
+        except Exception as e:
+            app.logger.debug(f"sync-group orientation detection failed (non-fatal): {e}")
+
         try:
             global_cfg = load_store_config()
-            gscreens = global_cfg.setdefault('screens', {}).setdefault(ns, {})
-            if nid not in gscreens:
-                gscreens[nid] = {}
-            if mode == 'vertical':
-                gscreens[nid]['vertical'] = True
-                gscreens[nid]['horizontal'] = False
-            elif mode == 'horizontal':
-                gscreens[nid]['vertical'] = False
-                gscreens[nid]['horizontal'] = True
-            else:
-                gscreens[nid]['vertical'] = False
-                gscreens[nid]['horizontal'] = False
-            save_store_config(global_cfg)
         except Exception as e:
-            app.logger.debug(f"mirror orientation mode to global failed (non-fatal): {e}")
-        # Queue a reload so the Pi applies the change instantly
-        try:
-            _enqueue_command_in_cfg(config, ns, nid, ctype='reload')
-        except Exception as e:
-            app.logger.debug(f"enqueue reload failed (non-fatal): {e}")
+            app.logger.debug(f"load global config for orientation mirror failed (non-fatal): {e}")
+            global_cfg = None
 
-        # Attempt to notify the assigned Pi via WebSocket for instant apply
-        try:
-            pi_id = (config.get('screens', {})
-                          .get(ns, {})
-                          .get(nid, {})
-                          .get('pi_id'))
-            if not pi_id:
-                gc = load_store_config()
-                pi_id = (gc.get('screens', {})
-                            .get(ns, {})
-                            .get(nid, {})
-                            .get('pi_id'))
-            payload = {
-                'store_id': ns,
-                'screen_id': nid,
-                'reason': 'orientation_mode',
-                'mode': mode
-            }
-            if pi_id and pi_id in connected_pis:
-                pi_session = connected_pis[pi_id]['sid']
+        updated_ids = []
+        for target_id in target_screen_ids:
+            target_screen = (config.get('screens', {}).get(ns, {}) or {}).get(target_id)
+            if not isinstance(target_screen, dict):
+                continue
+            _apply_mode_to_screen(target_screen)
+            updated_ids.append(target_id)
+
+            if global_cfg is not None:
                 try:
-                    logging.info('WS push: reload_client (targeted) pi_id=%s store=%s screen=%s reason=%s', pi_id, ns, nid, payload.get('reason'))
-                except Exception:
-                    pass
-                socketio.emit('reload_client', payload, room=pi_session)
-            else:
-                try:
-                    logging.info('WS push: reload_client (broadcast) store=%s screen=%s reason=%s', ns, nid, payload.get('reason'))
-                except Exception:
-                    pass
-                socketio.emit('reload_client', payload, namespace='/')
-        except Exception as e:
-            app.logger.debug(f"reload_client emit failed (non-fatal): {e}")
+                    gscreens = global_cfg.setdefault('screens', {}).setdefault(ns, {})
+                    if target_id not in gscreens:
+                        gscreens[target_id] = {}
+                    _apply_mode_to_screen(gscreens[target_id])
+                except Exception as e:
+                    app.logger.debug(f"mirror orientation mode to global failed for {target_id} (non-fatal): {e}")
+
+            try:
+                _enqueue_command_in_cfg(config, ns, target_id, ctype='reload')
+            except Exception as e:
+                app.logger.debug(f"enqueue reload failed for {target_id} (non-fatal): {e}")
+
+            try:
+                pi_id = (config.get('screens', {})
+                              .get(ns, {})
+                              .get(target_id, {})
+                              .get('pi_id'))
+                if not pi_id and global_cfg is not None:
+                    pi_id = (global_cfg.get('screens', {})
+                                .get(ns, {})
+                                .get(target_id, {})
+                                .get('pi_id'))
+                payload = {
+                    'store_id': ns,
+                    'screen_id': target_id,
+                    'reason': 'orientation_mode',
+                    'mode': mode
+                }
+                if pi_id and pi_id in connected_pis:
+                    pi_session = connected_pis[pi_id]['sid']
+                    try:
+                        logging.info('WS push: reload_client (targeted) pi_id=%s store=%s screen=%s reason=%s', pi_id, ns, target_id, payload.get('reason'))
+                    except Exception:
+                        pass
+                    socketio.emit('reload_client', payload, room=pi_session)
+                else:
+                    try:
+                        logging.info('WS push: reload_client (broadcast) store=%s screen=%s reason=%s', ns, target_id, payload.get('reason'))
+                    except Exception:
+                        pass
+                    socketio.emit('reload_client', payload, namespace='/')
+            except Exception as e:
+                app.logger.debug(f"reload_client emit failed for {target_id} (non-fatal): {e}")
+
+        if global_cfg is not None:
+            try:
+                save_store_config(global_cfg)
+            except Exception as e:
+                app.logger.debug(f"saving global orientation mirror failed (non-fatal): {e}")
 
         if ukey:
             save_store_config_for_user_safe_key(ukey, config)
         else:
             save_store_config(config)
-        return jsonify({'success': True, 'mode': mode, 'pushed': True})
+        return jsonify({'success': True, 'mode': mode, 'pushed': True, 'screens': updated_ids or [nid]})
     except Exception as e:
         print(f"Error setting orientation mode: {e}")
         return jsonify({'error': str(e)}), 500
@@ -13874,9 +14386,12 @@ def replicate_screen():
     Always skips screens marked protected in target stores.
     """
     try:
+        import copy
+        import time
+
         data = request.get_json() or {}
-        store_id = data.get('store_id')
-        screen_id = data.get('screen_id')
+        store_id = str(data.get('store_id') or '').strip()
+        screen_id = str(data.get('screen_id') or '').strip()
         mode = (data.get('mode') or 'override').lower()
         selected_item_ids = data.get('selected_item_ids') or []
         target_store_ids = data.get('target_store_ids') or []
@@ -13887,56 +14402,71 @@ def replicate_screen():
         if not store_id or not screen_id:
             return jsonify({'error': 'store_id and screen_id required'}), 400
 
-        config = ensure_playlists_structure(load_store_config())
-        master_store_id = config.get('master_store_id')
+        ukey = _safe_user_key()
+        config = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
+        master_store_id = str(config.get('master_store_id') or '')
         if store_id != master_store_id:
             return jsonify({'error': 'Only master store can replicate'}), 403
 
-        master_screens = config['screens'].get(store_id, {})
-        if screen_id not in master_screens:
-            if '_' in screen_id:
-                candidate = screen_id.split('_', 1)[1]
-                if candidate in master_screens:
-                    screen_id = candidate
-            else:
-                prefixed = f"{store_id}_{screen_id}"
-                if prefixed in master_screens:
-                    screen_id = prefixed
+        master_screens = (config.get('screens') or {}).get(store_id, {}) or {}
 
-        if screen_id not in master_screens:
+        def _resolve_screen_id(store_ns, candidate, screens_map):
+            candidate = str(candidate or '').strip()
+            if not candidate:
+                return None
+            if candidate in screens_map:
+                return candidate
+            if '_' in candidate:
+                short = candidate.split('_', 1)[1]
+                prefixed = f"{store_ns}_{short}"
+                if prefixed in screens_map:
+                    return prefixed
+                if short in screens_map:
+                    return short
+            else:
+                prefixed = f"{store_ns}_{candidate}"
+                if prefixed in screens_map:
+                    return prefixed
+            return candidate if candidate in screens_map else None
+
+        screen_id = _resolve_screen_id(store_id, screen_id, master_screens)
+        if not screen_id or screen_id not in master_screens:
             return jsonify({'error': 'Screen not found in master store'}), 404
 
         source_screen = master_screens[screen_id]
         source_file = source_screen.get('file')
-        source_playlist = source_screen.get('playlist', [])
+        source_playlist = source_screen.get('playlist', []) or []
 
-        # Build list of source items if specific selection requested
+        def _copy_item_fields(item):
+            schedule = item.get('schedule', []) if isinstance(item, dict) else []
+            days = item.get('days', []) if isinstance(item, dict) else []
+            copied = {
+                'file': item.get('file'),
+                'enabled': bool(item.get('enabled', True)),
+                'start': item.get('start'),
+                'end': item.get('end'),
+                'schedule': copy.deepcopy(schedule if isinstance(schedule, list) else []),
+                'duration': item.get('duration', 10),
+                'repeat': bool(item.get('repeat', True)),
+                'link_next': bool(item.get('link_next', False)),
+                'media_type': item.get('media_type') or classify_media(item.get('file') or ''),
+                'effect': item.get('effect', ''),
+                'days': copy.deepcopy(days if isinstance(days, list) else [])
+            }
+            return copied
+
         source_items = []
+        selected_source_records = []
         if selected_item_ids:
             by_id = {str(it.get('id')): it for it in source_playlist if isinstance(it, dict)}
             for iid in selected_item_ids:
                 it = by_id.get(str(iid))
                 if it:
-                    # Shallow copy fields we care about; generate new id per target later
-                    copied = {
-                        'file': it.get('file'),
-                        'enabled': bool(it.get('enabled', True)),
-                        'start': it.get('start'),
-                        'end': it.get('end'),
-                        'schedule': it.get('schedule', []),
-                        'duration': it.get('duration', 10),
-                        'repeat': bool(it.get('repeat', True)),
-                        'link_next': bool(it.get('link_next', False)),
-                        'media_type': it.get('media_type') or classify_media(it.get('file') or ''),
-                        'effect': it.get('effect', ''),
-                        'days': it.get('days', [])
-                    }
-                    source_items.append(copied)
-            # If selection empty after filtering, clear the selection flag
+                    selected_source_records.append(it)
+                    source_items.append(_copy_item_fields(it))
             if not source_items:
                 selected_item_ids = []
 
-        # Validation for mirror mode: must select all items from master
         if mode == 'mirror':
             master_ids = [str(it.get('id')) for it in source_playlist if isinstance(it, dict) and it.get('id') is not None]
             if not master_ids:
@@ -13944,54 +14474,198 @@ def replicate_screen():
             sel_set = set(str(x) for x in (selected_item_ids or []))
             if set(master_ids) != sel_set:
                 return jsonify({'error': 'Please tick all playlist items to mirror/replace exactly'}), 400
-            # Ensure source_items reflects all items in order
             source_items = []
+            selected_source_records = []
             for it in source_playlist:
                 if isinstance(it, dict):
-                    source_items.append({
-                        'file': it.get('file'),
-                        'enabled': bool(it.get('enabled', True)),
-                        'start': it.get('start'),
-                        'end': it.get('end'),
-                        'schedule': it.get('schedule', []),
-                        'duration': it.get('duration', 10),
-                        'repeat': bool(it.get('repeat', True)),
-                        'link_next': bool(it.get('link_next', False)),
-                        'media_type': it.get('media_type') or classify_media(it.get('file') or ''),
-                        'effect': it.get('effect', ''),
-                        'days': it.get('days', [])
-                    })
+                    selected_source_records.append(it)
+                    source_items.append(_copy_item_fields(it))
             selected_item_ids = master_ids
 
-        # If no selection (non-mirror), require a single source file as before
         if not selected_item_ids and mode != 'mirror':
             if not source_file:
                 return jsonify({'error': 'No file on this screen to replicate'}), 400
 
-        # Logical screen type for cross-store mapping
-        screen_type = screen_id.split('_', 1)[1] if '_' in screen_id else screen_id
+        def _build_wall_replication():
+            anchor_item = None
+            if selected_source_records:
+                anchor_item = selected_source_records[0]
+            else:
+                anchor_item = next((it for it in source_playlist if isinstance(it, dict) and it.get('file') == source_file), None)
+            sync_ref = anchor_item.get('sync_ref') if isinstance(anchor_item, dict) else None
+            group_id = sync_ref.get('group') if isinstance(sync_ref, dict) else None
+            group = ((config.get('sync_groups') or {}).get(group_id) or {}) if group_id else {}
+            members = group.get('members') or []
+            if not group_id or len(members) <= 1:
+                return None
 
+            layout = group.get('layout') or sync_ref.get('layout') or ('horizontal' if source_screen.get('horizontal') else 'vertical' if source_screen.get('vertical') else 'horizontal')
+            start_epoch = int(group.get('start_epoch') or sync_ref.get('start_epoch') or int(time.time()))
+            ordered_members = sorted(members, key=lambda member: int(member.get('order') or 0))
+            payload_members = []
+            for member in ordered_members:
+                member_sid = _resolve_screen_id(store_id, member.get('screen_id'), master_screens)
+                if not member_sid:
+                    continue
+                member_screen = master_screens.get(member_sid) or {}
+                member_playlist = member_screen.get('playlist') or []
+                member_item = None
+                member_item_id = str(member.get('item_id') or '')
+                if member_item_id:
+                    member_item = next((it for it in member_playlist if isinstance(it, dict) and str(it.get('id')) == member_item_id), None)
+                if member_item is None:
+                    member_item = next((it for it in member_playlist if isinstance(it, dict) and isinstance(it.get('sync_ref'), dict) and it.get('sync_ref', {}).get('group') == group_id and int(it.get('sync_ref', {}).get('order') or 0) == int(member.get('order') or 0)), None)
+                if member_item is None:
+                    continue
+
+                member_sync = dict(member_item.get('sync_ref') or {})
+                short_type = member_sid.split('_', 1)[1] if '_' in member_sid else member_sid
+                item_payload = _copy_item_fields(member_item)
+                item_payload['sync_ref'] = {
+                    'start_epoch': int(member_sync.get('start_epoch') or start_epoch),
+                    'group': group_id,
+                    'role': member_sync.get('role') or ('master' if int(member.get('order') or 0) == 0 else 'follower'),
+                    'order': int(member_sync.get('order') or member.get('order') or 0),
+                    'count': int(member_sync.get('count') or group.get('count') or len(ordered_members) or 1),
+                    'mode': member_sync.get('mode') or group.get('mode') or ('static-slices' if re.search(r'-screen\d+\.(mp4|mov|m4v|webm|mkv|avi)$', str(member_item.get('file') or ''), re.IGNORECASE) else 'split-h'),
+                    'layout': member_sync.get('layout') or layout,
+                    'precision_mode': member_sync.get('precision_mode') or 'high',
+                    'preload_buffer': member_sync.get('preload_buffer') or 2000,
+                    'sync_tolerance': member_sync.get('sync_tolerance') or 10,
+                }
+                payload_members.append({
+                    'screen_type': short_type,
+                    'payload': item_payload,
+                    'order': int(item_payload['sync_ref'].get('order') or 0),
+                })
+
+            payload_members.sort(key=lambda member: member['order'])
+            if len(payload_members) <= 1:
+                return None
+
+            return {
+                'layout': layout,
+                'start_epoch': start_epoch,
+                'members': payload_members,
+                'count': len(payload_members),
+            }
+
+        wall_replication = _build_wall_replication()
+
+        screen_type = screen_id.split('_', 1)[1] if '_' in screen_id else screen_id
         updated_stores = []
         skipped_stores = []
         created_screens = []
-
-        # Optional filter: only apply to these stores if provided
+        updated_screens = {}
         target_filter = set(str(sid) for sid in target_store_ids) if target_store_ids else None
 
-        for sid, screens in config.get('screens', {}).items():
+        for sid, screens in (config.get('screens') or {}).items():
             if sid == master_store_id:
                 continue
             if target_filter is not None and sid not in target_filter:
                 continue
+
+            if wall_replication:
+                resolved_targets = []
+                blocked = False
+                for index, member in enumerate(wall_replication['members']):
+                    member_type = member['screen_type']
+                    target_id = f"{sid}_{member_type}"
+                    legacy_id = member_type
+                    if target_id in screens:
+                        actual_id = target_id
+                    elif legacy_id in screens:
+                        actual_id = legacy_id
+                    else:
+                        is_promo = member_type.startswith('promo')
+                        screens[target_id] = {
+                            'file': None,
+                            'vertical': is_promo,
+                            'horizontal': not is_promo,
+                            'rotation': 0,
+                            'protected': False
+                        }
+                        created_screens.append(f"{sid}:{target_id}")
+                        actual_id = target_id
+                    if screens[actual_id].get('protected'):
+                        blocked = True
+                        break
+                    resolved_targets.append((index, actual_id, member))
+
+                if blocked:
+                    skipped_stores.append(sid)
+                    continue
+
+                try:
+                    groups = config.get('sync_groups') or {}
+                    stale_groups = []
+                    target_ids = {actual_id for _, actual_id, _ in resolved_targets}
+                    for gid, grp in list(groups.items()):
+                        if grp.get('store_id') != sid:
+                            continue
+                        members = grp.get('members') or []
+                        if any(str(member.get('screen_id') or '') in target_ids for member in members):
+                            stale_groups.append(gid)
+                    for gid in stale_groups:
+                        groups.pop(gid, None)
+                    if groups:
+                        config['sync_groups'] = groups
+                    else:
+                        config.pop('sync_groups', None)
+                except Exception:
+                    pass
+
+                target_group_id = f"sync_group_{int(time.time())}_{sid}_{uuid.uuid4().hex[:6]}"
+                target_members = []
+                updated_screens[sid] = []
+                for order, actual_id, member in resolved_targets:
+                    payload = copy.deepcopy(member['payload'])
+                    payload['id'] = str(uuid.uuid4())
+                    sync_ref = dict(payload.get('sync_ref') or {})
+                    sync_ref['group'] = target_group_id
+                    sync_ref['count'] = len(resolved_targets)
+                    sync_ref['order'] = order
+                    sync_ref['role'] = 'master' if order == 0 else 'follower'
+                    payload['sync_ref'] = sync_ref
+
+                    screen_cfg = screens[actual_id]
+                    screen_cfg['file'] = payload.get('file')
+                    screen_cfg['horizontal'] = (wall_replication['layout'] == 'horizontal')
+                    screen_cfg['vertical'] = (wall_replication['layout'] == 'vertical')
+                    screen_cfg['playlist'] = [payload]
+                    target_members.append({
+                        'screen_id': actual_id,
+                        'item_id': payload['id'],
+                        'role': sync_ref['role'],
+                        'order': order,
+                        'file': payload.get('file')
+                    })
+                    updated_screens[sid].append(actual_id)
+                    try:
+                        _enqueue_command_in_cfg(config, sid, actual_id, 'reload')
+                    except Exception:
+                        pass
+
+                config.setdefault('sync_groups', {})[target_group_id] = {
+                    'store_id': sid,
+                    'base': target_members[0]['screen_id'] if target_members else f"{sid}_{screen_type}",
+                    'count': len(target_members),
+                    'layout': wall_replication['layout'],
+                    'members': target_members,
+                    'created_at': int(time.time()),
+                    'start_epoch': wall_replication['start_epoch'],
+                    'mode': target_members and (wall_replication['members'][0]['payload'].get('sync_ref') or {}).get('mode') or 'static-slices'
+                }
+                updated_stores.append(sid)
+                continue
+
             target_id = f"{sid}_{screen_type}"
             legacy_id = screen_type
-
             if target_id in screens:
                 actual_id = target_id
             elif legacy_id in screens:
                 actual_id = legacy_id
             else:
-                # Create new screen with sensible defaults
                 is_promo = screen_type.startswith('promo')
                 screens[target_id] = {
                     'file': None,
@@ -14007,89 +14681,56 @@ def replicate_screen():
                 skipped_stores.append(sid)
                 continue
 
-            # Apply action based on mode and whether specific items were selected
             if selected_item_ids:
-                # Using selected playlist items as the replication source
                 tgt_pl = screens[actual_id].setdefault('playlist', [])
                 if mode == 'addon':
-                    # Append any of the selected files that are not in target playlist (by file)
                     existing_files = {i.get('file') for i in tgt_pl if isinstance(i, dict)}
                     for src in source_items:
                         f = src.get('file')
                         if f and f not in existing_files:
-                            item = dict(src)
+                            item = copy.deepcopy(src)
                             item['id'] = str(uuid.uuid4())
                             tgt_pl.append(item)
-                    # If target has no primary file, set to first selected
-                    if not screens[actual_id].get('file') and source_items:
-                        screens[actual_id]['file'] = source_items[0].get('file')
+                    if source_items:
+                        screens[actual_id]['file'] = source_items[0].get('file') or screens[actual_id].get('file')
                 elif mode == 'mirror':
-                    # Replace the entire playlist with exactly the master's items (order preserved)
                     new_pl = []
                     for src in source_items:
-                        item = dict(src)
+                        item = copy.deepcopy(src)
                         item['id'] = str(uuid.uuid4())
                         new_pl.append(item)
                     screens[actual_id]['playlist'] = new_pl
                     screens[actual_id]['file'] = new_pl[0].get('file') if new_pl else None
                 else:
-                    # override: upsert each selected item by file (replace settings if exists; add if missing)
-                    # Keep other existing items intact
-                    file_index = {}
-                    for idx, it in enumerate(list(tgt_pl)):
-                        f = isinstance(it, dict) and it.get('file')
-                        if f: file_index[f] = idx
+                    new_pl = []
                     for src in source_items:
-                        f = src.get('file')
-                        if not f:
-                            continue
-                        if f in file_index:
-                            # Replace payload but preserve item id
-                            idx = file_index[f]
-                            existing = tgt_pl[idx] if 0 <= idx < len(tgt_pl) else None
-                            keep_id = (existing or {}).get('id') or str(uuid.uuid4())
-                            new_item = dict(src)
-                            new_item['id'] = keep_id
-                            tgt_pl[idx] = new_item
-                        else:
-                            new_item = dict(src)
-                            new_item['id'] = str(uuid.uuid4())
-                            tgt_pl.append(new_item)
-                    # Set primary file if empty
-                    if not screens[actual_id].get('file') and source_items:
-                        screens[actual_id]['file'] = source_items[0].get('file')
+                        item = copy.deepcopy(src)
+                        item['id'] = str(uuid.uuid4())
+                        new_pl.append(item)
+                    screens[actual_id]['playlist'] = new_pl
+                    screens[actual_id]['file'] = new_pl[0].get('file') if new_pl else None
             else:
-                # Legacy single-file replicate path
-                # Get schedule/transition from master item if available
-                master_item = None
-                for it in source_playlist:
-                    if isinstance(it, dict) and it.get('file') == source_file:
-                        master_item = it
-                        break
-                
+                master_item = next((it for it in source_playlist if isinstance(it, dict) and it.get('file') == source_file), None)
                 if mode == 'addon':
-                    # Keep existing items, append if missing
                     pl = screens[actual_id].setdefault('playlist', [])
-                    if not any(i.get('file') == source_file for i in pl):
+                    if not any(i.get('file') == source_file for i in pl if isinstance(i, dict)):
                         new_item = {
-                            'id': str(uuid.uuid4()), 
-                            'file': source_file, 
-                            'enabled': True, 
-                            'start': master_item.get('start') if master_item else None, 
-                            'end': master_item.get('end') if master_item else None, 
-                            'schedule': master_item.get('schedule', []) if master_item else [], 
-                            'duration': master_item.get('duration', 10) if master_item else 10, 
-                            'repeat': master_item.get('repeat', True) if master_item else True, 
-                            'link_next': master_item.get('link_next', False) if master_item else False, 
+                            'id': str(uuid.uuid4()),
+                            'file': source_file,
+                            'enabled': True,
+                            'start': master_item.get('start') if master_item else None,
+                            'end': master_item.get('end') if master_item else None,
+                            'schedule': copy.deepcopy(master_item.get('schedule', [])) if master_item else [],
+                            'duration': master_item.get('duration', 10) if master_item else 10,
+                            'repeat': master_item.get('repeat', True) if master_item else True,
+                            'link_next': master_item.get('link_next', False) if master_item else False,
                             'media_type': classify_media(source_file),
                             'effect': master_item.get('effect', '') if master_item else '',
-                            'days': master_item.get('days', []) if master_item else []
+                            'days': copy.deepcopy(master_item.get('days', [])) if master_item else []
                         }
                         pl.append(new_item)
-                    if not screens[actual_id].get('file'):
-                        screens[actual_id]['file'] = source_file
+                    screens[actual_id]['file'] = source_file or screens[actual_id].get('file')
                 else:
-                    # override: set file and replace playlist with only this item
                     screens[actual_id]['file'] = source_file
                     screens[actual_id]['playlist'] = [{
                         'id': str(uuid.uuid4()),
@@ -14097,28 +14738,34 @@ def replicate_screen():
                         'enabled': True,
                         'start': master_item.get('start') if master_item else None,
                         'end': master_item.get('end') if master_item else None,
-                        'schedule': master_item.get('schedule', []) if master_item else [],
+                        'schedule': copy.deepcopy(master_item.get('schedule', [])) if master_item else [],
                         'duration': master_item.get('duration', 10) if master_item else 10,
                         'repeat': master_item.get('repeat', True) if master_item else True,
                         'link_next': master_item.get('link_next', False) if master_item else False,
                         'media_type': classify_media(source_file),
                         'effect': master_item.get('effect', '') if master_item else '',
-                        'days': master_item.get('days', []) if master_item else []
+                        'days': copy.deepcopy(master_item.get('days', [])) if master_item else []
                     }]
+
             updated_stores.append(sid)
-            # Enqueue reload for each affected screen
+            updated_screens[sid] = [actual_id]
             try:
                 _enqueue_command_in_cfg(config, sid, actual_id, 'reload')
             except Exception:
                 pass
 
-        save_store_config(config)
+        if ukey:
+            save_store_config_for_user_safe_key(ukey, config)
+        else:
+            save_store_config(config)
 
         action = 'Added to' if mode == 'addon' else 'Replaced in'
         extra = ''
         if selected_item_ids:
             extra = f" using {len(source_items)} selected item(s)"
         message = f"{action} {len(updated_stores)} stores ({screen_type}){extra}"
+        if wall_replication:
+            message += f" with {wall_replication['count']} synced wall screens"
         if created_screens:
             message += f". Created {len(created_screens)} screens"
         if skipped_stores:
@@ -14128,10 +14775,12 @@ def replicate_screen():
             'success': True,
             'filename': source_file,
             'updated_stores': updated_stores,
+            'updated_screens': updated_screens,
             'skipped_stores': skipped_stores,
             'created_screens': created_screens,
             'message': message,
-            'screen_type': screen_type
+            'screen_type': screen_type,
+            'wall_group': bool(wall_replication),
         })
     except Exception as e:
         print(f"Error in replicate_screen: {e}")
@@ -15230,32 +15879,8 @@ def get_playlist(store_id, screen_id):
                 screen_id = prefixed
         screen = alt
     if not screen:
-        # Auto-create a default screen entry so dashboard and players can proceed
-        try:
-            part = screen_id.split('_', 1)[1] if '_' in screen_id else screen_id
-            is_promo = str(part).startswith('promo')
-            sdata = {
-                'file': None,
-                'vertical': True if is_promo else False,
-                'horizontal': False if is_promo else True,
-                'rotation': 0,
-                'protected': False,
-                'playlist': []
-            }
-            screens[screen_id] = sdata
-            # Persist in whichever config space we're using (use ukey from above)
-            try:
-                if ukey:
-                    save_store_config_for_user_safe_key(ukey, cfg)
-                else:
-                    save_store_config(cfg)
-            except Exception:
-                pass
-            screen = sdata
-            print(f"DEBUG: Auto-created screen entry {store_id}/{screen_id}")
-        except Exception:
-            print("DEBUG: Screen not found for playlist (after mapping)")
-            return jsonify({'success': False, 'error': 'screen not found'}), 404
+        print(f"DEBUG: Screen not found for playlist (after mapping): {store_id}/{screen_id}")
+        return jsonify({'success': False, 'error': 'screen not found'}), 404
     # FIXED: Auto-clean missing-file items (local disk only) - DO NOT RUN IF R2 IS ENABLED
     # This was causing playlist data loss when files exist on CDN but not locally
     if not r2_enabled():
@@ -15407,8 +16032,10 @@ def get_playlist(store_id, screen_id):
                     except Exception:
                         it['sync_ref']['count'] = 1
                     
-                    # Always include mode for video slicing direction
-                    it['sync_ref']['mode'] = grp.get('mode') or 'split-h'
+                    # Pre-sliced wall files should be played directly, not sliced again by clients.
+                    sync_file = str((it.get('file') or item.get('file') or '')).strip()
+                    is_static_slice = bool(re.search(r'-screen\d+\.(mp4|mov|m4v|webm|mkv|avi)$', sync_file, re.IGNORECASE))
+                    it['sync_ref']['mode'] = 'static-slices' if is_static_slice else (grp.get('mode') or 'split-h')
                     
                     # Always include order/position for this screen in the sync group
                     try:
@@ -15453,7 +16080,15 @@ def get_playlist(store_id, screen_id):
                     scount = int(sref2.get('count') or 1)
                     sorder = int(sref2.get('order') or 0)
                     smode = (sref2.get('mode') or 'split-h').lower()
-                    if scount > 1:
+                    if smode == 'static-slices':
+                        direct_url = it.get('url') or build_public_url(it.get('file') or '')
+                        if direct_url:
+                            it['url'] = direct_url
+                            it['preferred_url'] = direct_url
+                        it.pop('slice_url', None)
+                        it.pop('slice_info', None)
+                        it['slice_aware'] = False
+                    elif scount > 1:
                         ua = ua_effective
                         android_tokens = ('android', 'okhttp', 'exoplayer', 'nvidia', 'bravia', 'shield')
                         pi_tokens = ('raspberrypi', 'raspberry pi', 'phtv-pi')
@@ -15569,7 +16204,7 @@ def get_playlist(store_id, screen_id):
                     'virtual': True,
                     'start_epoch': int(grp.get('start_epoch') or grp.get('start') or grp.get('created_at') or 0),
                     'count': int(grp.get('count') or len(grp.get('members', [])) or 1),
-                    'mode': grp.get('mode') or 'split-h'
+                    'mode': 'static-slices' if re.search(r'-screen\d+\.(mp4|mov|m4v|webm|mkv|avi)$', str(fname or ''), re.IGNORECASE) else (grp.get('mode') or 'split-h')
                 }
             }
 
@@ -15688,13 +16323,13 @@ def get_playlist(store_id, screen_id):
                                         except Exception:
                                             derived_count = 1
                                     if not derived_mode:
-                                        derived_mode = 'split-h'
+                                        derived_mode = 'static-slices' if re.search(r'-screen\d+\.(mp4|mov|m4v|webm|mkv|avi)$', str(fname or ''), re.IGNORECASE) else 'split-h'
                                     if not derived_gid:
                                         derived_gid = f"implicit:{store_id}:{prefix}"
                                 except Exception:
                                     derived_gid = f"implicit:{store_id}:{prefix}"
                                     derived_count = 1
-                                    derived_mode = 'split-h'
+                                    derived_mode = 'static-slices' if re.search(r'-screen\d+\.(mp4|mov|m4v|webm|mkv|avi)$', str(fname or ''), re.IGNORECASE) else 'split-h'
                                 # Compute this follower's order (0-based)
                                 follower_order = max(0, num - 1)
                                 out.append({
@@ -15742,9 +16377,18 @@ def get_playlist(store_id, screen_id):
                 if scount <= 1:
                     continue
                 sorder = int(sref.get('order') or 0)
-                smode = str(sref.get('mode') or 'split-h').lower()
                 vfile = it.get('file')
                 if not vfile:
+                    continue
+                smode = str(sref.get('mode') or 'split-h').lower()
+                if smode == 'static-slices':
+                    direct_url = it.get('url') or build_public_url(vfile)
+                    if direct_url:
+                        it['url'] = direct_url
+                        it['preferred_url'] = direct_url
+                    it.pop('slice_url', None)
+                    it.pop('slice_info', None)
+                    it['slice_aware'] = False
                     continue
                 # Always expose slice_url/info so clients can opt-in
                 slice_url = url_for('slice_video', video_path=vfile, _external=True)
@@ -16481,7 +17125,12 @@ def list_slice_jobs():
 def auto_create_sync_screens():
     """
     Automatically create sync screens and add pre-sliced videos.
-    Body: {sliced_files: [{screen_number, filename, url, size}], layout: 'horizontal'|'vertical', store_id: int}
+    Body: {
+        sliced_files: [{screen_number, filename, url, size}],
+        layout: 'horizontal'|'vertical',
+        store_id: int,
+        base_screen_id?: str
+    }
     """
     try:
         print("[auto_create_sync_screens] === ENDPOINT CALLED ===")
@@ -16490,8 +17139,9 @@ def auto_create_sync_screens():
         sliced_files = data.get('sliced_files', [])
         layout = data.get('layout', 'horizontal')
         store_id = data.get('store_id')
+        base_screen_id = str(data.get('base_screen_id') or '').strip()
         
-        print(f"[auto_create_sync_screens] sliced_files count: {len(sliced_files)}, layout: {layout}, store_id: {store_id}")
+        print(f"[auto_create_sync_screens] sliced_files count: {len(sliced_files)}, layout: {layout}, store_id: {store_id}, base_screen_id: {base_screen_id}")
         
         if not sliced_files or not store_id:
             print(f"[auto_create_sync_screens] ERROR: Missing data - sliced_files: {bool(sliced_files)}, store_id: {bool(store_id)}")
@@ -16502,14 +17152,45 @@ def auto_create_sync_screens():
         if not user_info:
             return jsonify({'success': False, 'error': 'Not authenticated'}), 403
         
-        # Use the existing config loading system
-        cfg = ensure_playlists_structure(load_store_config())
+        # Use the same per-user config as the dashboard/session.
+        ukey = _safe_user_key()
+        cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
         if not cfg:
             return jsonify({'success': False, 'error': 'Could not load config'}), 500
         
         ns = str(store_id)
         if ns not in cfg.get('screens', {}):
             cfg['screens'][ns] = {}
+        screens_map = cfg['screens'][ns]
+
+        sorted_slices = sorted(
+            [slice_info for slice_info in sliced_files if slice_info.get('screen_number') and slice_info.get('filename')],
+            key=lambda slice_info: int(slice_info.get('screen_number') or 0)
+        )
+        if not sorted_slices:
+            return jsonify({'success': False, 'error': 'No valid sliced files provided'}), 400
+
+        def _build_target_screen_ids() -> list[str]:
+            if not base_screen_id:
+                return [f"{store_id}_screen{index + 1}" for index in range(len(sorted_slices))]
+
+            normalized_base = base_screen_id
+            if normalized_base not in screens_map:
+                prefixed = f"{store_id}_{normalized_base}"
+                if prefixed in screens_map:
+                    normalized_base = prefixed
+
+            import re
+            match = re.match(r'^(.*?)(\d+)$', normalized_base)
+            if not match:
+                return [normalized_base]
+
+            prefix, start_number = match.group(1), int(match.group(2))
+            return [f"{prefix}{start_number + offset}" for offset in range(len(sorted_slices))]
+
+        target_screen_ids = _build_target_screen_ids()
+        if len(target_screen_ids) < len(sorted_slices):
+            return jsonify({'success': False, 'error': 'Base screen must end with a number for multi-screen assignment'}), 400
         
         # Generate a shared start_epoch for all sync screens (aligned to current time)
         import time
@@ -16519,9 +17200,11 @@ def auto_create_sync_screens():
         print(f"[auto_create_sync_screens] Creating sync group: {sync_group} with start_epoch: {start_epoch}")
         
         created_screens = []
+        members = []
+        cfg.setdefault('sync_groups', {})
         
         # Create sync screens for each sliced video (keeping individual files for speed)
-        for slice_info in sliced_files:
+        for index, slice_info in enumerate(sorted_slices):
             screen_num = slice_info.get('screen_number', 0)
             filename = slice_info.get('filename', '')
             url = slice_info.get('url', '')
@@ -16530,41 +17213,89 @@ def auto_create_sync_screens():
                 print(f"[auto_create_sync_screens] Skipping incomplete slice: {slice_info}")
                 continue
             
-            screen_id = f"{store_id}_screen{screen_num}"
+            screen_id = target_screen_ids[index]
+            screen_cfg = screens_map.get(screen_id) or {}
+            if not screen_cfg:
+                short_id = screen_id.split('_', 1)[1] if '_' in screen_id else screen_id
+                is_promo = short_id.startswith('promo')
+                screen_cfg = {
+                    'file': None,
+                    'vertical': True if is_promo else False,
+                    'horizontal': False if is_promo else True,
+                    'rotation': 0,
+                    'protected': False
+                }
+                screens_map[screen_id] = screen_cfg
             
-            # Create new screen with ENHANCED sync configuration for individual video files
-            screen_config = {
-                'horizontal': (layout == 'horizontal'),
-                'file': url or filename,  # Set file for dashboard display
-                'playlist': [{
+            role = 'master' if index == 0 else 'follower'
+            playlist_item = {
+                    'id': str(uuid.uuid4()),
                     'file': filename,       # Use individual sliced video file for speed
                     'url': url,            # Individual CDN URL for fast loading
                     'duration': 0,         # Auto-detect
                     'type': 'video',
+                    'media_type': 'video',
+                    'enabled': True,
+                    'repeat': True,
+                    'link_next': False,
+                    'schedule': [],
                     'sync_ref': {
                         'start_epoch': start_epoch,
                         'group': sync_group,
+                        'role': role,
+                        'order': index,
+                        'count': len(sorted_slices),
+                        'mode': 'static-slices',
+                        'layout': layout,
                         'precision_mode': 'high',  # Enable high-precision sync
                         'preload_buffer': 2000,    # 2s preload for smooth sync start
                         'sync_tolerance': 10       # 10ms tolerance for perfect sync
                     }
-                }],
-                'fresh': True
             }
-            
-            cfg['screens'][ns][screen_id] = screen_config
+
+            screen_cfg['horizontal'] = (layout == 'horizontal')
+            screen_cfg['vertical'] = (layout == 'vertical')
+            screen_cfg['file'] = url or filename
+            screen_cfg['playlist'] = [playlist_item]
+            screen_cfg['fresh'] = True
+
             created_screens.append(screen_id)
+            members.append({
+                'screen_id': screen_id,
+                'item_id': playlist_item['id'],
+                'role': role,
+                'order': index,
+                'file': filename,
+                'url': url
+            })
             
             print(f"[auto_create_sync_screens] Created screen {screen_id} with sync_ref: start_epoch={start_epoch}, group={sync_group}")
+
+        cfg['sync_groups'][sync_group] = {
+            'store_id': ns,
+            'base': created_screens[0] if created_screens else base_screen_id,
+            'count': len(created_screens),
+            'layout': layout,
+            'members': members,
+            'created_at': start_epoch,
+            'start_epoch': start_epoch,
+            'mode': 'static-slices'
+        }
         
-        # Save updated config using the existing save system
-        save_store_config(cfg)
+        # Save updated config using the same user scope the dashboard is editing.
+        if ukey:
+            save_store_config_for_user_safe_key(ukey, cfg)
+        else:
+            save_store_config(cfg)
         
         print(f"[auto_create_sync_screens] === SUCCESS === Created {len(created_screens)} screens: {created_screens}")
         
         return jsonify({
             'success': True,
             'screens': created_screens,
+            'used_screens': created_screens,
+            'members': members,
+            'group_id': sync_group,
             'count': len(created_screens),
             'message': f'Created {len(created_screens)} sync screens with videos'
         })
@@ -16804,7 +17535,8 @@ def assign_to_screen():
         if not is_youtube and not allowed_file(key):
             return jsonify({'success': False, 'error': 'Invalid or unsupported file type'}), 400
 
-        config = ensure_playlists_structure(load_store_config())
+        ukey = _safe_user_key()
+        config = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
 
         # Normalize screen_id against the actual config snapshot we will modify
         try:
@@ -16825,8 +17557,10 @@ def assign_to_screen():
             scr = config['screens'][store][scr_id]
             scr['file'] = key
             pl = scr.setdefault('playlist', [])
-            if not any((i.get('file') == key) for i in pl):
-                pl.append({
+            existing = next((i for i in pl if i.get('file') == key), None)
+            if existing:
+                return existing
+            new_item = {
                     'id': str(uuid.uuid4()),
                     'file': key,
                     'enabled': True,
@@ -16837,7 +17571,9 @@ def assign_to_screen():
                     'repeat': True,
                     'link_next': False,
                     'media_type': classify_media(key)
-                })
+                }
+            pl.append(new_item)
+            return new_item
 
         if apply_to_all:
             screen_type = screen_id.split('_', 1)[1] if '_' in screen_id else screen_id
@@ -16870,7 +17606,10 @@ def assign_to_screen():
                     _assign_to(sid, actual)
                     updated_stores.append(sid)
 
-            save_store_config(config)
+            if ukey:
+                save_store_config_for_user_safe_key(ukey, config)
+            else:
+                save_store_config(config)
             return jsonify({
                 'success': True,
                 'filename': key,
@@ -16886,8 +17625,11 @@ def assign_to_screen():
 
         # Single-store path
         if store_id in config.get('screens', {}) and screen_id in config['screens'].get(store_id, {}):
-            _assign_to(store_id, screen_id)
-            save_store_config(config)
+            assigned_item = _assign_to(store_id, screen_id)
+            if ukey:
+                save_store_config_for_user_safe_key(ukey, config)
+            else:
+                save_store_config(config)
             return jsonify({
                 'success': True,
                 'filename': key,
@@ -16895,6 +17637,7 @@ def assign_to_screen():
                 'media_type': classify_media(key),
                 'store_id': store_id,
                 'screen_id': screen_id,
+                'item_id': assigned_item.get('id') if isinstance(assigned_item, dict) else None,
                 'applied_to_all': False
             })
         
@@ -16915,8 +17658,11 @@ def assign_to_screen():
             }
             
             # Now assign to the newly created screen
-            _assign_to(store_id, screen_id)
-            save_store_config(config)
+            assigned_item = _assign_to(store_id, screen_id)
+            if ukey:
+                save_store_config_for_user_safe_key(ukey, config)
+            else:
+                save_store_config(config)
             
             return jsonify({
                 'success': True,
@@ -16925,6 +17671,7 @@ def assign_to_screen():
                 'media_type': classify_media(key),
                 'store_id': store_id,
                 'screen_id': screen_id,
+                'item_id': assigned_item.get('id') if isinstance(assigned_item, dict) else None,
                 'applied_to_all': False,
                 'screen_created': True
             })
@@ -18039,6 +18786,135 @@ def add_sync_follower():
         app.logger.exception('add_sync_follower failed')
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/sync/replace_wall_media', methods=['POST'])
+@login_required
+def replace_wall_media():
+    """Replace media files for all members in an existing sync group using ordered wall slices.
+
+    Body:
+      {
+        store_id: str,
+        screen_id: str,
+        item_id: str,
+        sliced_files: [{screen_number:int, filename:str}]  # order defines member mapping
+      }
+    """
+    try:
+        data = request.get_json(force=True) or {}
+        store_id = str(data.get('store_id') or '').strip()
+        screen_id = str(data.get('screen_id') or '').strip()
+        item_id = str(data.get('item_id') or '').strip()
+        sliced_files = data.get('sliced_files') or []
+
+        if not store_id or not screen_id or not item_id:
+            return jsonify({'success': False, 'error': 'store_id, screen_id, and item_id required'}), 400
+        if not isinstance(sliced_files, list) or not sliced_files:
+            return jsonify({'success': False, 'error': 'sliced_files required'}), 400
+
+        ukey = _safe_user_key()
+        cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
+        screens_map = (cfg.get('screens') or {}).get(store_id)
+        if not isinstance(screens_map, dict):
+            return jsonify({'success': False, 'error': 'store not found'}), 404
+
+        # Normalize screen id (support short form)
+        if screen_id not in screens_map:
+            cand = f"{store_id}_{screen_id}"
+            if cand in screens_map:
+                screen_id = cand
+        target_screen = screens_map.get(screen_id)
+        if not isinstance(target_screen, dict):
+            return jsonify({'success': False, 'error': 'screen not found'}), 404
+
+        target_item = next((it for it in (target_screen.get('playlist') or []) if str(it.get('id')) == item_id), None)
+        if not isinstance(target_item, dict):
+            return jsonify({'success': False, 'error': 'item not found'}), 404
+
+        sref = target_item.get('sync_ref') if isinstance(target_item, dict) else None
+        group_id = sref.get('group') if isinstance(sref, dict) else None
+        if not group_id:
+            return jsonify({'success': False, 'error': 'target item is not a sync-group wall item'}), 400
+
+        group = ((cfg.get('sync_groups') or {}).get(group_id) or {})
+        members = group.get('members') or []
+        if len(members) <= 1:
+            return jsonify({'success': False, 'error': 'sync group has insufficient members'}), 400
+
+        ordered_slices = sorted(
+            [entry for entry in sliced_files if isinstance(entry, dict) and entry.get('filename')],
+            key=lambda entry: int(entry.get('screen_number') or 0)
+        )
+        if len(ordered_slices) < len(members):
+            return jsonify({'success': False, 'error': 'not enough slice files for sync group'}), 400
+
+        ordered_members = sorted(members, key=lambda member: int(member.get('order') or 0))
+        updated_screens = []
+        updated_members = []
+
+        for idx, member in enumerate(ordered_members):
+            sid = str(member.get('screen_id') or '').strip()
+            mid = str(member.get('item_id') or '').strip()
+            if not sid:
+                continue
+
+            scr = screens_map.get(sid)
+            if not isinstance(scr, dict):
+                continue
+
+            member_item = None
+            if mid:
+                member_item = next((it for it in (scr.get('playlist') or []) if str(it.get('id')) == mid), None)
+            if member_item is None:
+                # Fallback for older/partial member records.
+                member_item = next(
+                    (
+                        it for it in (scr.get('playlist') or [])
+                        if isinstance(it, dict)
+                        and isinstance(it.get('sync_ref'), dict)
+                        and it.get('sync_ref', {}).get('group') == group_id
+                        and int(it.get('sync_ref', {}).get('order') or -1) == int(member.get('order') or -1)
+                    ),
+                    None
+                )
+            if not isinstance(member_item, dict):
+                continue
+
+            filename = str((ordered_slices[idx] or {}).get('filename') or '').strip()
+            if not filename or not allowed_file(filename):
+                return jsonify({'success': False, 'error': f'invalid media file for member {sid}'}), 400
+
+            member_item['file'] = filename
+            member_item['media_type'] = classify_media(filename)
+            scr['file'] = filename
+            member['file'] = filename
+
+            updated_screens.append(sid)
+            updated_members.append({'screen_id': sid, 'item_id': member_item.get('id'), 'file': filename, 'order': int(member.get('order') or 0)})
+            try:
+                _enqueue_command_in_cfg(cfg, store_id, sid, 'reload')
+            except Exception:
+                pass
+
+        if not updated_screens:
+            return jsonify({'success': False, 'error': 'no sync members updated'}), 400
+
+        group['members'] = members
+        if ukey:
+            save_store_config_for_user_safe_key(ukey, cfg)
+        else:
+            save_store_config(cfg)
+
+        return jsonify({
+            'success': True,
+            'group_id': group_id,
+            'updated_screens': updated_screens,
+            'updated_members': updated_members,
+            'count': len(updated_screens)
+        })
+    except Exception as e:
+        app.logger.exception('replace_wall_media failed')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 def serve_video_file_with_range_support(file_path, is_cached='false'):
     """
     Serve a video file from an arbitrary file path with robust HTTP Range (Partial Content) support.
@@ -18788,6 +19664,10 @@ def handle_pi_registration(data):
     try:
         pi_id = data.get('pi_id', '').strip()
         pi_version = data.get('version', 'Unknown')
+        claim_code = _normalize_pi_claim_code(data.get('claim_code'))
+        pair_code = (data.get('pair_code') or '').strip()
+        store_id = (data.get('store_id') or '').strip()
+        screen_id = (data.get('screen_id') or '').strip()
         
         if not pi_id:
             emit('registration_failed', {'message': 'Missing pi_id'})
@@ -18806,7 +19686,11 @@ def handle_pi_registration(data):
                 'last_seen': time.time(),
                 'connected': True,
                 'ip': pi_ip,
-                'version': pi_version
+                'version': pi_version,
+                'claim_code': claim_code,
+                'pair_code': pair_code,
+                'store_id': store_id,
+                'screen_id': screen_id
             }
         
         # Update IP mapping file (for backward compatibility)
@@ -18860,6 +19744,7 @@ def handle_pi_heartbeat(data):
         store_id = data.get('store_id')
         screen_id = data.get('screen_id')
         pair_code = data.get('pair_code')
+        claim_code = _normalize_pi_claim_code(data.get('claim_code'))
         
         # Update connected_pis dictionary with current assignment for dashboard display
         if store_id:
@@ -18868,6 +19753,8 @@ def handle_pi_heartbeat(data):
             connected_pis[pi_id]['screen_id'] = screen_id
         if pair_code:
             connected_pis[pi_id]['pair_code'] = pair_code
+        if claim_code:
+            connected_pis[pi_id]['claim_code'] = claim_code
         
         if store_id and screen_id and pair_code:
             try:
@@ -18902,15 +19789,11 @@ def handle_pi_heartbeat(data):
                                         config['screens'][sid][scr_id].pop('pi_id', None)
                     
                     # Update the screen's pi_id
-                    if 'screens' not in config:
-                        config['screens'] = {}
-                    if store_id not in config['screens']:
-                        config['screens'][store_id] = {}
-                    if screen_id not in config['screens'][store_id]:
-                        config['screens'][store_id][screen_id] = {}
-                    
-                    # Update this screen's pi_id
-                    config['screens'][store_id][screen_id]['pi_id'] = pi_id
+                    if store_id not in config.get('screens', {}) or screen_id not in config['screens'].get(store_id, {}):
+                        logging.warning(f'⚠ Skipping stale Pi registration for missing screen {store_id}/{screen_id} (pi_id={pi_id})')
+                    else:
+                        # Update this screen's pi_id
+                        config['screens'][store_id][screen_id]['pi_id'] = pi_id
                     
                     # Save updated config
                     with open(config_path, 'w') as f:
@@ -19505,6 +20388,41 @@ def pi_status_websocket(pi_id):
         logging.error(f'WebSocket status check error: {e}')
         return jsonify({'success': False, 'message': 'Status check failed'}), 500
 
+
+@app.route('/api/pi-claim-status/<claim_code>')
+@login_required
+def pi_claim_status(claim_code):
+    """Resolve a first-boot claim code to an online Pi waiting for dashboard assignment."""
+    try:
+        pi_id, pi_info = _resolve_connected_pi_by_claim_code(claim_code)
+        if not pi_id or not pi_info:
+            return jsonify({
+                'success': False,
+                'status': 'offline',
+                'message': 'No online Pi is waiting with that claim code'
+            }), 404
+
+        if not _pi_runtime_is_assignable(pi_info):
+            return jsonify({
+                'success': False,
+                'status': 'assigned',
+                'pi_id': pi_id,
+                'claim_code': _normalize_pi_claim_code(claim_code),
+                'message': 'This Pi is already assigned to a store and screen'
+            }), 409
+
+        return jsonify({
+            'success': True,
+            'status': 'online',
+            'pi_id': pi_id,
+            'claim_code': _normalize_pi_claim_code(claim_code),
+            'ip_address': pi_info.get('ip', 'Unknown'),
+            'version': pi_info.get('version', 'Unknown')
+        })
+    except Exception as e:
+        logging.error(f'Pi claim status error: {e}')
+        return jsonify({'success': False, 'message': 'Claim lookup failed'}), 500
+
 # Update configure-pi endpoint to use WebSocket
 @app.route('/api/configure-pi-ws', methods=['POST'])
 def configure_pi_websocket():
@@ -19515,15 +20433,20 @@ def configure_pi_websocket():
     try:
         data = request.get_json(force=True)
         pi_id = data.get('pi_id', '').strip()
+        claim_code = _normalize_pi_claim_code(data.get('claim_code'))
         pair_code = data.get('pair_code', '').strip()
         store_id = data.get('store_id', '').strip()
         screen_id = data.get('screen_id', '').strip()
         auto_start = data.get('auto_start', True)
+
+        if not pi_id and claim_code:
+            resolved_pi_id, _ = _resolve_connected_pi_by_claim_code(claim_code, require_assignable=True)
+            pi_id = (resolved_pi_id or '').strip()
         
         if not all([pi_id, pair_code, store_id, screen_id]):
             return jsonify({
                 'success': False,
-                'message': 'Missing required fields: pi_id, pair_code, store_id, screen_id'
+                'message': 'Missing required fields: pi_id or claim_code, pair_code, store_id, screen_id'
             }), 400
         
         # Check if Pi is connected via WebSocket
@@ -19532,6 +20455,11 @@ def configure_pi_websocket():
                 return jsonify({
                     'success': False,
                     'message': f'Pi {pi_id} is not connected. Please ensure Pi is online and connected to server.'
+                }), 400
+            if not connected_pis[pi_id].get('connected', True):
+                return jsonify({
+                    'success': False,
+                    'message': f'Pi {pi_id} is not currently online.'
                 }), 400
             
             pi_sid = connected_pis[pi_id]['sid']
@@ -19586,7 +20514,8 @@ def configure_pi_websocket():
         return jsonify({
             'success': True,
             'message': f'Configuration sent to Pi {pi_id} via WebSocket',
-            'method': 'websocket'
+            'method': 'websocket',
+            'pi_id': pi_id
         }), 200
         
     except Exception as e:

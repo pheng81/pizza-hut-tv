@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <title>Pizza Hut TV - Store Management Dashboard</title>
+    <title>EverydayAdvertise TV - Store Management Dashboard</title>
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
     <link rel="preconnect" href="https://cdn.everydayadvertise.com" crossorigin>
     <link rel="dns-prefetch" href="//cdn.everydayadvertise.com">
@@ -174,12 +174,16 @@
     body {
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         background-color: #eeeeee;
-        color: #333;
+        color: #5a6778;
         margin: 0;
         padding: 0;
         display: flex;
         flex-direction: column;
         min-height: 100vh;
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+        color: #2a384c;
     }
 
     .app-wrapper {
@@ -242,7 +246,7 @@
             font-family: 'Brush Script MT', 'Segoe Script', 'Lucida Handwriting', 'Comic Sans MS', cursive;
             font-size: 36px;
             font-weight: 500;
-            color: #1d1d1f;
+            color: #2a384c;
             line-height: 1.1;
             letter-spacing: 0;
             font-variant-ligatures: common-ligatures contextual;
@@ -252,7 +256,7 @@
             align-items: center;
         }
     .stores-title .tv-icons { display:inline-flex; align-items:center; gap:6px; margin-left:8px; }
-    .stores-title .tv-icon { width:22px; height:22px; color:#1d1d1f; opacity:.9; display:inline-block; }
+    .stores-title .tv-icon { width:22px; height:22px; color:#2a384c; opacity:.9; display:inline-block; }
     .stores-title .tv-img { width:24px; height:24px; display:inline-block; vertical-align:middle; border-radius:4px; }
     .stores-title .tv-svg { width:44px; height:44px; display:inline-block; vertical-align:middle; }
     /* Brand logo in title */
@@ -3618,6 +3622,13 @@
     /* No red emphasis for destructive action in drawer */
     .mobile-drawer .action-item.danger { color:#1d1d1f; }
     .mobile-drawer .menu-divider { height:1px; background:#e5e7eb; margin:4px 0 6px; border-radius:999px; }
+    .mobile-drawer .action-group { display:flex; flex-direction:column; gap:6px; }
+    .mobile-drawer .action-submenu { display:flex; flex-direction:column; gap:4px; padding:0 0 0 28px; }
+    .mobile-drawer .action-submenu[hidden] { display:none; }
+    .mobile-drawer .action-subitem { display:flex; align-items:center; min-height:36px; padding:8px 12px; border:none; border-radius:10px; background:transparent; color:#5b6472; text-align:left; font-size:13px; font-weight:600; cursor:pointer; }
+    .mobile-drawer .action-subitem:hover { background:#f8fafc; color:#1d1d1f; }
+    .mobile-drawer .action-subitem.is-current { background:#eef6ff; color:#0a63c9; }
+    .mobile-drawer .action-subitem[disabled] { opacity:.45; cursor:default; }
     /* Profile panel: overlay from top, covers drawer items */
     .profile-panel { position:absolute; inset:0; background:#fff; transform:translateY(-8px) scaleY(0); transform-origin:top; transition:transform .25s ease, opacity .25s ease; z-index:5; overflow:auto; pointer-events:none; opacity:.0; }
     .profile-panel.open { transform:translateY(0) scaleY(1); pointer-events:auto; opacity:1; }
@@ -3839,98 +3850,276 @@
         }
 
         #addStoreModal.dashboard-side-sheet .modal-content {
-            width: min(560px, calc(100vw - 64px)) !important;
-            max-width: 560px !important;
+            width: 100%;
             min-width: 0;
-            max-height: calc(100vh - 64px) !important;
-            height: auto !important;
-            margin: auto !important;
-            border: 1px solid rgba(203, 213, 225, 0.9);
-            border-radius: 14px !important;
-            display: block;
-            padding: 0;
+            margin: 0 !important;
+            border-left: 1px solid #e5e7eb;
+            display: flex;
+            align-items: stretch;
+            justify-content: flex-start;
+            gap: 28px;
+            padding: 40px 40px 40px 48px;
             background: #ffffff;
-            box-shadow: 0 22px 48px rgba(15, 23, 42, 0.16) !important;
-            overflow: hidden;
         }
 
         #addStoreModal.dashboard-side-sheet {
-            justify-content: center;
-            align-items: center;
-            padding: 24px !important;
-            background: rgba(15, 23, 42, 0.16);
-            backdrop-filter: blur(6px);
-            -webkit-backdrop-filter: blur(6px);
+            justify-content: stretch;
+            background: rgba(241, 245, 249, 0.9);
         }
 
         #addStoreModal.dashboard-side-sheet .add-store-shell {
-            width: 100%;
-            padding: 24px 24px 22px;
+            width: min(540px, 44vw);
             background: #ffffff;
             border: none;
-            border-radius: 14px;
+            border-radius: 0;
             box-shadow: none;
             overflow: visible;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        #addStoreModal .add-store-visual {
+            display: none;
+        }
+
+        #addStoreModal.dashboard-side-sheet .add-store-visual {
+            display: flex;
+            flex: 1 1 auto;
+            min-width: 320px;
+            max-width: 520px;
+            align-items: stretch;
+        }
+
+        #addStoreModal.dashboard-side-sheet .add-store-artwork {
+            --art-a: rgba(37, 99, 235, 0.30);
+            --art-b: rgba(14, 165, 233, 0.24);
+            --art-c: rgba(16, 185, 129, 0.18);
+            --art-d: rgba(255, 255, 255, 0.82);
+            position: relative;
+            flex: 1 1 auto;
+            min-height: 100%;
+            border-radius: 30px;
+            overflow: hidden;
+            padding: 28px;
+            background:
+                radial-gradient(circle at 18% 20%, var(--art-a) 0%, transparent 34%),
+                radial-gradient(circle at 78% 24%, var(--art-b) 0%, transparent 30%),
+                radial-gradient(circle at 68% 76%, var(--art-c) 0%, transparent 34%),
+                linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+            border: 1px solid rgba(219, 228, 238, 0.92);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.86), 0 24px 44px rgba(15, 23, 42, 0.08);
+        }
+
+        #addStoreModal.dashboard-side-sheet .add-store-artwork::before,
+        #addStoreModal.dashboard-side-sheet .add-store-artwork::after {
+            content: '';
+            position: absolute;
+            border-radius: 999px;
+            background: var(--art-d);
+            opacity: 0.55;
+            filter: blur(0.4px);
+        }
+
+        #addStoreModal.dashboard-side-sheet .add-store-artwork::before {
+            width: 180px;
+            height: 180px;
+            top: -42px;
+            right: -34px;
+        }
+
+        #addStoreModal.dashboard-side-sheet .add-store-artwork::after {
+            width: 140px;
+            height: 140px;
+            bottom: -28px;
+            left: -24px;
+        }
+
+        #addStoreModal.dashboard-side-sheet .add-store-artwork-orb {
+            position: absolute;
+            border-radius: 999px;
+            pointer-events: none;
+            opacity: 0.8;
+        }
+
+        #addStoreModal.dashboard-side-sheet .add-store-artwork-orb--one {
+            width: 84px;
+            height: 84px;
+            top: 92px;
+            right: 52px;
+            background: var(--art-a);
+        }
+
+        #addStoreModal.dashboard-side-sheet .add-store-artwork-orb--two {
+            width: 56px;
+            height: 56px;
+            top: 158px;
+            left: 44px;
+            background: var(--art-b);
+        }
+
+        #addStoreModal.dashboard-side-sheet .add-store-artwork-orb--three {
+            width: 112px;
+            height: 112px;
+            bottom: 98px;
+            right: 32px;
+            background: var(--art-c);
+        }
+
+        #addStoreModal.dashboard-side-sheet .add-store-visual__content {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            min-height: 520px;
+        }
+
+        #addStoreModal.dashboard-side-sheet .add-store-visual__eyebrow {
+            display: inline-flex;
+            align-self: flex-start;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.72);
+            border: 1px solid rgba(219,228,238,0.92);
+            color: #2563eb;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+
+        #addStoreModal.dashboard-side-sheet .add-store-visual__title {
+            margin: 20px 0 10px;
+            font-size: 34px;
+            line-height: 1.02;
+            letter-spacing: -0.04em;
+            color: #0f172a;
+            max-width: 320px;
+        }
+
+        #addStoreModal.dashboard-side-sheet .add-store-visual__copy {
+            margin: 0;
+            max-width: 320px;
+            color: #475569;
+            font-size: 15px;
+            line-height: 1.7;
+        }
+
+        #addStoreModal.dashboard-side-sheet .add-store-visual__chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 22px;
+        }
+
+        #addStoreModal.dashboard-side-sheet .add-store-visual__chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 9px 12px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.78);
+            border: 1px solid rgba(219,228,238,0.92);
+            color: #334155;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        #addStoreModal.dashboard-side-sheet .add-store-visual__chip::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: linear-gradient(135deg, #0f6efc 0%, #2a8cff 100%);
+            box-shadow: 0 0 0 4px rgba(15, 110, 252, 0.12);
+        }
+
+        #addStoreModal.dashboard-side-sheet .add-store-visual__cards {
+            display: grid;
             gap: 14px;
+            margin-top: auto;
+            padding-top: 28px;
+        }
+
+        #addStoreModal.dashboard-side-sheet .add-store-visual__card {
+            padding: 16px 18px;
+            border-radius: 22px;
+            background: rgba(255,255,255,0.78);
+            border: 1px solid rgba(219,228,238,0.94);
+            box-shadow: 0 16px 30px rgba(15, 23, 42, 0.05);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        #addStoreModal.dashboard-side-sheet .add-store-visual__card-label {
+            display: block;
+            color: #64748b;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 8px;
+        }
+
+        #addStoreModal.dashboard-side-sheet .add-store-visual__card-value {
+            display: block;
+            color: #0f172a;
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        #addStoreModal.dashboard-side-sheet .add-store-visual__card-meta {
+            display: block;
+            margin-top: 6px;
+            color: #475569;
+            font-size: 13px;
+            line-height: 1.5;
         }
 
         #addStoreModal.dashboard-side-sheet .modal-header {
-            padding: 0 36px 2px 0;
+            padding: 0 0 18px;
             justify-content: flex-start;
             border-bottom: none;
-            text-align: left;
         }
 
         #addStoreModal.dashboard-side-sheet .modal-header h3 {
-            font-size: 24px;
+            font-size: 30px;
             line-height: 1.1;
-            letter-spacing: -0.02em;
+            letter-spacing: -0.03em;
         }
 
         #addStoreModal.dashboard-side-sheet .close {
             right: 0;
-            top: 0;
-            width: 32px;
-            height: 32px;
-            background: #ffffff;
+            top: -4px;
+            width: 34px;
+            height: 34px;
+            background: rgba(255, 255, 255, 0.9);
             border: 1px solid rgba(203, 213, 225, 0.9);
-            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
         }
 
         #addStoreModal.dashboard-side-sheet .add-store-intro {
-            padding: 0;
-            text-align: left;
+            padding: 0 0 10px;
         }
 
         #addStoreModal.dashboard-side-sheet .helper {
-            font-size: 13px;
+            font-size: 14px;
             color: #64748b;
             margin: 0;
-            line-height: 1.5;
         }
 
         #addStoreModal.dashboard-side-sheet .add-store-tabs {
-            padding: 2px 0 8px;
-            justify-content: flex-start;
-            gap: 8px;
-        }
-
-        #addStoreModal.dashboard-side-sheet .add-store-tab {
-            min-width: 72px;
-            padding: 7px 12px;
-            border-radius: 10px;
-            box-shadow: none;
-        }
-
-        #addStoreModal.dashboard-side-sheet .add-store-tab.active {
-            background: linear-gradient(135deg, #0f6efc 0%, #2a8cff 100%);
-            border-color: #0f6efc;
-            box-shadow: 0 8px 18px rgba(15, 110, 252, 0.2);
+            padding: 0 0 18px;
         }
 
         #addStoreModal.dashboard-side-sheet #addStorePaneSingle,
         #addStoreModal.dashboard-side-sheet #addStorePaneBulk {
-            padding: 0 !important;
+            padding: 0 0 8px !important;
         }
 
         #addStoreModal.dashboard-side-sheet #addStoreForm {
@@ -3938,81 +4127,62 @@
         }
 
         #addStoreModal.dashboard-side-sheet .form-group {
-            margin: 0 0 14px;
+            margin: 0 0 18px;
         }
 
         #addStoreModal.dashboard-side-sheet .form-group label {
             font-size: 13px;
-            margin-bottom: 6px;
-            color: #475569;
-            text-transform: none;
-            letter-spacing: 0;
-            font-weight: 600;
+            margin-bottom: 8px;
+            color: #334155;
         }
 
         #addStoreModal.dashboard-side-sheet .form-group input,
         #addStoreModal.dashboard-side-sheet #bulkStores {
-            border-radius: 10px;
+            border-radius: 16px;
             border: 1px solid #d8e1ea;
-            padding: 12px 14px;
-            font-size: 15px;
-            background: #ffffff;
+            padding: 15px 16px;
+            font-size: 16px;
+            background: rgba(255, 255, 255, 0.92);
             box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
         }
 
         #addStoreModal.dashboard-side-sheet .modal-buttons {
-            padding: 6px 0 0;
-            justify-content: flex-end;
-            gap: 8px;
+            padding: 8px 0 0;
         }
 
         #addStoreModal.dashboard-side-sheet .btn-secondary,
         #addStoreModal.dashboard-side-sheet .btn-primary {
-            min-width: 112px;
-            padding: 11px 16px;
-            border-radius: 10px;
+            min-width: 132px;
+            padding: 12px 18px;
         }
 
-        #addStoreModal.dashboard-side-sheet .btn-primary {
-            background: linear-gradient(135deg, #0f6efc 0%, #2a8cff 100%);
-            box-shadow: 0 14px 28px rgba(15, 110, 252, 0.24);
-        }
-
-        #addStoreModal.dashboard-side-sheet .btn-secondary {
-            background: rgba(226, 232, 240, 0.72);
-            border-color: rgba(148, 163, 184, 0.32);
-        }
-
-        @media (max-width: 767px) {
-            #addStoreModal.dashboard-side-sheet {
-                padding: 16px !important;
-            }
-
+        @media (max-width: 1240px) {
             #addStoreModal.dashboard-side-sheet .modal-content {
-                width: min(100%, calc(100vw - 24px)) !important;
-                max-height: calc(100vh - 24px) !important;
-                border-radius: 12px !important;
+                padding: 36px 28px 36px 36px;
+                gap: 22px;
             }
 
             #addStoreModal.dashboard-side-sheet .add-store-shell {
-                padding: 20px 16px 16px;
+                width: min(520px, 100%);
             }
 
-            #addStoreModal.dashboard-side-sheet .modal-header {
-                padding: 0 36px 4px 0;
+            #addStoreModal.dashboard-side-sheet .add-store-visual {
+                min-width: 280px;
+            }
+        }
+
+        @media (max-width: 1100px) {
+            #addStoreModal.dashboard-side-sheet .modal-content {
+                justify-content: center;
+                padding: 36px 24px;
             }
 
-            #addStoreModal.dashboard-side-sheet .modal-header h3 {
-                font-size: 22px;
+            #addStoreModal.dashboard-side-sheet .add-store-shell {
+                width: min(720px, 100%);
             }
 
-            #addStoreModal.dashboard-side-sheet .modal-buttons {
-                flex-direction: column-reverse;
-            }
-
-            #addStoreModal.dashboard-side-sheet .btn-secondary,
-            #addStoreModal.dashboard-side-sheet .btn-primary {
-                width: 100%;
+            #addStoreModal.dashboard-side-sheet .add-store-visual {
+                display: none;
             }
         }
 
@@ -4024,7 +4194,7 @@
 
         #storeGroupsModal.dashboard-side-sheet {
             justify-content: stretch;
-            background: rgba(241, 245, 249, 0.9);
+            background: #ffffff;
         }
 
         #storeGroupsModal.dashboard-side-sheet .modal-content {
@@ -4033,11 +4203,12 @@
             margin: 0 !important;
             border-left: 1px solid #e5e7eb;
             padding: 36px 40px 56px;
-            background: linear-gradient(180deg, #f8fafc 0%, #eef3f8 100%);
+            background: #ffffff;
         }
 
         #storeGroupsModal.dashboard-side-sheet .store-groups-shell {
             width: 100%;
+            background: #ffffff;
         }
 
         #storeGroupsModal.dashboard-side-sheet .modal-header,
@@ -4495,10 +4666,15 @@
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
                 <span>Account</span>
             </button>
-            <button class="action-item" onclick="return openPiDeviceManager()" title="Pi Device Manager">
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
-                <span>Pi Device Manager</span>
-            </button>
+            <div class="action-group" id="piManagerActionGroup">
+                <button class="action-item" id="piManagerActionBtn" onclick="return openPiDeviceManager()" title="Pi Device Manager">
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                    <span>Pi Device Manager</span>
+                </button>
+                <div class="action-submenu" id="piManagerSubmenu" hidden>
+                    <button class="action-subitem" id="piSetupSubitem" onclick="return openPiSetupSubitem()">New Pi Setup</button>
+                </div>
+            </div>
             <a class="action-item" href="{{ url_for('logout') }}" title="Log out">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -4563,6 +4739,8 @@
         panel.setAttribute('aria-hidden', 'true');
         document.body.classList.remove('workspace-open');
         if(frame){ frame.src = 'about:blank'; }
+        clearSidebarWorkspaceState();
+        setDashboardSection('dashboard');
     }
     function closeDashboardTransientPanels(options){
         const keepWorkspace = options && options.keepWorkspace;
@@ -4607,9 +4785,29 @@
     }
     function openDashboardSection(view){
         closeDashboardTransientPanels();
+        clearSidebarWorkspaceState();
         setDashboardSection(view);
         toggleDrawer(false);
         return false;
+    }
+    function clearSidebarWorkspaceState(){
+        const piActionBtn = document.getElementById('piManagerActionBtn');
+        const submenu = document.getElementById('piManagerSubmenu');
+        const setupSubitem = document.getElementById('piSetupSubitem');
+        if(piActionBtn){ piActionBtn.classList.remove('is-current'); }
+        if(setupSubitem){ setupSubitem.classList.remove('is-current'); }
+        if(submenu){ submenu.hidden = true; }
+    }
+    function setPiSidebarState(view){
+        const piActionBtn = document.getElementById('piManagerActionBtn');
+        const submenu = document.getElementById('piManagerSubmenu');
+        const setupSubitem = document.getElementById('piSetupSubitem');
+        document.querySelectorAll('[data-dashboard-view-link]').forEach((node)=> node.classList.remove('is-current'));
+        if(piActionBtn){ piActionBtn.classList.add('is-current'); }
+        if(submenu){ submenu.hidden = false; }
+        if(setupSubitem){
+            setupSubitem.classList.toggle('is-current', view === 'setup');
+        }
     }
     function openSidebarWorkspace(event, title, url){
         if(event && event.preventDefault) event.preventDefault();
@@ -4617,6 +4815,7 @@
             window.location.href = url;
             return false;
         }
+        clearSidebarWorkspaceState();
         closeDashboardTransientPanels({ keepWorkspace: true });
         const panel = document.getElementById('dashboardWorkspace');
         const titleNode = document.getElementById('dashboardWorkspaceTitle');
@@ -4709,13 +4908,23 @@
     }
     
     // NEW Pi Device Manager Dashboard
-    function openPiDeviceManager() {
+    function openPiDeviceManager(view = 'devices') {
         console.log('🚀 Opening Pi Device Manager Dashboard');
+        const isSetupView = view === 'setup';
+        const title = isSetupView ? 'New Pi Setup' : 'Pi Device Manager';
+        const desktopUrl = isSetupView ? '/pi-manager?embedded=1&panel=setup' : '/pi-manager?embedded=1';
+        const mobileUrl = isSetupView ? '/pi-manager?panel=setup' : '/pi-manager';
         if (isDesktopSidebarLayout()) {
-            return openSidebarWorkspace(null, 'Pi Device Manager', '/pi-manager?embedded=1');
+            const opened = openSidebarWorkspace(null, title, desktopUrl);
+            setPiSidebarState(isSetupView ? 'setup' : 'devices');
+            return opened;
         }
-        window.location.href = '/pi-manager';
+        window.location.href = mobileUrl;
         return false;
+    }
+
+    function openPiSetupSubitem() {
+        return openPiDeviceManager('setup');
     }
 
     function closeRemotePiManager() {
@@ -4900,11 +5109,80 @@
     const MY_PAIRING_CODE = '{{ link_code or "" }}';
     console.log('🔐 Dashboard JS Version: 2.0 - MY_PAIRING_CODE:', MY_PAIRING_CODE);
 
+    function getNewPiInstallCommand() {
+        const pairCodeInput = document.getElementById('piPairCode');
+        const pairCode = (pairCodeInput && pairCodeInput.value ? pairCodeInput.value : MY_PAIRING_CODE || '').trim();
+        const storeId = (document.getElementById('piStoreId')?.value || '').trim();
+        const screenId = (document.getElementById('piScreenId')?.value || '').trim();
+        const baseUrl = String(window.location.origin || '').replace(/\/$/, '');
+
+        if (!pairCode || pairCode.length !== 4 || !storeId || !screenId) {
+            return '';
+        }
+
+        return `curl -fsSL "${baseUrl}/api/pi-bootstrap/install.sh?code=${encodeURIComponent(pairCode)}&store_id=${encodeURIComponent(storeId)}&screen_id=${encodeURIComponent(screenId)}" | bash`;
+    }
+
+    function syncNewPiInstallCommand() {
+        const commandInput = document.getElementById('newPiInstallCommand');
+        const copyButton = document.getElementById('copyNewPiInstallCommandBtn');
+        if (!commandInput) {
+            return;
+        }
+
+        const command = getNewPiInstallCommand();
+        commandInput.value = command;
+        commandInput.placeholder = command ? '' : 'Select your store and screen to generate the one-step installer command';
+
+        if (copyButton) {
+            copyButton.disabled = !command;
+            copyButton.style.opacity = command ? '1' : '0.6';
+            copyButton.style.cursor = command ? 'pointer' : 'not-allowed';
+        }
+    }
+
+    async function copyNewPiInstallCommand() {
+        const command = getNewPiInstallCommand();
+        if (!command) {
+            alert('Your pairing code is missing. Refresh the page and try again.');
+            return;
+        }
+
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(command);
+            } else {
+                const commandInput = document.getElementById('newPiInstallCommand');
+                if (!commandInput) {
+                    throw new Error('Install command field not found');
+                }
+                commandInput.focus();
+                commandInput.select();
+                document.execCommand('copy');
+            }
+
+            const copyButton = document.getElementById('copyNewPiInstallCommandBtn');
+            if (copyButton) {
+                const originalLabel = copyButton.textContent;
+                copyButton.textContent = 'Copied';
+                setTimeout(() => {
+                    copyButton.textContent = originalLabel;
+                }, 1600);
+            }
+        } catch (error) {
+            console.error('Failed to copy new Pi install command:', error);
+            alert('Copy failed. Please select the command manually and copy it.');
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', syncNewPiInstallCommand);
+
     // Step navigation functions for Remote Pi Manager
     async function showStoreStep() {
         const pairCode = document.getElementById('piPairCode').value.trim();
         console.log('✨ [v2.0] showStoreStep called, pair code:', pairCode, 'length:', pairCode.length);
         console.log('🔐 Comparing with MY_PAIRING_CODE:', MY_PAIRING_CODE, 'Match:', pairCode === MY_PAIRING_CODE);
+        syncNewPiInstallCommand();
         
         if (pairCode && pairCode.length === 4) {
             // Security check: Only allow users to configure Pi devices with their own pairing code
@@ -4936,6 +5214,7 @@
                     console.log('✨ [v2.0] Showing store step with', data.stores.length, 'stores');
                     document.getElementById('stepStoreId').style.display = 'block';
                     updateRemotePiConfigureButtonState();
+                    syncNewPiInstallCommand();
                 } else {
                     console.error('❌ Failed to fetch stores:', data.error);
                     const fallbackData = getRemotePiFallbackData();
@@ -4945,6 +5224,7 @@
                         populateRemotePiStoreOptions(fallbackData);
                         document.getElementById('stepStoreId').style.display = 'block';
                         updateRemotePiConfigureButtonState();
+                        syncNewPiInstallCommand();
                         return;
                     }
                     alert('Pairing code not found or invalid: ' + pairCode);
@@ -4958,6 +5238,7 @@
                     populateRemotePiStoreOptions(fallbackData);
                     document.getElementById('stepStoreId').style.display = 'block';
                     updateRemotePiConfigureButtonState();
+                    syncNewPiInstallCommand();
                     return;
                 }
                 alert('Failed to verify pairing code. Please check your connection.');
@@ -5032,6 +5313,7 @@
         }
 
         updateRemotePiConfigureButtonState();
+        syncNewPiInstallCommand();
     }
 
 
@@ -13278,6 +13560,12 @@ allowfullscreen></iframe></div>`;
             modal.classList.toggle('dashboard-side-sheet', isDesktopSidebarLayout());
             modal.classList.add('visible');
             setAddStoreTab('single');
+            if (typeof updateAddStoreArtwork === 'function') {
+                updateAddStoreArtwork();
+            }
+            if (typeof startAddStoreArtworkRotation === 'function') {
+                startAddStoreArtworkRotation();
+            }
             initializeStoreAddressInputs();
             // focus first field after animation frame
             requestAnimationFrame(() => {
@@ -13302,7 +13590,131 @@ allowfullscreen></iframe></div>`;
             const modal = document.getElementById('addStoreModal');
             modal.classList.remove('visible');
             modal.classList.remove('dashboard-side-sheet');
+            if (typeof stopAddStoreArtworkRotation === 'function') {
+                stopAddStoreArtworkRotation();
+            }
             document.getElementById('addStoreForm').reset();
+        }
+
+        function getAddStoreArtworkThemes() {
+            return [
+                {
+                    eyebrow: 'Store network',
+                    title: 'Build a fresh cluster with a new city rhythm.',
+                    copy: 'Each time this panel opens, the abstract composition shifts to keep the Add Store flow feeling alive and intentional.',
+                    chips: ['Metro rollout', '3 display zones', 'Ready to map'],
+                    cards: [
+                        { label: 'Launch cue', value: 'Store 1882', meta: 'Liverpool Branch · High-street corner' },
+                        { label: 'Visual mood', value: 'Blue horizon', meta: 'Clean geometry with a calm retail cadence' }
+                    ],
+                    colors: ['rgba(37, 99, 235, 0.32)', 'rgba(14, 165, 233, 0.22)', 'rgba(16, 185, 129, 0.18)', 'rgba(255,255,255,0.82)']
+                },
+                {
+                    eyebrow: 'Regional pattern',
+                    title: 'Open space for the next flagship identity.',
+                    copy: 'The visual rotates through abstract store-inspired scenes so the empty desktop area becomes part of the experience instead of dead space.',
+                    chips: ['North district', 'Window wall', 'Motion ready'],
+                    cards: [
+                        { label: 'Next opening', value: 'Store 2044', meta: 'Docklands · Waterfront footprint' },
+                        { label: 'Display concept', value: 'Soft gradients', meta: 'Daypart-friendly tones with layered depth' }
+                    ],
+                    colors: ['rgba(168, 85, 247, 0.28)', 'rgba(236, 72, 153, 0.22)', 'rgba(249, 115, 22, 0.18)', 'rgba(255,255,255,0.82)']
+                },
+                {
+                    eyebrow: 'Abstract floorplan',
+                    title: 'Shape the next branch like a living layout board.',
+                    copy: 'The art panel cycles through curated palettes and location prompts to keep the modal visually balanced while you enter store details.',
+                    chips: ['Retail map', 'Promo lane', 'Pairing flow'],
+                    cards: [
+                        { label: 'Suggested ID', value: 'Store 3210', meta: 'Southbank · Inline mall site' },
+                        { label: 'Ambient cue', value: 'Warm contrast', meta: 'Amber and cobalt accents for a bold store launch' }
+                    ],
+                    colors: ['rgba(245, 158, 11, 0.28)', 'rgba(59, 130, 246, 0.22)', 'rgba(244, 63, 94, 0.18)', 'rgba(255,255,255,0.84)']
+                },
+                {
+                    eyebrow: 'New location',
+                    title: 'Keep the admin flow crisp while the artwork rotates.',
+                    copy: 'This side panel changes automatically so the desktop form feels finished, balanced, and less like a wide empty canvas.',
+                    chips: ['Fresh install', 'Store group ready', 'Screen setup next'],
+                    cards: [
+                        { label: 'Expansion slot', value: 'Store 4108', meta: 'Harbour precinct · Multi-screen venue' },
+                        { label: 'Visual system', value: 'Glass layers', meta: 'Bright surfaces, rounded cards, and subtle motion' }
+                    ],
+                    colors: ['rgba(8, 145, 178, 0.30)', 'rgba(34, 197, 94, 0.20)', 'rgba(59, 130, 246, 0.18)', 'rgba(255,255,255,0.84)']
+                }
+            ];
+        }
+
+        function updateAddStoreArtwork() {
+            const artwork = document.getElementById('addStoreArtwork');
+            if (!artwork) {
+                return;
+            }
+
+            const themes = getAddStoreArtworkThemes();
+            if (!themes.length) {
+                return;
+            }
+
+            let nextIndex = Math.floor(Math.random() * themes.length);
+            if (typeof window.__lastAddStoreArtworkIndex === 'number' && themes.length > 1) {
+                while (nextIndex === window.__lastAddStoreArtworkIndex) {
+                    nextIndex = Math.floor(Math.random() * themes.length);
+                }
+            }
+            window.__lastAddStoreArtworkIndex = nextIndex;
+
+            const theme = themes[nextIndex];
+            artwork.style.setProperty('--art-a', theme.colors[0]);
+            artwork.style.setProperty('--art-b', theme.colors[1]);
+            artwork.style.setProperty('--art-c', theme.colors[2]);
+            artwork.style.setProperty('--art-d', theme.colors[3]);
+
+            const eyebrow = document.getElementById('addStoreArtworkEyebrow');
+            const title = document.getElementById('addStoreArtworkTitle');
+            const copy = document.getElementById('addStoreArtworkCopy');
+            if (eyebrow) eyebrow.textContent = theme.eyebrow;
+            if (title) title.textContent = theme.title;
+            if (copy) copy.textContent = theme.copy;
+
+            const chips = artwork.querySelectorAll('.add-store-visual__chip');
+            chips.forEach((chip, index) => {
+                chip.textContent = theme.chips[index] || '';
+            });
+
+            const cards = artwork.querySelectorAll('.add-store-visual__card');
+            cards.forEach((card, index) => {
+                const data = theme.cards[index] || { label: '', value: '', meta: '' };
+                const label = card.querySelector('.add-store-visual__card-label');
+                const value = card.querySelector('.add-store-visual__card-value');
+                const meta = card.querySelector('.add-store-visual__card-meta');
+                if (label) label.textContent = data.label;
+                if (value) value.textContent = data.value;
+                if (meta) meta.textContent = data.meta;
+            });
+        }
+
+        function startAddStoreArtworkRotation() {
+            stopAddStoreArtworkRotation();
+            const modal = document.getElementById('addStoreModal');
+            if (!modal || !modal.classList.contains('dashboard-side-sheet')) {
+                return;
+            }
+            window.__addStoreArtworkTimer = window.setInterval(() => {
+                const activeModal = document.getElementById('addStoreModal');
+                if (!activeModal || !activeModal.classList.contains('visible')) {
+                    stopAddStoreArtworkRotation();
+                    return;
+                }
+                updateAddStoreArtwork();
+            }, 5000);
+        }
+
+        function stopAddStoreArtworkRotation() {
+            if (window.__addStoreArtworkTimer) {
+                window.clearInterval(window.__addStoreArtworkTimer);
+                window.__addStoreArtworkTimer = null;
+            }
         }
         
     function addNewStore() {
@@ -13469,8 +13881,21 @@ allowfullscreen></iframe></div>`;
                 return;
             }
             
-            // Direct execution without confirmation (user disabled prompts)
-            console.log('Executing store deletion directly (confirmation bypassed)...');
+            const wantsDelete = confirm(`Delete ${storeText}?`);
+            if (!wantsDelete) {
+                console.log('Store deletion cancelled at first confirmation');
+                return;
+            }
+
+            const finalConfirmation = confirm(
+                `Final confirmation: permanently delete ${storeText} and all of its screens?\n\nThis cannot be undone.`
+            );
+            if (!finalConfirmation) {
+                console.log('Store deletion cancelled at final confirmation');
+                return;
+            }
+
+            console.log('Executing store deletion after double confirmation...');
             executeStoreDeletion(storeId, storeText);
         }
         
@@ -14284,6 +14709,39 @@ allowfullscreen></iframe></div>`;
                     </div>
                 </div>
             </div>
+
+            <div class="add-store-visual" aria-hidden="true">
+                <div class="add-store-artwork" id="addStoreArtwork">
+                    <div class="add-store-artwork-orb add-store-artwork-orb--one"></div>
+                    <div class="add-store-artwork-orb add-store-artwork-orb--two"></div>
+                    <div class="add-store-artwork-orb add-store-artwork-orb--three"></div>
+
+                    <div class="add-store-visual__content">
+                        <span class="add-store-visual__eyebrow" id="addStoreArtworkEyebrow">Store network</span>
+                        <h4 class="add-store-visual__title" id="addStoreArtworkTitle">Build a fresh cluster with a new city rhythm.</h4>
+                        <p class="add-store-visual__copy" id="addStoreArtworkCopy">Each time this panel opens, the abstract composition shifts to keep the Add Store flow feeling alive and intentional.</p>
+
+                        <div class="add-store-visual__chips">
+                            <span class="add-store-visual__chip">Metro rollout</span>
+                            <span class="add-store-visual__chip">3 display zones</span>
+                            <span class="add-store-visual__chip">Ready to map</span>
+                        </div>
+
+                        <div class="add-store-visual__cards">
+                            <div class="add-store-visual__card">
+                                <span class="add-store-visual__card-label">Launch cue</span>
+                                <span class="add-store-visual__card-value">Store 1882</span>
+                                <span class="add-store-visual__card-meta">Liverpool Branch · High-street corner</span>
+                            </div>
+                            <div class="add-store-visual__card">
+                                <span class="add-store-visual__card-label">Visual mood</span>
+                                <span class="add-store-visual__card-value">Blue horizon</span>
+                                <span class="add-store-visual__card-meta">Clean geometry with a calm retail cadence</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -14291,7 +14749,7 @@ allowfullscreen></iframe></div>`;
     <div id="storeGroupsModal" class="modal" role="dialog" aria-modal="true" onclick="if(event.target === this) closeStoreGroupsManager()">
         <div class="modal-content store-groups-shell" style="max-width: 900px;">
             <div class="modal-header">
-                <h3>🏪 Store Groups Manager</h3>
+                <h3>🏪 Multi Store Setup</h3>
                 <button type="button" class="close" onclick="closeStoreGroupsManager()">&times;</button>
             </div>
             <div class="store-groups-body" style="padding:24px;">
@@ -14345,6 +14803,21 @@ allowfullscreen></iframe></div>`;
                 <div style="background: white; border-radius: 12px; padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
                     <form id="remotePiManagerForm" onsubmit="event.preventDefault(); configureRemotePi();">
                         <p class="helper" style="font-size: 13px; margin-bottom: 16px;">Configure a Raspberry Pi remotely by entering its identifier and connection settings.</p>
+
+                        <div style="margin-bottom: 18px; padding: 16px; border-radius: 14px; background: linear-gradient(135deg, #fff8eb 0%, #ffffff 100%); border: 1px solid rgba(180, 123, 15, 0.18); box-shadow: inset 0 1px 0 rgba(255,255,255,0.75);">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 10px;">
+                                <div>
+                                    <div style="font-size: 15px; font-weight: 700; color: #7a4b00; margin-bottom: 4px;">New Pi install</div>
+                                    <div style="font-size: 13px; line-height: 1.5; color: #6b7280; max-width: 640px;">Choose the store and screen below, then run this one command on a fresh Raspberry Pi OS terminal. It installs the EverydayAdvertise TV client, starts it automatically, and preloads your pairing code, store, and screen for this account.</div>
+                                </div>
+                                <div style="padding: 6px 10px; border-radius: 999px; background: rgba(122, 75, 0, 0.08); color: #7a4b00; font-size: 12px; font-weight: 700; white-space: nowrap;">Fresh Pi setup</div>
+                            </div>
+                            <div style="display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap;">
+                                <input type="text" id="newPiInstallCommand" readonly value="" placeholder="Loading install command..." style="flex: 1 1 420px; min-width: 0; padding: 11px 12px; border-radius: 10px; border: 1px solid rgba(180, 123, 15, 0.28); background: #fffdf8; color: #3f3f46; font-size: 12px; font-family: 'Consolas', 'SFMono-Regular', monospace;">
+                                <button type="button" id="copyNewPiInstallCommandBtn" onclick="copyNewPiInstallCommand()" style="padding: 10px 16px; border-radius: 10px; border: none; background: #7a4b00; color: white; font-size: 13px; font-weight: 700; cursor: pointer;">Copy install command</button>
+                            </div>
+                            <div style="margin-top: 10px; font-size: 12px; line-height: 1.5; color: #6b7280;">After the installer finishes, the Pi should connect and auto-claim the selected store and screen. The Pi ID will still appear briefly on screen for troubleshooting.</div>
+                        </div>
 
                         <!-- Step 1: Pi Connection -->
                         <div class="form-group">
@@ -14403,7 +14876,7 @@ allowfullscreen></iframe></div>`;
                 <!-- Step 2: Pairing Code -->
                 <div id="stepPairCode" class="form-group" style="display:none;">
                     <label for="piPairCode">Your Pairing Code *</label>
-                    <input type="text" id="piPairCode" placeholder="{{ link_code or '----' }}" value="{{ link_code or '' }}" required pattern="[0-9]{4}" maxlength="4" oninput="showStoreStep()">
+                    <input type="text" id="piPairCode" placeholder="{{ link_code or '----' }}" value="{{ link_code or '' }}" required pattern="[0-9]{4}" maxlength="4" oninput="showStoreStep(); syncNewPiInstallCommand()">
                     <small style="color:#666; font-size:13px;">
                         Your pairing code: <strong>{{ link_code or '----' }}</strong> • Use this code to link your devices
                     </small>
@@ -14412,7 +14885,7 @@ allowfullscreen></iframe></div>`;
                 <!-- Step 3: Store Selection -->
                 <div id="stepStoreId" class="form-group" style="display:none;">
                     <label for="piStoreId">Store ID *</label>
-                    <select id="piStoreId" style="width:100%; padding:10px; border-radius:10px; border:1px solid rgba(60,60,67,0.29); font-size:14px;" onchange="showScreenStep()">
+                    <select id="piStoreId" style="width:100%; padding:10px; border-radius:10px; border:1px solid rgba(60,60,67,0.29); font-size:14px;" onchange="showScreenStep(); syncNewPiInstallCommand()">
                         <option value="">Select Store...</option>
                         {% for store in config.stores %}
                         <option value="{{ store.id }}">{{ store.id }} - {{ store.name }}</option>
@@ -14424,7 +14897,7 @@ allowfullscreen></iframe></div>`;
                 <!-- Step 4: Screen Selection -->
                 <div id="stepScreenId" class="form-group" style="display:none;">
                     <label for="piScreenId">Screen ID *</label>
-                    <select id="piScreenId" style="width:100%; padding:10px; border-radius:10px; border:1px solid rgba(60,60,67,0.29); font-size:14px;" onchange="updateRemotePiConfigureButtonState()">
+                    <select id="piScreenId" style="width:100%; padding:10px; border-radius:10px; border:1px solid rgba(60,60,67,0.29); font-size:14px;" onchange="updateRemotePiConfigureButtonState(); syncNewPiInstallCommand()">
                         <option value="">Select Screen...</option>
                     </select>
                     <small style="color:#666; font-size:13px;">Which screen content to display</small>

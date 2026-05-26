@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pi Device Manager - Pizza Hut TV</title>
+    <title>Pi Device Manager - EverydayAdvertise TV</title>
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
     
     <!-- Leaflet CSS for OpenStreetMap -->
@@ -26,14 +26,35 @@
             box-sizing: border-box;
         }
 
+        :root {
+            --pi-text-strong: #2a384c;
+            --pi-text-base: #5a677a;
+            --pi-text-muted: #7b8797;
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
             background-color: #f5f5f7;
-            color: #1d1d1f;
+            color: var(--pi-text-base);
             min-height: 100vh;
             line-height: 1.47059;
             font-weight: 400;
             letter-spacing: -0.022em;
+        }
+
+        h1, h2, h3, h4, h5, h6,
+        .stat-card .stat-value,
+        .new-pi-setup-title,
+        .empty-state h3,
+        .vnc-modal-title {
+            color: var(--pi-text-strong);
+        }
+
+        .btn-secondary,
+        .new-pi-setup-text,
+        .new-pi-setup-help,
+        .empty-state p {
+            color: var(--pi-text-base);
         }
 
         body.embedded {
@@ -250,16 +271,161 @@
             margin-bottom: 24px;
             padding: 0;
             align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .devices-header-toolbar {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            flex: 1 1 620px;
+            min-width: 0;
             flex-wrap: nowrap;
         }
 
-        .devices-header-row h2 {
+        .devices-header-actions {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            margin-left: auto;
+            flex: 0 0 auto;
+        }
+
+        .new-pi-setup-toggle {
+            white-space: nowrap;
+        }
+
+        .new-pi-setup-toggle[aria-expanded="true"] {
+            background: #5f6b7a;
+            color: #fff;
+            border-color: #5f6b7a;
+            box-shadow: 0 6px 18px rgba(95, 107, 122, 0.18);
+        }
+
+        .devices-header-toolbar h2 {
             margin: 0;
             font-size: 22px;
             font-weight: 600;
             color: #1d1d1f;
             white-space: nowrap;
             min-width: 120px;
+        }
+
+        .new-pi-setup-panel {
+            width: 100%;
+            max-width: none;
+            margin: 0;
+            padding: 0 16px;
+            border-radius: 18px;
+            background: linear-gradient(135deg, #f4f6f8 0%, #ffffff 100%);
+            border: 1px solid transparent;
+            box-shadow: none;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            overflow: hidden;
+            max-height: 0;
+            opacity: 0;
+            transform: translateY(-10px);
+            pointer-events: none;
+            transition: max-height 280ms ease, opacity 180ms ease, transform 280ms ease, margin 280ms ease, padding 280ms ease, border-color 280ms ease, box-shadow 280ms ease;
+        }
+
+        .new-pi-setup-panel.is-open {
+            max-height: 720px;
+            opacity: 1;
+            transform: translateY(0);
+            margin: 8px 0 24px 0;
+            padding: 16px;
+            border-color: rgba(148, 163, 184, 0.34);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            pointer-events: auto;
+        }
+
+        .new-pi-setup-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .new-pi-setup-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #4b5563;
+            margin: 0 0 4px 0;
+        }
+
+        .new-pi-setup-text {
+            font-size: 13px;
+            color: #6b7280;
+            line-height: 1.5;
+            margin: 0;
+        }
+
+        .new-pi-setup-badge {
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: #eef2f6;
+            color: #5f6b7a;
+            font-size: 12px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .new-pi-setup-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .new-pi-setup-field label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: #6b7280;
+            margin-bottom: 6px;
+        }
+
+        .new-pi-setup-field select,
+        .new-pi-setup-command {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid rgba(148, 163, 184, 0.42);
+            background: #ffffff;
+            color: #1d1d1f;
+            font-size: 13px;
+            font-family: inherit;
+        }
+
+        .new-pi-setup-command {
+            font-family: Consolas, 'SFMono-Regular', monospace;
+            font-size: 12px;
+        }
+
+        .new-pi-setup-command-wrap {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .new-pi-setup-command-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #6b7280;
+        }
+
+        .new-pi-setup-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .new-pi-setup-help {
+            font-size: 12px;
+            color: #6b7280;
+            line-height: 1.5;
         }
 
         .search-box {
@@ -1014,6 +1180,25 @@
             .devices-section {
                 padding: 20px 18px;
             }
+
+            .devices-header-toolbar {
+                flex-wrap: wrap;
+            }
+
+            .devices-header-actions {
+                width: 100%;
+                justify-content: flex-start;
+                margin-left: 0;
+            }
+
+            .new-pi-setup-panel {
+                width: 100%;
+                max-width: none;
+            }
+
+            .new-pi-setup-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -1023,7 +1208,7 @@
         <div class="header">
             <h1>🖥️ Pi Device Manager</h1>
             <div class="header-actions">
-                <button class="btn btn-primary" onclick="openAddDeviceModal()">+ Add Pi Device</button>
+                <button class="btn btn-primary" onclick="openAddDeviceModal()">Connect Existing Pi</button>
                 <a href="/dashboard" class="btn btn-secondary">Back to Dashboard</a>
             </div>
         </div>
@@ -1052,19 +1237,66 @@
         <div class="devices-section">
             <!-- All controls in one row -->
             <div class="devices-header-row">
-                <h2>Pi Devices</h2>
-                <div class="search-box">
-                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                        <path d="M9 2a7 7 0 100 14 7 7 0 000-14zM2 9a7 7 0 1112.452 4.391l3.328 3.329a1 1 0 01-1.414 1.414l-3.329-3.328A7 7 0 012 9z" fill="currentColor"/>
-                    </svg>
-                    <input type="text" id="searchInput" placeholder="Search by Store ID, Device ID, or Screen..." onkeyup="filterDevices()">
+                <div class="devices-header-toolbar">
+                    <h2>Pi Devices</h2>
+                    <div class="search-box">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                            <path d="M9 2a7 7 0 100 14 7 7 0 000-14zM2 9a7 7 0 1112.452 4.391l3.328 3.329a1 1 0 01-1.414 1.414l-3.329-3.328A7 7 0 012 9z" fill="currentColor"/>
+                        </svg>
+                        <input type="text" id="searchInput" placeholder="Search by Store ID, Device ID, or Screen..." onkeyup="filterDevices()">
+                    </div>
+                    <div class="filter-buttons">
+                        <button class="filter-btn active" data-filter="all" onclick="setStatusFilter('all')">All</button>
+                        <button class="filter-btn" data-filter="online" onclick="setStatusFilter('online')">Online</button>
+                        <button class="filter-btn" data-filter="offline" onclick="setStatusFilter('offline')">Offline</button>
+                    </div>
+                    <button class="btn btn-secondary" onclick="refreshDevices()">🔄 Refresh</button>
+                    <button type="button" class="btn btn-secondary new-pi-setup-toggle" id="toggleNewPiSetupBtn" aria-expanded="false" onclick="toggleNewPiSetup()">New Pi Setup</button>
                 </div>
-                <div class="filter-buttons">
-                    <button class="filter-btn active" data-filter="all" onclick="setStatusFilter('all')">All</button>
-                    <button class="filter-btn" data-filter="online" onclick="setStatusFilter('online')">Online</button>
-                    <button class="filter-btn" data-filter="offline" onclick="setStatusFilter('offline')">Offline</button>
+            </div>
+
+            <div class="new-pi-setup-panel" id="newPiSetupPanel" aria-hidden="true" inert>
+                <div class="new-pi-setup-top">
+                    <div>
+                        <div class="new-pi-setup-title">New Pi Setup</div>
+                        <p class="new-pi-setup-text">Choose the target store and screen, then generate a ready-made Pi setup page and downloadable installer. This is meant to be the user-friendly setup path.</p>
+                    </div>
+                    <span class="new-pi-setup-badge">Quick install</span>
                 </div>
-                <button class="btn btn-secondary" onclick="refreshDevices()">🔄 Refresh</button>
+
+                <div class="new-pi-setup-grid">
+                    <div class="new-pi-setup-field">
+                        <label for="quickSetupStore">Store</label>
+                        <select id="quickSetupStore" onchange="updateQuickSetupScreens(); syncQuickSetupCommand()">
+                            <option value="">Select Store</option>
+                            {% for store in stores %}
+                            <option value="{{ store.id }}">{{ store.id }} - {{ store.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="new-pi-setup-field">
+                        <label for="quickSetupScreen">Screen</label>
+                        <select id="quickSetupScreen" onchange="syncQuickSetupCommand()">
+                            <option value="">Select Screen</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="new-pi-setup-command-wrap">
+                    <div class="new-pi-setup-command-label">Pi setup link</div>
+                    <input type="text" id="quickSetupCommand" class="new-pi-setup-command" readonly placeholder="Select store and screen to generate a Pi setup link">
+                </div>
+
+                <div class="new-pi-setup-actions">
+                    <button type="button" class="btn btn-primary" id="downloadQuickSetupBtn" onclick="downloadQuickSetupInstaller()" disabled>Download Installer</button>
+                    <button type="button" class="btn btn-secondary" id="openQuickSetupBtn" onclick="openQuickSetupPage()" disabled>Open Setup Page</button>
+                    <button type="button" class="btn btn-secondary" id="copyQuickSetupBtn" onclick="copyQuickSetupLink()" disabled>Copy Setup Link</button>
+                    <button type="button" class="btn btn-secondary" onclick="openAddDeviceModal()">Claim Existing Pi</button>
+                </div>
+
+                <div class="new-pi-setup-help">
+                    Pairing code <strong>{{ link_code or '----' }}</strong> is embedded automatically. The Pi setup page explains the simple steps, and the installer file is downloaded as <strong>everydayadvertise_tv-installer.sh</strong>. The Pi ID is created automatically after install.
+                </div>
             </div>
 
             <div class="devices-grid">
@@ -1187,20 +1419,20 @@
     <div class="modal" id="addDeviceModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Add Pi Device</h2>
+                <h2>Claim Existing Pi</h2>
                 <button class="close-modal" onclick="closeAddDeviceModal()">&times;</button>
             </div>
             
             <!-- Step 1: Connect to Pi -->
             <div id="step1Connect">
                 <p style="color: #86868b; font-size: 14px; margin-bottom: 20px; line-height: 1.5;">
-                    Configure a Raspberry Pi remotely by entering its identifier and connection settings.
+                    Enter the first-boot claim code shown on the Pi screen, or enter a Pi identifier for an already known device.
                 </p>
                 <div class="form-group">
-                    <label>Pi Identifier *</label>
-                    <input type="text" id="piIdentifier" placeholder="e.g., raspberrypi-ce39" style="width: 100%; padding: 12px 14px; border: 1px solid rgba(0,0,0,0.12); border-radius: 10px; font-size: 14px;">
+                    <label>Claim Code or Pi Identifier *</label>
+                    <input type="text" id="piIdentifier" placeholder="e.g., A1B2C3 or raspberrypi-ce39" style="width: 100%; padding: 12px 14px; border: 1px solid rgba(0,0,0,0.12); border-radius: 10px; font-size: 14px; text-transform: uppercase;">
                     <small style="color: #86868b; font-size: 12px; margin-top: 4px; display: block;">
-                        Use hostname (raspberrypi), MAC address, or custom ID
+                        New Pis show a 6-character claim code on first boot. Existing Pis can still be looked up by Pi ID.
                     </small>
                 </div>
                 
@@ -1373,6 +1605,11 @@
         let screensData = {};
         let connectedPiId = '';
         let connectedPiIp = '';
+        let connectedClaimCode = '';
+        let quickSetupMeta = null;
+        let quickSetupRequestId = 0;
+        let quickSetupInitialized = false;
+        const CURRENT_PAIR_CODE = {{ (link_code or '')|tojson }};
         
         try {
             const piMapText = document.getElementById('piMapData').textContent.trim();
@@ -1394,48 +1631,255 @@
             screensData = {};
         }
 
+        function updateQuickSetupScreens() {
+            const storeId = document.getElementById('quickSetupStore')?.value || '';
+            const screenSelect = document.getElementById('quickSetupScreen');
+            if (!screenSelect) {
+                return;
+            }
+
+            const previousValue = screenSelect.value;
+            screenSelect.innerHTML = '<option value="">Select Screen</option>';
+
+            if (storeId && screensData[storeId]) {
+                const screens = screensData[storeId];
+                Object.keys(screens).forEach(screenId => {
+                    const screen = screens[screenId] || {};
+                    const option = document.createElement('option');
+                    option.value = screenId;
+                    option.textContent = screen.name || screen.screen_name || screenId;
+                    screenSelect.appendChild(option);
+                });
+
+                if (previousValue && screens[previousValue]) {
+                    screenSelect.value = previousValue;
+                } else if (screenSelect.options.length === 2) {
+                    screenSelect.value = screenSelect.options[1].value;
+                }
+            }
+        }
+
+        function toggleNewPiSetup(forceOpen = null) {
+            const panel = document.getElementById('newPiSetupPanel');
+            const toggleBtn = document.getElementById('toggleNewPiSetupBtn');
+            if (!panel) {
+                return;
+            }
+
+            const shouldOpen = typeof forceOpen === 'boolean'
+                ? forceOpen
+                : !panel.classList.contains('is-open');
+
+            panel.classList.toggle('is-open', shouldOpen);
+            panel.setAttribute('aria-hidden', shouldOpen ? 'false' : 'true');
+            panel.inert = !shouldOpen;
+            if (toggleBtn) {
+                toggleBtn.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+            }
+
+            if (shouldOpen && !quickSetupInitialized) {
+                const storeSelect = document.getElementById('quickSetupStore');
+                if (storeSelect && storeSelect.options.length === 2 && !storeSelect.value) {
+                    storeSelect.value = storeSelect.options[1].value;
+                }
+                updateQuickSetupScreens();
+                syncQuickSetupCommand();
+                quickSetupInitialized = true;
+            }
+        }
+
+        async function syncQuickSetupCommand() {
+            const commandInput = document.getElementById('quickSetupCommand');
+            const copyBtn = document.getElementById('copyQuickSetupBtn');
+            const openBtn = document.getElementById('openQuickSetupBtn');
+            const downloadBtn = document.getElementById('downloadQuickSetupBtn');
+            if (!commandInput || !copyBtn || !openBtn || !downloadBtn) {
+                return;
+            }
+
+            const storeId = (document.getElementById('quickSetupStore')?.value || '').trim();
+            const screenId = (document.getElementById('quickSetupScreen')?.value || '').trim();
+            const hasSelection = Boolean(storeId && screenId);
+
+            quickSetupMeta = null;
+
+            if (!hasSelection) {
+                commandInput.value = '';
+                commandInput.placeholder = 'Select store and screen to generate a Pi setup link';
+                [copyBtn, openBtn, downloadBtn].forEach(btn => {
+                    btn.disabled = true;
+                    btn.style.opacity = '0.6';
+                    btn.style.cursor = 'not-allowed';
+                });
+                return;
+            }
+
+            const requestId = ++quickSetupRequestId;
+            commandInput.value = 'Generating setup link...';
+            commandInput.placeholder = '';
+
+            try {
+                const response = await fetch(`/api/pi-bootstrap/setup-link?store_id=${encodeURIComponent(storeId)}&screen_id=${encodeURIComponent(screenId)}`, {
+                    cache: 'no-store'
+                });
+                const data = await response.json();
+
+                if (requestId !== quickSetupRequestId) {
+                    return;
+                }
+
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || 'Could not generate Pi setup link');
+                }
+
+                quickSetupMeta = data;
+                commandInput.value = data.setup_url || '';
+                [copyBtn, openBtn, downloadBtn].forEach(btn => {
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                    btn.style.cursor = 'pointer';
+                });
+            } catch (error) {
+                console.error('Failed to generate quick setup link:', error);
+                quickSetupMeta = null;
+                commandInput.value = '';
+                commandInput.placeholder = 'Could not generate Pi setup link';
+                [copyBtn, openBtn, downloadBtn].forEach(btn => {
+                    btn.disabled = true;
+                    btn.style.opacity = '0.6';
+                    btn.style.cursor = 'not-allowed';
+                });
+            }
+        }
+
+        async function copyQuickSetupLink() {
+            const link = (quickSetupMeta && quickSetupMeta.setup_url) || '';
+            if (!link) {
+                alert('Select a store and screen first.');
+                return;
+            }
+
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(link);
+                } else {
+                    const commandInput = document.getElementById('quickSetupCommand');
+                    commandInput.focus();
+                    commandInput.select();
+                    document.execCommand('copy');
+                }
+
+                const copyBtn = document.getElementById('copyQuickSetupBtn');
+                const originalText = copyBtn.textContent;
+                copyBtn.textContent = 'Copied';
+                setTimeout(() => {
+                    copyBtn.textContent = originalText;
+                }, 1600);
+            } catch (error) {
+                console.error('Failed to copy quick setup command:', error);
+                alert('Copy failed. Please copy the command manually.');
+            }
+        }
+
+        function openQuickSetupPage() {
+            const link = (quickSetupMeta && quickSetupMeta.setup_url) || '';
+            if (!link) {
+                alert('Select a store and screen first.');
+                return;
+            }
+
+            let targetLink = link;
+            if (piManagerEmbedded) {
+                try {
+                    const embeddedUrl = new URL(link, window.location.origin);
+                    embeddedUrl.searchParams.set('embedded', '1');
+                    targetLink = `${embeddedUrl.pathname}${embeddedUrl.search}${embeddedUrl.hash}`;
+                } catch (error) {
+                    const separator = link.includes('?') ? '&' : '?';
+                    targetLink = `${link}${separator}embedded=1`;
+                }
+            }
+
+            window.location.href = targetLink;
+        }
+
+        function downloadQuickSetupInstaller() {
+            const link = (quickSetupMeta && quickSetupMeta.download_url) || '';
+            if (!link) {
+                alert('Select a store and screen first.');
+                return;
+            }
+            window.location.href = link;
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const params = new URLSearchParams(window.location.search);
+            if ((params.get('panel') || '').trim().toLowerCase() === 'setup') {
+                toggleNewPiSetup(true);
+            }
+            const claimCode = (params.get('claim_code') || '').trim();
+            if (claimCode) {
+                openAddDeviceModal();
+                const input = document.getElementById('piIdentifier');
+                if (input) {
+                    input.value = claimCode.toUpperCase();
+                }
+                connectAndVerifyPi();
+            }
+        });
+
         async function connectAndVerifyPi() {
-            const piId = document.getElementById('piIdentifier').value.trim();
+            const rawValue = document.getElementById('piIdentifier').value.trim();
             const connectBtn = document.getElementById('connectPiBtn');
             const statusDiv = document.getElementById('piConnectionStatus');
             const statusContent = document.getElementById('piStatusContent');
 
-            if (!piId) {
-                statusContent.innerHTML = '<div style="color:#ff453a;">❌ Please enter a Pi Identifier</div>';
+            if (!rawValue) {
+                statusContent.innerHTML = '<div style="color:#ff453a;">❌ Please enter a claim code or Pi identifier</div>';
                 statusDiv.style.display = 'block';
                 statusDiv.style.background = '#ffebee';
                 statusDiv.style.border = '1px solid #ffcdd2';
                 return;
             }
 
+            const normalizedCode = rawValue.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            const looksLikeClaimCode = /^[A-Z0-9]{6}$/.test(normalizedCode);
+
             try {
                 connectBtn.disabled = true;
                 connectBtn.textContent = 'Connecting...';
                 
                 // Show connecting status
-                statusContent.innerHTML = '<div style="color:#ff9500;">🔄 Connecting to Pi: ' + piId + '...</div>';
+                statusContent.innerHTML = '<div style="color:#ff9500;">🔄 Looking up device: ' + rawValue + '...</div>';
                 statusDiv.style.display = 'block';
                 statusDiv.style.background = '#fff8e6';
                 statusDiv.style.border = '1px solid #ffd60a';
 
-                // Check if Pi is online via WebSocket
-                const response = await fetch('/api/pi-status-ws/' + encodeURIComponent(piId));
+                const lookupUrl = looksLikeClaimCode
+                    ? '/api/pi-claim-status/' + encodeURIComponent(normalizedCode)
+                    : '/api/pi-status-ws/' + encodeURIComponent(rawValue);
+
+                const response = await fetch(lookupUrl);
                 const result = await response.json();
 
                 if (response.ok && result.status === 'online') {
+                    const resolvedPiId = result.pi_id || rawValue;
+                    const resolvedClaimCode = result.claim_code || (looksLikeClaimCode ? normalizedCode : '');
                     // Pi is online - show success
                     statusContent.innerHTML = `
                         <div style="color:#30d158;">
-                            ✅ <strong>Pi Online</strong> - ${piId}
+                            ✅ <strong>Pi Online</strong> - ${resolvedPiId}
                             <br><small style="color:#86868b;">Version: ${result.version || 'Unknown'} | IP: ${result.ip_address || 'Unknown'}</small>
+                            ${resolvedClaimCode ? `<br><small style="color:#86868b;">Claim code: ${resolvedClaimCode}</small>` : ''}
                         </div>
                     `;
                     statusDiv.style.background = '#e8f5e8';
                     statusDiv.style.border = '1px solid #c8e6c9';
                     
                     // Store connected Pi info
-                    connectedPiId = piId;
+                    connectedPiId = resolvedPiId;
                     connectedPiIp = result.ip_address || 'Unknown';
+                    connectedClaimCode = resolvedClaimCode;
                     
                     // Wait a moment then show step 2
                     setTimeout(() => {
@@ -1449,7 +1893,7 @@
                     // Pi is offline
                     statusContent.innerHTML = `
                         <div style="color:#ff453a;">
-                            ❌ <strong>Pi Offline</strong> - ${piId}
+                            ❌ <strong>Device Not Ready</strong> - ${rawValue}
                             <br><small style="color:#86868b;">${result.message || 'Pi is not currently connected to the server'}</small>
                         </div>
                     `;
@@ -1514,6 +1958,9 @@
             document.getElementById('piConnectionStatus').style.display = 'none';
             document.getElementById('connectPiBtn').disabled = false;
             document.getElementById('connectPiBtn').textContent = 'Connect';
+            connectedPiId = '';
+            connectedPiIp = '';
+            connectedClaimCode = '';
             document.getElementById('piIdentifier').focus();
         }
 
@@ -1531,19 +1978,20 @@
             const storeId = document.getElementById('storeSelect').value;
             const screenId = document.getElementById('screenSelect').value;
             
-            if (!connectedPiId || !connectedPiIp || !storeId || !screenId) {
+            if (!connectedPiId || !storeId || !screenId || !CURRENT_PAIR_CODE) {
                 alert('Please fill in all fields');
                 return;
             }
             
             const data = {
                 pi_id: connectedPiId,
-                ip_address: connectedPiIp,
+                claim_code: connectedClaimCode,
+                pair_code: CURRENT_PAIR_CODE,
                 store_id: storeId,
                 screen_id: screenId
             };
             
-            fetch('/api/add-pi-device', {
+            fetch('/api/configure-pi-ws', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -1553,7 +2001,7 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert('Device assigned successfully!');
+                    alert('Pi claimed and assigned successfully!');
                     closeAddDeviceModal();
                     // Reload page to ensure fresh data
                     window.location.reload();
