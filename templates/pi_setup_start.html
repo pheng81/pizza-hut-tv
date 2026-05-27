@@ -321,14 +321,14 @@
                     <div class="step-number">1</div>
                     <div>
                         <div class="step-title">Open this page on the Raspberry Pi</div>
-                        <div class="step-text">Use the Pi's browser to open this setup page, then click <strong>Download Installer</strong>. The file will download as <strong>everydayadvertise_tv-installer.sh</strong>.</div>
+                        <div class="step-text">Use the Pi's browser to open this setup page. You can still click <strong>Download Installer</strong>, but the command below is the most reliable option because it downloads a fresh installer copy into <strong>/tmp</strong> before running it.</div>
                     </div>
                 </div>
                 <div class="step">
                     <div class="step-number">2</div>
                     <div>
-                        <div class="step-title">Run the downloaded installer</div>
-                        <div class="step-text">Open Terminal on the Pi and run the command below. This is the only terminal step left for now.</div>
+                        <div class="step-title">Run the installer command</div>
+                        <div class="step-text">Open Terminal on the Pi and run the command below. It does not rely on <strong>~/Downloads</strong> and it auto-detects the normal desktop user to install the client under.</div>
                         <div class="command-box">{{ local_command }}</div>
                     </div>
                 </div>

@@ -6387,6 +6387,64 @@ def _resolve_screen_last_seen(user_key, store_id, screen_id, screen_data):
     except Exception:
         return 0
 
+
+def _touch_assigned_pi_last_seen(user_key, store_id, screen_id, screen_data, client_ip=None):
+    """Treat authenticated playlist fetches as proof-of-life for the assigned Pi.
+
+    Some Pi clients can continue polling /playlist even when their websocket heartbeat
+    path is interrupted. Refresh the assigned Pi's runtime timestamp so Pi Manager does
+    not show a false offline state for an actively polling screen.
+    """
+    try:
+        pi_id = str((screen_data or {}).get('pi_id') or '').strip()
+        if not pi_id:
+            return
+
+        now = time.time()
+        safe_user_key = str(user_key or '').strip()
+        safe_store_id = str(store_id or '').strip()
+        safe_screen_id = str(screen_id or '').strip()
+        safe_ip = str(client_ip or '').strip()
+
+        with pi_connection_lock:
+            pi_info = connected_pis.get(pi_id)
+            if isinstance(pi_info, dict):
+                pi_info['last_seen'] = now
+                if safe_user_key:
+                    pi_info['user_key'] = safe_user_key
+                if safe_store_id:
+                    pi_info['store_id'] = safe_store_id
+                if safe_screen_id:
+                    pi_info['screen_id'] = safe_screen_id
+                if safe_ip:
+                    pi_info['ip'] = safe_ip
+
+        try:
+            with open(PI_MAP_FILE, 'r', encoding='utf-8') as f:
+                pi_map = json.load(f)
+        except Exception:
+            pi_map = {}
+
+        existing = pi_map.get(pi_id)
+        if isinstance(existing, dict):
+            if safe_ip:
+                existing['ip'] = safe_ip
+            existing['last_seen'] = now
+        else:
+            pi_map[pi_id] = {
+                'ip': existing if isinstance(existing, str) else (safe_ip or 'Unknown'),
+                'last_seen': now,
+            }
+
+        with open(PI_MAP_FILE, 'w', encoding='utf-8') as f:
+            json.dump(pi_map, f, indent=4)
+    except Exception:
+        logging.exception(
+            'Failed to refresh playlist proof-of-life for %s/%s',
+            store_id,
+            screen_id,
+        )
+
 # -------- Public API for TV app: list screens for a store (pair-code or session required) --------
 @app.route('/api/screens/<store_id>', methods=['GET'])
 def api_screens_for_store(store_id: str):
@@ -7626,10 +7684,74 @@ PAIR_CODE=\"{pair_code}\"
 SERVER_URL=\"{server_url}\"
 STORE_ID=\"{store_id}\"
 SCREEN_ID=\"{screen_id}\"
-INSTALL_DIR=\"${{HOME}}/everydayadvertise_tv_client\"
-VENV_DIR=\"${{INSTALL_DIR}}/venv\"
 SERVICE_NAME=\"everydayadvertise_tv\"
-CONFIG_PATH=\"${{HOME}}/.pizza_hut_tv_config.json\"
+
+discover_target_user() {{
+    if [[ -n "${{EA_TARGET_USER:-}}" ]]; then
+        echo "${{EA_TARGET_USER}}"
+        return 0
+    fi
+
+    if [[ -n "${{SUDO_USER:-}}" && "${{SUDO_USER}}" != "root" ]]; then
+        echo "${{SUDO_USER}}"
+        return 0
+    fi
+
+    local current_user
+    local current_home
+    current_user="$(id -un)"
+    current_home="$(getent passwd "${{current_user}}" | cut -d: -f6 || true)"
+    if [[ "${{current_user}}" != "root" && -n "${{current_home}}" && -d "${{current_home}}" ]]; then
+        echo "${{current_user}}"
+        return 0
+    fi
+
+    for candidate in everydayadvertise pi admin; do
+        local candidate_home
+        candidate_home="$(getent passwd "${{candidate}}" | cut -d: -f6 || true)"
+        if [[ -n "${{candidate_home}}" && -d "${{candidate_home}}" ]]; then
+            echo "${{candidate}}"
+            return 0
+        fi
+    done
+
+    getent passwd | awk -F: '$3 >= 1000 && $6 ~ /^\\// && $7 !~ /(false|nologin)$/ {{ print $1; exit }}'
+}}
+
+TARGET_USER="$(discover_target_user)"
+if [[ -z "${{TARGET_USER}}" ]]; then
+    echo "Could not determine which Pi desktop user should run the client." >&2
+    echo "Set EA_TARGET_USER=<username> and run the installer again." >&2
+    exit 1
+fi
+
+TARGET_HOME="$(getent passwd "${{TARGET_USER}}" | cut -d: -f6)"
+if [[ -z "${{TARGET_HOME}}" || ! -d "${{TARGET_HOME}}" ]]; then
+    echo "Resolved Pi user '${{TARGET_USER}}' but its home directory is missing." >&2
+    echo "Set EA_TARGET_USER=<username> with a valid home directory and run again." >&2
+    exit 1
+fi
+
+TARGET_UID="$(id -u "${{TARGET_USER}}")"
+TARGET_GROUP="$(id -gn "${{TARGET_USER}}")"
+INSTALL_DIR="${{TARGET_HOME}}/everydayadvertise_tv_client"
+VENV_DIR="${{INSTALL_DIR}}/venv"
+CONFIG_PATH="${{TARGET_HOME}}/.pizza_hut_tv_config.json"
+
+run_as_target() {{
+    if [[ "$(id -un)" == "${{TARGET_USER}}" ]]; then
+        env HOME="${{TARGET_HOME}}" USER="${{TARGET_USER}}" LOGNAME="${{TARGET_USER}}" "$@"
+    else
+        sudo -H -u "${{TARGET_USER}}" env HOME="${{TARGET_HOME}}" USER="${{TARGET_USER}}" LOGNAME="${{TARGET_USER}}" "$@"
+    fi
+}}
+
+install_owned_file() {{
+    local src_path="$1"
+    local dest_path="$2"
+    local mode="${{3:-0644}}"
+    sudo install -m "$mode" -o "${{TARGET_USER}}" -g "${{TARGET_GROUP}}" "$src_path" "$dest_path"
+}}
 
 FILES=(
   \"complete_pi_client.py\"
@@ -7642,6 +7764,8 @@ FILES=(
 echo \"== EverydayAdvertise TV Pi installer ==\"
 echo \"Server: $SERVER_URL\"
 echo \"Pairing code: $PAIR_CODE\"
+echo \"Install user: $TARGET_USER\"
+echo \"Install home: $TARGET_HOME\"
 if [[ -n \"$STORE_ID\" && -n \"$SCREEN_ID\" ]]; then
     echo \"Store: $STORE_ID\"
     echo \"Screen: $SCREEN_ID\"
@@ -7658,14 +7782,18 @@ sudo apt-get install -y \
   mpv \
   libmpv2 \
   x11vnc
-
+sudo install -d -m 0755 -o \"$TARGET_USER\" -g \"$TARGET_GROUP\" \"$INSTALL_DIR\"
 mkdir -p \"$INSTALL_DIR\"
 
 fetch_file() {{
+    local temp_path
+    temp_path="$(mktemp)"
   local file_name=\"$1\"
   curl -fsSL \
     -H \"X-User-Code: $PAIR_CODE\" \
-    \"$SERVER_URL/api/pi-bootstrap/file/${{file_name}}?code=${{PAIR_CODE}}\" \
+        -o \"$temp_path\"
+    install_owned_file \"$temp_path\" \"$INSTALL_DIR/${{file_name}}\" 0644
+    rm -f \"$temp_path\"
     -o \"$INSTALL_DIR/${{file_name}}\"
 }}
 
@@ -7673,9 +7801,11 @@ for file_name in \"${{FILES[@]}}\"; do
   echo \"Downloading $file_name ...\"
   fetch_file \"$file_name\"
 done
+run_as_target rm -f \"${{TARGET_HOME}}/.pizza_hut_tv_id\" \"${{TARGET_HOME}}/pi_client_debug.log\"
 
-python3 -m venv --system-site-packages \"$VENV_DIR\"
-\"$VENV_DIR/bin/pip\" install --upgrade pip setuptools wheel
+run_as_target python3 -m venv --system-site-packages \"$VENV_DIR\"
+run_as_target \"$VENV_DIR/bin/pip\" install --upgrade pip setuptools wheel
+run_as_target \"$VENV_DIR/bin/pip\" install \
 \"$VENV_DIR/bin/pip\" install \
   requests \
   \"python-socketio[client]\" \
@@ -7686,7 +7816,8 @@ python3 -m venv --system-site-packages \"$VENV_DIR\"
   python-mpv \
   qrcode
 
-cat > \"$CONFIG_PATH\" <<EOF
+config_temp="$(mktemp)"
+cat > \"$config_temp\" <<EOF
 {{
   \"pair_code\": \"$PAIR_CODE\",
   \"store_id\": \"$STORE_ID\",
@@ -7695,8 +7826,25 @@ cat > \"$CONFIG_PATH\" <<EOF
   \"last_updated\": $(date +%s)
 }}
 EOF
+install_owned_file \"$config_temp\" \"$CONFIG_PATH\" 0644
+rm -f \"$config_temp\"
 
-CURRENT_USER=\"$(id -un)\"
+SUPPLEMENTARY_GROUPS=""
+for group_name in video render; do
+    if getent group \"${{group_name}}\" >/dev/null 2>&1; then
+        if [[ -n \"${{SUPPLEMENTARY_GROUPS}}\" ]]; then
+            SUPPLEMENTARY_GROUPS=\"${{SUPPLEMENTARY_GROUPS}} ${{group_name}}\"
+        else
+            SUPPLEMENTARY_GROUPS=\"${{group_name}}\"
+        fi
+    fi
+done
+
+SUPPLEMENTARY_GROUPS_LINE=""
+if [[ -n \"${{SUPPLEMENTARY_GROUPS}}\" ]]; then
+    SUPPLEMENTARY_GROUPS_LINE=\"SupplementaryGroups=${{SUPPLEMENTARY_GROUPS}}\"
+fi
+
 cat > /tmp/${{SERVICE_NAME}}.service <<EOF
 [Unit]
 Description=EverydayAdvertise TV Digital Signage Client
@@ -7705,10 +7853,14 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=${{CURRENT_USER}}
-SupplementaryGroups=video render
+User=${{TARGET_USER}}
+${{SUPPLEMENTARY_GROUPS_LINE}}
 Environment=DISPLAY=:0
-Environment=XAUTHORITY=/home/${{CURRENT_USER}}/.Xauthority
+Environment=HOME=${{TARGET_HOME}}
+Environment=USER=${{TARGET_USER}}
+Environment=LOGNAME=${{TARGET_USER}}
+Environment=XAUTHORITY=${{TARGET_HOME}}/.Xauthority
+Environment=XDG_RUNTIME_DIR=/run/user/${{TARGET_UID}}
 Environment=PYTHONUNBUFFERED=1
 WorkingDirectory=$INSTALL_DIR
 ExecStartPre=/bin/sleep 10
@@ -7738,6 +7890,15 @@ fi
 echo \"Status: sudo systemctl status $SERVICE_NAME\"
 echo \"Logs:   journalctl -u $SERVICE_NAME -f\"
 """
+
+
+def _build_pi_setup_local_command(download_url: str) -> str:
+    safe_url = str(download_url or '').strip()
+    return (
+        'tmp_script="$(mktemp /tmp/everydayadvertise_tv-installer.XXXXXX.sh)" '
+        f'&& curl -fsSL "{safe_url}" -o "$tmp_script" '
+        '&& bash "$tmp_script"'
+    )
 
 
 def _pi_setup_serializer() -> URLSafeTimedSerializer:
@@ -7854,7 +8015,7 @@ def api_pi_bootstrap_setup_link():
         'success': True,
         'setup_url': setup_url,
         'download_url': download_url,
-        'local_command': 'bash ~/Downloads/everydayadvertise_tv-installer.sh',
+        'local_command': _build_pi_setup_local_command(download_url),
     })
 
 
@@ -7875,6 +8036,8 @@ def pi_setup_start(token):
     screen_data = (cfg.get('screens', {}).get(payload['store_id'], {}) or {}).get(payload['screen_id'], {}) or {}
     screen_name = screen_data.get('name') or screen_data.get('screen_name') or payload['screen_id']
 
+    download_url = url_for('pi_setup_download_installer', token=token, _external=True)
+
     return render_template(
         'pi_setup_start.html',
         success=True,
@@ -7882,9 +8045,9 @@ def pi_setup_start(token):
         store_name=store_name,
         screen_id=payload['screen_id'],
         screen_name=screen_name,
-        download_url=url_for('pi_setup_download_installer', token=token),
+        download_url=download_url,
         setup_url=url_for('pi_setup_start', token=token, _external=True),
-        local_command='bash ~/Downloads/everydayadvertise_tv-installer.sh',
+        local_command=_build_pi_setup_local_command(download_url),
         embedded=embedded,
     )
 
@@ -15820,6 +15983,7 @@ def debug_schedule(store_id, screen_id):
 @with_etag_json
 def get_playlist(store_id, screen_id):
     print(f"DEBUG: GET /playlist {store_id} {screen_id}")
+    used_pair_code_auth = False
     
     # SECURITY FIX: Always prefer logged-in session user over pair code header
     # This prevents cross-user data leakage when authenticated user enters another user's pairing code
@@ -15837,6 +16001,7 @@ def get_playlist(store_id, screen_id):
         if user_key:
             # Valid pair code provided
             ukey = user_key
+            used_pair_code_auth = True
             print(f"DEBUG: Using pair code user key: {ukey}")
         else:
             # No session and no valid pair code - check if public access allowed
@@ -15881,6 +16046,13 @@ def get_playlist(store_id, screen_id):
     if not screen:
         print(f"DEBUG: Screen not found for playlist (after mapping): {store_id}/{screen_id}")
         return jsonify({'success': False, 'error': 'screen not found'}), 404
+
+    if used_pair_code_auth and ukey:
+        client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+        if ',' in str(client_ip):
+            client_ip = client_ip.split(',')[0].strip()
+        _touch_assigned_pi_last_seen(ukey, store_id, screen_id, screen, client_ip)
+
     # FIXED: Auto-clean missing-file items (local disk only) - DO NOT RUN IF R2 IS ENABLED
     # This was causing playlist data loss when files exist on CDN but not locally
     if not r2_enabled():
