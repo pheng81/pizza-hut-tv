@@ -30,13 +30,47 @@
             gap: 16px;
             background: #111;
         }
-        #canvas {
+        #viewport {
+            position: relative;
+            width: 640px;
+            height: 360px;
             border: 1px solid #333;
+            background: #000;
+            overflow: hidden;
+        }
+        #canvas {
             background: #000;
             width: 640px;  /* fixed small preview */
             height: 360px; /* 16:9 */
             image-rendering: -webkit-optimize-contrast;
             image-rendering: crisp-edges;
+            position: absolute;
+            inset: 0;
+            z-index: 2;
+        }
+        #scheduledPreview {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            display: none;
+            background: #0f172a;
+        }
+        #scheduledPreview img,
+        #scheduledPreview video,
+        #scheduledPreview .scheduled-preview-empty {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        #scheduledPreview .scheduled-preview-empty {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #94a3b8;
+            font-size: 13px;
+            text-align: center;
+            padding: 20px;
         }
         #error {
             display: none;
@@ -58,7 +92,10 @@
 <body>
     <div id="status">Connecting…</div>
     <div id="screen">
-        <canvas id="canvas"></canvas>
+        <div id="viewport">
+            <div id="scheduledPreview"></div>
+            <canvas id="canvas"></canvas>
+        </div>
     </div>
     <div id="error">
         <h2>Connection Failed</h2>
@@ -106,6 +143,9 @@
         
         // Get Pi ID from Flask template variable (passed from URL path)
         const piId = '{{ pi_id }}';
+        const activeFile = {{ (active_file or '') | tojson }};
+        const activeMediaType = {{ (active_media_type or '') | tojson }};
+        const mediaBaseUrl = {{ (media_base_url or '/static/uploads/') | tojson }};
         
         if (!piId || piId === '') {
             showError('No Pi ID specified');
@@ -114,6 +154,11 @@
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         const statusEl = document.getElementById('status');
+        const scheduledPreviewEl = document.getElementById('scheduledPreview');
+        const frameAnalysisCanvas = document.createElement('canvas');
+        frameAnalysisCanvas.width = 32;
+        frameAnalysisCanvas.height = 18;
+        const frameAnalysisCtx = frameAnalysisCanvas.getContext('2d', { willReadFrequently: true });
 
         // Connect to server WebSocket
         // Force long-polling to avoid WebSocket upgrade issues behind proxies/CDNs
@@ -133,15 +178,186 @@
     let initialSizeSet = false;
     let retryTimer = null;
     let stallTimer = null;
+    let firstFrameTimer = null;
     let framesReceived = 0;
+    let legacyStreamRequested = false;
+    let hasVncFrames = false;
+    let scheduledPreviewRendered = false;
+    let liveDisplayReady = false;
+    let consecutiveRenderableFrames = 0;
+
+        function guessMediaType(file) {
+            const text = String(file || '').trim().toLowerCase();
+            if (!text) return '';
+            const extension = text.includes('.') ? text.split('.').pop() : '';
+            if (['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv', 'm4v'].includes(extension)) {
+                return 'video';
+            }
+            return 'image';
+        }
+
+        function buildMediaUrl(file) {
+            const text = String(file || '').trim();
+            if (!text) {
+                return '';
+            }
+            if (/^https?:\/\//i.test(text) || text.startsWith('/')) {
+                return text;
+            }
+            const base = String(mediaBaseUrl || '/static/uploads/');
+            return `${base.replace(/\/$/, '')}/${text.replace(/^\//, '')}`;
+        }
+
+        function renderScheduledPreview() {
+            if (scheduledPreviewRendered) {
+                return;
+            }
+            if (!activeFile) {
+                scheduledPreviewEl.innerHTML = '<div class="scheduled-preview-empty">Live Pi frames are unavailable.</div>';
+                scheduledPreviewRendered = true;
+                return;
+            }
+            const mediaType = String(activeMediaType || guessMediaType(activeFile)).toLowerCase();
+            if (mediaType === 'video') {
+                const previewSrc = /^https?:\/\//i.test(activeFile)
+                    ? buildMediaUrl(activeFile)
+                    : `/vpreview/640/${encodeURIComponent(activeFile)}?v=${Date.now()}`;
+                const poster = /^https?:\/\//i.test(activeFile)
+                    ? ''
+                    : `/vthumb/640/${encodeURIComponent(activeFile)}?v=${Date.now()}`;
+                scheduledPreviewEl.innerHTML = `<video muted autoplay loop playsinline preload="metadata" ${poster ? `poster="${poster}"` : ''} src="${previewSrc}"></video>`;
+                scheduledPreviewRendered = true;
+                return;
+            }
+            const imageSrc = /^https?:\/\//i.test(activeFile)
+                ? buildMediaUrl(activeFile)
+                : `/thumb/640/${encodeURIComponent(activeFile)}?v=${Date.now()}`;
+            scheduledPreviewEl.innerHTML = `<img src="${imageSrc}" alt="Scheduled media preview">`;
+            scheduledPreviewRendered = true;
+        }
+
+        function showScheduledPreview(statusText) {
+            renderScheduledPreview();
+            scheduledPreviewEl.style.display = 'block';
+            canvas.style.visibility = 'hidden';
+            if (statusText) {
+                statusEl.textContent = statusText;
+                statusEl.style.background = 'rgba(255, 152, 0, 0.9)';
+            }
+        }
+
+        function hideScheduledPreview() {
+            scheduledPreviewEl.style.display = 'none';
+            canvas.style.visibility = 'visible';
+        }
+
+        function isMostlyBlackFrame(img) {
+            if (!frameAnalysisCtx) {
+                return false;
+            }
+            frameAnalysisCtx.clearRect(0, 0, frameAnalysisCanvas.width, frameAnalysisCanvas.height);
+            frameAnalysisCtx.drawImage(img, 0, 0, frameAnalysisCanvas.width, frameAnalysisCanvas.height);
+            const { data } = frameAnalysisCtx.getImageData(0, 0, frameAnalysisCanvas.width, frameAnalysisCanvas.height);
+            let visiblePixels = 0;
+            let darkPixels = 0;
+            let luminanceTotal = 0;
+            for (let index = 0; index < data.length; index += 4) {
+                const alpha = data[index + 3];
+                if (alpha < 16) {
+                    continue;
+                }
+                visiblePixels += 1;
+                const luminance = (data[index] * 0.2126) + (data[index + 1] * 0.7152) + (data[index + 2] * 0.0722);
+                luminanceTotal += luminance;
+                if (luminance < 12) {
+                    darkPixels += 1;
+                }
+            }
+            if (visiblePixels === 0) {
+                return true;
+            }
+            return (darkPixels / visiblePixels) >= 0.985 || (luminanceTotal / visiblePixels) <= 6;
+        }
+
+        function isTargetPi(data) {
+            return !!data && String(data.pi_id || '') === String(piId);
+        }
+
+        function requestLegacyFrames() {
+            if (legacyStreamRequested || hasVncFrames) {
+                return;
+            }
+            legacyStreamRequested = true;
+            socket.emit('request_screenshot', { pi_id: piId });
+            socket.emit('start_live_stream', { pi_id: piId });
+        }
+
+        function markDisplayReady() {
+            if (!vncConnected) {
+                vncConnected = true;
+            }
+            liveDisplayReady = true;
+            hideScheduledPreview();
+            statusEl.textContent = '✅ Connected';
+            statusEl.style.background = 'rgba(76, 175, 80, 0.9)';
+            if (retryTimer) clearTimeout(retryTimer);
+            if (stallTimer) clearTimeout(stallTimer);
+            if (firstFrameTimer) clearTimeout(firstFrameTimer);
+        }
+
+        function handleIncomingFrame(data, source = 'unknown') {
+            if (!isTargetPi(data)) {
+                return;
+            }
+            if (source !== 'vnc' && hasVncFrames) {
+                return;
+            }
+            const frame = data.frame || data.screenshot;
+            if (!frame) {
+                return;
+            }
+            const img = new Image();
+            img.onload = () => {
+                if (isMostlyBlackFrame(img)) {
+                    console.warn('Ignoring mostly black frame from', source);
+                    consecutiveRenderableFrames = 0;
+                    if (!liveDisplayReady) {
+                        showScheduledPreview('Connected, showing schedule preview...');
+                    }
+                    requestLegacyFrames();
+                    return;
+                }
+                framesReceived++;
+                consecutiveRenderableFrames++;
+                if (source === 'vnc' && !hasVncFrames) {
+                    hasVncFrames = true;
+                    if (legacyStreamRequested) {
+                        socket.emit('stop_live_stream', { pi_id: piId });
+                        legacyStreamRequested = false;
+                    }
+                }
+                if (!initialSizeSet && data.width && data.height) {
+                    canvas.width = data.width;
+                    canvas.height = data.height;
+                    initialSizeSet = true;
+                }
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                if (liveDisplayReady || consecutiveRenderableFrames >= 2) {
+                    markDisplayReady();
+                }
+            };
+            img.src = 'data:image/jpeg;base64,' + frame;
+        }
 
         socket.on('connect', () => {
             console.log('✅ Connected to server');
             statusEl.textContent = 'Connecting to Pi...';
             statusEl.style.background = 'rgba(255, 152, 0, 0.9)';
+            showScheduledPreview('Connecting to Pi...');
             
             // Request VNC connection to Pi
             socket.emit('vnc_connect', { pi_id: piId });
+            requestLegacyFrames();
             // Retry once after 4s if no response
             retryTimer = setTimeout(() => {
                 if (!vncConnected && framesReceived === 0) {
@@ -153,24 +369,28 @@
             // After 10s, surface guidance ONLY if no frames received
             stallTimer = setTimeout(() => {
                 if (!vncConnected && framesReceived === 0) {
-                    showError('No response from Pi. If it persists, try Restart Pi Client.');
+                    statusEl.textContent = 'Trying fallback capture...';
+                    statusEl.style.background = 'rgba(255, 152, 0, 0.9)';
+                    requestLegacyFrames();
+                    setTimeout(() => {
+                        if (!vncConnected && framesReceived === 0) {
+                            showError('No response from Pi. If it persists, try Restart Pi Client.');
+                        }
+                    }, 6000);
                 } else if (framesReceived > 0) {
-                    // Frames are coming through, mark as connected even without explicit vnc_connected event
                     console.log('✅ Frames detected, marking as connected');
-                    vncConnected = true;
-                    statusEl.textContent = '✅ Connected';
-                    statusEl.style.background = 'rgba(76, 175, 80, 0.9)';
+                    markDisplayReady();
                 }
             }, 10000);
         });
 
         socket.on('vnc_connected', (data) => {
+            if (!isTargetPi(data)) {
+                return;
+            }
             console.log('🖥️ VNC connected to Pi:', data);
-            vncConnected = true;
-            statusEl.textContent = '✅ Connected';
-            statusEl.style.background = 'rgba(76, 175, 80, 0.9)';
+            showScheduledPreview('Connected, waiting for display...');
             if (retryTimer) clearTimeout(retryTimer);
-            if (stallTimer) clearTimeout(stallTimer);
             
             // Set backing resolution to incoming size but keep a fixed on-screen size
             if (data.width && data.height) {
@@ -182,31 +402,65 @@
                 canvas.height = 720;
             }
             initialSizeSet = true;
+            if (firstFrameTimer) clearTimeout(firstFrameTimer);
+            firstFrameTimer = setTimeout(() => {
+                if (framesReceived === 0) {
+                    statusEl.textContent = 'Trying fallback capture...';
+                    statusEl.style.background = 'rgba(255, 152, 0, 0.9)';
+                    requestLegacyFrames();
+                    setTimeout(() => {
+                        if (framesReceived === 0) {
+                            showError('Connected to the Pi relay, but no display frames arrived. Falling back to screenshot/live-stream capture.');
+                        }
+                    }, 6000);
+                }
+            }, 6000);
         });
 
         // No window-fit scaling: keep a small fixed preview size per user request
 
         socket.on('vnc_data', (data) => {
-            // Receive VNC frame data from Pi (via server proxy)
-            if (data.frame) {
-                framesReceived++;
-                const img = new Image();
-                img.onload = () => {
-                    if (!initialSizeSet && data.width && data.height) {
-                        canvas.width = data.width;
-                        canvas.height = data.height;
-                        initialSizeSet = true;
-                    }
-                    // Draw image scaled into the backing store; browser will shrink to fixed CSS size
-                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                };
-                img.src = 'data:image/jpeg;base64,' + data.frame;
+            handleIncomingFrame(data, 'vnc');
+        });
+
+        socket.on('live_frame', (data) => {
+            handleIncomingFrame(data, 'live');
+        });
+
+        socket.on('screenshot_data', (data) => {
+            if (!isTargetPi(data)) {
+                return;
             }
+            if (data.error) {
+                console.warn('Screenshot fallback error:', data.error);
+                if (framesReceived === 0) {
+                    showError(data.error);
+                }
+                return;
+            }
+            handleIncomingFrame(data, 'screenshot');
         });
 
         socket.on('vnc_error', (data) => {
+            if (!isTargetPi(data)) {
+                return;
+            }
             console.error('❌ VNC error:', data);
-            showError(data.message || 'VNC connection failed');
+            requestLegacyFrames();
+            if (framesReceived === 0) {
+                statusEl.textContent = 'Trying fallback capture...';
+                statusEl.style.background = 'rgba(255, 152, 0, 0.9)';
+            }
+        });
+
+        socket.on('stream_error', (data) => {
+            if (!isTargetPi(data)) {
+                return;
+            }
+            console.error('❌ Stream error:', data);
+            if (framesReceived === 0) {
+                showError(data.error || 'Live stream failed');
+            }
         });
 
         socket.on('disconnect', () => {
@@ -214,6 +468,16 @@
             statusEl.textContent = '❌ Disconnected';
             statusEl.style.background = 'rgba(211, 47, 47, 0.9)';
             vncConnected = false;
+            legacyStreamRequested = false;
+            hasVncFrames = false;
+            liveDisplayReady = false;
+            consecutiveRenderableFrames = 0;
+            showScheduledPreview();
+        });
+
+        window.addEventListener('beforeunload', () => {
+            socket.emit('stop_live_stream', { pi_id: piId });
+            socket.emit('vnc_disconnect', { pi_id: piId });
         });
 
         // Mouse and keyboard events

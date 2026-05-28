@@ -1947,6 +1947,34 @@ def _resolve_connected_pi_by_claim_code(claim_code: Optional[str], *, require_as
             return pi_id, dict(pi_info or {})
     return None, None
 
+
+def _get_connected_pi_runtime(pi_id: Optional[str], *, max_age: int = 120) -> Optional[dict]:
+    pi_text = str(pi_id or '').strip()
+    if not pi_text:
+        return None
+
+    try:
+        now = time.time()
+    except Exception:
+        now = 0
+
+    with pi_connection_lock:
+        pi_info = connected_pis.get(pi_text)
+        if not isinstance(pi_info, dict):
+            return None
+        if not pi_info.get('connected', True):
+            return None
+
+        try:
+            last_seen = float(pi_info.get('last_seen') or 0)
+        except Exception:
+            last_seen = 0
+
+        if max_age > 0 and last_seen and now and (now - last_seen) >= max_age:
+            return None
+
+        return dict(pi_info)
+
 # Track connected Android TV devices via heartbeat
 # Key = device_id (session_id or unique identifier)
 # Value = {'store_id': str, 'screen_id': str, 'last_seen': timestamp, 'ip': str}
@@ -7786,15 +7814,15 @@ sudo install -d -m 0755 -o \"$TARGET_USER\" -g \"$TARGET_GROUP\" \"$INSTALL_DIR\
 mkdir -p \"$INSTALL_DIR\"
 
 fetch_file() {{
-    local temp_path
-    temp_path="$(mktemp)"
-  local file_name=\"$1\"
-  curl -fsSL \
-    -H \"X-User-Code: $PAIR_CODE\" \
-        -o \"$temp_path\"
-    install_owned_file \"$temp_path\" \"$INSTALL_DIR/${{file_name}}\" 0644
-    rm -f \"$temp_path\"
-    -o \"$INSTALL_DIR/${{file_name}}\"
+        local file_name=\"$1\"
+        local temp_path
+        temp_path="$(mktemp)"
+        curl -fsSL \
+            -H \"X-User-Code: $PAIR_CODE\" \
+            \"$SERVER_URL/api/pi-bootstrap/file/${{file_name}}\" \
+            -o \"$temp_path\"
+        install_owned_file \"$temp_path\" \"$INSTALL_DIR/${{file_name}}\" 0644
+        rm -f \"$temp_path\"
 }}
 
 for file_name in \"${{FILES[@]}}\"; do
@@ -7805,8 +7833,7 @@ run_as_target rm -f \"${{TARGET_HOME}}/.pizza_hut_tv_id\" \"${{TARGET_HOME}}/pi_
 
 run_as_target python3 -m venv --system-site-packages \"$VENV_DIR\"
 run_as_target \"$VENV_DIR/bin/pip\" install --upgrade pip setuptools wheel
-run_as_target \"$VENV_DIR/bin/pip\" install \
-\"$VENV_DIR/bin/pip\" install \
+run_as_target "$VENV_DIR/bin/pip" install \
   requests \
   \"python-socketio[client]\" \
   psutil \
@@ -20338,8 +20365,9 @@ def handle_screenshot_request(data):
     pi_id = data.get('pi_id')
     logging.info(f'📸 Screenshot request for Pi: {pi_id}')
     
-    if pi_id and pi_id in connected_pis:
-        pi_session = connected_pis[pi_id]['sid']
+    pi_runtime = _get_connected_pi_runtime(pi_id)
+    if pi_id and pi_runtime:
+        pi_session = pi_runtime['sid']
         # Emit to the specific Pi's session
         socketio.emit('request_screenshot', data, room=pi_session)
         logging.info(f'📸 Screenshot request forwarded to {pi_id}')
@@ -20362,8 +20390,9 @@ def handle_start_live_stream(data):
     pi_id = data.get('pi_id')
     logging.info(f'📺 Live stream START request for Pi: {pi_id}')
     
-    if pi_id and pi_id in connected_pis:
-        pi_session = connected_pis[pi_id]['sid']
+    pi_runtime = _get_connected_pi_runtime(pi_id)
+    if pi_id and pi_runtime:
+        pi_session = pi_runtime['sid']
         # Emit to the specific Pi's session
         socketio.emit('start_live_stream', data, room=pi_session)
         logging.info(f'📺 Live stream start forwarded to {pi_id}')
@@ -20385,8 +20414,9 @@ def handle_stop_live_stream(data):
     pi_id = data.get('pi_id')
     logging.info(f'📺 Live stream STOP request for Pi: {pi_id}')
     
-    if pi_id and pi_id in connected_pis:
-        pi_session = connected_pis[pi_id]['sid']
+    pi_runtime = _get_connected_pi_runtime(pi_id)
+    if pi_id and pi_runtime:
+        pi_session = pi_runtime['sid']
         socketio.emit('stop_live_stream', data, room=pi_session)
         logging.info(f'📺 Live stream stop forwarded to {pi_id}')
 
@@ -20442,8 +20472,9 @@ def handle_vnc_connect(data):
     
     logging.info(f'🖥️ VNC connect request from dashboard {dashboard_sid} to Pi: {pi_id}')
     
-    if pi_id and pi_id in connected_pis:
-        pi_session = connected_pis[pi_id]['sid']
+    pi_runtime = _get_connected_pi_runtime(pi_id)
+    if pi_id and pi_runtime:
+        pi_session = pi_runtime['sid']
         # Forward connect request to Pi, include dashboard sid for routing back
         socketio.emit('vnc_connect', {
             'pi_id': pi_id,
@@ -20467,9 +20498,12 @@ def handle_vnc_data(data):
     if target_sid:
         # Forward VNC data to specific session (could be dashboard or Pi)
         socketio.emit('vnc_data', data, room=target_sid)
-    elif pi_id and pi_id in connected_pis:
+    else:
+        pi_runtime = _get_connected_pi_runtime(pi_id)
+        if not (pi_id and pi_runtime):
+            return
         # If no target_sid but has pi_id, send to Pi
-        pi_session = connected_pis[pi_id]['sid']
+        pi_session = pi_runtime['sid']
         socketio.emit('vnc_data', data, room=pi_session)
 
 @socketio.on('vnc_disconnect')
@@ -20483,13 +20517,32 @@ def handle_vnc_disconnect(data):
     
     logging.info(f'🖥️ VNC disconnect request for Pi: {pi_id}')
     
-    if pi_id and pi_id in connected_pis:
-        pi_session = connected_pis[pi_id]['sid']
+    pi_runtime = _get_connected_pi_runtime(pi_id)
+    if pi_id and pi_runtime:
+        pi_session = pi_runtime['sid']
         socketio.emit('vnc_disconnect', {
             'pi_id': pi_id,
             'dashboard_sid': dashboard_sid
         }, room=pi_session)
         logging.info(f'🖥️ VNC disconnect forwarded to {pi_id}')
+
+
+@socketio.on('vnc_connected')
+@socketio_error_handler
+def handle_vnc_connected(data):
+    """Relay Pi-side VNC connection readiness back to the requesting dashboard."""
+    target_sid = (data or {}).get('target_sid')
+    if target_sid:
+        socketio.emit('vnc_connected', data, room=target_sid)
+
+
+@socketio.on('vnc_error')
+@socketio_error_handler
+def handle_vnc_error(data):
+    """Relay Pi-side VNC/capture errors back to the requesting dashboard."""
+    target_sid = (data or {}).get('target_sid')
+    if target_sid:
+        socketio.emit('vnc_error', data, room=target_sid)
 
 @socketio.on('restart_client')
 @socketio_error_handler
@@ -20501,8 +20554,9 @@ def handle_restart_client(data):
     pi_id = data.get('pi_id')
     logging.info(f'🔄 Client restart request for Pi: {pi_id}')
     
-    if pi_id and pi_id in connected_pis:
-        pi_session = connected_pis[pi_id]['sid']
+    pi_runtime = _get_connected_pi_runtime(pi_id)
+    if pi_id and pi_runtime:
+        pi_session = pi_runtime['sid']
         # Emit to the specific Pi's session
         socketio.emit('restart_client', data, room=pi_session)
         logging.info(f'🔄 Client restart command forwarded to {pi_id}')
@@ -20537,25 +20591,24 @@ def pi_status_websocket(pi_id):
     PREFERRED method - instant, no network delay
     """
     try:
-        with pi_connection_lock:
-            if pi_id in connected_pis:
-                pi_info = connected_pis[pi_id]
-                return jsonify({
-                    'pi_id': pi_id,
-                    'status': 'online',
-                    'connection_type': 'websocket',
-                    'connected_since': pi_info['connected_at'],
-                    'ip_address': pi_info['ip'],
-                    'version': pi_info.get('version', 'Unknown'),
-                    'last_heartbeat': pi_info.get('last_heartbeat', pi_info['connected_at'])
-                })
-            else:
-                return jsonify({
-                    'pi_id': pi_id,
-                    'status': 'offline',
-                    'connection_type': 'none',
-                    'message': 'Pi not connected to WebSocket server'
-                }), 200
+        pi_info = _get_connected_pi_runtime(pi_id)
+        if pi_info:
+            return jsonify({
+                'pi_id': pi_id,
+                'status': 'online',
+                'connection_type': 'websocket',
+                'connected_since': pi_info['connected_at'],
+                'ip_address': pi_info['ip'],
+                'version': pi_info.get('version', 'Unknown'),
+                'last_heartbeat': pi_info.get('last_heartbeat', pi_info['connected_at'])
+            })
+
+        return jsonify({
+            'pi_id': pi_id,
+            'status': 'offline',
+            'connection_type': 'none',
+            'message': 'Pi is not currently connected to the live WebSocket relay'
+        }), 200
     except Exception as e:
         logging.error(f'WebSocket status check error: {e}')
         return jsonify({'success': False, 'message': 'Status check failed'}), 500
@@ -20906,26 +20959,25 @@ def list_connected_pis():
 def vnc_proxy_info(pi_id):
     """Get VNC proxy information for a Pi"""
     try:
-        with pi_connection_lock:
-            if pi_id not in connected_pis:
-                return jsonify({
-                    'success': False,
-                    'message': 'Pi not connected'
-                }), 404
-            
-            pi_info = connected_pis[pi_id]
-            pi_ip = pi_info['ip']
-            
-            # Return info about how to connect via noVNC
-            # Client will use: https://your-domain/vnc/<pi_id>
+        pi_info = _get_connected_pi_runtime(pi_id)
+        if not pi_info:
             return jsonify({
-                'success': True,
-                'pi_id': pi_id,
-                'pi_ip': pi_ip,
-                'vnc_url': f'/vnc/{pi_id}',  # Relative URL for iframe
-                'websocket_port': 6080,
-                'vnc_port': 5900
-            })
+                'success': False,
+                'message': 'Pi not connected'
+            }), 404
+
+        pi_ip = pi_info['ip']
+            
+        # Return info about how to connect via noVNC
+        # Client will use: https://your-domain/vnc/<pi_id>
+        return jsonify({
+            'success': True,
+            'pi_id': pi_id,
+            'pi_ip': pi_ip,
+            'vnc_url': f'/vnc/{pi_id}',  # Relative URL for iframe
+            'websocket_port': 6080,
+            'vnc_port': 5900
+        })
     except Exception as e:
         logging.error(f'VNC proxy info error: {e}')
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -20938,12 +20990,51 @@ def vnc_viewer(pi_id):
     Uses WebSocket tunnel to avoid mixed content and NAT issues
     """
     try:
-        with pi_connection_lock:
-            if pi_id not in connected_pis:
-                return "Pi not connected", 404
+        pi_runtime = _get_connected_pi_runtime(pi_id)
+        if not pi_runtime:
+            return "Pi not connected", 404
+
+        config = None
+        screen_config = None
+        store_id = str(pi_runtime.get('store_id') or '').strip()
+        screen_id = str(pi_runtime.get('screen_id') or '').strip()
+        active_file = None
+        active_media_type = ''
+
+        try:
+            ukey = _safe_user_key()
+            config = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
+        except Exception:
+            config = ensure_playlists_structure(load_store_config())
+
+        if store_id and screen_id:
+            screen_config = ((config.get('screens') or {}).get(store_id) or {}).get(screen_id)
+
+        if not isinstance(screen_config, dict):
+            for candidate_store_id, screens in (config.get('screens') or {}).items():
+                if not isinstance(screens, dict):
+                    continue
+                for candidate_screen_id, candidate_screen in screens.items():
+                    if isinstance(candidate_screen, dict) and str(candidate_screen.get('pi_id') or '').strip() == str(pi_id):
+                        store_id = str(candidate_store_id)
+                        screen_id = str(candidate_screen_id)
+                        screen_config = candidate_screen
+                        break
+                if isinstance(screen_config, dict):
+                    break
+
+        if isinstance(screen_config, dict) and store_id and screen_id:
+            active_file = pick_active_playlist_item(screen_config, config, store_id, screen_id)
+            active_media_type = classify_media(active_file) if active_file else ''
         
         # Render our custom VNC viewer that uses WebSocket proxy
-        return render_template('vnc_viewer.html', pi_id=pi_id)
+        return render_template(
+            'vnc_viewer.html',
+            pi_id=pi_id,
+            active_file=active_file,
+            active_media_type=active_media_type,
+            media_base_url=get_media_base_url(),
+        )
     
     except Exception as e:
         logging.error(f'VNC viewer error: {e}')
@@ -21160,13 +21251,34 @@ def get_pi_location():
             store_id = store.get('id')
             for screen_id, screen_data in config.get('screens', {}).get(store_id, {}).items():
                 if screen_data.get('pi_id') == pi_id:
+                    address_details = _resolve_screen_address_details(config, store_id, screen_id, screen_data)
+                    latitude = screen_data.get('latitude')
+                    longitude = screen_data.get('longitude')
+                    try:
+                        latitude = float(latitude) if latitude is not None else None
+                        longitude = float(longitude) if longitude is not None else None
+                    except Exception:
+                        latitude, longitude = None, None
+
+                    if (latitude is None or longitude is None) and address_details.get('effective_address'):
+                        geocoded = _geocode_address_to_coordinates(address_details.get('effective_address')) or {}
+                        latitude = geocoded.get('latitude', latitude)
+                        longitude = geocoded.get('longitude', longitude)
+
+                    location_label = address_details.get('location_name') or ''
+                    if not location_label and address_details.get('effective_address'):
+                        location_label = 'Saved screen address' if address_details.get('screen_address') else 'Store address fallback'
+
                     return jsonify({
                         'success': True,
-                        'location_name': screen_data.get('location_name', ''),
-                        'latitude': screen_data.get('latitude'),
-                        'longitude': screen_data.get('longitude'),
-                        'address': screen_data.get('address', ''),
-                        'label': screen_data.get('location_name', '')
+                        'location_name': location_label,
+                        'latitude': latitude,
+                        'longitude': longitude,
+                        'address': address_details.get('effective_address', ''),
+                        'label': location_label,
+                        'store_address': address_details.get('store_address', ''),
+                        'screen_address': address_details.get('screen_address', ''),
+                        'source': address_details.get('source', '')
                     }), 200
         
         # Pi not found

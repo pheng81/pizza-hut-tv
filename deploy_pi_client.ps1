@@ -3,14 +3,14 @@ param(
     [string]$PiHost = "raspberrypi",  # Using hostname instead of IP
     [string]$RemoteDir = "",
     [string]$KeyFile = "",
-    [string]$ServiceName = "complete_pi_client"
+    [string]$ServiceName = "everydayadvertise_tv"
 )
 
-Write-Host "Pizza Hut TV - Pi Client Deployment" -ForegroundColor Cyan
+Write-Host "EverydayAdvertise TV - Pi Client Deployment" -ForegroundColor Cyan
 Write-Host "====================================" -ForegroundColor Cyan
 
 if ([string]::IsNullOrWhiteSpace($RemoteDir)) {
-    $RemoteDir = "/home/${PiUser}/pizzahut-client"
+    $RemoteDir = "/home/${PiUser}/everydayadvertise_tv_client"
 }
 $remoteDirWasDefault = $true
 if (-not [string]::IsNullOrWhiteSpace($PSBoundParameters['RemoteDir'])) {
@@ -33,6 +33,62 @@ $targetCandidates = @()
 $explicitPiUser = $PSBoundParameters.ContainsKey('PiUser')
 $explicitPiHost = $PSBoundParameters.ContainsKey('PiHost')
 
+function Normalize-HostName {
+    param([string]$HostName)
+
+    if ([string]::IsNullOrWhiteSpace($HostName)) {
+        return ''
+    }
+
+    $trimmed = $HostName.Trim()
+    if ($trimmed.StartsWith('[') -and $trimmed.EndsWith(']')) {
+        return $trimmed.Substring(1, $trimmed.Length - 2)
+    }
+
+    return $trimmed
+}
+
+function Test-IsIpLiteral {
+    param([string]$HostName)
+
+    $normalized = Normalize-HostName -HostName $HostName
+    if ([string]::IsNullOrWhiteSpace($normalized)) {
+        return $false
+    }
+
+    $parsedIp = $null
+    return [System.Net.IPAddress]::TryParse($normalized, [ref]$parsedIp)
+}
+
+function Format-HostForSsh {
+    param([string]$HostName)
+
+    $normalized = Normalize-HostName -HostName $HostName
+    if ([string]::IsNullOrWhiteSpace($normalized)) {
+        return ''
+    }
+
+    if ((Test-IsIpLiteral -HostName $normalized) -and $normalized.Contains(':')) {
+        return "[$normalized]"
+    }
+
+    return $normalized
+}
+
+function Format-SshTarget {
+    param(
+        [string]$User,
+        [string]$HostName
+    )
+
+    $formattedHost = Format-HostForSsh -HostName $HostName
+    if ([string]::IsNullOrWhiteSpace($User) -or [string]::IsNullOrWhiteSpace($formattedHost)) {
+        return ''
+    }
+
+    return "$($User.Trim())@$formattedHost"
+}
+
 function Add-TargetCandidate {
     param(
         [string]$User,
@@ -45,12 +101,12 @@ function Add-TargetCandidate {
 
     $script:targetCandidates += [PSCustomObject]@{
         User = $User.Trim()
-        Host = $HostName.Trim()
+        Host = Normalize-HostName -HostName $HostName
     }
 }
 
 Add-TargetCandidate -User $PiUser -HostName $PiHost
-if ($PiHost -and -not $PiHost.ToLower().EndsWith('.local')) {
+if ($PiHost -and -not (Test-IsIpLiteral -HostName $PiHost) -and -not (Normalize-HostName -HostName $PiHost).ToLower().EndsWith('.local')) {
     Add-TargetCandidate -User $PiUser -HostName "$PiHost.local"
 }
 
@@ -68,7 +124,7 @@ $targetCandidates = $targetCandidates | Group-Object User, Host | ForEach-Object
 $connected = $false
 $sshTarget = ""
 foreach($target in $targetCandidates) {
-    $candidate = "$($target.User)@$($target.Host)"
+    $candidate = Format-SshTarget -User $target.User -HostName $target.Host
     Write-Host " - Trying $candidate" -ForegroundColor Gray
     $null = & ssh @sshArgs $candidate "echo connected" 2>$null
     if ($LASTEXITCODE -eq 0) { $connected = $true; $sshTarget = $candidate; break }
@@ -78,7 +134,7 @@ if ($connected) {
     $resolvedPiUser = ($sshTarget -split '@', 2)[0]
     $PiUser = $resolvedPiUser
     if ($remoteDirWasDefault) {
-        $RemoteDir = "/home/${PiUser}/pizzahut-client"
+        $RemoteDir = "/home/${PiUser}/everydayadvertise_tv_client"
     }
 }
 
@@ -89,14 +145,15 @@ if (-not $connected) {
         Write-Host "Cannot connect to Pi. Please check network connection and SSH access" -ForegroundColor Yellow
         exit 1
     }
+    $manualHost = $manual.Trim()
     if ($manual.Contains('@')) {
-        $sshTarget = $manual.Trim()
-        $PiUser = ($sshTarget -split '@', 2)[0]
-    } else {
-        $sshTarget = "$PiUser@$manual"
+        $manualParts = $manual.Trim() -split '@', 2
+        $PiUser = $manualParts[0]
+        $manualHost = $manualParts[1]
     }
+    $sshTarget = Format-SshTarget -User $PiUser -HostName $manualHost
     if ($remoteDirWasDefault) {
-        $RemoteDir = "/home/${PiUser}/pizzahut-client"
+        $RemoteDir = "/home/${PiUser}/everydayadvertise_tv_client"
     }
     Write-Host " - Trying $sshTarget" -ForegroundColor Gray
     $null = & ssh @sshArgs $sshTarget "echo connected" 2>$null
@@ -142,7 +199,7 @@ foreach ($line in $runtimeProcessLines) {
         continue
     }
 
-    $matches = [regex]::Matches($line, '/home/[^\s"'']+/complete_pi_client\.py|/home/[^\s"'']+/pizzahut-client/complete_pi_client\.py')
+    $matches = [regex]::Matches($line, '/home/[^\s"'']+/complete_pi_client\.py|/home/[^\s"'']+/everydayadvertise_tv_client/complete_pi_client\.py')
     foreach ($match in $matches) {
         $runtimeFile = $match.Value
         if ([string]::IsNullOrWhiteSpace($runtimeFile)) {
@@ -207,12 +264,12 @@ foreach($file in $files){
 Write-Host "Files uploaded successfully!" -ForegroundColor Green
 Write-Host "Runtime path files updated." -ForegroundColor Green
 
-# Ensure capture dependencies are installed (mss, pillow)
-Write-Host "Installing/ensuring capture dependencies (mss, pillow)..." -ForegroundColor Yellow
+# Ensure capture dependencies are installed (mss, pillow, scrot)
+Write-Host "Installing/ensuring capture dependencies (mss, pillow, scrot)..." -ForegroundColor Yellow
 # Try pip first (user scope); if blocked (PEP 668), apt installs will cover
 & ssh @sshArgs $sshTarget "pip3 install --user -q mss pillow || true"
 # Ensure system packages available for capture backends
-& ssh @sshArgs $sshTarget "sudo apt-get update -y && sudo apt-get install -y python3-pil || true"
+& ssh @sshArgs $sshTarget "sudo apt-get update -y && sudo apt-get install -y python3-pil scrot || true"
 # Try installing mss despite PEP 668 restrictions (user site, allow break-system-packages)
 & ssh @sshArgs $sshTarget "pip3 install --user --break-system-packages -q mss || true"
 
@@ -236,7 +293,7 @@ if ($LASTEXITCODE -eq 0) {
 } else {
     # Try systemd service restart
     Write-Host "  -> No auto-restart detected, trying systemd services..." -ForegroundColor Gray
-    $serviceCandidates = @($ServiceName, 'complete-pi-client', 'pizza-hut-tv', 'pizza-hut-tv-complete') | Select-Object -Unique
+    $serviceCandidates = @($ServiceName, 'complete-pi-client', 'everydayadvertise_tv', 'pizza-hut-tv', 'pizza-hut-tv-complete') | Select-Object -Unique
     $restartOk = $false
     $usedUserService = $false
     foreach($svc in $serviceCandidates){
