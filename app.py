@@ -7806,6 +7806,7 @@ sudo apt-get install -y \
   python3-pip \
   python3-pygame \
   python3-pil \
+    scrot \
   ffmpeg \
   mpv \
   libmpv2 \
@@ -12106,6 +12107,54 @@ def _ffmpeg_bin() -> Optional[str]:
         pass
     return None
 
+def _ffprobe_bin() -> Optional[str]:
+    """Resolve ffprobe executable path using the same rules as ffmpeg."""
+    try:
+        env_bin = os.environ.get('FFPROBE_BIN')
+        if env_bin and os.path.exists(env_bin) and os.access(env_bin, os.X_OK):
+            return env_bin
+
+        ffmpeg = _ffmpeg_bin()
+        if ffmpeg:
+            ffprobe_guess = ffmpeg.replace('ffmpeg.exe', 'ffprobe.exe').replace('ffmpeg', 'ffprobe')
+            if ffprobe_guess and os.path.exists(ffprobe_guess) and os.access(ffprobe_guess, os.X_OK):
+                return ffprobe_guess
+
+        found = shutil.which('ffprobe') or shutil.which('ffprobe.exe')
+        if found:
+            return found
+
+        for p in ('/usr/bin/ffprobe', '/usr/local/bin/ffprobe', '/bin/ffprobe'):
+            if os.path.exists(p) and os.access(p, os.X_OK):
+                return p
+        for p in (r'C:\\ffmpeg\\bin\\ffprobe.exe', r'C:\\ffmpeg\\ffprobe.exe'):
+            if os.path.exists(p) and os.access(p, os.X_OK):
+                return p
+    except Exception:
+        pass
+    return None
+
+def _video_file_is_playable(path: str) -> bool:
+    """Return True when ffprobe can parse a cached MP4 preview cleanly."""
+    try:
+        if not path or not os.path.exists(path) or os.path.getsize(path) <= 0:
+            return False
+        ffprobe = _ffprobe_bin()
+        if not ffprobe:
+            return True
+        cmd = [
+            ffprobe,
+            '-v', 'error',
+            '-select_streams', 'v:0',
+            '-show_entries', 'stream=codec_name',
+            '-of', 'default=noprint_wrappers=1:nokey=1',
+            path,
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        return result.returncode == 0 and bool((result.stdout or '').strip())
+    except Exception:
+        return False
+
 def _has_ffmpeg() -> bool:
     try:
         return _ffmpeg_bin() is not None
@@ -12246,6 +12295,9 @@ def vpreview(width: int, filename: str):
                 rebuild = os.path.getmtime(cached_path) < os.path.getmtime(src_path)
             except Exception:
                 rebuild = True
+            if not rebuild and not _video_file_is_playable(cached_path):
+                logging.warning('Cached vpreview is corrupt, rebuilding: %s', cached_path)
+                rebuild = True
         if rebuild:
             ffmpeg = _ffmpeg_bin()
             if not ffmpeg:
@@ -12272,13 +12324,18 @@ def vpreview(width: int, filename: str):
                     src_use = src_path
                 # 6s low-bitrate H.264 baseline clip, scaled to width, no audio, faststart
                 target_w = int(width) if width>0 else 360
+                cache_root, cache_ext = os.path.splitext(cached_path)
+                tmp_cached_path = f"{cache_root}.tmp.{os.getpid()}.{threading.get_ident()}{cache_ext}"
                 cmd = [
                     ffmpeg, '-y', '-ss', '0', '-t', '6', '-i', src_use,
                     '-an', '-vf', f'scale={target_w}:-2',
                     '-c:v', 'libx264', '-profile:v', 'baseline', '-preset', 'veryfast', '-b:v', '600k',
-                    '-movflags', '+faststart', cached_path
+                    '-movflags', '+faststart', tmp_cached_path
                 ]
                 subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                if not _video_file_is_playable(tmp_cached_path):
+                    raise RuntimeError('Generated preview is not playable')
+                os.replace(tmp_cached_path, cached_path)
                 # Push the generated preview to R2 for CDN delivery
                 try:
                     if r2_enabled():
@@ -12298,6 +12355,9 @@ def vpreview(width: int, filename: str):
                     logging.debug('R2 upload (vpreview) skipped/failed for %s: %s', rel_path, _upl_err)
                 if tmp_src and os.path.exists(tmp_src):
                     try: os.remove(tmp_src)
+                    except Exception: pass
+                if os.path.exists(tmp_cached_path):
+                    try: os.remove(tmp_cached_path)
                     except Exception: pass
             except Exception as e:
                 logging.error('ffmpeg vpreview failed for %s: %s', rel_path, e)
@@ -19966,16 +20026,30 @@ def handle_pi_heartbeat(data):
                 if user_row:
                     username = user_row[0]
                     # Convert username (email) to safe key and get config path
-                    safe_key = username.lower().replace('@', '_at_')
-                    safe_key = ''.join(c for c in safe_key if (c.isalnum() or c in '._-'))
+                    safe_key = _safe_key_from_username(username)
+                    if not safe_key:
+                        logging.warning(f'⚠ Skipping registration update for {pi_id}: invalid safe key for user {username}')
+                        emit('heartbeat_ack', {'status': 'ok'})
+                        return
                     connected_pis[pi_id]['user_key'] = safe_key
                     config_path = _config_path_for_user_safe_key(safe_key)
                     
                     try:
-                        with open(config_path, 'r') as f:
+                        with open(config_path, 'r', encoding='utf-8') as f:
                             config = json.load(f)
-                    except:
-                        config = {}
+                    except Exception as load_error:
+                        logging.error(
+                            f'❌ Skipping registration update for {pi_id}: failed to load {config_path}: {load_error}'
+                        )
+                        emit('heartbeat_ack', {'status': 'ok'})
+                        return
+
+                    if not isinstance(config, dict) or not isinstance(config.get('screens'), dict):
+                        logging.error(
+                            f'❌ Skipping registration update for {pi_id}: malformed config structure in {config_path}'
+                        )
+                        emit('heartbeat_ack', {'status': 'ok'})
+                        return
                     
                     # First, remove this pi_id from ANY other screens (Pi can only be assigned to ONE screen)
                     if 'screens' in config:
@@ -19995,8 +20069,7 @@ def handle_pi_heartbeat(data):
                         config['screens'][store_id][screen_id]['pi_id'] = pi_id
                     
                     # Save updated config
-                    with open(config_path, 'w') as f:
-                        json.dump(config, f, indent=2)
+                    save_store_config_for_user_safe_key(safe_key, config)
                     
                     logging.info(f'✅ Updated registration for {pi_id}: {store_id}/{screen_id} (user: {username})')
                 else:
@@ -21000,15 +21073,32 @@ def vnc_viewer(pi_id):
         screen_id = str(pi_runtime.get('screen_id') or '').strip()
         active_file = None
         active_media_type = ''
+        viewer_user_key = ''
 
         try:
-            ukey = _safe_user_key()
-            config = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
+            viewer_user_key = str(pi_runtime.get('user_key') or '').strip()
+            if not viewer_user_key:
+                viewer_user_key = _resolve_user_key_by_code(pi_runtime.get('pair_code')) or ''
+            if not viewer_user_key:
+                viewer_user_key = _safe_user_key() or ''
+
+            config = ensure_playlists_structure(
+                load_store_config_for_user_safe_key(viewer_user_key) if viewer_user_key else load_store_config()
+            )
         except Exception:
             config = ensure_playlists_structure(load_store_config())
 
         if store_id and screen_id:
             screen_config = ((config.get('screens') or {}).get(store_id) or {}).get(screen_id)
+
+        # Heartbeat store/screen can be stale or point at a different screen.
+        # Only trust it when the config assignment still matches this Pi.
+        if isinstance(screen_config, dict):
+            mapped_pi_id = str((screen_config.get('pi_id') or '')).strip()
+            if mapped_pi_id and mapped_pi_id != str(pi_id):
+                screen_config = None
+                store_id = ''
+                screen_id = ''
 
         if not isinstance(screen_config, dict):
             for candidate_store_id, screens in (config.get('screens') or {}).items():
