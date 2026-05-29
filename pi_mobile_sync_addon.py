@@ -204,7 +204,11 @@ class MobileSyncAddon:
         # Build URL based on current step
         server_url = self.pi_client.server_url.replace('/api', '')
         
-        if step == "code":
+        if step == "claim":
+            claim_code = getattr(self.pi_client, 'claim_code', '')
+            url = getattr(self.pi_client, 'claim_url', '') or f"{server_url}/pi-manager"
+            instruction_text = f"Scan to claim this Pi ({claim_code})"
+        elif step == "code":
             url = f"{server_url}/webplayer/?session={self.session_id}"
             instruction_text = "Scan to enter code on your phone"
         elif step == "store":

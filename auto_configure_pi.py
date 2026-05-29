@@ -50,8 +50,8 @@ def fetch_pi_config(server_url, pi_id, pair_code):
 def update_systemd_service(config, server_url):
     """Update the systemd service with new configuration."""
     try:
-        service_name = "pizza-hut-tv"
-        install_dir = os.path.expanduser("~/pizza-hut-tv")
+        service_name = "everydayadvertise_tv"
+        install_dir = os.path.expanduser("~/everydayadvertise_tv_client")
         venv_python = f"{install_dir}/venv/bin/python"
         main_script = f"{install_dir}/complete_pi_client.py"
         
@@ -67,7 +67,7 @@ def update_systemd_service(config, server_url):
         
         # Create systemd service content
         service_content = f"""[Unit]
-Description=Pizza Hut TV Digital Signage Client
+    Description=EverydayAdvertise TV Digital Signage Client
 After=graphical.target network-online.target
 Wants=network-online.target
 
@@ -77,6 +77,7 @@ User={os.environ.get('USER', 'pi')}
 Environment=DISPLAY=:0
 Environment=XAUTHORITY=/home/{os.environ.get('USER', 'pi')}/.Xauthority
 Environment=PYTHONUNBUFFERED=1
+    SupplementaryGroups=video render
 WorkingDirectory={install_dir}
 ExecStartPre=/bin/sleep 10
 ExecStart={exec_start}
@@ -91,7 +92,7 @@ WantedBy=graphical.target
         
         # Write service file
         service_path = f"/etc/systemd/system/{service_name}.service"
-        temp_path = "/tmp/pizza-hut-tv.service"
+        temp_path = "/tmp/everydayadvertise_tv.service"
         
         with open(temp_path, 'w') as f:
             f.write(service_content)
@@ -114,7 +115,7 @@ WantedBy=graphical.target
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Auto-configure Pizza Hut TV Pi client from server'
+        description='Auto-configure EverydayAdvertise TV Pi client from server'
     )
     parser.add_argument('--pi-id', required=True, help='Unique Pi identifier (e.g., pi-001)')
     parser.add_argument('--pair-code', required=True, help='4-digit pairing code')
@@ -125,7 +126,7 @@ def main():
     
     print("╔═══════════════════════════════════════════════════════╗")
     print("║                                                       ║")
-    print("║   🍕 Pizza Hut TV - Pi Auto-Configuration 🍕         ║")
+    print("║   EverydayAdvertise TV - Pi Auto-Configuration      ║")
     print("║                                                       ║")
     print("╚═══════════════════════════════════════════════════════╝")
     print()
@@ -150,16 +151,16 @@ def main():
         
         if args.start:
             print("\n🚀 Starting service...")
-            subprocess.run(['sudo', 'systemctl', 'restart', 'pizza-hut-tv'])
+            subprocess.run(['sudo', 'systemctl', 'restart', 'everydayadvertise_tv'])
             print("✅ Service started!")
         else:
             print("\n💡 To start the service, run:")
-            print("   sudo systemctl restart pizza-hut-tv")
+            print("   sudo systemctl restart everydayadvertise_tv")
         
         print("\n📋 Service commands:")
-        print("   Status:  sudo systemctl status pizza-hut-tv")
-        print("   Logs:    journalctl -u pizza-hut-tv -f")
-        print("   Stop:    sudo systemctl stop pizza-hut-tv")
+        print("   Status:  sudo systemctl status everydayadvertise_tv")
+        print("   Logs:    journalctl -u everydayadvertise_tv -f")
+        print("   Stop:    sudo systemctl stop everydayadvertise_tv")
         print()
         
     else:

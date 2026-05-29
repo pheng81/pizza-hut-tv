@@ -8,7 +8,7 @@ Write-Host "=== Sync Server Data to Local ===" -ForegroundColor Cyan
 Write-Host ""
 
 $localPath = $PSScriptRoot
-$serverPath = "/var/www/pizza-hut-tv"
+$serverPath = "/var/www/everydayadvertise_tv"
 
 # Download database
 Write-Host "Downloading database.db from server..." -ForegroundColor Yellow

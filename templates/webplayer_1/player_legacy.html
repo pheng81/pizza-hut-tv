@@ -47,6 +47,10 @@
     function isVideoByName(name){ if(!name) return false; var ext=(name.split('?')[0].split('#')[0].split('.').pop()||'').toLowerCase(); for(var i=0;i<videoExt.length;i++){ if(videoExt[i]===ext) return true; } return false; }
     function fileNameFrom(item){ try{ var f=item&&item.file||item&&item.url||''; if(typeof item==='string') f=item; if(/^[a-z]+:\/\//i.test(f)){ var a=document.createElement('a'); a.href=f; var p=a.pathname||''; return (p.split('/').pop()||''); } return (f.split('/').pop()||''); }catch(e){ return ''; } }
     function mediaUrl(item){ 
+      if (typeof item === 'object' && item && item.sync_ref && String((item.sync_ref && item.sync_ref.mode) || '').toLowerCase() === 'static-slices') {
+        var direct = item.url || item.file || '';
+        return direct.replace(/^http:/, 'https:');
+      }
         // For slice-aware videos, prioritize slice_url or preferred_url
         if (typeof item === 'object' && item && item.slice_aware && (item.slice_url || item.preferred_url)) {
             return (item.slice_url || item.preferred_url).replace(/^http:/, 'https:');

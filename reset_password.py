@@ -1,7 +1,7 @@
 import sqlite3
 from werkzeug.security import generate_password_hash
 
-conn = sqlite3.connect("/var/www/pizza-hut-tv/database.db")
+conn = sqlite3.connect("/var/www/everydayadvertise_tv/database.db")
 cursor = conn.cursor()
 
 # Reset password for test9@gmail.com

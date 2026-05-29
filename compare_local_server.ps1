@@ -7,7 +7,7 @@ Write-Host "=== Compare Local vs Server Data ===" -ForegroundColor Cyan
 Write-Host ""
 
 $localPath = $PSScriptRoot
-$serverPath = "/var/www/pizza-hut-tv"
+$serverPath = "/var/www/everydayadvertise_tv"
 
 # Check local database
 Write-Host "Local Database:" -ForegroundColor Yellow

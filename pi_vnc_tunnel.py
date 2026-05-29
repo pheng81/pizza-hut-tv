@@ -62,11 +62,12 @@ class VNCTunnel:
 
         tmp_path = None
         try:
-            with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
-                tmp_path = tmp.name
+            fd, tmp_path = tempfile.mkstemp(suffix='.jpg')
+            os.close(fd)
+            os.unlink(tmp_path)
 
             result = subprocess.run(
-                ['scrot', '-q', '85', '-z', tmp_path],
+                ['scrot', '-o', '-q', '85', '-z', tmp_path],
                 capture_output=True,
                 timeout=3,
                 env=self._capture_env(),

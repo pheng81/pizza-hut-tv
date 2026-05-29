@@ -1,7 +1,7 @@
 import sqlite3
 
 # Check all users with this phone number
-db = sqlite3.connect('/var/www/pizza-hut-tv/database.db')
+db = sqlite3.connect('/var/www/everydayadvertise_tv/database.db')
 cursor = db.cursor()
 
 # Find all users with this phone

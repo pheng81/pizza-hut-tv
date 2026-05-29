@@ -111,8 +111,29 @@
             crossorigin="anonymous"
             onerror="this.onerror=null; this.src='/socket.io/socket.io.js'"></script>
     <script>
+        function hasScheduledMedia() {
+            return !!String(activeFile || '').trim();
+        }
+
+        function hideErrorOverlay() {
+            const errorEl = document.getElementById('error');
+            if (errorEl) {
+                errorEl.style.display = 'none';
+            }
+            const restartBtn = document.getElementById('restartBtn');
+            if (restartBtn) {
+                restartBtn.disabled = false;
+                restartBtn.textContent = 'Restart Pi Client';
+            }
+        }
+
         // Define error handler first
         function showError(msg) {
+            if (hasScheduledMedia()) {
+                console.warn('Suppressing blocking error modal because scheduled media is available:', msg);
+                hideErrorOverlay();
+                return;
+            }
             document.getElementById('errorMsg').textContent = msg;
             document.getElementById('error').style.display = 'block';
             const statusEl = document.getElementById('status');
@@ -208,6 +229,33 @@
             return `${base.replace(/\/$/, '')}/${text.replace(/^\//, '')}`;
         }
 
+        function ensureScheduledPreviewPlayback() {
+            const video = scheduledPreviewEl.querySelector('video');
+            if (!video) {
+                return;
+            }
+
+            video.muted = true;
+            video.defaultMuted = true;
+            video.autoplay = true;
+            video.loop = true;
+            video.playsInline = true;
+            video.preload = 'auto';
+
+            const tryPlay = () => {
+                const playPromise = video.play();
+                if (playPromise && typeof playPromise.catch === 'function') {
+                    playPromise.catch((error) => {
+                        console.warn('Scheduled preview video play() failed:', error);
+                    });
+                }
+            };
+
+            video.addEventListener('loadeddata', tryPlay, { once: true });
+            video.addEventListener('canplay', tryPlay, { once: true });
+            tryPlay();
+        }
+
         function renderScheduledPreview() {
             if (scheduledPreviewRendered) {
                 return;
@@ -225,8 +273,9 @@
                 const poster = /^https?:\/\//i.test(activeFile)
                     ? ''
                     : `/vthumb/640/${encodeURIComponent(activeFile)}?v=${Date.now()}`;
-                scheduledPreviewEl.innerHTML = `<video muted autoplay loop playsinline preload="metadata" ${poster ? `poster="${poster}"` : ''} src="${previewSrc}"></video>`;
+                scheduledPreviewEl.innerHTML = `<video muted autoplay loop playsinline preload="auto" ${poster ? `poster="${poster}"` : ''} src="${previewSrc}"></video>`;
                 scheduledPreviewRendered = true;
+                ensureScheduledPreviewPlayback();
                 return;
             }
             const imageSrc = /^https?:\/\//i.test(activeFile)
@@ -238,8 +287,10 @@
 
         function showScheduledPreview(statusText) {
             renderScheduledPreview();
+            hideErrorOverlay();
             scheduledPreviewEl.style.display = 'block';
             canvas.style.visibility = 'hidden';
+            ensureScheduledPreviewPlayback();
             if (statusText) {
                 statusEl.textContent = statusText;
                 statusEl.style.background = 'rgba(255, 152, 0, 0.9)';
@@ -297,6 +348,7 @@
                 vncConnected = true;
             }
             liveDisplayReady = true;
+            hideErrorOverlay();
             hideScheduledPreview();
             statusEl.textContent = '✅ Connected';
             statusEl.style.background = 'rgba(76, 175, 80, 0.9)';
@@ -473,6 +525,12 @@
             liveDisplayReady = false;
             consecutiveRenderableFrames = 0;
             showScheduledPreview();
+        });
+
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                ensureScheduledPreviewPlayback();
+            }
         });
 
         window.addEventListener('beforeunload', () => {

@@ -545,6 +545,32 @@
 			
 			return clientTime + adjustedOffset;
 		}
+
+		async function stableSyncWait(syncGroup, activeScreenId) {
+			try {
+				if ((Date.now() - lastServerSync) > 2000) {
+					await getServerTime();
+				}
+			} catch (err) {
+				console.warn('⚠️ Sync wait pre-refresh failed:', err);
+			}
+
+			const serverTime = getServerSyncedTime();
+			const syncIntervalMs = 1000;
+			const nextSyncMoment = Math.ceil((serverTime + SYNC_WARMUP_MS) / syncIntervalMs) * syncIntervalMs;
+			const waitTime = Math.max(0, nextSyncMoment - serverTime);
+
+			console.log(`🎯 STABLE SYNC WAIT [${activeScreenId}]`, {
+				group: syncGroup,
+				wait: Math.round(waitTime),
+				nextSync: new Date(nextSyncMoment).toISOString(),
+				serverOffset: Number(serverTimeOffset || 0).toFixed(3) + 'ms'
+			});
+
+			if (waitTime > 0) {
+				await new Promise((resolve) => setTimeout(resolve, waitTime));
+			}
+		}
 		
 		const SYNC_WARMUP_MS = 150;
 		async function computeSyncDelayMs(item){
@@ -834,6 +860,13 @@
 
 		function mediaUrl(item){
 			if(!item) return '';
+			if (typeof item === 'object' && item.sync_ref && String(item.sync_ref.mode || '').toLowerCase() === 'static-slices') {
+				const directUrl = item.url || item.file || '';
+				if(!directUrl.includes('127.0.0.1') && !directUrl.includes('localhost')){
+					return directUrl.replace(/^http:/,'https:');
+				}
+				return directUrl;
+			}
 			
 		// For slice-aware videos with sync_ref, use FULL CDN video and apply client-side CSS crop
 		// This matches custom_player.py behavior to avoid double-cropping

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">EverydayAdvertise</string>
-    <string name="onboarding_title">Welcome to EverydayAdvertise</string>
+    <string name="app_name">EverydayAdvertise TV</string>
+    <string name="onboarding_title">Welcome to EverydayAdvertise TV</string>
     <string name="onboarding_description">Use your remote to pair this screen with a store code and start streaming curated content.</string>
     <string name="onboarding_continue">Get Started</string>
     <string name="onboarding_logo_content_description">EverydayAdvertise logo</string>

@@ -3426,7 +3426,7 @@ allowfullscreen></iframe></div>`;
                 
                 <div class="button-row" style="justify-content:center; flex-wrap: nowrap; gap:6px; align-items:center; width:100%;">
                     <button class="upload-btn" onclick="openReplaceModal('${screenId}','SINGLE')" style="flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 10px; font-size:clamp(10px, 2vw, 12px);">Schedule</button>
-                    <button class="upload-btn" onclick="openAutoSliceModal('${screenId}')" style="flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 10px; font-size:clamp(10px, 2vw, 12px); background:#28a745;" title="Auto-slice multi-screen videos">✂️ Auto-Slice</button>
+                    <button class="upload-btn" onclick="openAutoSliceModal('${screenId}')" style="flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 10px; font-size:clamp(10px, 2vw, 12px); background:#1f2937; border:1px solid #374151; display:flex; align-items:center; justify-content:center; gap:6px;" title="Auto-slice multi-screen videos"><img src="{{ url_for('static', filename='ea_logo_official.svg') }}?v={{ asset_bust|default(0) }}" alt="" style="width:14px;height:14px;object-fit:contain;flex:0 0 auto;"><span>Wall Video</span></button>
                     <button class="upload-btn" onclick="openYouTubeModal('${screenId}')" title="Add YouTube video to schedule" style="flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 10px; font-size:clamp(10px, 2vw, 12px); background:#FF0000;">▶️ YouTube</button>
                     <button class="rotate-btn" type="button" onclick="rotateScreen('${screenId}')" title="Rotate image 90°" style="flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:6px 10px; font-size:clamp(10px, 2vw, 12px);">⤾ Rotate</button>
                     <span id="rotation-indicator-${screenId}" class="rotation-indicator rotate-${rotation}" title="Current rotation" style="flex:0 0 18px; width:18px; height:18px;"></span>
@@ -6562,68 +6562,345 @@ allowfullscreen></iframe></div>`;
             // AUTO-SLICE MULTI-SCREEN VIDEO MODAL
             // ============================================
             // Automatically detects video resolution and slices it into separate files for multi-screen sync
+            const AUTO_SLICE_ICON_URL = "{{ url_for('static', filename='ea_logo_official.svg') }}?v={{ asset_bust|default(0) }}";
+            const AUTO_SLICE_PROGRESS_COLOR = '#4f46e5';
+            const AUTO_SLICE_WARNING_COLOR = '#334155';
+            const AUTO_SLICE_ERROR_COLOR = '#dc2626';
+
+            function ensureAutoSliceModalStyles() {
+                if (document.getElementById('auto-slice-modal-styles')) return;
+                const style = document.createElement('style');
+                style.id = 'auto-slice-modal-styles';
+                style.textContent = `
+                    .auto-slice-modal {
+                        position: fixed;
+                        inset: 0;
+                        background: rgba(15, 23, 42, 0.66);
+                        display: none;
+                        align-items: center;
+                        justify-content: center;
+                        z-index: 1100;
+                        padding: 24px;
+                    }
+                    .auto-slice-panel {
+                        width: min(620px, 100%);
+                        background: #ffffff;
+                        border: 1px solid #d7dce5;
+                        border-radius: 4px;
+                        padding: 24px;
+                        box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+                    }
+                    .auto-slice-header {
+                        display: flex;
+                        align-items: flex-start;
+                        justify-content: space-between;
+                        gap: 16px;
+                        margin-bottom: 18px;
+                    }
+                    .auto-slice-title-wrap {
+                        display: flex;
+                        align-items: center;
+                        gap: 12px;
+                    }
+                    .auto-slice-title-icon {
+                        width: 36px;
+                        height: 36px;
+                        object-fit: contain;
+                        flex: 0 0 auto;
+                    }
+                    .auto-slice-title-eyebrow {
+                        display: block;
+                        margin-bottom: 3px;
+                        font-size: 11px;
+                        font-weight: 700;
+                        text-transform: uppercase;
+                        letter-spacing: 0.08em;
+                        color: #64748b;
+                    }
+                    .auto-slice-title {
+                        margin: 0;
+                        font-size: 20px;
+                        font-weight: 700;
+                        color: #111827;
+                    }
+                    .auto-slice-subtitle {
+                        margin: 4px 0 0;
+                        font-size: 13px;
+                        line-height: 1.5;
+                        color: #667085;
+                    }
+                    .auto-slice-close {
+                        background: transparent;
+                        border: 1px solid #d7dce5;
+                        border-radius: 2px;
+                        width: 34px;
+                        height: 34px;
+                        font-size: 24px;
+                        line-height: 1;
+                        color: #6b7280;
+                        cursor: pointer;
+                    }
+                    .auto-slice-close:hover {
+                        background: #f8fafc;
+                        color: #111827;
+                    }
+                    .auto-slice-info {
+                        margin-bottom: 18px;
+                        padding: 16px;
+                        border: 1px solid #d7dce5;
+                        border-radius: 4px;
+                        background: #f8fafc;
+                    }
+                    .auto-slice-info h3 {
+                        margin: 0 0 8px;
+                        font-size: 15px;
+                        font-weight: 700;
+                        color: #111827;
+                    }
+                    .auto-slice-info p {
+                        margin: 0 0 12px;
+                        font-size: 13px;
+                        line-height: 1.6;
+                        color: #475467;
+                    }
+                    .auto-slice-info ul {
+                        margin: 0;
+                        padding-left: 18px;
+                        color: #344054;
+                        font-size: 13px;
+                        line-height: 1.7;
+                    }
+                    .auto-slice-field {
+                        margin-bottom: 18px;
+                    }
+                    .auto-slice-field label {
+                        display: block;
+                        margin-bottom: 10px;
+                        font-size: 14px;
+                        font-weight: 700;
+                        color: #111827;
+                    }
+                    .auto-slice-input {
+                        width: 100%;
+                        padding: 12px 14px;
+                        border: 1px solid #cbd5e1;
+                        border-radius: 2px;
+                        font-size: 14px;
+                        cursor: pointer;
+                        background: #ffffff;
+                        box-sizing: border-box;
+                    }
+                    .auto-slice-file-info {
+                        min-height: 20px;
+                        margin-top: 10px;
+                        font-size: 13px;
+                        color: #667085;
+                    }
+                    .auto-slice-layouts {
+                        margin-bottom: 18px;
+                        padding: 16px;
+                        border: 1px solid #d7dce5;
+                        border-radius: 4px;
+                        background: #ffffff;
+                    }
+                    .auto-slice-layouts strong {
+                        display: block;
+                        margin-bottom: 10px;
+                        font-size: 13px;
+                        text-transform: uppercase;
+                        letter-spacing: 0.08em;
+                        color: #475467;
+                    }
+                    .auto-slice-layout-grid {
+                        display: grid;
+                        grid-template-columns: repeat(2, minmax(0, 1fr));
+                        gap: 12px;
+                    }
+                    .auto-slice-layout-card {
+                        padding: 12px;
+                        border: 1px solid #e5e7eb;
+                        border-radius: 2px;
+                        background: #f8fafc;
+                        font-size: 12px;
+                        line-height: 1.6;
+                        color: #475467;
+                    }
+                    .auto-slice-layout-card span {
+                        display: block;
+                        margin-bottom: 6px;
+                        font-size: 13px;
+                        font-weight: 700;
+                        color: #111827;
+                    }
+                    .auto-slice-actions {
+                        display: flex;
+                        gap: 12px;
+                        justify-content: flex-end;
+                        flex-wrap: wrap;
+                    }
+                    .auto-slice-btn {
+                        padding: 12px 20px;
+                        border-radius: 2px;
+                        cursor: pointer;
+                        font-size: 14px;
+                        font-weight: 700;
+                        border: 1px solid transparent;
+                        min-width: 150px;
+                    }
+                    .auto-slice-btn--ghost {
+                        background: #ffffff;
+                        border-color: #d1d5db;
+                        color: #475467;
+                    }
+                    .auto-slice-btn--primary {
+                        background: #111827;
+                        border-color: #111827;
+                        color: #ffffff;
+                    }
+                    .auto-slice-btn--secondary {
+                        background: #eef2ff;
+                        border-color: #c7d2fe;
+                        color: #312e81;
+                    }
+                    .auto-slice-btn--primary:disabled {
+                        opacity: 0.5;
+                        cursor: not-allowed;
+                    }
+                    .auto-slice-btn__content {
+                        display: inline-flex;
+                        align-items: center;
+                        justify-content: center;
+                        gap: 8px;
+                    }
+                    .auto-slice-btn__icon {
+                        width: 16px;
+                        height: 16px;
+                        object-fit: contain;
+                        flex: 0 0 auto;
+                    }
+                    .auto-slice-progress {
+                        display: none;
+                        margin-top: 18px;
+                        padding: 16px;
+                        border: 1px solid #d7dce5;
+                        border-radius: 4px;
+                        background: #f8fafc;
+                    }
+                    .auto-slice-progress__status {
+                        font-size: 14px;
+                        font-weight: 700;
+                        color: #111827;
+                        margin-bottom: 10px;
+                    }
+                    .auto-slice-progress__track {
+                        width: 100%;
+                        background: #e5e7eb;
+                        height: 8px;
+                        overflow: hidden;
+                        border-radius: 999px;
+                    }
+                    .auto-slice-progress__bar {
+                        width: 0%;
+                        height: 100%;
+                        background: #4f46e5;
+                        transition: width 0.3s;
+                    }
+                    .auto-slice-progress__detail {
+                        margin-top: 8px;
+                        font-size: 12px;
+                        color: #667085;
+                    }
+                    @media (max-width: 640px) {
+                        .auto-slice-modal { padding: 12px; }
+                        .auto-slice-panel { padding: 18px; }
+                        .auto-slice-layout-grid { grid-template-columns: 1fr; }
+                        .auto-slice-actions { flex-direction: column; }
+                        .auto-slice-btn { width: 100%; }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            function resetAutoSliceUploadButton() {
+                const uploadBtn = document.getElementById('auto-slice-upload-btn');
+                if (!uploadBtn) return;
+                uploadBtn.disabled = true;
+                uploadBtn.style.opacity = '0.5';
+                uploadBtn.onclick = doAutoSliceUpload;
+                uploadBtn.innerHTML = `<span class="auto-slice-btn__content"><img class="auto-slice-btn__icon" src="${AUTO_SLICE_ICON_URL}" alt=""><span>Slice Wall Video</span></span>`;
+            }
+
             function openAutoSliceModal(screenId) {
+                ensureAutoSliceModalStyles();
                 // Create modal overlay
                 let modal = document.getElementById('auto-slice-modal');
                 if (!modal) {
                     modal = document.createElement('div');
                     modal.id = 'auto-slice-modal';
-                    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);display:none;align-items:center;justify-content:center;z-index:1100;';
+                    modal.className = 'auto-slice-modal';
                     modal.innerHTML = `
-                        <div style="width:520px;max-width:95vw;background:#fff;border-radius:12px;padding:24px;box-shadow:0 10px 40px rgba(0,0,0,.4);">
-                            <div style="font-weight:700;font-size:20px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;color:#333;">
-                                <span>✂️ Auto-Slice Multi-Screen Video</span>
-                                <button onclick="closeAutoSliceModal()" style="background:none;border:none;font-size:28px;color:#999;cursor:pointer;padding:0;width:32px;height:32px;line-height:1;">×</button>
+                        <div class="auto-slice-panel">
+                            <div class="auto-slice-header">
+                                <div class="auto-slice-title-wrap">
+                                    <img class="auto-slice-title-icon" src="${AUTO_SLICE_ICON_URL}" alt="">
+                                    <div>
+                                        <span class="auto-slice-title-eyebrow">Video wall</span>
+                                        <h2 class="auto-slice-title">Wall Video Upload</h2>
+                                        <p class="auto-slice-subtitle">Upload one source video and split it into synced screen files.</p>
+                                    </div>
+                                </div>
+                                <button class="auto-slice-close" onclick="closeAutoSliceModal()">×</button>
                             </div>
-                            
-                            <div style="background:#f8f9fa;border-left:4px solid #28a745;padding:12px 16px;border-radius:6px;margin-bottom:20px;">
-                                <div style="font-size:14px;color:#333;font-weight:600;margin-bottom:6px;">🎯 Smart Resolution Detection</div>
-                                <div style="font-size:13px;color:#666;line-height:1.5;">
-                                    Upload a multi-screen video (e.g., 3840×1080, 7680×1080) and the system will:
-                                    <ul style="margin:8px 0 0 20px;padding:0;">
-                                        <li>Automatically detect the resolution</li>
-                                        <li>Calculate screen layout (horizontal/vertical)</li>
-                                        <li>Slice into individual 1920×1080 videos</li>
-                                        <li>Create synchronized screens</li>
-                                    </ul>
+
+                            <div class="auto-slice-info">
+                                <h3>Smart resolution detection</h3>
+                                <p>Upload a wall video such as 3840x1080 or 7680x1080 and the system will prepare each screen automatically.</p>
+                                <ul>
+                                    <li>Detect the full canvas size</li>
+                                    <li>Work out the wall direction and screen count</li>
+                                    <li>Slice each panel to 1920x1080</li>
+                                    <li>Create synchronized screens from the result</li>
+                                </ul>
+                            </div>
+
+                            <div class="auto-slice-field">
+                                <label for="auto-slice-file-input">Select wall video</label>
+                                <input class="auto-slice-input" type="file" id="auto-slice-file-input" accept="video/*" onchange="handleAutoSliceFileSelect(this)">
+                                <div id="auto-slice-file-info" class="auto-slice-file-info">No file selected.</div>
+                            </div>
+
+                            <div class="auto-slice-layouts">
+                                <strong>Supported layouts</strong>
+                                <div class="auto-slice-layout-grid">
+                                    <div class="auto-slice-layout-card">
+                                        <span>Horizontal</span>
+                                        3840x1080 (2), 5760x1080 (3), 7680x1080 (4), 9600x1080 (5), 11520x1080 (6), 13440x1080 (7)
+                                    </div>
+                                    <div class="auto-slice-layout-card">
+                                        <span>Vertical</span>
+                                        1920x2160 (2), 1920x3240 (3), 1920x4320 (4), 1920x5400 (5), 1920x6480 (6), 1920x7560 (7)
+                                    </div>
                                 </div>
                             </div>
 
-                            <div style="margin-bottom:20px;">
-                                <label style="display:block;font-size:14px;font-weight:600;margin-bottom:10px;color:#333;">Select Multi-Screen Video:</label>
-                                <input type="file" id="auto-slice-file-input" accept="video/*" 
-                                    style="width:100%;padding:12px;border:2px dashed #28a745;border-radius:8px;font-size:14px;cursor:pointer;background:#f8fff8;"
-                                    onchange="handleAutoSliceFileSelect(this)">
-                                <div id="auto-slice-file-info" style="margin-top:10px;font-size:13px;color:#666;min-height:20px;"></div>
-                            </div>
-
-                            <div style="background:#fff3cd;border-left:4px solid #ffc107;padding:10px 14px;border-radius:6px;margin-bottom:20px;font-size:12px;color:#856404;">
-                                <strong>💡 Supported Layouts:</strong><br>
-                                • <strong>Horizontal (side-by-side):</strong> 3840×1080 (2), 5760×1080 (3), 7680×1080 (4), 9600×1080 (5), 11520×1080 (6), 13440×1080 (7)<br>
-                                • <strong>Vertical (stacked):</strong> 1920×2160 (2), 1920×3240 (3), 1920×4320 (4), 1920×5400 (5), 1920×6480 (6), 1920×7560 (7)
-                            </div>
-
-                            <div style="display:flex;gap:12px;justify-content:flex-end;">
-                                <button onclick="closeAutoSliceModal()" 
-                                    style="padding:12px 24px;border:1px solid #ddd;background:#fff;border-radius:8px;cursor:pointer;font-size:14px;font-weight:500;color:#666;">
+                            <div class="auto-slice-actions">
+                                <button class="auto-slice-btn auto-slice-btn--ghost" onclick="closeAutoSliceModal()">
                                     Cancel
                                 </button>
-                                <button id="auto-slice-upload-btn" onclick="doAutoSliceUpload()" disabled
-                                    style="padding:12px 24px;background:#28a745;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px;opacity:0.5;">
-                                    ✂️ Slice & Create Screens
+                                <button id="auto-slice-upload-btn" class="auto-slice-btn auto-slice-btn--primary" onclick="doAutoSliceUpload()" disabled>
+                                    <span class="auto-slice-btn__content"><img class="auto-slice-btn__icon" src="${AUTO_SLICE_ICON_URL}" alt=""><span>Slice Wall Video</span></span>
                                 </button>
-                                <button id="auto-slice-check-jobs-btn" onclick="checkRecentSliceJobs()" 
-                                    style="padding:12px 24px;background:#17a2b8;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px;">
-                                    📋 Check Recent Jobs
+                                <button id="auto-slice-check-jobs-btn" class="auto-slice-btn auto-slice-btn--secondary" onclick="checkRecentSliceJobs()">
+                                    Check Recent Jobs
                                 </button>
                             </div>
 
-                            <div id="auto-slice-progress" style="display:none;margin-top:20px;padding:16px;background:#f8f9fa;border-radius:8px;">
-                                <div style="font-size:14px;font-weight:600;margin-bottom:10px;color:#333;" id="auto-slice-status">Processing...</div>
-                                <div style="width:100%;background:#e9ecef;border-radius:8px;height:8px;overflow:hidden;">
-                                    <div id="auto-slice-progress-bar" style="width:0%;background:#28a745;height:100%;transition:width 0.3s;"></div>
+                            <div id="auto-slice-progress" class="auto-slice-progress">
+                                <div class="auto-slice-progress__status" id="auto-slice-status">Ready to process your file</div>
+                                <div class="auto-slice-progress__track">
+                                    <div id="auto-slice-progress-bar" class="auto-slice-progress__bar"></div>
                                 </div>
-                                <div style="font-size:12px;color:#666;margin-top:8px;" id="auto-slice-detail"></div>
+                                <div class="auto-slice-progress__detail" id="auto-slice-detail">Upload a multi-screen video to start.</div>
                             </div>
                         </div>`;
                     document.body.appendChild(modal);
@@ -6631,10 +6908,15 @@ allowfullscreen></iframe></div>`;
                 
                 // Reset modal state
                 document.getElementById('auto-slice-file-input').value = '';
-                document.getElementById('auto-slice-file-info').textContent = '';
-                document.getElementById('auto-slice-upload-btn').disabled = true;
-                document.getElementById('auto-slice-upload-btn').style.opacity = '0.5';
+                document.getElementById('auto-slice-file-info').textContent = 'No file selected.';
+                document.getElementById('auto-slice-file-info').style.color = '#667085';
+                resetAutoSliceUploadButton();
                 document.getElementById('auto-slice-progress').style.display = 'none';
+                document.getElementById('auto-slice-status').textContent = 'Ready to process your file';
+                document.getElementById('auto-slice-status').style.color = '#111827';
+                document.getElementById('auto-slice-detail').textContent = 'Upload a multi-screen video to start.';
+                document.getElementById('auto-slice-progress-bar').style.width = '0%';
+                document.getElementById('auto-slice-progress-bar').style.background = AUTO_SLICE_PROGRESS_COLOR;
                 
                 // Store the screen ID for context
                 window.__autoSliceScreenId = screenId;
@@ -6655,13 +6937,13 @@ allowfullscreen></iframe></div>`;
                     const file = input.files[0];
                     const sizeMB = (file.size / 1024 / 1024).toFixed(2);
                     fileInfo.innerHTML = `<strong>Selected:</strong> ${file.name} (${sizeMB} MB)`;
-                    fileInfo.style.color = '#28a745';
+                    fileInfo.style.color = '#312e81';
                     uploadBtn.disabled = false;
                     uploadBtn.style.opacity = '1';
                 } else {
-                    fileInfo.textContent = '';
-                    uploadBtn.disabled = true;
-                    uploadBtn.style.opacity = '0.5';
+                    fileInfo.textContent = 'No file selected.';
+                    fileInfo.style.color = '#667085';
+                    resetAutoSliceUploadButton();
                 }
             }
 
@@ -6673,8 +6955,10 @@ allowfullscreen></iframe></div>`;
                 
                 try {
                     progressDiv.style.display = 'block';
-                    statusText.textContent = '🔍 Checking recent jobs...';
+                    statusText.textContent = 'Checking recent jobs...';
+                    statusText.style.color = '#111827';
                     progressBar.style.width = '50%';
+                    progressBar.style.background = AUTO_SLICE_PROGRESS_COLOR;
                     detailText.textContent = 'Fetching job history...';
                     
                     const response = await fetch('/api/list_slice_jobs');
@@ -6686,7 +6970,7 @@ allowfullscreen></iframe></div>`;
                     const jobs = data.jobs || [];
                     
                     if (jobs.length === 0) {
-                        statusText.textContent = '📭 No Recent Jobs';
+                        statusText.textContent = 'No recent jobs';
                         detailText.textContent = 'No completed slicing jobs found.';
                         progressBar.style.width = '100%';
                         return;
@@ -6696,7 +6980,7 @@ allowfullscreen></iframe></div>`;
                     const completedJob = jobs.find(j => j.status === 'complete');
                     
                     if (completedJob && completedJob.result && completedJob.result.length > 0) {
-                        statusText.textContent = `✅ Found completed job! (${completedJob.screen_count} screens)`;
+                        statusText.textContent = `Found completed job (${completedJob.screen_count} screens)`;
                         detailText.textContent = `Layout: ${completedJob.layout} | Creating screens...`;
                         progressBar.style.width = '75%';
                         
@@ -6715,30 +6999,30 @@ allowfullscreen></iframe></div>`;
                             const syncResult = await syncResponse.json();
                             if (syncResult.success) {
                                 progressBar.style.width = '100%';
-                                progressBar.style.background = '#28a745';
-                                statusText.textContent = `🎉 Created ${syncResult.count} screens from recent job!`;
+                                progressBar.style.background = AUTO_SLICE_PROGRESS_COLOR;
+                                statusText.textContent = `Created ${syncResult.count} screens from recent job`;
                                 detailText.textContent = `Screens: ${syncResult.screens.join(', ')}`;
                                 
                                 setTimeout(() => {
                                     closeAutoSliceModal();
                                     fetchScreenData();
-                                    showMessage(`Created ${syncResult.count} screens from completed job!`, '#28a745');
+                                    showMessage(`Created ${syncResult.count} screens from completed job!`, '#4f46e5');
                                 }, 2000);
                             }
                         }
                     } else {
-                        statusText.textContent = '⚠️ No Completed Jobs';
+                        statusText.textContent = 'No completed jobs';
                         detailText.textContent = 'Found jobs but none are completed yet. Please wait or upload a new video.';
                         progressBar.style.width = '100%';
-                        progressBar.style.background = '#ffc107';
+                        progressBar.style.background = AUTO_SLICE_WARNING_COLOR;
                     }
                     
                 } catch (error) {
                     console.error('Check jobs error:', error);
-                    statusText.textContent = '❌ Error';
-                    statusText.style.color = '#dc3545';
+                    statusText.textContent = 'Error';
+                    statusText.style.color = AUTO_SLICE_ERROR_COLOR;
                     detailText.textContent = error.message;
-                    progressBar.style.background = '#dc3545';
+                    progressBar.style.background = AUTO_SLICE_ERROR_COLOR;
                 }
             }
 
@@ -6764,7 +7048,9 @@ allowfullscreen></iframe></div>`;
                     
                     // Show progress
                     progressDiv.style.display = 'block';
-                    statusText.textContent = '📤 Uploading video...';
+                    statusText.textContent = 'Uploading video...';
+                    statusText.style.color = '#111827';
+                    progressBar.style.background = AUTO_SLICE_PROGRESS_COLOR;
                     progressBar.style.width = '5%';
                     detailText.textContent = 'Preparing upload...';
 
@@ -6792,7 +7078,7 @@ allowfullscreen></iframe></div>`;
                     if (uploadResult.slice_job_id && uploadResult.screen_count > 1) {
                         const jobId = uploadResult.slice_job_id;
                         
-                        statusText.textContent = `🔍 Detected ${uploadResult.screen_count}-screen ${uploadResult.layout} layout`;
+                        statusText.textContent = `Detected ${uploadResult.screen_count}-screen ${uploadResult.layout} layout`;
                         detailText.textContent = 'Starting video slicing...';
                         progressBar.style.width = '10%';
                         
@@ -6821,7 +7107,7 @@ allowfullscreen></iframe></div>`;
                                         if (jobStatus === 'complete') {
                                             jobComplete = true;
                                             jobResult = statusData;
-                                            statusText.textContent = '✅ Video sliced successfully!';
+                                            statusText.textContent = 'Video sliced successfully';
                                             detailText.textContent = `Created ${statusData.result?.length || 0} sliced videos`;
                                         } else if (jobStatus === 'error') {
                                             throw new Error(statusData.error || 'Slicing failed');
@@ -6829,7 +7115,7 @@ allowfullscreen></iframe></div>`;
                                             // Still processing
                                             const elapsedTime = Math.floor(pollAttempts / 60);
                                             const timeStr = elapsedTime > 0 ? ` (${elapsedTime}m ${pollAttempts % 60}s)` : ` (${pollAttempts}s)`;
-                                            statusText.textContent = `✂️ Slicing video (${jobProgress}%)${timeStr}`;
+                                            statusText.textContent = `Slicing video (${jobProgress}%)${timeStr}`;
                                             detailText.textContent = statusData.stage || `Processing screen ${statusData.current_screen || 0}/${statusData.screen_count || 0}`;
                                         }
                                     }
@@ -6842,18 +7128,18 @@ allowfullscreen></iframe></div>`;
                         
                         if (!jobComplete) {
                             // Instead of error, show "still processing" message
-                            statusText.textContent = '⏳ Still Processing...';
-                            statusText.style.color = '#ffc107';
+                            statusText.textContent = 'Still processing';
+                            statusText.style.color = AUTO_SLICE_WARNING_COLOR;
                             detailText.textContent = `Video is taking longer than expected (${Math.floor(pollAttempts/60)} min). You can close this and check the dashboard in a few minutes - screens will appear automatically when complete.`;
-                            progressBar.style.background = '#ffc107';
+                            progressBar.style.background = AUTO_SLICE_WARNING_COLOR;
                             
                             // Re-enable button
                             uploadBtn.disabled = false;
                             uploadBtn.style.opacity = '1';
-                            uploadBtn.textContent = 'Close';
+                            uploadBtn.innerHTML = '<span class="auto-slice-btn__content"><span>Close</span></span>';
                             uploadBtn.onclick = () => {
                                 closeAutoSliceModal();
-                                showMessage(`Video is still processing in background. Job ID: ${jobId}. Check back in a few minutes!`, '#ffc107');
+                                showMessage(`Video is still processing in background. Job ID: ${jobId}. Check back in a few minutes!`, '#334155');
                             };
                             return; // Don't throw error
                         }
@@ -6861,7 +7147,7 @@ allowfullscreen></iframe></div>`;
                         // Job complete! Now create sync screens
                         const slicedFiles = jobResult.result || [];
                         if (slicedFiles.length > 0) {
-                            statusText.textContent = '🎬 Creating synchronized screens...';
+                            statusText.textContent = 'Creating synchronized screens...';
                             detailText.textContent = `Creating ${slicedFiles.length} screens...`;
                             progressBar.style.width = '96%';
 
@@ -6887,15 +7173,15 @@ allowfullscreen></iframe></div>`;
                             }
                             
                             progressBar.style.width = '100%';
-                            progressBar.style.background = '#28a745';
-                            statusText.textContent = `🎉 Success! Created ${syncResult.count} synchronized screens!`;
+                            progressBar.style.background = AUTO_SLICE_PROGRESS_COLOR;
+                            statusText.textContent = `Created ${syncResult.count} synchronized screens`;
                             detailText.textContent = `Layout: ${jobResult.layout} | Screens: ${syncResult.screens.join(', ')}`;
 
                             // Wait a moment then close and refresh
                             setTimeout(() => {
                                 closeAutoSliceModal();
                                 fetchScreenData(); // Refresh dashboard
-                                showMessage(`Auto-Slice Complete! Created ${syncResult.count} synchronized screens from ${jobResult.layout} layout.`, '#28a745');
+                                showMessage(`Auto-Slice Complete! Created ${syncResult.count} synchronized screens from ${jobResult.layout} layout.`, '#4f46e5');
                             }, 2000);
                         } else {
                             throw new Error('No sliced files created');
@@ -6904,12 +7190,14 @@ allowfullscreen></iframe></div>`;
                     } else if (uploadResult.screen_count === 1) {
                         // Single screen video - just show message
                         progressBar.style.width = '100%';
-                        statusText.textContent = '⚠️ Single Screen Detected';
+                        statusText.textContent = 'Single screen detected';
+                        statusText.style.color = AUTO_SLICE_WARNING_COLOR;
+                        progressBar.style.background = AUTO_SLICE_WARNING_COLOR;
                         detailText.textContent = 'This is a standard 1920×1080 video. Use "Schedule" button for single screens.';
                         
                         setTimeout(() => {
                             closeAutoSliceModal();
-                            showMessage('This is a single-screen video (1920×1080). Use the Schedule button instead.', '#ffc107');
+                            showMessage('This is a single-screen video (1920×1080). Use the Schedule button instead.', '#334155');
                         }, 3000);
                     } else {
                         throw new Error('Unexpected upload response format');
@@ -6917,10 +7205,10 @@ allowfullscreen></iframe></div>`;
 
                 } catch (error) {
                     console.error('Auto-slice failed:', error);
-                    statusText.textContent = '❌ Error';
-                    statusText.style.color = '#dc3545';
+                    statusText.textContent = 'Error';
+                    statusText.style.color = AUTO_SLICE_ERROR_COLOR;
                     detailText.textContent = error.message;
-                    progressBar.style.background = '#dc3545';
+                    progressBar.style.background = AUTO_SLICE_ERROR_COLOR;
                     
                     // Re-enable button after error
                     uploadBtn.disabled = false;

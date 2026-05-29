@@ -1,0 +1,18 @@
+[Unit]
+Description=EverydayAdvertise TV - Gunicorn with WebSocket Support
+After=network.target
+
+[Service]
+Environment="GOOGLE_CLIENT_SECRET=REDACTED"
+Environment="GOOGLE_CLIENT_ID=REDACTED"
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/var/www/everydayadvertise_tv
+Environment=PYTHONUNBUFFERED=1
+Environment=FLASK_ENV=production
+ExecStart=/var/www/everydayadvertise_tv/venv/bin/python -m gunicorn --worker-class eventlet --workers 1 --bind 127.0.0.1:5002 --timeout 600 app:app
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

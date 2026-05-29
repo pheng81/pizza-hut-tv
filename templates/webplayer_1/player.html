@@ -814,6 +814,13 @@
 
 		function mediaUrl(item){
 			if(!item) return '';
+			if (typeof item === 'object' && item.sync_ref && String(item.sync_ref.mode || '').toLowerCase() === 'static-slices') {
+				const directUrl = item.url || item.file || '';
+				if(!directUrl.includes('127.0.0.1') && !directUrl.includes('localhost')){
+					return directUrl.replace(/^http:/,'https:');
+				}
+				return directUrl;
+			}
 			
 		// For slice-aware videos with sync_ref, use FULL CDN video and apply client-side CSS crop
 		// This matches custom_player.py behavior to avoid double-cropping

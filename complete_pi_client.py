@@ -123,6 +123,13 @@ def register_pi_with_server(pi_id, server_url):
     except Exception as e:
         logger.warning(f"⚠️ Could not register Pi with server: {e}")
 
+
+def build_claim_code(pi_id: str) -> str:
+    """Create a short stable claim code for first-boot dashboard pairing."""
+    raw = (pi_id or '').strip().encode('utf-8')
+    digest = hashlib.sha1(raw).hexdigest().upper() if raw else '000000'
+    return digest[:6]
+
 def _extract_effect_value(raw: Any) -> Optional[str]:
     """Normalize effect payloads that may arrive as dicts or numeric IDs."""
     try:
@@ -537,6 +544,8 @@ class CompleteWebplayerClient:
         
         # Pi ID - unique identifier for this device
         self.pi_id = self._get_or_create_pi_id()
+        self.claim_code = build_claim_code(self.pi_id)
+        self.claim_url = self._build_claim_url()
         
         # Try to load saved configuration
         self.load_config()
@@ -610,7 +619,7 @@ class CompleteWebplayerClient:
         # pair_code, store_id, screen_id loaded by load_config() - don't reset them here
         self.available_screens = {}  # Screen data from API
         self.selected_store = None
-        self.setup_step = "code"  # code, store, screen
+        self.setup_step = "claim"  # claim, code, store, screen
         
         # Active timer for current item (to prevent overlapping timers)
         self._current_item_timer = None
@@ -704,6 +713,7 @@ class CompleteWebplayerClient:
         # File-based kill switch for VNC if env isn't passed by systemd
         try:
             flag_files = [
+                '/etc/everydayadvertise_tv/disable_vnc',
                 '/etc/pizza-hut-tv/disable_vnc',
                 os.path.expanduser('~/.disable_phtv_vnc')
             ]
@@ -777,6 +787,23 @@ class CompleteWebplayerClient:
         
         # Register Pi with server automatically (legacy HTTP method)
         threading.Thread(target=register_pi_with_server, args=(self.pi_id, self.server_url), daemon=True).start()
+
+        if self.pair_code and self.store_id and self.screen_id:
+            logger.info(
+                f"🔁 Resuming saved Pi config on startup: pair_code={self.pair_code}, "
+                f"store={self.store_id}, screen={self.screen_id}"
+            )
+            self.current_state = "playing"
+            self.setup_step = "complete"
+            self.show_pi_id = False
+            self.start_playback_services()
+        else:
+            logger.info("ℹ️ No saved Pi playback config found; staying in setup mode")
+
+    def _build_claim_url(self) -> str:
+        """Build the dashboard URL used by the first-boot claim QR."""
+        base_url = self.server_url.replace('/api', '').rstrip('/')
+        return f"{base_url}/pi-manager?claim_code={urllib.parse.quote(self.claim_code)}"
     
     def _call_on_main_thread(self, func, *args, **kwargs):
         """Ensure pygame rendering calls run on the main thread."""
@@ -926,7 +953,11 @@ class CompleteWebplayerClient:
             # Register this Pi with server
             self.sio.emit('register_pi', {
                 'pi_id': self.pi_id,
-                'version': f"{VERSION}-websocket"
+                'version': f"{VERSION}-websocket",
+                'claim_code': self.claim_code,
+                'pair_code': self.pair_code,
+                'store_id': self.store_id,
+                'screen_id': self.screen_id
             })
             
             # MOBILE SYNC: Join webplayer session after registering
@@ -1396,7 +1427,8 @@ class CompleteWebplayerClient:
                     'timestamp': time.time(),
                     'store_id': self.store_id,
                     'screen_id': self.screen_id,
-                    'pair_code': self.pair_code
+                    'pair_code': self.pair_code,
+                    'claim_code': self.claim_code
                 })
                 time.sleep(30)  # Heartbeat every 30 seconds
             except Exception as e:
@@ -1666,7 +1698,7 @@ class CompleteWebplayerClient:
             try:
                 self.mobile_sync.draw_qr_code(
                     self.screen,
-                    "code" if self.setup_step == "code" else ("store" if self.setup_step == "store" else "screen"),
+                    "claim" if self.setup_step == "claim" else ("code" if self.setup_step == "code" else ("store" if self.setup_step == "store" else "screen")),
                     x=group_x,
                     y=container_y,
                     override_qr_size=qr_size,
@@ -1695,16 +1727,67 @@ class CompleteWebplayerClient:
         
         # Title - matching custom_player.py style
         # Slightly larger/bolder title look (UI only)
-        title_text = self.font_title.render("Enter your Android TV pairing code", True, self.colors['light_gray'])
+        title_lookup = {
+            "claim": "Claim this Raspberry Pi from your dashboard",
+            "code": "Enter your Android TV pairing code",
+            "store": "Select your store",
+            "screen": "Choose this screen"
+        }
+        title_text = self.font_title.render(title_lookup.get(self.setup_step, "Set up this Raspberry Pi"), True, self.colors['light_gray'])
         title_rect = title_text.get_rect(center=(container_x + container_width // 2, container_y + 60))
         self.screen.blit(title_text, title_rect)
         
-        if self.setup_step == "code":
+        if self.setup_step == "claim":
+            self.draw_claim_screen(container_x, container_y, container_width)
+        elif self.setup_step == "code":
             self.draw_code_input_screen(container_x, container_y, container_width)
         elif self.setup_step == "store":
             self.draw_store_selection_screen(container_x, container_y, container_width)
         elif self.setup_step == "screen":
             self.draw_screen_selection_screen(container_x, container_y, container_width)
+
+    def draw_claim_screen(self, container_x: int, container_y: int, container_width: int):
+        """Draw the first-boot dashboard claim flow."""
+        subtitle = self.font_subtitle.render("Use Pi Manager to claim and assign this screen", True, self.colors['gray'])
+        subtitle_rect = subtitle.get_rect(center=(container_x + container_width // 2, container_y + 102))
+        self.screen.blit(subtitle, subtitle_rect)
+
+        label = self.font_label.render("Claim code", True, self.colors['medium_gray'])
+        label_rect = label.get_rect(topleft=(container_x + 40, container_y + 150))
+        self.screen.blit(label, label_rect)
+
+        code_width = 320
+        code_height = 72
+        code_x = container_x + (container_width - code_width) // 2
+        code_y = container_y + 182
+        pygame.draw.rect(self.screen, self.colors['input_bg'], (code_x, code_y, code_width, code_height), border_radius=10)
+        pygame.draw.rect(self.screen, self.colors['input_border_focus'], (code_x, code_y, code_width, code_height), 2, border_radius=10)
+
+        claim_surface = self.font_input.render("  ".join(self.claim_code), True, self.colors['white'])
+        claim_rect = claim_surface.get_rect(center=(code_x + code_width // 2, code_y + code_height // 2))
+        self.screen.blit(claim_surface, claim_rect)
+
+        steps = [
+            "1. Open Pi Manager on your phone or computer.",
+            "2. Scan the QR code or enter this claim code.",
+            "3. Pick the store and screen in the dashboard.",
+            "4. This Pi will start playback automatically after it is claimed."
+        ]
+        for idx, step_text in enumerate(steps):
+            line_surface = self.font_small.render(step_text, True, self.colors['medium_gray'])
+            line_rect = line_surface.get_rect(topleft=(container_x + 40, container_y + 290 + (idx * 28)))
+            self.screen.blit(line_surface, line_rect)
+
+        support_text = self.font_small.render(f"Pi ID: {self.pi_id}", True, self.colors['dark_gray'])
+        support_rect = support_text.get_rect(topleft=(container_x + 40, container_y + 424))
+        self.screen.blit(support_text, support_rect)
+
+        manual_text = self.font_small.render("Press M for manual on-device setup if the dashboard is unavailable.", True, self.colors['dark_gray'])
+        manual_rect = manual_text.get_rect(topleft=(container_x + 40, container_y + 448))
+        self.screen.blit(manual_text, manual_rect)
+
+        if hasattr(self, 'mobile_sync') and self.mobile_sync and not getattr(self, '_drew_outer_qr', False):
+            self.mobile_sync.draw_qr_code(self.screen, "claim")
             
     def draw_code_input_screen(self, container_x: int, container_y: int, container_width: int):
         """Draw 4-digit code input screen matching custom_player.py."""
@@ -3188,7 +3271,12 @@ class CompleteWebplayerClient:
     def handle_keydown(self, event):
         """Handle keyboard input."""
         if self.current_state == "setup":
-            if self.setup_step == "code":
+            if self.setup_step == "claim":
+                if event.key == pygame.K_m:
+                    self.setup_step = "code"
+                    self.input_text = ""
+                    logger.info("⌨️ Switching to manual on-device setup")
+            elif self.setup_step == "code":
                 if event.key == pygame.K_BACKSPACE:
                     self.input_text = self.input_text[:-1]
                 elif event.key == pygame.K_RETURN or event.key == pygame.K_KP_ENTER:

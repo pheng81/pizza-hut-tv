@@ -4,7 +4,7 @@ param(
     [string]$FromNumber = "+13165308999",
     [string]$Server = "54.252.90.27",
     [string]$KeyPath = "C:\Users\toeng\Downloads\LightsailDefaultKey-ap-southeast-2(3).pem",
-    [string]$FinalPath = "/var/www/pizza-hut-tv"
+    [string]$FinalPath = "/var/www/everydayadvertise_tv"
 )
 
 if (-not $ApiSecret) {
@@ -31,7 +31,7 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "SUCCESS: Credentials updated" -ForegroundColor Green
     Write-Host ""
     Write-Host "Restarting service..." -ForegroundColor Yellow
-    & ssh -i $KeyPath "ubuntu@${Server}" "sudo systemctl restart pizza-hut-tv"
+    & ssh -i $KeyPath "ubuntu@${Server}" "sudo systemctl restart everydayadvertise_tv"
     Start-Sleep -Seconds 3
     
     Write-Host "DONE!" -ForegroundColor Green

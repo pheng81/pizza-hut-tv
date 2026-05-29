@@ -2,7 +2,7 @@ import sqlite3
 from werkzeug.security import generate_password_hash
 
 # Connect to database
-conn = sqlite3.connect("/var/www/pizza-hut-tv/database.db")
+conn = sqlite3.connect("/var/www/everydayadvertise_tv/database.db")
 cursor = conn.cursor()
 
 # Create test9@gmail.com user

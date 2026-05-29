@@ -4411,7 +4411,6 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
 class _VideoPreview extends StatefulWidget {
   const _VideoPreview({
     required this.url,
-    this.headers = const {},
   });
 
   final String url;

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Quick Vonage setup script - run on server
 
-cd /var/www/pizza-hut-tv
+cd /var/www/everydayadvertise_tv
 
 # Backup existing .env
 cp .env .env.backup-vonage
@@ -18,12 +18,12 @@ EOF
 echo "Vonage credentials added to .env"
 
 # Restart service
-sudo systemctl restart pizza-hut-tv
+sudo systemctl restart everydayadvertise_tv
 
 echo "Service restarted - checking status..."
 sleep 2
-sudo systemctl status pizza-hut-tv --no-pager -l | head -20
+sudo systemctl status everydayadvertise_tv --no-pager -l | head -20
 
 echo ""
 echo "Checking for Vonage initialization:"
-sudo journalctl -u pizza-hut-tv -n 30 --no-pager | grep -i vonage
+sudo journalctl -u everydayadvertise_tv -n 30 --no-pager | grep -i vonage

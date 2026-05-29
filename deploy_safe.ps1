@@ -1,11 +1,11 @@
 param(
     [string]$Server = "54.252.90.27",
     [string]$KeyPath = "C:\Users\toeng\.ssh\LightsailDefaultKey-ap-southeast-2.pem",
-    [string]$TempPath = "pizza-hut-tv-deploy",
-    [string]$FinalPath = "/var/www/pizza-hut-tv"
+    [string]$TempPath = "everydayadvertise_tv-deploy",
+    [string]$FinalPath = "/var/www/everydayadvertise_tv"
 )
 
-Write-Host "== SAFE Pizza Hut TV Deploy (Protects Config) ==" -ForegroundColor Cyan
+Write-Host "== SAFE EverydayAdvertise TV Deploy (Protects Config) ==" -ForegroundColor Cyan
 Write-Host ""
 
 # Check local config is clean BEFORE deploying
@@ -107,10 +107,10 @@ Write-Host "Installing dependencies..." -ForegroundColor Yellow
 & ssh -i $KeyPath "ubuntu@${Server}" "cd ${FinalPath} && source venv/bin/activate && pip install -q -r requirements.txt" 2>&1 | Out-Null
 
 Write-Host "Restarting service..." -ForegroundColor Yellow
-& ssh -i $KeyPath "ubuntu@${Server}" "sudo pkill -f 'gunicorn.*pizza-hut-tv' 2>/dev/null || true; sleep 1; sudo systemctl restart pizza-hut-tv"
+& ssh -i $KeyPath "ubuntu@${Server}" "sudo pkill -f 'gunicorn.*/var/www/everydayadvertise_tv' 2>/dev/null || true; sleep 1; sudo systemctl restart everydayadvertise_tv"
 Start-Sleep -Seconds 3
 
-& ssh -i $KeyPath "ubuntu@${Server}" "sudo systemctl status pizza-hut-tv --no-pager"
+& ssh -i $KeyPath "ubuntu@${Server}" "sudo systemctl status everydayadvertise_tv --no-pager"
 
 # Verify server config matches local
 Write-Host ""

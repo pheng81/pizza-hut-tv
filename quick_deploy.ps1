@@ -7,11 +7,11 @@ Write-Host "Quick Deploy - app.py only" -ForegroundColor Cyan
 Write-Host ""
 
 Write-Host "Uploading app.py..." -ForegroundColor Yellow
-& scp -i $KeyPath "app.py" "ubuntu@${Server}:/var/www/pizza-hut-tv/app.py"
+& scp -i $KeyPath "app.py" "ubuntu@${Server}:/var/www/everydayadvertise_tv/app.py"
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "Restarting service..." -ForegroundColor Yellow
-    & ssh -i $KeyPath "ubuntu@${Server}" "sudo systemctl restart pizza-hut-tv"
+    & ssh -i $KeyPath "ubuntu@${Server}" "sudo systemctl restart everydayadvertise_tv"
     Start-Sleep -Seconds 3
     
     Write-Host ""

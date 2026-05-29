@@ -1122,8 +1122,9 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
             try { debugOverlay?.bringToFront() } catch (_: Exception) {}
             try { transitionOverlay?.bringToFront() } catch (_: Exception) {}
 
-            val durMs = (next.duration ?: 30).coerceAtLeast(5) * 1000L
+            val durMs = (next.duration ?: 10).coerceAtLeast(5) * 1000L
             currentItemDurationMs = durMs
+            android.util.Log.d("TvDisplayActivity", "YouTube item duration=${next.duration} -> ${durMs}ms")
             // hqdefault is consistently available; maxresdefault is often missing and causes delay.
             val thumbUrl = "https://img.youtube.com/vi/$videoId/hqdefault.jpg"
 

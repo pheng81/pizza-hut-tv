@@ -6,6 +6,6 @@ Write-Host "Uploading fix script to server..."
 & scp -i $KeyPath "fix_screen_mixup.py" "ubuntu@${Server}:~/fix_screen_mixup.py"
 
 Write-Host "`nRunning fix script on server..."
-& ssh -i $KeyPath "ubuntu@${Server}" "cd /var/www/pizza-hut-tv && python3 ~/fix_screen_mixup.py store_config__test9_at_gmail.com.json"
+& ssh -i $KeyPath "ubuntu@${Server}" "cd /var/www/everydayadvertise_tv && python3 ~/fix_screen_mixup.py store_config__test9_at_gmail.com.json"
 
 Write-Host "`nDone! Config fixed on server."

@@ -144,15 +144,15 @@ def check_remote_config(server, pi_id, pair_code):
 def setup_systemd_service(config):
     """Set up the systemd service."""
     try:
-        service_name = "pizza-hut-tv"
-        install_dir = os.path.expanduser("~/pizza-hut-tv")
+        service_name = "everydayadvertise_tv"
+        install_dir = os.path.expanduser("~/everydayadvertise_tv_client")
         venv_python = f"{install_dir}/venv/bin/python"
         main_script = f"{install_dir}/complete_pi_client.py"
         
         # Check if files exist
         if not os.path.exists(main_script):
             print(f"❌ {main_script} not found!")
-            print("Please ensure complete_pi_client.py is in ~/pizza-hut-tv/")
+            print("Please ensure complete_pi_client.py is in ~/everydayadvertise_tv_client/")
             return False
         
         # Build command
@@ -160,7 +160,7 @@ def setup_systemd_service(config):
         
         # Create service file
         service_content = f"""[Unit]
-Description=Pizza Hut TV Digital Signage Client
+    Description=EverydayAdvertise TV Digital Signage Client
 After=graphical.target network-online.target
 Wants=network-online.target
 
@@ -170,6 +170,7 @@ User={os.environ.get('USER', 'pi')}
 Environment=DISPLAY=:0
 Environment=XAUTHORITY=/home/{os.environ.get('USER', 'pi')}/.Xauthority
 Environment=PYTHONUNBUFFERED=1
+SupplementaryGroups=video render
 WorkingDirectory={install_dir}
 ExecStartPre=/bin/sleep 10
 ExecStart={exec_start}
@@ -182,7 +183,7 @@ StandardError=journal
 WantedBy=graphical.target
 """
         
-        temp_path = "/tmp/pizza-hut-tv.service"
+        temp_path = "/tmp/everydayadvertise_tv.service"
         with open(temp_path, 'w') as f:
             f.write(service_content)
         
@@ -203,7 +204,7 @@ WantedBy=graphical.target
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Setup Pizza Hut TV Pi client')
+    parser = argparse.ArgumentParser(description='Setup EverydayAdvertise TV Pi client')
     parser.add_argument('--pair-code', help='4-digit pairing code')
     parser.add_argument('--store-id', help='Store ID')
     parser.add_argument('--screen-id', default='1', help='Screen ID (default: 1)')
@@ -215,7 +216,7 @@ def main():
     
     print("╔═══════════════════════════════════════════════════════╗")
     print("║                                                       ║")
-    print("║   🍕 Pizza Hut TV - Pi Client Setup 🍕               ║")
+    print("║   EverydayAdvertise TV - Pi Client Setup            ║")
     print("║                                                       ║")
     print("╚═══════════════════════════════════════════════════════╝")
     
@@ -269,17 +270,17 @@ def main():
         
         if args.start or input("\n🚀 Start service now? (Y/n): ").lower() != 'n':
             print("\n🚀 Starting service...")
-            subprocess.run(['sudo', 'systemctl', 'restart', 'pizza-hut-tv'])
+            subprocess.run(['sudo', 'systemctl', 'restart', 'everydayadvertise_tv'])
             print("✅ Service started!")
             
             print("\n📋 Useful commands:")
-            print("   Status:  sudo systemctl status pizza-hut-tv")
-            print("   Logs:    journalctl -u pizza-hut-tv -f")
-            print("   Stop:    sudo systemctl stop pizza-hut-tv")
-            print("   Restart: sudo systemctl restart pizza-hut-tv")
+            print("   Status:  sudo systemctl status everydayadvertise_tv")
+            print("   Logs:    journalctl -u everydayadvertise_tv -f")
+            print("   Stop:    sudo systemctl stop everydayadvertise_tv")
+            print("   Restart: sudo systemctl restart everydayadvertise_tv")
         else:
             print("\n💡 To start later, run:")
-            print("   sudo systemctl start pizza-hut-tv")
+            print("   sudo systemctl start everydayadvertise_tv")
     else:
         print("\n❌ Setup failed!")
         sys.exit(1)

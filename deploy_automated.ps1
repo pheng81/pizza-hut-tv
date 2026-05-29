@@ -17,7 +17,7 @@ Write-Host ""
 # Configuration
 $Server = "54.252.90.27"
 $KeyPath = "$env:USERPROFILE\.ssh\LightsailDefaultKey-ap-southeast-2.pem"
-$RemotePath = "/var/www/pizza-hut-tv"
+$RemotePath = "/var/www/everydayadvertise_tv"
 
 # Step 1: Pre-deployment Checks
 Write-Host "Step 1: Pre-deployment Checks" -ForegroundColor Yellow
@@ -112,10 +112,10 @@ Write-Host "--------------------------" -ForegroundColor Yellow
 
 if (-not $DryRun) {
     ssh -i $KeyPath "ubuntu@$Server" @"
-        sudo systemctl stop everydayadvertise && \
+    sudo systemctl stop everydayadvertise_tv && \
         sudo fuser -k 5002/tcp || true && \
         sleep 2 && \
-        sudo systemctl start everydayadvertise && \
+    sudo systemctl start everydayadvertise_tv && \
         sleep 3
 "@
     Write-Host "✓ Service restarted" -ForegroundColor Green
@@ -129,7 +129,7 @@ Write-Host "--------------------" -ForegroundColor Yellow
 
 if (-not $DryRun) {
     Start-Sleep -Seconds 5
-    $status = ssh -i $KeyPath "ubuntu@$Server" "sudo systemctl is-active everydayadvertise"
+    $status = ssh -i $KeyPath "ubuntu@$Server" "sudo systemctl is-active everydayadvertise_tv"
     
     if ($status -eq "active") {
         Write-Host "✓ Service is running" -ForegroundColor Green
@@ -147,7 +147,7 @@ if (-not $DryRun) {
         Write-Host "Rolling back..." -ForegroundColor Yellow
         
         # Rollback
-        ssh -i $KeyPath "ubuntu@$Server" "sudo cp $RemotePath/app.py.$backupName $RemotePath/app.py && sudo systemctl restart everydayadvertise"
+        ssh -i $KeyPath "ubuntu@$Server" "sudo cp $RemotePath/app.py.$backupName $RemotePath/app.py && sudo systemctl restart everydayadvertise_tv"
         Write-Host "✓ Rolled back to previous version" -ForegroundColor Green
         exit 1
     }
@@ -170,7 +170,7 @@ Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Yellow
 Write-Host "  1. Test the website: https://everydayadvertise.com" -ForegroundColor White
 Write-Host "  2. Check dashboard functionality" -ForegroundColor White
-Write-Host "  3. Monitor logs: ssh ubuntu@$Server 'sudo journalctl -u everydayadvertise -f'" -ForegroundColor White
+Write-Host "  3. Monitor logs: ssh ubuntu@$Server 'sudo journalctl -u everydayadvertise_tv -f'" -ForegroundColor White
 Write-Host ""
 
 if ($DryRun) {

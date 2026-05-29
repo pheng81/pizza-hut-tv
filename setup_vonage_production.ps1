@@ -5,7 +5,7 @@ $setupScript = @'
 #!/bin/bash
 echo "Setting up Vonage SMS credentials..."
 
-cd /var/www/pizza-hut-tv
+cd /var/www/everydayadvertise_tv
 
 cp .env .env.backup-$(date +%s) 2>/dev/null || true
 
@@ -27,18 +27,18 @@ pip install 'vonage>=3.0,<4'
 
 echo ""
 echo "Restarting service..."
-sudo systemctl restart pizza-hut-tv
+sudo systemctl restart everydayadvertise_tv
 sleep 2
 
 echo ""
 echo "Setup complete!"
 echo ""
 echo "Checking service status:"
-sudo systemctl status pizza-hut-tv --no-pager -l | head -15
+sudo systemctl status everydayadvertise_tv --no-pager -l | head -15
 
 echo ""
 echo "Checking for Vonage initialization:"
-sudo journalctl -u pizza-hut-tv -n 50 --no-pager | grep -i vonage
+sudo journalctl -u everydayadvertise_tv -n 50 --no-pager | grep -i vonage
 '@
 
 $tempScript = "setup_vonage_tmp.sh"

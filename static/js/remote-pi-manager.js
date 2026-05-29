@@ -70,6 +70,9 @@ function resetRemotePiManagerUi(options = {}) {
     if (typeof window.updateRemotePiConfigureButtonState === 'function') {
         window.updateRemotePiConfigureButtonState();
     }
+    if (typeof window.syncNewPiInstallCommand === 'function') {
+        window.syncNewPiInstallCommand();
+    }
 }
 
 function openRemotePiManager() {
@@ -97,6 +100,9 @@ function openRemotePiManager() {
     if (typeof window.updateRemotePiConfigureButtonState === 'function') {
         window.updateRemotePiConfigureButtonState();
     }
+    if (typeof window.syncNewPiInstallCommand === 'function') {
+        window.syncNewPiInstallCommand();
+    }
 }
 
 function closeRemotePiManager() {
@@ -108,6 +114,9 @@ function closeRemotePiManager() {
 async function showStoreStep() {
     const pairCode = document.getElementById('piPairCode').value.trim();
     console.log('showStoreStep called, pair code:', pairCode, 'length:', pairCode.length);
+    if (typeof window.syncNewPiInstallCommand === 'function') {
+        window.syncNewPiInstallCommand();
+    }
     
     if (pairCode.length === 4) {
         const myPairingCode = typeof MY_PAIRING_CODE !== 'undefined' ? MY_PAIRING_CODE : '';
@@ -164,6 +173,9 @@ async function showStoreStep() {
                 if (typeof window.updateRemotePiConfigureButtonState === 'function') {
                     window.updateRemotePiConfigureButtonState();
                 }
+                if (typeof window.syncNewPiInstallCommand === 'function') {
+                    window.syncNewPiInstallCommand();
+                }
             } else {
                 const fallbackData = typeof window.getRemotePiStoresData === 'function'
                     ? window.getRemotePiStoresData()
@@ -182,6 +194,9 @@ async function showStoreStep() {
                     document.getElementById('stepStoreId').style.display = 'block';
                     if (typeof window.updateRemotePiConfigureButtonState === 'function') {
                         window.updateRemotePiConfigureButtonState();
+                    }
+                    if (typeof window.syncNewPiInstallCommand === 'function') {
+                        window.syncNewPiInstallCommand();
                     }
                     return;
                 }
@@ -207,6 +222,9 @@ async function showStoreStep() {
                 document.getElementById('stepStoreId').style.display = 'block';
                 if (typeof window.updateRemotePiConfigureButtonState === 'function') {
                     window.updateRemotePiConfigureButtonState();
+                }
+                if (typeof window.syncNewPiInstallCommand === 'function') {
+                    window.syncNewPiInstallCommand();
                 }
                 return;
             }
@@ -286,6 +304,10 @@ function showScreenStep() {
 
     if (typeof window.updateRemotePiConfigureButtonState === 'function') {
         window.updateRemotePiConfigureButtonState();
+    }
+
+    if (typeof window.syncNewPiInstallCommand === 'function') {
+        window.syncNewPiInstallCommand();
     }
 }
 
