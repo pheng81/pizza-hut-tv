@@ -22,17 +22,17 @@ object ApiClient {
 			.readTimeout(15, TimeUnit.SECONDS)
 			.writeTimeout(15, TimeUnit.SECONDS)
 		
-		// WORKAROUND: For old Android TV (8.0/2020) without updated root CAs
-		// Trust all certificates to bypass Cloudflare/Google Trust Services validation
-		// Works on both old and new Android versions
-		try {
-			builder.sslSocketFactory(
-				TrustAllCerts.getUnsafeSSLSocketFactory(),
-				TrustAllCerts.getTrustManager()
-			)
-			builder.hostnameVerifier(TrustAllCerts.getAllTrustingHostnameVerifier())
-		} catch (e: Exception) {
-			// Fall back to default SSL if workaround fails
+		// Only allow the insecure TLS workaround when explicitly enabled per build.
+		if (BuildConfig.PHTV_ALLOW_INSECURE_SSL) {
+			try {
+				builder.sslSocketFactory(
+					TrustAllCerts.getUnsafeSSLSocketFactory(),
+					TrustAllCerts.getTrustManager()
+				)
+				builder.hostnameVerifier(TrustAllCerts.getAllTrustingHostnameVerifier())
+			} catch (e: Exception) {
+				// Fall back to default SSL if workaround fails
+			}
 		}
 		
 		builder

@@ -52,6 +52,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Load .env first
 load_dotenv()
 
+
 def _apply_r2_env_overrides():
     """Best-effort: load r2.env and apply safe overrides so R2 works in prod shells.
     Only sets env vars if they're not already set.
@@ -60,13 +61,13 @@ def _apply_r2_env_overrides():
         env_path = os.path.join(os.path.dirname(__file__), 'r2.env')
         if os.path.exists(env_path):
             vals = dotenv_values(env_path) or {}
-            for k in ('R2_BUCKET_NAME','R2_ENDPOINT_URL','R2_ACCESS_KEY_ID','R2_SECRET_ACCESS_KEY','MEDIA_BASE_URL'):
+            for k in ('R2_BUCKET_NAME', 'R2_ENDPOINT_URL', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'MEDIA_BASE_URL'):
                 v = vals.get(k)
                 if v is not None and not os.environ.get(k):
                     os.environ[k] = v
     except Exception:
-        # Non-fatal; app can continue without R2
         pass
+
 
 _apply_r2_env_overrides()
 
@@ -90,13 +91,69 @@ def _allowed_request_hosts() -> set[str]:
         }
     return hosts
 
+
+def _allowed_socketio_origins() -> list[str]:
+    explicit = (os.environ.get('SOCKETIO_ALLOWED_ORIGINS') or '').strip()
+    if explicit:
+        return [
+            origin.strip()
+            for origin in explicit.split(',')
+            if origin.strip()
+        ]
+
+    origins: set[str] = set()
+    for host in _allowed_request_hosts():
+        normalized = host.strip().lower().rstrip('.')
+        if not normalized:
+            continue
+
+        if normalized == '::1':
+            origins.add('http://[::1]:5002')
+            origins.add('https://[::1]:5002')
+            continue
+
+        origins.add(f'https://{normalized}')
+        origins.add(f'http://{normalized}')
+
+        if normalized in {'localhost', '127.0.0.1'}:
+            origins.add(f'http://{normalized}:5002')
+            origins.add(f'https://{normalized}:5002')
+
+    return sorted(origins)
+
+
+def _load_flask_secret_key() -> str:
+    configured = (os.environ.get('SECRET_KEY') or '').strip()
+    if configured:
+        return configured
+
+    env_name = (os.environ.get('FLASK_ENV') or 'development').strip().lower()
+    if env_name == 'production':
+        raise RuntimeError('SECRET_KEY must be set in production')
+
+    fallback_path = os.path.join(BASE_DIR, '.dev_secret_key')
+    try:
+        if os.path.exists(fallback_path):
+            with open(fallback_path, 'r', encoding='utf-8') as handle:
+                cached = handle.read().strip()
+            if cached:
+                return cached
+
+        generated = secrets.token_urlsafe(48)
+        with open(fallback_path, 'w', encoding='utf-8') as handle:
+            handle.write(generated)
+        return generated
+    except Exception as exc:
+        logging.warning('Falling back to ephemeral development secret key: %s', exc)
+        return secrets.token_urlsafe(48)
+
+
 # Optional boto3 for R2 (S3-compatible)
 try:
     import boto3
     from botocore.config import Config as BotoConfig
 except Exception:
     boto3 = None
-    # Ensure name exists so later references do not raise NameError when boto3 missing
     BotoConfig = None
 
 # Optional Stripe SDK for billing
@@ -108,7 +165,6 @@ except Exception:
 # Global in-memory cache for library listings
 _LIB_CACHE: dict = {}
 
-# Global job tracking for async operations (auto-slicing, etc.)
 # Using filesystem for cross-worker job status sharing
 JOBS_DIR = os.path.join(tempfile.gettempdir(), 'pizza_hut_tv_jobs')
 os.makedirs(JOBS_DIR, exist_ok=True)
@@ -1883,8 +1939,8 @@ except Exception as _log_e:
     print(f'Logging setup failed: {_log_e}')
 
 app = Flask(__name__)
-# Use a strong, consistent secret key for session signing
-app.secret_key = os.environ.get('SECRET_KEY') or 'everydayadvertise-tv-oauth-session-key-2025-production'
+# Use a configured secret in production and a persisted local secret in development.
+app.secret_key = _load_flask_secret_key()
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 
 # Template filters
@@ -1906,7 +1962,7 @@ def format_timestamp(timestamp):
 # Initialize Socket.IO for WebSocket relay (TeamViewer-style)
 socketio = SocketIO(
     app,
-    cors_allowed_origins="*",
+    cors_allowed_origins=_allowed_socketio_origins(),
     async_mode='threading',
     ping_timeout=120,
     ping_interval=30,
@@ -1917,6 +1973,8 @@ socketio = SocketIO(
 # Track connected Pis via WebSocket
 connected_pis = {}  # { 'pi_id': {'sid': socket_id, 'connected_at': timestamp, 'ip': ip_address} }
 pi_connection_lock = threading.Lock()
+pi_watchers: dict[str, set[str]] = {}
+pi_watchers_lock = threading.Lock()
 
 
 def _normalize_pi_claim_code(raw_code: Optional[str]) -> str:
@@ -1992,7 +2050,15 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_
 # Cookie settings: Allow override for local development
 cookie_secure = os.environ.get('SESSION_COOKIE_SECURE', 'True').lower() == 'true'
 cookie_samesite = os.environ.get('SESSION_COOKIE_SAMESITE', 'None')
-cookie_domain = os.environ.get('SESSION_COOKIE_DOMAIN', '.everydayadvertise.com') if os.environ.get('SESSION_COOKIE_DOMAIN') != '' else None
+cookie_domain_raw = os.environ.get('SESSION_COOKIE_DOMAIN')
+if cookie_domain_raw is None:
+    cookie_domain = '.everydayadvertise.com'
+else:
+    cookie_domain_text = str(cookie_domain_raw).strip()
+    if cookie_domain_text.lower() in ('', 'none', 'null', 'host-only', 'hostonly', 'localhost'):
+        cookie_domain = None
+    else:
+        cookie_domain = cookie_domain_text
 
 app.config.update(
     PREFERRED_URL_SCHEME='https',
@@ -2233,6 +2299,36 @@ def _send_verification_email(username: str):
         logging.warning('send_verification_email failed: %s', e)
         return False
 
+
+def _has_user_session() -> bool:
+    try:
+        return bool(session.get('user'))
+    except Exception:
+        return False
+
+
+def _has_authenticated_browser_session() -> bool:
+    try:
+        return bool(session.get('user') or session.get('super_admin'))
+    except Exception:
+        return False
+
+
+def _request_uses_header_auth() -> bool:
+    return bool(
+        (request.headers.get('X-Mobile-Auth') or '').strip()
+        or (request.headers.get('X-User-Code') or '').strip()
+    )
+
+
+def _url_host(value: str | None) -> str:
+    try:
+        parsed = urllib.parse.urlparse(str(value or '').strip())
+        host = (parsed.hostname or '').strip().lower().rstrip('.')
+        return host
+    except Exception:
+        return ''
+
 def login_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
@@ -2305,6 +2401,40 @@ def _enforce_canonical_request_host():
         return Response('Gone', status=410, mimetype='text/plain')
 
     return jsonify({'success': False, 'error': 'Host not allowed'}), 421
+
+
+@app.before_request
+def _enforce_session_csrf_origin():
+    if request.method not in ('POST', 'PUT', 'PATCH', 'DELETE'):
+        return None
+
+    if not _has_authenticated_browser_session():
+        return None
+
+    if _request_uses_header_auth():
+        return None
+
+    origin_host = _url_host(request.headers.get('Origin'))
+    referer_host = _url_host(request.headers.get('Referer'))
+    allowed_hosts = _allowed_request_hosts()
+
+    if origin_host and origin_host in allowed_hosts:
+        return None
+    if referer_host and referer_host in allowed_hosts:
+        return None
+
+    logging.warning(
+        'Blocked CSRF-like request path=%s origin=%s referer=%s',
+        request.path,
+        request.headers.get('Origin'),
+        request.headers.get('Referer'),
+    )
+
+    if request.path.startswith('/api/'):
+        return jsonify({'success': False, 'error': 'Request origin not allowed'}), 403
+
+    flash('Your session could not be verified. Please try again.', 'error')
+    return redirect(url_for('login', next=request.path))
 
 def _stripe_enabled() -> bool:
     try:
@@ -6995,8 +7125,21 @@ def screen_status_by_store(store_id):
     return {'success': True, 'status': result}
 
 # -------------------- Core Configuration & Media Type Definitions --------------------
-CONFIG_FILE = os.path.join(BASE_DIR, 'store_config.json')
-PI_MAP_FILE = os.path.join(BASE_DIR, 'pi_id_ip_map.json')
+def _config_base_dir() -> str:
+    raw = (os.environ.get('STORE_CONFIG_DIR') or '').strip()
+    if not raw:
+        return BASE_DIR
+    if os.path.isabs(raw):
+        return raw
+    return os.path.join(BASE_DIR, raw)
+
+
+def _config_file_path(filename: str) -> str:
+    return os.path.join(_config_base_dir(), filename)
+
+
+CONFIG_FILE = _config_file_path('store_config.json')
+PI_MAP_FILE = _config_file_path('pi_id_ip_map.json')
 
 # --- Multi-tenant config selection (per-logged-in user) ---
 def _safe_user_key() -> Optional[str]:
@@ -7060,7 +7203,7 @@ def _effective_config_path() -> str:
     try:
         k = _safe_user_key()
         if k:
-            return f"store_config__{k}.json"
+            return _config_path_for_user_safe_key(k)
     except Exception:
         pass
     return CONFIG_FILE
@@ -7444,6 +7587,7 @@ def stream_media(filename):
 
 def ensure_playlists_structure(config):
     changed = False
+    valid_panel_layouts = {'off', 'split-right-25', 'split-left-25', 'split-bottom-25'}
     for store_id, screens in config.get('screens', {}).items():
         for sid, sdata in screens.items():
             # SAFETY: Backup existing playlist before any modifications
@@ -7486,6 +7630,40 @@ def ensure_playlists_structure(config):
                     # Backfill media_type for older entries
                     if 'media_type' not in item and item.get('file'):
                         item['media_type'] = classify_media(item['file'])
+            panel_zone = sdata.get('panel_zone')
+            if not isinstance(panel_zone, dict):
+                panel_zone = {}
+                sdata['panel_zone'] = panel_zone
+                changed = True
+            panel_enabled = bool(panel_zone.get('enabled', False))
+            if panel_zone.get('enabled') is not panel_enabled:
+                panel_zone['enabled'] = panel_enabled
+                changed = True
+            panel_layout_mode = str(panel_zone.get('layout_mode') or 'off').strip().lower()
+            if panel_layout_mode not in valid_panel_layouts:
+                panel_layout_mode = 'off'
+                changed = True
+            if panel_zone.get('layout_mode') != panel_layout_mode:
+                panel_zone['layout_mode'] = panel_layout_mode
+                changed = True
+            if 'playlist' not in panel_zone or not isinstance(panel_zone.get('playlist'), list):
+                panel_zone['playlist'] = []
+                changed = True
+            if 'rotation_meta' not in panel_zone or not isinstance(panel_zone.get('rotation_meta'), dict):
+                panel_zone['rotation_meta'] = {'last_index': 0, 'last_ts': 0}
+                changed = True
+            for item in panel_zone.get('playlist', []) or []:
+                item.setdefault('id', str(uuid.uuid4()))
+                item.setdefault('kind', 'text_card')
+                item.setdefault('title', 'Info card')
+                item.setdefault('body', '')
+                item.setdefault('enabled', True)
+                item.setdefault('start', None)
+                item.setdefault('end', None)
+                item.setdefault('schedule', [])
+                item.setdefault('duration', 10)
+                item.setdefault('repeat', True)
+                item.setdefault('days', [])
             # NEW: Attempt R2 restore for missing local files referenced by playlist
             try:
                 for _it in sdata.get('playlist', []) or []:
@@ -7498,6 +7676,322 @@ def ensure_playlists_structure(config):
     if changed:
         save_store_config(config)
     return config
+
+
+def _panel_zone_defaults() -> dict:
+    return {
+        'enabled': False,
+        'layout_mode': 'off',
+        'playlist': [],
+        'rotation_meta': {'last_index': 0, 'last_ts': 0},
+        'source_mode': 'manual',
+        'pos_feed': {
+            'name': '',
+            'webhook_token': '',
+            'connector_type': 'generic_webhook',
+            'field_map': {
+                'customer_name': 'customer.name',
+                'order_number': 'order.number',
+                'status': 'order.status',
+                'external_id': 'order.id',
+            },
+            'title_template': 'Now serving',
+            'body_template': '{{customer_name}}\nOrder #{{order_number}}',
+            'allowed_statuses': ['ready', 'serving'],
+            'display_seconds': 10,
+            'max_items': 5,
+            'event_count': 0,
+            'last_event_at': None,
+            'last_event_result': '',
+            'last_event_summary': {
+                'customer_name': '',
+                'order_number': '',
+                'status': '',
+                'external_id': '',
+            },
+            'last_payload_preview': '',
+        },
+        'live_queue': [],
+    }
+
+
+def _normalize_panel_zone_state(panel_zone: Optional[dict]) -> dict:
+    if not isinstance(panel_zone, dict):
+        panel_zone = {}
+    defaults = _panel_zone_defaults()
+    panel_zone.setdefault('enabled', defaults['enabled'])
+    panel_zone.setdefault('layout_mode', defaults['layout_mode'])
+    panel_zone.setdefault('playlist', [])
+    panel_zone.setdefault('rotation_meta', {'last_index': 0, 'last_ts': 0})
+    source_mode = str(panel_zone.get('source_mode') or 'manual').strip().lower()
+    if source_mode not in {'manual', 'pos_webhook'}:
+        source_mode = 'manual'
+    panel_zone['source_mode'] = source_mode
+
+    pos_feed = panel_zone.get('pos_feed')
+    if not isinstance(pos_feed, dict):
+        pos_feed = {}
+        panel_zone['pos_feed'] = pos_feed
+    default_feed = defaults['pos_feed']
+    pos_feed['name'] = str(pos_feed.get('name') or default_feed['name']).strip()
+    pos_feed['webhook_token'] = str(pos_feed.get('webhook_token') or default_feed['webhook_token']).strip()
+    connector_type = str(pos_feed.get('connector_type') or default_feed['connector_type']).strip().lower()
+    if connector_type not in {'generic_webhook', 'zapier', 'make', 'n8n', 'developer'}:
+        connector_type = default_feed['connector_type']
+    pos_feed['connector_type'] = connector_type
+    field_map = pos_feed.get('field_map')
+    if not isinstance(field_map, dict):
+        field_map = {}
+        pos_feed['field_map'] = field_map
+    for field_key, field_default in default_feed['field_map'].items():
+        field_map[field_key] = str(field_map.get(field_key) or field_default).strip() or field_default
+    pos_feed['title_template'] = str(pos_feed.get('title_template') or default_feed['title_template']).strip() or default_feed['title_template']
+    pos_feed['body_template'] = str(pos_feed.get('body_template') or default_feed['body_template']).replace('\r\n', '\n').replace('\r', '\n').strip() or default_feed['body_template']
+    allowed_statuses = pos_feed.get('allowed_statuses')
+    if isinstance(allowed_statuses, str):
+        allowed_statuses = [part.strip().lower() for part in allowed_statuses.split(',') if part.strip()]
+    elif isinstance(allowed_statuses, list):
+        allowed_statuses = [str(part).strip().lower() for part in allowed_statuses if str(part).strip()]
+    else:
+        allowed_statuses = list(default_feed['allowed_statuses'])
+    deduped_statuses: list[str] = []
+    for status_value in allowed_statuses:
+        if status_value and status_value not in deduped_statuses:
+            deduped_statuses.append(status_value)
+    pos_feed['allowed_statuses'] = deduped_statuses
+    try:
+        pos_feed['display_seconds'] = max(1, min(120, int(pos_feed.get('display_seconds') or default_feed['display_seconds'])))
+    except Exception:
+        pos_feed['display_seconds'] = default_feed['display_seconds']
+    try:
+        pos_feed['max_items'] = max(1, min(20, int(pos_feed.get('max_items') or default_feed['max_items'])))
+    except Exception:
+        pos_feed['max_items'] = default_feed['max_items']
+    try:
+        pos_feed['event_count'] = max(0, int(pos_feed.get('event_count') or 0))
+    except Exception:
+        pos_feed['event_count'] = 0
+    pos_feed['last_event_at'] = pos_feed.get('last_event_at')
+    pos_feed['last_event_result'] = str(pos_feed.get('last_event_result') or '').strip().lower()
+    last_summary = pos_feed.get('last_event_summary')
+    if not isinstance(last_summary, dict):
+        last_summary = {}
+        pos_feed['last_event_summary'] = last_summary
+    for summary_key in ('customer_name', 'order_number', 'status', 'external_id'):
+        last_summary[summary_key] = str(last_summary.get(summary_key) or '').strip()
+    preview_text = pos_feed.get('last_payload_preview')
+    if preview_text is None:
+        preview_text = ''
+    pos_feed['last_payload_preview'] = str(preview_text)
+
+    live_queue = panel_zone.get('live_queue')
+    if not isinstance(live_queue, list):
+        live_queue = []
+    normalized_live_queue = []
+    for live_item in live_queue:
+        if not isinstance(live_item, dict):
+            continue
+        live_copy = dict(live_item)
+        live_copy.setdefault('id', str(uuid.uuid4()))
+        live_copy.setdefault('kind', 'pos_card')
+        live_copy.setdefault('title', 'Now serving')
+        live_copy.setdefault('body', '')
+        live_copy.setdefault('enabled', True)
+        live_copy.setdefault('start', None)
+        live_copy.setdefault('end', None)
+        live_copy.setdefault('schedule', [])
+        live_copy.setdefault('duration', pos_feed['display_seconds'])
+        live_copy.setdefault('repeat', True)
+        live_copy.setdefault('days', [])
+        live_copy.setdefault('external_id', '')
+        live_copy.setdefault('status', '')
+        live_copy.setdefault('created_at', None)
+        normalized_live_queue.append(live_copy)
+    panel_zone['live_queue'] = normalized_live_queue[-pos_feed['max_items']:]
+    return panel_zone
+
+
+def _panel_zone_active_items(panel_zone: Optional[dict]) -> list[dict]:
+    panel_zone = _normalize_panel_zone_state(panel_zone)
+    if panel_zone.get('source_mode') == 'pos_webhook':
+        return [dict(item) for item in (panel_zone.get('live_queue') or []) if isinstance(item, dict)]
+    return [dict(item) for item in (panel_zone.get('playlist') or []) if isinstance(item, dict)]
+
+
+def _save_config_for_scope(safe_key: Optional[str], cfg: dict) -> None:
+    if safe_key:
+        save_store_config_for_user_safe_key(safe_key, cfg)
+    else:
+        save_store_config(cfg)
+
+
+def _panel_pos_lookup_value(payload, path: str):
+    if not path:
+        return None
+    current = payload
+    for segment in [part.strip() for part in str(path).split('.') if part.strip()]:
+        if isinstance(current, dict):
+            if segment not in current:
+                return None
+            current = current.get(segment)
+            continue
+        if isinstance(current, list) and segment.isdigit():
+            idx = int(segment)
+            if idx < 0 or idx >= len(current):
+                return None
+            current = current[idx]
+            continue
+        return None
+    return current
+
+
+def _render_panel_pos_template(template: str, values: dict) -> str:
+    raw_template = str(template or '')
+
+    def replace_match(match):
+        key = str(match.group(1) or '').strip()
+        return str(values.get(key, '') or '')
+
+    return re.sub(r'{{\s*([a-zA-Z0-9_]+)\s*}}', replace_match, raw_template)
+
+
+def _panel_pos_payload_preview(payload: dict, limit: int = 4000) -> str:
+    try:
+        text = json.dumps(payload, indent=2, ensure_ascii=False)
+    except Exception:
+        text = str(payload)
+    if len(text) > limit:
+        return text[:limit - 1] + '…'
+    return text
+
+
+def _apply_panel_pos_event(panel_zone: dict, payload: dict) -> dict:
+    panel_zone = _normalize_panel_zone_state(panel_zone)
+    pos_feed = panel_zone['pos_feed']
+    field_map = pos_feed.get('field_map') or {}
+    payload_dict = payload if isinstance(payload, dict) else {}
+    customer_name = _panel_pos_lookup_value(payload_dict, field_map.get('customer_name') or '')
+    order_number = _panel_pos_lookup_value(payload_dict, field_map.get('order_number') or '')
+    status_value = _panel_pos_lookup_value(payload_dict, field_map.get('status') or '')
+    external_id = _panel_pos_lookup_value(payload_dict, field_map.get('external_id') or '')
+
+    customer_text = str(customer_name or '').strip()
+    order_text = str(order_number or '').strip()
+    status_text = str(status_value or '').strip().lower()
+    external_text = str(external_id or '').strip() or order_text or customer_text or str(uuid.uuid4())
+    pos_feed['event_count'] = max(0, int(pos_feed.get('event_count') or 0)) + 1
+    pos_feed['last_event_at'] = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+    pos_feed['last_payload_preview'] = _panel_pos_payload_preview(payload_dict)
+    pos_feed['last_event_summary'] = {
+        'customer_name': customer_text,
+        'order_number': order_text,
+        'status': status_text,
+        'external_id': external_text,
+    }
+
+    allowed_statuses = [str(value).strip().lower() for value in (pos_feed.get('allowed_statuses') or []) if str(value).strip()]
+    live_queue = [dict(item) for item in (panel_zone.get('live_queue') or []) if isinstance(item, dict)]
+    existing_index = next((idx for idx, item in enumerate(live_queue) if str(item.get('external_id') or '').strip() == external_text), -1)
+
+    if allowed_statuses and status_text and status_text not in allowed_statuses:
+        if existing_index >= 0:
+            del live_queue[existing_index]
+            panel_zone['live_queue'] = live_queue
+        pos_feed['last_event_result'] = 'filtered'
+        return {
+            'accepted': False,
+            'reason': 'status_filtered',
+            'external_id': external_text,
+            'status': status_text,
+            'removed_existing': existing_index >= 0,
+        }
+
+    template_values = {
+        'customer_name': customer_text,
+        'order_number': order_text,
+        'status': status_text,
+        'external_id': external_text,
+    }
+    title = _render_panel_pos_template(pos_feed.get('title_template') or 'Now serving', template_values).strip() or 'Now serving'
+    body = _render_panel_pos_template(pos_feed.get('body_template') or '{{customer_name}}\nOrder #{{order_number}}', template_values).strip()
+    if not body:
+        body = '\n'.join([line for line in (customer_text, f"Order #{order_text}" if order_text else '') if line])
+    live_item = {
+        'id': live_queue[existing_index].get('id') if existing_index >= 0 else str(uuid.uuid4()),
+        'kind': 'pos_card',
+        'title': title,
+        'body': body,
+        'enabled': True,
+        'start': None,
+        'end': None,
+        'schedule': [],
+        'duration': int(pos_feed.get('display_seconds') or 10),
+        'repeat': True,
+        'days': [],
+        'external_id': external_text,
+        'status': status_text,
+        'created_at': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
+    }
+    if existing_index >= 0:
+        live_queue[existing_index] = live_item
+    else:
+        live_queue.append(live_item)
+    live_queue = live_queue[-int(pos_feed.get('max_items') or 5):]
+    panel_zone['live_queue'] = live_queue
+    pos_feed['last_event_at'] = live_item['created_at']
+    pos_feed['last_event_result'] = 'accepted'
+    return {
+        'accepted': True,
+        'external_id': external_text,
+        'status': status_text,
+        'item': live_item,
+        'queue_len': len(live_queue),
+    }
+
+
+def _find_panel_zone_by_webhook_token(token: str):
+    token_text = str(token or '').strip()
+    if not token_text:
+        return None
+
+    search_targets = [(None, CONFIG_FILE)]
+    try:
+        import glob
+
+        pattern = _config_file_path('store_config__*.json')
+        for path in sorted(glob.glob(pattern)):
+            safe_key = os.path.basename(path)[len('store_config__'):-len('.json')]
+            search_targets.append((safe_key, path))
+    except Exception:
+        pass
+
+    for safe_key, path in search_targets:
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, 'r') as fh:
+                cfg = json.load(fh)
+        except Exception:
+            continue
+        for store_id, screens in (cfg.get('screens') or {}).items():
+            if not isinstance(screens, dict):
+                continue
+            for screen_id, screen in screens.items():
+                if not isinstance(screen, dict):
+                    continue
+                panel_zone = _normalize_panel_zone_state(screen.setdefault('panel_zone', {}))
+                webhook_token = str((((panel_zone.get('pos_feed') or {}).get('webhook_token')) or '')).strip()
+                if webhook_token == token_text:
+                    return {
+                        'safe_key': safe_key,
+                        'path': path,
+                        'cfg': cfg,
+                        'screen': screen,
+                        'panel_zone': panel_zone,
+                        'store_id': store_id,
+                        'screen_id': screen_id,
+                    }
+    return None
 
 # -------- Manual R2 media diagnostics & repair endpoints --------
 @app.route('/r2/restore_one', methods=['POST'])
@@ -9868,7 +10362,7 @@ def _get_current_username_from_session() -> Optional[str]:
         return None
 
 def _config_path_for_user_safe_key(safe_key: str) -> str:
-    return os.path.join(BASE_DIR, f"store_config__{safe_key}.json")
+    return _config_file_path(f"store_config__{safe_key}.json")
 
 def load_store_config_for_user_safe_key(safe_key: str):
     """Load another user's config by safe key (used for code-based listing).
@@ -9963,6 +10457,176 @@ def save_store_config_for_user_safe_key(safe_key: str, config):
     except Exception as e:
         print(f"Error saving per-user configuration: {e}")
         raise
+
+
+def _connected_pi_info(pi_id: Optional[str]) -> Optional[dict]:
+    pi_text = str(pi_id or '').strip()
+    if not pi_text:
+        return None
+
+    with pi_connection_lock:
+        pi_info = connected_pis.get(pi_text)
+        if not isinstance(pi_info, dict):
+            return None
+        return dict(pi_info)
+
+
+def _registered_pi_id_for_socket_sid(socket_sid: Optional[str]) -> Optional[str]:
+    sid = str(socket_sid or '').strip()
+    if not sid:
+        return None
+
+    with pi_connection_lock:
+        for pi_id, pi_info in connected_pis.items():
+            if not isinstance(pi_info, dict):
+                continue
+            if pi_info.get('sid') != sid:
+                continue
+            if not pi_info.get('connected', True):
+                continue
+            return str(pi_id)
+    return None
+
+
+def _register_pi_watcher(pi_id: Optional[str], socket_sid: Optional[str]) -> None:
+    pi_text = str(pi_id or '').strip()
+    sid = str(socket_sid or '').strip()
+    if not pi_text or not sid:
+        return
+
+    with pi_watchers_lock:
+        watchers = pi_watchers.setdefault(pi_text, set())
+        watchers.add(sid)
+
+
+def _unregister_pi_watcher(pi_id: Optional[str], socket_sid: Optional[str]) -> None:
+    pi_text = str(pi_id or '').strip()
+    sid = str(socket_sid or '').strip()
+    if not pi_text or not sid:
+        return
+
+    with pi_watchers_lock:
+        watchers = pi_watchers.get(pi_text)
+        if not watchers:
+            return
+        watchers.discard(sid)
+        if not watchers:
+            pi_watchers.pop(pi_text, None)
+
+
+def _unregister_socket_from_all_pi_watchers(socket_sid: Optional[str]) -> None:
+    sid = str(socket_sid or '').strip()
+    if not sid:
+        return
+
+    with pi_watchers_lock:
+        empty_keys = []
+        for pi_id, watchers in pi_watchers.items():
+            watchers.discard(sid)
+            if not watchers:
+                empty_keys.append(pi_id)
+        for pi_id in empty_keys:
+            pi_watchers.pop(pi_id, None)
+
+
+def _emit_to_pi_watchers(pi_id: Optional[str], event_name: str, data: dict) -> None:
+    pi_text = str(pi_id or '').strip()
+    if not pi_text:
+        return
+
+    with pi_watchers_lock:
+        watchers = list(pi_watchers.get(pi_text) or [])
+
+    for watcher_sid in watchers:
+        socketio.emit(event_name, data, room=watcher_sid)
+
+
+def _all_user_safe_keys() -> list[str]:
+    try:
+        db = get_db()
+        rows = db.execute('SELECT username FROM users').fetchall()
+    except Exception:
+        return []
+
+    safe_keys: list[str] = []
+    seen: set[str] = set()
+    for row in rows or []:
+        safe_key = _safe_key_from_username((row['username'] or '').strip().lower())
+        if not safe_key or safe_key in seen:
+            continue
+        seen.add(safe_key)
+        safe_keys.append(safe_key)
+    return safe_keys
+
+
+def _find_pi_assignment_for_user_safe_key(safe_key: Optional[str], pi_id: Optional[str]) -> Optional[tuple[str, str]]:
+    safe_text = str(safe_key or '').strip()
+    pi_text = str(pi_id or '').strip()
+    if not safe_text or not pi_text:
+        return None
+
+    config_path = _config_path_for_user_safe_key(safe_text)
+    if not os.path.exists(config_path):
+        return None
+
+    try:
+        with open(config_path, 'r', encoding='utf-8') as handle:
+            config = json.load(handle)
+    except Exception:
+        return None
+
+    for store_id, screens in (config.get('screens') or {}).items():
+        if not isinstance(screens, dict):
+            continue
+        for screen_id, screen_data in screens.items():
+            if not isinstance(screen_data, dict):
+                continue
+            if str(screen_data.get('pi_id') or '').strip() == pi_text:
+                return str(store_id), str(screen_id)
+    return None
+
+
+def _resolve_pi_owner_user_key(pi_id: Optional[str], pi_info: Optional[dict] = None) -> Optional[str]:
+    pi_text = str(pi_id or '').strip()
+    if not pi_text:
+        return None
+
+    info = pi_info or _connected_pi_info(pi_text) or {}
+    runtime_user_key = str(info.get('user_key') or '').strip()
+    if runtime_user_key:
+        return runtime_user_key
+
+    owner_from_pair = _resolve_user_key_by_code(info.get('pair_code'))
+    if owner_from_pair:
+        return owner_from_pair
+
+    for safe_key in _all_user_safe_keys():
+        if _find_pi_assignment_for_user_safe_key(safe_key, pi_text):
+            return safe_key
+    return None
+
+
+def _current_user_can_access_pi(
+    pi_id: Optional[str],
+    *,
+    pi_info: Optional[dict] = None,
+    allow_unassigned: bool = False,
+    claim_code: Optional[str] = None,
+) -> bool:
+    current_user_key = _safe_user_key()
+    if not current_user_key:
+        return False
+
+    owner_key = _resolve_pi_owner_user_key(pi_id, pi_info)
+    if owner_key:
+        return owner_key == current_user_key
+
+    if not allow_unassigned:
+        return False
+
+    normalized_claim = _normalize_pi_claim_code(claim_code)
+    runtime_claim = _normalize_pi_claim_code((pi_info or {}).get('claim_code'))
+    return bool(normalized_claim and runtime_claim and normalized_claim == runtime_claim)
 
 @app.route('/api/stores_by_code/<code>', methods=['GET'])
 @with_etag_json
@@ -12385,6 +13049,96 @@ def parse_time_string(val, now):
     except Exception:
         return None
 
+
+def _pick_active_scheduled_record(items, runtime_holder=None, now=None):
+    items = [item for item in (items or []) if isinstance(item, dict)]
+    if not items:
+        return None, False
+    now = now or datetime.now()
+
+    def interval_active(raw_s, raw_e, current_time, days=None):
+        if days:
+            wd = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'][current_time.weekday()]
+            if wd not in days:
+                return False
+        if not (raw_s or raw_e):
+            return False
+        ws, we = _normalized_schedule_bounds(raw_s, raw_e, current_time)
+        if ws and we:
+            if we < ws:
+                return False
+            return ws <= current_time <= we
+        if ws and current_time < ws:
+            return False
+        if we and current_time > we:
+            return False
+        return True
+
+    enabled = [item for item in items if item.get('enabled', True)]
+    scheduled = []
+    fallback = []
+    for item in enabled:
+        st_raw = item.get('start')
+        en_raw = item.get('end')
+        schedule_windows = item.get('schedule') or []
+        in_any_window = False
+        if schedule_windows:
+            for win in schedule_windows:
+                if interval_active(win.get('start'), win.get('end'), now, win.get('days')):
+                    in_any_window = True
+                    break
+        if in_any_window:
+            scheduled.append(item)
+            continue
+        if st_raw or en_raw:
+            if interval_active(st_raw, en_raw, now, item.get('days')):
+                scheduled.append(item)
+            else:
+                fallback.append(item)
+        else:
+            fallback.append(item)
+
+    active_set = scheduled if scheduled else [item for item in fallback if item.get('repeat', True)]
+    if not active_set:
+        return None, False
+    seq = scheduled if scheduled else active_set
+    holder = runtime_holder if isinstance(runtime_holder, dict) else {}
+    meta = holder.setdefault('rotation_meta', {'last_index': 0, 'last_ts': int(now.timestamp())})
+    idx = meta.get('last_index', 0)
+    last_ts = meta.get('last_ts', int(now.timestamp()))
+    if idx >= len(seq):
+        idx = 0
+    current_item = seq[idx]
+    try:
+        duration = max(1, int(current_item.get('duration', 10)))
+    except Exception:
+        duration = 10
+    elapsed = int(now.timestamp()) - int(last_ts)
+    advanced = False
+    if elapsed >= duration:
+        idx = (idx + 1) % len(seq)
+        meta['last_index'] = idx
+        meta['last_ts'] = int(now.timestamp())
+        current_item = seq[idx]
+        advanced = True
+    return current_item, advanced
+
+
+def pick_active_panel_playlist_item(screen):
+    try:
+        panel_zone = screen.get('panel_zone') if isinstance(screen, dict) else None
+        if not isinstance(panel_zone, dict):
+            return None, False
+        panel_zone = _normalize_panel_zone_state(panel_zone)
+        if not panel_zone.get('enabled'):
+            return None, False
+        layout_mode = str(panel_zone.get('layout_mode') or 'off').strip().lower()
+        if layout_mode == 'off':
+            return None, False
+        return _pick_active_scheduled_record(_panel_zone_active_items(panel_zone), runtime_holder=panel_zone)
+    except Exception:
+        return None, False
+
 def pick_active_playlist_item(screen, parent_config=None, store_id=None, screen_id=None):
     pl = screen.get('playlist', [])
     # If this screen is part of a sync group but doesn't yet have a concrete playlist item,
@@ -12448,108 +13202,15 @@ def pick_active_playlist_item(screen, parent_config=None, store_id=None, screen_
             # For store 1000, use the test video as default for all screens
             default_file = 'users/toengpheng_at_gmail.com/2025-09/aa5bfb25-ff6f-4a67-878f-060187487b3c.mp4'
         return default_file
-    # Use local server time (was UTC) so user-entered wall-clock times align with expectations
     now = datetime.now()
-    # Base enabled list (user toggle). Windows will not force-on disabled items.
-    enabled = [i for i in pl if i.get('enabled', True)]
-    scheduled = []
-    fallback = []
-    def interval_active(raw_s, raw_e, now, days=None):
-        """Return True if now is inside the interval defined by raw_s/raw_e.
-        Accepts:
-          - time-only 'HH:MM[:SS]'
-          - ISO 'YYYY-MM-DDTHH:MM:SS'
-          - date-only 'YYYY-MM-DD'
-        Rules:
-                    - If days are provided, they also gate absolute date ranges.
-                        This allows weekday repeat inside an overall start/end date range.
-          - Date-only normalization:
-              * start=date with no end -> active for that calendar day (00:00..23:59:59)
-              * end=date with no start -> active for that calendar day (00:00..23:59:59)
-          - End must not be earlier than start. Use the next date for overnight ranges.
-        """
-        def is_time_only(v):
-            return bool(v) and (len(v) <= 8) and (':' in v) and ('-' not in v)
-        def is_date_only(v):
-            return bool(v) and (len(v) == 10) and (v[4] == '-' and v[7] == '-')
-        def is_absolute(v):
-            return bool(v) and (('T' in v) or is_date_only(v))
-
-        if days:
-            wd = ['mon','tue','wed','thu','fri','sat','sun'][now.weekday()]
-            if wd not in days:
-                return False
-
-        if not (raw_s or raw_e):
-            return False
-        ws, we = _normalized_schedule_bounds(raw_s, raw_e, now)
-        if ws and we:
-            if we < ws:
-                return False
-            return ws <= now <= we
-        if ws and now < ws:
-            return False
-        if we and now > we:
-            return False
-        return True
-
-    for item in enabled:
-        st_raw = item.get('start')
-        en_raw = item.get('end')
-        schedule_windows = item.get('schedule') or []  # list of {'start':..., 'end':...}
-        in_any_window = False
-        # Evaluate multi windows first; if any valid, treat as scheduled
-        if schedule_windows:
-            for win in schedule_windows:
-                if interval_active(win.get('start'), win.get('end'), now, win.get('days')):
-                    in_any_window = True
-                    break
-        if in_any_window:
-            scheduled.append(item)
-            continue
-        if st_raw or en_raw:
-            if interval_active(st_raw, en_raw, now, item.get('days')):
-                scheduled.append(item)
-            else:
-                fallback.append(item)
-        elif item.get('enabled', True):
-            fallback.append(item)
-        else:
-            fallback.append(item)
-    # If no explicit scheduled windows right now, use enabled fallback respecting repeat
-    active_set = scheduled if scheduled else [i for i in fallback if i.get('repeat', True)]
-    if not active_set:
-        return None
-    # Duration-based sequential rotation tracking last change to avoid time modulo drift
-    seq = scheduled if scheduled else active_set
-    if not seq:
-        return None
-    meta = screen.setdefault('rotation_meta', {'last_index': 0, 'last_ts': int(now.timestamp())})
-    idx = meta.get('last_index', 0)
-    last_ts = meta.get('last_ts', int(now.timestamp()))
-    # Clamp idx
-    if idx >= len(seq):
-        idx = 0
-    current_item = seq[idx]
-    dur = max(1, int(current_item.get('duration', 10)))
-    elapsed = int(now.timestamp()) - int(last_ts)
-    if elapsed >= dur:
-        # advance
-        idx = (idx + 1) % len(seq)
-        meta['last_index'] = idx
-        meta['last_ts'] = int(now.timestamp())
-        if parent_config and store_id and screen_id:
-            try:
-                save_store_config(parent_config)
-            except Exception as e:
-                print(f"Rotation meta save failed: {e}")
-        current_item = seq[idx]
-        # persist change lazily (avoid too-frequent writes: only when index advances)
+    current_item, advanced = _pick_active_scheduled_record(pl, runtime_holder=screen, now=now)
+    if advanced and parent_config and store_id and screen_id:
         try:
-            # lightweight load/save pattern avoided; caller handles persistence
-            pass
-        except Exception:
-            pass
+            save_store_config(parent_config)
+        except Exception as e:
+            print(f"Rotation meta save failed: {e}")
+    if not current_item:
+        return None
     return current_item.get('file')
 
 @app.route('/dashboard')
@@ -16673,6 +17334,58 @@ def get_playlist(store_id, screen_id):
                 print(f"WARNING: Post slice assign failed for item[{i}]: {_e_postslice}")
     except Exception:
         pass
+    panel_zone_resp = {
+        'enabled': False,
+        'layout_mode': 'off',
+        'playlist': [],
+        'active_item': None,
+        'source_mode': 'manual',
+        'live_queue': [],
+    }
+    try:
+        panel_zone = screen.get('panel_zone') if isinstance(screen, dict) else None
+        if isinstance(panel_zone, dict):
+            panel_zone = _normalize_panel_zone_state(panel_zone)
+            panel_layout_mode = str(panel_zone.get('layout_mode') or 'off').strip().lower()
+            panel_enabled = bool(panel_zone.get('enabled')) and panel_layout_mode != 'off'
+            panel_source_mode = str(panel_zone.get('source_mode') or 'manual').strip().lower()
+            panel_out = []
+            for panel_item in (panel_zone.get('playlist') or []):
+                if not isinstance(panel_item, dict):
+                    continue
+                if not skip_schedule_filter and not is_item_active_now(panel_item, timezone_offset_hours):
+                    continue
+                panel_out.append(dict(panel_item))
+            live_queue_out = [dict(panel_item) for panel_item in (panel_zone.get('live_queue') or []) if isinstance(panel_item, dict)]
+            panel_active_item = None
+            panel_advanced = False
+            if panel_enabled:
+                panel_active_item, panel_advanced = pick_active_panel_playlist_item(screen)
+                if isinstance(panel_active_item, dict):
+                    panel_active_item = dict(panel_active_item)
+            if panel_advanced:
+                try:
+                    if ukey:
+                        save_store_config_for_user_safe_key(ukey, cfg)
+                    else:
+                        save_store_config(cfg)
+                except Exception as panel_save_err:
+                    print(f"Panel rotation meta save failed: {panel_save_err}")
+            panel_zone_resp = {
+                'enabled': panel_enabled,
+                'layout_mode': panel_layout_mode if panel_enabled else 'off',
+                'playlist': panel_out,
+                'active_item': panel_active_item,
+                'source_mode': panel_source_mode,
+                'live_queue': live_queue_out,
+            }
+            if session_ukey and not used_pair_code_auth:
+                try:
+                    panel_zone_resp['pos_feed'] = json.loads(json.dumps(panel_zone.get('pos_feed') or {}, ensure_ascii=False))
+                except Exception:
+                    panel_zone_resp['pos_feed'] = dict(panel_zone.get('pos_feed') or {})
+    except Exception as panel_err:
+        print(f"WARNING: panel zone build failed: {panel_err}")
     print(f"DEBUG: Returning playlist items: {len(out)}")
     # Orientation mode for clients: vertical, horizontal, or default (none)
     try:
@@ -16691,7 +17404,7 @@ def get_playlist(store_id, screen_id):
         rotation = 0
     muted = bool(screen.get('muted', False))
     return (
-    {'success': True, 'playlist': out, 'queue_len': len(screen.get('cmd_queue', [])), 'events_recent': len(screen.get('events', [])), 'orientation': orientation_mode, 'rotation': rotation, 'muted': muted},
+    {'success': True, 'playlist': out, 'panel_zone': panel_zone_resp, 'queue_len': len(screen.get('cmd_queue', [])), 'events_recent': len(screen.get('events', [])), 'orientation': orientation_mode, 'rotation': rotation, 'muted': muted},
         200,
         {'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'}
     )
@@ -18612,6 +19325,256 @@ def delete_schedule_window(store_id, screen_id, item_id, index):
 def delete_schedule_window_post(store_id, screen_id, item_id, index):
     return delete_schedule_window(store_id, screen_id, item_id, index)
 
+
+def _resolve_screen_for_mutation(cfg, store_id, screen_id):
+    screens = cfg.get('screens', {}).get(store_id, {})
+    if screen_id not in screens:
+        if '_' in screen_id:
+            short = screen_id.split('_', 1)[1]
+            prefixed = f"{store_id}_{short}"
+            if prefixed in screens:
+                screen_id = prefixed
+            elif short in screens:
+                screen_id = short
+        else:
+            prefixed = f"{store_id}_{screen_id}"
+            if prefixed in screens:
+                screen_id = prefixed
+    return cfg.get('screens', {}).get(store_id, {}).get(screen_id), screen_id
+
+
+@app.route('/panel_zone/<store_id>/<screen_id>', methods=['PATCH'])
+@login_required
+def update_panel_zone(store_id, screen_id):
+    ukey = _safe_user_key()
+    cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
+    screen, screen_id = _resolve_screen_for_mutation(cfg, store_id, screen_id)
+    if not screen:
+        return jsonify({'success': False, 'error': 'screen not found'}), 404
+    payload = request.get_json() or {}
+    panel_zone = _normalize_panel_zone_state(screen.setdefault('panel_zone', _panel_zone_defaults()))
+    valid_layouts = {'off', 'split-right-25', 'split-left-25', 'split-bottom-25'}
+    if 'layout_mode' in payload:
+        layout_mode = str(payload.get('layout_mode') or 'off').strip().lower()
+        if layout_mode not in valid_layouts:
+            return jsonify({'success': False, 'error': 'invalid layout mode'}), 400
+        panel_zone['layout_mode'] = layout_mode
+        panel_zone['enabled'] = layout_mode != 'off'
+    elif 'enabled' in payload:
+        panel_zone['enabled'] = bool(payload.get('enabled'))
+        if not panel_zone['enabled']:
+            panel_zone['layout_mode'] = 'off'
+        elif str(panel_zone.get('layout_mode') or 'off').strip().lower() == 'off':
+            panel_zone['layout_mode'] = 'split-right-25'
+    if 'source_mode' in payload:
+        source_mode = str(payload.get('source_mode') or 'manual').strip().lower()
+        if source_mode not in {'manual', 'pos_webhook'}:
+            return jsonify({'success': False, 'error': 'invalid source mode'}), 400
+        panel_zone['source_mode'] = source_mode
+        if source_mode == 'pos_webhook':
+            pos_feed = panel_zone.setdefault('pos_feed', _panel_zone_defaults()['pos_feed'])
+            if not str(pos_feed.get('webhook_token') or '').strip():
+                pos_feed['webhook_token'] = secrets.token_urlsafe(18)
+            if str(panel_zone.get('layout_mode') or 'off').strip().lower() == 'off':
+                panel_zone['layout_mode'] = 'split-right-25'
+                panel_zone['enabled'] = True
+    panel_zone = _normalize_panel_zone_state(panel_zone)
+    _enqueue_command_in_cfg(cfg, store_id, screen_id, 'reload')
+    _save_config_for_scope(ukey, cfg)
+    return jsonify({'success': True, 'panel_zone': panel_zone})
+
+
+@app.route('/panel_pos_feed/<store_id>/<screen_id>', methods=['PATCH'])
+@login_required
+def update_panel_pos_feed(store_id, screen_id):
+    ukey = _safe_user_key()
+    cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
+    screen, screen_id = _resolve_screen_for_mutation(cfg, store_id, screen_id)
+    if not screen:
+        return jsonify({'success': False, 'error': 'screen not found'}), 404
+
+    payload = request.get_json() or {}
+    panel_zone = _normalize_panel_zone_state(screen.setdefault('panel_zone', _panel_zone_defaults()))
+    pos_feed = panel_zone.setdefault('pos_feed', _panel_zone_defaults()['pos_feed'])
+    field_map = pos_feed.setdefault('field_map', _panel_zone_defaults()['pos_feed']['field_map'])
+
+    if payload.get('reset_token'):
+        pos_feed['webhook_token'] = secrets.token_urlsafe(18)
+    elif not str(pos_feed.get('webhook_token') or '').strip():
+        pos_feed['webhook_token'] = secrets.token_urlsafe(18)
+
+    if 'name' in payload:
+        pos_feed['name'] = str(payload.get('name') or '').strip()
+    if 'connector_type' in payload:
+        pos_feed['connector_type'] = str(payload.get('connector_type') or '').strip().lower()
+    if 'field_map' in payload and isinstance(payload.get('field_map'), dict):
+        for field_key in ('customer_name', 'order_number', 'status', 'external_id'):
+            if field_key in payload['field_map']:
+                field_map[field_key] = str(payload['field_map'].get(field_key) or '').strip()
+    if 'title_template' in payload:
+        pos_feed['title_template'] = str(payload.get('title_template') or '').strip() or 'Now serving'
+    if 'body_template' in payload:
+        pos_feed['body_template'] = str(payload.get('body_template') or '').replace('\r\n', '\n').replace('\r', '\n').strip() or '{{customer_name}}\nOrder #{{order_number}}'
+    if 'allowed_statuses' in payload:
+        pos_feed['allowed_statuses'] = payload.get('allowed_statuses')
+    if 'display_seconds' in payload:
+        pos_feed['display_seconds'] = payload.get('display_seconds')
+    if 'max_items' in payload:
+        pos_feed['max_items'] = payload.get('max_items')
+    if payload.get('clear_queue'):
+        panel_zone['live_queue'] = []
+    if payload.get('enable_source'):
+        panel_zone['source_mode'] = 'pos_webhook'
+        if str(panel_zone.get('layout_mode') or 'off').strip().lower() == 'off':
+            panel_zone['layout_mode'] = 'split-right-25'
+            panel_zone['enabled'] = True
+
+    panel_zone = _normalize_panel_zone_state(panel_zone)
+    _enqueue_command_in_cfg(cfg, store_id, screen_id, 'reload')
+    _save_config_for_scope(ukey, cfg)
+    return jsonify({'success': True, 'panel_zone': panel_zone})
+
+
+@app.route('/panel_pos_feed/<store_id>/<screen_id>/sample', methods=['POST'])
+@login_required
+def sample_panel_pos_feed(store_id, screen_id):
+    ukey = _safe_user_key()
+    cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
+    screen, screen_id = _resolve_screen_for_mutation(cfg, store_id, screen_id)
+    if not screen:
+        return jsonify({'success': False, 'error': 'screen not found'}), 404
+
+    panel_zone = _normalize_panel_zone_state(screen.setdefault('panel_zone', _panel_zone_defaults()))
+    pos_feed = panel_zone.setdefault('pos_feed', _panel_zone_defaults()['pos_feed'])
+    if not str(pos_feed.get('webhook_token') or '').strip():
+        pos_feed['webhook_token'] = secrets.token_urlsafe(18)
+
+    sample_payload = {
+        'customer': {'name': 'Jane Smith'},
+        'order': {'id': f'sample-{int(time.time())}', 'number': 'A104', 'status': 'ready'},
+    }
+    result = _apply_panel_pos_event(panel_zone, sample_payload)
+    _enqueue_command_in_cfg(cfg, store_id, screen_id, 'reload')
+    _save_config_for_scope(ukey, cfg)
+    return jsonify({'success': True, 'result': result, 'sample_payload': sample_payload, 'panel_zone': panel_zone})
+
+
+@app.route('/api/panel-pos-webhook/<token>', methods=['POST'])
+def receive_panel_pos_webhook(token):
+    target = _find_panel_zone_by_webhook_token(token)
+    if not target:
+        return jsonify({'success': False, 'error': 'webhook not found'}), 404
+
+    payload = request.get_json(silent=True)
+    if payload is None:
+        payload = request.form.to_dict(flat=True) if request.form else {}
+    if not isinstance(payload, dict):
+        return jsonify({'success': False, 'error': 'JSON object body required'}), 400
+
+    panel_zone = _normalize_panel_zone_state(target['panel_zone'])
+    result = _apply_panel_pos_event(panel_zone, payload)
+    _enqueue_command_in_cfg(target['cfg'], target['store_id'], target['screen_id'], 'reload')
+    _save_config_for_scope(target['safe_key'], target['cfg'])
+    return jsonify({
+        'success': True,
+        'accepted': bool(result.get('accepted')),
+        'result': result,
+        'store_id': target['store_id'],
+        'screen_id': target['screen_id'],
+    })
+
+
+@app.route('/panel_playlist/item/<store_id>/<screen_id>', methods=['POST'])
+@login_required
+def add_panel_playlist_item(store_id, screen_id):
+    ukey = _safe_user_key()
+    cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
+    screen, screen_id = _resolve_screen_for_mutation(cfg, store_id, screen_id)
+    if not screen:
+        return jsonify({'success': False, 'error': 'screen not found'}), 404
+    payload = request.get_json() or {}
+    title = str(payload.get('title') or '').strip() or 'Info card'
+    body = str(payload.get('body') or '').strip()
+    panel_zone = _normalize_panel_zone_state(screen.setdefault('panel_zone', _panel_zone_defaults()))
+    item = {
+        'id': str(uuid.uuid4()),
+        'kind': 'text_card',
+        'title': title,
+        'body': body,
+        'enabled': True,
+        'start': None,
+        'end': None,
+        'schedule': [],
+        'duration': 10,
+        'repeat': True,
+        'days': [],
+    }
+    panel_zone.setdefault('playlist', []).append(item)
+    panel_zone['enabled'] = True
+    if str(panel_zone.get('layout_mode') or 'off').strip().lower() == 'off':
+        panel_zone['layout_mode'] = 'split-right-25'
+    _enqueue_command_in_cfg(cfg, store_id, screen_id, 'reload')
+    _save_config_for_scope(ukey, cfg)
+    return jsonify({'success': True, 'item': item, 'panel_zone': panel_zone})
+
+
+@app.route('/panel_playlist/item/<store_id>/<screen_id>/<item_id>', methods=['PATCH'])
+@login_required
+def update_panel_playlist_item(store_id, screen_id, item_id):
+    ukey = _safe_user_key()
+    cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
+    screen, screen_id = _resolve_screen_for_mutation(cfg, store_id, screen_id)
+    if not screen:
+        return jsonify({'success': False, 'error': 'screen not found'}), 404
+    payload = request.get_json() or {}
+    panel_zone = _normalize_panel_zone_state(screen.setdefault('panel_zone', _panel_zone_defaults()))
+    for item in panel_zone.get('playlist', []):
+        if str(item.get('id')) != str(item_id):
+            continue
+        next_start = payload.get('start') if 'start' in payload else item.get('start')
+        next_end = payload.get('end') if 'end' in payload else item.get('end')
+        if ('start' in payload or 'end' in payload) and not _schedule_range_is_valid(next_start, next_end):
+            return jsonify({'success': False, 'error': 'End must be after start. Choose the next date for overnight schedules.'}), 400
+        if 'title' in payload:
+            item['title'] = str(payload.get('title') or '').strip() or 'Info card'
+        if 'body' in payload:
+            item['body'] = str(payload.get('body') or '').strip()
+        for key in ['enabled', 'start', 'end', 'repeat']:
+            if key in payload:
+                item[key] = payload.get(key)
+        if 'duration' in payload:
+            try:
+                item['duration'] = max(1, int(str(payload.get('duration')).strip()))
+            except Exception:
+                pass
+        if 'days' in payload:
+            if isinstance(payload.get('days'), list):
+                item['days'] = [str(day).lower()[:3] for day in payload.get('days') if day]
+            elif payload.get('days') is None:
+                item['days'] = []
+        _enqueue_command_in_cfg(cfg, store_id, screen_id, 'reload')
+        _save_config_for_scope(ukey, cfg)
+        return jsonify({'success': True, 'panel_zone': panel_zone})
+    return jsonify({'success': False, 'error': 'item not found'}), 404
+
+
+@app.route('/panel_playlist/item/<store_id>/<screen_id>/<item_id>', methods=['DELETE'])
+@login_required
+def delete_panel_playlist_item(store_id, screen_id, item_id):
+    ukey = _safe_user_key()
+    cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
+    screen, screen_id = _resolve_screen_for_mutation(cfg, store_id, screen_id)
+    if not screen:
+        return jsonify({'success': False, 'error': 'screen not found'}), 404
+    panel_zone = _normalize_panel_zone_state(screen.setdefault('panel_zone', _panel_zone_defaults()))
+    before = len(panel_zone.get('playlist', []))
+    panel_zone['playlist'] = [item for item in panel_zone.get('playlist', []) if str(item.get('id')) != str(item_id)]
+    if len(panel_zone['playlist']) == before:
+        return jsonify({'success': False, 'error': 'item not found'}), 404
+    _enqueue_command_in_cfg(cfg, store_id, screen_id, 'reload')
+    _save_config_for_scope(ukey, cfg)
+    return jsonify({'success': True, 'panel_zone': panel_zone})
+
 # ---- Legacy fixed-path alias: redirect /playlist/1881/... to current master store id ----
 @app.route('/playlist/1881/<screen_id>')
 def get_playlist_legacy_1881(screen_id):
@@ -19655,6 +20618,7 @@ def ffmpeg_status():
 
 # Remote Pi Manager API endpoints
 @app.route('/api/configure-pi', methods=['POST'])
+@login_required
 def configure_pi():
     """Configure a Pi remotely using Pi ID"""
     try:
@@ -19678,6 +20642,10 @@ def configure_pi():
         if not all([pi_id, pair_code, store_id, screen_id]):
             logging.error(f'Missing fields: pi_id={pi_id}, pair_code={pair_code}, store_id={store_id}, screen_id={screen_id}')
             return jsonify({'success': False, 'message': 'Missing required fields'}), 400
+
+        pi_info = _connected_pi_info(pi_id)
+        if not _current_user_can_access_pi(pi_id, pi_info=pi_info):
+            return jsonify({'success': False, 'message': 'Forbidden'}), 403
 
         # If no IP provided, resolve from mapping file
         if not pi_ip:
@@ -19757,10 +20725,14 @@ def register_pi():
         return jsonify({'success': False, 'message': f'Error: {e}'}), 500
 
 @app.route('/api/pi-status/<pi_id>')
+@login_required
 def pi_status(pi_id):
     """Get status of a specific Pi"""
     try:
         logging.info(f'Pi status request for: {pi_id}')
+        pi_info = _connected_pi_info(pi_id)
+        if not _current_user_can_access_pi(pi_id, pi_info=pi_info):
+            return jsonify({'success': False, 'message': 'Forbidden'}), 403
 
         # Get Pi IP from query parameter
         pi_ip = request.args.get('pi_ip')
@@ -19870,6 +20842,7 @@ def handle_connect(auth=None):
 @socketio.on('disconnect')
 def handle_disconnect():
     """Handle WebSocket disconnection"""
+    _unregister_socket_from_all_pi_watchers(request.sid)
     # Find Pi and update last_seen timestamp instead of deleting
     with pi_connection_lock:
         for pi_id, pi_info in list(connected_pis.items()):
@@ -20437,8 +21410,19 @@ def handle_screenshot_request(data):
     """
     pi_id = data.get('pi_id')
     logging.info(f'📸 Screenshot request for Pi: {pi_id}')
-    
+
     pi_runtime = _get_connected_pi_runtime(pi_id)
+    if not _has_user_session() or not _current_user_can_access_pi(pi_id, pi_info=pi_runtime):
+        emit('screenshot_data', {
+            'pi_id': pi_id,
+            'error': 'Forbidden',
+            'timestamp': time.time()
+        })
+        logging.warning(f'❌ Screenshot request denied for Pi {pi_id}')
+        return
+
+    _register_pi_watcher(pi_id, request.sid)
+    
     if pi_id and pi_runtime:
         pi_session = pi_runtime['sid']
         # Emit to the specific Pi's session
@@ -20462,8 +21446,19 @@ def handle_start_live_stream(data):
     """
     pi_id = data.get('pi_id')
     logging.info(f'📺 Live stream START request for Pi: {pi_id}')
-    
+
     pi_runtime = _get_connected_pi_runtime(pi_id)
+    if not _has_user_session() or not _current_user_can_access_pi(pi_id, pi_info=pi_runtime):
+        emit('stream_error', {
+            'pi_id': pi_id,
+            'error': 'Forbidden',
+            'timestamp': time.time()
+        })
+        logging.warning(f'❌ Live stream start denied for Pi {pi_id}')
+        return
+
+    _register_pi_watcher(pi_id, request.sid)
+    
     if pi_id and pi_runtime:
         pi_session = pi_runtime['sid']
         # Emit to the specific Pi's session
@@ -20486,8 +21481,14 @@ def handle_stop_live_stream(data):
     """
     pi_id = data.get('pi_id')
     logging.info(f'📺 Live stream STOP request for Pi: {pi_id}')
-    
+
     pi_runtime = _get_connected_pi_runtime(pi_id)
+    if not _has_user_session() or not _current_user_can_access_pi(pi_id, pi_info=pi_runtime):
+        logging.warning(f'❌ Live stream stop denied for Pi {pi_id}')
+        return
+
+    _unregister_pi_watcher(pi_id, request.sid)
+    
     if pi_id and pi_runtime:
         pi_session = pi_runtime['sid']
         socketio.emit('stop_live_stream', data, room=pi_session)
@@ -20500,7 +21501,14 @@ def handle_live_frame(data):
     Pi sends live frame data
     Relay to all dashboard sessions viewing this Pi
     """
-    pi_id = data.get('pi_id')
+    sender_pi_id = _registered_pi_id_for_socket_sid(request.sid)
+    if not sender_pi_id:
+        logging.warning('❌ Rejected live frame from unknown socket sid=%s', request.sid)
+        return
+
+    payload = dict(data or {})
+    pi_id = sender_pi_id
+    payload['pi_id'] = pi_id
     frame_number = data.get('frame_number', 0)
     
     # Log every 30th frame to avoid spam
@@ -20508,9 +21516,7 @@ def handle_live_frame(data):
         frame_size = len(data.get('frame', ''))
         logging.debug(f'📺 Frame #{frame_number} from {pi_id} ({frame_size} bytes)')
     
-    # Emit to ALL clients (including sender) instead of broadcast=True
-    # broadcast=True excludes the sender, but we want dashboards to receive it
-    socketio.emit('live_frame', data, namespace='/')
+    _emit_to_pi_watchers(pi_id, 'live_frame', payload)
 
 @socketio.on('screenshot_data')
 @socketio_error_handler
@@ -20519,19 +21525,25 @@ def handle_screenshot_data(data):
     Pi sends screenshot data back (legacy/fallback)
     Relay to all dashboard sessions (they filter by pi_id)
     """
-    pi_id = data.get('pi_id')
-    has_screenshot = 'screenshot' in data
-    has_error = 'error' in data
+    sender_pi_id = _registered_pi_id_for_socket_sid(request.sid)
+    if not sender_pi_id:
+        logging.warning('❌ Rejected screenshot payload from unknown socket sid=%s', request.sid)
+        return
+
+    payload = dict(data or {})
+    payload['pi_id'] = sender_pi_id
+    pi_id = sender_pi_id
+    has_screenshot = 'screenshot' in payload
+    has_error = 'error' in payload
     
     if has_screenshot:
         # Calculate approximate size for logging
-        screenshot_size = len(data['screenshot']) if data['screenshot'] else 0
+        screenshot_size = len(payload['screenshot']) if payload['screenshot'] else 0
         logging.info(f'📸 Screenshot received from {pi_id} ({screenshot_size} bytes)')
     elif has_error:
-        logging.warning(f'❌ Screenshot error from {pi_id}: {data["error"]}')
+        logging.warning(f'❌ Screenshot error from {pi_id}: {payload["error"]}')
     
-    # Broadcast to all dashboard sessions
-    socketio.emit('screenshot_data', data, broadcast=True)
+    _emit_to_pi_watchers(pi_id, 'screenshot_data', payload)
 
 # VNC-over-WebSocket proxy handlers
 @socketio.on('vnc_connect')
@@ -20544,8 +21556,15 @@ def handle_vnc_connect(data):
     dashboard_sid = request.sid
     
     logging.info(f'🖥️ VNC connect request from dashboard {dashboard_sid} to Pi: {pi_id}')
-    
+
     pi_runtime = _get_connected_pi_runtime(pi_id)
+    if not _has_user_session() or not _current_user_can_access_pi(pi_id, pi_info=pi_runtime):
+        emit('vnc_error', {'pi_id': pi_id, 'message': 'Forbidden'})
+        logging.warning(f'🖥️ VNC connect denied for Pi: {pi_id}')
+        return
+
+    _register_pi_watcher(pi_id, dashboard_sid)
+    
     if pi_id and pi_runtime:
         pi_session = pi_runtime['sid']
         # Forward connect request to Pi, include dashboard sid for routing back
@@ -20569,9 +21588,20 @@ def handle_vnc_data(data):
     pi_id = data.get('pi_id')
     
     if target_sid:
+        sender_pi_id = _registered_pi_id_for_socket_sid(request.sid)
+        if not sender_pi_id:
+            logging.warning('🖥️ Rejected targeted VNC data from unknown socket sid=%s', request.sid)
+            return
+        payload = dict(data or {})
+        payload['pi_id'] = sender_pi_id
         # Forward VNC data to specific session (could be dashboard or Pi)
-        socketio.emit('vnc_data', data, room=target_sid)
+        socketio.emit('vnc_data', payload, room=target_sid)
     else:
+        pi_runtime = _get_connected_pi_runtime(pi_id)
+        if not _has_user_session() or not _current_user_can_access_pi(pi_id, pi_info=pi_runtime):
+            emit('vnc_error', {'pi_id': pi_id, 'message': 'Forbidden'})
+            logging.warning('🖥️ Rejected dashboard VNC input for Pi %s', pi_id)
+            return
         pi_runtime = _get_connected_pi_runtime(pi_id)
         if not (pi_id and pi_runtime):
             return
@@ -20589,8 +21619,14 @@ def handle_vnc_disconnect(data):
     dashboard_sid = data.get('dashboard_sid')
     
     logging.info(f'🖥️ VNC disconnect request for Pi: {pi_id}')
-    
+
     pi_runtime = _get_connected_pi_runtime(pi_id)
+    if not _has_user_session() or not _current_user_can_access_pi(pi_id, pi_info=pi_runtime):
+        logging.warning(f'🖥️ VNC disconnect denied for Pi: {pi_id}')
+        return
+
+    _unregister_pi_watcher(pi_id, request.sid)
+    
     if pi_id and pi_runtime:
         pi_session = pi_runtime['sid']
         socketio.emit('vnc_disconnect', {
@@ -20604,6 +21640,13 @@ def handle_vnc_disconnect(data):
 @socketio_error_handler
 def handle_vnc_connected(data):
     """Relay Pi-side VNC connection readiness back to the requesting dashboard."""
+    sender_pi_id = _registered_pi_id_for_socket_sid(request.sid)
+    if not sender_pi_id:
+        logging.warning('🖥️ Rejected vnc_connected from unknown socket sid=%s', request.sid)
+        return
+
+    data = dict(data or {})
+    data['pi_id'] = sender_pi_id
     target_sid = (data or {}).get('target_sid')
     if target_sid:
         socketio.emit('vnc_connected', data, room=target_sid)
@@ -20613,6 +21656,13 @@ def handle_vnc_connected(data):
 @socketio_error_handler
 def handle_vnc_error(data):
     """Relay Pi-side VNC/capture errors back to the requesting dashboard."""
+    sender_pi_id = _registered_pi_id_for_socket_sid(request.sid)
+    if not sender_pi_id:
+        logging.warning('🖥️ Rejected vnc_error from unknown socket sid=%s', request.sid)
+        return
+
+    data = dict(data or {})
+    data['pi_id'] = sender_pi_id
     target_sid = (data or {}).get('target_sid')
     if target_sid:
         socketio.emit('vnc_error', data, room=target_sid)
@@ -20626,8 +21676,17 @@ def handle_restart_client(data):
     """
     pi_id = data.get('pi_id')
     logging.info(f'🔄 Client restart request for Pi: {pi_id}')
-    
+
     pi_runtime = _get_connected_pi_runtime(pi_id)
+    if not _has_user_session() or not _current_user_can_access_pi(pi_id, pi_info=pi_runtime):
+        emit('client_restart_error', {
+            'pi_id': pi_id,
+            'error': 'Forbidden',
+            'timestamp': time.time()
+        })
+        logging.warning(f'❌ Client restart denied for Pi {pi_id}')
+        return
+    
     if pi_id and pi_runtime:
         pi_session = pi_runtime['sid']
         # Emit to the specific Pi's session
@@ -20649,21 +21708,32 @@ def handle_client_restarting(data):
     Pi confirms it's restarting the client
     Relay to dashboard
     """
-    pi_id = data.get('pi_id')
-    status = data.get('status')
+    sender_pi_id = _registered_pi_id_for_socket_sid(request.sid)
+    if not sender_pi_id:
+        logging.warning('🔄 Rejected client_restarting from unknown socket sid=%s', request.sid)
+        return
+
+    payload = dict(data or {})
+    payload['pi_id'] = sender_pi_id
+    pi_id = sender_pi_id
+    status = payload.get('status')
     logging.info(f'🔄 Client restart status from {pi_id}: {status}')
     
-    # Broadcast to all dashboard sessions
-    socketio.emit('client_restarting', data, broadcast=True)
+    _emit_to_pi_watchers(pi_id, 'client_restarting', payload)
 
 # Update the pi_status endpoint to check WebSocket connections
 @app.route('/api/pi-status-ws/<pi_id>')
+@login_required
 def pi_status_websocket(pi_id):
     """
     Check if Pi is online via WebSocket connection
     PREFERRED method - instant, no network delay
     """
     try:
+        pi_info = _connected_pi_info(pi_id)
+        if not _current_user_can_access_pi(pi_id, pi_info=pi_info):
+            return jsonify({'success': False, 'message': 'Forbidden'}), 403
+
         pi_info = _get_connected_pi_runtime(pi_id)
         if pi_info:
             return jsonify({
@@ -20723,6 +21793,7 @@ def pi_claim_status(claim_code):
 
 # Update configure-pi endpoint to use WebSocket
 @app.route('/api/configure-pi-ws', methods=['POST'])
+@login_required
 def configure_pi_websocket():
     """
     Send configuration to Pi via WebSocket (PREFERRED method)
@@ -20759,18 +21830,29 @@ def configure_pi_websocket():
                     'success': False,
                     'message': f'Pi {pi_id} is not currently online.'
                 }), 400
-            
+            pi_info = dict(connected_pis[pi_id])
             pi_sid = connected_pis[pi_id]['sid']
+
+        if not _current_user_can_access_pi(
+            pi_id,
+            pi_info=pi_info,
+            allow_unassigned=True,
+            claim_code=claim_code,
+        ):
+            return jsonify({
+                'success': False,
+                'message': 'Forbidden'
+            }), 403
         
-        # Send configuration to Pi via WebSocket - BROADCAST with PI_ID so client can filter
-        logging.info(f'📡 Broadcasting configuration to all clients (target: {pi_id}, sid: {pi_sid}): store={store_id}, screen={screen_id}')
+        # Emit directly to the target Pi instead of broadcasting to every client.
+        logging.info(f'📡 Sending configuration to Pi {pi_id} (sid: {pi_sid}): store={store_id}, screen={screen_id}')
         socketio.emit('configure', {
             'target_pi_id': pi_id,  # Add target so Pi can filter
             'pair_code': pair_code,
             'store_id': store_id,
             'screen_id': screen_id,
             'auto_start': auto_start
-        })
+        }, room=pi_sid)
         
         logging.info(f'✅ Configuration broadcast sent (target PI: {pi_id})')
         
@@ -20821,6 +21903,7 @@ def configure_pi_websocket():
         return jsonify({'success': False, 'message': f'Configuration failed: {e}'}), 500
 
 @app.route('/api/pi-close-screen', methods=['POST'])
+@login_required
 def pi_close_screen():
     """Send close screen command to Pi via WebSocket"""
     try:
@@ -20831,6 +21914,9 @@ def pi_close_screen():
             return jsonify({'success': False, 'message': 'Pi ID required'}), 400
         
         logging.info(f'[v2.0] Close screen request for Pi: {pi_id}')
+        pi_info = _connected_pi_info(pi_id)
+        if not _current_user_can_access_pi(pi_id, pi_info=pi_info):
+            return jsonify({'success': False, 'message': 'Forbidden'}), 403
         
         # Check if Pi is connected
         with pi_connection_lock:
@@ -20861,6 +21947,7 @@ def pi_close_screen():
         return jsonify({'success': False, 'message': f'Close screen failed: {e}'}), 500
 
 @app.route('/api/pi-restart', methods=['POST'])
+@login_required
 def pi_restart():
     """Send restart command to Pi via WebSocket"""
     try:
@@ -20871,6 +21958,9 @@ def pi_restart():
             return jsonify({'success': False, 'message': 'Pi ID required'}), 400
         
         logging.info(f'[v2.0] Restart request for Pi: {pi_id}')
+        pi_info = _connected_pi_info(pi_id)
+        if not _current_user_can_access_pi(pi_id, pi_info=pi_info):
+            return jsonify({'success': False, 'message': 'Forbidden'}), 403
         
         # Check if Pi is connected
         with pi_connection_lock:
@@ -20905,6 +21995,7 @@ def pi_restart():
         return jsonify({'success': False, 'message': f'Restart failed: {e}'}), 500
 
 @app.route('/api/pi-delete', methods=['POST'])
+@login_required
 def pi_delete():
     """Delete a Pi device from the database"""
     try:
@@ -20915,6 +22006,9 @@ def pi_delete():
             return jsonify({'success': False, 'message': 'Pi ID required'}), 400
         
         logging.info(f'[DELETE] Delete request for Pi: {pi_id}')
+        pi_info = _connected_pi_info(pi_id)
+        if not _current_user_can_access_pi(pi_id, pi_info=pi_info):
+            return jsonify({'success': False, 'message': 'Forbidden'}), 403
         
         # Track if we actually did anything
         actions_taken = []
@@ -20937,34 +22031,31 @@ def pi_delete():
         
         # 2. Remove Pi assignments from all user config files
         try:
-            with get_db() as conn:
-                cursor = conn.cursor()
-                cursor.execute('SELECT id FROM users')
-                users = cursor.fetchall()
-                
-                assignments_removed = 0
-                for user in users:
-                    user_id = user['id']
-                    try:
-                        config = load_store_config_for_user_safe_key(user_id)
-                        if config and 'screens' in config:
-                            modified = False
-                            # Check all stores and screens for this pi_id
-                            for store_id, screens in config['screens'].items():
-                                for screen_id, screen_data in screens.items():
-                                    if isinstance(screen_data, dict) and screen_data.get('pi_id') == pi_id:
-                                        logging.info(f'[DELETE] Removing {pi_id} assignment from user {user_id}, store {store_id}, screen {screen_id}')
-                                        screen_data['pi_id'] = None
-                                        modified = True
-                                        assignments_removed += 1
-                            
-                            if modified:
-                                save_store_config_for_user_safe_key(user_id, config)
-                    except Exception as e:
-                        logging.warning(f'[DELETE] Error checking user {user_id} config: {e}')
-                
-                if assignments_removed > 0:
-                    actions_taken.append(f'removed {assignments_removed} assignment(s)')
+            assignments_removed = 0
+            for safe_key in _all_user_safe_keys():
+                try:
+                    config_path = _config_path_for_user_safe_key(safe_key)
+                    if not os.path.exists(config_path):
+                        continue
+                    config = load_store_config_for_user_safe_key(safe_key)
+                    if config and 'screens' in config:
+                        modified = False
+                        # Check all stores and screens for this pi_id
+                        for store_id, screens in config['screens'].items():
+                            for screen_id, screen_data in screens.items():
+                                if isinstance(screen_data, dict) and screen_data.get('pi_id') == pi_id:
+                                    logging.info(f'[DELETE] Removing {pi_id} assignment from user {safe_key}, store {store_id}, screen {screen_id}')
+                                    screen_data['pi_id'] = None
+                                    modified = True
+                                    assignments_removed += 1
+
+                        if modified:
+                            save_store_config_for_user_safe_key(safe_key, config)
+                except Exception as e:
+                    logging.warning(f'[DELETE] Error checking user {safe_key} config: {e}')
+
+            if assignments_removed > 0:
+                actions_taken.append(f'removed {assignments_removed} assignment(s)')
         except Exception as e:
             logging.warning(f'[DELETE] Error removing Pi assignments: {e}')
         
@@ -21005,12 +22096,15 @@ def pi_delete():
 
 # List all connected Pis (useful for admin dashboard)
 @app.route('/api/connected-pis')
+@login_required
 def list_connected_pis():
     """List all currently connected Pis via WebSocket"""
     try:
         with pi_connection_lock:
             pis = []
             for pi_id, pi_info in connected_pis.items():
+                if not _current_user_can_access_pi(pi_id, pi_info=pi_info):
+                    continue
                 pis.append({
                     'pi_id': pi_id,
                     'ip': pi_info['ip'],
@@ -21029,10 +22123,16 @@ def list_connected_pis():
 
 # VNC WebSocket Proxy (solves HTTPS mixed content issue)
 @app.route('/api/vnc-proxy/<pi_id>')
+@login_required
 def vnc_proxy_info(pi_id):
     """Get VNC proxy information for a Pi"""
     try:
         pi_info = _get_connected_pi_runtime(pi_id)
+        if not _current_user_can_access_pi(pi_id, pi_info=pi_info):
+            return jsonify({
+                'success': False,
+                'message': 'Forbidden'
+            }), 403
         if not pi_info:
             return jsonify({
                 'success': False,
@@ -21057,6 +22157,7 @@ def vnc_proxy_info(pi_id):
 
 # Serve VNC viewer page via HTTPS (WebSocket tunnel)
 @app.route('/vnc/<pi_id>')
+@login_required
 def vnc_viewer(pi_id):
     """
     Serve VNC viewer page for specific Pi
@@ -21064,6 +22165,8 @@ def vnc_viewer(pi_id):
     """
     try:
         pi_runtime = _get_connected_pi_runtime(pi_id)
+        if not _current_user_can_access_pi(pi_id, pi_info=pi_runtime):
+            return redirect(url_for('login', next=request.path))
         if not pi_runtime:
             return "Pi not connected", 404
 
@@ -21218,6 +22321,12 @@ def restart_pi(pi_id):
     """Send restart command to Pi device"""
     try:
         logging.info(f'Restart request for Pi: {pi_id}')
+        pi_info = _connected_pi_info(pi_id)
+        if not _current_user_can_access_pi(pi_id, pi_info=pi_info):
+            return jsonify({
+                'success': False,
+                'message': 'Forbidden'
+            }), 403
         
         # Check if Pi is connected via WebSocket
         with pi_connection_lock:

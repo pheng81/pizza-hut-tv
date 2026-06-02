@@ -7791,6 +7791,30 @@ allowfullscreen></iframe></div>`;
                     ${!isMasterStore(storeId)?'<div style=\"font-size:10px;color:#777;margin-top:6px;\">Local changes here do NOT propagate. Master Apply-To-All uploads can still replace files (unless protected).</div>':''}
                 </div>
 
+                <div class="playlist-section panel-zone-section" id="panel-zone-${screenId}" style="margin-top:12px; border-top:1px solid #eceef3; padding-top:12px;">
+                    <div style="font-size:13px; font-weight:600; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+                        <span>Info Panel Schedule</span>
+                        <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                            <select id="panel-source-${screenId}" onchange="updatePanelSourceMode('${screenId}', this.value)" style="height:28px; border:1px solid #dcdfe3; background:#fff; color:#1d1d1f; font-size:11px; padding:0 8px;" ${isWallFollower ? 'disabled' : ''}>
+                                <option value="manual">Manual cards</option>
+                                <option value="pos_webhook">Live POS</option>
+                            </select>
+                            <select id="panel-layout-${screenId}" onchange="updatePanelLayout('${screenId}', this.value)" style="height:28px; border:1px solid #dcdfe3; background:#fff; color:#1d1d1f; font-size:11px; padding:0 8px;" ${isWallFollower ? 'disabled' : ''}>
+                                <option value="off">Off</option>
+                                <option value="split-right-25">Right 25%</option>
+                                <option value="split-left-25">Left 25%</option>
+                                <option value="split-bottom-25">Bottom 25%</option>
+                            </select>
+                            <button type="button" class="add-slot-btn" onclick="addPanelCard('${screenId}')" title="Add a scheduled text card" ${isWallFollower ? 'disabled' : ''}>+</button>
+                        </div>
+                    </div>
+                    <div class="panel-pos-feed" id="panel-pos-feed-${screenId}" style="display:flex; flex-direction:column; gap:8px; margin-bottom:10px;"></div>
+                    <div class="panel-items" id="panel-items-${screenId}" style="display:flex; flex-direction:column; gap:6px; padding:4px 0;">
+                        <div style="font-size:11px; color:#666;">Loading panel schedule...</div>
+                    </div>
+                    <div style="font-size:10px;color:#777;margin-top:6px;">${isWallFollower ? 'Wall follower screens keep full-screen playback. The info panel is ignored here.' : 'The info panel auto-hides during sync or wall video playback and only appears on normal media.'}</div>
+                </div>
+
                 ${isMasterStore(currentStoreId) ? (isWallFollower ? `
                 <div class="apply-all-section" style="background:#f7f8fb;border:1px solid #dfe5ee;">
                     <div class="help-text" style="margin:0;color:#5a6472;">This wall follower inherits master changes from ${masterScreenLabel}. Apply and Replace All are available only on the master screen.</div>
@@ -9269,6 +9293,17 @@ allowfullscreen></iframe></div>`;
                         return;
                     }
                     const items = data.playlist || [];
+                    const existingPanelZone = (((allStoresData || {}).screens || {})[currentStoreId] || {})[screenId]?.panel_zone || {};
+                    const panelZone = Object.assign({}, existingPanelZone, data.panel_zone || {});
+                    if (existingPanelZone.pos_feed && !(panelZone && panelZone.pos_feed)) {
+                        panelZone.pos_feed = existingPanelZone.pos_feed;
+                    }
+                    try {
+                        if (allStoresData && allStoresData.screens && allStoresData.screens[currentStoreId] && allStoresData.screens[currentStoreId][screenId]) {
+                            allStoresData.screens[currentStoreId][screenId].panel_zone = panelZone;
+                        }
+                    } catch {}
+                    renderPanelScheduleSection(screenId, panelZone, screenBinding);
                     container.innerHTML = '';
                     if (!items.length) {
                         container.innerHTML = screenBinding.isFollower ? `
@@ -10210,6 +10245,7 @@ allowfullscreen></iframe></div>`;
                         function openTimePicker(inputEl){
                             closeTimePicker();
                             let field = inputEl.getAttribute('data-field');
+                            const lane = inputEl.getAttribute('data-lane') || 'playlist';
                             let scr = inputEl.getAttribute('data-screen');
                             let item = inputEl.getAttribute('data-item');
                             let winIndexAttr = inputEl.getAttribute('data-win-index');
@@ -10252,7 +10288,7 @@ allowfullscreen></iframe></div>`;
                                     </div>
                                 </div>`;
                             document.body.appendChild(overlay);
-                            tpCurrent = { overlay, input: inputEl, screenId: scr, itemId: item, field, winIndex, isWindow };
+                            tpCurrent = { overlay, input: inputEl, screenId: scr, itemId: item, field, winIndex, isWindow, lane };
                             overlay.addEventListener('click', (event) => { if(event.target === overlay) closeTimePicker(); });
                             document.getElementById('tp-clear').onclick = () => clearTimePicker(scr, item, field, winIndex);
                             document.getElementById('tp-cancel').onclick = closeTimePicker;
@@ -10263,6 +10299,8 @@ allowfullscreen></iframe></div>`;
                             tpCurrent.input.value = '';
                             if(tpCurrent.isWindow && winIndex !== null && !isNaN(winIndex)){
                                 updateScheduleWinDateTime(screenId,itemId,winIndex);
+                            } else if(tpCurrent.lane === 'panel') {
+                                panelDateTimeChanged(screenId,itemId);
                             } else {
                                 playlistDateTimeChanged(screenId,itemId);
                             }
@@ -10277,6 +10315,8 @@ allowfullscreen></iframe></div>`;
                             tpCurrent.input.value = val;
                             if(tpCurrent.isWindow && winIndex !== null && !isNaN(winIndex)){
                                 updateScheduleWinDateTime(screenId,itemId,winIndex);
+                            } else if(tpCurrent.lane === 'panel') {
+                                panelDateTimeChanged(screenId,itemId);
                             } else {
                                 playlistDateTimeChanged(screenId,itemId);
                             }
@@ -10373,6 +10413,1115 @@ allowfullscreen></iframe></div>`;
                         alert('Delete failed');
                     }
                 });
+        }
+
+        function findPanelItem(screenId, itemId){
+            try {
+                const screenData = (((allStoresData || {}).screens || {})[currentStoreId] || {})[screenId] || {};
+                const panelZone = screenData.panel_zone || {};
+                const list = Array.isArray(panelZone.playlist) ? panelZone.playlist : [];
+                return list.find((item) => String(item.id || '') === String(itemId || '')) || null;
+            } catch {
+                return null;
+            }
+        }
+
+        function getPanelZoneState(screenId){
+            try {
+                return ((((allStoresData || {}).screens || {})[currentStoreId] || {})[screenId] || {}).panel_zone || {};
+            } catch {
+                return {};
+            }
+        }
+
+        function panelPosToken(name){
+            const tokenName = String(name || '').trim();
+            return '{' + '{' + tokenName + '}' + '}';
+        }
+
+        const PANEL_POS_TEMPLATE_TOKENS = {
+            customer_name: panelPosToken('customer_name'),
+            order_number: panelPosToken('order_number'),
+            status: panelPosToken('status'),
+            external_id: panelPosToken('external_id')
+        };
+
+        const PANEL_POS_DEFAULT_BODY = `${PANEL_POS_TEMPLATE_TOKENS.customer_name}\nOrder #${PANEL_POS_TEMPLATE_TOKENS.order_number}`;
+        const PANEL_POS_TEMPLATE_REGEX = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
+
+        function normalizePanelPosFeed(panelZone){
+            const feed = (panelZone && typeof panelZone.pos_feed === 'object' && panelZone.pos_feed) ? panelZone.pos_feed : {};
+            const fieldMap = (feed.field_map && typeof feed.field_map === 'object' && feed.field_map) ? feed.field_map : {};
+            const allowedStatusesRaw = Array.isArray(feed.allowed_statuses)
+                ? feed.allowed_statuses
+                : String(feed.allowed_statuses || 'ready,serving').split(',');
+            const allowedStatuses = allowedStatusesRaw
+                .map((value) => String(value || '').trim().toLowerCase())
+                .filter(Boolean);
+            const lastEventSummary = (feed.last_event_summary && typeof feed.last_event_summary === 'object' && feed.last_event_summary) ? feed.last_event_summary : {};
+            const connectorType = String(feed.connector_type || 'generic_webhook').trim().toLowerCase();
+            return {
+                sourceMode: String((panelZone && panelZone.source_mode) || 'manual'),
+                name: String(feed.name || ''),
+                webhookToken: String(feed.webhook_token || ''),
+                connectorType: ['generic_webhook','zapier','make','n8n','developer'].includes(connectorType) ? connectorType : 'generic_webhook',
+                fieldMap: {
+                    customer_name: String(fieldMap.customer_name || 'customer.name'),
+                    order_number: String(fieldMap.order_number || 'order.number'),
+                    status: String(fieldMap.status || 'order.status'),
+                    external_id: String(fieldMap.external_id || 'order.id')
+                },
+                titleTemplate: String(feed.title_template || 'Now serving'),
+                bodyTemplate: String(feed.body_template || PANEL_POS_DEFAULT_BODY),
+                allowedStatuses,
+                displaySeconds: Math.max(1, parseInt(String(feed.display_seconds || 10), 10) || 10),
+                maxItems: Math.max(1, parseInt(String(feed.max_items || 5), 10) || 5),
+                eventCount: Math.max(0, parseInt(String(feed.event_count || 0), 10) || 0),
+                lastEventAt: String(feed.last_event_at || ''),
+                lastEventResult: String(feed.last_event_result || ''),
+                lastEventSummary: {
+                    customer_name: String(lastEventSummary.customer_name || ''),
+                    order_number: String(lastEventSummary.order_number || ''),
+                    status: String(lastEventSummary.status || ''),
+                    external_id: String(lastEventSummary.external_id || '')
+                },
+                lastPayloadPreview: String(feed.last_payload_preview || ''),
+                liveQueue: Array.isArray(panelZone && panelZone.live_queue) ? panelZone.live_queue : []
+            };
+        }
+
+        const PANEL_POS_CONNECTOR_META = {
+            generic_webhook: {
+                label: 'Direct webhook',
+                subtitle: 'Best when your POS can POST JSON directly',
+                recommended: true,
+                steps: [
+                    'Open the POS or order manager webhook settings.',
+                    'Paste the webhook URL below as the destination.',
+                    'Send a POST request when an order becomes ready or serving.',
+                    'Use the sample payload below if your provider asks for a test body.'
+                ]
+            },
+            zapier: {
+                label: 'Zapier',
+                subtitle: 'Use when the POS already connects to Zapier',
+                steps: [
+                    'Create a Zap with your POS as the trigger.',
+                    'Add Webhooks by Zapier as the action.',
+                    'Choose POST and paste the webhook URL below.',
+                    'Map your POS fields into the sample JSON shape.'
+                ]
+            },
+            make: {
+                label: 'Make',
+                subtitle: 'Good for multi-step automations',
+                steps: [
+                    'Create a scenario with your POS or order source as the trigger.',
+                    'Add an HTTP Make a request module.',
+                    'Set Method to POST and paste the webhook URL below.',
+                    'Map name, order number, status, and id into the JSON body.'
+                ]
+            },
+            n8n: {
+                label: 'n8n',
+                subtitle: 'Best for self-hosted workflows',
+                steps: [
+                    'Create a workflow with your POS or app trigger node.',
+                    'Add an HTTP Request node.',
+                    'Use POST and paste the webhook URL below.',
+                    'Send the fields using the sample payload structure.'
+                ]
+            },
+            developer: {
+                label: 'Developer',
+                subtitle: 'Use your own backend, plugin, or script',
+                steps: [
+                    'Use the webhook URL as the target endpoint.',
+                    'POST JSON whenever the order should appear on screen.',
+                    'Keep a stable order id so updates replace the same queue item.',
+                    'Remove completed items by sending a status outside the allowed list.'
+                ]
+            }
+        };
+
+        const PANEL_POS_TEMPLATE_PRESETS = {
+            customer_order: { label: 'Customer + order', title: 'Now serving', body: PANEL_POS_DEFAULT_BODY },
+            order_only: { label: 'Order only', title: 'Now serving', body: `Order #${PANEL_POS_TEMPLATE_TOKENS.order_number}` },
+            customer_only: { label: 'Customer only', title: 'Ready for pickup', body: PANEL_POS_TEMPLATE_TOKENS.customer_name }
+        };
+
+        const PANEL_POS_MAPPING_PRESETS = {
+            nested_default: {
+                label: 'Nested payload',
+                fields: { customer_name: 'customer.name', order_number: 'order.number', status: 'order.status', external_id: 'order.id' }
+            },
+            flat_payload: {
+                label: 'Flat payload',
+                fields: { customer_name: 'customer_name', order_number: 'order_number', status: 'status', external_id: 'id' }
+            },
+            ticket_payload: {
+                label: 'Ticket payload',
+                fields: { customer_name: 'name', order_number: 'ticket', status: 'state', external_id: 'ticket_id' }
+            }
+        };
+
+        function panelPosApplyTemplate(template, values){
+            return String(template || '').replace(PANEL_POS_TEMPLATE_REGEX, (_, key) => String(values[key] || ''));
+        }
+
+        function getPanelPosPreviewValues(screenId){
+            const state = normalizePanelPosFeed(getPanelZoneState(screenId));
+            return {
+                customer_name: state.lastEventSummary.customer_name || 'Jane Smith',
+                order_number: state.lastEventSummary.order_number || 'A104',
+                status: state.lastEventSummary.status || state.allowedStatuses[0] || 'ready',
+                external_id: state.lastEventSummary.external_id || `sample-${screenId}`
+            };
+        }
+
+        function updatePanelPosPreview(screenId){
+            const titleNode = document.getElementById(`panel-pos-preview-title-${screenId}`);
+            const bodyNode = document.getElementById(`panel-pos-preview-body-${screenId}`);
+            const metaNode = document.getElementById(`panel-pos-preview-meta-${screenId}`);
+            if(!titleNode || !bodyNode || !metaNode) return;
+            const titleInput = document.getElementById(`panel-pos-title-${screenId}`);
+            const bodyInput = document.getElementById(`panel-pos-body-${screenId}`);
+            const values = getPanelPosPreviewValues(screenId);
+            const title = panelPosApplyTemplate(titleInput ? titleInput.value : 'Now serving', values).trim() || 'Now serving';
+            const body = panelPosApplyTemplate(bodyInput ? bodyInput.value : PANEL_POS_DEFAULT_BODY, values).trim() || `${values.customer_name}\nOrder #${values.order_number}`;
+            titleNode.textContent = title;
+            bodyNode.innerHTML = escapeHtml(body).replace(/\n/g, '<br>');
+            metaNode.textContent = values.status ? `Preview using ${values.status} data` : 'Preview using sample data';
+        }
+
+        function getPanelPosGuideText(screenId){
+            const connectorSelect = document.getElementById(`panel-pos-connector-${screenId}`);
+            const connectorType = String(connectorSelect ? connectorSelect.value : normalizePanelPosFeed(getPanelZoneState(screenId)).connectorType || 'generic_webhook');
+            const meta = PANEL_POS_CONNECTOR_META[connectorType] || PANEL_POS_CONNECTOR_META.generic_webhook;
+            const webhookUrl = getPanelPosWebhookUrl(screenId);
+            return [
+                `${meta.label}`,
+                `${meta.subtitle}`,
+                '',
+                ...meta.steps.map((step, index) => `${index + 1}. ${step}`),
+                '',
+                `Webhook URL: ${webhookUrl}`
+            ].join('\n');
+        }
+
+        function updatePanelPosGuide(screenId){
+            const guide = document.getElementById(`panel-pos-guide-${screenId}`);
+            if(!guide) return;
+            const connectorSelect = document.getElementById(`panel-pos-connector-${screenId}`);
+            const connectorType = String(connectorSelect ? connectorSelect.value : normalizePanelPosFeed(getPanelZoneState(screenId)).connectorType || 'generic_webhook');
+            const meta = PANEL_POS_CONNECTOR_META[connectorType] || PANEL_POS_CONNECTOR_META.generic_webhook;
+            const webhookUrl = getPanelPosWebhookUrl(screenId);
+            guide.innerHTML = `
+                <div style="display:flex; flex-direction:column; gap:8px; background:#ffffff; border:1px solid #d8e4fb; border-radius:12px; padding:12px;">
+                    <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start; flex-wrap:wrap;">
+                        <div>
+                            <div style="font-size:12px; font-weight:700; color:#1e40af;">${escapeHtml(meta.label)}</div>
+                            <div style="font-size:11px; color:#64748b; margin-top:3px;">${escapeHtml(meta.subtitle)}</div>
+                        </div>
+                        ${meta.recommended ? '<span style="font-size:10px; font-weight:700; color:#1d4ed8; background:#dbeafe; border:1px solid #bfdbfe; border-radius:999px; padding:4px 8px;">Recommended</span>' : ''}
+                    </div>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:8px;">
+                        ${meta.steps.map((step, index) => `
+                            <div style="background:#f8fbff; border:1px solid #e2eaf7; border-radius:10px; padding:10px;">
+                                <div style="font-size:10px; font-weight:700; color:#2563eb; letter-spacing:.04em; text-transform:uppercase;">Step ${index + 1}</div>
+                                <div style="font-size:11px; color:#334155; margin-top:4px; line-height:1.45;">${escapeHtml(step)}</div>
+                            </div>`).join('')}
+                    </div>
+                    <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+                        <button type="button" class="btn" onclick="copyPanelPosWebhook('${screenId}')">Copy webhook URL</button>
+                        <button type="button" class="btn" onclick="copyPanelPosGuide('${screenId}')">Copy setup steps</button>
+                        <button type="button" class="btn" onclick="copyPanelPosSampleJson('${screenId}')">Copy sample JSON</button>
+                        <button type="button" class="btn" onclick="copyPanelPosCurl('${screenId}')">Copy cURL</button>
+                    </div>
+                    <div style="font-size:11px; color:#64748b; word-break:break-all;">${escapeHtml(webhookUrl || 'Save this screen once to generate the webhook URL')}</div>
+                </div>`;
+        }
+
+        function getPanelPosWebhookUrl(screenId){
+            const state = normalizePanelPosFeed(getPanelZoneState(screenId));
+            if(!state.webhookToken) return '';
+            return `${window.location.origin}/api/panel-pos-webhook/${encodeURIComponent(state.webhookToken)}`;
+        }
+
+        function buildPanelPosSamplePayload(screenId){
+            const state = normalizePanelPosFeed(getPanelZoneState(screenId));
+            return {
+                customer: { name: 'Jane Smith' },
+                order: {
+                    id: `sample-${screenId}-${Date.now()}`,
+                    number: 'A104',
+                    status: state.allowedStatuses[0] || 'ready'
+                }
+            };
+        }
+
+        async function copyPanelPosWebhook(screenId){
+            const webhookUrl = getPanelPosWebhookUrl(screenId);
+            if(!webhookUrl){
+                showMessage('Save Live POS mode first');
+                return;
+            }
+            try {
+                await navigator.clipboard.writeText(webhookUrl);
+                showMessage('POS webhook URL copied');
+            } catch {
+                alert(webhookUrl);
+            }
+        }
+
+        async function copyPanelPosCurl(screenId){
+            const webhookUrl = getPanelPosWebhookUrl(screenId);
+            if(!webhookUrl){
+                showMessage('Save Live POS mode first');
+                return;
+            }
+            const samplePayload = buildPanelPosSamplePayload(screenId);
+            const curl = `curl -X POST "${webhookUrl}" -H "Content-Type: application/json" -d '${JSON.stringify(samplePayload)}'`;
+            try {
+                await navigator.clipboard.writeText(curl);
+                showMessage('Example cURL copied');
+            } catch {
+                alert(curl);
+            }
+        }
+
+        async function copyPanelPosGuide(screenId){
+            const guideText = getPanelPosGuideText(screenId);
+            try {
+                await navigator.clipboard.writeText(guideText);
+                showMessage('POS setup steps copied');
+            } catch {
+                alert(guideText);
+            }
+        }
+
+        async function copyPanelPosSampleJson(screenId){
+            const sampleJson = JSON.stringify(buildPanelPosSamplePayload(screenId), null, 2);
+            try {
+                await navigator.clipboard.writeText(sampleJson);
+                showMessage('Sample JSON copied');
+            } catch {
+                alert(sampleJson);
+            }
+        }
+
+        function setPanelPosTemplatePreset(screenId, presetKey){
+            const preset = PANEL_POS_TEMPLATE_PRESETS[presetKey];
+            if(!preset) return;
+            const titleInput = document.getElementById(`panel-pos-title-${screenId}`);
+            const bodyInput = document.getElementById(`panel-pos-body-${screenId}`);
+            if(titleInput) titleInput.value = preset.title;
+            if(bodyInput) bodyInput.value = preset.body;
+            updatePanelPosPreview(screenId);
+        }
+
+        function applyPanelPosMappingPreset(screenId, presetKey){
+            const preset = PANEL_POS_MAPPING_PRESETS[presetKey];
+            if(!preset) return;
+            const customerInput = document.getElementById(`panel-pos-customer-${screenId}`);
+            const orderInput = document.getElementById(`panel-pos-order-${screenId}`);
+            const statusInput = document.getElementById(`panel-pos-status-${screenId}`);
+            const externalInput = document.getElementById(`panel-pos-external-${screenId}`);
+            if(customerInput) customerInput.value = preset.fields.customer_name;
+            if(orderInput) orderInput.value = preset.fields.order_number;
+            if(statusInput) statusInput.value = preset.fields.status;
+            if(externalInput) externalInput.value = preset.fields.external_id;
+            showMessage(`${preset.label} mapping applied`);
+        }
+
+        function renderPanelPosFeedEditor(screenId, panelZone, screenBinding){
+            const wrap = document.getElementById(`panel-pos-feed-${screenId}`);
+            if(!wrap) return;
+            const state = normalizePanelPosFeed(panelZone);
+            const isFollower = !!(screenBinding && screenBinding.isFollower);
+            const isPosMode = state.sourceMode === 'pos_webhook';
+            const disabledAttr = isFollower ? 'disabled' : '';
+            if(!isPosMode){
+                wrap.innerHTML = `
+                    <div style="font-size:11px; color:#6b7280; background:#f8fafc; border:1px solid #e5e7eb; border-radius:10px; padding:10px 12px;">
+                        Switch the source to <strong>Live POS</strong> when you want a POS, Zapier, Make, n8n, or custom app to send customer names and order numbers into this screen automatically.
+                    </div>`;
+                return;
+            }
+            if(isFollower){
+                wrap.innerHTML = `
+                    <div style="font-size:11px; color:#6b7280; background:#f8fafc; border:1px solid #e5e7eb; border-radius:10px; padding:10px 12px;">
+                        This wall follower screen ignores the info panel. Configure the master screen instead.
+                    </div>`;
+                return;
+            }
+            const webhookUrl = getPanelPosWebhookUrl(screenId);
+            const samplePayload = JSON.stringify(buildPanelPosSamplePayload(screenId), null, 2);
+            const connectorOptions = Object.entries(PANEL_POS_CONNECTOR_META).map(([key, meta]) => `<option value="${key}" ${state.connectorType === key ? 'selected' : ''}>${escapeHtml(meta.label)}</option>`).join('');
+            const templateButtons = Object.entries(PANEL_POS_TEMPLATE_PRESETS).map(([key, preset]) => `<button type="button" class="btn" onclick="setPanelPosTemplatePreset('${screenId}','${key}')">${escapeHtml(preset.label)}</button>`).join('');
+            const mappingButtons = Object.entries(PANEL_POS_MAPPING_PRESETS).map(([key, preset]) => `<button type="button" class="btn" onclick="applyPanelPosMappingPreset('${screenId}','${key}')">${escapeHtml(preset.label)}</button>`).join('');
+            const hasEvents = state.eventCount > 0;
+            const queueCount = Array.isArray(state.liveQueue) ? state.liveQueue.length : 0;
+            let statusLabel = 'Waiting for first event';
+            let statusBg = '#f3f4f6';
+            let statusColor = '#475569';
+            if(hasEvents && state.lastEventResult === 'filtered'){
+                statusLabel = 'Receiving but filtered';
+                statusBg = '#fff7ed';
+                statusColor = '#c2410c';
+            } else if(hasEvents){
+                statusLabel = 'Connected';
+                statusBg = '#dcfce7';
+                statusColor = '#166534';
+            }
+            const lastEventLabel = state.lastEventAt ? state.lastEventAt.replace('T', ' ').replace('Z', ' UTC') : 'No events yet';
+            const hasSummary = !!(state.lastEventSummary.customer_name || state.lastEventSummary.order_number || state.lastEventSummary.status || state.lastEventSummary.external_id);
+            wrap.innerHTML = `
+                <div style="display:flex; flex-direction:column; gap:12px; background:linear-gradient(180deg,#f8fbff 0%,#f3f8ff 100%); border:1px solid #d7e6ff; border-radius:12px; padding:12px;">
+                    <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start; flex-wrap:wrap;">
+                        <div>
+                            <div style="font-size:12px; font-weight:700; color:#1d4ed8;">Live POS Setup</div>
+                            <div style="font-size:11px; color:#5b6472; margin-top:3px;">Connect any POS through a direct webhook or a bridge like Zapier, Make, or n8n. The screen will rotate the newest eligible orders automatically.</div>
+                        </div>
+                        <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+                            <span style="font-size:10px; font-weight:700; color:${statusColor}; background:${statusBg}; border:1px solid rgba(148,163,184,.25); border-radius:999px; padding:4px 8px;">${escapeHtml(statusLabel)}</span>
+                            <span style="font-size:10px; font-weight:700; color:#1e3a8a; background:#dbeafe; border:1px solid #bfdbfe; border-radius:999px; padding:4px 8px;">${state.eventCount} event${state.eventCount === 1 ? '' : 's'}</span>
+                            <span style="font-size:10px; font-weight:700; color:#334155; background:#eef2ff; border:1px solid #dbeafe; border-radius:999px; padding:4px 8px;">${queueCount}/${state.maxItems} queued</span>
+                        </div>
+                    </div>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:8px;">
+                        <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
+                            <span>POS or feed name</span>
+                            <input id="panel-pos-name-${screenId}" type="text" value="${escapeHtml(state.name)}" placeholder="Front Counter POS" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
+                        </label>
+                        <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
+                            <span>How will you connect?</span>
+                            <select id="panel-pos-connector-${screenId}" onchange="updatePanelPosGuide('${screenId}')" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
+                                ${connectorOptions}
+                            </select>
+                        </label>
+                        <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
+                            <span>Statuses to show</span>
+                            <input id="panel-pos-statuses-${screenId}" type="text" value="${escapeHtml(state.allowedStatuses.join(', '))}" placeholder="ready, serving" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
+                        </label>
+                        <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
+                            <span>Seconds each order stays visible</span>
+                            <input id="panel-pos-duration-${screenId}" type="number" min="1" max="120" value="${state.displaySeconds}" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
+                        </label>
+                    </div>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:8px;">
+                        <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
+                            <span>Maximum queue size</span>
+                            <input id="panel-pos-max-${screenId}" type="number" min="1" max="20" value="${state.maxItems}" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
+                        </label>
+                        <div style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
+                            <span>Last event received</span>
+                            <div style="height:34px; display:flex; align-items:center; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff; color:#475569;">${escapeHtml(lastEventLabel)}</div>
+                        </div>
+                    </div>
+                    <div id="panel-pos-guide-${screenId}"></div>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:10px;">
+                        <div style="background:#fff; border:1px solid #d8e4fb; border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:8px;">
+                            <div style="display:flex; justify-content:space-between; gap:8px; align-items:center; flex-wrap:wrap;">
+                                <div style="font-size:12px; font-weight:700; color:#0f172a;">On-screen template</div>
+                                <div style="display:flex; gap:6px; flex-wrap:wrap;">${templateButtons}</div>
+                            </div>
+                            <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
+                                <span>Title template</span>
+                                <input id="panel-pos-title-${screenId}" type="text" value="${escapeHtml(state.titleTemplate)}" placeholder="Now serving" oninput="updatePanelPosPreview('${screenId}')" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
+                            </label>
+                            <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
+                                <span>Body template</span>
+                                <textarea id="panel-pos-body-${screenId}" oninput="updatePanelPosPreview('${screenId}')" ${disabledAttr} style="min-height:58px; border:1px solid #d6dbe5; border-radius:8px; padding:8px 10px; background:#fff; resize:vertical;">${escapeHtml(state.bodyTemplate)}</textarea>
+                            </label>
+                            <div style="background:linear-gradient(180deg,#fff8ef 0%,#fff3e6 100%); border:1px solid #f3c48c; border-radius:12px; overflow:hidden;">
+                                <div style="display:grid; grid-template-columns:92px minmax(0,1fr);">
+                                    <div style="display:flex; align-items:center; justify-content:center; background:linear-gradient(180deg,#fff3d8 0%,#ffe5bf 100%); min-height:84px;">
+                                        <div style="font-size:13px; font-weight:800; color:#8a4b00; letter-spacing:.08em;">INFO</div>
+                                    </div>
+                                    <div style="padding:12px; display:flex; flex-direction:column; gap:6px;">
+                                        <div id="panel-pos-preview-title-${screenId}" style="font-size:14px; font-weight:700; color:#1f2937;">Now serving</div>
+                                        <div id="panel-pos-preview-body-${screenId}" style="font-size:12px; color:#4b5563; line-height:1.45;">Jane Smith<br>Order #A104</div>
+                                        <div id="panel-pos-preview-meta-${screenId}" style="font-size:10px; color:#64748b;">Preview using sample data</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="background:#fff; border:1px solid #d8e4fb; border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:8px;">
+                            <div style="font-size:12px; font-weight:700; color:#0f172a;">Connection status</div>
+                            <div style="display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px;">
+                                <div style="background:#f8fafc; border:1px solid #e5e7eb; border-radius:10px; padding:10px;">
+                                    <div style="font-size:10px; font-weight:700; color:#2563eb; text-transform:uppercase; letter-spacing:.04em;">Status</div>
+                                    <div style="font-size:12px; color:#334155; margin-top:4px;">${escapeHtml(statusLabel)}</div>
+                                </div>
+                                <div style="background:#f8fafc; border:1px solid #e5e7eb; border-radius:10px; padding:10px;">
+                                    <div style="font-size:10px; font-weight:700; color:#2563eb; text-transform:uppercase; letter-spacing:.04em;">Events received</div>
+                                    <div style="font-size:12px; color:#334155; margin-top:4px;">${state.eventCount}</div>
+                                </div>
+                            </div>
+                            <div style="font-size:11px; color:#475569;">Latest order snapshot</div>
+                            <div style="background:#f8fafc; border:1px solid #e5e7eb; border-radius:10px; padding:10px; font-size:11px; color:#334155; line-height:1.5;">
+                                ${hasSummary ? `
+                                    <div><strong>Customer:</strong> ${escapeHtml(state.lastEventSummary.customer_name || '—')}</div>
+                                    <div><strong>Order:</strong> ${escapeHtml(state.lastEventSummary.order_number || '—')}</div>
+                                    <div><strong>Status:</strong> ${escapeHtml(state.lastEventSummary.status || '—')}</div>
+                                    <div><strong>External ID:</strong> ${escapeHtml(state.lastEventSummary.external_id || '—')}</div>
+                                ` : '<div>No order has been received yet. Use "Send sample" to test the screen immediately.</div>'}
+                            </div>
+                        </div>
+                    </div>
+                    <details style="background:#fff; border:1px solid #d8e4fb; border-radius:12px; padding:10px 12px;">
+                        <summary style="cursor:pointer; font-size:12px; font-weight:700; color:#0f172a;">Advanced mapping and developer tools</summary>
+                        <div style="display:flex; flex-direction:column; gap:10px; margin-top:10px;">
+                            <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+                                <span style="font-size:11px; color:#4b5563;">Mapping presets:</span>
+                                ${mappingButtons}
+                            </div>
+                            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:8px;">
+                                <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
+                                    <span>Customer path</span>
+                                    <input id="panel-pos-customer-${screenId}" type="text" value="${escapeHtml(state.fieldMap.customer_name)}" placeholder="customer.name" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
+                                </label>
+                                <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
+                                    <span>Order path</span>
+                                    <input id="panel-pos-order-${screenId}" type="text" value="${escapeHtml(state.fieldMap.order_number)}" placeholder="order.number" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
+                                </label>
+                                <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
+                                    <span>Status path</span>
+                                    <input id="panel-pos-status-${screenId}" type="text" value="${escapeHtml(state.fieldMap.status)}" placeholder="order.status" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
+                                </label>
+                                <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
+                                    <span>External id path</span>
+                                    <input id="panel-pos-external-${screenId}" type="text" value="${escapeHtml(state.fieldMap.external_id)}" placeholder="order.id" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
+                                </label>
+                            </div>
+                            <div style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
+                                <span>Webhook URL</span>
+                                <input id="panel-pos-webhook-${screenId}" type="text" readonly value="${escapeHtml(webhookUrl)}" style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
+                            </div>
+                            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:8px;">
+                                <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
+                                    <span>Example payload</span>
+                                    <textarea readonly style="min-height:92px; border:1px solid #d6dbe5; border-radius:8px; padding:10px; background:#fff; font:11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;">${escapeHtml(samplePayload)}</textarea>
+                                </label>
+                                <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
+                                    <span>Last payload received</span>
+                                    <textarea readonly style="min-height:92px; border:1px solid #d6dbe5; border-radius:8px; padding:10px; background:#fff; font:11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;">${escapeHtml(state.lastPayloadPreview || 'No payload received yet')}</textarea>
+                                </label>
+                            </div>
+                        </div>
+                    </details>
+                    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                        <button type="button" class="btn" onclick="savePanelPosFeed('${screenId}')" ${disabledAttr}>Save setup</button>
+                        <button type="button" class="btn" onclick="sendPanelPosSample('${screenId}')" ${disabledAttr}>Send sample</button>
+                        <button type="button" class="btn" onclick="resetPanelPosWebhookToken('${screenId}')" ${disabledAttr}>Reset webhook</button>
+                        <button type="button" class="btn" onclick="clearPanelPosQueue('${screenId}')" ${disabledAttr}>Clear queue</button>
+                    </div>
+                </div>`;
+            updatePanelPosGuide(screenId);
+            updatePanelPosPreview(screenId);
+        }
+
+        function renderPanelLiveQueue(screenId, panelZone, container){
+            const state = normalizePanelPosFeed(panelZone);
+            const activeExternalId = String((((panelZone || {}).active_item || {}).external_id) || '');
+            const list = Array.isArray(state.liveQueue) ? state.liveQueue : [];
+            if(!list.length){
+                if(state.eventCount > 0 && state.lastEventResult === 'filtered'){
+                    container.innerHTML = '<div style="font-size:11px; color:#92400e; background:#fff7ed; border:1px solid #fed7aa; border-radius:10px; padding:10px 12px;">The screen is receiving POS events, but the latest one was filtered out by the allowed status list. Update the statuses above if needed.</div>';
+                } else {
+                    container.innerHTML = '<div style="font-size:11px; color:#666;">No live POS entries yet. Copy the webhook URL above or press "Send sample" to test the screen.</div>';
+                }
+                return;
+            }
+            container.innerHTML = '';
+            list.slice().reverse().forEach((item) => {
+                const isActive = activeExternalId && String(item.external_id || '') === activeExternalId;
+                const createdAt = String(item.created_at || '').replace('T', ' ').replace('Z', ' UTC');
+                const row = document.createElement('div');
+                row.className = 'playlist-row apple';
+                row.style.borderColor = isActive ? '#93c5fd' : '';
+                row.style.boxShadow = isActive ? '0 0 0 1px rgba(59,130,246,.18)' : '';
+                row.innerHTML = `
+                    <div style="display:flex; flex-direction:column; gap:8px;">
+                        <div class="schedule-summary-shell" style="--schedule-bg-start:${isActive ? '#eff6ff' : '#fff8ef'};--schedule-bg-end:${isActive ? '#dbeafe' : '#fff3e6'};--schedule-border:${isActive ? '#93c5fd' : '#f3c48c'};--schedule-accent:${isActive ? '#2563eb' : '#d97706'};">
+                            <div class="schedule-summary-thumb" style="display:flex;align-items:center;justify-content:center;min-width:92px;background:${isActive ? 'linear-gradient(180deg,#dbeafe 0%,#bfdbfe 100%)' : 'linear-gradient(180deg,#fff3d8 0%,#ffe5bf 100%)'};">
+                                <div style="font-size:13px;font-weight:800;color:${isActive ? '#1d4ed8' : '#8a4b00'};letter-spacing:.08em;">POS</div>
+                            </div>
+                            <div class="schedule-summary-row">
+                                <div class="schedule-summary-main">
+                                    <div class="schedule-summary-title">${escapeHtml(String(item.title || 'Now serving'))}</div>
+                                    <div class="schedule-summary-meta">
+                                        <span class="schedule-summary-range">${escapeHtml(String(item.status || 'live'))}</span>
+                                        <span class="schedule-summary-duration">${parseInt(String(item.duration || 10), 10) || 10}s</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="font-size:12px; color:#4b5563; line-height:1.45; background:#fff; border:1px solid #eceef3; padding:10px 12px;">${escapeHtml(String(item.body || '')).replace(/\n/g, '<br>') || '<em>No body text</em>'}</div>
+                        <div style="display:flex; justify-content:space-between; gap:10px; font-size:10px; color:#6b7280; flex-wrap:wrap;">
+                            <span>${escapeHtml(createdAt || 'Waiting for first event')}</span>
+                            <span>${escapeHtml(String(item.external_id || ''))}</span>
+                        </div>
+                    </div>`;
+                container.appendChild(row);
+            });
+        }
+
+        function renderPanelScheduleSection(screenId, panelZone, screenBinding){
+            const sourceSelect = document.getElementById(`panel-source-${screenId}`);
+            const sourceMode = String((panelZone && panelZone.source_mode) || 'manual');
+            if(sourceSelect){
+                sourceSelect.value = sourceMode;
+            }
+            const select = document.getElementById(`panel-layout-${screenId}`);
+            if(select){
+                select.value = String((panelZone && panelZone.layout_mode) || 'off');
+            }
+            const addBtn = document.querySelector(`#panel-zone-${screenId} .add-slot-btn`);
+            if(addBtn){
+                const disableAdd = !!(screenBinding && screenBinding.isFollower) || sourceMode === 'pos_webhook';
+                addBtn.disabled = disableAdd;
+                addBtn.title = sourceMode === 'pos_webhook' ? 'Switch back to Manual cards to add text cards here' : 'Add a scheduled text card';
+            }
+            renderPanelPosFeedEditor(screenId, panelZone, screenBinding);
+            const container = document.getElementById(`panel-items-${screenId}`);
+            if(!container) return;
+            if(sourceMode === 'pos_webhook'){
+                renderPanelLiveQueue(screenId, panelZone, container);
+                return;
+            }
+            const list = (panelZone && Array.isArray(panelZone.playlist)) ? panelZone.playlist : [];
+            if(!list.length){
+                container.innerHTML = '<div style="font-size:11px; color:#666;">(No info panel cards yet)</div>';
+                return;
+            }
+            container.innerHTML = '';
+            list.forEach((item) => {
+                const startValRaw = String(item.start || '');
+                const endValRaw = String(item.end || '');
+                let startDateVal = '';
+                let endDateVal = '';
+                let startVal = '';
+                let endVal = '';
+                if(startValRaw){
+                    if(startValRaw.includes('T')){ const parts = startValRaw.split('T'); startDateVal = parts[0]; startVal = toLocalTimeHMSS(parts[1]); }
+                    else startVal = toLocalTimeHMSS(startValRaw);
+                }
+                if(endValRaw){
+                    if(endValRaw.includes('T')){ const parts = endValRaw.split('T'); endDateVal = parts[0]; endVal = toLocalTimeHMSS(parts[1]); }
+                    else endVal = toLocalTimeHMSS(endValRaw);
+                }
+                const bodyMarkup = escapeHtml(String(item.body || '')).replace(/\n/g, '<br>');
+                const weekdayMarkup = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((dayLabel) => {
+                    const code = dayLabel.toLowerCase().slice(0,3);
+                    const active = (item.days || []).includes(code) ? 'active' : '';
+                    return `<div class="weekday-btn ${active}" data-day="${code}" onclick="togglePanelItemWeekday('${screenId}','${item.id}','${code}',this)">${dayLabel[0]}</div>`;
+                }).join('');
+                const row = document.createElement('div');
+                row.className = 'playlist-row apple';
+                row.innerHTML = `
+                    <div class="pl-top">
+                        <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
+                            <div class="schedule-summary-shell" style="--schedule-bg-start:#fff8ef;--schedule-bg-end:#fff3e6;--schedule-border:#f3c48c;--schedule-accent:#d97706;">
+                                <div class="schedule-summary-thumb" style="display:flex;align-items:center;justify-content:center;min-width:92px;background:linear-gradient(180deg,#fff3d8 0%,#ffe5bf 100%);">
+                                    <div style="font-size:13px;font-weight:800;color:#8a4b00;letter-spacing:.08em;">INFO</div>
+                                </div>
+                                <div class="schedule-summary-row">
+                                    <div class="schedule-summary-main">
+                                        <div class="schedule-summary-title">${escapeHtml(String(item.title || 'Info card'))}</div>
+                                        <div class="schedule-summary-meta">
+                                            <span class="schedule-summary-range">${escapeHtml(formatPlaylistSummaryRange(startVal, endVal))}</span>
+                                            <span class="schedule-summary-duration">${parseInt(String(item.duration || 10), 10) || 10}s</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="font-size:12px; color:#4b5563; line-height:1.45; background:#fff; border:1px solid #eceef3; padding:10px 12px;">${bodyMarkup || '<em>No body text</em>'}</div>
+                            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#555;">
+                                <span>Repeat:</span>
+                                <div class="weekday-row" id="wd-panel-${screenId}-${item.id}">${weekdayMarkup}</div>
+                            </div>
+                            <div class="schedule-primary one-row">
+                                <div class="slot-box dual ${item.enabled ? '' : 'dimmed'}">
+                                    <div class="dual-col"><span class="slot-label">Start</span><div class="slot-inline"><input type="date" id="ppstartdate-${screenId}-${item.id}" value="${startDateVal}" onchange="panelDateTimeChanged('${screenId}','${item.id}')"><input class="tp-input" readonly data-lane="panel" data-field="start" data-screen="${screenId}" data-item="${item.id}" id="ppstart-${screenId}-${item.id}" type="text" value="${startVal}" placeholder="HH:MM:SS" onclick="openTimePicker(this)" oninput="panelDateTimeChanged('${screenId}','${item.id}')"></div></div>
+                                    <div class="dual-col"><span class="slot-label">End</span><div class="slot-inline"><input type="date" id="ppenddate-${screenId}-${item.id}" value="${endDateVal}" onchange="panelDateTimeChanged('${screenId}','${item.id}')"><input class="tp-input" readonly data-lane="panel" data-field="end" data-screen="${screenId}" data-item="${item.id}" id="ppend-${screenId}-${item.id}" type="text" value="${endVal}" placeholder="HH:MM:SS" onclick="openTimePicker(this)" oninput="panelDateTimeChanged('${screenId}','${item.id}')"></div></div>
+                                </div>
+                            </div>
+                            <div class="pl-actions inline-actions primary-actions">
+                                <div class="group left">
+                                    <button class="pl-switch ${item.enabled ? 'on' : 'off'}" aria-label="Toggle info card" data-realstate="${item.enabled ? 'on' : 'off'}" onclick="togglePanelItemEnabled(this,'${screenId}','${item.id}')"><span>${item.enabled ? 'On' : 'Off'}</span></button>
+                                </div>
+                                <div class="group center combo-dur-del">
+                                    <div class="dur-box small">
+                                        <input class="dur-input" id="pdur-${screenId}-${item.id}" type="number" min="1" step="1" value="${parseInt(String(item.duration || 10), 10) || 10}" data-prev="${parseInt(String(item.duration || 10), 10) || 10}" aria-label="Panel duration in seconds" onchange="updatePanelDuration('${screenId}','${item.id}', event)" onkeydown="handlePanelDurationKeydown('${screenId}','${item.id}', event)">
+                                        <span class="dur-unit">s</span>
+                                    </div>
+                                </div>
+                                <div class="group right">
+                                    <button class="delete-pill tiny" onclick="editPanelCard('${screenId}','${item.id}')">Edit</button>
+                                    <button class="delete-pill tiny" onclick="deletePanelItem('${screenId}','${item.id}')">Delete</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+                container.appendChild(row);
+            });
+        }
+
+        function updatePanelSourceMode(screenId, sourceMode){
+            fetch(`/panel_zone/${currentStoreId}/${screenId}`, {
+                method:'PATCH',
+                headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ source_mode: sourceMode })
+            }).then(r => r.json()).then(data => {
+                if(!data.success){
+                    alert(data.error || 'Failed to update info panel source');
+                    refreshPlaylist(screenId);
+                    return;
+                }
+                try {
+                    const screenData = (((allStoresData || {}).screens || {})[currentStoreId] || {})[screenId];
+                    if(screenData) screenData.panel_zone = data.panel_zone || screenData.panel_zone;
+                } catch {}
+                showMessage(sourceMode === 'pos_webhook' ? 'Live POS mode enabled' : 'Manual info cards enabled');
+                renderRpPanelScheduleControls();
+                refreshPlaylist(screenId);
+            }).catch(() => {
+                alert('Network error updating info panel source');
+                refreshPlaylist(screenId);
+            });
+        }
+
+        function savePanelPosFeed(screenId){
+            const payload = {
+                enable_source: true,
+                name: (document.getElementById(`panel-pos-name-${screenId}`)?.value || '').trim(),
+                connector_type: (document.getElementById(`panel-pos-connector-${screenId}`)?.value || 'generic_webhook').trim(),
+                field_map: {
+                    customer_name: (document.getElementById(`panel-pos-customer-${screenId}`)?.value || '').trim(),
+                    order_number: (document.getElementById(`panel-pos-order-${screenId}`)?.value || '').trim(),
+                    status: (document.getElementById(`panel-pos-status-${screenId}`)?.value || '').trim(),
+                    external_id: (document.getElementById(`panel-pos-external-${screenId}`)?.value || '').trim()
+                },
+                title_template: (document.getElementById(`panel-pos-title-${screenId}`)?.value || '').trim(),
+                body_template: (document.getElementById(`panel-pos-body-${screenId}`)?.value || '').trim(),
+                allowed_statuses: (document.getElementById(`panel-pos-statuses-${screenId}`)?.value || '')
+                    .split(',')
+                    .map((value) => value.trim().toLowerCase())
+                    .filter(Boolean),
+                display_seconds: parseInt(String(document.getElementById(`panel-pos-duration-${screenId}`)?.value || '10'), 10) || 10,
+                max_items: parseInt(String(document.getElementById(`panel-pos-max-${screenId}`)?.value || '5'), 10) || 5
+            };
+            fetch(`/panel_pos_feed/${currentStoreId}/${screenId}`, {
+                method:'PATCH',
+                headers:{'Content-Type':'application/json'},
+                body: JSON.stringify(payload)
+            }).then(r => r.json()).then(data => {
+                if(!data.success){
+                    alert(data.error || 'Failed to save POS settings');
+                    return;
+                }
+                try {
+                    const screenData = (((allStoresData || {}).screens || {})[currentStoreId] || {})[screenId];
+                    if(screenData) screenData.panel_zone = data.panel_zone || screenData.panel_zone;
+                } catch {}
+                showMessage('Live POS setup saved');
+                renderRpPanelScheduleControls();
+                refreshPlaylist(screenId);
+            }).catch(() => alert('Network error saving POS settings'));
+        }
+
+        function resetPanelPosWebhookToken(screenId){
+            if(!confirm('Generate a new webhook URL for this screen? The old webhook will stop working.')) return;
+            fetch(`/panel_pos_feed/${currentStoreId}/${screenId}`, {
+                method:'PATCH',
+                headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ reset_token: true, enable_source: true })
+            }).then(r => r.json()).then(data => {
+                if(!data.success){
+                    alert(data.error || 'Failed to reset webhook');
+                    return;
+                }
+                try {
+                    const screenData = (((allStoresData || {}).screens || {})[currentStoreId] || {})[screenId];
+                    if(screenData) screenData.panel_zone = data.panel_zone || screenData.panel_zone;
+                } catch {}
+                showMessage('Webhook URL regenerated');
+                refreshPlaylist(screenId);
+            }).catch(() => alert('Network error resetting webhook'));
+        }
+
+        function clearPanelPosQueue(screenId){
+            if(!confirm('Clear the current live POS queue for this screen?')) return;
+            fetch(`/panel_pos_feed/${currentStoreId}/${screenId}`, {
+                method:'PATCH',
+                headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ clear_queue: true, enable_source: true })
+            }).then(r => r.json()).then(data => {
+                if(!data.success){
+                    alert(data.error || 'Failed to clear queue');
+                    return;
+                }
+                try {
+                    const screenData = (((allStoresData || {}).screens || {})[currentStoreId] || {})[screenId];
+                    if(screenData) screenData.panel_zone = data.panel_zone || screenData.panel_zone;
+                } catch {}
+                showMessage('POS queue cleared');
+                refreshPlaylist(screenId);
+            }).catch(() => alert('Network error clearing queue'));
+        }
+
+        function sendPanelPosSample(screenId){
+            fetch(`/panel_pos_feed/${currentStoreId}/${screenId}/sample`, {
+                method:'POST'
+            }).then(r => r.json()).then(data => {
+                if(!data.success){
+                    alert(data.error || 'Failed to send sample');
+                    return;
+                }
+                try {
+                    const screenData = (((allStoresData || {}).screens || {})[currentStoreId] || {})[screenId];
+                    if(screenData) screenData.panel_zone = data.panel_zone || screenData.panel_zone;
+                } catch {}
+                showMessage('Sample POS event sent to this screen');
+                refreshPlaylist(screenId);
+            }).catch(() => alert('Network error sending sample event'));
+        }
+
+        function updatePanelLayout(screenId, layoutMode){
+            fetch(`/panel_zone/${currentStoreId}/${screenId}`, {
+                method:'PATCH',
+                headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ layout_mode: layoutMode })
+            }).then(r=>r.json()).then(data => {
+                if(!data.success){
+                    alert('Failed to update info panel layout');
+                    refreshPlaylist(screenId);
+                    return;
+                }
+                try {
+                    const screenData = (((allStoresData || {}).screens || {})[currentStoreId] || {})[screenId];
+                    if(screenData) screenData.panel_zone = data.panel_zone || screenData.panel_zone;
+                } catch {}
+                showMessage(layoutMode === 'off' ? 'Info panel turned off' : 'Info panel layout updated');
+                renderRpPanelScheduleControls();
+                refreshPlaylist(screenId);
+            }).catch(() => {
+                alert('Network error updating info panel layout');
+                renderRpPanelScheduleControls();
+                refreshPlaylist(screenId);
+            });
+        }
+
+        async function addPanelCard(screenId){
+            const panelZone = getPanelZoneState(screenId);
+            if(String((panelZone && panelZone.source_mode) || 'manual') === 'pos_webhook'){
+                showMessage('Switch this screen back to Manual cards before adding panel text cards');
+                return false;
+            }
+            const title = (window.prompt('Info card title', 'Now serving') || '').trim();
+            if(!title) return false;
+            const body = window.prompt('Info card text', 'Customer name\nOrder #123') || '';
+            try {
+                const response = await fetch(`/panel_playlist/item/${currentStoreId}/${screenId}`, {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({ title, body })
+                });
+                const data = await response.json();
+                if(!data.success){
+                    alert(data.error || 'Failed to add info card');
+                    return false;
+                }
+                try {
+                    const screenData = (((allStoresData || {}).screens || {})[currentStoreId] || {})[screenId];
+                    if(screenData) screenData.panel_zone = data.panel_zone || screenData.panel_zone;
+                } catch {}
+                renderRpPanelScheduleControls();
+                refreshPlaylist(screenId);
+                return true;
+            } catch {
+                alert('Network error adding info card');
+                return false;
+            }
+        }
+
+        async function editPanelCard(screenId, itemId){
+            const item = findPanelItem(screenId, itemId);
+            if(!item) return;
+            const title = (window.prompt('Info card title', String(item.title || '')) || '').trim();
+            if(!title) return;
+            const body = window.prompt('Info card text', String(item.body || ''));
+            try {
+                const response = await fetch(`/panel_playlist/item/${currentStoreId}/${screenId}/${itemId}`, {
+                    method:'PATCH',
+                    headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({ title, body })
+                });
+                const data = await response.json();
+                if(!data.success){
+                    alert(data.error || 'Failed to update info card');
+                    return;
+                }
+                refreshPlaylist(screenId);
+            } catch {
+                alert('Network error updating info card');
+            }
+        }
+
+        function panelDateTimeChanged(screenId, itemId){
+            const ds = document.getElementById(`ppstartdate-${screenId}-${itemId}`);
+            const de = document.getElementById(`ppenddate-${screenId}-${itemId}`);
+            const ts = document.getElementById(`ppstart-${screenId}-${itemId}`);
+            const te = document.getElementById(`ppend-${screenId}-${itemId}`);
+            if(!ts || !te) return;
+            const payload = buildScheduleDatePayload(ds, ts, de, te, true);
+            if(!validateSchedulePayload(payload, screenId)) return;
+            fetch(`/panel_playlist/item/${currentStoreId}/${screenId}/${itemId}`, {
+                method:'PATCH',
+                headers:{'Content-Type':'application/json'},
+                body: JSON.stringify(payload)
+            }).then(r=>r.json()).then(data=>{
+                if(!data.success){
+                    alert('Failed to update info panel schedule');
+                    return;
+                }
+                setTimeout(() => refreshPlaylist(screenId), 100);
+            }).catch(() => alert('Network error updating info panel schedule'));
+        }
+
+        function togglePanelItemWeekday(screenId, itemId, code, el){
+            const parent = document.getElementById(`wd-panel-${screenId}-${itemId}`);
+            if(!parent) return;
+            const btns = [...parent.querySelectorAll('.weekday-btn')];
+            if(el) el.classList.toggle('active');
+            const days = btns.filter((btn) => btn.classList.contains('active')).map((btn) => btn.getAttribute('data-day'));
+            fetch(`/panel_playlist/item/${currentStoreId}/${screenId}/${itemId}`, {
+                method:'PATCH',
+                headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ days })
+            }).then(r=>r.json()).then(data => {
+                if(!data.success){
+                    alert('Failed to update repeat days');
+                    refreshPlaylist(screenId);
+                    return;
+                }
+                setTimeout(() => refreshPlaylist(screenId), 100);
+            }).catch(() => {
+                alert('Network error updating repeat days');
+                refreshPlaylist(screenId);
+            });
+        }
+
+        function togglePanelItemEnabled(btn, screenId, itemId){
+            const isOn = btn.classList.contains('on');
+            const next = !isOn;
+            btn.classList.toggle('on', next);
+            btn.classList.toggle('off', !next);
+            const span = btn.querySelector('span');
+            if(span) span.textContent = next ? 'On' : 'Off';
+            fetch(`/panel_playlist/item/${currentStoreId}/${screenId}/${itemId}`, {
+                method:'PATCH',
+                headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ enabled: next })
+            }).then(r=>r.json()).then(data => {
+                if(!data.success){
+                    alert('Failed to update info card state');
+                    refreshPlaylist(screenId);
+                    return;
+                }
+                renderRpPanelScheduleControls();
+                setTimeout(() => refreshPlaylist(screenId), 100);
+            }).catch(() => {
+                alert('Network error updating info card state');
+                renderRpPanelScheduleControls();
+                refreshPlaylist(screenId);
+            });
+        }
+
+        function getRpPanelScheduleState(){
+            const fallback = {
+                screenId: '',
+                layoutMode: 'off',
+                sourceMode: 'manual',
+                layoutDisabled: true,
+                actionDisabled: true,
+                hint: 'Open a schedule slot first to manage the info panel from here.'
+            };
+            if(!(rpCtx && rpCtx.itemId === 'SINGLE')) return fallback;
+            const targetScreenId = getRpSelectedTargetScreenId();
+            if(!targetScreenId) return fallback;
+            if(isRpCreatingNewScreen()){
+                return {
+                    screenId: targetScreenId,
+                    layoutMode: 'off',
+                    sourceMode: 'manual',
+                    layoutDisabled: true,
+                    actionDisabled: true,
+                    hint: 'Create the new screen first, then add info panel cards for it.'
+                };
+            }
+            const controlTarget = resolveWallControlTarget(targetScreenId, null, false);
+            const binding = controlTarget && controlTarget.binding ? controlTarget.binding : getWallSyncBinding(currentStoreId, targetScreenId, null);
+            if(binding && binding.isFollower){
+                const masterLabel = binding.masterScreenId ? getScreenDisplayName(binding.masterScreenId) : 'the master screen';
+                return {
+                    screenId: targetScreenId,
+                    layoutMode: 'off',
+                    sourceMode: 'manual',
+                    layoutDisabled: true,
+                    actionDisabled: true,
+                    hint: `Wall follower screens keep full-screen playback. Change ${masterLabel} instead.`
+                };
+            }
+            const screenData = ((((allStoresData || {}).screens || {})[currentStoreId] || {})[targetScreenId]) || {};
+            const panelZone = screenData.panel_zone || {};
+            if(String(panelZone.source_mode || 'manual') === 'pos_webhook'){
+                return {
+                    screenId: targetScreenId,
+                    layoutMode: String(panelZone.layout_mode || 'off'),
+                    sourceMode: 'pos_webhook',
+                    layoutDisabled: false,
+                    actionDisabled: false,
+                    hint: 'This screen is using Live POS mode. Layout still works here, and the full POS setup opens from the button on the right.'
+                };
+            }
+            return {
+                screenId: targetScreenId,
+                layoutMode: String(panelZone.layout_mode || 'off'),
+                sourceMode: 'manual',
+                layoutDisabled: false,
+                actionDisabled: false,
+                hint: 'The info panel auto-hides during sync or wall video playback and only appears on normal media.'
+            };
+        }
+
+        function renderRpPanelScheduleControls(){
+            const select = document.getElementById('rp-panel-layout-picker');
+            const addBtn = document.getElementById('rp-panel-add-btn');
+            const manageBtn = document.getElementById('rp-panel-manage-btn');
+            const hint = document.getElementById('rp-panel-zone-hint');
+            if(!select || !addBtn || !hint) return;
+            const state = getRpPanelScheduleState();
+            select.value = state.layoutMode || 'off';
+            select.disabled = !!state.layoutDisabled;
+            if(state.sourceMode === 'pos_webhook'){
+                addBtn.disabled = true;
+                addBtn.textContent = '+';
+                addBtn.title = 'Manual info cards are disabled while Live POS mode is active';
+                if(manageBtn){
+                    manageBtn.style.display = '';
+                    manageBtn.disabled = !!state.actionDisabled;
+                    manageBtn.title = state.hint;
+                }
+            } else {
+                addBtn.disabled = !!state.actionDisabled;
+                addBtn.textContent = '+';
+                addBtn.title = state.actionDisabled ? state.hint : 'Add a scheduled text card';
+                if(manageBtn){
+                    manageBtn.style.display = 'none';
+                    manageBtn.disabled = true;
+                }
+            }
+            hint.textContent = state.hint;
+        }
+
+        function updateRpPanelLayout(layoutMode){
+            const state = getRpPanelScheduleState();
+            if(state.layoutDisabled || !state.screenId){
+                renderRpPanelScheduleControls();
+                return;
+            }
+            updatePanelLayout(state.screenId, layoutMode);
+        }
+
+        function openRpPanelPosSetup(){
+            const state = getRpPanelScheduleState();
+            if(!state.screenId){
+                renderRpPanelScheduleControls();
+                return;
+            }
+            try { closeReplaceModal(); } catch {}
+            setTimeout(() => {
+                const panel = document.getElementById(`panel-zone-${state.screenId}`);
+                if(panel){
+                    panel.scrollIntoView({ behavior:'smooth', block:'center' });
+                    const previousOutline = panel.style.boxShadow;
+                    panel.style.boxShadow = '0 0 0 3px rgba(37,99,235,.18)';
+                    panel.style.transition = 'box-shadow .2s ease';
+                    setTimeout(() => { panel.style.boxShadow = previousOutline || ''; }, 1800);
+                }
+            }, 60);
+        }
+
+        async function addRpPanelCardFromModal(){
+            const state = getRpPanelScheduleState();
+            if(!state.screenId){
+                renderRpPanelScheduleControls();
+                return;
+            }
+            if(state.sourceMode === 'pos_webhook'){
+                openRpPanelPosSetup();
+                return;
+            }
+            if(state.actionDisabled){
+                renderRpPanelScheduleControls();
+                return;
+            }
+            await addPanelCard(state.screenId);
+            renderRpPanelScheduleControls();
+        }
+
+        function updatePanelDuration(screenId, itemId, ev){
+            const input = ev && ev.target ? ev.target : document.getElementById(`pdur-${screenId}-${itemId}`);
+            if(!input) return;
+            const previous = normalizeDurationValue(input.dataset.prev, input.defaultValue || 10);
+            const next = normalizeDurationValue(input.value, previous);
+            input.value = String(next);
+            fetch(`/panel_playlist/item/${currentStoreId}/${screenId}/${itemId}`, {
+                method:'PATCH',
+                headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ duration: next })
+            }).then(r=>r.json()).then(data => {
+                if(!data.success){
+                    input.value = String(previous);
+                    alert('Failed to update info card duration');
+                    return;
+                }
+                input.dataset.prev = String(next);
+            }).catch(() => {
+                input.value = String(previous);
+                alert('Network error updating info card duration');
+            });
+        }
+
+        function handlePanelDurationKeydown(screenId, itemId, ev){
+            if(!ev) return;
+            if(ev.key === 'Enter'){
+                ev.preventDefault();
+                ev.target.blur();
+            } else if(ev.key === 'Escape'){
+                const input = document.getElementById(`pdur-${screenId}-${itemId}`);
+                if(!input) return;
+                input.value = String(normalizeDurationValue(input.dataset.prev, input.defaultValue || 10));
+                ev.preventDefault();
+                ev.target.blur();
+            }
+        }
+
+        function deletePanelItem(screenId, itemId){
+            if(!confirm('Delete this info card?')) return;
+            fetch(`/panel_playlist/item/${currentStoreId}/${screenId}/${itemId}`, { method:'DELETE' })
+                .then(r=>r.json())
+                .then(data => {
+                    if(!data.success){
+                        alert('Delete failed');
+                        return;
+                    }
+                    refreshPlaylist(screenId);
+                })
+                .catch(() => alert('Network error deleting info card'));
         }
 
         function toLocalInput(isoString) {
@@ -11063,6 +12212,22 @@ allowfullscreen></iframe></div>`;
                                                             <span class="rp-preview-pill">Step 1: choose media</span>
                                                         </div>
                                                         <div id="rp-preview-note" class="rp-preview-note">Choose media on the left, then confirm it with the schedule on the right.</div>
+                                                        <div id="rp-preview-panel-zone" class="rp-schedule-row" style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-top:18px; border:1px solid #e5e7eb; border-radius:10px; padding:12px 14px; background:#fbfcfe;">
+                                                            <div>
+                                                                <div class="rp-subtitle" style="margin:0;">Info Panel Schedule</div>
+                                                                <div class="rp-help" id="rp-panel-zone-hint" style="margin-top:4px;">The info panel auto-hides during sync or wall video playback and only appears on normal media.</div>
+                                                            </div>
+                                                            <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                                                                <select id="rp-panel-layout-picker" onchange="updateRpPanelLayout(this.value)" style="height:32px; border:1px solid #dcdfe3; background:#fff; color:#1d1d1f; font-size:12px; padding:0 8px; min-width:116px;">
+                                                                    <option value="off">Off</option>
+                                                                    <option value="split-right-25">Right 25%</option>
+                                                                    <option value="split-left-25">Left 25%</option>
+                                                                    <option value="split-bottom-25">Bottom 25%</option>
+                                                                </select>
+                                                                <button type="button" class="btn" id="rp-panel-manage-btn" onclick="openRpPanelPosSetup()" style="display:none;">Configure Live POS</button>
+                                                                <button type="button" class="add-slot-btn" id="rp-panel-add-btn" onclick="addRpPanelCardFromModal()" title="Add a scheduled text card">+</button>
+                                                            </div>
+                                                        </div>
                                                         <div class="rp-preview-actions">
                                                             <button id="rp-clear-selection" class="btn" onclick="clearRpSelection()" disabled>Clear selection</button>
                                                         </div>
@@ -11419,6 +12584,7 @@ allowfullscreen></iframe></div>`;
                     if(previewScreen) previewScreen.textContent = formatRpScreenLabel(targetScreenId);
                     if(storeName) storeName.textContent = currentStoreId ? getCurrentStoreName(currentStoreId) : 'No store selected';
                     setRpScheduleEditorVisible(addMode);
+                    renderRpPanelScheduleControls();
                 }
                 function resetRpUploadUI(){
                     try{

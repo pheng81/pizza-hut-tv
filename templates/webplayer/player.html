@@ -93,12 +93,105 @@
 	</script>
 	<style>
 		html, body { height:100%; margin:0; background:#000; color:#fff; cursor:none; overflow:hidden; }
+		body { font-family: "Segoe UI", Roboto, Arial, sans-serif; }
 		#stage { position:fixed; top:0; left:0; right:0; bottom:0; width:100%; height:100%; overflow:hidden; background:#000; 
 			/* HARDWARE ACCELERATION for smooth transitions */
 			transform: translateZ(0);
 			-webkit-transform: translateZ(0);
 			transform-origin: center center;
 			-webkit-transform-origin: center center;
+			transition: top .35s ease, left .35s ease, right .35s ease, bottom .35s ease;
+		}
+		#panel-zone {
+			position: fixed;
+			top: 0;
+			right: 0;
+			bottom: 0;
+			width: 25vw;
+			display: none;
+			z-index: 8;
+			background:
+				linear-gradient(180deg, rgba(32, 18, 6, 0.96) 0%, rgba(14, 10, 7, 0.98) 100%),
+				radial-gradient(circle at top right, rgba(245, 158, 11, 0.32), transparent 44%);
+			border-left: 1px solid rgba(255, 214, 153, 0.28);
+			box-shadow: -18px 0 48px rgba(0, 0, 0, 0.38);
+			overflow: hidden;
+		}
+		#panel-zone.visible { display: block; }
+		#panel-zone.layout-left {
+			left: 0;
+			right: auto;
+			border-left: none;
+			border-right: 1px solid rgba(255, 214, 153, 0.28);
+			box-shadow: 18px 0 48px rgba(0, 0, 0, 0.38);
+		}
+		#panel-zone.layout-bottom {
+			left: 0;
+			right: 0;
+			top: auto;
+			width: 100vw;
+			height: 25vh;
+			border-left: none;
+			border-top: 1px solid rgba(255, 214, 153, 0.28);
+			box-shadow: 0 -18px 48px rgba(0, 0, 0, 0.38);
+		}
+		#panel-zone-content {
+			height: 100%;
+			display: flex;
+			flex-direction: column;
+			justify-content: center;
+			gap: 18px;
+			padding: 34px 28px;
+			box-sizing: border-box;
+		}
+		#panel-zone.layout-bottom #panel-zone-content {
+			padding: 22px 28px;
+			flex-direction: row;
+			align-items: center;
+			justify-content: space-between;
+		}
+		.panel-kicker {
+			font-size: 12px;
+			font-weight: 700;
+			letter-spacing: 0.14em;
+			text-transform: uppercase;
+			color: rgba(255, 228, 181, 0.82);
+		}
+		.panel-title {
+			font-size: clamp(28px, 3vw, 54px);
+			line-height: 1.06;
+			font-weight: 800;
+			color: #fff4dc;
+			text-wrap: balance;
+		}
+		#panel-zone.layout-bottom .panel-title {
+			font-size: clamp(24px, 2.4vw, 44px);
+			max-width: 34vw;
+		}
+		.panel-body {
+			font-size: clamp(18px, 1.55vw, 30px);
+			line-height: 1.4;
+			color: rgba(255, 246, 230, 0.92);
+			white-space: pre-wrap;
+		}
+		#panel-zone.layout-bottom .panel-body {
+			font-size: clamp(16px, 1.15vw, 22px);
+			max-width: 46vw;
+			text-align: right;
+		}
+		.panel-chip {
+			display: inline-flex;
+			align-items: center;
+			width: fit-content;
+			padding: 8px 12px;
+			border-radius: 999px;
+			background: rgba(255, 255, 255, 0.09);
+			border: 1px solid rgba(255, 233, 196, 0.18);
+			font-size: 12px;
+			font-weight: 700;
+			letter-spacing: 0.08em;
+			text-transform: uppercase;
+			color: rgba(255, 233, 196, 0.92);
 		}
 		.layer { position:absolute; top:0; left:0; right:0; bottom:0; display:block; background:transparent; text-align:center;
 			/* SMOOTH TRANSITION OPTIMIZATION */
@@ -255,6 +348,9 @@
 	<div id="stage">
 		<div class="layer" id="layerA"></div>
 		<div class="layer" id="layerB"></div>
+	</div>
+	<div id="panel-zone" aria-hidden="true">
+		<div id="panel-zone-content"></div>
 	</div>
 	<div id="overlay"></div>
 	<div id="address-overlay" {% if not display_address %}hidden{% endif %}><small>{% if display_address_source == 'store' %}Store Address{% else %}Screen Address{% endif %}</small><span>{{ display_address or '' }}</span></div>
@@ -950,6 +1046,8 @@
 		}
 
 	const stage = document.getElementById('stage');
+		const panelZone = document.getElementById('panel-zone');
+		const panelZoneContent = document.getElementById('panel-zone-content');
 		const layerA = document.getElementById('layerA');
 		const layerB = document.getElementById('layerB');
 		let front = layerA, back = layerB;
@@ -974,6 +1072,8 @@
 		let lastFetchTs = 0;
 		let screenMuted = true; // default true for autoplay; updated from server /playlist response
 		let currentItemKey = '';
+		let currentMainItem = null;
+		let panelZoneState = { enabled:false, layout_mode:'off', playlist:[], active_item:null };
 		let forceAdvanceNow = false;
 		const PLAYLIST_REFRESH_MIN_MS = 3000; // INSTANT REFRESH: Faster refresh for immediate schedule changes
 		const COMMANDS_POLL_MS = 1500; // INSTANT POLLING: Faster polling for immediate admin updates
@@ -1013,6 +1113,65 @@
 				console.warn('Failed to compute playlist signature', err);
 				return `sig:${Date.now()}`;
 			}
+		}
+
+		function isSyncOrWallMedia(item){
+			return !!(item && item.sync_ref);
+		}
+
+		function resetStageBounds(){
+			stage.style.top = '0';
+			stage.style.left = '0';
+			stage.style.right = '0';
+			stage.style.bottom = '0';
+			stage.style.width = '100%';
+			stage.style.height = '100%';
+		}
+
+		function hidePanelZone(){
+			if(panelZone){
+				panelZone.classList.remove('visible', 'layout-left', 'layout-right', 'layout-bottom');
+				panelZone.setAttribute('aria-hidden', 'true');
+			}
+			if(panelZoneContent){
+				panelZoneContent.innerHTML = '';
+			}
+			resetStageBounds();
+		}
+
+		function renderPanelZone(mainItem){
+			const zone = panelZoneState || {};
+			const activeItem = zone.active_item || null;
+			const layout = String(zone.layout_mode || 'off').toLowerCase();
+			if(!panelZone || !panelZoneContent || !zone.enabled || !activeItem || layout === 'off' || isSyncOrWallMedia(mainItem)){
+				hidePanelZone();
+				return;
+			}
+			panelZone.classList.remove('layout-left', 'layout-right', 'layout-bottom');
+			panelZone.classList.add('visible');
+			panelZone.setAttribute('aria-hidden', 'false');
+			resetStageBounds();
+			if(layout === 'split-left-25'){
+				panelZone.classList.add('layout-left');
+				stage.style.left = '25vw';
+			} else if(layout === 'split-bottom-25'){
+				panelZone.classList.add('layout-bottom');
+				stage.style.bottom = '25vh';
+			} else {
+				panelZone.classList.add('layout-right');
+				stage.style.right = '25vw';
+			}
+			const title = String(activeItem.title || activeItem.name || 'Info');
+			const body = String(activeItem.body || activeItem.text || '');
+			panelZoneContent.innerHTML = `
+				<div class="panel-chip">Live order info</div>
+				<div class="panel-kicker">Scheduled panel</div>
+				<div class="panel-title"></div>
+				<div class="panel-body"></div>`;
+			const titleNode = panelZoneContent.querySelector('.panel-title');
+			const bodyNode = panelZoneContent.querySelector('.panel-body');
+			if(titleNode) titleNode.textContent = title;
+			if(bodyNode) bodyNode.textContent = body;
 		}
 		
 		// Client-side schedule filtering (matches server logic)
@@ -1250,11 +1409,13 @@
 					const newSignature = computePlaylistSignature(j.playlist, j.orientation, j.rotation);
 					const signatureChanged = Boolean(playlistSignature) && newSignature !== playlistSignature;
 					playlist = j.playlist;
+					panelZoneState = j.panel_zone || { enabled:false, layout_mode:'off', playlist:[], active_item:null };
 					playlistSignature = newSignature;
 					if(typeof j.orientation === 'string'){ orientationMode = j.orientation; }
 					if(typeof j.rotation === 'number'){ displayRotation = (j.rotation||0); }
 					if(typeof j.muted === 'boolean'){ screenMuted = j.muted; }
 					applyOrientation();
+					renderPanelZone(currentMainItem);
 					if(idx >= playlist.length) idx = 0;
 					// If the currently showing item is no longer present (e.g., schedule switch), advance immediately
 					if(currentItemKey){
@@ -1275,6 +1436,8 @@
 			}catch(e){ overlay.textContent = `Playlist error: ${e&&e.message||'unknown'}`; }
 			lastFetchTs = Date.now();
 			if(!playlist.length){
+				currentMainItem = null;
+				renderPanelZone(null);
 				showIdleState('Waiting for schedule…');
 			}else{
 				hideIdleState();
@@ -2401,6 +2564,8 @@
 			const item = activePlaylist[activeIdx];
 			const next = activePlaylist[(activeIdx + 1) % activePlaylist.length];
 			const dur = Math.max(1, parseInt(item.duration||10));
+			currentMainItem = item;
+			renderPanelZone(item);
 			
 			console.log('🔍 DURATION DEBUG:', {
 				item_id: item.id,

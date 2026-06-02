@@ -55,6 +55,7 @@ users.db
 # Environment variables
 .env
 .env.local
+.dev_secret_key
 
 # OS
 .DS_Store

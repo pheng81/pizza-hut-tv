@@ -39,13 +39,17 @@ android {
 			// Production: prefer supplied domain; fallback to direct server IP
 			def suppliedBase = project.findProperty('PHTV_BASE_URL') as String
 			def defaultProd = 'https://everydayadvertise.com/'
+			def allowInsecureSsl = ((project.findProperty('PHTV_ALLOW_INSECURE_SSL') ?: 'false').toString()).toBoolean()
 			buildConfigField 'String', 'PHTV_BASE_URL', '"' + (suppliedBase ?: defaultProd) + '"'
+			buildConfigField 'boolean', 'PHTV_ALLOW_INSECURE_SSL', String.valueOf(allowInsecureSsl)
 		}
 		debug {
 			// Prefer supplied domain if provided; otherwise emulator alias
 			def suppliedBase = project.findProperty('PHTV_BASE_URL') as String
 			def defaultProd = 'https://everydayadvertise.com/'
+			def allowInsecureSsl = ((project.findProperty('PHTV_ALLOW_INSECURE_SSL') ?: 'true').toString()).toBoolean()
 			buildConfigField 'String', 'PHTV_BASE_URL', '"' + (suppliedBase ?: defaultProd) + '"'
+			buildConfigField 'boolean', 'PHTV_ALLOW_INSECURE_SSL', String.valueOf(allowInsecureSsl)
 		}
 	}
 

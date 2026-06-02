@@ -192,19 +192,21 @@ class StoreSelectActivity : AppCompatActivity() {
                 opts.reconnection = true
                 opts.transports = arrayOf("websocket", "polling")
                 
-                // WORKAROUND: Apply SSL bypass for old Android TV (same as SetupActivity)
-                try {
-                    val okHttpClient = okhttp3.OkHttpClient.Builder()
-                        .sslSocketFactory(
-                            com.everydayadvertise.tv.api.TrustAllCerts.getUnsafeSSLSocketFactory(),
-                            com.everydayadvertise.tv.api.TrustAllCerts.getTrustManager()
-                        )
-                        .hostnameVerifier(com.everydayadvertise.tv.api.TrustAllCerts.getAllTrustingHostnameVerifier())
-                        .build()
-                    opts.callFactory = okHttpClient
-                    opts.webSocketFactory = okHttpClient
-                } catch (e: Exception) {
-                    android.util.Log.w("StoreSelectActivity", "Failed to apply SSL workaround", e)
+                // Only enable the insecure TLS workaround when the build explicitly allows it.
+                if (BuildConfig.PHTV_ALLOW_INSECURE_SSL) {
+                    try {
+                        val okHttpClient = okhttp3.OkHttpClient.Builder()
+                            .sslSocketFactory(
+                                com.everydayadvertise.tv.api.TrustAllCerts.getUnsafeSSLSocketFactory(),
+                                com.everydayadvertise.tv.api.TrustAllCerts.getTrustManager()
+                            )
+                            .hostnameVerifier(com.everydayadvertise.tv.api.TrustAllCerts.getAllTrustingHostnameVerifier())
+                            .build()
+                        opts.callFactory = okHttpClient
+                        opts.webSocketFactory = okHttpClient
+                    } catch (e: Exception) {
+                        android.util.Log.w("StoreSelectActivity", "Failed to apply SSL workaround", e)
+                    }
                 }
                 
                 socket?.let { try { it.off(); it.disconnect() } catch (_: Exception) {} }

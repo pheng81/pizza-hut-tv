@@ -94,22 +94,24 @@ class SetupActivity : AppCompatActivity() {
 				// Start with polling for better reliability, then upgrade to websocket if available
 				opts.transports = arrayOf("polling", "websocket")
 				
-				// WORKAROUND: Apply SSL bypass for old Android TV (same as ApiClient)
-				try {
-					val okHttpClient = okhttp3.OkHttpClient.Builder()
-						.sslSocketFactory(
-							com.everydayadvertise.tv.api.TrustAllCerts.getUnsafeSSLSocketFactory(),
-							com.everydayadvertise.tv.api.TrustAllCerts.getTrustManager()
-						)
-						.hostnameVerifier(com.everydayadvertise.tv.api.TrustAllCerts.getAllTrustingHostnameVerifier())
-						.connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
-						.readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
-						.build()
-					opts.callFactory = okHttpClient
-					opts.webSocketFactory = okHttpClient
-					android.util.Log.d("SetupActivity", "✅ Applied SSL workaround to Socket.IO")
-				} catch (e: Exception) {
-					android.util.Log.w("SetupActivity", "⚠️ Failed to apply SSL workaround to Socket.IO", e)
+				// Only enable the insecure TLS workaround when the build explicitly allows it.
+				if (BuildConfig.PHTV_ALLOW_INSECURE_SSL) {
+					try {
+						val okHttpClient = okhttp3.OkHttpClient.Builder()
+							.sslSocketFactory(
+								com.everydayadvertise.tv.api.TrustAllCerts.getUnsafeSSLSocketFactory(),
+								com.everydayadvertise.tv.api.TrustAllCerts.getTrustManager()
+							)
+							.hostnameVerifier(com.everydayadvertise.tv.api.TrustAllCerts.getAllTrustingHostnameVerifier())
+							.connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+							.readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+							.build()
+						opts.callFactory = okHttpClient
+						opts.webSocketFactory = okHttpClient
+						android.util.Log.d("SetupActivity", "✅ Applied SSL workaround to Socket.IO")
+					} catch (e: Exception) {
+						android.util.Log.w("SetupActivity", "⚠️ Failed to apply SSL workaround to Socket.IO", e)
+					}
 				}
 				
 				android.util.Log.d("SetupActivity", "🔌 Connecting Socket.IO to $host (attempt ${retryCount + 1}/$maxRetries)...")

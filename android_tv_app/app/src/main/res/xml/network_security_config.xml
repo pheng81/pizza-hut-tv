@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-	<!-- Allow cleartext HTTP for local development/testing -->
-	<base-config cleartextTrafficPermitted="true">
+	<!-- Production config: require TLS. Debug overrides may relax this locally. -->
+	<base-config cleartextTrafficPermitted="false">
 		<trust-anchors>
 			<certificates src="system" />
 			<certificates src="user" />
