@@ -10734,12 +10734,40 @@ allowfullscreen></iframe></div>`;
             showMessage(`${preset.label} mapping applied`);
         }
 
+        function getPanelPosCollapseStorageKey(screenId){
+            return `panelPosCollapsed:${currentStoreId || 'default'}:${screenId}`;
+        }
+
+        function isPanelPosFeedCollapsed(screenId){
+            try {
+                return localStorage.getItem(getPanelPosCollapseStorageKey(screenId)) === '1';
+            } catch {
+                return false;
+            }
+        }
+
+        function setPanelPosFeedCollapsed(screenId, collapsed){
+            try {
+                localStorage.setItem(getPanelPosCollapseStorageKey(screenId), collapsed ? '1' : '0');
+            } catch {}
+        }
+
+        function togglePanelPosFeedCollapsed(screenId){
+            const next = !isPanelPosFeedCollapsed(screenId);
+            setPanelPosFeedCollapsed(screenId, next);
+            const screenData = (((allStoresData || {}).screens || {})[currentStoreId] || {})[screenId] || {};
+            const panelZone = screenData.panel_zone || {};
+            const screenBinding = getWallSyncBinding(currentStoreId, screenId, screenData);
+            renderPanelScheduleSection(screenId, panelZone, screenBinding);
+        }
+
         function renderPanelPosFeedEditor(screenId, panelZone, screenBinding){
             const wrap = document.getElementById(`panel-pos-feed-${screenId}`);
             if(!wrap) return;
             const state = normalizePanelPosFeed(panelZone);
             const isFollower = !!(screenBinding && screenBinding.isFollower);
             const isPosMode = state.sourceMode === 'pos_webhook';
+            const isCollapsed = isPanelPosFeedCollapsed(screenId);
             const disabledAttr = isFollower ? 'disabled' : '';
             if(!isPosMode){
                 wrap.innerHTML = `
@@ -10776,10 +10804,15 @@ allowfullscreen></iframe></div>`;
             }
             const lastEventLabel = state.lastEventAt ? state.lastEventAt.replace('T', ' ').replace('Z', ' UTC') : 'No events yet';
             const hasSummary = !!(state.lastEventSummary.customer_name || state.lastEventSummary.order_number || state.lastEventSummary.status || state.lastEventSummary.external_id);
+            const connectorMeta = PANEL_POS_CONNECTOR_META[state.connectorType] || PANEL_POS_CONNECTOR_META.generic_webhook;
+            const collapseIconButton = `<button type="button" class="btn" onclick="togglePanelPosFeedCollapsed('${screenId}')" title="Minimize Live POS setup" aria-label="Minimize Live POS setup" style="position:absolute; top:10px; right:10px; width:30px; height:30px; display:inline-flex; align-items:center; justify-content:center; padding:0; font-size:18px; line-height:1; border-radius:999px;">&times;</button>`;
+            const expandIconUrl = `/static/icons/panel-expand.svg?v={{ asset_bust }}`;
+            const expandIconButton = `<button type="button" class="btn" onclick="togglePanelPosFeedCollapsed('${screenId}')" title="Expand Live POS setup" aria-label="Expand Live POS setup" style="position:absolute; top:10px; right:10px; width:30px; height:30px; display:inline-flex; align-items:center; justify-content:center; padding:0; border-radius:999px; color:#334155;"><img src="${expandIconUrl}" alt="" aria-hidden="true" style="width:16px; height:16px; display:block;"></button>`;
             wrap.innerHTML = `
-                <div style="display:flex; flex-direction:column; gap:12px; background:linear-gradient(180deg,#f8fbff 0%,#f3f8ff 100%); border:1px solid #d7e6ff; border-radius:12px; padding:12px;">
-                    <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start; flex-wrap:wrap;">
-                        <div>
+                <div style="position:relative; display:flex; flex-direction:column; gap:12px; background:linear-gradient(180deg,#f8fbff 0%,#f3f8ff 100%); border:1px solid #d7e6ff; border-radius:12px; padding:12px;">
+                    ${isCollapsed ? expandIconButton : collapseIconButton}
+                    <div style="display:flex; flex-direction:column; gap:10px; align-items:flex-start;">
+                        <div style="padding-right:40px;">
                             <div style="font-size:12px; font-weight:700; color:#1d4ed8;">Live POS Setup</div>
                             <div style="font-size:11px; color:#5b6472; margin-top:3px;">Connect any POS through a direct webhook or a bridge like Zapier, Make, or n8n. The screen will rotate the newest eligible orders automatically.</div>
                         </div>
@@ -10789,6 +10822,7 @@ allowfullscreen></iframe></div>`;
                             <span style="font-size:10px; font-weight:700; color:#334155; background:#eef2ff; border:1px solid #dbeafe; border-radius:999px; padding:4px 8px;">${queueCount}/${state.maxItems} queued</span>
                         </div>
                     </div>
+                    ${isCollapsed ? `` : `
                     <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:8px;">
                         <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
                             <span>POS or feed name</span>
@@ -10917,9 +10951,12 @@ allowfullscreen></iframe></div>`;
                         <button type="button" class="btn" onclick="resetPanelPosWebhookToken('${screenId}')" ${disabledAttr}>Reset webhook</button>
                         <button type="button" class="btn" onclick="clearPanelPosQueue('${screenId}')" ${disabledAttr}>Clear queue</button>
                     </div>
+                    `}
                 </div>`;
-            updatePanelPosGuide(screenId);
-            updatePanelPosPreview(screenId);
+            if(!isCollapsed){
+                updatePanelPosGuide(screenId);
+                updatePanelPosPreview(screenId);
+            }
         }
 
         function renderPanelLiveQueue(screenId, panelZone, container){
