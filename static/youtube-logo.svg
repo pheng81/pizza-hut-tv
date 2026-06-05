@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="80" height="80">
+  <!-- Red background -->
+  <rect width="48" height="48" rx="4" fill="#FF0000"/>
+  <!-- Play button -->
+  <polygon points="18,14 18,34 34,24" fill="white"/>
+</svg>

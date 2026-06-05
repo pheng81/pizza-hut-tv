@@ -1105,7 +1105,7 @@
     }
     .rp-body { flex:1; min-height:0; padding:0; overflow:hidden; background:#fff; }
     .rp-body > div { height:100%; min-height:0; }
-    .rp-shell { display:grid; grid-template-columns:minmax(220px, 250px) minmax(0, 1fr) minmax(310px, 350px); height:100%; min-height:0; }
+    .rp-shell { display:grid; grid-template-columns:minmax(280px, 380px) minmax(0, 1fr) minmax(340px, 420px); height:100%; min-height:0; }
     .rp-shell--single { grid-template-columns:minmax(0, 1fr) 320px; }
     .rp-panel { background:#fff; border-right:1px solid #e5e7eb; padding:18px; min-height:0; height:100%; overflow:hidden; }
     .rp-panel:last-child { border-right:none; }
@@ -1117,10 +1117,11 @@
     .rp-toolbar-title { color:#0f172a; font-size:13px; font-weight:700; }
     .rp-toolbar-meta { color:#64748b; font-size:11px; line-height:1.35; }
     .rp-toolbar-controls { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
-    .rp-library-toolbar { display:flex; align-items:center; justify-content:flex-end; gap:8px; width:100%; flex-wrap:wrap; }
-    .rp-library-toolbar__title { display:none; color:#0f172a; font-size:20px; font-weight:700; line-height:1.1; }
+    .rp-library-toolbar { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; flex-wrap:wrap; }
+    .rp-library-toolbar__title { display:flex; align-items:center; gap:10px; color:#0f172a; font-size:16px; font-weight:700; line-height:1.1; flex:1 1 auto; min-width:0; }
+    .rp-library-toolbar__title .rp-filters { margin-left: 12px; }
     .rp-library-toolbar__header { display:flex; align-items:center; justify-content:space-between; gap:10px; min-width:0; }
-    .rp-library-toolbar__actions { display:flex; align-items:center; gap:6px; flex-wrap:nowrap; justify-content:flex-start; min-width:0; position:relative; overflow:visible; }
+    .rp-library-toolbar__actions { display:flex; align-items:center; gap:6px; flex-wrap:wrap; justify-content:flex-end; min-width:0; position:relative; overflow:visible; }
     .rp-upload-trigger {
         appearance:none;
         border:none;
@@ -1176,6 +1177,9 @@
     .rp-breadcrumb__link { color:#2563eb; font-size:12px; font-weight:600; text-decoration:none; }
     .rp-breadcrumb__sep { color:#94a3b8; font-size:12px; }
     .rp-folder-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .rp-folder-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom: 8px; }
+    .rp-folder-filters { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+    .rp-folder-filters .rp-filter-btn { font-size: 12px; padding: 4px 8px; }
     .rp-library-pane { display:flex; flex:1 1 auto; flex-direction:column; gap:10px; min-height:0; overflow:auto; padding-right:2px; }
     .rp-library-group { display:flex; flex-direction:column; gap:6px; }
     .rp-section-head { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; }
@@ -1272,7 +1276,7 @@
         font-size: 11px;
     }
     .rp-overlay--library .rp-shell {
-        grid-template-columns: minmax(280px, 320px) minmax(0, 1fr) minmax(280px, 320px);
+        grid-template-columns: minmax(320px, 400px) minmax(0, 1fr) minmax(320px, 380px);
     }
     .rp-overlay--library .rp-panel--library {
         gap: 10px;
@@ -1319,7 +1323,7 @@
     }
     @media (max-width: 1280px) {
         .rp-overlay--library .rp-shell {
-            grid-template-columns: minmax(300px, 360px) minmax(0, 1fr) minmax(260px, 300px);
+            grid-template-columns: minmax(320px, 400px) minmax(0, 1fr) minmax(280px, 340px);
         }
     }
     .auto-slice-modal-overlay {
@@ -10449,6 +10453,72 @@ allowfullscreen></iframe></div>`;
         const PANEL_POS_DEFAULT_BODY = `${PANEL_POS_TEMPLATE_TOKENS.customer_name}\nOrder #${PANEL_POS_TEMPLATE_TOKENS.order_number}`;
         const PANEL_POS_TEMPLATE_REGEX = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
 
+        function normalizeHexColor(value, fallback='#201206'){
+            const raw = String(value || '').trim();
+            if(/^#?[0-9a-f]{6}$/i.test(raw)){
+                return `#${raw.replace(/^#/, '').toLowerCase()}`;
+            }
+            if(/^#?[0-9a-f]{3}$/i.test(raw)){
+                const compact = raw.replace(/^#/, '').toLowerCase();
+                return `#${compact.split('').map((char) => `${char}${char}`).join('')}`;
+            }
+            return fallback;
+        }
+
+        function hexToRgb(hexColor){
+            const normalized = normalizeHexColor(hexColor, '');
+            if(!normalized) return null;
+            const raw = normalized.slice(1);
+            return {
+                r: parseInt(raw.slice(0, 2), 16),
+                g: parseInt(raw.slice(2, 4), 16),
+                b: parseInt(raw.slice(4, 6), 16)
+            };
+        }
+
+        function mixRgb(base, target, ratio){
+            return {
+                r: Math.round(base.r + ((target.r - base.r) * ratio)),
+                g: Math.round(base.g + ((target.g - base.g) * ratio)),
+                b: Math.round(base.b + ((target.b - base.b) * ratio))
+            };
+        }
+
+        function rgbToCss(rgb, alpha=1){
+            return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+        }
+
+        function getPanelAppearancePalette(backgroundColor){
+            const baseRgb = hexToRgb(backgroundColor) || { r: 32, g: 18, b: 6 };
+            const darkerRgb = mixRgb(baseRgb, { r: 0, g: 0, b: 0 }, 0.34);
+            const lighterRgb = mixRgb(baseRgb, { r: 255, g: 255, b: 255 }, 0.18);
+            const contrastScore = ((baseRgb.r * 299) + (baseRgb.g * 587) + (baseRgb.b * 114)) / 1000;
+            const isLight = contrastScore >= 170;
+            return {
+                backgroundStart: rgbToCss(baseRgb, 0.95),
+                backgroundEnd: rgbToCss(darkerRgb, 0.98),
+                accentGlow: rgbToCss(lighterRgb, 0.28),
+                borderColor: isLight ? 'rgba(15, 23, 42, 0.14)' : 'rgba(255, 214, 153, 0.26)',
+                chipBg: isLight ? 'rgba(255, 255, 255, 0.56)' : 'rgba(255, 255, 255, 0.10)',
+                chipBorder: isLight ? 'rgba(15, 23, 42, 0.12)' : 'rgba(255, 233, 196, 0.18)',
+                chipText: isLight ? '#0f172a' : 'rgba(255, 233, 196, 0.92)',
+                titleColor: isLight ? '#0f172a' : '#fff4dc',
+                bodyColor: isLight ? 'rgba(15, 23, 42, 0.88)' : 'rgba(255, 246, 230, 0.92)',
+                mutedColor: isLight ? 'rgba(15, 23, 42, 0.68)' : 'rgba(255, 228, 181, 0.82)',
+                metaColor: isLight ? 'rgba(15, 23, 42, 0.56)' : 'rgba(226, 232, 240, 0.78)'
+            };
+        }
+
+        function normalizePanelAppearance(panelZone){
+            const raw = (panelZone && typeof panelZone.appearance === 'object' && panelZone.appearance) ? panelZone.appearance : {};
+            const contentAlign = String(raw.content_align || 'center').trim().toLowerCase();
+            return {
+                backgroundColor: normalizeHexColor(raw.background_color || '#201206', '#201206'),
+                contentAlign: ['top', 'center', 'bottom'].includes(contentAlign) ? contentAlign : 'center',
+                bodyRows: Math.max(1, Math.min(6, parseInt(String(raw.body_rows || 4), 10) || 4))
+            };
+        }
+
         function normalizePanelPosFeed(panelZone){
             const feed = (panelZone && typeof panelZone.pos_feed === 'object' && panelZone.pos_feed) ? panelZone.pos_feed : {};
             const fieldMap = (feed.field_map && typeof feed.field_map === 'object' && feed.field_map) ? feed.field_map : {};
@@ -10460,8 +10530,10 @@ allowfullscreen></iframe></div>`;
                 .filter(Boolean);
             const lastEventSummary = (feed.last_event_summary && typeof feed.last_event_summary === 'object' && feed.last_event_summary) ? feed.last_event_summary : {};
             const connectorType = String(feed.connector_type || 'generic_webhook').trim().toLowerCase();
+            const feedScope = String((panelZone && panelZone.feed_scope) || 'screen').trim().toLowerCase();
             return {
                 sourceMode: String((panelZone && panelZone.source_mode) || 'manual'),
+                feedScope: ['screen', 'store', 'chain'].includes(feedScope) ? feedScope : 'screen',
                 name: String(feed.name || ''),
                 webhookToken: String(feed.webhook_token || ''),
                 connectorType: ['generic_webhook','zapier','make','n8n','developer'].includes(connectorType) ? connectorType : 'generic_webhook',
@@ -10471,6 +10543,7 @@ allowfullscreen></iframe></div>`;
                     status: String(fieldMap.status || 'order.status'),
                     external_id: String(fieldMap.external_id || 'order.id')
                 },
+                storeSelectorPath: String(feed.store_selector_path || 'store.id'),
                 titleTemplate: String(feed.title_template || 'Now serving'),
                 bodyTemplate: String(feed.body_template || PANEL_POS_DEFAULT_BODY),
                 allowedStatuses,
@@ -10485,6 +10558,7 @@ allowfullscreen></iframe></div>`;
                     status: String(lastEventSummary.status || ''),
                     external_id: String(lastEventSummary.external_id || '')
                 },
+                appearance: normalizePanelAppearance(panelZone),
                 lastPayloadPreview: String(feed.last_payload_preview || ''),
                 liveQueue: Array.isArray(panelZone && panelZone.live_queue) ? panelZone.live_queue : []
             };
@@ -10565,6 +10639,21 @@ allowfullscreen></iframe></div>`;
             }
         };
 
+        const PANEL_POS_SCOPE_META = {
+            screen: {
+                label: 'This screen only',
+                subtitle: 'One webhook just for this screen'
+            },
+            store: {
+                label: 'This store',
+                subtitle: 'One shared webhook for screens in this store'
+            },
+            chain: {
+                label: 'Multi-store chain',
+                subtitle: 'One shared webhook across many stores. Include a store id or name in the payload.'
+            }
+        };
+
         function panelPosApplyTemplate(template, values){
             return String(template || '').replace(PANEL_POS_TEMPLATE_REGEX, (_, key) => String(values[key] || ''));
         }
@@ -10577,6 +10666,48 @@ allowfullscreen></iframe></div>`;
                 status: state.lastEventSummary.status || state.allowedStatuses[0] || 'ready',
                 external_id: state.lastEventSummary.external_id || `sample-${screenId}`
             };
+        }
+
+        function getPanelPosPreviewAppearance(screenId){
+            const state = normalizePanelPosFeed(getPanelZoneState(screenId));
+            const bgInput = document.getElementById(`panel-pos-bg-${screenId}`);
+            const alignInput = document.getElementById(`panel-pos-align-${screenId}`);
+            const rowsInput = document.getElementById(`panel-pos-rows-${screenId}`);
+            const alignValue = String(alignInput ? alignInput.value : state.appearance.contentAlign || 'center').trim().toLowerCase();
+            return {
+                backgroundColor: normalizeHexColor(bgInput ? bgInput.value : state.appearance.backgroundColor, state.appearance.backgroundColor),
+                contentAlign: ['top', 'center', 'bottom'].includes(alignValue) ? alignValue : 'center',
+                bodyRows: Math.max(1, Math.min(6, parseInt(String(rowsInput ? rowsInput.value : state.appearance.bodyRows || 4), 10) || 4))
+            };
+        }
+
+        function applyPanelPosPreviewAppearance(screenId){
+            const shell = document.getElementById(`panel-pos-preview-shell-${screenId}`);
+            const chip = document.getElementById(`panel-pos-preview-chip-${screenId}`);
+            const kicker = document.getElementById(`panel-pos-preview-kicker-${screenId}`);
+            const content = document.getElementById(`panel-pos-preview-content-${screenId}`);
+            const title = document.getElementById(`panel-pos-preview-title-${screenId}`);
+            const body = document.getElementById(`panel-pos-preview-body-${screenId}`);
+            const meta = document.getElementById(`panel-pos-preview-meta-${screenId}`);
+            if(!shell || !chip || !kicker || !content || !title || !body || !meta) return;
+            const appearance = getPanelPosPreviewAppearance(screenId);
+            const palette = getPanelAppearancePalette(appearance.backgroundColor);
+            shell.style.background = `linear-gradient(180deg, ${palette.backgroundStart} 0%, ${palette.backgroundEnd} 100%), radial-gradient(circle at top right, ${palette.accentGlow}, transparent 44%)`;
+            shell.style.borderColor = palette.borderColor;
+            chip.style.background = palette.chipBg;
+            chip.style.borderColor = palette.chipBorder;
+            chip.style.color = palette.chipText;
+            kicker.style.color = palette.mutedColor;
+            title.style.color = palette.titleColor;
+            body.style.color = palette.bodyColor;
+            body.style.maxHeight = `${(appearance.bodyRows * 1.4).toFixed(2)}em`;
+            body.style.overflow = 'hidden';
+            meta.style.color = palette.metaColor;
+            content.style.justifyContent = appearance.contentAlign === 'top'
+                ? 'flex-start'
+                : appearance.contentAlign === 'bottom'
+                    ? 'flex-end'
+                    : 'center';
         }
 
         function updatePanelPosPreview(screenId){
@@ -10592,16 +10723,22 @@ allowfullscreen></iframe></div>`;
             titleNode.textContent = title;
             bodyNode.innerHTML = escapeHtml(body).replace(/\n/g, '<br>');
             metaNode.textContent = values.status ? `Preview using ${values.status} data` : 'Preview using sample data';
+            applyPanelPosPreviewAppearance(screenId);
         }
 
         function getPanelPosGuideText(screenId){
             const connectorSelect = document.getElementById(`panel-pos-connector-${screenId}`);
             const connectorType = String(connectorSelect ? connectorSelect.value : normalizePanelPosFeed(getPanelZoneState(screenId)).connectorType || 'generic_webhook');
             const meta = PANEL_POS_CONNECTOR_META[connectorType] || PANEL_POS_CONNECTOR_META.generic_webhook;
+            const scopeSelect = document.getElementById(`panel-pos-scope-${screenId}`);
+            const scopeValue = String(scopeSelect ? scopeSelect.value : normalizePanelPosFeed(getPanelZoneState(screenId)).feedScope || 'screen');
+            const scopeMeta = PANEL_POS_SCOPE_META[scopeValue] || PANEL_POS_SCOPE_META.screen;
             const webhookUrl = getPanelPosWebhookUrl(screenId);
             return [
                 `${meta.label}`,
                 `${meta.subtitle}`,
+                `${scopeMeta.label}`,
+                `${scopeMeta.subtitle}`,
                 '',
                 ...meta.steps.map((step, index) => `${index + 1}. ${step}`),
                 '',
@@ -10615,13 +10752,20 @@ allowfullscreen></iframe></div>`;
             const connectorSelect = document.getElementById(`panel-pos-connector-${screenId}`);
             const connectorType = String(connectorSelect ? connectorSelect.value : normalizePanelPosFeed(getPanelZoneState(screenId)).connectorType || 'generic_webhook');
             const meta = PANEL_POS_CONNECTOR_META[connectorType] || PANEL_POS_CONNECTOR_META.generic_webhook;
+            const scopeSelect = document.getElementById(`panel-pos-scope-${screenId}`);
+            const scopeValue = String(scopeSelect ? scopeSelect.value : normalizePanelPosFeed(getPanelZoneState(screenId)).feedScope || 'screen');
+            const scopeMeta = PANEL_POS_SCOPE_META[scopeValue] || PANEL_POS_SCOPE_META.screen;
             const webhookUrl = getPanelPosWebhookUrl(screenId);
+            const chainHint = scopeValue === 'chain'
+                ? '<div style="font-size:11px; color:#7c2d12; background:#fff7ed; border:1px solid #fed7aa; border-radius:10px; padding:10px 12px;">Chain mode needs each incoming payload to include a store id or store name. Use the <strong>Store id path (chain)</strong> field below to point to that value.</div>'
+                : '';
             guide.innerHTML = `
                 <div style="display:flex; flex-direction:column; gap:8px; background:#ffffff; border:1px solid #d8e4fb; border-radius:12px; padding:12px;">
                     <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start; flex-wrap:wrap;">
                         <div>
                             <div style="font-size:12px; font-weight:700; color:#1e40af;">${escapeHtml(meta.label)}</div>
                             <div style="font-size:11px; color:#64748b; margin-top:3px;">${escapeHtml(meta.subtitle)}</div>
+                            <div style="font-size:11px; color:#475569; margin-top:6px;"><strong>${escapeHtml(scopeMeta.label)}:</strong> ${escapeHtml(scopeMeta.subtitle)}</div>
                         </div>
                         ${meta.recommended ? '<span style="font-size:10px; font-weight:700; color:#1d4ed8; background:#dbeafe; border:1px solid #bfdbfe; border-radius:999px; padding:4px 8px;">Recommended</span>' : ''}
                     </div>
@@ -10632,6 +10776,7 @@ allowfullscreen></iframe></div>`;
                                 <div style="font-size:11px; color:#334155; margin-top:4px; line-height:1.45;">${escapeHtml(step)}</div>
                             </div>`).join('')}
                     </div>
+                    ${chainHint}
                     <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
                         <button type="button" class="btn" onclick="copyPanelPosWebhook('${screenId}')">Copy webhook URL</button>
                         <button type="button" class="btn" onclick="copyPanelPosGuide('${screenId}')">Copy setup steps</button>
@@ -10650,7 +10795,12 @@ allowfullscreen></iframe></div>`;
 
         function buildPanelPosSamplePayload(screenId){
             const state = normalizePanelPosFeed(getPanelZoneState(screenId));
+            const currentStore = ((allStoresData.stores || []).find((store) => String(store.id) === String(currentStoreId)) || {});
             return {
+                store: {
+                    id: String(currentStoreId || ''),
+                    name: String(currentStore.name || '')
+                },
                 customer: { name: 'Jane Smith' },
                 order: {
                     id: `sample-${screenId}-${Date.now()}`,
@@ -10761,6 +10911,23 @@ allowfullscreen></iframe></div>`;
             renderPanelScheduleSection(screenId, panelZone, screenBinding);
         }
 
+        function applyPanelPosResponseState(data){
+            if(!data || typeof data !== 'object') return;
+            if(data.shared_feeds && typeof data.shared_feeds === 'object'){
+                allStoresData.panel_pos_shared_feeds = data.shared_feeds;
+            }
+            const updatedScreens = Array.isArray(data.updated_screens) ? data.updated_screens : [];
+            updatedScreens.forEach((entry) => {
+                const storeId = String((entry && entry.store_id) || '').trim();
+                const screenId = String((entry && entry.screen_id) || '').trim();
+                if(!storeId || !screenId || !entry.panel_zone) return;
+                if(!allStoresData.screens) allStoresData.screens = {};
+                if(!allStoresData.screens[storeId]) allStoresData.screens[storeId] = {};
+                if(!allStoresData.screens[storeId][screenId]) allStoresData.screens[storeId][screenId] = {};
+                allStoresData.screens[storeId][screenId].panel_zone = entry.panel_zone;
+            });
+        }
+
         function renderPanelPosFeedEditor(screenId, panelZone, screenBinding){
             const wrap = document.getElementById(`panel-pos-feed-${screenId}`);
             if(!wrap) return;
@@ -10786,10 +10953,12 @@ allowfullscreen></iframe></div>`;
             const webhookUrl = getPanelPosWebhookUrl(screenId);
             const samplePayload = JSON.stringify(buildPanelPosSamplePayload(screenId), null, 2);
             const connectorOptions = Object.entries(PANEL_POS_CONNECTOR_META).map(([key, meta]) => `<option value="${key}" ${state.connectorType === key ? 'selected' : ''}>${escapeHtml(meta.label)}</option>`).join('');
+            const scopeOptions = Object.entries(PANEL_POS_SCOPE_META).map(([key, meta]) => `<option value="${key}" ${state.feedScope === key ? 'selected' : ''}>${escapeHtml(meta.label)}</option>`).join('');
             const templateButtons = Object.entries(PANEL_POS_TEMPLATE_PRESETS).map(([key, preset]) => `<button type="button" class="btn" onclick="setPanelPosTemplatePreset('${screenId}','${key}')">${escapeHtml(preset.label)}</button>`).join('');
             const mappingButtons = Object.entries(PANEL_POS_MAPPING_PRESETS).map(([key, preset]) => `<button type="button" class="btn" onclick="applyPanelPosMappingPreset('${screenId}','${key}')">${escapeHtml(preset.label)}</button>`).join('');
             const hasEvents = state.eventCount > 0;
             const queueCount = Array.isArray(state.liveQueue) ? state.liveQueue.length : 0;
+            const scopeMeta = PANEL_POS_SCOPE_META[state.feedScope] || PANEL_POS_SCOPE_META.screen;
             let statusLabel = 'Waiting for first event';
             let statusBg = '#f3f4f6';
             let statusColor = '#475569';
@@ -10815,6 +10984,7 @@ allowfullscreen></iframe></div>`;
                         <div style="padding-right:40px;">
                             <div style="font-size:12px; font-weight:700; color:#1d4ed8;">Live POS Setup</div>
                             <div style="font-size:11px; color:#5b6472; margin-top:3px;">Connect any POS through a direct webhook or a bridge like Zapier, Make, or n8n. The screen will rotate the newest eligible orders automatically.</div>
+                            <div style="font-size:11px; color:#334155; margin-top:6px;"><strong>${escapeHtml(scopeMeta.label)}:</strong> ${escapeHtml(scopeMeta.subtitle)}</div>
                         </div>
                         <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
                             <span style="font-size:10px; font-weight:700; color:${statusColor}; background:${statusBg}; border:1px solid rgba(148,163,184,.25); border-radius:999px; padding:4px 8px;">${escapeHtml(statusLabel)}</span>
@@ -10824,6 +10994,12 @@ allowfullscreen></iframe></div>`;
                     </div>
                     ${isCollapsed ? `` : `
                     <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:8px;">
+                        <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
+                            <span>Webhook scope</span>
+                            <select id="panel-pos-scope-${screenId}" onchange="updatePanelPosGuide('${screenId}')" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
+                                ${scopeOptions}
+                            </select>
+                        </label>
                         <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
                             <span>POS or feed name</span>
                             <input id="panel-pos-name-${screenId}" type="text" value="${escapeHtml(state.name)}" placeholder="Front Counter POS" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
@@ -10868,16 +11044,31 @@ allowfullscreen></iframe></div>`;
                                 <span>Body template</span>
                                 <textarea id="panel-pos-body-${screenId}" oninput="updatePanelPosPreview('${screenId}')" ${disabledAttr} style="min-height:58px; border:1px solid #d6dbe5; border-radius:8px; padding:8px 10px; background:#fff; resize:vertical;">${escapeHtml(state.bodyTemplate)}</textarea>
                             </label>
-                            <div style="background:linear-gradient(180deg,#fff8ef 0%,#fff3e6 100%); border:1px solid #f3c48c; border-radius:12px; overflow:hidden;">
-                                <div style="display:grid; grid-template-columns:92px minmax(0,1fr);">
-                                    <div style="display:flex; align-items:center; justify-content:center; background:linear-gradient(180deg,#fff3d8 0%,#ffe5bf 100%); min-height:84px;">
-                                        <div style="font-size:13px; font-weight:800; color:#8a4b00; letter-spacing:.08em;">INFO</div>
-                                    </div>
-                                    <div style="padding:12px; display:flex; flex-direction:column; gap:6px;">
-                                        <div id="panel-pos-preview-title-${screenId}" style="font-size:14px; font-weight:700; color:#1f2937;">Now serving</div>
-                                        <div id="panel-pos-preview-body-${screenId}" style="font-size:12px; color:#4b5563; line-height:1.45;">Jane Smith<br>Order #A104</div>
-                                        <div id="panel-pos-preview-meta-${screenId}" style="font-size:10px; color:#64748b;">Preview using sample data</div>
-                                    </div>
+                            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:8px;">
+                                <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
+                                    <span>Background colour</span>
+                                    <input id="panel-pos-bg-${screenId}" type="color" value="${escapeHtml(state.appearance.backgroundColor)}" oninput="updatePanelPosPreview('${screenId}')" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:4px; background:#fff; width:100%;">
+                                </label>
+                                <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
+                                    <span>Content position</span>
+                                    <select id="panel-pos-align-${screenId}" onchange="updatePanelPosPreview('${screenId}')" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
+                                        <option value="top" ${state.appearance.contentAlign === 'top' ? 'selected' : ''}>Top</option>
+                                        <option value="center" ${state.appearance.contentAlign === 'center' ? 'selected' : ''}>Center</option>
+                                        <option value="bottom" ${state.appearance.contentAlign === 'bottom' ? 'selected' : ''}>Bottom</option>
+                                    </select>
+                                </label>
+                                <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
+                                    <span>Visible body rows</span>
+                                    <input id="panel-pos-rows-${screenId}" type="number" min="1" max="6" value="${state.appearance.bodyRows}" oninput="updatePanelPosPreview('${screenId}')" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
+                                </label>
+                            </div>
+                            <div id="panel-pos-preview-shell-${screenId}" style="border:1px solid #f3c48c; border-radius:12px; min-height:164px; padding:14px; display:flex; flex-direction:column; gap:10px; overflow:hidden;">
+                                <div id="panel-pos-preview-chip-${screenId}" style="display:inline-flex; align-items:center; width:fit-content; padding:7px 11px; border-radius:999px; border:1px solid rgba(255,233,196,.18); font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;">Live order info</div>
+                                <div id="panel-pos-preview-content-${screenId}" style="display:flex; flex-direction:column; gap:6px; min-height:102px;">
+                                    <div id="panel-pos-preview-kicker-${screenId}" style="font-size:10px; font-weight:700; letter-spacing:.12em; text-transform:uppercase;">Panel preview</div>
+                                    <div id="panel-pos-preview-title-${screenId}" style="font-size:20px; font-weight:800; line-height:1.08;">Now serving</div>
+                                    <div id="panel-pos-preview-body-${screenId}" style="font-size:13px; line-height:1.4; white-space:normal;">Jane Smith<br>Order #A104</div>
+                                    <div id="panel-pos-preview-meta-${screenId}" style="font-size:10px;">Preview using sample data</div>
                                 </div>
                             </div>
                         </div>
@@ -10927,6 +11118,10 @@ allowfullscreen></iframe></div>`;
                                 <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
                                     <span>External id path</span>
                                     <input id="panel-pos-external-${screenId}" type="text" value="${escapeHtml(state.fieldMap.external_id)}" placeholder="order.id" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
+                                </label>
+                                <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
+                                    <span>Store id path (chain)</span>
+                                    <input id="panel-pos-store-selector-${screenId}" type="text" value="${escapeHtml(state.storeSelectorPath)}" placeholder="store.id" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
                                 </label>
                             </div>
                             <div style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
@@ -11121,6 +11316,7 @@ allowfullscreen></iframe></div>`;
                     const screenData = (((allStoresData || {}).screens || {})[currentStoreId] || {})[screenId];
                     if(screenData) screenData.panel_zone = data.panel_zone || screenData.panel_zone;
                 } catch {}
+                applyPanelPosResponseState(data);
                 showMessage(sourceMode === 'pos_webhook' ? 'Live POS mode enabled' : 'Manual info cards enabled');
                 renderRpPanelScheduleControls();
                 refreshPlaylist(screenId);
@@ -11133,6 +11329,7 @@ allowfullscreen></iframe></div>`;
         function savePanelPosFeed(screenId){
             const payload = {
                 enable_source: true,
+                feed_scope: (document.getElementById(`panel-pos-scope-${screenId}`)?.value || 'screen').trim(),
                 name: (document.getElementById(`panel-pos-name-${screenId}`)?.value || '').trim(),
                 connector_type: (document.getElementById(`panel-pos-connector-${screenId}`)?.value || 'generic_webhook').trim(),
                 field_map: {
@@ -11141,6 +11338,7 @@ allowfullscreen></iframe></div>`;
                     status: (document.getElementById(`panel-pos-status-${screenId}`)?.value || '').trim(),
                     external_id: (document.getElementById(`panel-pos-external-${screenId}`)?.value || '').trim()
                 },
+                store_selector_path: (document.getElementById(`panel-pos-store-selector-${screenId}`)?.value || '').trim(),
                 title_template: (document.getElementById(`panel-pos-title-${screenId}`)?.value || '').trim(),
                 body_template: (document.getElementById(`panel-pos-body-${screenId}`)?.value || '').trim(),
                 allowed_statuses: (document.getElementById(`panel-pos-statuses-${screenId}`)?.value || '')
@@ -11148,7 +11346,12 @@ allowfullscreen></iframe></div>`;
                     .map((value) => value.trim().toLowerCase())
                     .filter(Boolean),
                 display_seconds: parseInt(String(document.getElementById(`panel-pos-duration-${screenId}`)?.value || '10'), 10) || 10,
-                max_items: parseInt(String(document.getElementById(`panel-pos-max-${screenId}`)?.value || '5'), 10) || 5
+                max_items: parseInt(String(document.getElementById(`panel-pos-max-${screenId}`)?.value || '5'), 10) || 5,
+                appearance: {
+                    background_color: normalizeHexColor(document.getElementById(`panel-pos-bg-${screenId}`)?.value || '#201206', '#201206'),
+                    content_align: (document.getElementById(`panel-pos-align-${screenId}`)?.value || 'center').trim().toLowerCase(),
+                    body_rows: parseInt(String(document.getElementById(`panel-pos-rows-${screenId}`)?.value || '4'), 10) || 4
+                }
             };
             fetch(`/panel_pos_feed/${currentStoreId}/${screenId}`, {
                 method:'PATCH',
@@ -11163,6 +11366,7 @@ allowfullscreen></iframe></div>`;
                     const screenData = (((allStoresData || {}).screens || {})[currentStoreId] || {})[screenId];
                     if(screenData) screenData.panel_zone = data.panel_zone || screenData.panel_zone;
                 } catch {}
+                applyPanelPosResponseState(data);
                 showMessage('Live POS setup saved');
                 renderRpPanelScheduleControls();
                 refreshPlaylist(screenId);
@@ -11170,11 +11374,13 @@ allowfullscreen></iframe></div>`;
         }
 
         function resetPanelPosWebhookToken(screenId){
-            if(!confirm('Generate a new webhook URL for this screen? The old webhook will stop working.')) return;
+            const scopeValue = String(document.getElementById(`panel-pos-scope-${screenId}`)?.value || normalizePanelPosFeed(getPanelZoneState(screenId)).feedScope || 'screen');
+            const scopeMeta = PANEL_POS_SCOPE_META[scopeValue] || PANEL_POS_SCOPE_META.screen;
+            if(!confirm(`Generate a new webhook URL for ${scopeMeta.label.toLowerCase()}? The old webhook will stop working.`)) return;
             fetch(`/panel_pos_feed/${currentStoreId}/${screenId}`, {
                 method:'PATCH',
                 headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({ reset_token: true, enable_source: true })
+                body: JSON.stringify({ reset_token: true, enable_source: true, feed_scope: scopeValue })
             }).then(r => r.json()).then(data => {
                 if(!data.success){
                     alert(data.error || 'Failed to reset webhook');
@@ -11184,17 +11390,20 @@ allowfullscreen></iframe></div>`;
                     const screenData = (((allStoresData || {}).screens || {})[currentStoreId] || {})[screenId];
                     if(screenData) screenData.panel_zone = data.panel_zone || screenData.panel_zone;
                 } catch {}
+                applyPanelPosResponseState(data);
                 showMessage('Webhook URL regenerated');
                 refreshPlaylist(screenId);
             }).catch(() => alert('Network error resetting webhook'));
         }
 
         function clearPanelPosQueue(screenId){
-            if(!confirm('Clear the current live POS queue for this screen?')) return;
+            const scopeValue = String(document.getElementById(`panel-pos-scope-${screenId}`)?.value || normalizePanelPosFeed(getPanelZoneState(screenId)).feedScope || 'screen');
+            const scopeMeta = PANEL_POS_SCOPE_META[scopeValue] || PANEL_POS_SCOPE_META.screen;
+            if(!confirm(`Clear the current live POS queue for ${scopeMeta.label.toLowerCase()}?`)) return;
             fetch(`/panel_pos_feed/${currentStoreId}/${screenId}`, {
                 method:'PATCH',
                 headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({ clear_queue: true, enable_source: true })
+                body: JSON.stringify({ clear_queue: true, enable_source: true, feed_scope: scopeValue })
             }).then(r => r.json()).then(data => {
                 if(!data.success){
                     alert(data.error || 'Failed to clear queue');
@@ -11204,6 +11413,7 @@ allowfullscreen></iframe></div>`;
                     const screenData = (((allStoresData || {}).screens || {})[currentStoreId] || {})[screenId];
                     if(screenData) screenData.panel_zone = data.panel_zone || screenData.panel_zone;
                 } catch {}
+                applyPanelPosResponseState(data);
                 showMessage('POS queue cleared');
                 refreshPlaylist(screenId);
             }).catch(() => alert('Network error clearing queue'));
@@ -11221,6 +11431,7 @@ allowfullscreen></iframe></div>`;
                     const screenData = (((allStoresData || {}).screens || {})[currentStoreId] || {})[screenId];
                     if(screenData) screenData.panel_zone = data.panel_zone || screenData.panel_zone;
                 } catch {}
+                applyPanelPosResponseState(data);
                 showMessage('Sample POS event sent to this screen');
                 refreshPlaylist(screenId);
             }).catch(() => alert('Network error sending sample event'));
@@ -11241,6 +11452,7 @@ allowfullscreen></iframe></div>`;
                     const screenData = (((allStoresData || {}).screens || {})[currentStoreId] || {})[screenId];
                     if(screenData) screenData.panel_zone = data.panel_zone || screenData.panel_zone;
                 } catch {}
+                applyPanelPosResponseState(data);
                 showMessage(layoutMode === 'off' ? 'Info panel turned off' : 'Info panel layout updated');
                 renderRpPanelScheduleControls();
                 refreshPlaylist(screenId);
@@ -12112,6 +12324,7 @@ allowfullscreen></iframe></div>`;
                 }
                 window.startRpResize = startRpResize;
                 let rpLibraryFilter = 'all';
+                let rpAppMode = false;
                 let rpSelectedMedia = null;
                 let rpLibraryFiles = [];
                 let rpWallAssignments = null;
@@ -12154,14 +12367,9 @@ allowfullscreen></iframe></div>`;
                                             <div class="rp-panel rp-panel--library">
                                                 <div class="rp-bar">
                                                     <div class="rp-library-toolbar">
-                                                        <div class="rp-library-toolbar__title">Media / Playlists</div>
                                                         <div class="rp-library-toolbar__actions">
                                                             <button type="button" class="rp-upload-trigger" onclick="switchRpTab('upload')">Upload new</button>
-                                                            <div class="rp-filters" role="tablist" aria-label="Media filter">
-                                                                <button id="rp-filter-all" class="rp-filter-btn active" onclick="setRpFilter('all')" role="tab" aria-selected="true">All</button>
-                                                                <button id="rp-filter-images" class="rp-filter-btn" onclick="setRpFilter('images')" role="tab" aria-selected="false">Images</button>
-                                                                <button id="rp-filter-videos" class="rp-filter-btn" onclick="setRpFilter('videos')" role="tab" aria-selected="false">Videos</button>
-                                                            </div>
+                                                            <button type="button" class="rp-upload-trigger" onclick="openRpAppPanel()">App</button>
                                                             <button type="button" class="rp-wall-video-btn" onclick="openRpWallVideo()"><img class="rp-wall-video-btn__icon" src="{{ url_for('static', filename='ea_logo_official.svg') }}?v={{ asset_bust|default(0) }}" alt=""><span>Wall video</span></button>
                                                             <div class="rp-search-toggle" id="rp-search-toggle">
                                                                 <button type="button" class="rp-search-trigger" onclick="toggleRpSearch()" aria-label="Search library" title="Search library">
@@ -12206,6 +12414,25 @@ allowfullscreen></iframe></div>`;
                                                             </div>
                                                         </div>
                                                         <div class="rp-grid" id="rp-grid-videos"></div>
+                                                    </div>
+                                                    <div id="rp-group-apps" class="rp-library-group" style="display:none;">
+                                                        <div class="rp-section-head">
+                                                            <div>
+                                                                <div class="rp-subtitle">Apps</div>
+                                                                <div class="rp-help">Choose an app and schedule its content.</div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="rp-grid" id="rp-grid-apps">
+                                                            <button type="button" class="rp-item" onclick="focusRpPanel('youtube')">
+                                                                <div class="rp-item__img" style="display: flex; align-items: center; justify-content: center; height: 120px; background-color: #f0f0f0; border-radius: 4px; margin-bottom: 8px;">
+                                                                    <img src="{{ url_for('static', filename='youtube-logo.svg') }}?v={{ asset_bust|default(0) }}" alt="YouTube" style="max-height: 80px; max-width: 80px; object-fit: contain;">
+                                                                </div>
+                                                                <div class="rp-item__body">
+                                                                    <div class="rp-item__title">YouTube</div>
+                                                                    <div class="rp-item__meta">Schedule a YouTube video</div>
+                                                                </div>
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                     <div id="rp-search-empty" class="rp-empty rp-search-empty" style="display:none;">No items match this search.</div>
                                                 </div>
@@ -12665,6 +12892,8 @@ allowfullscreen></iframe></div>`;
                     resetRpScheduleEditor();
                     resetRpUploadUI();
                     switchRpTab('lib');
+                    const appsGroup = document.getElementById('rp-group-apps');
+                    if(appsGroup) appsGroup.style.display = 'none';
                     const searchInput = document.getElementById('rp-search-input');
                     if(searchInput) searchInput.value = '';
                     toggleRpSearch(false);
@@ -12673,7 +12902,7 @@ allowfullscreen></iframe></div>`;
                     renderRpSelection();
                 }
                 function closeReplaceModal(){ const ov=document.getElementById('rp-overlay'); if(ov){ ov.style.display='none'; ov.classList.remove('dashboard-side-sheet'); ov.classList.remove('rp-overlay--library'); } toggleRpSearch(false); rpCtx=null; resetRpUploadUI(); resetRpScheduleEditor(); clearRpSelection(); }
-                function switchRpTab(which){ const lib=document.getElementById('rp-view-lib'); const up=document.getElementById('rp-view-upload'); const t1=document.getElementById('rp-tab-lib'); const t2=document.getElementById('rp-tab-upload'); const isLib=which==='lib'; if(lib) lib.style.display=isLib?'block':'none'; if(up) up.style.display=isLib?'none':'block'; if(t1) t1.classList.toggle('active',isLib); if(t2) t2.classList.toggle('active',!isLib); }
+                function switchRpTab(which){ const lib=document.getElementById('rp-view-lib'); const up=document.getElementById('rp-view-upload'); const t1=document.getElementById('rp-tab-lib'); const t2=document.getElementById('rp-tab-upload'); const isLib=which==='lib'; if(lib) lib.style.display=isLib?'block':'none'; if(up) up.style.display=isLib?'none':'block'; if(t1) t1.classList.toggle('active',isLib); if(t2) t2.classList.toggle('active',!isLib); const foldersGroup = document.getElementById('rp-group-folders'); const imagesGroup = document.getElementById('rp-group-images'); const videosGroup = document.getElementById('rp-group-videos'); const appsGroup = document.getElementById('rp-group-apps'); if(which==='upload'){ if(foldersGroup) foldersGroup.style.display = 'block'; if(imagesGroup) imagesGroup.style.display = 'block'; if(videosGroup) videosGroup.style.display = 'block'; if(appsGroup) appsGroup.style.display = 'none'; rpAppMode = false; } else if(which === 'lib'){ if(!rpAppMode){ if(appsGroup) appsGroup.style.display = 'none'; } } }
                 function getRpApplyLabel(){
                     if(rpCtx && rpCtx.itemId === 'SINGLE' && rpSelectedMedia && Array.isArray(rpSelectedMedia.wallSet) && rpSelectedMedia.wallSet.length > 1){
                         return isRpCreatingNewScreen() ? 'Add to new screens' : 'Add to screens';
@@ -13245,21 +13474,51 @@ allowfullscreen></iframe></div>`;
                         if(input) input.focus();
                     }
                 }
+                function openRpAppPanel(){
+                    rpAppMode = true;
+                    rpLibraryFilter = 'all';
+                    switchRpTab('lib');
+                    const foldersGroup = document.getElementById('rp-group-folders');
+                    const imagesGroup = document.getElementById('rp-group-images');
+                    const videosGroup = document.getElementById('rp-group-videos');
+                    const appsGroup = document.getElementById('rp-group-apps');
+                    if(foldersGroup) foldersGroup.style.display = 'none';
+                    if(imagesGroup) imagesGroup.style.display = 'none';
+                    if(videosGroup) videosGroup.style.display = 'none';
+                    if(appsGroup) appsGroup.style.display = 'block';
+                    const btnAll = document.getElementById('rp-filter-all');
+                    const btnImg = document.getElementById('rp-filter-images');
+                    const btnVid = document.getElementById('rp-filter-videos');
+                    if(btnAll) btnAll.classList.remove('active');
+                    if(btnAll) btnAll.setAttribute('aria-selected','false');
+                    if(btnImg) btnImg.classList.remove('active');
+                    if(btnImg) btnImg.setAttribute('aria-selected','false');
+                    if(btnVid) btnVid.classList.remove('active');
+                    if(btnVid) btnVid.setAttribute('aria-selected','false');
+                    setTimeout(() => {
+                        if(appsGroup) appsGroup.scrollIntoView({ behavior:'smooth', block:'nearest' });
+                    }, 50);
+                }
                 function renderRpBreadcrumb(){
                     const bar = document.getElementById('rp-folderbar-anchor');
                     if(!bar) return;
                     if(!bar.dataset.ready){
                         bar.innerHTML = `
-                            <div id="rp-breadcrumb" class="rp-breadcrumb"></div>
-                            <div class="rp-folder-actions">
-                                <button class="btn" id="rp-new-folder">New Folder</button>
-                                <button class="btn" id="rp-rename-folder">Rename</button>
-                                <button class="btn" id="rp-delete-folder">Delete</button>
+                            <div class="rp-folder-row">
+                                <div id="rp-breadcrumb" class="rp-breadcrumb"></div>
+                                <div class="rp-folder-filters" role="tablist" aria-label="Media filter">
+                                    <button id="rp-filter-all" class="rp-filter-btn active" onclick="setRpFilter('all')" role="tab" aria-selected="true">All</button>
+                                    <button id="rp-filter-images" class="rp-filter-btn" onclick="setRpFilter('images')" role="tab" aria-selected="false">Images</button>
+                                    <button id="rp-filter-videos" class="rp-filter-btn" onclick="setRpFilter('videos')" role="tab" aria-selected="false">Videos</button>
+                                </div>
+                                <div class="rp-folder-actions">
+                                    <button class="btn" id="rp-new-folder">New Folder</button>
+                                    <button class="btn" id="rp-rename-folder">Rename</button>
+                                </div>
                             </div>`;
                         bar.dataset.ready = '1';
                         document.getElementById('rp-new-folder').addEventListener('click', createFolderPrompt);
                         document.getElementById('rp-rename-folder').addEventListener('click', renameFolderPrompt);
-                        document.getElementById('rp-delete-folder').addEventListener('click', deleteFolderConfirm);
                     }
                     const crumb = document.getElementById('rp-breadcrumb');
                     if(!crumb) return;
@@ -13368,10 +13627,19 @@ allowfullscreen></iframe></div>`;
                 }
                 function setRpFilter(which){
                     rpLibraryFilter = which;
+                    rpAppMode = false;
+                    const foldersGroup = document.getElementById('rp-group-folders');
+                    const imagesGroup = document.getElementById('rp-group-images');
+                    const videosGroup = document.getElementById('rp-group-videos');
+                    const appsGroup = document.getElementById('rp-group-apps');
+                    if(foldersGroup) foldersGroup.style.display = 'block';
+                    if(imagesGroup) imagesGroup.style.display = 'block';
+                    if(videosGroup) videosGroup.style.display = 'block';
+                    if(appsGroup) appsGroup.style.display = 'none';
                     const btnAll = document.getElementById('rp-filter-all');
                     const btnImg = document.getElementById('rp-filter-images');
                     const btnVid = document.getElementById('rp-filter-videos');
-                    const setActive = (btn, on)=>{ btn.classList.toggle('active',on); btn.setAttribute('aria-selected', on? 'true':'false'); };
+                    const setActive = (btn, on)=>{ if(!btn) return; btn.classList.toggle('active',on); btn.setAttribute('aria-selected', on? 'true':'false'); };
                     setActive(btnAll, which === 'all');
                     setActive(btnImg, which === 'images');
                     setActive(btnVid, which === 'videos');
