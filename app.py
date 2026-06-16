@@ -6481,6 +6481,7 @@ def screen_heartbeat():
     
     with android_tv_lock:
         connected_android_tvs[device_id] = {
+            'device_id': device_id,
             'store_id': store_id,
             'screen_id': screen_id,
             'last_seen': current_timestamp,
@@ -7588,6 +7589,11 @@ def stream_media(filename):
 def ensure_playlists_structure(config):
     changed = False
     valid_panel_layouts = {'off', 'split-right-25', 'split-left-25', 'split-bottom-25'}
+    if not isinstance(config.get('panel_pos_shared_feeds'), dict):
+        config['panel_pos_shared_feeds'] = {'stores': {}, 'chain': {}}
+        changed = True
+    else:
+        _ensure_panel_pos_shared_feeds(config)
     for store_id, screens in config.get('screens', {}).items():
         for sid, sdata in screens.items():
             # SAFETY: Backup existing playlist before any modifications
@@ -7678,28 +7684,41 @@ def ensure_playlists_structure(config):
     return config
 
 
-def _panel_zone_defaults() -> dict:
-    return {
-        'enabled': False,
-        'layout_mode': 'off',
-        'playlist': [],
-        'rotation_meta': {'last_index': 0, 'last_ts': 0},
-        'source_mode': 'manual',
-        'pos_feed': {
-            'name': '',
-            'webhook_token': '',
-            'connector_type': 'generic_webhook',
-            'field_map': {
-                'customer_name': 'customer.name',
-                'order_number': 'order.number',
-                'status': 'order.status',
-                'external_id': 'order.id',
-            },
-            'title_template': 'Now serving',
-            'body_template': '{{customer_name}}\nOrder #{{order_number}}',
-            'allowed_statuses': ['ready', 'serving'],
-            'display_seconds': 10,
-            'max_items': 5,
+PANEL_POS_SCOPE_VALUES = {'screen', 'store', 'chain'}
+PANEL_POS_SHARED_SETTING_KEYS = (
+    'name',
+    'webhook_token',
+    'connector_type',
+    'field_map',
+    'title_template',
+    'body_template',
+    'allowed_statuses',
+    'display_seconds',
+    'max_items',
+    'store_selector_path',
+)
+
+
+def _panel_pos_feed_defaults(include_runtime: bool = True) -> dict:
+    feed = {
+        'name': '',
+        'webhook_token': '',
+        'connector_type': 'generic_webhook',
+        'field_map': {
+            'customer_name': 'customer.name',
+            'order_number': 'order.number',
+            'status': 'order.status',
+            'external_id': 'order.id',
+        },
+        'title_template': 'Now serving',
+        'body_template': '{{customer_name}}\nOrder #{{order_number}}',
+        'allowed_statuses': ['ready', 'serving'],
+        'display_seconds': 10,
+        'max_items': 5,
+        'store_selector_path': 'store.id',
+    }
+    if include_runtime:
+        feed.update({
             'event_count': 0,
             'last_event_at': None,
             'last_event_result': '',
@@ -7710,9 +7729,168 @@ def _panel_zone_defaults() -> dict:
                 'external_id': '',
             },
             'last_payload_preview': '',
+        })
+    return feed
+
+
+def _normalize_panel_pos_feed_state(pos_feed: Optional[dict], include_runtime: bool = True) -> dict:
+    if not isinstance(pos_feed, dict):
+        pos_feed = {}
+    default_feed = _panel_pos_feed_defaults(include_runtime=include_runtime)
+    pos_feed['name'] = str(pos_feed.get('name') or default_feed['name']).strip()
+    pos_feed['webhook_token'] = str(pos_feed.get('webhook_token') or default_feed['webhook_token']).strip()
+    connector_type = str(pos_feed.get('connector_type') or default_feed['connector_type']).strip().lower()
+    if connector_type not in {'generic_webhook', 'zapier', 'make', 'n8n', 'developer'}:
+        connector_type = default_feed['connector_type']
+    pos_feed['connector_type'] = connector_type
+
+    field_map = pos_feed.get('field_map')
+    if not isinstance(field_map, dict):
+        field_map = {}
+        pos_feed['field_map'] = field_map
+    for field_key, field_default in default_feed['field_map'].items():
+        field_map[field_key] = str(field_map.get(field_key) or field_default).strip() or field_default
+
+    pos_feed['title_template'] = str(pos_feed.get('title_template') or default_feed['title_template']).strip() or default_feed['title_template']
+    pos_feed['body_template'] = str(pos_feed.get('body_template') or default_feed['body_template']).replace('\r\n', '\n').replace('\r', '\n').strip() or default_feed['body_template']
+
+    allowed_statuses = pos_feed.get('allowed_statuses')
+    if isinstance(allowed_statuses, str):
+        allowed_statuses = [part.strip().lower() for part in allowed_statuses.split(',') if part.strip()]
+    elif isinstance(allowed_statuses, list):
+        allowed_statuses = [str(part).strip().lower() for part in allowed_statuses if str(part).strip()]
+    else:
+        allowed_statuses = list(default_feed['allowed_statuses'])
+    deduped_statuses: list[str] = []
+    for status_value in allowed_statuses:
+        if status_value and status_value not in deduped_statuses:
+            deduped_statuses.append(status_value)
+    pos_feed['allowed_statuses'] = deduped_statuses
+
+    try:
+        pos_feed['display_seconds'] = max(1, min(120, int(pos_feed.get('display_seconds') or default_feed['display_seconds'])))
+    except Exception:
+        pos_feed['display_seconds'] = default_feed['display_seconds']
+    try:
+        pos_feed['max_items'] = max(1, min(20, int(pos_feed.get('max_items') or default_feed['max_items'])))
+    except Exception:
+        pos_feed['max_items'] = default_feed['max_items']
+    pos_feed['store_selector_path'] = str(pos_feed.get('store_selector_path') or default_feed['store_selector_path']).strip() or default_feed['store_selector_path']
+
+    if include_runtime:
+        try:
+            pos_feed['event_count'] = max(0, int(pos_feed.get('event_count') or 0))
+        except Exception:
+            pos_feed['event_count'] = 0
+        pos_feed['last_event_at'] = pos_feed.get('last_event_at')
+        pos_feed['last_event_result'] = str(pos_feed.get('last_event_result') or '').strip().lower()
+        last_summary = pos_feed.get('last_event_summary')
+        if not isinstance(last_summary, dict):
+            last_summary = {}
+            pos_feed['last_event_summary'] = last_summary
+        for summary_key in ('customer_name', 'order_number', 'status', 'external_id'):
+            last_summary[summary_key] = str(last_summary.get(summary_key) or '').strip()
+        preview_text = pos_feed.get('last_payload_preview')
+        if preview_text is None:
+            preview_text = ''
+        pos_feed['last_payload_preview'] = str(preview_text)
+    return pos_feed
+
+
+def _copy_panel_pos_feed_settings(source: Optional[dict], dest: Optional[dict]) -> dict:
+    source_feed = _normalize_panel_pos_feed_state(source, include_runtime=False)
+    dest_feed = _normalize_panel_pos_feed_state(dest, include_runtime=True)
+    for key in PANEL_POS_SHARED_SETTING_KEYS:
+        value = source_feed.get(key)
+        if key == 'field_map':
+            dest_feed[key] = {
+                field_key: str(field_value or '').strip()
+                for field_key, field_value in (value or {}).items()
+            }
+        elif key == 'allowed_statuses':
+            dest_feed[key] = [str(item or '').strip().lower() for item in (value or []) if str(item or '').strip()]
+        else:
+            dest_feed[key] = value
+    return _normalize_panel_pos_feed_state(dest_feed, include_runtime=True)
+
+
+def _ensure_panel_pos_shared_feeds(config: dict) -> dict:
+    shared_feeds = config.get('panel_pos_shared_feeds')
+    if not isinstance(shared_feeds, dict):
+        shared_feeds = {}
+        config['panel_pos_shared_feeds'] = shared_feeds
+    stores_map = shared_feeds.get('stores')
+    if not isinstance(stores_map, dict):
+        stores_map = {}
+        shared_feeds['stores'] = stores_map
+    chain_feed = shared_feeds.get('chain')
+    if chain_feed is None:
+        shared_feeds['chain'] = {}
+    elif isinstance(chain_feed, dict):
+        shared_feeds['chain'] = _normalize_panel_pos_feed_state(chain_feed, include_runtime=False)
+    else:
+        shared_feeds['chain'] = {}
+
+    for store_key, store_feed in list(stores_map.items()):
+        if not isinstance(store_feed, dict):
+            stores_map[store_key] = _panel_pos_feed_defaults(include_runtime=False)
+            continue
+        stores_map[store_key] = _normalize_panel_pos_feed_state(store_feed, include_runtime=False)
+    return shared_feeds
+
+
+def _get_shared_panel_pos_feed(config: dict, scope: str, store_id: Optional[str] = None, create: bool = False) -> Optional[dict]:
+    normalized_scope = str(scope or 'screen').strip().lower()
+    if normalized_scope not in {'store', 'chain'}:
+        return None
+    shared_feeds = _ensure_panel_pos_shared_feeds(config)
+    if normalized_scope == 'store':
+        store_key = str(store_id or '').strip()
+        if not store_key:
+            return None
+        stores_map = shared_feeds['stores']
+        if create and not isinstance(stores_map.get(store_key), dict):
+            stores_map[store_key] = _panel_pos_feed_defaults(include_runtime=False)
+        feed = stores_map.get(store_key)
+        if not isinstance(feed, dict):
+            return None
+        stores_map[store_key] = _normalize_panel_pos_feed_state(feed, include_runtime=False)
+        return stores_map[store_key]
+    if create and not isinstance(shared_feeds.get('chain'), dict):
+        shared_feeds['chain'] = _panel_pos_feed_defaults(include_runtime=False)
+    chain_feed = shared_feeds.get('chain')
+    if not isinstance(chain_feed, dict):
+        return None
+    shared_feeds['chain'] = _normalize_panel_pos_feed_state(chain_feed, include_runtime=False)
+    return shared_feeds['chain']
+
+
+def _panel_zone_defaults() -> dict:
+    return {
+        'enabled': False,
+        'layout_mode': 'off',
+        'playlist': [],
+        'rotation_meta': {'last_index': 0, 'last_ts': 0},
+        'source_mode': 'manual',
+        'feed_scope': 'screen',
+        'appearance': {
+            'background_color': '#201206',
+            'content_align': 'center',
+            'body_rows': 4,
         },
+        'pos_feed': _panel_pos_feed_defaults(include_runtime=True),
         'live_queue': [],
     }
+
+
+def _normalize_panel_zone_color(value, default: str = '#201206') -> str:
+    text = str(value or '').strip()
+    if re.fullmatch(r'#?[0-9a-fA-F]{6}', text):
+        return '#' + text.lstrip('#').lower()
+    if re.fullmatch(r'#?[0-9a-fA-F]{3}', text):
+        compact = text.lstrip('#').lower()
+        return '#' + ''.join(ch * 2 for ch in compact)
+    return default
 
 
 def _normalize_panel_zone_state(panel_zone: Optional[dict]) -> dict:
@@ -7727,62 +7905,30 @@ def _normalize_panel_zone_state(panel_zone: Optional[dict]) -> dict:
     if source_mode not in {'manual', 'pos_webhook'}:
         source_mode = 'manual'
     panel_zone['source_mode'] = source_mode
+    feed_scope = str(panel_zone.get('feed_scope') or 'screen').strip().lower()
+    if feed_scope not in PANEL_POS_SCOPE_VALUES:
+        feed_scope = 'screen'
+    panel_zone['feed_scope'] = feed_scope
+    appearance = panel_zone.get('appearance')
+    if not isinstance(appearance, dict):
+        appearance = {}
+        panel_zone['appearance'] = appearance
+    default_appearance = defaults['appearance']
+    appearance['background_color'] = _normalize_panel_zone_color(
+        appearance.get('background_color'),
+        default_appearance['background_color'],
+    )
+    content_align = str(appearance.get('content_align') or default_appearance['content_align']).strip().lower()
+    if content_align not in {'top', 'center', 'bottom'}:
+        content_align = default_appearance['content_align']
+    appearance['content_align'] = content_align
+    try:
+        appearance['body_rows'] = max(1, min(6, int(appearance.get('body_rows') or default_appearance['body_rows'])))
+    except Exception:
+        appearance['body_rows'] = default_appearance['body_rows']
 
-    pos_feed = panel_zone.get('pos_feed')
-    if not isinstance(pos_feed, dict):
-        pos_feed = {}
-        panel_zone['pos_feed'] = pos_feed
-    default_feed = defaults['pos_feed']
-    pos_feed['name'] = str(pos_feed.get('name') or default_feed['name']).strip()
-    pos_feed['webhook_token'] = str(pos_feed.get('webhook_token') or default_feed['webhook_token']).strip()
-    connector_type = str(pos_feed.get('connector_type') or default_feed['connector_type']).strip().lower()
-    if connector_type not in {'generic_webhook', 'zapier', 'make', 'n8n', 'developer'}:
-        connector_type = default_feed['connector_type']
-    pos_feed['connector_type'] = connector_type
-    field_map = pos_feed.get('field_map')
-    if not isinstance(field_map, dict):
-        field_map = {}
-        pos_feed['field_map'] = field_map
-    for field_key, field_default in default_feed['field_map'].items():
-        field_map[field_key] = str(field_map.get(field_key) or field_default).strip() or field_default
-    pos_feed['title_template'] = str(pos_feed.get('title_template') or default_feed['title_template']).strip() or default_feed['title_template']
-    pos_feed['body_template'] = str(pos_feed.get('body_template') or default_feed['body_template']).replace('\r\n', '\n').replace('\r', '\n').strip() or default_feed['body_template']
-    allowed_statuses = pos_feed.get('allowed_statuses')
-    if isinstance(allowed_statuses, str):
-        allowed_statuses = [part.strip().lower() for part in allowed_statuses.split(',') if part.strip()]
-    elif isinstance(allowed_statuses, list):
-        allowed_statuses = [str(part).strip().lower() for part in allowed_statuses if str(part).strip()]
-    else:
-        allowed_statuses = list(default_feed['allowed_statuses'])
-    deduped_statuses: list[str] = []
-    for status_value in allowed_statuses:
-        if status_value and status_value not in deduped_statuses:
-            deduped_statuses.append(status_value)
-    pos_feed['allowed_statuses'] = deduped_statuses
-    try:
-        pos_feed['display_seconds'] = max(1, min(120, int(pos_feed.get('display_seconds') or default_feed['display_seconds'])))
-    except Exception:
-        pos_feed['display_seconds'] = default_feed['display_seconds']
-    try:
-        pos_feed['max_items'] = max(1, min(20, int(pos_feed.get('max_items') or default_feed['max_items'])))
-    except Exception:
-        pos_feed['max_items'] = default_feed['max_items']
-    try:
-        pos_feed['event_count'] = max(0, int(pos_feed.get('event_count') or 0))
-    except Exception:
-        pos_feed['event_count'] = 0
-    pos_feed['last_event_at'] = pos_feed.get('last_event_at')
-    pos_feed['last_event_result'] = str(pos_feed.get('last_event_result') or '').strip().lower()
-    last_summary = pos_feed.get('last_event_summary')
-    if not isinstance(last_summary, dict):
-        last_summary = {}
-        pos_feed['last_event_summary'] = last_summary
-    for summary_key in ('customer_name', 'order_number', 'status', 'external_id'):
-        last_summary[summary_key] = str(last_summary.get(summary_key) or '').strip()
-    preview_text = pos_feed.get('last_payload_preview')
-    if preview_text is None:
-        preview_text = ''
-    pos_feed['last_payload_preview'] = str(preview_text)
+    pos_feed = _normalize_panel_pos_feed_state(panel_zone.get('pos_feed'), include_runtime=True)
+    panel_zone['pos_feed'] = pos_feed
 
     live_queue = panel_zone.get('live_queue')
     if not isinstance(live_queue, list):
@@ -7949,6 +8095,113 @@ def _apply_panel_pos_event(panel_zone: dict, payload: dict) -> dict:
     }
 
 
+def _iter_panel_pos_bound_screens(cfg: dict, scope: str, store_id: Optional[str] = None):
+    normalized_scope = str(scope or 'screen').strip().lower()
+    normalized_store_id = str(store_id or '').strip()
+    for candidate_store_id, screens in (cfg.get('screens') or {}).items():
+        if normalized_store_id and normalized_scope in {'store', 'chain'} and str(candidate_store_id) != normalized_store_id:
+            continue
+        if not isinstance(screens, dict):
+            continue
+        for screen_id, screen in screens.items():
+            if not isinstance(screen, dict):
+                continue
+            panel_zone = _normalize_panel_zone_state(screen.setdefault('panel_zone', _panel_zone_defaults()))
+            if str(panel_zone.get('source_mode') or 'manual').strip().lower() != 'pos_webhook':
+                continue
+            if str(panel_zone.get('feed_scope') or 'screen').strip().lower() != normalized_scope:
+                continue
+            yield {
+                'store_id': str(candidate_store_id),
+                'screen_id': str(screen_id),
+                'screen': screen,
+                'panel_zone': panel_zone,
+            }
+
+
+def _match_panel_pos_store_id(cfg: dict, raw_store_value) -> Optional[str]:
+    if raw_store_value is None:
+        return None
+    store_text = str(raw_store_value or '').strip()
+    if not store_text:
+        return None
+    screens_map = cfg.get('screens') or {}
+    if store_text in screens_map:
+        return store_text
+    normalized_value = re.sub(r'[^a-z0-9]+', '', store_text.lower())
+    for store in (cfg.get('stores') or []):
+        store_id = str(store.get('id') or '').strip()
+        store_name = str(store.get('name') or '').strip()
+        if store_text == store_name or normalized_value == re.sub(r'[^a-z0-9]+', '', store_name.lower()):
+            if store_id in screens_map:
+                return store_id
+    return None
+
+
+def _sync_panel_pos_shared_feed_to_screens(cfg: dict, scope: str, store_id: Optional[str], shared_feed: dict) -> list[dict]:
+    updated_targets = []
+    for target in _iter_panel_pos_bound_screens(cfg, scope, store_id):
+        panel_zone = target['panel_zone']
+        panel_zone['pos_feed'] = _copy_panel_pos_feed_settings(shared_feed, panel_zone.get('pos_feed'))
+        updated_targets.append({
+            'store_id': target['store_id'],
+            'screen_id': target['screen_id'],
+            'panel_zone': panel_zone,
+        })
+    return updated_targets
+
+
+def _find_shared_panel_pos_feed_by_webhook_token(token: str):
+    token_text = str(token or '').strip()
+    if not token_text:
+        return None
+
+    search_targets = [(None, CONFIG_FILE)]
+    try:
+        import glob
+
+        pattern = _config_file_path('store_config__*.json')
+        for path in sorted(glob.glob(pattern)):
+            safe_key = os.path.basename(path)[len('store_config__'):-len('.json')]
+            search_targets.append((safe_key, path))
+    except Exception:
+        pass
+
+    for safe_key, path in search_targets:
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, 'r') as fh:
+                cfg = json.load(fh)
+        except Exception:
+            continue
+        shared_feeds = _ensure_panel_pos_shared_feeds(cfg)
+        for store_id, feed in (shared_feeds.get('stores') or {}).items():
+            feed = _normalize_panel_pos_feed_state(feed, include_runtime=False)
+            if str(feed.get('webhook_token') or '').strip() == token_text:
+                return {
+                    'safe_key': safe_key,
+                    'path': path,
+                    'cfg': cfg,
+                    'scope': 'store',
+                    'store_id': str(store_id),
+                    'feed': feed,
+                }
+        chain_feed = shared_feeds.get('chain')
+        if isinstance(chain_feed, dict):
+            chain_feed = _normalize_panel_pos_feed_state(chain_feed, include_runtime=False)
+            if str(chain_feed.get('webhook_token') or '').strip() == token_text:
+                return {
+                    'safe_key': safe_key,
+                    'path': path,
+                    'cfg': cfg,
+                    'scope': 'chain',
+                    'store_id': None,
+                    'feed': chain_feed,
+                }
+    return None
+
+
 def _find_panel_zone_by_webhook_token(token: str):
     token_text = str(token or '').strip()
     if not token_text:
@@ -7992,6 +8245,63 @@ def _find_panel_zone_by_webhook_token(token: str):
                         'screen_id': screen_id,
                     }
     return None
+
+
+def _dispatch_panel_pos_payload_to_targets(
+    cfg: dict,
+    safe_key: Optional[str],
+    targets: list[dict],
+    payload: dict,
+    shared_feed: Optional[dict] = None,
+) -> dict:
+    results = []
+    updated_screens = []
+    for target in targets:
+        panel_zone = _normalize_panel_zone_state(target['screen'].setdefault('panel_zone', _panel_zone_defaults()))
+        if isinstance(shared_feed, dict):
+            panel_zone['pos_feed'] = _copy_panel_pos_feed_settings(shared_feed, panel_zone.get('pos_feed'))
+        result = _apply_panel_pos_event(panel_zone, payload)
+        _enqueue_command_in_cfg(cfg, target['store_id'], target['screen_id'], 'reload')
+        results.append({
+            'store_id': target['store_id'],
+            'screen_id': target['screen_id'],
+            'result': result,
+        })
+        updated_screens.append({
+            'store_id': target['store_id'],
+            'screen_id': target['screen_id'],
+            'panel_zone': panel_zone,
+        })
+    if results:
+        _save_config_for_scope(safe_key, cfg)
+    accepted = any(bool(entry.get('result', {}).get('accepted')) for entry in results)
+    return {
+        'accepted': accepted,
+        'results': results,
+        'updated_screens': updated_screens,
+    }
+
+
+def _panel_pos_targets_for_screen(cfg: dict, store_id: str, screen_id: str, screen: dict) -> list[dict]:
+    panel_zone = _normalize_panel_zone_state(screen.setdefault('panel_zone', _panel_zone_defaults()))
+    feed_scope = str(panel_zone.get('feed_scope') or 'screen').strip().lower()
+    if feed_scope == 'store':
+        return list(_iter_panel_pos_bound_screens(cfg, 'store', store_id))
+    if feed_scope == 'chain':
+        return list(_iter_panel_pos_bound_screens(cfg, 'chain', store_id))
+    return [{
+        'store_id': str(store_id),
+        'screen_id': str(screen_id),
+        'screen': screen,
+        'panel_zone': panel_zone,
+    }]
+
+
+def _panel_pos_shared_feeds_payload(cfg: dict) -> dict:
+    try:
+        return json.loads(json.dumps(_ensure_panel_pos_shared_feeds(cfg), ensure_ascii=False))
+    except Exception:
+        return dict(_ensure_panel_pos_shared_feeds(cfg))
 
 # -------- Manual R2 media diagnostics & repair endpoints --------
 @app.route('/r2/restore_one', methods=['POST'])
@@ -17340,6 +17650,8 @@ def get_playlist(store_id, screen_id):
         'playlist': [],
         'active_item': None,
         'source_mode': 'manual',
+        'feed_scope': 'screen',
+        'appearance': dict(_panel_zone_defaults()['appearance']),
         'live_queue': [],
     }
     try:
@@ -17377,6 +17689,8 @@ def get_playlist(store_id, screen_id):
                 'playlist': panel_out,
                 'active_item': panel_active_item,
                 'source_mode': panel_source_mode,
+                'feed_scope': str(panel_zone.get('feed_scope') or 'screen'),
+                'appearance': dict(panel_zone.get('appearance') or _panel_zone_defaults()['appearance']),
                 'live_queue': live_queue_out,
             }
             if session_ukey and not used_pair_code_auth:
@@ -19373,15 +19687,50 @@ def update_panel_zone(store_id, screen_id):
         panel_zone['source_mode'] = source_mode
         if source_mode == 'pos_webhook':
             pos_feed = panel_zone.setdefault('pos_feed', _panel_zone_defaults()['pos_feed'])
-            if not str(pos_feed.get('webhook_token') or '').strip():
-                pos_feed['webhook_token'] = secrets.token_urlsafe(18)
+            feed_scope = str(panel_zone.get('feed_scope') or 'screen').strip().lower()
+            if feed_scope == 'screen':
+                if not str(pos_feed.get('webhook_token') or '').strip():
+                    pos_feed['webhook_token'] = secrets.token_urlsafe(18)
+            else:
+                shared_feed = _get_shared_panel_pos_feed(cfg, feed_scope, store_id=store_id, create=True)
+                if shared_feed is not None:
+                    if not str(shared_feed.get('webhook_token') or '').strip():
+                        shared_feed['webhook_token'] = secrets.token_urlsafe(18)
+                    panel_zone['pos_feed'] = _copy_panel_pos_feed_settings(shared_feed, pos_feed)
             if str(panel_zone.get('layout_mode') or 'off').strip().lower() == 'off':
                 panel_zone['layout_mode'] = 'split-right-25'
                 panel_zone['enabled'] = True
+    if 'feed_scope' in payload:
+        feed_scope = str(payload.get('feed_scope') or 'screen').strip().lower()
+        if feed_scope not in PANEL_POS_SCOPE_VALUES:
+            return jsonify({'success': False, 'error': 'invalid feed scope'}), 400
+        panel_zone['feed_scope'] = feed_scope
+    if 'appearance' in payload and isinstance(payload.get('appearance'), dict):
+        appearance = panel_zone.setdefault('appearance', _panel_zone_defaults()['appearance'])
+        appearance_payload = payload.get('appearance') or {}
+        for appearance_key in ('background_color', 'content_align', 'body_rows'):
+            if appearance_key in appearance_payload:
+                appearance[appearance_key] = appearance_payload.get(appearance_key)
     panel_zone = _normalize_panel_zone_state(panel_zone)
+    if str(panel_zone.get('source_mode') or 'manual').strip().lower() == 'pos_webhook':
+        feed_scope = str(panel_zone.get('feed_scope') or 'screen').strip().lower()
+        if feed_scope == 'screen':
+            if not str((panel_zone.get('pos_feed') or {}).get('webhook_token') or '').strip():
+                panel_zone['pos_feed']['webhook_token'] = secrets.token_urlsafe(18)
+        else:
+            shared_feed = _get_shared_panel_pos_feed(cfg, feed_scope, store_id=store_id, create=True)
+            if shared_feed is not None:
+                if not str(shared_feed.get('webhook_token') or '').strip():
+                    shared_feed['webhook_token'] = secrets.token_urlsafe(18)
+                panel_zone['pos_feed'] = _copy_panel_pos_feed_settings(shared_feed, panel_zone.get('pos_feed'))
+                _sync_panel_pos_shared_feed_to_screens(cfg, feed_scope, None if feed_scope == 'chain' else store_id, shared_feed)
     _enqueue_command_in_cfg(cfg, store_id, screen_id, 'reload')
     _save_config_for_scope(ukey, cfg)
-    return jsonify({'success': True, 'panel_zone': panel_zone})
+    return jsonify({
+        'success': True,
+        'panel_zone': panel_zone,
+        'shared_feeds': _panel_pos_shared_feeds_payload(cfg),
+    })
 
 
 @app.route('/panel_pos_feed/<store_id>/<screen_id>', methods=['PATCH'])
@@ -19395,44 +19744,103 @@ def update_panel_pos_feed(store_id, screen_id):
 
     payload = request.get_json() or {}
     panel_zone = _normalize_panel_zone_state(screen.setdefault('panel_zone', _panel_zone_defaults()))
+    old_scope = str(panel_zone.get('feed_scope') or 'screen').strip().lower()
     pos_feed = panel_zone.setdefault('pos_feed', _panel_zone_defaults()['pos_feed'])
-    field_map = pos_feed.setdefault('field_map', _panel_zone_defaults()['pos_feed']['field_map'])
+    appearance = panel_zone.setdefault('appearance', _panel_zone_defaults()['appearance'])
 
-    if payload.get('reset_token'):
-        pos_feed['webhook_token'] = secrets.token_urlsafe(18)
-    elif not str(pos_feed.get('webhook_token') or '').strip():
-        pos_feed['webhook_token'] = secrets.token_urlsafe(18)
+    if 'feed_scope' in payload:
+        feed_scope = str(payload.get('feed_scope') or 'screen').strip().lower()
+        if feed_scope not in PANEL_POS_SCOPE_VALUES:
+            return jsonify({'success': False, 'error': 'invalid feed scope'}), 400
+        panel_zone['feed_scope'] = feed_scope
+    feed_scope = str(panel_zone.get('feed_scope') or 'screen').strip().lower()
+    if feed_scope not in PANEL_POS_SCOPE_VALUES:
+        feed_scope = 'screen'
+        panel_zone['feed_scope'] = feed_scope
 
-    if 'name' in payload:
-        pos_feed['name'] = str(payload.get('name') or '').strip()
-    if 'connector_type' in payload:
-        pos_feed['connector_type'] = str(payload.get('connector_type') or '').strip().lower()
-    if 'field_map' in payload and isinstance(payload.get('field_map'), dict):
-        for field_key in ('customer_name', 'order_number', 'status', 'external_id'):
-            if field_key in payload['field_map']:
-                field_map[field_key] = str(payload['field_map'].get(field_key) or '').strip()
-    if 'title_template' in payload:
-        pos_feed['title_template'] = str(payload.get('title_template') or '').strip() or 'Now serving'
-    if 'body_template' in payload:
-        pos_feed['body_template'] = str(payload.get('body_template') or '').replace('\r\n', '\n').replace('\r', '\n').strip() or '{{customer_name}}\nOrder #{{order_number}}'
-    if 'allowed_statuses' in payload:
-        pos_feed['allowed_statuses'] = payload.get('allowed_statuses')
-    if 'display_seconds' in payload:
-        pos_feed['display_seconds'] = payload.get('display_seconds')
-    if 'max_items' in payload:
-        pos_feed['max_items'] = payload.get('max_items')
-    if payload.get('clear_queue'):
-        panel_zone['live_queue'] = []
     if payload.get('enable_source'):
         panel_zone['source_mode'] = 'pos_webhook'
         if str(panel_zone.get('layout_mode') or 'off').strip().lower() == 'off':
             panel_zone['layout_mode'] = 'split-right-25'
             panel_zone['enabled'] = True
 
+    active_feed = pos_feed
+    if feed_scope == 'screen':
+        if payload.get('reset_token') or old_scope != 'screen' or not str(pos_feed.get('webhook_token') or '').strip():
+            pos_feed['webhook_token'] = secrets.token_urlsafe(18)
+    else:
+        shared_feed = _get_shared_panel_pos_feed(cfg, feed_scope, store_id=store_id, create=True)
+        if shared_feed is None:
+            return jsonify({'success': False, 'error': 'shared feed unavailable'}), 400
+        if payload.get('reset_token') or not str(shared_feed.get('webhook_token') or '').strip():
+            shared_feed['webhook_token'] = secrets.token_urlsafe(18)
+        active_feed = shared_feed
+
+    active_feed = _normalize_panel_pos_feed_state(active_feed, include_runtime=(feed_scope == 'screen'))
+    active_field_map = active_feed.setdefault('field_map', _panel_pos_feed_defaults(include_runtime=False)['field_map'])
+
+    if 'name' in payload:
+        active_feed['name'] = str(payload.get('name') or '').strip()
+    if 'connector_type' in payload:
+        active_feed['connector_type'] = str(payload.get('connector_type') or '').strip().lower()
+    if 'field_map' in payload and isinstance(payload.get('field_map'), dict):
+        for field_key in ('customer_name', 'order_number', 'status', 'external_id'):
+            if field_key in payload['field_map']:
+                active_field_map[field_key] = str(payload['field_map'].get(field_key) or '').strip()
+    if 'store_selector_path' in payload:
+        active_feed['store_selector_path'] = str(payload.get('store_selector_path') or '').strip()
+    if 'title_template' in payload:
+        active_feed['title_template'] = str(payload.get('title_template') or '').strip() or 'Now serving'
+    if 'body_template' in payload:
+        active_feed['body_template'] = str(payload.get('body_template') or '').replace('\r\n', '\n').replace('\r', '\n').strip() or '{{customer_name}}\nOrder #{{order_number}}'
+    if 'allowed_statuses' in payload:
+        active_feed['allowed_statuses'] = payload.get('allowed_statuses')
+    if 'display_seconds' in payload:
+        active_feed['display_seconds'] = payload.get('display_seconds')
+    if 'max_items' in payload:
+        active_feed['max_items'] = payload.get('max_items')
+    if 'appearance' in payload and isinstance(payload.get('appearance'), dict):
+        appearance_payload = payload.get('appearance') or {}
+        for appearance_key in ('background_color', 'content_align', 'body_rows'):
+            if appearance_key in appearance_payload:
+                appearance[appearance_key] = appearance_payload.get(appearance_key)
     panel_zone = _normalize_panel_zone_state(panel_zone)
-    _enqueue_command_in_cfg(cfg, store_id, screen_id, 'reload')
+    if feed_scope == 'screen':
+        panel_zone['pos_feed'] = _normalize_panel_pos_feed_state(active_feed, include_runtime=True)
+    else:
+        panel_zone['pos_feed'] = _copy_panel_pos_feed_settings(active_feed, panel_zone.get('pos_feed'))
+
+    if payload.get('clear_queue'):
+        updated_screens = []
+        for target in _panel_pos_targets_for_screen(cfg, store_id, screen_id, screen):
+            target_panel_zone = _normalize_panel_zone_state(target['screen'].setdefault('panel_zone', _panel_zone_defaults()))
+            target_panel_zone['live_queue'] = []
+            _enqueue_command_in_cfg(cfg, target['store_id'], target['screen_id'], 'reload')
+            updated_screens.append({
+                'store_id': target['store_id'],
+                'screen_id': target['screen_id'],
+                'panel_zone': target_panel_zone,
+            })
+    elif feed_scope == 'screen':
+        updated_screens = [{
+            'store_id': str(store_id),
+            'screen_id': str(screen_id),
+            'panel_zone': panel_zone,
+        }]
+        _enqueue_command_in_cfg(cfg, store_id, screen_id, 'reload')
+    else:
+        shared_scope_store_id = None if feed_scope == 'chain' else store_id
+        updated_screens = _sync_panel_pos_shared_feed_to_screens(cfg, feed_scope, shared_scope_store_id, active_feed)
+        for target in updated_screens:
+            _enqueue_command_in_cfg(cfg, target['store_id'], target['screen_id'], 'reload')
+
     _save_config_for_scope(ukey, cfg)
-    return jsonify({'success': True, 'panel_zone': panel_zone})
+    return jsonify({
+        'success': True,
+        'panel_zone': panel_zone,
+        'updated_screens': updated_screens,
+        'shared_feeds': _panel_pos_shared_feeds_payload(cfg),
+    })
 
 
 @app.route('/panel_pos_feed/<store_id>/<screen_id>/sample', methods=['POST'])
@@ -19445,36 +19853,102 @@ def sample_panel_pos_feed(store_id, screen_id):
         return jsonify({'success': False, 'error': 'screen not found'}), 404
 
     panel_zone = _normalize_panel_zone_state(screen.setdefault('panel_zone', _panel_zone_defaults()))
-    pos_feed = panel_zone.setdefault('pos_feed', _panel_zone_defaults()['pos_feed'])
-    if not str(pos_feed.get('webhook_token') or '').strip():
-        pos_feed['webhook_token'] = secrets.token_urlsafe(18)
+    feed_scope = str(panel_zone.get('feed_scope') or 'screen').strip().lower()
+    if feed_scope == 'screen':
+        pos_feed = panel_zone.setdefault('pos_feed', _panel_zone_defaults()['pos_feed'])
+        if not str(pos_feed.get('webhook_token') or '').strip():
+            pos_feed['webhook_token'] = secrets.token_urlsafe(18)
+        shared_feed = None
+    else:
+        shared_feed = _get_shared_panel_pos_feed(cfg, feed_scope, store_id=store_id, create=True)
+        if shared_feed is None:
+            return jsonify({'success': False, 'error': 'shared feed unavailable'}), 400
+        if not str(shared_feed.get('webhook_token') or '').strip():
+            shared_feed['webhook_token'] = secrets.token_urlsafe(18)
+        panel_zone['pos_feed'] = _copy_panel_pos_feed_settings(shared_feed, panel_zone.get('pos_feed'))
 
     sample_payload = {
+        'store': {'id': str(store_id), 'name': next((str(store.get('name') or '') for store in (cfg.get('stores') or []) if str(store.get('id') or '') == str(store_id)), '')},
         'customer': {'name': 'Jane Smith'},
         'order': {'id': f'sample-{int(time.time())}', 'number': 'A104', 'status': 'ready'},
     }
-    result = _apply_panel_pos_event(panel_zone, sample_payload)
-    _enqueue_command_in_cfg(cfg, store_id, screen_id, 'reload')
-    _save_config_for_scope(ukey, cfg)
-    return jsonify({'success': True, 'result': result, 'sample_payload': sample_payload, 'panel_zone': panel_zone})
+    targets = _panel_pos_targets_for_screen(cfg, store_id, screen_id, screen)
+    dispatch = _dispatch_panel_pos_payload_to_targets(cfg, ukey, targets, sample_payload, shared_feed=shared_feed)
+    current_panel_zone = _normalize_panel_zone_state(screen.setdefault('panel_zone', _panel_zone_defaults()))
+    return jsonify({
+        'success': True,
+        'result': (dispatch.get('results') or [{}])[0].get('result', {}) if dispatch.get('results') else {},
+        'sample_payload': sample_payload,
+        'panel_zone': current_panel_zone,
+        'updated_screens': dispatch.get('updated_screens', []),
+        'shared_feeds': _panel_pos_shared_feeds_payload(cfg),
+    })
 
 
 @app.route('/api/panel-pos-webhook/<token>', methods=['POST'])
 def receive_panel_pos_webhook(token):
-    target = _find_panel_zone_by_webhook_token(token)
-    if not target:
-        return jsonify({'success': False, 'error': 'webhook not found'}), 404
-
     payload = request.get_json(silent=True)
     if payload is None:
         payload = request.form.to_dict(flat=True) if request.form else {}
     if not isinstance(payload, dict):
         return jsonify({'success': False, 'error': 'JSON object body required'}), 400
+    shared_target = _find_shared_panel_pos_feed_by_webhook_token(token)
+    if shared_target:
+        cfg = shared_target['cfg']
+        feed_scope = shared_target['scope']
+        if feed_scope == 'store':
+            resolved_store_id = str(shared_target.get('store_id') or '').strip()
+            targets = list(_iter_panel_pos_bound_screens(cfg, 'store', resolved_store_id))
+        else:
+            store_selector_path = str((shared_target.get('feed') or {}).get('store_selector_path') or 'store.id').strip()
+            raw_store_value = _panel_pos_lookup_value(payload, store_selector_path)
+            resolved_store_id = _match_panel_pos_store_id(cfg, raw_store_value)
+            if not resolved_store_id:
+                return jsonify({
+                    'success': False,
+                    'error': 'store not resolved for chain feed',
+                    'store_selector_path': store_selector_path,
+                }), 404
+            targets = list(_iter_panel_pos_bound_screens(cfg, 'chain', resolved_store_id))
+        if not targets:
+            return jsonify({
+                'success': False,
+                'error': 'no bound screens found for this feed',
+                'scope': feed_scope,
+                'store_id': resolved_store_id,
+            }), 404
+        dispatch = _dispatch_panel_pos_payload_to_targets(
+            cfg,
+            shared_target['safe_key'],
+            targets,
+            payload,
+            shared_feed=shared_target.get('feed'),
+        )
+        return jsonify({
+            'success': True,
+            'accepted': bool(dispatch.get('accepted')),
+            'scope': feed_scope,
+            'store_id': resolved_store_id,
+            'updated_screens': dispatch.get('updated_screens', []),
+            'results': dispatch.get('results', []),
+        })
 
-    panel_zone = _normalize_panel_zone_state(target['panel_zone'])
-    result = _apply_panel_pos_event(panel_zone, payload)
-    _enqueue_command_in_cfg(target['cfg'], target['store_id'], target['screen_id'], 'reload')
-    _save_config_for_scope(target['safe_key'], target['cfg'])
+    target = _find_panel_zone_by_webhook_token(token)
+    if not target:
+        return jsonify({'success': False, 'error': 'webhook not found'}), 404
+
+    dispatch = _dispatch_panel_pos_payload_to_targets(
+        target['cfg'],
+        target['safe_key'],
+        [{
+            'store_id': target['store_id'],
+            'screen_id': target['screen_id'],
+            'screen': target['screen'],
+            'panel_zone': target['panel_zone'],
+        }],
+        payload,
+    )
+    result = (dispatch.get('results') or [{}])[0].get('result', {}) if dispatch.get('results') else {}
     return jsonify({
         'success': True,
         'accepted': bool(result.get('accepted')),
@@ -22496,11 +22970,8 @@ def get_pi_location():
 @app.route('/api/pi-map-locations', methods=['GET'])
 @login_required
 def pi_map_locations():
-    """Return Pi devices with coordinates for the global map view in Pi Manager."""
+    """Return mapped screens with coordinates for the dashboard/global map view."""
     try:
-        now_ts = time.time()
-        PI_OFFLINE_TIMEOUT = 120
-
         # Load user-scoped config so map only shows current account's devices.
         ukey = _safe_user_key()
         config = load_store_config_for_user_safe_key(ukey) if ukey else load_store_config()
@@ -22553,19 +23024,50 @@ def pi_map_locations():
                 active_media_type = classify_media(active_file) if active_file else ''
 
                 pi_runtime = connected_pis.get(pi_id, {}) or {} if pi_id else {}
-                runtime_last_seen = pi_runtime.get('last_seen')
-                config_last_seen = screen_data.get('last_seen')
-                timestamps = []
-                for raw_ts in (runtime_last_seen, config_last_seen):
-                    if isinstance(raw_ts, (int, float)):
-                        timestamps.append(float(raw_ts))
-                if timestamps:
-                    effective_last_seen = max(timestamps)
-                    is_online = (now_ts - effective_last_seen) < HEARTBEAT_TIMEOUT
+                effective_last_seen = _resolve_screen_last_seen(ukey, str(store_id), str(screen_id), screen_data)
+                if effective_last_seen:
+                    is_online = (time.time() - effective_last_seen) < HEARTBEAT_TIMEOUT
                     last_seen = datetime.fromtimestamp(effective_last_seen).strftime('%Y-%m-%d %I:%M:%S %p')
                 else:
                     is_online = False
                     last_seen = 'Never'
+
+                client_type = 'screen'
+                client_ip = str(pi_runtime.get('ip') or 'Unknown')
+
+                if pi_id and isinstance(pi_runtime, dict) and effective_last_seen:
+                    try:
+                        pi_seen = int(pi_runtime.get('last_seen') or 0)
+                    except Exception:
+                        pi_seen = 0
+                    if pi_seen and pi_seen == int(effective_last_seen):
+                        client_type = 'pi'
+
+                if client_type != 'pi':
+                    with android_tv_lock:
+                        latest_client = None
+                        latest_client_seen = 0
+                        for device_id, tv_data in connected_android_tvs.items():
+                            if not isinstance(tv_data, dict):
+                                continue
+                            if str(tv_data.get('user_key') or '') != str(ukey or ''):
+                                continue
+                            if str(tv_data.get('store_id') or '') != str(store_id):
+                                continue
+                            if str(tv_data.get('screen_id') or '') != str(screen_id):
+                                continue
+                            try:
+                                seen = int(tv_data.get('last_seen') or 0)
+                            except Exception:
+                                seen = 0
+                            if seen >= latest_client_seen:
+                                latest_client_seen = seen
+                                latest_client = tv_data
+
+                        if latest_client is not None:
+                            device_id = str(latest_client.get('device_id') or '')
+                            client_type = 'webplayer' if device_id.startswith('webplayer_') else 'android_tv'
+                            client_ip = str(latest_client.get('ip') or client_ip or 'Unknown')
 
                 out.append({
                     'pi_id': pi_id,
@@ -22582,7 +23084,8 @@ def pi_map_locations():
                     'longitude': lng,
                     'status': 'online' if is_online else 'offline',
                     'last_seen': last_seen,
-                    'ip': str(pi_runtime.get('ip') or 'Unknown')
+                    'ip': client_ip,
+                    'client_type': client_type
                 })
 
         return jsonify({'success': True, 'devices': out})

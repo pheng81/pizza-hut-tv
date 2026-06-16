@@ -2036,7 +2036,16 @@
 			// Keep-alive heartbeat so dashboard sees this webplayer as online
 			async function sendHeartbeat(){
 				try{
-					const qs = new URLSearchParams({ store_id: storeId, screen_id: screenId });
+					let deviceId = '';
+					try {
+						const key = `webplayer_device_id_${storeId}_${screenId}`;
+						deviceId = localStorage.getItem(key) || '';
+						if (!deviceId) {
+							deviceId = `webplayer_${storeId}_${screenId}_${Math.random().toString(36).slice(2, 10)}`;
+							localStorage.setItem(key, deviceId);
+						}
+					} catch {}
+					const qs = new URLSearchParams({ store_id: storeId, screen_id: screenId, device_id: deviceId });
 					if(pairCode) qs.set('user_code', pairCode);
 					await fetch(`${ORIGIN}/api/screen_heartbeat?`+qs.toString(), { method:'GET', cache:'no-store', headers: pairCode?{'X-User-Code': pairCode}:{} });
 				}catch{}

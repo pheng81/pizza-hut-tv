@@ -1,0 +1,235 @@
+{
+  "stores": [
+    {
+      "id": "1712",
+      "name": "Store 1712"
+    },
+    {
+      "id": "1713",
+      "name": "Store 1713"
+    }
+  ],
+  "screens": {
+    "1712": {
+      "1712_screen1": {
+        "panel_zone": {
+          "source_mode": "pos_webhook",
+          "feed_scope": "store",
+          "pos_feed": {
+            "name": "",
+            "webhook_token": "storetok",
+            "connector_type": "generic_webhook",
+            "field_map": {
+              "customer_name": "customer.name",
+              "order_number": "order.number",
+              "status": "order.status",
+              "external_id": "order.id"
+            },
+            "title_template": "Store order",
+            "body_template": "{{customer_name}}\nOrder #{{order_number}}",
+            "allowed_statuses": [
+              "ready",
+              "serving"
+            ],
+            "display_seconds": 10,
+            "max_items": 5,
+            "store_selector_path": "store.id",
+            "event_count": 0,
+            "last_event_at": null,
+            "last_event_result": "",
+            "last_event_summary": {
+              "customer_name": "",
+              "order_number": "",
+              "status": "",
+              "external_id": ""
+            },
+            "last_payload_preview": ""
+          },
+          "enabled": false,
+          "layout_mode": "off",
+          "playlist": [],
+          "rotation_meta": {
+            "last_index": 0,
+            "last_ts": 0
+          },
+          "appearance": {
+            "background_color": "#201206",
+            "content_align": "center",
+            "body_rows": 4
+          },
+          "live_queue": []
+        }
+      },
+      "1712_screen2": {
+        "panel_zone": {
+          "source_mode": "pos_webhook",
+          "feed_scope": "chain",
+          "pos_feed": {
+            "name": "",
+            "webhook_token": "chaintok",
+            "connector_type": "generic_webhook",
+            "field_map": {
+              "customer_name": "customer.name",
+              "order_number": "order.number",
+              "status": "order.status",
+              "external_id": "order.id"
+            },
+            "title_template": "Now serving",
+            "body_template": "{{customer_name}}\nOrder #{{order_number}}",
+            "allowed_statuses": [
+              "ready",
+              "serving"
+            ],
+            "display_seconds": 10,
+            "max_items": 5,
+            "store_selector_path": "store.id",
+            "event_count": 1,
+            "last_event_at": "2026-06-03T00:37:50.610501Z",
+            "last_event_result": "accepted",
+            "last_event_summary": {
+              "customer_name": "Jane",
+              "order_number": "A104",
+              "status": "ready",
+              "external_id": "ord-1"
+            },
+            "last_payload_preview": "{\n  \"store\": {\n    \"id\": \"1712\"\n  },\n  \"customer\": {\n    \"name\": \"Jane\"\n  },\n  \"order\": {\n    \"id\": \"ord-1\",\n    \"number\": \"A104\",\n    \"status\": \"ready\"\n  }\n}"
+          },
+          "enabled": false,
+          "layout_mode": "off",
+          "playlist": [],
+          "rotation_meta": {
+            "last_index": 0,
+            "last_ts": 0
+          },
+          "appearance": {
+            "background_color": "#201206",
+            "content_align": "center",
+            "body_rows": 4
+          },
+          "live_queue": [
+            {
+              "id": "58f5e5a1-bbec-4fe9-99f0-26532c89504a",
+              "kind": "pos_card",
+              "title": "Now serving",
+              "body": "Jane\nOrder #A104",
+              "enabled": true,
+              "start": null,
+              "end": null,
+              "schedule": [],
+              "duration": 10,
+              "repeat": true,
+              "days": [],
+              "external_id": "ord-1",
+              "status": "ready",
+              "created_at": "2026-06-03T00:37:50.610501Z"
+            }
+          ]
+        },
+        "cmd_queue": [
+          {
+            "id": "20e1b2f0-97f4-4362-8d4c-b151efdf9a5c",
+            "ts": 1780447070,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ]
+      }
+    },
+    "1713": {
+      "1713_screen1": {
+        "panel_zone": {
+          "source_mode": "pos_webhook",
+          "feed_scope": "chain",
+          "pos_feed": {
+            "name": "",
+            "webhook_token": "chaintok",
+            "connector_type": "generic_webhook",
+            "field_map": {
+              "customer_name": "customer.name",
+              "order_number": "order.number",
+              "status": "order.status",
+              "external_id": "order.id"
+            },
+            "title_template": "Now serving",
+            "body_template": "{{customer_name}}\nOrder #{{order_number}}",
+            "allowed_statuses": [
+              "ready",
+              "serving"
+            ],
+            "display_seconds": 10,
+            "max_items": 5,
+            "store_selector_path": "store.id",
+            "event_count": 0,
+            "last_event_at": null,
+            "last_event_result": "",
+            "last_event_summary": {
+              "customer_name": "",
+              "order_number": "",
+              "status": "",
+              "external_id": ""
+            },
+            "last_payload_preview": ""
+          },
+          "enabled": false,
+          "layout_mode": "off",
+          "playlist": [],
+          "rotation_meta": {
+            "last_index": 0,
+            "last_ts": 0
+          },
+          "appearance": {
+            "background_color": "#201206",
+            "content_align": "center",
+            "body_rows": 4
+          },
+          "live_queue": []
+        }
+      }
+    }
+  },
+  "panel_pos_shared_feeds": {
+    "stores": {
+      "1712": {
+        "name": "",
+        "webhook_token": "storetok",
+        "connector_type": "generic_webhook",
+        "field_map": {
+          "customer_name": "customer.name",
+          "order_number": "order.number",
+          "status": "order.status",
+          "external_id": "order.id"
+        },
+        "title_template": "Store order",
+        "body_template": "{{customer_name}}\nOrder #{{order_number}}",
+        "allowed_statuses": [
+          "ready",
+          "serving"
+        ],
+        "display_seconds": 10,
+        "max_items": 5,
+        "store_selector_path": "store.id"
+      }
+    },
+    "chain": {
+      "name": "",
+      "webhook_token": "chaintok",
+      "connector_type": "generic_webhook",
+      "field_map": {
+        "customer_name": "customer.name",
+        "order_number": "order.number",
+        "status": "order.status",
+        "external_id": "order.id"
+      },
+      "title_template": "Now serving",
+      "body_template": "{{customer_name}}\nOrder #{{order_number}}",
+      "allowed_statuses": [
+        "ready",
+        "serving"
+      ],
+      "display_seconds": 10,
+      "max_items": 5,
+      "store_selector_path": "store.id"
+    }
+  }
+}

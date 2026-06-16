@@ -103,6 +103,16 @@
 			transition: top .35s ease, left .35s ease, right .35s ease, bottom .35s ease;
 		}
 		#panel-zone {
+			--panel-bg-primary: rgba(32, 18, 6, 0.96);
+			--panel-bg-secondary: rgba(14, 10, 7, 0.98);
+			--panel-bg-accent: rgba(245, 158, 11, 0.32);
+			--panel-border-color: rgba(255, 214, 153, 0.28);
+			--panel-chip-bg: rgba(255, 255, 255, 0.09);
+			--panel-chip-border: rgba(255, 233, 196, 0.18);
+			--panel-chip-color: rgba(255, 233, 196, 0.92);
+			--panel-kicker-color: rgba(255, 228, 181, 0.82);
+			--panel-title-color: #fff4dc;
+			--panel-body-color: rgba(255, 246, 230, 0.92);
 			position: fixed;
 			top: 0;
 			right: 0;
@@ -111,9 +121,9 @@
 			display: none;
 			z-index: 8;
 			background:
-				linear-gradient(180deg, rgba(32, 18, 6, 0.96) 0%, rgba(14, 10, 7, 0.98) 100%),
-				radial-gradient(circle at top right, rgba(245, 158, 11, 0.32), transparent 44%);
-			border-left: 1px solid rgba(255, 214, 153, 0.28);
+				linear-gradient(180deg, var(--panel-bg-primary) 0%, var(--panel-bg-secondary) 100%),
+				radial-gradient(circle at top right, var(--panel-bg-accent), transparent 44%);
+			border-left: 1px solid var(--panel-border-color);
 			box-shadow: -18px 0 48px rgba(0, 0, 0, 0.38);
 			overflow: hidden;
 		}
@@ -122,7 +132,7 @@
 			left: 0;
 			right: auto;
 			border-left: none;
-			border-right: 1px solid rgba(255, 214, 153, 0.28);
+			border-right: 1px solid var(--panel-border-color);
 			box-shadow: 18px 0 48px rgba(0, 0, 0, 0.38);
 		}
 		#panel-zone.layout-bottom {
@@ -132,7 +142,7 @@
 			width: 100vw;
 			height: 25vh;
 			border-left: none;
-			border-top: 1px solid rgba(255, 214, 153, 0.28);
+			border-top: 1px solid var(--panel-border-color);
 			box-shadow: 0 -18px 48px rgba(0, 0, 0, 0.38);
 		}
 		#panel-zone-content {
@@ -155,14 +165,15 @@
 			font-weight: 700;
 			letter-spacing: 0.14em;
 			text-transform: uppercase;
-			color: rgba(255, 228, 181, 0.82);
+			color: var(--panel-kicker-color);
 		}
 		.panel-title {
 			font-size: clamp(28px, 3vw, 54px);
 			line-height: 1.06;
 			font-weight: 800;
-			color: #fff4dc;
+			color: var(--panel-title-color);
 			text-wrap: balance;
+			text-shadow: 0 2px 14px rgba(0, 0, 0, 0.26);
 		}
 		#panel-zone.layout-bottom .panel-title {
 			font-size: clamp(24px, 2.4vw, 44px);
@@ -171,8 +182,11 @@
 		.panel-body {
 			font-size: clamp(18px, 1.55vw, 30px);
 			line-height: 1.4;
-			color: rgba(255, 246, 230, 0.92);
+			color: var(--panel-body-color);
 			white-space: pre-wrap;
+			overflow-wrap: anywhere;
+			word-break: break-word;
+			text-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
 		}
 		#panel-zone.layout-bottom .panel-body {
 			font-size: clamp(16px, 1.15vw, 22px);
@@ -185,13 +199,13 @@
 			width: fit-content;
 			padding: 8px 12px;
 			border-radius: 999px;
-			background: rgba(255, 255, 255, 0.09);
-			border: 1px solid rgba(255, 233, 196, 0.18);
+			background: var(--panel-chip-bg);
+			border: 1px solid var(--panel-chip-border);
 			font-size: 12px;
 			font-weight: 700;
 			letter-spacing: 0.08em;
 			text-transform: uppercase;
-			color: rgba(255, 233, 196, 0.92);
+			color: var(--panel-chip-color);
 		}
 		.layer { position:absolute; top:0; left:0; right:0; bottom:0; display:block; background:transparent; text-align:center;
 			/* SMOOTH TRANSITION OPTIMIZATION */
@@ -1128,6 +1142,112 @@
 			stage.style.height = '100%';
 		}
 
+		function normalizePanelHexColor(value, fallback = '#201206'){
+			const raw = String(value || '').trim();
+			if(/^#?[0-9a-f]{6}$/i.test(raw)){
+				return `#${raw.replace(/^#/, '').toLowerCase()}`;
+			}
+			if(/^#?[0-9a-f]{3}$/i.test(raw)){
+				const compact = raw.replace(/^#/, '').toLowerCase();
+				return `#${compact.split('').map((ch) => `${ch}${ch}`).join('')}`;
+			}
+			return fallback;
+		}
+
+		function panelHexToRgb(hexColor){
+			const normalized = normalizePanelHexColor(hexColor, '');
+			if(!normalized) return null;
+			const raw = normalized.slice(1);
+			return {
+				r: parseInt(raw.slice(0, 2), 16),
+				g: parseInt(raw.slice(2, 4), 16),
+				b: parseInt(raw.slice(4, 6), 16)
+			};
+		}
+
+		function mixPanelRgb(base, target, ratio){
+			return {
+				r: Math.round(base.r + ((target.r - base.r) * ratio)),
+				g: Math.round(base.g + ((target.g - base.g) * ratio)),
+				b: Math.round(base.b + ((target.b - base.b) * ratio))
+			};
+		}
+
+		function panelRgbCss(rgb, alpha = 1){
+			return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+		}
+
+		function normalizePanelAppearance(zone){
+			const raw = (zone && typeof zone.appearance === 'object' && zone.appearance) ? zone.appearance : {};
+			const contentAlign = String(raw.content_align || 'center').trim().toLowerCase();
+			return {
+				backgroundColor: normalizePanelHexColor(raw.background_color || '#201206', '#201206'),
+				contentAlign: ['top', 'center', 'bottom'].includes(contentAlign) ? contentAlign : 'center',
+				bodyRows: Math.max(1, Math.min(6, parseInt(String(raw.body_rows || 4), 10) || 4))
+			};
+		}
+
+		function insertPanelSoftBreaks(text, maxTokenLength = 14){
+			const source = String(text || '');
+			if(!source.trim()) return source;
+			let tokenRun = 0;
+			let output = '';
+			for(const char of source){
+				output += char;
+				if(/\s/.test(char)){
+					tokenRun = 0;
+					continue;
+				}
+				if(char === '/' || char === '-' || char === '_' || char === '#'){
+					output += '\u200b';
+					tokenRun = 0;
+					continue;
+				}
+				tokenRun += 1;
+				if(tokenRun >= maxTokenLength){
+					output += '\u200b';
+					tokenRun = 0;
+				}
+			}
+			return output;
+		}
+
+		function applyPanelZoneAppearance(zone, layout){
+			if(!panelZone || !panelZoneContent) return normalizePanelAppearance(zone);
+			const appearance = normalizePanelAppearance(zone);
+			const baseRgb = panelHexToRgb(appearance.backgroundColor) || { r: 32, g: 18, b: 6 };
+			const darkerRgb = mixPanelRgb(baseRgb, { r: 0, g: 0, b: 0 }, 0.34);
+			const lighterRgb = mixPanelRgb(baseRgb, { r: 255, g: 255, b: 255 }, 0.18);
+			const contrastScore = ((baseRgb.r * 299) + (baseRgb.g * 587) + (baseRgb.b * 114)) / 1000;
+			const isLight = contrastScore >= 170;
+			panelZone.style.setProperty('--panel-bg-primary', panelRgbCss(baseRgb, 0.95));
+			panelZone.style.setProperty('--panel-bg-secondary', panelRgbCss(darkerRgb, 0.98));
+			panelZone.style.setProperty('--panel-bg-accent', panelRgbCss(lighterRgb, 0.28));
+			panelZone.style.setProperty('--panel-border-color', isLight ? 'rgba(15, 23, 42, 0.14)' : 'rgba(255, 214, 153, 0.26)');
+			panelZone.style.setProperty('--panel-chip-bg', isLight ? 'rgba(255, 255, 255, 0.56)' : 'rgba(255, 255, 255, 0.10)');
+			panelZone.style.setProperty('--panel-chip-border', isLight ? 'rgba(15, 23, 42, 0.12)' : 'rgba(255, 233, 196, 0.18)');
+			panelZone.style.setProperty('--panel-chip-color', isLight ? '#0f172a' : 'rgba(255, 233, 196, 0.92)');
+			panelZone.style.setProperty('--panel-kicker-color', isLight ? 'rgba(15, 23, 42, 0.68)' : 'rgba(255, 228, 181, 0.82)');
+			panelZone.style.setProperty('--panel-title-color', isLight ? '#0f172a' : '#fff4dc');
+			panelZone.style.setProperty('--panel-body-color', isLight ? 'rgba(15, 23, 42, 0.88)' : 'rgba(255, 246, 230, 0.92)');
+			if(layout === 'split-bottom-25'){
+				panelZoneContent.style.justifyContent = 'space-between';
+				panelZoneContent.style.alignItems = appearance.contentAlign === 'top'
+					? 'flex-start'
+					: appearance.contentAlign === 'bottom'
+						? 'flex-end'
+						: 'center';
+			}else{
+				panelZoneContent.style.justifyContent = appearance.contentAlign === 'top'
+					? 'flex-start'
+					: appearance.contentAlign === 'bottom'
+						? 'flex-end'
+						: 'center';
+				panelZoneContent.style.alignItems = '';
+			}
+			return appearance;
+		}
+
 		function hidePanelZone(){
 			if(panelZone){
 				panelZone.classList.remove('visible', 'layout-left', 'layout-right', 'layout-bottom');
@@ -1161,6 +1281,7 @@
 				panelZone.classList.add('layout-right');
 				stage.style.right = '25vw';
 			}
+			const appearance = applyPanelZoneAppearance(zone, layout);
 			const title = String(activeItem.title || activeItem.name || 'Info');
 			const body = String(activeItem.body || activeItem.text || '');
 			panelZoneContent.innerHTML = `
@@ -1170,8 +1291,12 @@
 				<div class="panel-body"></div>`;
 			const titleNode = panelZoneContent.querySelector('.panel-title');
 			const bodyNode = panelZoneContent.querySelector('.panel-body');
-			if(titleNode) titleNode.textContent = title;
-			if(bodyNode) bodyNode.textContent = body;
+			if(titleNode) titleNode.textContent = insertPanelSoftBreaks(title, 18);
+			if(bodyNode){
+				bodyNode.textContent = insertPanelSoftBreaks(body, 14);
+				bodyNode.style.maxHeight = `${(appearance.bodyRows * 1.4).toFixed(2)}em`;
+				bodyNode.style.overflow = 'hidden';
+			}
 		}
 		
 		// Client-side schedule filtering (matches server logic)

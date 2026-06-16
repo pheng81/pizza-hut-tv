@@ -2818,6 +2818,27 @@
             color: #be123c;
         }
 
+        .dashboard-location-item__meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .dashboard-location-item__client {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 9px;
+            border-radius: 3px;
+            background: #eef6ff;
+            color: #1d4ed8;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
         .dashboard-location-item__location,
         .dashboard-location-item__address {
             color: #4b5563;
@@ -4462,7 +4483,7 @@
                             <div>
                                 <span class="overview-panel__eyebrow">Map</span>
                                 <h3 id="dashboardMapTitle">Screen locations</h3>
-                                <p>Mapped screens appear here using the same Pi location data already saved in your account.</p>
+                                <p>Mapped screens appear here using the saved screen or store location data in your account, regardless of whether the live client is Pi, Android TV, or webplayer.</p>
                             </div>
                             <div style="display:flex; align-items:center; gap:10px;">
                                 <div class="overview-panel__summary" id="dashboardMapSummary">Loading map...</div>
@@ -4471,7 +4492,7 @@
                         </div>
                         <div class="dashboard-map-shell">
                             <div id="dashboardMap" class="dashboard-map" aria-label="Mapped screen locations"></div>
-                            <div id="dashboardMapEmpty" class="dashboard-map-empty" hidden>Location pins will appear here after screens are assigned coordinates in the Pi manager.</div>
+                            <div id="dashboardMapEmpty" class="dashboard-map-empty" hidden>Location pins will appear here after screens are assigned coordinates or a saved address.</div>
                         </div>
                     </section>
                 </div>
@@ -6257,6 +6278,26 @@
             const mediaType = String((device && device.active_media_type) || guessMediaType(file) || 'image').toLowerCase();
             const isAbsolute = /^https?:\/\//i.test(file);
             const safeFile = escapeHtml(file);
+            const youtubeMatch = file.match(/^youtube:([a-zA-Z0-9_-]{11})$/i);
+
+            if (youtubeMatch) {
+                const videoId = youtubeMatch[1];
+                return `
+                    ${previewButtonStart}
+                    <div id="${previewId}" style="position:relative; border-radius:10px; overflow:hidden; background:#111827; width:180px; height:102px;">
+                        <iframe
+                            src="https://www.youtube.com/embed/${encodeURIComponent(videoId)}?autoplay=1&mute=1&loop=1&playlist=${encodeURIComponent(videoId)}&controls=0&modestbranding=1&playsinline=1&rel=0"
+                            style="display:block; width:100%; height:100%; border:none; background:#111827;"
+                            allow="autoplay; encrypted-media; picture-in-picture"
+                            referrerpolicy="strict-origin-when-cross-origin"
+                            allowfullscreen
+                            title="YouTube preview"
+                        ></iframe>
+                        <div style="position:absolute; inset:auto 8px 8px auto; padding:4px 8px; border-radius:999px; background:rgba(220,38,38,0.92); color:#fff; font-size:10px; font-weight:800; letter-spacing:0.06em; text-transform:uppercase; pointer-events:none;">YouTube</div>
+                    </div>
+                    ${previewButtonEnd}
+                `;
+            }
 
             if (mediaType === 'video') {
                 const previewSrc = isAbsolute
@@ -6458,12 +6499,21 @@
         }
 
         function getDashboardMapPopupContent(device, status) {
+            const clientType = String((device && device.client_type) || '').toLowerCase();
+            const clientLabel = clientType === 'webplayer'
+                ? 'Webplayer'
+                : clientType === 'android_tv'
+                    ? 'Android TV'
+                    : clientType === 'pi'
+                        ? 'Pi'
+                        : 'Screen';
             return (
                 `<strong>${escapeHtml(device.store_name || device.store_id || 'Store')}</strong><br>` +
                 `${escapeHtml(device.screen_name || device.screen_id || 'Screen')}<br>` +
                 `${getDashboardPopupPreviewHtml(device)}` +
                 `${escapeHtml(device.location_label || device.address || 'Mapped location')}<br>` +
                 `Status: ${status === 'online' ? 'Online' : 'Offline'}<br>` +
+                `Client: <span style="display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;background:#eef6ff;color:#1d4ed8;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.02em;">${escapeHtml(clientLabel)}</span><br>` +
                 `<button type="button" data-store-id="${escapeHtml(String(device.store_id || ''))}" data-screen-id="${escapeHtml(String(device.screen_id || ''))}" onclick="return focusDashboardScreenFromMap(this.dataset.storeId, this.dataset.screenId)" style="margin-top:10px; padding:7px 10px; border:1px solid #cdd5df; border-radius:8px; background:#fff; color:#1d1d1f; font-size:12px; font-weight:600; cursor:pointer;">Open schedule</button>`
             );
         }
@@ -6702,6 +6752,14 @@
 
             listEl.innerHTML = devices.slice(0, 6).map((device) => {
                 const status = String(device.status || '').toLowerCase() === 'online' ? 'online' : 'offline';
+                const clientType = String(device.client_type || '').toLowerCase();
+                const clientLabel = clientType === 'webplayer'
+                    ? 'Webplayer'
+                    : clientType === 'android_tv'
+                        ? 'Android TV'
+                        : clientType === 'pi'
+                            ? 'Pi'
+                            : 'Screen';
                 const locationText = device.location_label || 'Mapped screen location';
                 const addressText = device.address || 'No address saved';
                 return `
@@ -6711,7 +6769,10 @@
                                 <div class="dashboard-location-item__store">${escapeHtml(device.store_name || device.store_id || 'Store')}</div>
                                 <span class="dashboard-location-item__screen">${escapeHtml(device.screen_name || device.screen_id || 'Screen')}</span>
                             </div>
+                        </div>
+                        <div class="dashboard-location-item__meta">
                             <span class="dashboard-location-item__status ${status}">${status}</span>
+                            <span class="dashboard-location-item__client">${escapeHtml(clientLabel)}</span>
                         </div>
                         <div class="dashboard-location-item__location">${escapeHtml(locationText)}</div>
                         <div class="dashboard-location-item__address">${escapeHtml(addressText)}</div>
@@ -14009,6 +14070,9 @@ allowfullscreen></iframe></div>`;
             // Minimal client-side media type classifier matching server logic
             function guessMediaType(name){
                 try{
+                    if(/^youtube:[a-zA-Z0-9_-]{11}$/i.test(String(name || '').trim())){
+                        return 'youtube';
+                    }
                     const ext = (String(name).split('.').pop()||'').toLowerCase();
                     const v = ['mp4','webm','ogg','mov','avi','mkv','m4v'];
                     return v.includes(ext) ? 'video' : 'image';

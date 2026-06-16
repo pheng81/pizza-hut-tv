@@ -1500,11 +1500,24 @@
       z-index: 9999;
       opacity: 1;
       transition: opacity 0.6s ease-out;
+      animation: logoIntroAutoDismiss 4.8s ease-out forwards;
     }
     
     .logo-intro.hidden {
       opacity: 0;
+      visibility: hidden;
       pointer-events: none;
+    }
+
+    @keyframes logoIntroAutoDismiss {
+      0%, 82% {
+        opacity: 1;
+        visibility: visible;
+      }
+      100% {
+        opacity: 0;
+        visibility: hidden;
+      }
     }
     
     .logo-intro .frame {
@@ -2227,6 +2240,63 @@
       window.addEventListener('resize', update);
       document.addEventListener('DOMContentLoaded', update);
       update();
+    })();
+  </script>
+
+  <script>
+    (function () {
+      var SAFE_IDS = new Set(['logoIntro', 'cookieConsent', 'aiChatButton', 'aiChatWindow']);
+
+      function isFullscreenBlocker(el) {
+        if (!(el instanceof HTMLElement)) return false;
+        if (SAFE_IDS.has(el.id)) return false;
+
+        var style = window.getComputedStyle(el);
+        if (
+          style.display === 'none' ||
+          style.visibility === 'hidden' ||
+          style.pointerEvents === 'none' ||
+          !['fixed', 'absolute', 'sticky'].includes(style.position)
+        ) {
+          return false;
+        }
+
+        var rect = el.getBoundingClientRect();
+        var coversViewport =
+          rect.width >= window.innerWidth * 0.96 &&
+          rect.height >= window.innerHeight * 0.96;
+        var zIndex = parseInt(style.zIndex || '0', 10);
+
+        return coversViewport && !Number.isNaN(zIndex) && zIndex >= 1000;
+      }
+
+      function clearUnexpectedFullscreenLayers() {
+        var intro = document.getElementById('logoIntro');
+        if (intro) {
+          intro.classList.add('hidden');
+          window.setTimeout(function () {
+            if (intro && intro.parentNode) {
+              intro.remove();
+            }
+          }, 900);
+        }
+
+        Array.from(document.body.children).forEach(function (el) {
+          if (!isFullscreenBlocker(el)) return;
+          el.style.pointerEvents = 'none';
+        });
+      }
+
+      window.addEventListener('load', function () {
+        window.setTimeout(clearUnexpectedFullscreenLayers, 4200);
+        window.setTimeout(clearUnexpectedFullscreenLayers, 5200);
+      });
+
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) {
+          clearUnexpectedFullscreenLayers();
+        }
+      });
     })();
   </script>
 

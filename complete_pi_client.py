@@ -41,7 +41,7 @@ from pi_vnc_tunnel import init_vnc_tunnel
 MAIN_THREAD_TASK_EVENT = pygame.USEREVENT + 42
 
 # Client version identifier for logs, status, and WebSocket registration
-VERSION = "v2.1.2"  # Timer deduplication fix - prevent multiple overlapping timers
+VERSION = "v2.1.3"  # Improve live POS panel readability and wrapping on TV clients
 
 # MOBILE SYNC ADDON: Import mobile sync functionality (optional - degrades gracefully if not available)
 try:
@@ -245,6 +245,31 @@ class PlaylistItem:
             schedule=data.get('schedule', []),
             days=data.get('days', [])
         )
+
+
+@dataclass
+class PanelAppearance:
+    background_color: str = "#201206"
+    content_align: str = "center"
+    body_rows: int = 4
+
+
+@dataclass
+class PanelActiveItem:
+    title: str = "Info"
+    body: str = ""
+
+
+@dataclass
+class PanelZoneState:
+    enabled: bool = False
+    layout_mode: str = "off"
+    appearance: PanelAppearance = None
+    active_item: Optional[PanelActiveItem] = None
+
+    def __post_init__(self):
+        if self.appearance is None:
+            self.appearance = PanelAppearance()
 
 class ServerTimeSync:
     """Server time synchronization like webplayer."""
@@ -612,6 +637,7 @@ class CompleteWebplayerClient:
             self.font_input = pygame.font.SysFont('arial', 22, bold=True)
             self.font_button = pygame.font.SysFont('arial', 18, bold=True)
             self.font_small = pygame.font.SysFont('arial', 14)
+        self._panel_font_cache = {}
         
         # State management
         self.current_state = "setup"  # setup, playing, error
@@ -639,6 +665,8 @@ class CompleteWebplayerClient:
         # Screen orientation and rotation (from dashboard)
         self.screen_orientation = None  # 'vertical', 'horizontal', or 'default' (None = not fetched yet)
         self.screen_rotation = None  # 0, 90, 180, 270 degrees (None = not fetched yet)
+        self.panel_zone_state = PanelZoneState()
+        self.current_panel_item = None
 
         # Concurrency + change-tracking helpers
         import threading as _thr
@@ -2023,9 +2051,9 @@ class CompleteWebplayerClient:
             idle_text = self.font_subtitle.render("Waiting for schedule...", True, self.colors['white'])
             idle_rect = idle_text.get_rect(center=(self.width // 2, self.height // 2))
             self.screen.blit(idle_text, idle_rect)
-            
-        # NOTE: Overlay info removed to prevent flicker during video playback
-        # Only Pi ID overlay is shown occasionally (every 3 seconds)
+            return
+
+        self.draw_panel_zone()
     
     def draw_pi_id_overlay(self):
         """Draw Pi ID overlay - called separately to ensure it's always on top."""
@@ -2096,6 +2124,243 @@ class CompleteWebplayerClient:
         
         self.screen.blit(overlay, (10, self.height - 50))
         self.screen.blit(debug_overlay, (10, self.height - 25))
+
+    def _normalize_panel_hex_color(self, value: Optional[str], default: str = "#201206") -> str:
+        text = str(value or "").strip()
+        if len(text) == 7 and text.startswith("#"):
+            return text.lower()
+        if len(text) == 6 and all(ch in "0123456789abcdefABCDEF" for ch in text):
+            return f"#{text.lower()}"
+        if len(text) == 4 and text.startswith("#"):
+            compact = text[1:].lower()
+            return "#" + "".join(ch * 2 for ch in compact)
+        if len(text) == 3 and all(ch in "0123456789abcdefABCDEF" for ch in text):
+            compact = text.lower()
+            return "#" + "".join(ch * 2 for ch in compact)
+        return default
+
+    def _hex_to_rgb(self, value: Optional[str], default: tuple = (32, 18, 6)) -> tuple:
+        normalized = self._normalize_panel_hex_color(value, "")
+        if not normalized:
+            return default
+        try:
+            raw = normalized.lstrip("#")
+            return (int(raw[0:2], 16), int(raw[2:4], 16), int(raw[4:6], 16))
+        except Exception:
+            return default
+
+    def _mix_rgb(self, base: tuple, target: tuple, ratio: float) -> tuple:
+        ratio = max(0.0, min(1.0, float(ratio)))
+        return (
+            int(base[0] + ((target[0] - base[0]) * ratio)),
+            int(base[1] + ((target[1] - base[1]) * ratio)),
+            int(base[2] + ((target[2] - base[2]) * ratio)),
+        )
+
+    def _get_panel_font(self, size: int, bold: bool = False):
+        key = (max(12, int(size)), bool(bold))
+        cached_font = self._panel_font_cache.get(key)
+        if cached_font is not None:
+            return cached_font
+        try:
+            font = pygame.font.SysFont('arial', key[0], bold=key[1])
+        except Exception:
+            font = pygame.font.Font(None, key[0])
+        self._panel_font_cache[key] = font
+        return font
+
+    def _blit_panel_text(self, surface, font, text: str, color: tuple, pos: tuple, shadow_alpha: int = 88):
+        shadow_surface = font.render(text, True, (0, 0, 0))
+        shadow_surface.set_alpha(max(0, min(255, int(shadow_alpha))))
+        surface.blit(shadow_surface, (pos[0] + 2, pos[1] + 2))
+        text_surface = font.render(text, True, color)
+        surface.blit(text_surface, pos)
+
+    def _parse_panel_zone_state(self, raw: Any) -> PanelZoneState:
+        if not isinstance(raw, dict):
+            return PanelZoneState()
+        appearance_raw = raw.get('appearance') if isinstance(raw.get('appearance'), dict) else {}
+        content_align = str(appearance_raw.get('content_align') or 'center').strip().lower()
+        if content_align not in {'top', 'center', 'bottom'}:
+            content_align = 'center'
+        try:
+            body_rows = max(1, min(6, int(appearance_raw.get('body_rows') or 4)))
+        except Exception:
+            body_rows = 4
+        active_raw = raw.get('active_item') if isinstance(raw.get('active_item'), dict) else None
+        active_item = None
+        if active_raw:
+            active_item = PanelActiveItem(
+                title=str(active_raw.get('title') or active_raw.get('name') or 'Info'),
+                body=str(active_raw.get('body') or active_raw.get('text') or ''),
+            )
+        layout_mode = str(raw.get('layout_mode') or 'off').strip().lower()
+        return PanelZoneState(
+            enabled=bool(raw.get('enabled')) and layout_mode != 'off',
+            layout_mode=layout_mode,
+            appearance=PanelAppearance(
+                background_color=self._normalize_panel_hex_color(appearance_raw.get('background_color'), '#201206'),
+                content_align=content_align,
+                body_rows=body_rows,
+            ),
+            active_item=active_item,
+        )
+
+    def _should_draw_panel_zone(self) -> bool:
+        zone = getattr(self, 'panel_zone_state', None)
+        active_item = getattr(zone, 'active_item', None)
+        current_item = getattr(self, 'current_panel_item', None)
+        if not zone or not zone.enabled or zone.layout_mode == 'off' or active_item is None:
+            return False
+        try:
+            sync_ref = getattr(current_item, 'sync_ref', None) if current_item is not None else None
+            if sync_ref:
+                return False
+        except Exception:
+            pass
+        return True
+
+    def _split_panel_word(self, word: str, font, max_width: int) -> List[str]:
+        if not word:
+            return [""]
+        if font.size(word)[0] <= max_width:
+            return [word]
+        parts: List[str] = []
+        current = ""
+        for char in word:
+            trial = f"{current}{char}"
+            if current and font.size(trial)[0] > max_width:
+                parts.append(current)
+                current = char
+            else:
+                current = trial
+        if current:
+            parts.append(current)
+        return parts or [word]
+
+    def _wrap_panel_text(self, text: str, font, max_width: int, max_lines: Optional[int] = None) -> List[str]:
+        words = str(text or '').replace('\r', '').split()
+        if not words:
+            return ['']
+        lines: List[str] = []
+        current = ""
+        for word in words:
+            chunks = self._split_panel_word(word, font, max_width)
+            if len(chunks) > 1:
+                if current:
+                    lines.append(current)
+                    current = ""
+                    if max_lines and len(lines) >= max_lines:
+                        return lines[:max_lines]
+                for chunk in chunks[:-1]:
+                    lines.append(chunk)
+                    if max_lines and len(lines) >= max_lines:
+                        return lines[:max_lines]
+                current = chunks[-1]
+                continue
+            chunk = chunks[0]
+            trial = chunk if not current else f"{current} {chunk}"
+            if font.size(trial)[0] <= max_width:
+                current = trial
+            else:
+                lines.append(current)
+                if max_lines and len(lines) >= max_lines:
+                    return lines[:max_lines]
+                current = chunk
+        if current and (not max_lines or len(lines) < max_lines):
+            lines.append(current)
+        return lines[:max_lines] if max_lines else lines
+
+    def draw_panel_zone(self):
+        if not self._should_draw_panel_zone():
+            return
+        zone = self.panel_zone_state
+        active_item = zone.active_item
+        appearance = zone.appearance or PanelAppearance()
+        base_rgb = self._hex_to_rgb(appearance.background_color)
+        dark_rgb = self._mix_rgb(base_rgb, (0, 0, 0), 0.34)
+        contrast_score = ((base_rgb[0] * 299) + (base_rgb[1] * 587) + (base_rgb[2] * 114)) / 1000
+        is_light = contrast_score >= 170
+        title_color = (15, 23, 42) if is_light else (255, 244, 220)
+        body_color = (15, 23, 42) if is_light else (255, 246, 230)
+        muted_color = (15, 23, 42) if is_light else (255, 228, 181)
+        chip_bg = (255, 255, 255, 143) if is_light else (255, 255, 255, 28)
+        chip_border = (15, 23, 42, 30) if is_light else (255, 233, 196, 46)
+        border_color = (15, 23, 42, 36) if is_light else (255, 214, 153, 72)
+
+        if zone.layout_mode == 'split-left-25':
+            panel_rect = pygame.Rect(0, 0, int(self.width * 0.25), self.height)
+        elif zone.layout_mode == 'split-bottom-25':
+            panel_rect = pygame.Rect(0, self.height - int(self.height * 0.25), self.width, int(self.height * 0.25))
+        else:
+            panel_rect = pygame.Rect(self.width - int(self.width * 0.25), 0, int(self.width * 0.25), self.height)
+
+        panel_surface = pygame.Surface((panel_rect.width, panel_rect.height), pygame.SRCALPHA)
+        for row in range(panel_rect.height):
+            blend = row / max(1, panel_rect.height - 1)
+            rr = int(base_rgb[0] + ((dark_rgb[0] - base_rgb[0]) * blend))
+            gg = int(base_rgb[1] + ((dark_rgb[1] - base_rgb[1]) * blend))
+            bb = int(base_rgb[2] + ((dark_rgb[2] - base_rgb[2]) * blend))
+            pygame.draw.line(panel_surface, (rr, gg, bb, 244), (0, row), (panel_rect.width, row))
+        pygame.draw.rect(panel_surface, border_color, panel_surface.get_rect(), width=1)
+
+        padding_x = max(24, int(panel_rect.width * 0.08))
+        padding_y = max(24, int(panel_rect.height * 0.08))
+        if zone.layout_mode == 'split-bottom-25':
+            title_font = self._get_panel_font(min(44, max(28, int(panel_rect.height * 0.17))), bold=True)
+            body_font = self._get_panel_font(min(28, max(18, int(panel_rect.height * 0.09))))
+            chip_font = self._get_panel_font(min(18, max(13, int(panel_rect.height * 0.05))), bold=True)
+            kicker_font = self._get_panel_font(min(16, max(12, int(panel_rect.height * 0.042))), bold=True)
+        else:
+            title_font = self._get_panel_font(min(56, max(36, int(panel_rect.width * 0.11))), bold=True)
+            body_font = self._get_panel_font(min(32, max(22, int(panel_rect.width * 0.06))))
+            chip_font = self._get_panel_font(min(18, max(14, int(panel_rect.width * 0.037))), bold=True)
+            kicker_font = self._get_panel_font(min(16, max(12, int(panel_rect.width * 0.032))), bold=True)
+
+        title_lines = self._wrap_panel_text(active_item.title or 'Info', title_font, panel_rect.width - (padding_x * 2), max_lines=2)
+        body_lines = []
+        for paragraph in str(active_item.body or '').split('\n'):
+            body_lines.extend(self._wrap_panel_text(paragraph, body_font, panel_rect.width - (padding_x * 2), max_lines=None))
+        if not body_lines:
+            body_lines = ['']
+        body_lines = body_lines[:appearance.body_rows]
+
+        chip_height = max(34, chip_font.get_linesize() + 14)
+        title_line_height = title_font.get_linesize()
+        body_line_height = body_font.get_linesize()
+        kicker_height = kicker_font.get_linesize()
+        block_height = chip_height + 14 + kicker_height + 10 + (len(title_lines) * title_line_height) + 12 + (len(body_lines) * body_line_height)
+        if appearance.content_align == 'top':
+            content_y = padding_y
+        elif appearance.content_align == 'bottom':
+            content_y = panel_rect.height - padding_y - block_height
+        else:
+            content_y = (panel_rect.height - block_height) // 2
+        content_y = max(padding_y, content_y)
+        shadow_alpha = 56 if is_light else 92
+
+        chip_rect = pygame.Rect(padding_x, content_y, min(panel_rect.width - (padding_x * 2), 170), chip_height)
+        chip_surface = pygame.Surface((chip_rect.width, chip_rect.height), pygame.SRCALPHA)
+        pygame.draw.rect(chip_surface, chip_bg, chip_surface.get_rect(), border_radius=16)
+        pygame.draw.rect(chip_surface, chip_border, chip_surface.get_rect(), width=1, border_radius=16)
+        chip_text = chip_font.render("Live order info", True, (15, 23, 42) if is_light else (255, 233, 196))
+        chip_text_rect = chip_text.get_rect(center=(chip_rect.width // 2, chip_rect.height // 2))
+        chip_surface.blit(chip_text, chip_text_rect)
+        panel_surface.blit(chip_surface, chip_rect.topleft)
+
+        self._blit_panel_text(panel_surface, kicker_font, "Scheduled panel", muted_color, (padding_x, chip_rect.bottom + 12), shadow_alpha=shadow_alpha)
+
+        title_y = chip_rect.bottom + 12 + kicker_height + 8
+        for line in title_lines:
+            self._blit_panel_text(panel_surface, title_font, line, title_color, (padding_x, title_y), shadow_alpha=shadow_alpha)
+            title_y += title_line_height
+
+        body_y = title_y + 10
+        for line in body_lines:
+            self._blit_panel_text(panel_surface, body_font, line, body_color, (padding_x, body_y), shadow_alpha=shadow_alpha)
+            body_y += body_line_height
+
+        self.screen.blit(panel_surface, panel_rect.topleft)
         
     def get_media_url(self, item: PlaylistItem) -> str:
         """Get media URL for playlist item like webplayer."""
@@ -2290,6 +2555,7 @@ class CompleteWebplayerClient:
                 self.screen_orientation = new_orientation
                 self.screen_rotation = new_rotation
                 logger.info(f"🔄 Screen config: orientation={self.screen_orientation}, rotation={self.screen_rotation}°")
+                self.panel_zone_state = self._parse_panel_zone_state(data.get('panel_zone'))
                 
                 # NUCLEAR FIX: If rotation changed, completely restart playback FIRST
                 if rotation_changed or orientation_changed:
@@ -2356,11 +2622,14 @@ class CompleteWebplayerClient:
                     return playlist
                 else:
                     logger.warning(f"⚠️ Playlist API returned error: {data.get('error', 'unknown')}")
+                    self.panel_zone_state = PanelZoneState()
             else:
                 logger.warning(f"⚠️ Playlist API returned {response.status_code}: {response.text[:200]}")
+                self.panel_zone_state = PanelZoneState()
                     
         except Exception as e:
             logger.error(f"❌ Playlist fetch failed: {e}", exc_info=True)
+            self.panel_zone_state = PanelZoneState()
             
         return []
     
@@ -2927,6 +3196,7 @@ class CompleteWebplayerClient:
                     logger.info("⏰ No items scheduled for current time - showing waiting screen")
                     self.playlist = []
                     self.playlist_signature = ""
+                    self.current_panel_item = None
                     return
                 
                 # Compute signature to detect changes (include last-seen rotation, not the just-read value)
@@ -2992,6 +3262,7 @@ class CompleteWebplayerClient:
                 # No playlist from server
                 self.playlist = []
                 self.playlist_signature = ""
+                self.current_panel_item = None
         finally:
             try:
                 self._playlist_lock.release()
@@ -3036,6 +3307,7 @@ class CompleteWebplayerClient:
     def advance_to_next_item(self):
         """Advance to next playlist item."""
         if not self.playlist:
+            self.current_panel_item = None
             return
 
         # Prevent overlapping advances which can cause flicker/double starts
@@ -3144,6 +3416,7 @@ class CompleteWebplayerClient:
                         success = False
                 
                 if success:
+                    self.current_panel_item = current_item
                     # Use prefixed key to align with playlist signature/new_keys
                     if current_item.id:
                         self.current_item_key = f"id:{current_item.id}"
@@ -3208,6 +3481,8 @@ class CompleteWebplayerClient:
                     
                     # Preload upcoming items
                     self.preload_upcoming_items()
+                else:
+                    self.current_panel_item = None
         finally:
             try:
                 self._advance_lock.release()
@@ -3663,6 +3938,11 @@ class CompleteWebplayerClient:
                             logger.error(f"❌ Display.flip() ERROR during clear: {type(e).__name__}: {e}")
                         self._pygame_cleared = True
                         logger.info("✅ Pygame UI cleared - displaying media")
+
+                    try:
+                        self.draw_playing_screen()
+                    except Exception as draw_err:
+                        logger.debug(f"⚠️ draw_playing_screen error: {draw_err}")
                     
                     # Avoid background flips while a transition is in progress or when video is playing
                     in_transition = False
@@ -3679,14 +3959,20 @@ class CompleteWebplayerClient:
                     except Exception:
                         current_media_type = None
 
+                    panel_visible = False
+                    try:
+                        panel_visible = self._should_draw_panel_zone()
+                    except Exception:
+                        panel_visible = False
+
                     # Only flip the pygame surface when we're actively showing images.
                     # MPV owns the window during video playback and handles its own vsync.
-                    if not in_transition and current_media_type == 'image':
+                    if not in_transition and (current_media_type == 'image' or panel_visible):
                         try:
                             pygame.display.flip()
                             display_flip_count += 1
                             if time.time() - last_flip_log > 5:  # Log every 5 seconds
-                                logger.info(f"📺 Display updates: {display_flip_count} flips (image mode)")
+                                logger.info(f"📺 Display updates: {display_flip_count} flips ({current_media_type or 'panel'} mode)")
                                 last_flip_log = time.time()
                         except Exception as e:
                             logger.error(f"❌ Display.flip() ERROR: {type(e).__name__}: {e}")
@@ -3696,6 +3982,8 @@ class CompleteWebplayerClient:
                         clock.tick(60)
                     elif current_media_type == 'image':
                         clock.tick(120)
+                    elif panel_visible:
+                        clock.tick(30)
                     else:
                         # Video mode: MPV handles its own timing, keep loop light
                         clock.tick(30)

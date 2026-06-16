@@ -25,6 +25,9 @@
       box-shadow: 0 30px 80px rgba(15, 23, 42, 0.12);
       padding: 48px;
       border: 1px solid rgba(15, 23, 42, 0.06);
+      position: relative;
+      z-index: 2147483000;
+      isolation: isolate;
     }
     h1 {
       margin: 0 0 8px;
@@ -194,6 +197,53 @@
       {% endif %}
     {% endif %}
   </div>
+  <script>
+    (function () {
+      const SAFE_ELEMENT_IDS = new Set(['cookieConsent']);
+
+      function isLikelyFullscreenBlocker(el) {
+        if (!(el instanceof HTMLElement)) return false;
+        if (SAFE_ELEMENT_IDS.has(el.id)) return false;
+        if (el.classList.contains('card')) return false;
+
+        const style = window.getComputedStyle(el);
+        if (
+          style.display === 'none' ||
+          style.visibility === 'hidden' ||
+          style.pointerEvents === 'none' ||
+          !['fixed', 'absolute', 'sticky'].includes(style.position)
+        ) {
+          return false;
+        }
+
+        const rect = el.getBoundingClientRect();
+        const coversScreen =
+          rect.width >= window.innerWidth * 0.95 &&
+          rect.height >= window.innerHeight * 0.95;
+        const zIndex = Number.parseInt(style.zIndex || '0', 10);
+        return coversScreen && Number.isFinite(zIndex) && zIndex >= 10;
+      }
+
+      function neutralizeUnexpectedOverlays() {
+        document.body.style.overflow = '';
+        for (const el of Array.from(document.body.children)) {
+          if (!isLikelyFullscreenBlocker(el)) continue;
+          el.dataset.subscribeOverlayNeutralized = '1';
+          el.style.pointerEvents = 'none';
+        }
+      }
+
+      window.addEventListener('load', function () {
+        neutralizeUnexpectedOverlays();
+        window.setTimeout(neutralizeUnexpectedOverlays, 250);
+        window.setTimeout(neutralizeUnexpectedOverlays, 1200);
+      });
+
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) neutralizeUnexpectedOverlays();
+      });
+    })();
+  </script>
 </body>
 {% include '_cookie_consent.html' %}
 </html>

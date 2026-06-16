@@ -2,13 +2,16 @@ package com.everydayadvertise.tv
 
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.graphics.Typeface
 import android.os.Bundle
+import android.os.Build
 import android.widget.ImageView
 import android.widget.VideoView // legacy kept until fully removed
 import android.view.ViewGroup
 import android.view.TextureView
 import android.view.SurfaceView
 import android.view.WindowManager
+import android.view.Gravity
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.everydayadvertise.tv.api.ApiClient
@@ -30,13 +33,36 @@ import android.view.KeyEvent
 import android.view.View
 import androidx.activity.OnBackPressedCallback
 import android.widget.TextView
+import android.widget.FrameLayout
+import android.widget.LinearLayout
 import android.content.Intent
+import android.text.TextUtils
 import java.io.File
 import java.util.Date
 import java.util.Calendar
 import java.text.SimpleDateFormat
 import java.util.Locale
 import com.everydayadvertise.tv.api.HeartbeatReq
+import org.json.JSONObject
+import android.graphics.drawable.GradientDrawable
+
+data class PanelAppearanceConfig(
+    val backgroundColor: String = "#201206",
+    val contentAlign: String = "center",
+    val bodyRows: Int = 4
+)
+
+data class PanelActiveItemConfig(
+    val title: String = "Info",
+    val body: String = ""
+)
+
+data class PanelZoneConfig(
+    val enabled: Boolean = false,
+    val layoutMode: String = "off",
+    val appearance: PanelAppearanceConfig = PanelAppearanceConfig(),
+    val activeItem: PanelActiveItemConfig? = null
+)
 
 class TvDisplayActivity : AppCompatActivity() {
     // Made public so extension functions can access
@@ -70,6 +96,14 @@ class TvDisplayActivity : AppCompatActivity() {
     var mainPlayerView: SurfaceView? = null
     // Simple full-screen overlay to provide a quick fade reveal between items
     var transitionOverlay: View? = null
+    var panelContainer: FrameLayout? = null
+    var panelContent: LinearLayout? = null
+    var panelChip: TextView? = null
+    var panelKicker: TextView? = null
+    var panelTitle: TextView? = null
+    var panelBody: TextView? = null
+    var panelMeta: TextView? = null
+    var panelZoneState: PanelZoneConfig = PanelZoneConfig()
 
     // Helper to pre-rotate and scale bitmap to fill screen (like Pi client)
     fun prepareRotatedBitmap(original: Bitmap, degrees: Int): Bitmap {
@@ -201,6 +235,7 @@ class TvDisplayActivity : AppCompatActivity() {
         }
         val overlayFullParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         binding.root.addView(transitionOverlay, overlayFullParams)
+        ensurePanelOverlayViews()
 
     val prefs = getSharedPreferences("phtv", MODE_PRIVATE)
     val storeId = intent.getStringExtra("storeId") ?: prefs.getString("storeId", null) ?: "0000"
@@ -270,6 +305,286 @@ class TvDisplayActivity : AppCompatActivity() {
         legacyVideoView?.let { try { it.stopPlayback() } catch (_: Exception) {}; it.visibility = ImageView.GONE }
         youTubeWebView?.let { try { it.loadUrl("about:blank"); it.removeAllViews() } catch (_: Exception) {}; it.visibility = android.view.View.GONE }
         super.onDestroy()
+    }
+
+    private fun ensurePanelOverlayViews() {
+        if (panelContainer != null) return
+        val root = binding.root
+        val panelScale = (resources.displayMetrics.widthPixels / 1920f).coerceIn(1.0f, 1.45f)
+        val container = FrameLayout(this).apply {
+            visibility = View.GONE
+            setPadding(dp(28), dp(28), dp(28), dp(28))
+        }
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, 0)
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        }
+        val chip = TextView(this).apply {
+            text = "Live order info"
+            textSize = 12f * panelScale
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(dp(12), dp(8), dp(12), dp(8))
+        }
+        val kicker = TextView(this).apply {
+            text = "Scheduled panel"
+            textSize = 11f * panelScale
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(0, dp(10), 0, 0)
+        }
+        val title = TextView(this).apply {
+            text = "Now serving"
+            textSize = 36f * panelScale
+            typeface = Typeface.DEFAULT_BOLD
+            setLineSpacing(0f, 1.04f)
+        }
+        val body = TextView(this).apply {
+            textSize = 24f * panelScale
+            setLineSpacing(0f, 1.2f)
+            ellipsize = TextUtils.TruncateAt.END
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                breakStrategy = android.text.Layout.BREAK_STRATEGY_HIGH_QUALITY
+                hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+            }
+        }
+        val meta = TextView(this).apply {
+            textSize = 11f * panelScale
+            text = ""
+        }
+        content.addView(chip, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        content.addView(kicker, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        content.addView(title, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = dp(10)
+        })
+        content.addView(body, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = dp(8)
+        })
+        content.addView(meta, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = dp(10)
+        })
+        container.addView(content)
+        root.addView(container, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        panelContainer = container
+        panelContent = content
+        panelChip = chip
+        panelKicker = kicker
+        panelTitle = title
+        panelBody = body
+        panelMeta = meta
+    }
+
+    fun bringUiOverlaysToFront() {
+        try { panelContainer?.let { if (it.visibility == View.VISIBLE) it.bringToFront() } } catch (_: Exception) {}
+        try { binding.message.bringToFront() } catch (_: Exception) {}
+        try { debugOverlay?.bringToFront() } catch (_: Exception) {}
+        try { transitionOverlay?.bringToFront() } catch (_: Exception) {}
+    }
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    fun renderPanelOverlay(currentItem: com.everydayadvertise.tv.api.PlaylistItem?) {
+        ensurePanelOverlayViews()
+        val state = panelZoneState
+        val activeItem = state.activeItem
+        if (!state.enabled || activeItem == null || state.layoutMode == "off" || currentItem?.syncRef != null) {
+            hidePanelOverlay()
+            return
+        }
+        val container = panelContainer ?: return
+        val content = panelContent ?: return
+        val bodyView = panelBody ?: return
+        val titleView = panelTitle ?: return
+        val chipView = panelChip ?: return
+        val kickerView = panelKicker ?: return
+        val metaView = panelMeta ?: return
+
+        applyPanelLayout(state.layoutMode)
+        applyPanelAppearance(state.appearance, state.layoutMode)
+
+        titleView.text = formatPanelDisplayText(if (activeItem.title.isNotBlank()) activeItem.title else "Info", 18)
+        bodyView.text = formatPanelDisplayText(activeItem.body, 14)
+        bodyView.maxLines = state.appearance.bodyRows
+        metaView.text = ""
+        container.visibility = View.VISIBLE
+        bringUiOverlaysToFront()
+    }
+
+    fun hidePanelOverlay() {
+        panelContainer?.visibility = View.GONE
+        applyMediaInsets("off")
+    }
+
+    private fun applyPanelLayout(layoutMode: String) {
+        val container = panelContainer ?: return
+        val metrics = resources.displayMetrics
+        val panelWidth = (metrics.widthPixels * 0.25f).toInt()
+        val panelHeight = (metrics.heightPixels * 0.25f).toInt()
+        val params = when (layoutMode) {
+            "split-left-25" -> FrameLayout.LayoutParams(panelWidth, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.START or Gravity.TOP)
+            "split-bottom-25" -> FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, panelHeight, Gravity.BOTTOM)
+            else -> FrameLayout.LayoutParams(panelWidth, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.END or Gravity.TOP)
+        }
+        container.layoutParams = params
+        applyMediaInsets(layoutMode)
+    }
+
+    fun applyMediaInsets(layoutMode: String) {
+        val metrics = resources.displayMetrics
+        val panelWidth = (metrics.widthPixels * 0.25f).toInt()
+        val panelHeight = (metrics.heightPixels * 0.25f).toInt()
+        val applyToView: (View?) -> Unit = { view ->
+            if (view != null) {
+                val params = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+                when (layoutMode) {
+                    "split-left-25" -> params.leftMargin = panelWidth
+                    "split-bottom-25" -> params.bottomMargin = panelHeight
+                    "split-right-25" -> params.rightMargin = panelWidth
+                }
+                view.layoutParams = params
+            }
+        }
+        applyToView(mainImageView)
+        applyToView(secondaryImageView)
+        applyToView(mainPlayerView)
+        applyToView(youTubeWebView)
+        applyToView(legacyVideoView)
+    }
+
+    private fun applyPanelAppearance(appearance: PanelAppearanceConfig, layoutMode: String) {
+        val container = panelContainer ?: return
+        val content = panelContent ?: return
+        val chipView = panelChip ?: return
+        val kickerView = panelKicker ?: return
+        val titleView = panelTitle ?: return
+        val bodyView = panelBody ?: return
+        val metaView = panelMeta ?: return
+
+        val baseColor = parseColorSafe(appearance.backgroundColor, Color.parseColor("#201206"))
+        val darkerColor = blendColor(baseColor, Color.BLACK, 0.34f)
+        val lighterColor = blendColor(baseColor, Color.WHITE, 0.18f)
+        val isLight = android.graphics.Color.luminance(baseColor) >= 0.55f
+
+        container.background = GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(withAlpha(baseColor, 242), withAlpha(darkerColor, 250))
+        ).apply {
+            cornerRadius = dp(0).toFloat()
+            setStroke(dp(1), if (isLight) withAlpha(Color.BLACK, 36) else withAlpha(Color.parseColor("#ffd699"), 72))
+        }
+
+        chipView.background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = dp(999).toFloat()
+            setColor(if (isLight) withAlpha(Color.WHITE, 143) else withAlpha(Color.WHITE, 26))
+            setStroke(dp(1), if (isLight) withAlpha(Color.BLACK, 30) else withAlpha(Color.parseColor("#ffe9c4"), 46))
+        }
+        chipView.setTextColor(if (isLight) Color.parseColor("#0f172a") else Color.parseColor("#ffe9c4"))
+        kickerView.setTextColor(if (isLight) withAlpha(Color.parseColor("#0f172a"), 173) else Color.parseColor("#ffe4b5"))
+        titleView.setTextColor(if (isLight) Color.parseColor("#0f172a") else Color.parseColor("#fff4dc"))
+        bodyView.setTextColor(if (isLight) withAlpha(Color.parseColor("#0f172a"), 225) else Color.parseColor("#fff6e6"))
+        metaView.setTextColor(if (isLight) withAlpha(Color.parseColor("#0f172a"), 143) else withAlpha(Color.parseColor("#e2e8f0"), 199))
+        val shadowAlpha = if (isLight) 72 else 132
+        titleView.setShadowLayer(dp(2).toFloat(), 0f, dp(1).toFloat(), withAlpha(Color.BLACK, shadowAlpha))
+        bodyView.setShadowLayer(dp(2).toFloat(), 0f, dp(1).toFloat(), withAlpha(Color.BLACK, shadowAlpha))
+        kickerView.setShadowLayer(dp(1).toFloat(), 0f, dp(1).toFloat(), withAlpha(Color.BLACK, shadowAlpha / 2))
+
+        content.gravity = when (appearance.contentAlign) {
+            "top" -> Gravity.TOP
+            "bottom" -> Gravity.BOTTOM
+            else -> Gravity.CENTER_VERTICAL
+        }
+        val panelScale = (resources.displayMetrics.widthPixels / 1920f).coerceIn(1.0f, 1.45f)
+        if (layoutMode == "split-bottom-25") {
+            bodyView.textSize = 20f * panelScale
+            titleView.textSize = 28f * panelScale
+        } else {
+            bodyView.textSize = 24f * panelScale
+            titleView.textSize = 36f * panelScale
+        }
+    }
+
+    private fun formatPanelDisplayText(text: String, maxTokenLength: Int = 14): String {
+        if (text.isBlank()) return text
+        val builder = StringBuilder(text.length + 12)
+        var tokenRun = 0
+        text.forEach { ch ->
+            builder.append(ch)
+            when {
+                ch.isWhitespace() -> tokenRun = 0
+                ch == '/' || ch == '-' || ch == '_' || ch == '#' -> {
+                    builder.append('\u200B')
+                    tokenRun = 0
+                }
+                else -> {
+                    tokenRun += 1
+                    if (tokenRun >= maxTokenLength) {
+                        builder.append('\u200B')
+                        tokenRun = 0
+                    }
+                }
+            }
+        }
+        return builder.toString()
+    }
+
+    private fun parseColorSafe(value: String?, fallback: Int): Int {
+        val raw = value?.trim().orEmpty()
+        return try {
+            when {
+                raw.matches(Regex("^#?[0-9a-fA-F]{6}$")) -> Color.parseColor(if (raw.startsWith("#")) raw else "#$raw")
+                raw.matches(Regex("^#?[0-9a-fA-F]{3}$")) -> {
+                    val compact = raw.removePrefix("#")
+                    Color.parseColor("#${compact.map { "$it$it" }.joinToString("")}")
+                }
+                else -> fallback
+            }
+        } catch (_: Exception) {
+            fallback
+        }
+    }
+
+    private fun blendColor(base: Int, target: Int, ratio: Float): Int {
+        val clamped = ratio.coerceIn(0f, 1f)
+        val r = Color.red(base) + ((Color.red(target) - Color.red(base)) * clamped).toInt()
+        val g = Color.green(base) + ((Color.green(target) - Color.green(base)) * clamped).toInt()
+        val b = Color.blue(base) + ((Color.blue(target) - Color.blue(base)) * clamped).toInt()
+        return Color.rgb(r, g, b)
+    }
+
+    private fun withAlpha(color: Int, alpha: Int): Int = Color.argb(alpha.coerceIn(0, 255), Color.red(color), Color.green(color), Color.blue(color))
+
+    fun parsePanelZoneConfig(panelObj: JSONObject?): PanelZoneConfig {
+        if (panelObj == null) return PanelZoneConfig()
+        val enabled = panelObj.optBoolean("enabled", false)
+        val layoutMode = panelObj.optString("layout_mode", "off")
+        val appearanceObj = panelObj.optJSONObject("appearance")
+        val appearance = PanelAppearanceConfig(
+            backgroundColor = appearanceObj?.optString("background_color", "#201206") ?: "#201206",
+            contentAlign = appearanceObj?.optString("content_align", "center") ?: "center",
+            bodyRows = (appearanceObj?.optInt("body_rows", 4) ?: 4).coerceIn(1, 6)
+        )
+        val activeObj = panelObj.optJSONObject("active_item")
+        val activeItem = if (activeObj != null) {
+            PanelActiveItemConfig(
+                title = activeObj.optString("title", activeObj.optString("name", "Info")),
+                body = activeObj.optString("body", activeObj.optString("text", ""))
+            )
+        } else {
+            null
+        }
+        return PanelZoneConfig(
+            enabled = enabled && layoutMode != "off",
+            layoutMode = layoutMode,
+            appearance = appearance,
+            activeItem = activeItem
+        )
     }
 
     // Quick reveal: show a black overlay and fade it out rapidly to hide visual pops between items.
@@ -440,10 +755,7 @@ class TvDisplayActivity : AppCompatActivity() {
                 }
             }
             usePrimaryAsFront = !usePrimaryAsFront
-            // Keep overlays above images
-            try { binding.message.bringToFront() } catch (_: Exception) {}
-            try { debugOverlay?.bringToFront() } catch (_: Exception) {}
-            try { transitionOverlay?.bringToFront() } catch (_: Exception) {}
+            bringUiOverlaysToFront()
         } catch (_: Exception) {}
     }
 
@@ -1092,6 +1404,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
     debugOverlay?.text = "idx=${state.index}/${state.items.size} cur=${currentItemFile ?: "-"}"
         if (next?.file == null) {
             binding.message.text = "No items currently scheduled"
+            hidePanelOverlay()
             imageView.postDelayed({ showAndSchedule() }, 5_000L)
             return
         }
@@ -1110,6 +1423,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
             }
         }
         currentItemFile = file
+        renderPanelOverlay(next)
         // Record the moment we switched to a new item for watchdog purposes
         try { lastAdvanceAtMs = android.os.SystemClock.elapsedRealtime() } catch (_: Exception) {}
         // ── YouTube IFrame embed via WebView ─────────────────────────────────
@@ -1118,9 +1432,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
             if (videoId.isEmpty()) { showAndSchedule(); return }
             // Clear transient status text so no placeholder label appears before playback starts
             binding.message.text = ""
-            binding.message.bringToFront()
-            try { debugOverlay?.bringToFront() } catch (_: Exception) {}
-            try { transitionOverlay?.bringToFront() } catch (_: Exception) {}
+            bringUiOverlaysToFront()
 
             val durMs = (next.duration ?: 10).coerceAtLeast(5) * 1000L
             currentItemDurationMs = durMs
@@ -1145,9 +1457,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                 binding.message.text = "YT ${videoId.take(11)}"
                 imageView.visibility = ImageView.VISIBLE
                 secondaryImageView?.visibility = ImageView.GONE
-                binding.message.bringToFront()
-                try { debugOverlay?.bringToFront() } catch (_: Exception) {}
-                try { transitionOverlay?.bringToFront() } catch (_: Exception) {}
+                bringUiOverlaysToFront()
                 // YouTube thumbnail URL — always available, no WebView needed
                 loadAnimatedOrStatic(thumbUrl, next.id, thumbUrl, next.effect) { _ ->
                     lifecycleScope.launch(Dispatchers.IO) {
@@ -1191,9 +1501,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                 secondaryImageView?.visibility = ImageView.GONE
                 wv.visibility = android.view.View.VISIBLE
                 wv.bringToFront()
-                binding.message.bringToFront()
-                try { debugOverlay?.bringToFront() } catch (_: Exception) {}
-                try { transitionOverlay?.bringToFront() } catch (_: Exception) {}
+                bringUiOverlaysToFront()
             }
 
             try {
@@ -1250,6 +1558,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                     }
                     binding.root.addView(newWv, 0)
                     youTubeWebView = newWv
+                    applyMediaInsets(panelZoneState.layoutMode)
                     newWv
                 }
                 wv.visibility = android.view.View.GONE
@@ -1333,10 +1642,7 @@ function onYouTubeIframeAPIReady(){
             imageView.visibility = ImageView.GONE
             secondaryImageView?.visibility = ImageView.GONE
             playerView.visibility = ImageView.VISIBLE
-            // Ensure message is above player
-            binding.message.bringToFront()
-            try { debugOverlay?.bringToFront() } catch (_: Exception) {}
-            try { transitionOverlay?.bringToFront() } catch (_: Exception) {}
+            bringUiOverlaysToFront()
             // Prefer /media (range streaming) for videos; fallback to static if needed
             val videoUrlPrimary = if (hasYoutubeProxyMp4) next.url!! else ApiClientImageHelper.buildVideoUrl(file)
             val videoUrlFallback = if (!next.url.isNullOrBlank() && next.url!!.startsWith("http", true)) next.url!! else ApiClientImageHelper.buildImageUrl(file)
@@ -1352,6 +1658,7 @@ function onYouTubeIframeAPIReady(){
                 // add behind message
                 binding.root.addView(vv, 0)
                 legacyVideoView = vv
+                applyMediaInsets(panelZoneState.layoutMode)
                 return vv
             }
             fun useLegacy() {
@@ -1619,9 +1926,7 @@ function onYouTubeIframeAPIReady(){
             playerView.visibility = ImageView.GONE
             // Do NOT pre-show imageView here — crossfadeToImage manages visibility.
             // Pre-showing caused stale drawables to flash or slide out when coming from video.
-            binding.message.bringToFront()
-            try { debugOverlay?.bringToFront() } catch (_: Exception) {}
-            try { transitionOverlay?.bringToFront() } catch (_: Exception) {}
+            bringUiOverlaysToFront()
             loadAnimatedOrStatic(file, next.id, next.url, next.effect) { success ->
                 android.util.Log.d("TvDisplayActivity", "Displayed image/anim ${file} success=${success}")
                 // Prefetch upcoming
@@ -1869,6 +2174,8 @@ function onYouTubeIframeAPIReady(){
                         }
                     } catch (_: Exception) {}
                 }
+
+                panelZoneState = parsePanelZoneConfig(jsonObj.optJSONObject("panel_zone"))
                 
                 originalItems = original
                 // Apply without resetting index if files are the same
@@ -1879,12 +2186,14 @@ function onYouTubeIframeAPIReady(){
                 val cnt = state.items.size
                 if (cnt > 0) {
                     binding.message.text = "" // Hide items loaded message
+                    renderPanelOverlay(state.items.firstOrNull { it.file == currentItemFile })
                     // If rotation hasn’t started or was cancelled, kick it off
                     if (scheduledRotation == null && (currentItemFile == null || imageView.drawable == null)) {
                         showAndSchedule()
                     }
                 } else {
                     binding.message.text = if (original.isNotEmpty()) "No items currently scheduled" else "No items in playlist"
+                    hidePanelOverlay()
                 }
             } catch (e: Exception) {
                 android.util.Log.e("TvDisplayActivity", "fetchPlaylist error", e)
@@ -1893,6 +2202,7 @@ function onYouTubeIframeAPIReady(){
                     else -> "Network error: ${e.javaClass.simpleName}"
                 }
                 binding.message.text = errorMsg.take(60)
+                hidePanelOverlay()
             } finally {
                 imageView.postDelayed({ fetchPlaylist() }, refreshIntervalMs)
             }

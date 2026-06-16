@@ -22,3 +22,79 @@
   }catch(e){}
 })();
 </script>
+<script>
+(function(){
+  var SAFE_IDS = new Set(['cookieConsent', 'cookieAcceptBtn', 'logoIntro', 'aiChatButton', 'aiChatWindow']);
+  var SAFE_CLASS_SNIPPETS = ['ai-chat-', 'message-avatar', 'typing-indicator'];
+
+  function isSafeElement(el){
+    if (!el || !(el instanceof HTMLElement)) return true;
+    if (SAFE_IDS.has(el.id)) return true;
+    var cls = String(el.className || '');
+    return SAFE_CLASS_SNIPPETS.some(function(part){ return cls.indexOf(part) !== -1; });
+  }
+
+  function isUnexpectedViewportBlocker(el){
+    if (!el || !(el instanceof HTMLElement) || isSafeElement(el)) return false;
+    var style = window.getComputedStyle(el);
+    if (
+      style.display === 'none' ||
+      style.visibility === 'hidden' ||
+      style.pointerEvents === 'none' ||
+      style.opacity === '0' ||
+      ['static', 'relative'].indexOf(style.position) !== -1
+    ) {
+      return false;
+    }
+
+    var rect = el.getBoundingClientRect();
+    if (rect.width < window.innerWidth * 0.96 || rect.height < window.innerHeight * 0.96) {
+      return false;
+    }
+
+    var zIndex = parseInt(style.zIndex || '0', 10);
+    if (Number.isNaN(zIndex) || zIndex < 5) {
+      return false;
+    }
+
+    return true;
+  }
+
+  function neutralizeViewportBlockers(){
+    try {
+      Array.from(document.querySelectorAll('body *')).forEach(function(el){
+        if (!isUnexpectedViewportBlocker(el)) return;
+        el.setAttribute('data-overlay-neutralized', '1');
+        el.style.setProperty('pointer-events', 'none', 'important');
+        el.style.setProperty('visibility', 'hidden', 'important');
+        el.style.setProperty('opacity', '0', 'important');
+      });
+    } catch(e) {}
+  }
+
+  function scheduleSweep(){
+    neutralizeViewportBlockers();
+    window.setTimeout(neutralizeViewportBlockers, 250);
+    window.setTimeout(neutralizeViewportBlockers, 1000);
+    window.setTimeout(neutralizeViewportBlockers, 3000);
+    window.setTimeout(neutralizeViewportBlockers, 6000);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', scheduleSweep, { once: true });
+  } else {
+    scheduleSweep();
+  }
+
+  window.addEventListener('load', scheduleSweep);
+  document.addEventListener('visibilitychange', function(){ if (!document.hidden) scheduleSweep(); });
+
+  try {
+    var observer = new MutationObserver(function(){ neutralizeViewportBlockers(); });
+    document.addEventListener('DOMContentLoaded', function(){
+      observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
+      window.setTimeout(function(){ try { observer.disconnect(); } catch(e) {} }, 15000);
+    }, { once: true });
+  } catch(e) {}
+})();
+</script>
