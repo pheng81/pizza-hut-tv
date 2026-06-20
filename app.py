@@ -20819,6 +20819,20 @@ def add_sync_follower():
         import uuid as _uuid, time as _time, re
         import re as _re
         m = _re.match(r'^(.*?)(\d+)$', base_screen_id)
+        def _screen_is_occupied_for_sync(sid):
+            scr = screens_map.get(sid)
+            if not isinstance(scr, dict):
+                return False
+            playlist = scr.get('playlist') or []
+            return bool(scr.get('file') or playlist)
+        def _next_available_sync_screen_id(prefix, start_num, member_ids):
+            candidate_num = max(1, int(start_num or 1))
+            while candidate_num < 200:
+                candidate = f"{prefix}{candidate_num}"
+                if candidate not in member_ids and not _screen_is_occupied_for_sync(candidate):
+                    return candidate
+                candidate_num += 1
+            raise ValueError('Could not find an empty screen slot for sync follower')
         if not grp:
             # Create new group with count=2
             if not m:
@@ -20841,7 +20855,7 @@ def add_sync_follower():
             master_item['sync_ref'] = {'group': group_id, 'role': 'master', 'order': 0}
             members.append({'screen_id': base_screen_id, 'item_id': master_item['id'], 'role': 'master', 'order': 0})
             # Create follower screen id
-            follower_sid = f"{prefix}{num+1}"
+            follower_sid = _next_available_sync_screen_id(prefix, num + 1, {base_screen_id})
             follower_scr = screens_map.get(follower_sid)
             if not follower_scr:
                 short = follower_sid.split('_',1)[1] if '_' in follower_sid else follower_sid
@@ -20882,16 +20896,8 @@ def add_sync_follower():
             return jsonify({'success': False, 'error': 'base id not numeric-suffixed; cannot expand'}, 400)
         prefix, num = m.group(1), int(m.group(2))
         new_order = cur_count
-        follower_sid = f"{prefix}{num + new_order - 0}"  # order 0 is master, so order==cur_count -> suffix num+cur_count
-        if follower_sid in [m['screen_id'] for m in members]:
-            # Find next unused numeric id
-            k = num + 1
-            while True:
-                candidate = f"{prefix}{k}"
-                if candidate not in [m['screen_id'] for m in members]:
-                    follower_sid = candidate
-                    break
-                k += 1
+        member_ids = {m.get('screen_id') for m in members if isinstance(m, dict)}
+        follower_sid = _next_available_sync_screen_id(prefix, num + new_order, member_ids)
         follower_scr = screens_map.get(follower_sid)
         if not follower_scr:
             short = follower_sid.split('_',1)[1] if '_' in follower_sid else follower_sid
