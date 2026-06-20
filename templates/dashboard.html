@@ -19,10 +19,14 @@
     {% if google_maps_api_key %}
     <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key | e }}"></script>
     {% endif %}
+    {% if google_client_id %}
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    {% endif %}
     
         <!-- Configuration data for JavaScript -->
         <script type="application/json" id="config-data">{{ config | tojson | safe }}</script>
         <script>
+            window.GOOGLE_CLIENT_ID = {{ google_client_id | tojson | safe }};
             window.MEDIA_BASE_URL = (function(){
                 try {
                     const cfgText = document.getElementById('config-data')?.textContent || '{}';
@@ -1714,15 +1718,21 @@
     .rp-preview-date-label { color:#475569; font-size:13px; font-weight:600; }
     .rp-preview-head-meta { display:flex; align-items:center; gap:12px; flex-wrap:wrap; justify-content:flex-end; }
     .rp-preview-stage { position:relative; min-height:430px; overflow:hidden; border:1px solid #dbe3ee; background:
-        linear-gradient(90deg, rgba(37,99,235,0.06) 0, rgba(37,99,235,0.06) 1px, transparent 1px, transparent calc(16.666% - 1px), rgba(37,99,235,0.06) calc(16.666% - 1px), rgba(37,99,235,0.06) 16.666%, transparent 16.666%),
+        repeating-linear-gradient(90deg, rgba(37,99,235,0.055) 0, rgba(37,99,235,0.055) 1px, transparent 1px, transparent calc((100% - 36px) / 24)),
         linear-gradient(180deg, rgba(37,99,235,0.04) 0, rgba(37,99,235,0.04) 1px, transparent 1px, transparent 72px),
         linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
         box-shadow:inset 0 1px 0 rgba(255,255,255,0.85); }
     .rp-preview-stage::after { content:''; position:absolute; inset:auto 18px 16px; height:5px; background:linear-gradient(90deg, rgba(37,99,235,0.12), rgba(37,99,235,0.56), rgba(37,99,235,0.12)); }
-    .rp-preview-ticks { position:absolute; top:18px; left:18px; right:18px; display:grid; grid-template-columns:repeat(6, minmax(0, 1fr)); gap:0; color:#94a3b8; font-size:12px; font-weight:600; }
+    .rp-preview-ticks { position:absolute; top:18px; left:18px; right:18px; display:grid; grid-template-columns:repeat(8, minmax(0, 1fr)); gap:0; color:#94a3b8; font-size:12px; font-weight:600; }
     .rp-preview-ticks span { justify-self:start; }
-    .rp-preview-pin { position:absolute; top:58px; left:38%; width:16px; height:16px; background:#2563eb; box-shadow:0 0 0 6px rgba(37,99,235,0.14); }
-    .rp-preview-pin::after { content:''; position:absolute; top:16px; left:7px; width:2px; height:220px; background:linear-gradient(180deg, rgba(37,99,235,0.72), rgba(37,99,235,0.08)); }
+    .rp-preview-pin { position:absolute; top:52px; left:38%; width:30px; height:252px; transform:translateX(-50%); z-index:6; cursor:ew-resize; touch-action:none; background:transparent; --rp-pin-color:#2563eb; --rp-pin-shadow:rgba(37,99,235,0.14); --rp-pin-line:rgba(37,99,235,0.72); }
+    .rp-preview-pin::before { content:''; position:absolute; top:6px; left:7px; width:16px; height:16px; background:var(--rp-pin-color); box-shadow:0 0 0 6px var(--rp-pin-shadow); }
+    .rp-preview-pin::after { content:''; position:absolute; top:22px; left:14px; width:2px; height:220px; background:linear-gradient(180deg, var(--rp-pin-line), rgba(37,99,235,0.08)); }
+    .rp-preview-pin--end { --rp-pin-color:#ef4444; --rp-pin-shadow:rgba(239,68,68,0.14); --rp-pin-line:rgba(239,68,68,0.68); z-index:7; }
+    .rp-preview-pin__label { position:absolute; top:-20px; left:50%; transform:translateX(-50%); padding:2px 6px; background:#0f172a; color:#fff; font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap; pointer-events:none; }
+    .rp-preview-pin--end .rp-preview-pin__label { background:#7f1d1d; }
+    .rp-preview-pin:focus-visible { outline:none; }
+    .rp-preview-pin:focus-visible::before { box-shadow:0 0 0 6px rgba(37,99,235,0.14), 0 0 0 11px rgba(96,165,250,0.18); }
     .rp-preview-media, .rp-preview-empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
     .rp-preview-empty { flex-direction:column; gap:10px; padding:24px; text-align:center; color:#64748b; }
     .rp-preview-empty__drop { width:min(360px, calc(100% - 36px)); padding:24px; border:2px dashed #93c5fd; background:rgba(239, 246, 255, 0.72); }
@@ -1790,6 +1800,8 @@
     .rp-schedule-inline input[type="date"],
     .rp-schedule-inline .tp-input,
     .rp-duration-input { width:100%; min-width:0; height:46px; padding:0 14px 0 40px; border:1px solid #dbe3ee; background:#fff; color:#0f172a; font-size:13px; }
+    .rp-schedule-inline .tp-input,
+    .rp-schedule-control:has(.tp-input) { cursor:pointer; }
     .rp-schedule-inline input[type="date"] { padding-right:38px; }
     .rp-schedule-inline input[type="date"]::-webkit-calendar-picker-indicator { opacity:0.9; }
     .rp-duration-input { padding-left:14px; }
@@ -1806,6 +1818,38 @@
     .rp-input { width:100%; padding:11px 14px; border:1px solid #dbe3ee; background:#fff; color:#0f172a; font-size:13px; }
     .rp-input-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
     .rp-input-row .rp-input { flex:1 1 160px; min-width:0; }
+    .rp-drive-inline { display:grid; gap:8px; width:100%; }
+    .rp-drive-inline__head { display:grid; grid-template-columns:minmax(0, 1fr) auto; align-items:center; gap:8px; }
+    .rp-drive-titleline { display:flex; align-items:center; gap:10px; min-width:0; }
+    .rp-drive-titleline .rp-subtitle { margin:0; flex:0 0 auto; }
+    .rp-drive-inline__actions { display:flex; gap:6px; align-items:center; justify-content:flex-end; flex-wrap:nowrap; }
+    .rp-drive-toolbar-btn { min-width:0; height:30px; padding:0 10px; display:inline-flex; align-items:center; justify-content:center; font-size:11px; line-height:1; }
+    .rp-drive-toolbar-btn--icon { width:32px; padding:0; font-size:13px; }
+    .rp-drive-status { display:inline-flex; align-items:center; gap:8px; min-width:0; max-width:min(52vw, 560px); color:#334155; font-size:12px; font-weight:600; }
+    .rp-drive-status span:last-child { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .rp-drive-status__dot { width:10px; height:10px; border-radius:999px; background:#94a3b8; box-shadow:0 0 0 4px rgba(148,163,184,.16); flex:0 0 auto; }
+    .rp-drive-status__dot.is-on { background:#10b981; box-shadow:0 0 0 4px rgba(16,185,129,.16); }
+    .rp-drive-status__dot.is-error { background:#ef4444; box-shadow:0 0 0 4px rgba(239,68,68,.14); }
+    .rp-drive-crumbs { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+    .rp-drive-crumbs__btn { border:1px solid #dbe3ee; background:#fff; color:#1e293b; font-size:11px; font-weight:600; padding:5px 8px; cursor:pointer; }
+    .rp-drive-crumbs__btn.is-current { background:#eff6ff; border-color:#bfdbfe; color:#1d4ed8; cursor:default; }
+    .rp-drive-browser { display:block; min-height:260px; max-height:min(66vh, 720px); overflow-y:auto; overflow-x:hidden; padding:10px; border:1px solid #dbe3ee; background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%); overscroll-behavior:contain; }
+    .rp-drive-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:10px; align-items:start; }
+    .rp-drive-card { display:grid; grid-template-rows:auto minmax(48px, 1fr); gap:7px; align-items:stretch; padding:8px; border:1px solid #dbe3ee; background:#fff; min-height:145px; cursor:pointer; transition:border-color .16s ease, box-shadow .16s ease, transform .16s ease; }
+    .rp-drive-card:hover,
+    .rp-drive-card:focus { border-color:#93c5fd; box-shadow:0 10px 22px rgba(37,99,235,.10); outline:none; transform:translateY(-1px); }
+    .rp-drive-card--folder { min-height:128px; }
+    .rp-drive-card__thumb { position:relative; width:100%; height:78px; background:#eff6ff; border:1px solid #dbeafe; overflow:hidden; display:flex; align-items:center; justify-content:center; color:#1d4ed8; font-size:12px; font-weight:800; text-transform:uppercase; }
+    .rp-drive-card__thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+    .rp-drive-card__thumb--folder { background:linear-gradient(135deg,#eff6ff 0%,#f8fbff 100%); }
+    .rp-drive-card__thumb--folder::before { content:''; position:absolute; left:16px; top:26px; width:50px; height:32px; border:1px solid #93c5fd; background:#bfdbfe; }
+    .rp-drive-card__thumb--folder::after { content:''; position:absolute; left:16px; top:18px; width:28px; height:14px; border:1px solid #93c5fd; border-bottom:0; background:#dbeafe; }
+    .rp-drive-card__fallback { display:flex; align-items:center; justify-content:center; width:100%; height:100%; background:#eff6ff; color:#1d4ed8; }
+    .rp-drive-card__name { color:#0f172a; font-size:12px; font-weight:700; line-height:1.3; word-break:break-word; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    .rp-drive-card__meta { color:#64748b; font-size:11px; line-height:1.4; margin-top:4px; word-break:break-word; }
+    .rp-drive-card__hint { color:#2563eb; font-size:10px; font-weight:700; margin-top:5px; }
+    .rp-drive-empty { padding:20px; border:1px dashed #cbd5e1; background:#fff; color:#64748b; font-size:13px; line-height:1.65; }
+    .rp-drive-link-box { display:grid; gap:10px; padding:14px; border:1px solid #dbe3ee; background:#fff; }
     .rp-upload-layout { display:grid; grid-template-columns:minmax(0, 1fr) 320px; height:100%; min-height:0; }
     .rp-upload-dropzone { display:flex; flex-direction:column; gap:8px; padding:22px; border:1.5px dashed #93c5fd; background:linear-gradient(180deg, #eff6ff 0%, #f8fbff 100%); }
     .rp-upload-dropzone strong { color:#0f172a; font-size:16px; font-weight:700; }
@@ -1842,6 +1886,12 @@
         .rp-upload-layout,
         .rp-panel { height:auto; }
         .rp-panel { overflow:visible; }
+        .rp-drive-inline__head { grid-template-columns:1fr; align-items:start; }
+        .rp-drive-inline__actions { justify-content:flex-start; }
+        .rp-drive-status { max-width:100%; }
+        .rp-drive-browser { max-height:60vh; }
+        .rp-drive-grid { grid-template-columns:1fr; }
+        .rp-drive-card { min-height:0; }
     }
     @media (max-width: 640px) {
         .rp-header,
@@ -3458,8 +3508,8 @@
     .playlist-row.apple .pl-switch:focus-visible { box-shadow:0 0 0 3px rgba(38,132,255,0.35); }
     .playlist-section { backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
     /* Time picker popup */
-    .timepicker-overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.35); display:flex; align-items:center; justify-content:center; z-index:4000; }
-    .timepicker { background:#fff; border:1px solid #d0d3d7; border-radius:10px; padding:10px 14px 12px; width:220px; box-shadow:none; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; }
+    .timepicker-overlay { position:fixed; inset:0; background:transparent; display:block; z-index:2147483000 !important; }
+    .timepicker { position:fixed; background:#fff; border:1px solid #d0d3d7; border-radius:10px; padding:10px 14px 12px; width:240px; box-shadow:0 18px 48px rgba(15,23,42,.24); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; z-index:2147483001 !important; }
     .timepicker h4 { margin:0 0 8px; font-size:13px; font-weight:600; color:#222; }
     .timepicker .tp-grid { display:flex; gap:6px; }
     .timepicker .tp-col { flex:1; text-align:center; }
@@ -4298,13 +4348,15 @@
         }
 
         .rp-overlay.dashboard-side-sheet .rp-modal {
-            width: min(860px, 100%);
+            width: 100%;
+            min-width: 0;
             max-width: none;
             max-height: none;
             height: 100vh;
-            margin-left: auto;
+            margin: 0;
             border-radius: 0;
             box-shadow: none;
+            border-left: 1px solid #e5e7eb;
         }
 
         .rp-overlay.dashboard-side-sheet.rp-overlay--library {
@@ -4876,12 +4928,7 @@
         ensureReplaceModal();
         rpCtx = { screenId: 'SINGLE', itemId: 'SINGLE' }; // neutral context
         rpPrefix = '';
-        const overlay = document.getElementById('rp-overlay');
-        if(overlay){
-            overlay.classList.toggle('dashboard-side-sheet', isDesktopSidebarLayout());
-            overlay.classList.add('rp-overlay--library');
-            overlay.style.display='flex';
-        }
+        presentRpOverlay('library');
         updateReplaceModalContext();
         clearRpSelection();
         resetRpScheduleEditor();
@@ -5957,11 +6004,41 @@
     </div>
 
     <script>        
+        function parseDashboardConfigData(){
+            const fallback = {
+                stores: [],
+                screens: {},
+                master_store_id: null,
+                store_groups: [],
+                settings: {}
+            };
+            try {
+                const raw = document.getElementById('config-data')?.textContent || '{}';
+                const normalized = String(raw)
+                    .replace(/\bNaN\b/g, 'null')
+                    .replace(/\b-Infinity\b/g, 'null')
+                    .replace(/\bInfinity\b/g, 'null');
+                const parsed = JSON.parse(normalized);
+                if (!parsed || typeof parsed !== 'object') {
+                    return { ...fallback };
+                }
+                if (!Array.isArray(parsed.stores)) parsed.stores = [];
+                if (!parsed.screens || typeof parsed.screens !== 'object') parsed.screens = {};
+                if (!Array.isArray(parsed.store_groups)) parsed.store_groups = [];
+                if (!parsed.settings || typeof parsed.settings !== 'object') parsed.settings = {};
+                return parsed;
+            } catch (error) {
+                console.error('Failed to parse dashboard config-data:', error);
+                return { ...fallback };
+            }
+        }
+
         // Global Variables - Must be declared first
         let currentStoreId = null; // Will be set after config loads
         
         // Configuration data passed from Flask
-        const allStoresData = JSON.parse(document.getElementById('config-data').textContent);
+        const allStoresData = parseDashboardConfigData();
+        window.allStoresData = allStoresData;
 
         function resolveValidStoreId(storeId) {
             const stores = Array.isArray(allStoresData.stores) ? allStoresData.stores : [];
@@ -9382,7 +9459,7 @@ allowfullscreen></iframe></div>`;
                             <div class="schedule-section">
                                 <div class="schedule-header">
                                     <div class="schedule-title">Schedule</div>
-                                    <button type="button" class="add-slot-btn" onclick="toggleScreenActionMenu(event, '${screenId}')" title="Add media or schedule action">+</button>
+                                    <button type="button" class="add-slot-btn" onclick="openReplaceModal('${screenId}','SINGLE')" title="Add scheduled media">+</button>
                                 </div>
                                 <div style="font-size:11px; color:#666;">(No playlist items yet)</div>
                             </div>`;
@@ -9503,6 +9580,7 @@ allowfullscreen></iframe></div>`;
                                         </div>
                                         <div class="group right">
                                             ${failed ? `<button class="delete-pill tiny" style="background:#d35400;border-color:#d35400" onclick="retryItemOnTV('${screenId}','${item.id}',${JSON.stringify(item.file || '')})">Retry on TV</button>` : ''}
+                                            ${!isFollowerSyncItem && /^youtube:[a-zA-Z0-9_-]{11}$/i.test(String(item.file || '').trim()) ? `<button class="delete-pill tiny" data-screen-id="${escapeHtml(screenId)}" data-item-id="${escapeHtml(item.id)}" data-youtube-file="${escapeHtml(encodeURIComponent(String(item.file || '')))}" onclick="openYouTubeScheduleEditorFromButton(this)">Edit YouTube</button>` : ''}
                                             ${isFollowerSyncItem ? '' : `<button class="delete-pill tiny" onclick="deletePlaylistItem('${screenId}','${item.id}')">Delete</button>`}
                                         </div>
                                     </div>`;
@@ -9555,7 +9633,7 @@ allowfullscreen></iframe></div>`;
                                                 <div class="schedule-details">
                                                     <div class="schedule-header">
                                                         <div class="schedule-title">Schedule</div>
-                                                        ${isFollowerSyncItem ? `<button type="button" class="add-slot-btn" onclick="openReplaceModal('${screenId}','SINGLE')" title="Add a scheduled slot via the master screen">+</button>` : `<button type="button" class="add-slot-btn" onclick="toggleScreenActionMenu(event, '${screenId}')" title="Add media or schedule action">+</button>`}
+                                                        ${isFollowerSyncItem ? `<button type="button" class="add-slot-btn" onclick="openReplaceModal('${screenId}','SINGLE')" title="Add a scheduled slot via the master screen">+</button>` : `<button type="button" class="add-slot-btn" onclick="openReplaceModal('${screenId}','SINGLE')" title="Add scheduled media">+</button>`}
                                                     </div>
                                                     <div style="margin-top:4px;font-size:11px;font-weight:600;color:#555;display:flex;align-items:center;gap:6px;">
                                                         <span style="letter-spacing:.3px;">${isFollowerSyncItem ? 'Repeat (sync):' : 'Repeat:'}</span>
@@ -9707,7 +9785,7 @@ allowfullscreen></iframe></div>`;
                 if(action === 'schedule'){
                     openReplaceModal(screenId,'SINGLE');
                 } else if(action === 'youtube'){
-                    openYouTubeModal(screenId);
+                    openYouTubeScheduleEditor(screenId, 'SINGLE');
                 }
             });
             document.body.appendChild(menu);
@@ -9745,7 +9823,10 @@ allowfullscreen></iframe></div>`;
             screenActionMenuAnchor = null;
         }
 
-        function toggleScreenActionMenu(event, screenId){
+        function toggleScreenActionMenu(anchorOrEvent, screenId, maybeEvent){
+            const event = (maybeEvent && typeof maybeEvent.preventDefault === 'function')
+                ? maybeEvent
+                : ((anchorOrEvent && typeof anchorOrEvent.preventDefault === 'function') ? anchorOrEvent : null);
             if(event){
                 event.preventDefault();
                 event.stopPropagation();
@@ -9754,7 +9835,17 @@ allowfullscreen></iframe></div>`;
             if (controlTarget.redirected) {
                 return false;
             }
-            const anchor = event && event.currentTarget ? event.currentTarget : null;
+            const anchor = (anchorOrEvent && anchorOrEvent.nodeType === 1)
+                ? anchorOrEvent
+                : (event && event.currentTarget ? event.currentTarget : null);
+            if(!anchor){
+                showPopupMenu([
+                    { icon: '📅', label: 'Schedule', action: () => openReplaceModal(screenId,'SINGLE') },
+                    { icon: '▶️', label: 'YouTube', action: () => openYouTubeScheduleEditor(screenId, 'SINGLE') },
+                    { icon: '❌', label: 'Cancel', action: null }
+                ]);
+                return false;
+            }
             const menu = ensureScreenActionMenu();
             const alreadyOpen = !menu.hidden && menu.classList.contains('is-open');
             const sameTarget = alreadyOpen && menu.dataset.screenId === String(screenId) && screenActionMenuAnchor === anchor;
@@ -10302,15 +10393,29 @@ allowfullscreen></iframe></div>`;
         }
                         // --- Time Picker ---
                         let tpCurrent = null;
-                        function closeTimePicker(){
+                        let tpOpenedAt = 0;
+                        function closeTimePicker(force){
+                            if(!force && tpOpenedAt && Date.now() - tpOpenedAt < 150) return;
                             const overlay = document.querySelector('.timepicker-overlay');
                             if(overlay) overlay.remove();
                             tpCurrent = null;
                         }
+                        function openRpScheduleTimePicker(inputId, event){
+                            if(event){
+                                event.preventDefault();
+                                event.stopPropagation();
+                            }
+                            const input = document.getElementById(inputId);
+                            if(input){
+                                openTimePicker(input);
+                            }
+                            return false;
+                        }
                         function openTimePicker(inputEl){
-                            closeTimePicker();
+                            if(!inputEl) return false;
+                            closeTimePicker(true);
                             let field = inputEl.getAttribute('data-field');
-                            const lane = inputEl.getAttribute('data-lane') || 'playlist';
+                            const lane = inputEl.getAttribute('data-lane') || ((inputEl.id === 'rp-start-time' || inputEl.id === 'rp-end-time') ? 'replace' : 'playlist');
                             let scr = inputEl.getAttribute('data-screen');
                             let item = inputEl.getAttribute('data-item');
                             let winIndexAttr = inputEl.getAttribute('data-win-index');
@@ -10319,6 +10424,13 @@ allowfullscreen></iframe></div>`;
                             if(winIndexAttr !== null){
                                 isWindow = true;
                                 winIndex = parseInt(winIndexAttr, 10);
+                            }
+                            if(!field){
+                                if(inputEl.id === 'rp-start-time'){
+                                    field = 'start';
+                                } else if(inputEl.id === 'rp-end-time'){
+                                    field = 'end';
+                                }
                             }
                             if(!field){
                                 const id = inputEl.id;
@@ -10337,6 +10449,7 @@ allowfullscreen></iframe></div>`;
                             const [hh, mm, ss] = parts.map((part) => part || '00');
                             const overlay = document.createElement('div');
                             overlay.className = 'timepicker-overlay';
+                            tpOpenedAt = Date.now();
                             overlay.innerHTML = `
                                 <div class="timepicker" role="dialog" aria-label="Pick time">
                                     <h4>Select ${field === 'start' ? 'Start' : 'End'} Time</h4>
@@ -10353,23 +10466,40 @@ allowfullscreen></iframe></div>`;
                                     </div>
                                 </div>`;
                             document.body.appendChild(overlay);
+                            const picker = overlay.querySelector('.timepicker');
+                            if(picker){
+                                const rect = inputEl.getBoundingClientRect();
+                                const pickerWidth = 240;
+                                const estimatedHeight = 176;
+                                const gap = 8;
+                                let left = Math.max(8, Math.min(rect.left, window.innerWidth - pickerWidth - 8));
+                                let top = rect.bottom + gap;
+                                if(top + estimatedHeight > window.innerHeight - 8){
+                                    top = Math.max(8, rect.top - estimatedHeight - gap);
+                                }
+                                picker.style.left = `${left}px`;
+                                picker.style.top = `${top}px`;
+                            }
                             tpCurrent = { overlay, input: inputEl, screenId: scr, itemId: item, field, winIndex, isWindow, lane };
                             overlay.addEventListener('click', (event) => { if(event.target === overlay) closeTimePicker(); });
                             document.getElementById('tp-clear').onclick = () => clearTimePicker(scr, item, field, winIndex);
-                            document.getElementById('tp-cancel').onclick = closeTimePicker;
+                            document.getElementById('tp-cancel').onclick = () => closeTimePicker(true);
                             document.getElementById('tp-apply').onclick = () => applyTimePicker(scr, item, field, winIndex);
+                            return false;
                         }
                         function clearTimePicker(screenId,itemId,field,winIndex){
                             if(!tpCurrent) return;
                             tpCurrent.input.value = '';
                             if(tpCurrent.isWindow && winIndex !== null && !isNaN(winIndex)){
                                 updateScheduleWinDateTime(screenId,itemId,winIndex);
+                            } else if(tpCurrent.lane === 'replace' || (!screenId && !itemId)) {
+                                renderRpSelection();
                             } else if(tpCurrent.lane === 'panel') {
                                 panelDateTimeChanged(screenId,itemId);
                             } else {
                                 playlistDateTimeChanged(screenId,itemId);
                             }
-                            closeTimePicker();
+                            closeTimePicker(true);
                         }
                         function applyTimePicker(screenId,itemId,field,winIndex){
                             if(!tpCurrent) return;
@@ -10380,14 +10510,16 @@ allowfullscreen></iframe></div>`;
                             tpCurrent.input.value = val;
                             if(tpCurrent.isWindow && winIndex !== null && !isNaN(winIndex)){
                                 updateScheduleWinDateTime(screenId,itemId,winIndex);
+                            } else if(tpCurrent.lane === 'replace' || (!screenId && !itemId)) {
+                                renderRpSelection();
                             } else if(tpCurrent.lane === 'panel') {
                                 panelDateTimeChanged(screenId,itemId);
                             } else {
                                 playlistDateTimeChanged(screenId,itemId);
                             }
-                            closeTimePicker();
+                            closeTimePicker(true);
                         }
-                        document.addEventListener('keydown', (event) => { if(event.key === 'Escape') closeTimePicker(); });
+                        document.addEventListener('keydown', (event) => { if(event.key === 'Escape') closeTimePicker(true); });
 
         function updatePlaylistSchedule(screenId, itemId, startVal, endVal) {
             const payload = { };
@@ -12386,10 +12518,23 @@ allowfullscreen></iframe></div>`;
                 window.startRpResize = startRpResize;
                 let rpLibraryFilter = 'all';
                 let rpAppMode = false;
+                let rpComposerMode = '';
                 let rpSelectedMedia = null;
                 let rpLibraryFiles = [];
                 let rpWallAssignments = null;
                 let rpWallDragName = '';
+                let rpDriveConfigured = false;
+                let rpDriveConnected = false;
+                let rpDriveAccountEmail = '';
+                let rpDriveStatusChecked = false;
+                let rpDriveFolderTrail = [{ id:'root', name:'My Drive' }];
+                let rpDriveItems = [];
+                let rpDriveNextPageToken = '';
+                let rpDriveLoading = false;
+                let rpDriveError = '';
+                let rpDriveImportingFileId = '';
+                let rpDrivePopup = null;
+                let rpDriveScrollTop = 0;
                 function ensureReplaceModal(){
                         if(document.getElementById('rp-overlay')) return;
                         const ov = document.createElement('div'); ov.id='rp-overlay'; ov.className='rp-overlay';
@@ -12493,6 +12638,17 @@ allowfullscreen></iframe></div>`;
                                                                     <div class="rp-item__meta">Schedule a YouTube video</div>
                                                                 </div>
                                                             </button>
+                                                            <button type="button" class="rp-item" onclick="focusRpPanel('drive')">
+                                                                <div class="rp-item__img" style="display:flex; align-items:center; justify-content:center; height:120px; background:linear-gradient(135deg,#eef5ff 0%,#f8fbff 100%); border-radius:4px; margin-bottom:8px;">
+                                                                    <div style="display:inline-flex; align-items:center; justify-content:center; width:82px; height:82px; border-radius:20px; background:#fff; border:1px solid #dbe4ee; box-shadow:0 10px 22px rgba(37,99,235,.08);">
+                                                                        <img src="{{ url_for('static', filename='google-drive-logo.svg') }}?v={{ asset_bust|default(0) }}" alt="Google Drive" style="width:54px; height:54px; object-fit:contain;">
+                                                                    </div>
+                                                                </div>
+                                                                <div class="rp-item__body">
+                                                                    <div class="rp-item__title">Google Drive</div>
+                                                                    <div class="rp-item__meta">Browse and import from your Drive</div>
+                                                                </div>
+                                                            </button>
                                                         </div>
                                                     </div>
                                                     <div id="rp-search-empty" class="rp-empty rp-search-empty" style="display:none;">No items match this search.</div>
@@ -12515,14 +12671,17 @@ allowfullscreen></iframe></div>`;
                                                     <div class="rp-preview-stage">
                                                         <div id="rp-preview-badge" class="rp-preview-badge" style="display:none;">Selected</div>
                                                         <div class="rp-preview-ticks">
+                                                            <span>12 AM</span>
+                                                            <span>3 AM</span>
+                                                            <span>6 AM</span>
+                                                            <span>9 AM</span>
                                                             <span>12 PM</span>
-                                                            <span>1 PM</span>
-                                                            <span>2 PM</span>
                                                             <span>3 PM</span>
-                                                            <span>4 PM</span>
-                                                            <span>5 PM</span>
+                                                            <span>6 PM</span>
+                                                            <span>9 PM</span>
                                                         </div>
-                                                        <div class="rp-preview-pin" aria-hidden="true"></div>
+                                                        <div id="rp-preview-pin-start" class="rp-preview-pin rp-preview-pin--start" data-rp-time-field="start" role="slider" tabindex="0" aria-label="Start time" aria-valuetext="No start time" title="Drag to set start time" onpointerdown="startRpPreviewTimeDrag(event, 'start')" onkeydown="handleRpPreviewTimeKey(event, 'start')"><span class="rp-preview-pin__label">Start</span></div>
+                                                        <div id="rp-preview-pin-end" class="rp-preview-pin rp-preview-pin--end" data-rp-time-field="end" role="slider" tabindex="0" aria-label="End time" aria-valuetext="No end time" title="Drag to set end time" onpointerdown="startRpPreviewTimeDrag(event, 'end')" onkeydown="handleRpPreviewTimeKey(event, 'end')"><span class="rp-preview-pin__label">End</span></div>
                                                         <div id="rp-preview-media" class="rp-preview-media" style="display:none;"></div>
                                                         <div id="rp-preview-empty" class="rp-preview-empty">
                                                             <div class="rp-preview-empty__drop">
@@ -12594,9 +12753,9 @@ allowfullscreen></iframe></div>`;
                                                                 </div>
                                                                 <div class="rp-schedule-control-group">
                                                                     <span>Time</span>
-                                                                    <div class="rp-schedule-control">
+                                                                    <div class="rp-schedule-control" onclick="openRpScheduleTimePicker('rp-start-time', event)">
                                                                         <svg class="rp-schedule-control__icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
-                                                                        <input class="tp-input" readonly id="rp-start-time" type="text" placeholder="HH:MM:SS" onclick="openTimePicker(this)" onchange="renderRpSelection()" oninput="renderRpSelection()">
+                                                                        <input class="tp-input" readonly id="rp-start-time" type="text" inputmode="numeric" pattern="[0-9]{2}:[0-9]{2}(:[0-9]{2})?" data-lane="replace" data-field="start" placeholder="HH:MM:SS" onclick="openRpScheduleTimePicker('rp-start-time', event)" onchange="renderRpSelection()" oninput="renderRpSelection()">
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -12613,9 +12772,9 @@ allowfullscreen></iframe></div>`;
                                                                 </div>
                                                                 <div class="rp-schedule-control-group">
                                                                     <span>Time</span>
-                                                                    <div class="rp-schedule-control">
+                                                                    <div class="rp-schedule-control" onclick="openRpScheduleTimePicker('rp-end-time', event)">
                                                                         <svg class="rp-schedule-control__icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
-                                                                        <input class="tp-input" readonly id="rp-end-time" type="text" placeholder="HH:MM:SS" onclick="openTimePicker(this)" onchange="renderRpSelection()" oninput="renderRpSelection()">
+                                                                        <input class="tp-input" readonly id="rp-end-time" type="text" inputmode="numeric" pattern="[0-9]{2}:[0-9]{2}(:[0-9]{2})?" data-lane="replace" data-field="end" placeholder="HH:MM:SS" onclick="openRpScheduleTimePicker('rp-end-time', event)" onchange="renderRpSelection()" oninput="renderRpSelection()">
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -12653,12 +12812,16 @@ allowfullscreen></iframe></div>`;
                                                 <div class="rp-source-tools">
                                                     <div>
                                                         <div class="rp-side-title">Quick actions</div>
-                                                        <div class="rp-side-copy">Keep everything on one line here: schedule, upload, YouTube, and import are all on the right side.</div>
+                                                        <div class="rp-side-copy">Keep everything on one line here: schedule, upload, YouTube, Drive, and public-link import stay in this workspace.</div>
                                                     </div>
                                                     <div class="rp-source-tools__grid">
                                                         <button type="button" class="rp-quick-card" onclick="switchRpTab('upload')">
                                                             <strong>Upload new media</strong>
                                                             <span>Upload an image or video, then come straight back to this layout.</span>
+                                                        </button>
+                                                        <button type="button" class="rp-quick-card" onclick="focusRpPanel('drive')">
+                                                            <strong>Google Drive</strong>
+                                                            <span>Sign in, browse folders, and import a file without leaving this popup.</span>
                                                         </button>
                                                         <button type="button" class="rp-quick-card" onclick="focusRpPanel('youtube')">
                                                             <strong>Add YouTube</strong>
@@ -12911,6 +13074,27 @@ allowfullscreen></iframe></div>`;
                     setRpScheduleEditorVisible(addMode);
                     renderRpPanelScheduleControls();
                 }
+                function presentRpOverlay(mode){
+                    ensureReplaceModal();
+                    const overlay = document.getElementById('rp-overlay');
+                    if(!overlay) return;
+                    const isLibrary = mode === 'library';
+                    overlay.classList.toggle('dashboard-side-sheet', !!(typeof isDesktopSidebarLayout === 'function' && isDesktopSidebarLayout()));
+                    overlay.classList.toggle('rp-overlay--library', isLibrary);
+                    overlay.style.display = 'flex';
+                    overlay.style.visibility = 'visible';
+                    overlay.style.opacity = '1';
+                    overlay.style.pointerEvents = 'auto';
+                    overlay.style.zIndex = '20000';
+                    overlay.setAttribute('aria-hidden', 'false');
+                    const modal = overlay.querySelector('.rp-modal');
+                    if(modal){
+                        modal.style.display = 'flex';
+                        modal.style.visibility = 'visible';
+                        modal.style.opacity = '1';
+                    }
+                    try { document.body.style.overflow = 'hidden'; } catch {}
+                }
                 function resetRpUploadUI(){
                     try{
                         const wrap = document.getElementById('rp-progress-wrap');
@@ -12926,10 +13110,6 @@ allowfullscreen></iframe></div>`;
                     }catch{}
                 }
                 function openReplaceModal(screenId,itemId){
-                    const overlay = document.getElementById('rp-overlay');
-                    if (overlay) {
-                        overlay.classList.remove('rp-overlay--library');
-                    }
                     if (itemId !== 'SINGLE') {
                         const controlTarget = resolveWallControlTarget(screenId, itemId, true);
                         if (controlTarget.redirected) {
@@ -12941,7 +13121,7 @@ allowfullscreen></iframe></div>`;
                         }
                     }
                     ensureReplaceModal(); rpCtx={screenId,itemId}; rpPrefix='';
-                    document.getElementById('rp-overlay').style.display='flex';
+                    presentRpOverlay('replace');
                     updateReplaceModalContext();
                     const previewDate = document.getElementById('rp-preview-current-date');
                     if(previewDate){
@@ -12962,8 +13142,8 @@ allowfullscreen></iframe></div>`;
                     renderRpBreadcrumb(); refreshLibrary();
                     renderRpSelection();
                 }
-                function closeReplaceModal(){ const ov=document.getElementById('rp-overlay'); if(ov){ ov.style.display='none'; ov.classList.remove('dashboard-side-sheet'); ov.classList.remove('rp-overlay--library'); } toggleRpSearch(false); rpCtx=null; resetRpUploadUI(); resetRpScheduleEditor(); clearRpSelection(); }
-                function switchRpTab(which){ const lib=document.getElementById('rp-view-lib'); const up=document.getElementById('rp-view-upload'); const t1=document.getElementById('rp-tab-lib'); const t2=document.getElementById('rp-tab-upload'); const isLib=which==='lib'; if(lib) lib.style.display=isLib?'block':'none'; if(up) up.style.display=isLib?'none':'block'; if(t1) t1.classList.toggle('active',isLib); if(t2) t2.classList.toggle('active',!isLib); const foldersGroup = document.getElementById('rp-group-folders'); const imagesGroup = document.getElementById('rp-group-images'); const videosGroup = document.getElementById('rp-group-videos'); const appsGroup = document.getElementById('rp-group-apps'); if(which==='upload'){ if(foldersGroup) foldersGroup.style.display = 'block'; if(imagesGroup) imagesGroup.style.display = 'block'; if(videosGroup) videosGroup.style.display = 'block'; if(appsGroup) appsGroup.style.display = 'none'; rpAppMode = false; } else if(which === 'lib'){ if(!rpAppMode){ if(appsGroup) appsGroup.style.display = 'none'; } } }
+                function closeReplaceModal(){ const ov=document.getElementById('rp-overlay'); if(ov){ ov.style.display='none'; ov.style.visibility=''; ov.style.opacity=''; ov.style.pointerEvents=''; ov.style.zIndex=''; ov.setAttribute('aria-hidden', 'true'); ov.classList.remove('dashboard-side-sheet'); ov.classList.remove('rp-overlay--library'); const modal = ov.querySelector('.rp-modal'); if(modal){ modal.style.display=''; modal.style.visibility=''; modal.style.opacity=''; } } try { document.body.style.overflow = ''; } catch {} toggleRpSearch(false); rpCtx=null; rpComposerMode=''; resetRpUploadUI(); resetRpScheduleEditor(); clearRpSelection(); }
+                function switchRpTab(which){ const lib=document.getElementById('rp-view-lib'); const up=document.getElementById('rp-view-upload'); const t1=document.getElementById('rp-tab-lib'); const t2=document.getElementById('rp-tab-upload'); const isLib=which==='lib'; if(lib) lib.style.display=isLib?'block':'none'; if(up) up.style.display=isLib?'none':'block'; if(t1) t1.classList.toggle('active',isLib); if(t2) t2.classList.toggle('active',!isLib); const foldersGroup = document.getElementById('rp-group-folders'); const imagesGroup = document.getElementById('rp-group-images'); const videosGroup = document.getElementById('rp-group-videos'); const appsGroup = document.getElementById('rp-group-apps'); if(which==='upload'){ if(foldersGroup) foldersGroup.style.display = 'block'; if(imagesGroup) imagesGroup.style.display = 'block'; if(videosGroup) videosGroup.style.display = 'block'; if(appsGroup) appsGroup.style.display = 'none'; rpAppMode = false; rpComposerMode = ''; } else if(which === 'lib'){ if(!rpAppMode){ if(appsGroup) appsGroup.style.display = 'none'; } } }
                 function getRpApplyLabel(){
                     if(rpCtx && rpCtx.itemId === 'SINGLE' && rpSelectedMedia && Array.isArray(rpSelectedMedia.wallSet) && rpSelectedMedia.wallSet.length > 1){
                         return isRpCreatingNewScreen() ? 'Add to new screens' : 'Add to screens';
@@ -13082,6 +13262,136 @@ allowfullscreen></iframe></div>`;
                         });
                     });
                 }
+                const RP_PREVIEW_TIME_START_MINUTES = 0;
+                const RP_PREVIEW_TIME_END_MINUTES = 24 * 60;
+                const RP_PREVIEW_TIME_DEFAULTS = { start: 13 * 60, end: 18 * 60 };
+                function clampRpPreviewRatio(value){
+                    return Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
+                }
+                function parseRpClockTimeToMinutes(value){
+                    const match = String(value || '').trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+                    if(!match) return null;
+                    const hour = parseInt(match[1], 10);
+                    const minute = parseInt(match[2], 10);
+                    const second = parseInt(match[3] || '0', 10);
+                    if(!Number.isFinite(hour) || !Number.isFinite(minute) || !Number.isFinite(second)) return null;
+                    if(hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59) return null;
+                    return Math.min(1439, (hour * 60) + minute + (second >= 30 ? 1 : 0));
+                }
+                function formatRpMinutesAsClock(minutes){
+                    const safe = Math.max(0, Math.min(1439, Math.round(Number(minutes) || 0)));
+                    const hour = Math.floor(safe / 60);
+                    const minute = safe % 60;
+                    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
+                }
+                function normalizeRpPreviewField(field){
+                    return field === 'end' ? 'end' : 'start';
+                }
+                function getRpPreviewInputForField(field){
+                    return document.getElementById(normalizeRpPreviewField(field) === 'end' ? 'rp-end-time' : 'rp-start-time');
+                }
+                function getRpPreviewPinForField(field){
+                    return document.getElementById(normalizeRpPreviewField(field) === 'end' ? 'rp-preview-pin-end' : 'rp-preview-pin-start');
+                }
+                function getRpPreviewDefaultMinutes(field){
+                    return RP_PREVIEW_TIME_DEFAULTS[normalizeRpPreviewField(field)] || RP_PREVIEW_TIME_DEFAULTS.start;
+                }
+                function getRpPreviewTimeRatio(field){
+                    const input = getRpPreviewInputForField(field);
+                    const parsed = parseRpClockTimeToMinutes(input && input.value);
+                    const minutes = parsed === null ? getRpPreviewDefaultMinutes(field) : parsed;
+                    const range = RP_PREVIEW_TIME_END_MINUTES - RP_PREVIEW_TIME_START_MINUTES;
+                    return clampRpPreviewRatio((minutes - RP_PREVIEW_TIME_START_MINUTES) / range);
+                }
+                function syncRpPreviewTimePin(){
+                    ['start', 'end'].forEach((field) => {
+                        const pin = getRpPreviewPinForField(field);
+                        const stage = pin ? pin.closest('.rp-preview-stage') : null;
+                        if(!pin || !stage || !stage.clientWidth) return;
+                        const ratio = getRpPreviewTimeRatio(field);
+                        const left = 18 + (ratio * Math.max(1, stage.clientWidth - 36));
+                        const input = getRpPreviewInputForField(field);
+                        const label = input && input.value ? input.value : `No ${field} time`;
+                        const title = field === 'end' ? 'End' : 'Start';
+                        pin.style.left = `${left}px`;
+                        pin.setAttribute('aria-valuetext', label);
+                        pin.setAttribute('title', input && input.value ? `${title} time: ${input.value}` : `Drag to set ${field} time`);
+                    });
+                }
+                function getRpPreviewMinutesFromClientX(clientX){
+                    const stage = document.querySelector('.rp-preview-stage');
+                    if(!stage) return RP_PREVIEW_TIME_START_MINUTES;
+                    const rect = stage.getBoundingClientRect();
+                    const left = rect.left + 18;
+                    const width = Math.max(1, rect.width - 36);
+                    const ratio = clampRpPreviewRatio((clientX - left) / width);
+                    const range = RP_PREVIEW_TIME_END_MINUTES - RP_PREVIEW_TIME_START_MINUTES;
+                    return Math.min(RP_PREVIEW_TIME_END_MINUTES - 1, Math.round(RP_PREVIEW_TIME_START_MINUTES + (ratio * range)));
+                }
+                function getRpScheduleSummaryText(scheduleMeta){
+                    return `Schedule will use ${scheduleMeta.durationText}, ${scheduleMeta.effectText.toLowerCase()}, and ${scheduleMeta.repeatText.toLowerCase()}${scheduleMeta.timeText !== 'No time window set' ? ` between ${scheduleMeta.timeText}.` : '.'}`;
+                }
+                function refreshRpDraftScheduleText(){
+                    syncRpPreviewTimePin();
+                    const scheduleMeta = getRpDraftScheduleMeta();
+                    const scheduleSummaryBox = document.getElementById('rp-schedule-summary-box');
+                    if(scheduleSummaryBox) scheduleSummaryBox.textContent = getRpScheduleSummaryText(scheduleMeta);
+                    const stageSub = document.querySelector('#rp-preview-media .rp-stage-card__sub');
+                    if(stageSub) stageSub.textContent = scheduleMeta.timeText;
+                }
+                function setRpPreviewTimeMinutes(field, minutes, renderFull){
+                    const input = getRpPreviewInputForField(field);
+                    if(!input) return;
+                    input.value = formatRpMinutesAsClock(minutes);
+                    if(renderFull){
+                        renderRpSelection();
+                    } else {
+                        refreshRpDraftScheduleText();
+                    }
+                }
+                function startRpPreviewTimeDrag(event, field){
+                    field = normalizeRpPreviewField(field);
+                    if(event && event.button !== undefined && event.button !== 0) return false;
+                    if(event){
+                        event.preventDefault();
+                        event.stopPropagation();
+                    }
+                    const previousUserSelect = document.body.style.userSelect;
+                    document.body.style.userSelect = 'none';
+                    const move = (moveEvent) => {
+                        if(moveEvent && moveEvent.preventDefault) moveEvent.preventDefault();
+                        setRpPreviewTimeMinutes(field, getRpPreviewMinutesFromClientX(moveEvent.clientX), false);
+                    };
+                    const stop = (upEvent) => {
+                        if(upEvent && upEvent.preventDefault) upEvent.preventDefault();
+                        document.body.style.userSelect = previousUserSelect;
+                        window.removeEventListener('pointermove', move);
+                        window.removeEventListener('pointerup', stop);
+                        window.removeEventListener('pointercancel', stop);
+                        setRpPreviewTimeMinutes(field, getRpPreviewMinutesFromClientX((upEvent && upEvent.clientX) || (event && event.clientX) || 0), true);
+                    };
+                    setRpPreviewTimeMinutes(field, getRpPreviewMinutesFromClientX(event.clientX), false);
+                    window.addEventListener('pointermove', move, { passive:false });
+                    window.addEventListener('pointerup', stop);
+                    window.addEventListener('pointercancel', stop);
+                    return false;
+                }
+                function handleRpPreviewTimeKey(event, field){
+                    if(!event) return;
+                    field = normalizeRpPreviewField(field);
+                    const current = parseRpClockTimeToMinutes((getRpPreviewInputForField(field) || {}).value);
+                    let minutes = current === null ? getRpPreviewDefaultMinutes(field) : current;
+                    const step = event.shiftKey ? 15 : 5;
+                    if(event.key === 'ArrowLeft') minutes -= step;
+                    else if(event.key === 'ArrowRight') minutes += step;
+                    else if(event.key === 'Home') minutes = RP_PREVIEW_TIME_START_MINUTES;
+                    else if(event.key === 'End') minutes = RP_PREVIEW_TIME_END_MINUTES;
+                    else return;
+                    event.preventDefault();
+                    minutes = Math.max(RP_PREVIEW_TIME_START_MINUTES, Math.min(RP_PREVIEW_TIME_END_MINUTES - 1, minutes));
+                    setRpPreviewTimeMinutes(field, minutes, true);
+                }
+                window.addEventListener('resize', () => syncRpPreviewTimePin());
                 function toggleRpScheduleDay(code, el){
                     if(!el) return;
                     el.classList.toggle('active');
@@ -13178,6 +13488,479 @@ allowfullscreen></iframe></div>`;
                     if(raw.startsWith('youtube:')) return 'youtube';
                     if(/\.(mp4|mov|m4v|webm|mkv|avi)$/i.test(raw)) return 'video';
                     return 'image';
+                }
+                function isRpYouTubeMode(){
+                    return rpComposerMode === 'youtube' || !!(rpSelectedMedia && (rpSelectedMedia.mediaType === 'youtube' || inferRpMediaType(rpSelectedMedia.name) === 'youtube'));
+                }
+                function syncRpInlineYoutubeValue(value){
+                    const sidebarInput = document.getElementById('rp-youtube-url');
+                    if(sidebarInput) sidebarInput.value = String(value || '');
+                    const inlineInput = document.getElementById('rp-youtube-url-inline');
+                    if(inlineInput && inlineInput !== document.activeElement) inlineInput.value = String(value || '');
+                }
+                function isRpDriveMode(){
+                    return rpComposerMode === 'drive';
+                }
+                function isRpImportMode(){
+                    return rpComposerMode === 'import';
+                }
+                function syncRpInlineImportValue(value){
+                    const sidebarInput = document.getElementById('rp-import-url');
+                    if(sidebarInput) sidebarInput.value = String(value || '');
+                    const inlineInput = document.getElementById('rp-import-url-inline');
+                    if(inlineInput && inlineInput !== document.activeElement) inlineInput.value = String(value || '');
+                }
+                function getRpDriveCurrentFolder(){
+                    return rpDriveFolderTrail[rpDriveFolderTrail.length - 1] || { id:'root', name:'My Drive' };
+                }
+                function inferRpDriveKind(item){
+                    const mimeType = String((item && item.mimeType) || '').toLowerCase();
+                    const name = String((item && item.name) || '').toLowerCase();
+                    if(mimeType === 'application/vnd.google-apps.folder') return 'folder';
+                    if(mimeType.startsWith('image/')) return 'image';
+                    if(mimeType.startsWith('video/')) return 'video';
+                    if(/\.(png|jpe?g|webp|gif|bmp|svg|mp4|mov|m4v|webm|mkv|avi)$/i.test(name)) return /\.(mp4|mov|m4v|webm|mkv|avi)$/i.test(name) ? 'video' : 'image';
+                    return 'other';
+                }
+                function isRpDriveItemSupported(item){
+                    const kind = inferRpDriveKind(item);
+                    return kind === 'folder' || kind === 'image' || kind === 'video';
+                }
+                function getRpDriveVisibleItems(){
+                    return (Array.isArray(rpDriveItems) ? rpDriveItems : [])
+                        .map((item, index) => ({ item, index }))
+                        .filter(({ item }) => isRpDriveItemSupported(item));
+                }
+                function formatRpDriveBytes(value){
+                    const size = Number(value || 0);
+                    if(!Number.isFinite(size) || size <= 0) return '';
+                    const units = ['B','KB','MB','GB','TB'];
+                    let idx = 0;
+                    let current = size;
+                    while(current >= 1024 && idx < units.length - 1){
+                        current /= 1024;
+                        idx += 1;
+                    }
+                    return `${current >= 100 || idx === 0 ? current.toFixed(0) : current.toFixed(1)} ${units[idx]}`;
+                }
+                function formatRpDriveDate(value){
+                    if(!value) return '';
+                    try {
+                        return new Date(value).toLocaleString([], { year:'numeric', month:'short', day:'numeric' });
+                    } catch {
+                        return '';
+                    }
+                }
+                function getRpDriveExtensionForMime(mimeType){
+                    const mime = String(mimeType || '').toLowerCase();
+                    const map = {
+                        'image/jpeg': '.jpg',
+                        'image/png': '.png',
+                        'image/webp': '.webp',
+                        'image/gif': '.gif',
+                        'image/bmp': '.bmp',
+                        'image/svg+xml': '.svg',
+                        'video/mp4': '.mp4',
+                        'video/quicktime': '.mov',
+                        'video/webm': '.webm',
+                        'video/x-matroska': '.mkv',
+                        'video/x-msvideo': '.avi',
+                    };
+                    return map[mime] || '';
+                }
+                function buildRpDriveUploadName(name, mimeType){
+                    const safeBase = String(name || 'drive-file').trim() || 'drive-file';
+                    if(/\.[A-Za-z0-9]{2,5}$/.test(safeBase)) return safeBase;
+                    return safeBase + getRpDriveExtensionForMime(mimeType);
+                }
+                function escapeRpDriveJsString(value){
+                    return String(value || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                }
+                function buildRpDriveThumbMarkup(item, kind){
+                    const label = kind === 'video' ? 'Video' : (kind === 'image' ? 'Image' : 'Folder');
+                    if(kind === 'folder'){
+                        return '<div class="rp-drive-card__thumb rp-drive-card__thumb--folder" aria-hidden="true"><span style="position:relative; z-index:1; margin-top:56px;">Folder</span></div>';
+                    }
+                    const id = encodeURIComponent(String((item && item.id) || ''));
+                    if(id && (item.thumbnailLink || item.hasThumbnail)){
+                        return `<div class="rp-drive-card__thumb"><img loading="lazy" src="/api/google-drive/thumb/${id}" alt="${escapeHtml(label)} preview" onerror="this.parentNode.innerHTML='<div class=&quot;rp-drive-card__fallback&quot;>${escapeHtml(label)}</div>'"></div>`;
+                    }
+                    return `<div class="rp-drive-card__thumb"><div class="rp-drive-card__fallback">${escapeHtml(label)}</div></div>`;
+                }
+                async function syncRpDriveStatus(force){
+                    if(rpDriveLoading && !force) return;
+                    if(rpDriveStatusChecked && !force) return;
+                    try{
+                        const response = await fetch('/api/google-drive/status', { cache:'no-store' });
+                        const payload = await response.json();
+                        if(response.ok && payload && payload.success){
+                            rpDriveConfigured = !!payload.configured;
+                            rpDriveConnected = !!payload.connected;
+                            rpDriveAccountEmail = String(payload.email || '').trim();
+                            rpDriveStatusChecked = true;
+                            if(!rpDriveConnected){
+                                rpDriveItems = [];
+                                rpDriveNextPageToken = '';
+                            }
+                        } else {
+                            throw new Error((payload && payload.error) || 'Failed to check Google Drive status');
+                        }
+                    }catch(error){
+                        rpDriveConfigured = false;
+                        rpDriveConnected = false;
+                        rpDriveAccountEmail = '';
+                        rpDriveStatusChecked = true;
+                        rpDriveError = error && error.message ? error.message : 'Failed to check Google Drive status';
+                    }finally{
+                        renderRpContextPanels();
+                    }
+                }
+                function ensureRpDriveMessageListener(){
+                    if(window.__rpDriveMessageListenerBound) return;
+                    window.__rpDriveMessageListenerBound = true;
+                    window.addEventListener('message', async (event) => {
+                        if(!event || event.origin !== window.location.origin) return;
+                        const data = event.data || {};
+                        if(data.type !== 'google-drive-auth') return;
+                        if(data.success){
+                            rpDriveError = '';
+                            await syncRpDriveStatus(true);
+                            if(rpDriveConnected){
+                                rpDriveResetTrail();
+                                await rpDriveLoadCurrentFolder();
+                            }
+                            return;
+                        }
+                        rpDriveError = data.message || 'Google Drive authorization failed';
+                        rpDrivePopup = null;
+                        renderRpContextPanels();
+                    });
+                }
+                function renderRpDriveInlinePanel(){
+                    const host = document.getElementById('rp-drive-inline-host');
+                    if(!host) return;
+                    const existingBrowser = host.querySelector('.rp-drive-browser');
+                    if(existingBrowser) rpDriveScrollTop = existingBrowser.scrollTop || 0;
+                    const configured = !!rpDriveConfigured;
+                    const connected = !!rpDriveConnected;
+                    const currentFolder = getRpDriveCurrentFolder();
+                    const statusClass = rpDriveError ? 'is-error' : (connected ? 'is-on' : '');
+                    const statusText = rpDriveError
+                        ? rpDriveError
+                        : (connected ? `Connected to Google Drive${rpDriveAccountEmail ? ` as ${rpDriveAccountEmail}` : ''}: ${currentFolder.name}` : 'Connect Google Drive to browse your files here.');
+                    const statusLabel = rpDriveError
+                        ? rpDriveError
+                        : (connected ? `${rpDriveAccountEmail || 'Connected'}: ${currentFolder.name}` : 'Not connected');
+                    const driveItems = getRpDriveVisibleItems();
+                    const breadcrumbs = rpDriveFolderTrail.map((entry, index) => `
+                        <button type="button" class="rp-drive-crumbs__btn ${index === rpDriveFolderTrail.length - 1 ? 'is-current' : ''}" ${index === rpDriveFolderTrail.length - 1 ? 'disabled' : `onclick="rpDriveGoToTrailIndex(${index})"`}>
+                            ${escapeHtml(entry.name || (index === 0 ? 'My Drive' : 'Folder'))}
+                        </button>`).join('');
+                    let browserMarkup = '';
+                    if(!configured){
+                        browserMarkup = `<div class="rp-drive-empty">Google Drive browsing is not configured on this server yet. Add <code>GOOGLE_CLIENT_ID</code> to enable sign-in and browsing here.</div>`;
+                    } else if(!connected){
+                        browserMarkup = `<div class="rp-drive-empty">Sign in to Google Drive to browse folders and choose a file inside this scheduling workspace. Images and videos are supported right now.</div>`;
+                    } else if(rpDriveLoading){
+                        browserMarkup = `<div class="rp-drive-empty">Loading Google Drive items...</div>`;
+                    } else if(rpDriveError){
+                        browserMarkup = `<div class="rp-drive-empty">Google Drive error: ${escapeHtml(rpDriveError)}</div>`;
+                    } else if(!driveItems.length){
+                        browserMarkup = `<div class="rp-drive-empty">No folders or supported media files were found here. This browser currently shows folders plus image/video files only.${rpDriveNextPageToken ? ' More items exist in this folder; narrow the folder or refresh after moving files.' : ''}</div>`;
+                    } else {
+                        browserMarkup = `<div class="rp-drive-grid">${driveItems.map(({ item, index }) => {
+                            const kind = inferRpDriveKind(item);
+                            const iconLabel = kind === 'folder' ? 'Folder' : (kind === 'video' ? 'Video' : 'Image');
+                            const metaParts = [iconLabel];
+                            const sizeText = formatRpDriveBytes(item.size);
+                            const dateText = formatRpDriveDate(item.modifiedTime);
+                            if(sizeText && kind !== 'folder') metaParts.push(sizeText);
+                            if(dateText) metaParts.push(dateText);
+                            const isBusy = rpDriveImportingFileId && rpDriveImportingFileId === item.id;
+                            const cardAction = kind === 'folder' ? `rpDriveOpenFolderByIndex(${index})` : `rpDriveImportFileByIndex(${index})`;
+                            const actionHint = kind === 'folder' ? 'Double-click to open' : (isBusy ? 'Importing...' : 'Double-click to import');
+                            return `
+                                <div class="rp-drive-card ${kind === 'folder' ? 'rp-drive-card--folder' : ''}" tabindex="0" role="button" ondblclick="${cardAction}" onkeydown="handleRpDriveCardKey(event, ${index})" title="${actionHint}">
+                                    ${buildRpDriveThumbMarkup(item, kind)}
+                                    <div class="rp-drive-card__body">
+                                        <div class="rp-drive-card__name">${escapeHtml(item.name || 'Untitled')}</div>
+                                        <div class="rp-drive-card__meta">${escapeHtml(metaParts.join(' • '))}</div>
+                                        <div class="rp-drive-card__hint">${actionHint}</div>
+                                    </div>
+                                </div>`;
+                        }).join('')}</div>`;
+                    }
+                    host.innerHTML = `
+                        <div class="rp-drive-inline">
+                            <div class="rp-drive-inline__head">
+                                <div class="rp-drive-titleline">
+                                    <div class="rp-subtitle">Google Drive</div>
+                                    <div class="rp-drive-status" title="${escapeHtml(statusText)}"><span class="rp-drive-status__dot ${statusClass}"></span><span>${escapeHtml(statusLabel)}</span></div>
+                                </div>
+                                <div class="rp-drive-inline__actions" aria-label="Google Drive controls">
+                                    ${configured ? `<button type="button" class="btn rp-drive-toolbar-btn ${connected ? '' : 'primary'}" onclick="connectRpGoogleDrive()" title="${connected ? 'Reconnect Google Drive' : 'Connect Google Drive'}">${connected ? 'Reconnect' : 'Connect'}</button>` : ''}
+                                    ${connected ? '<button type="button" class="btn rp-drive-toolbar-btn" onclick="rpDriveRefreshFolder()" title="Refresh Google Drive folder">Refresh</button><button type="button" class="btn rp-drive-toolbar-btn rp-drive-toolbar-btn--icon" onclick="disconnectRpGoogleDrive()" title="Disconnect Google Drive">X</button>' : ''}
+                                </div>
+                            </div>
+                            <div class="rp-drive-crumbs">${breadcrumbs}</div>
+                            <div class="rp-drive-browser">${browserMarkup}</div>
+                            <div class="rp-drive-link-box">
+                                <div class="rp-subtitle" style="margin:0;">Public link import</div>
+                                <div class="rp-help" style="margin-top:0;">If you already have a public Drive, Dropbox, or OneDrive link, you can still import it directly here.</div>
+                                <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+                                    <div style="flex:1 1 420px; min-width:280px;">
+                                        <input id="rp-drive-public-link-inline" class="rp-input" type="url" placeholder="Paste a public file link">
+                                    </div>
+                                    <button type="button" class="btn" onclick="rpDriveImportPublicLink()">Import from link</button>
+                                </div>
+                            </div>
+                        </div>`;
+                    const publicLinkInput = document.getElementById('rp-drive-public-link-inline');
+                    if(publicLinkInput){
+                        publicLinkInput.value = ((document.getElementById('rp-import-url') || {}).value || '').trim();
+                        publicLinkInput.addEventListener('input', () => syncRpInlineImportValue(publicLinkInput.value));
+                    }
+                    const nextBrowser = host.querySelector('.rp-drive-browser');
+                    if(nextBrowser){
+                        nextBrowser.addEventListener('scroll', () => { rpDriveScrollTop = nextBrowser.scrollTop || 0; }, { passive:true });
+                        requestAnimationFrame(() => {
+                            try { nextBrowser.scrollTop = rpDriveScrollTop || 0; } catch {}
+                        });
+                    }
+                }
+                async function rpDriveLoadCurrentFolder(){
+                    const current = getRpDriveCurrentFolder();
+                    rpDriveLoading = true;
+                    rpDriveError = '';
+                    renderRpContextPanels();
+                    try{
+                        const response = await fetch(`/api/google-drive/list?folder_id=${encodeURIComponent(current.id || 'root')}`, { cache:'no-store' });
+                        const payload = await response.json();
+                        if(!response.ok){
+                            throw new Error((payload && payload.error) || 'Failed to load Google Drive folder');
+                        }
+                        const files = Array.isArray(payload && payload.files) ? payload.files.slice() : [];
+                        files.sort((left, right) => {
+                            const leftKind = inferRpDriveKind(left) === 'folder' ? 0 : 1;
+                            const rightKind = inferRpDriveKind(right) === 'folder' ? 0 : 1;
+                            if(leftKind !== rightKind) return leftKind - rightKind;
+                            return String(left && left.name || '').localeCompare(String(right && right.name || ''), undefined, { numeric:true, sensitivity:'base' });
+                        });
+                        rpDriveItems = files;
+                        rpDriveNextPageToken = String((payload && payload.nextPageToken) || '');
+                    }catch(error){
+                        rpDriveItems = [];
+                        rpDriveNextPageToken = '';
+                        rpDriveError = error && error.message ? error.message : 'Failed to load Google Drive folder';
+                    }finally{
+                        rpDriveLoading = false;
+                        renderRpContextPanels();
+                    }
+                }
+                function rpDriveResetTrail(){
+                    rpDriveFolderTrail = [{ id:'root', name:'My Drive' }];
+                }
+                function connectRpGoogleDrive(){
+                    try{
+                        ensureRpDriveMessageListener();
+                        rpDriveError = '';
+                        const width = 620;
+                        const height = 760;
+                        const left = Math.max(0, Math.round((window.screen.width - width) / 2));
+                        const top = Math.max(0, Math.round((window.screen.height - height) / 2));
+                        rpDrivePopup = window.open(
+                            '/auth/google/drive/start',
+                            'rpGoogleDriveAuth',
+                            `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+                        );
+                        if(!rpDrivePopup){
+                            throw new Error('Popup was blocked. Please allow popups for this site and try again.');
+                        }
+                    }catch(error){
+                        rpDriveError = error && error.message ? error.message : 'Google Drive is not available';
+                        renderRpContextPanels();
+                    }
+                }
+                async function disconnectRpGoogleDrive(){
+                    rpDriveItems = [];
+                    rpDriveNextPageToken = '';
+                    rpDriveLoading = false;
+                    rpDriveImportingFileId = '';
+                    rpDriveError = '';
+                    rpDriveResetTrail();
+                    rpDriveConnected = false;
+                    rpDriveAccountEmail = '';
+                    rpDriveStatusChecked = true;
+                    try {
+                        await fetch('/api/google-drive/disconnect', { method:'POST' });
+                    } catch {}
+                    renderRpContextPanels();
+                }
+                async function rpDriveRefreshFolder(){
+                    if(!rpDriveConnected){
+                        await syncRpDriveStatus(true);
+                        if(!rpDriveConnected){
+                            connectRpGoogleDrive();
+                            return;
+                        }
+                    }
+                    if(!Array.isArray(rpDriveFolderTrail) || !rpDriveFolderTrail.length){
+                        rpDriveResetTrail();
+                    }
+                    await rpDriveLoadCurrentFolder();
+                }
+                async function ensureRpDriveReady(){
+                    await syncRpDriveStatus(false);
+                    if(!rpDriveConnected){
+                        renderRpContextPanels();
+                        return;
+                    }
+                    if(!rpDriveItems.length && !rpDriveLoading){
+                        await rpDriveLoadCurrentFolder();
+                    }
+                }
+                async function rpDriveGoToTrailIndex(index){
+                    const safeIndex = Number(index);
+                    if(!Number.isFinite(safeIndex) || safeIndex < 0 || safeIndex >= rpDriveFolderTrail.length) return;
+                    rpDriveFolderTrail = rpDriveFolderTrail.slice(0, safeIndex + 1);
+                    rpDriveScrollTop = 0;
+                    await rpDriveLoadCurrentFolder();
+                }
+                async function rpDriveOpenFolderByIndex(index){
+                    const item = rpDriveItems[Number(index)];
+                    if(!item || inferRpDriveKind(item) !== 'folder') return;
+                    rpDriveFolderTrail = [...rpDriveFolderTrail, { id:String(item.id || ''), name:String(item.name || 'Folder') }];
+                    rpDriveScrollTop = 0;
+                    await rpDriveLoadCurrentFolder();
+                }
+                function handleRpDriveCardKey(event, index){
+                    if(!event || (event.key !== 'Enter' && event.key !== ' ')) return;
+                    event.preventDefault();
+                    const item = rpDriveItems[Number(index)];
+                    if(!item) return;
+                    if(inferRpDriveKind(item) === 'folder'){
+                        rpDriveOpenFolderByIndex(index);
+                    } else {
+                        rpDriveImportFileByIndex(index);
+                    }
+                }
+                async function rpDriveImportFileByIndex(index){
+                    const item = rpDriveItems[Number(index)];
+                    if(!item) return;
+                    const kind = inferRpDriveKind(item);
+                    if(kind === 'folder'){
+                        await rpDriveOpenFolderByIndex(index);
+                        return;
+                    }
+                    if(kind !== 'image' && kind !== 'video'){
+                        alert('Only image and video files can be imported from Google Drive right now.');
+                        return;
+                    }
+                    rpDriveImportingFileId = item.id;
+                    rpDriveError = '';
+                    renderRpContextPanels();
+                    try{
+                        const uploadResponse = await fetch('/api/google-drive/import', {
+                            method:'POST',
+                            headers:{ 'Content-Type':'application/json' },
+                            body: JSON.stringify({ file_id: item.id, prefix: rpPrefix || '' })
+                        });
+                        const uploadResult = await uploadResponse.json();
+                        if(!uploadResponse.ok || !uploadResult.success){
+                            throw new Error((uploadResult && uploadResult.error) || 'Failed to import Google Drive file');
+                        }
+                        refreshLibrary();
+                        chooseLibraryFile(uploadResult.filename, uploadResult.media_type || inferRpMediaType(uploadResult.filename));
+                        showMessage(`Imported ${buildRpDriveUploadName(item.name, item.mimeType)} from Google Drive`, '#2563eb');
+                    }catch(error){
+                        rpDriveError = error && error.message ? error.message : 'Google Drive import failed';
+                        renderRpContextPanels();
+                        alert(rpDriveError);
+                    }finally{
+                        rpDriveImportingFileId = '';
+                        renderRpContextPanels();
+                    }
+                }
+                function rpDriveImportPublicLink(){
+                    const inlineInput = document.getElementById('rp-drive-public-link-inline');
+                    if(inlineInput) syncRpInlineImportValue(inlineInput.value);
+                    rpImportFromUrl();
+                }
+                function renderRpContextPanels(){
+                    const previewPanelZone = document.getElementById('rp-preview-panel-zone');
+                    const youtubePanel = document.getElementById('rp-youtube-panel');
+                    const importPanel = document.getElementById('rp-import-panel');
+                    if(!previewPanelZone) return;
+                    if(!previewPanelZone.dataset.defaultHtml){
+                        previewPanelZone.dataset.defaultHtml = previewPanelZone.innerHTML;
+                    }
+                    if(isRpYouTubeMode()){
+                        if(youtubePanel) youtubePanel.style.display = 'none';
+                        if(importPanel) importPanel.style.display = '';
+                        previewPanelZone.style.display = 'block';
+                        previewPanelZone.innerHTML = `
+                            <div class="rp-subtitle" style="margin:0 0 8px 0;">YouTube</div>
+                            <div class="rp-help" style="margin-top:0;">Paste a YouTube URL or direct video ID here, then preview it before adding it to the screen.</div>
+                            <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; margin-top:12px;">
+                                <div style="flex:1 1 420px; min-width:280px;">
+                                    <input id="rp-youtube-url-inline" class="rp-input" type="url" placeholder="Paste YouTube URL or video ID">
+                                </div>
+                                <button type="button" class="btn primary" onclick="rpPreviewInlineYouTube()">Preview YouTube</button>
+                            </div>`;
+                        const sidebarInput = document.getElementById('rp-youtube-url');
+                        const inlineInput = document.getElementById('rp-youtube-url-inline');
+                        if(inlineInput){
+                            inlineInput.value = sidebarInput ? sidebarInput.value : '';
+                            inlineInput.addEventListener('input', () => syncRpInlineYoutubeValue(inlineInput.value));
+                        }
+                        return;
+                    }
+                    if(isRpDriveMode()){
+                        if(youtubePanel) youtubePanel.style.display = 'none';
+                        if(importPanel) importPanel.style.display = 'none';
+                        previewPanelZone.style.display = 'block';
+                        previewPanelZone.innerHTML = '<div id="rp-drive-inline-host"></div>';
+                        renderRpDriveInlinePanel();
+                        return;
+                    }
+                    if(isRpImportMode()){
+                        if(youtubePanel) youtubePanel.style.display = '';
+                        if(importPanel) importPanel.style.display = 'none';
+                        previewPanelZone.style.display = 'block';
+                        previewPanelZone.innerHTML = `
+                            <div class="rp-subtitle" style="margin:0 0 8px 0;">Google Drive</div>
+                            <div class="rp-help" style="margin-top:0;">Paste a public Google Drive link here. Dropbox and OneDrive links also work.</div>
+                            <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; margin-top:12px;">
+                                <div style="flex:1 1 420px; min-width:280px;">
+                                    <input id="rp-import-url-inline" class="rp-input" type="url" placeholder="Paste Google Drive / Dropbox / OneDrive link">
+                                </div>
+                                <button type="button" class="btn primary" onclick="rpImportInlineUrl()">Import file</button>
+                            </div>`;
+                        const sidebarInput = document.getElementById('rp-import-url');
+                        const inlineInput = document.getElementById('rp-import-url-inline');
+                        if(inlineInput){
+                            inlineInput.value = sidebarInput ? sidebarInput.value : '';
+                            inlineInput.addEventListener('input', () => syncRpInlineImportValue(inlineInput.value));
+                        }
+                        return;
+                    }
+                    if(youtubePanel) youtubePanel.style.display = '';
+                    if(importPanel) importPanel.style.display = '';
+                    previewPanelZone.style.display = 'flex';
+                    if(previewPanelZone.innerHTML !== previewPanelZone.dataset.defaultHtml){
+                        previewPanelZone.innerHTML = previewPanelZone.dataset.defaultHtml;
+                        renderRpPanelScheduleControls();
+                    }
+                }
+                function rpPreviewInlineYouTube(){
+                    const inlineInput = document.getElementById('rp-youtube-url-inline');
+                    if(inlineInput) syncRpInlineYoutubeValue(inlineInput.value);
+                    rpReplaceWithYouTube();
+                }
+                function rpImportInlineUrl(){
+                    const inlineInput = document.getElementById('rp-import-url-inline');
+                    if(inlineInput) syncRpInlineImportValue(inlineInput.value);
+                    rpImportFromUrl();
                 }
                 function getRpDisplayName(media){
                     if(!media) return '';
@@ -13309,6 +14092,7 @@ allowfullscreen></iframe></div>`;
                     const hasSelection = !!(rpSelectedMedia && rpSelectedMedia.name);
                     const wallSet = (rpSelectedMedia && Array.isArray(rpSelectedMedia.wallSet) && rpSelectedMedia.wallSet.length > 1) ? rpSelectedMedia.wallSet : null;
                     const scheduleMeta = getRpDraftScheduleMeta();
+                    syncRpPreviewTimePin();
                     const targetLabel = wallSet ? getRpWallScreenLabel(wallSet.length) : formatRpScreenLabel(getRpSelectedTargetScreenId());
                     if(modalScreen) modalScreen.textContent = targetLabel;
                     if(previewScreen) previewScreen.textContent = targetLabel;
@@ -13317,8 +14101,9 @@ allowfullscreen></iframe></div>`;
                         applyBtn.textContent = getRpApplyLabel();
                     }
                     if(clearBtn) clearBtn.disabled = !hasSelection;
+                    renderRpContextPanels();
                     if(scheduleSummaryBox){
-                        scheduleSummaryBox.textContent = `Schedule will use ${scheduleMeta.durationText}, ${scheduleMeta.effectText.toLowerCase()}, and ${scheduleMeta.repeatText.toLowerCase()}${scheduleMeta.timeText !== 'No time window set' ? ` between ${scheduleMeta.timeText}.` : '.'}`;
+                        scheduleSummaryBox.textContent = getRpScheduleSummaryText(scheduleMeta);
                     }
                     if(!hasSelection){
                         if(previewMedia){ previewMedia.style.display = 'none'; previewMedia.innerHTML = ''; }
@@ -13379,6 +14164,7 @@ allowfullscreen></iframe></div>`;
                     renderRpSelection();
                 }
                 function chooseLibraryFile(name, mediaType){
+                    rpComposerMode = mediaType === 'youtube' ? 'youtube' : '';
                     const wallSet = mediaType === 'video' ? getRpWallSliceSet(name) : null;
                     rpSelectedMedia = {
                         name,
@@ -13519,6 +14305,7 @@ allowfullscreen></iframe></div>`;
                         switchRpTab('lib');
                         const panel = document.querySelector('.rp-preview-shell');
                         if(panel) panel.scrollIntoView({ behavior:'smooth', block:'nearest' });
+                        renderRpSelection();
                         return;
                     }
                     if(which === 'upload'){
@@ -13527,7 +14314,29 @@ allowfullscreen></iframe></div>`;
                         if(uploadInput) uploadInput.focus();
                         return;
                     }
+                    rpComposerMode = which === 'youtube' ? 'youtube' : (which === 'drive' ? 'drive' : (which === 'import' ? 'import' : ''));
                     switchRpTab('lib');
+                    renderRpSelection();
+                    if(which === 'youtube'){
+                        const inlineInput = document.getElementById('rp-youtube-url-inline');
+                        const previewPanelZone = document.getElementById('rp-preview-panel-zone');
+                        if(previewPanelZone) previewPanelZone.scrollIntoView({ behavior:'smooth', block:'nearest' });
+                        if(inlineInput) inlineInput.focus();
+                        return;
+                    }
+                    if(which === 'drive'){
+                        const previewPanelZone = document.getElementById('rp-preview-panel-zone');
+                        if(previewPanelZone) previewPanelZone.scrollIntoView({ behavior:'smooth', block:'nearest' });
+                        ensureRpDriveReady().catch(() => {});
+                        return;
+                    }
+                    if(which === 'import'){
+                        const inlineInput = document.getElementById('rp-import-url-inline');
+                        const previewPanelZone = document.getElementById('rp-preview-panel-zone');
+                        if(previewPanelZone) previewPanelZone.scrollIntoView({ behavior:'smooth', block:'nearest' });
+                        if(inlineInput) inlineInput.focus();
+                        return;
+                    }
                     const panel = document.getElementById(which === 'youtube' ? 'rp-youtube-panel' : 'rp-import-panel');
                     if(panel){
                         panel.scrollIntoView({ behavior:'smooth', block:'nearest' });
@@ -13887,14 +14696,8 @@ allowfullscreen></iframe></div>`;
                         return; 
                     }
                     
-                    // Extract video ID from URL or use as-is if it's just an ID
-                    let videoId = urlInput;
-                    const youtubeRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
-                    const match = urlInput.match(youtubeRegex);
-                    if (match && match[1]) {
-                        videoId = match[1];
-                    }
-                    if(!/^[a-zA-Z0-9_-]{11}$/.test(videoId)){
+                    const videoId = parseYouTubeVideoId(urlInput);
+                    if(!videoId){
                         alert('Enter a valid YouTube URL or 11-character video ID');
                         return;
                     }
@@ -14169,18 +14972,83 @@ allowfullscreen></iframe></div>`;
             // YOUTUBE VIDEO MODAL
             // ============================================
             let youtubeTargetScreen = null;
+            let youtubeTargetItemId = null;
+
+            function parseYouTubeVideoId(value) {
+                const raw = String(value || '').trim();
+                if (!raw) return '';
+                const markerMatch = raw.match(/^youtube:([a-zA-Z0-9_-]{11})$/i);
+                if (markerMatch) return markerMatch[1];
+                if (/^[a-zA-Z0-9_-]{11}$/.test(raw)) return raw;
+                const youtubeRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+                const match = raw.match(youtubeRegex);
+                return match && match[1] ? match[1] : '';
+            }
+
+            function formatEditableYouTubeValue(value) {
+                const videoId = parseYouTubeVideoId(value);
+                if (videoId) return `https://www.youtube.com/watch?v=${videoId}`;
+                return String(value || '').trim();
+            }
+
+            function openYouTubeScheduleEditor(screenId, itemId = 'SINGLE', currentFile = '') {
+                const targetItemId = itemId || 'SINGLE';
+                let decodedFile = String(currentFile || '');
+                try {
+                    decodedFile = decodeURIComponent(decodedFile);
+                } catch {}
+                openReplaceModal(screenId, targetItemId);
+                window.setTimeout(() => {
+                    const input = document.getElementById('rp-youtube-url');
+                    if (input) {
+                        input.value = formatEditableYouTubeValue(decodedFile);
+                    }
+                    focusRpPanel('youtube');
+                    if (input) {
+                        input.focus();
+                        input.select();
+                    }
+                    showMessage(
+                        targetItemId === 'SINGLE'
+                            ? 'Paste a YouTube link here, preview it, then add it to the screen.'
+                            : 'Current YouTube link loaded here. Update it, click Preview YouTube, then replace media.',
+                        '#3657d6'
+                    );
+                }, 0);
+            }
+
+            function openYouTubeScheduleEditorFromButton(button) {
+                if (!button) return false;
+                const screenId = String(button.getAttribute('data-screen-id') || '').trim();
+                const itemId = String(button.getAttribute('data-item-id') || 'SINGLE').trim() || 'SINGLE';
+                const currentFile = String(button.getAttribute('data-youtube-file') || '').trim();
+                if (!screenId) return false;
+                openYouTubeScheduleEditor(screenId, itemId, currentFile);
+                return false;
+            }
             
-            function openYouTubeModal(screenId) {
+            function openYouTubeModal(screenId, itemId = null, currentFile = '', currentDuration = 30) {
                 youtubeTargetScreen = screenId;
+                youtubeTargetItemId = itemId || null;
+                const editing = !!youtubeTargetItemId;
                 document.getElementById('youtubeModal').style.display = 'flex';
-                document.getElementById('youtubeUrl').value = '';
-                document.getElementById('youtubeDuration').value = '30';
+                document.getElementById('youtubeUrl').value = parseYouTubeVideoId(currentFile) || '';
+                document.getElementById('youtubeDuration').value = String(parseInt(currentDuration, 10) || 30);
+                const titleEl = document.getElementById('youtubeModalTitle');
+                const copyEl = document.getElementById('youtubeModalCopy');
+                const actionEl = document.getElementById('youtubeModalAction');
+                if (titleEl) titleEl.textContent = editing ? '▶️ Edit YouTube Video' : '▶️ Add YouTube Video';
+                if (copyEl) copyEl.textContent = editing
+                    ? 'Replace the existing YouTube link on this playlist item without deleting its schedule settings.'
+                    : 'Paste a YouTube video URL or video ID to add it to the schedule.';
+                if (actionEl) actionEl.textContent = editing ? 'Update YouTube Link' : 'Add to Schedule';
                 document.getElementById('youtubeUrl').focus();
             }
             
             function closeYouTubeModal() {
                 document.getElementById('youtubeModal').style.display = 'none';
                 youtubeTargetScreen = null;
+                youtubeTargetItemId = null;
             }
             
             async function addYouTubeVideo() {
@@ -14197,18 +15065,38 @@ allowfullscreen></iframe></div>`;
                     return;
                 }
                 
-                // Extract video ID from URL or use as-is if it's just an ID
-                let videoId = urlInput;
-                const youtubeRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
-                const match = urlInput.match(youtubeRegex);
-                if (match && match[1]) {
-                    videoId = match[1];
+                const videoId = parseYouTubeVideoId(urlInput);
+                if (!videoId) {
+                    alert('Please enter a valid YouTube URL or 11-character video ID');
+                    return;
                 }
                 
                 // Create YouTube embed URL - use a special marker so backend knows it's YouTube
                 const youtubeUrl = `youtube:${videoId}`;
                 
                 try {
+                    if (youtubeTargetItemId) {
+                        const response = await fetch(`/playlist/item/${currentStoreId}/${youtubeTargetScreen}/${youtubeTargetItemId}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                file: youtubeUrl,
+                                duration: duration
+                            })
+                        });
+
+                        const result = await response.json();
+                        if (result.success) {
+                            showMessage(`YouTube link updated for ${youtubeTargetScreen}!`, '#28a745');
+                            closeYouTubeModal();
+                            await refreshPlaylist(youtubeTargetScreen);
+                            loadScreensForStore(currentStoreId);
+                        } else {
+                            alert('Failed to update YouTube video: ' + (result.error || 'Unknown error'));
+                        }
+                        return;
+                    }
+
                     // Use assign_to_screen which will create a new playlist item
                     // The filename will be the YouTube URL marker
                     const response = await fetch('/assign_to_screen', {
@@ -16508,11 +17396,11 @@ allowfullscreen></iframe></div>`;
     <div id="youtubeModal" class="modal" style="display:none;">
         <div class="modal-content" style="max-width:600px;">
             <div class="modal-header">
-                <h3>▶️ Add YouTube Video</h3>
+                <h3 id="youtubeModalTitle">▶️ Add YouTube Video</h3>
                 <button type="button" class="close" onclick="closeYouTubeModal()">&times;</button>
             </div>
             <div style="padding:20px;">
-                <p style="margin-bottom:15px; color:#666;">Paste a YouTube video URL or video ID to add it to the schedule.</p>
+                <p id="youtubeModalCopy" style="margin-bottom:15px; color:#666;">Paste a YouTube video URL or video ID to add it to the schedule.</p>
                 
                 <div class="form-group">
                     <label for="youtubeUrl">YouTube URL or Video ID</label>
@@ -16528,7 +17416,7 @@ allowfullscreen></iframe></div>`;
                 
                 <div style="margin-top:20px; display:flex; gap:10px; justify-content:flex-end;">
                     <button type="button" class="btn-secondary" onclick="closeYouTubeModal()">Cancel</button>
-                    <button type="button" class="btn-primary" onclick="addYouTubeVideo()" style="background:#FF0000;">Add to Schedule</button>
+                    <button type="button" class="btn-primary" id="youtubeModalAction" onclick="addYouTubeVideo()" style="background:#FF0000;">Add to Schedule</button>
                 </div>
             </div>
         </div>

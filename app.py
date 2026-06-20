@@ -3,6 +3,7 @@ import re
 import tempfile
 import urllib.request
 import urllib.parse
+import urllib.error
 import json
 import time
 import logging
@@ -4045,6 +4046,227 @@ def import_from_url():
         logging.exception('import_from_url error: %s', e)
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
+@app.route('/api/google-drive/status', methods=['GET'])
+@login_required
+def google_drive_status():
+    try:
+        configured = bool((os.environ.get('GOOGLE_CLIENT_ID') or '').strip() and (os.environ.get('GOOGLE_CLIENT_SECRET') or '').strip())
+        info = _google_drive_session()
+        connected = bool(_google_drive_access_token())
+        return jsonify({
+            'success': True,
+            'configured': configured,
+            'connected': connected,
+            'email': str(info.get('email') or '').strip(),
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/google-drive/disconnect', methods=['POST'])
+@login_required
+def google_drive_disconnect():
+    try:
+        session.pop('google_drive_auth', None)
+        session.pop('google_oauth_mode', None)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/google-drive/list', methods=['GET'])
+@login_required
+def google_drive_list():
+    try:
+        folder_id = str(request.args.get('folder_id') or 'root').strip() or 'root'
+        with _google_drive_api_request('files', params={
+            'q': f"'{folder_id}' in parents and trashed = false",
+            'fields': 'nextPageToken,files(id,name,mimeType,size,modifiedTime,thumbnailLink,iconLink,hasThumbnail)',
+            'orderBy': 'folder,name_natural',
+            'pageSize': '100',
+            'supportsAllDrives': 'false',
+            'includeItemsFromAllDrives': 'false',
+        }) as resp:
+            payload = json.loads(resp.read().decode('utf-8') or '{}')
+        files = payload.get('files') or []
+        return jsonify({
+            'success': True,
+            'files': files,
+            'nextPageToken': payload.get('nextPageToken') or '',
+        })
+    except PermissionError as e:
+        return jsonify({'success': False, 'error': str(e)}), 401
+    except Exception as e:
+        logging.exception('google_drive_list error: %s', e)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/google-drive/thumb/<file_id>', methods=['GET'])
+@login_required
+def google_drive_thumbnail(file_id):
+    try:
+        clean_file_id = str(file_id or '').strip()
+        if not clean_file_id:
+            return jsonify({'success': False, 'error': 'file_id required'}), 400
+
+        with _google_drive_api_request(f'files/{urllib.parse.quote(clean_file_id, safe="")}', params={
+            'fields': 'id,name,mimeType,thumbnailLink'
+        }) as meta_resp:
+            meta = json.loads(meta_resp.read().decode('utf-8') or '{}')
+
+        thumb_url = str(meta.get('thumbnailLink') or '').strip()
+        if not thumb_url:
+            return jsonify({'success': False, 'error': 'thumbnail not available'}), 404
+
+        # Drive thumbnail links are short-lived. Proxy them with this user's token
+        # so private Drive media can still render inside the schedule workspace.
+        token = _google_drive_access_token()
+        if not token:
+            return jsonify({'success': False, 'error': 'Google Drive is not connected'}), 401
+        if '=s220' in thumb_url:
+            thumb_url = thumb_url.replace('=s220', '=s480')
+
+        req = urllib.request.Request(
+            thumb_url,
+            headers={
+                'Authorization': f'Bearer {token}',
+                'User-Agent': 'PHTV/1.0',
+            }
+        )
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            data = resp.read()
+            content_type = resp.headers.get('Content-Type') or 'image/jpeg'
+
+        response = Response(data, mimetype=content_type)
+        response.headers['Cache-Control'] = 'private, max-age=300'
+        return response
+    except PermissionError as e:
+        return jsonify({'success': False, 'error': str(e)}), 401
+    except Exception as e:
+        logging.exception('google_drive_thumbnail error: %s', e)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/google-drive/import', methods=['POST'])
+@login_required
+def google_drive_import():
+    try:
+        data = request.get_json(force=True) or {}
+        file_id = str(data.get('file_id') or '').strip()
+        raw_prefix = data.get('prefix')
+        if not file_id:
+            return jsonify({'success': False, 'error': 'file_id required'}), 400
+
+        with _google_drive_api_request(f'files/{urllib.parse.quote(file_id, safe="")}', params={
+            'fields': 'id,name,mimeType,size'
+        }) as meta_resp:
+            meta = json.loads(meta_resp.read().decode('utf-8') or '{}')
+
+        name = str(meta.get('name') or 'drive-file').strip() or 'drive-file'
+        mime_type = str(meta.get('mimeType') or '').strip().lower()
+        if mime_type == 'application/vnd.google-apps.folder':
+            return jsonify({'success': False, 'error': 'Folders cannot be imported'}), 400
+        if not (mime_type.startswith('image/') or mime_type.startswith('video/')):
+            return jsonify({'success': False, 'error': 'Only image and video files can be imported right now'}), 400
+
+        ext = ''
+        if '.' in name:
+            ext = name.rsplit('.', 1)[1].lower()
+        if not ext:
+            try:
+                import mimetypes
+                guesses = mimetypes.guess_all_extensions(mime_type) or []
+                for guess in guesses:
+                    candidate = guess.lstrip('.').lower()
+                    if candidate in ALLOWED_EXTENSIONS:
+                        ext = candidate
+                        break
+            except Exception:
+                pass
+        if ext not in ALLOWED_EXTENSIONS:
+            return jsonify({'success': False, 'error': f'File type not allowed ({ext or "unknown"})'}), 415
+
+        MAX_BYTES = int(os.environ.get('IMPORT_MAX_BYTES', '104857600'))
+        with _google_drive_api_request(
+            f'files/{urllib.parse.quote(file_id, safe="")}',
+            params={'alt': 'media', 'acknowledgeAbuse': 'true'},
+            headers={'Accept': 'application/octet-stream'},
+            timeout=60.0,
+        ) as file_resp:
+            tmpf = tempfile.NamedTemporaryFile(prefix='gdrive_', suffix='.' + ext, delete=False)
+            tmp_path = tmpf.name
+            written = 0
+            try:
+                while True:
+                    chunk = file_resp.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    written += len(chunk)
+                    if written > MAX_BYTES:
+                        tmpf.close()
+                        os.unlink(tmp_path)
+                        return jsonify({'success': False, 'error': 'File too large'}), 413
+                    tmpf.write(chunk)
+                tmpf.flush()
+            finally:
+                try:
+                    tmpf.close()
+                except Exception:
+                    pass
+
+        user_root = _user_content_prefix()
+        if not user_root:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+            return jsonify({'success': False, 'error': 'auth required'}), 403
+
+        ui_prefix = _sanitize_prefix(raw_prefix)
+        req_prefix = _join_prefix_key(user_root, ui_prefix)
+        safe_name = f"{uuid.uuid4()}.{ext}"
+        local_dir = os.path.join(app.config['UPLOAD_FOLDER'], req_prefix)
+        os.makedirs(local_dir, exist_ok=True)
+        dest = os.path.join(local_dir, safe_name)
+        try:
+            os.replace(tmp_path, dest)
+        except Exception:
+            shutil.copyfile(tmp_path, dest)
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+        try:
+            for k in (f"{user_root}|{ui_prefix or '__root__'}", f"{user_root}|__root__"):
+                _LIB_CACHE.pop(k, None)
+        except Exception:
+            pass
+
+        try:
+            if r2_enabled():
+                with open(dest, 'rb') as fh:
+                    data_bytes = fh.read()
+                key = _join_prefix_key(req_prefix, safe_name)
+                r2_put_bytes(key, data_bytes, content_type=_guess_mime(safe_name))
+            else:
+                key = _join_prefix_key(req_prefix, safe_name)
+        except Exception:
+            key = _join_prefix_key(req_prefix, safe_name)
+
+        return jsonify({
+            'success': True,
+            'filename': key,
+            'media_type': classify_media(safe_name),
+            'url': build_public_url(key),
+        })
+    except PermissionError as e:
+        return jsonify({'success': False, 'error': str(e)}), 401
+    except Exception as e:
+        logging.exception('google_drive_import error: %s', e)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     if request.method == 'POST':
@@ -4960,40 +5182,13 @@ def verify_email(token: str):
 def auth_google():
     # Ensure the Google client exists; lazily register if env vars are present
     try:
-        client = None
-        if oauth:
-            if not getattr(oauth, 'google', None):
-                gid = os.environ.get('GOOGLE_CLIENT_ID')
-                gsecret = os.environ.get('GOOGLE_CLIENT_SECRET')
-                if gid and gsecret:
-                    try:
-                        oauth.register(
-                            name='google',
-                            client_id=gid,
-                            client_secret=gsecret,
-                            server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
-                            client_kwargs={'scope': 'openid email profile'},
-                        )
-                        logging.info('OAuth: Google provider lazily registered in route')
-                    except Exception as _e:
-                        logging.warning('OAuth: google (re)register failed: %s', _e)
-            try:
-                client = oauth.create_client('google')
-            except Exception:
-                client = None
+        client = _google_oauth_client()
 
         if not client:
             flash('Google Sign-In not configured', 'error')
             return redirect(url_for('login'))
 
-        try:
-            redirect_uri = url_for('auth_google_callback', _external=True)
-            # If a proxy ever yields http, prefer https externally
-            if redirect_uri.startswith('http://'):
-                redirect_uri = redirect_uri.replace('http://', 'https://', 1)
-        except Exception:
-            # Fallback to proper domain instead of IP
-            redirect_uri = 'https://api.everydayadvertise.com/auth/google/callback'
+        redirect_uri = _google_oauth_redirect_uri()
 
         # Preserve desired post-login destination for callback routing.
         try:
@@ -5028,6 +5223,17 @@ def auth_google():
         flash('Google Sign-In not available', 'error')
         return redirect(url_for('login'))
 
+
+@app.route('/auth/google/drive/start')
+@login_required
+def auth_google_drive_start():
+    try:
+        return redirect(_google_drive_authorize_url())
+    except Exception as e:
+        logging.warning('Google Drive auth init failed: %s', e)
+        return _google_drive_popup_response(False, 'Google Drive sign-in not available')
+
+
 @app.route('/auth/google/callback')
 def auth_google_callback():
     logging.info('=== Google OAuth Callback Started ===')
@@ -5039,40 +5245,48 @@ def auth_google_callback():
     
     # Ensure google client exists in case of lazy registration need
     try:
-        if oauth and not getattr(oauth, 'google', None):
-            gid = os.environ.get('GOOGLE_CLIENT_ID')
-            gsecret = os.environ.get('GOOGLE_CLIENT_SECRET')
-            if gid and gsecret:
-                try:
-                    oauth.register(
-                        name='google',
-                        client_id=gid,
-                        client_secret=gsecret,
-                        server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
-                        client_kwargs={'scope': 'openid email profile'},
-                    )
-                    logging.info('OAuth: Google provider lazily registered in callback')
-                except Exception as _e:
-                    logging.warning('OAuth: google lazy register failed in callback: %s', _e)
-        client = oauth.create_client('google') if oauth else None
+        oauth_mode = str(session.get('google_oauth_mode') or '').strip().lower()
+        if oauth_mode == 'drive_manual':
+            return _handle_google_drive_manual_callback()
+        client = _google_oauth_client()
         if not client:
             logging.error('✗ Google client not available in callback')
+            if oauth_mode == 'drive':
+                session.pop('google_oauth_mode', None)
+                return _google_drive_popup_response(False, 'Google Sign-In not configured')
             flash('Google Sign-In not configured', 'error')
             return redirect(url_for('login'))
     except Exception as _e:
         logging.error(f'✗ Google client prep failed in callback: {_e}')
+        if str(session.get('google_oauth_mode') or '').strip().lower() == 'drive':
+            session.pop('google_oauth_mode', None)
+            return _google_drive_popup_response(False, 'Google callback preparation failed')
         flash('Google Sign-In not configured', 'error')
         return redirect(url_for('login'))
     
     try:
         token = client.authorize_access_token()
         logging.info(f'✓ Google OAuth token received successfully')
+        oauth_mode = str(session.pop('google_oauth_mode', '') or '').strip().lower()
         
         userinfo = token.get('userinfo') or {}
         # Some providers put userinfo under separate call; fallback
         if not userinfo:
             resp = client.get('userinfo')
             userinfo = resp.json() if resp else {}
+
+        if oauth_mode == 'drive':
+            access_token = str(token.get('access_token') or '').strip()
+            if not access_token:
+                return _google_drive_popup_response(False, 'Google Drive token was not returned')
+            email = str(userinfo.get('email') or (session.get('user') or {}).get('email') or '').strip().lower()
+            session['google_drive_auth'] = {
+                'access_token': access_token,
+                'expires_at': int(token.get('expires_at') or (time.time() + 3300)),
+                'email': email,
+            }
+            session.permanent = True
+            return _google_drive_popup_response(True, 'Google Drive connected')
         
         email = userinfo.get('email')
         logging.info(f'✓ Google userinfo received: email={email}, name={userinfo.get("name")}')
@@ -5167,6 +5381,10 @@ def auth_google_callback():
         logging.error(f'✗ Google OAuth callback failed: {e}')
         logging.error(f'✗ Error type: {type(e).__name__}')
         logging.exception('✗ Full traceback:')
+        oauth_mode = str(session.pop('google_oauth_mode', '') or '').strip().lower()
+        if oauth_mode == 'drive':
+            session.pop('google_drive_auth', None)
+            return _google_drive_popup_response(False, str(e) or 'Google Drive authentication failed')
         
         # Check for specific error types
         error_msg = str(e).lower()
@@ -12112,6 +12330,226 @@ def _get_google_geocode_api_key():
     ).strip()
 
 
+def _google_oauth_client():
+    try:
+        client = None
+        if oauth:
+            if not getattr(oauth, 'google', None):
+                gid = os.environ.get('GOOGLE_CLIENT_ID')
+                gsecret = os.environ.get('GOOGLE_CLIENT_SECRET')
+                if gid and gsecret:
+                    try:
+                        oauth.register(
+                            name='google',
+                            client_id=gid,
+                            client_secret=gsecret,
+                            server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+                            client_kwargs={'scope': 'openid email profile'},
+                        )
+                        logging.info('OAuth: Google provider lazily registered')
+                    except Exception as _e:
+                        logging.warning('OAuth: google register failed: %s', _e)
+            try:
+                client = oauth.create_client('google')
+            except Exception:
+                client = None
+        return client
+    except Exception:
+        return None
+
+
+def _google_oauth_redirect_uri():
+    try:
+        redirect_uri = url_for('auth_google_callback', _external=True)
+        if redirect_uri.startswith('http://'):
+            redirect_uri = redirect_uri.replace('http://', 'https://', 1)
+        return redirect_uri
+    except Exception:
+        return 'https://api.everydayadvertise.com/auth/google/callback'
+
+
+def _google_drive_popup_response(success: bool, message: str = ''):
+    safe_message = json.dumps(str(message or ''))
+    payload = json.dumps({
+        'type': 'google-drive-auth',
+        'success': bool(success),
+        'message': str(message or '')
+    })
+    return Response(f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Google Drive</title>
+</head>
+<body style="font-family:Arial,sans-serif;padding:24px;">
+  <script>
+    (function() {{
+      const payload = {payload};
+      try {{
+        if (window.opener && !window.opener.closed) {{
+          window.opener.postMessage(payload, window.location.origin);
+        }}
+      }} catch (error) {{}}
+      if (payload.success) {{
+        window.close();
+        setTimeout(function() {{
+          document.body.innerHTML = '<p>Google Drive connected. You can close this window.</p>';
+        }}, 150);
+      }} else {{
+        document.body.innerHTML = '<p>Google Drive connection failed: ' + {safe_message} + '</p>';
+      }}
+    }})();
+  </script>
+</body>
+</html>""", mimetype='text/html')
+
+
+def _google_drive_authorize_url():
+    gid = (os.environ.get('GOOGLE_CLIENT_ID') or '').strip()
+    if not gid:
+        raise RuntimeError('Google client ID is not configured')
+    state = secrets.token_urlsafe(24)
+    session['google_oauth_mode'] = 'drive_manual'
+    session['google_drive_oauth_state'] = state
+    session.pop('google_drive_auth', None)
+    session.permanent = True
+    params = {
+        'client_id': gid,
+        'redirect_uri': _google_oauth_redirect_uri(),
+        'response_type': 'code',
+        'scope': 'openid email profile https://www.googleapis.com/auth/drive.readonly',
+        'state': state,
+        'prompt': 'consent',
+        'include_granted_scopes': 'false',
+        'access_type': 'online',
+    }
+    return 'https://accounts.google.com/o/oauth2/v2/auth?' + urllib.parse.urlencode(params)
+
+
+def _handle_google_drive_manual_callback():
+    expected_state = str(session.pop('google_drive_oauth_state', '') or '')
+    session.pop('google_oauth_mode', None)
+    if request.args.get('error'):
+        return _google_drive_popup_response(False, request.args.get('error_description') or request.args.get('error') or 'Google Drive authorization failed')
+    state = str(request.args.get('state') or '')
+    if not expected_state or state != expected_state:
+        return _google_drive_popup_response(False, 'Google Drive authorization state expired. Please try again.')
+    code = str(request.args.get('code') or '').strip()
+    if not code:
+        return _google_drive_popup_response(False, 'Google Drive authorization code was not returned')
+
+    gid = (os.environ.get('GOOGLE_CLIENT_ID') or '').strip()
+    gsecret = (os.environ.get('GOOGLE_CLIENT_SECRET') or '').strip()
+    if not gid or not gsecret:
+        return _google_drive_popup_response(False, 'Google OAuth credentials are not configured')
+
+    try:
+        token_body = urllib.parse.urlencode({
+            'code': code,
+            'client_id': gid,
+            'client_secret': gsecret,
+            'redirect_uri': _google_oauth_redirect_uri(),
+            'grant_type': 'authorization_code',
+        }).encode('utf-8')
+        token_req = urllib.request.Request(
+            'https://oauth2.googleapis.com/token',
+            data=token_body,
+            headers={'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'PHTV/1.0'},
+            method='POST',
+        )
+        with urllib.request.urlopen(token_req, timeout=20) as resp:
+            token_json = json.loads(resp.read().decode('utf-8') or '{}')
+
+        access_token = str(token_json.get('access_token') or '').strip()
+        if not access_token:
+            return _google_drive_popup_response(False, 'Google Drive token was not returned')
+
+        scope_text = str(token_json.get('scope') or '')
+        if 'https://www.googleapis.com/auth/drive.readonly' not in scope_text.split():
+            return _google_drive_popup_response(False, 'Google did not grant Drive read-only access. Please reconnect and allow Drive access.')
+
+        email = ''
+        try:
+            user_req = urllib.request.Request(
+                'https://openidconnect.googleapis.com/v1/userinfo',
+                headers={'Authorization': f'Bearer {access_token}', 'User-Agent': 'PHTV/1.0'},
+            )
+            with urllib.request.urlopen(user_req, timeout=20) as user_resp:
+                userinfo = json.loads(user_resp.read().decode('utf-8') or '{}')
+            email = str(userinfo.get('email') or '').strip().lower()
+        except Exception:
+            email = ''
+
+        expires_in = int(token_json.get('expires_in') or 3300)
+        session['google_drive_auth'] = {
+            'access_token': access_token,
+            'expires_at': int(time.time() + max(60, expires_in - 30)),
+            'email': email,
+        }
+        session.permanent = True
+        return _google_drive_popup_response(True, 'Google Drive connected')
+    except Exception as e:
+        logging.exception('Google Drive manual OAuth callback failed: %s', e)
+        return _google_drive_popup_response(False, str(e) or 'Google Drive authentication failed')
+
+
+def _google_drive_session():
+    info = session.get('google_drive_auth') or {}
+    if not isinstance(info, dict):
+        return {}
+    return info
+
+
+def _google_drive_access_token():
+    info = _google_drive_session()
+    token = str(info.get('access_token') or '').strip()
+    if not token:
+        return ''
+    expires_at = info.get('expires_at')
+    try:
+        if expires_at and float(expires_at) <= (time.time() + 30):
+            return ''
+    except Exception:
+        pass
+    return token
+
+
+def _google_drive_api_request(path: str, *, params=None, method: str = 'GET', headers=None, data=None, timeout: float = 25.0):
+    token = _google_drive_access_token()
+    if not token:
+        raise PermissionError('Google Drive is not connected')
+    url = f'https://www.googleapis.com/drive/v3/{path.lstrip("/")}'
+    if params:
+        query = urllib.parse.urlencode({k: v for k, v in (params or {}).items() if v is not None and v != ''})
+        if query:
+            url = f'{url}?{query}'
+    req_headers = {
+        'Authorization': f'Bearer {token}',
+        'User-Agent': 'PHTV/1.0',
+    }
+    if headers:
+        req_headers.update(headers)
+    request_obj = urllib.request.Request(url, headers=req_headers, method=method.upper(), data=data)
+    try:
+        return urllib.request.urlopen(request_obj, timeout=timeout)
+    except urllib.error.HTTPError as exc:
+        try:
+            body = exc.read().decode('utf-8', errors='replace')
+        except Exception:
+            body = ''
+        message = ''
+        try:
+            payload = json.loads(body) if body else {}
+            message = str(((payload.get('error') or {}).get('message')) or '').strip()
+            status = str(((payload.get('error') or {}).get('status')) or '').strip()
+            if status == 'PERMISSION_DENIED' and 'insufficient' in message.lower():
+                session.pop('google_drive_auth', None)
+                message = 'Google Drive permission is missing. Click Reconnect and allow Drive access.'
+        except Exception:
+            message = ''
+        raise RuntimeError(message or body or f'Google Drive API error ({exc.code})')
+
+
 def _geocode_address_to_coordinates(address):
     normalized = str(address or '').strip()
     if len(normalized) < 3:
@@ -13611,6 +14049,7 @@ def dashboard():
         if not dashboard_display_name:
             dashboard_display_name = 'there'
         google_maps_api_key = (os.environ.get('GOOGLE_MAPS_API_KEY') or '').strip()
+        google_client_id = (os.environ.get('GOOGLE_CLIENT_ID') or '').strip()
         # After computing asset_bust, render the template
         resp = make_response(render_template(
             'dashboard.html',
@@ -13627,6 +14066,7 @@ def dashboard():
             dashboard_total_screens=dashboard_total_screens,
             dashboard_total_stores=dashboard_total_stores,
             google_maps_api_key=google_maps_api_key,
+            google_client_id=google_client_id,
         ))
         # Avoid CDN/browser caching the admin dashboard HTML
         try:
@@ -19103,10 +19543,11 @@ def update_playlist_item(store_id, screen_id, item_id):
             if 'file' in payload:
                 new_file = payload.get('file')
                 if new_file:
+                    is_youtube = isinstance(new_file, str) and new_file.strip().lower().startswith('youtube:')
                     # For R2-backed storage, skip local existence check
-                    if not allowed_file(new_file):
+                    if not is_youtube and not allowed_file(new_file):
                         return jsonify({'success': False, 'error': 'invalid file type'}), 400
-                    if not r2_enabled():
+                    if not is_youtube and not r2_enabled():
                         path = os.path.join(app.config['UPLOAD_FOLDER'], new_file)
                         if not os.path.exists(path):
                             return jsonify({'success': False, 'error': 'file not found in uploads'}), 400

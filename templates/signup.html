@@ -57,7 +57,7 @@
       <img class="logo" src="{{ url_for('static', filename='ea-logo.svg') }}?v={{ (build_stamp or 0) }}" alt="Logo">
     </div>
     <h1>Sign Up for Free</h1>
-    <p class="muted">By clicking Continue, you agree to our <a href="#" style="color:#b8d1ff;text-decoration:none">Terms of Service</a> and our <a href="#" style="color:#b8d1ff;text-decoration:none">Privacy Policy</a>. You'll receive a verification email to confirm your account.</p>
+    <p class="muted">By clicking Continue, you agree to our <a href="{{ url_for('terms_of_service') }}" style="color:#b8d1ff;text-decoration:none">Terms of Service</a> and our <a href="{{ url_for('privacy_policy') }}" style="color:#b8d1ff;text-decoration:none">Privacy Policy</a>. You'll receive a verification email to confirm your account.</p>
 
     {% with messages = get_flashed_messages(category_filter=['error','success']) %}
       {% if messages %}
