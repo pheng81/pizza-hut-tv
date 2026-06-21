@@ -12535,6 +12535,7 @@ allowfullscreen></iframe></div>`;
                 let rpDriveImportingFileId = '';
                 let rpDrivePopup = null;
                 let rpDriveScrollTop = 0;
+                let rpDriveOAuthCompleting = false;
                 function ensureReplaceModal(){
                         if(document.getElementById('rp-overlay')) return;
                         const ov = document.createElement('div'); ov.id='rp-overlay'; ov.className='rp-overlay';
@@ -13588,8 +13589,8 @@ allowfullscreen></iframe></div>`;
                     return `<div class="rp-drive-card__thumb"><div class="rp-drive-card__fallback">${escapeHtml(label)}</div></div>`;
                 }
                 async function syncRpDriveStatus(force){
-                    if(rpDriveLoading && !force) return;
-                    if(rpDriveStatusChecked && !force) return;
+                    if(rpDriveLoading && !force) return rpDriveConnected;
+                    if(rpDriveStatusChecked && !force) return rpDriveConnected;
                     try{
                         const response = await fetch('/api/google-drive/status', { cache:'no-store' });
                         const payload = await response.json();
@@ -13602,6 +13603,7 @@ allowfullscreen></iframe></div>`;
                                 rpDriveItems = [];
                                 rpDriveNextPageToken = '';
                             }
+                            return rpDriveConnected;
                         } else {
                             throw new Error((payload && payload.error) || 'Failed to check Google Drive status');
                         }
@@ -13611,9 +13613,61 @@ allowfullscreen></iframe></div>`;
                         rpDriveAccountEmail = '';
                         rpDriveStatusChecked = true;
                         rpDriveError = error && error.message ? error.message : 'Failed to check Google Drive status';
+                        return false;
                     }finally{
                         renderRpContextPanels();
                     }
+                }
+                function waitRpDrive(ms){
+                    return new Promise(resolve => setTimeout(resolve, ms));
+                }
+                async function finishRpDriveOAuthConnection(){
+                    if(rpDriveOAuthCompleting) return rpDriveConnected;
+                    rpDriveOAuthCompleting = true;
+                    rpDrivePopup = null;
+                    rpDriveError = 'Finishing Google Drive connection...';
+                    renderRpContextPanels();
+                    try{
+                        for(let attempt = 0; attempt < 8; attempt += 1){
+                            await waitRpDrive(attempt === 0 ? 350 : Math.min(1200, 350 + attempt * 180));
+                            rpDriveError = attempt === 0 ? 'Finishing Google Drive connection...' : 'Checking Google Drive connection...';
+                            const connected = await syncRpDriveStatus(true);
+                            if(connected){
+                                rpDriveError = '';
+                                rpDriveResetTrail();
+                                await rpDriveLoadCurrentFolder();
+                                return true;
+                            }
+                        }
+                        rpDriveError = 'Google finished authorization, but the dashboard did not receive the Drive session yet. Click Refresh once or reconnect.';
+                        renderRpContextPanels();
+                        return false;
+                    }finally{
+                        rpDriveOAuthCompleting = false;
+                    }
+                }
+                function pollRpDrivePopup(openedPopup){
+                    const popupRef = openedPopup || rpDrivePopup;
+                    if(!popupRef) return;
+                    const startedAt = Date.now();
+                    const timer = setInterval(() => {
+                        if(rpDrivePopup !== popupRef){
+                            clearInterval(timer);
+                            return;
+                        }
+                        if(popupRef.closed){
+                            clearInterval(timer);
+                            finishRpDriveOAuthConnection().catch(() => {
+                                rpDriveError = 'Google Drive authorization did not finish. Please try reconnecting.';
+                                renderRpContextPanels();
+                            });
+                            return;
+                        }
+                        if(Date.now() - startedAt > 5 * 60 * 1000){
+                            clearInterval(timer);
+                            if(rpDrivePopup === popupRef) rpDrivePopup = null;
+                        }
+                    }, 500);
                 }
                 function ensureRpDriveMessageListener(){
                     if(window.__rpDriveMessageListenerBound) return;
@@ -13624,11 +13678,7 @@ allowfullscreen></iframe></div>`;
                         if(data.type !== 'google-drive-auth') return;
                         if(data.success){
                             rpDriveError = '';
-                            await syncRpDriveStatus(true);
-                            if(rpDriveConnected){
-                                rpDriveResetTrail();
-                                await rpDriveLoadCurrentFolder();
-                            }
+                            await finishRpDriveOAuthConnection();
                             return;
                         }
                         rpDriveError = data.message || 'Google Drive authorization failed';
@@ -13776,6 +13826,7 @@ allowfullscreen></iframe></div>`;
                         if(!rpDrivePopup){
                             throw new Error('Popup was blocked. Please allow popups for this site and try again.');
                         }
+                        pollRpDrivePopup(rpDrivePopup);
                     }catch(error){
                         rpDriveError = error && error.message ? error.message : 'Google Drive is not available';
                         renderRpContextPanels();

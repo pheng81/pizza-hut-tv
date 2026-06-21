@@ -12385,16 +12385,29 @@ def _google_drive_popup_response(success: bool, message: str = ''):
   <script>
     (function() {{
       const payload = {payload};
-      try {{
+      const sendPayload = function() {{
+        try {{
         if (window.opener && !window.opener.closed) {{
           window.opener.postMessage(payload, window.location.origin);
         }}
-      }} catch (error) {{}}
+        }} catch (error) {{}}
+      }};
+      sendPayload();
       if (payload.success) {{
-        window.close();
+        let attempts = 0;
+        const timer = setInterval(function() {{
+          attempts += 1;
+          sendPayload();
+          if (attempts >= 5) {{
+            clearInterval(timer);
+          }}
+        }}, 250);
+        setTimeout(function() {{
+          window.close();
+        }}, 900);
         setTimeout(function() {{
           document.body.innerHTML = '<p>Google Drive connected. You can close this window.</p>';
-        }}, 150);
+        }}, 1100);
       }} else {{
         document.body.innerHTML = '<p>Google Drive connection failed: ' + {safe_message} + '</p>';
       }}
@@ -12487,6 +12500,7 @@ def _handle_google_drive_manual_callback():
             'email': email,
         }
         session.permanent = True
+        session.modified = True
         return _google_drive_popup_response(True, 'Google Drive connected')
     except Exception as e:
         logging.exception('Google Drive manual OAuth callback failed: %s', e)
