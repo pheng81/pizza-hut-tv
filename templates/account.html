@@ -788,6 +788,10 @@
       .info-value {
         text-align: left;
       }
+      .email-status-line {
+        justify-content: flex-start;
+        text-align: left;
+      }
     }
 
     /* Flat account layout override */
@@ -978,6 +982,68 @@
       font-weight: 700;
     }
 
+    .email-status-line {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      text-align: right;
+    }
+
+    .email-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    .email-status-badge.verified {
+      background: #ecfdf3;
+      border: 1px solid #abefc6;
+      color: var(--flat-green);
+    }
+
+    .email-status-badge.unverified {
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+      color: #c2410c;
+    }
+
+    .email-resend-action {
+      min-height: 34px;
+      padding: 7px 12px;
+      border-radius: 7px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .email-resend-action[disabled] {
+      cursor: not-allowed;
+      opacity: 0.65;
+    }
+
+    .email-status-message {
+      flex-basis: 100%;
+      min-height: 16px;
+      color: var(--flat-muted);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .email-status-message.success {
+      color: var(--flat-green);
+    }
+
+    .email-status-message.error {
+      color: var(--flat-red);
+    }
+
     .action-grid {
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 10px;
@@ -1120,6 +1186,10 @@
         grid-template-columns: 1fr;
       }
       .info-value {
+        text-align: left;
+      }
+      .email-status-line {
+        justify-content: flex-start;
         text-align: left;
       }
     }
@@ -1284,6 +1354,27 @@
       <div class="info-row">
         <span class="info-label">Email</span>
         <span class="info-value">{{ user_info.email }}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Email Status</span>
+        <span class="info-value">
+          <span class="email-status-line">
+            {% if user_info.email_verified %}
+              <span class="email-status-badge verified">Verified</span>
+            {% else %}
+              <span class="email-status-badge unverified">Not verified</span>
+              <button type="button"
+                      class="btn btn-secondary email-resend-action"
+                      id="resendEmailVerificationBtn"
+                      onclick="resendEmailVerification()">
+                Resend verification link
+              </button>
+              <span class="email-status-message" id="emailVerificationMessage">
+                Please verify your email before subscribing.
+              </span>
+            {% endif %}
+          </span>
+        </span>
       </div>
       <div class="info-row">
         <span class="info-label">Account Type</span>
@@ -1499,6 +1590,49 @@
 
 <script>
   let iti; // International telephone input instance
+
+  async function resendEmailVerification() {
+    const btn = document.getElementById('resendEmailVerificationBtn');
+    const msg = document.getElementById('emailVerificationMessage');
+    if (!btn || !msg) return;
+
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Sending...';
+    msg.className = 'email-status-message';
+    msg.textContent = 'Sending a new verification link...';
+
+    try {
+      const response = await fetch('/api/account/email/resend-verification', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: {{ user_info.email|tojson }} })
+      });
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        msg.className = 'email-status-message success';
+        msg.textContent = data.message || 'Verification email sent. Please check your inbox.';
+        btn.textContent = 'Link sent';
+        setTimeout(() => {
+          btn.disabled = false;
+          btn.textContent = originalText;
+        }, 30000);
+      } else {
+        msg.className = 'email-status-message error';
+        msg.textContent = data.error || 'Could not send verification email right now.';
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+    } catch (error) {
+      msg.className = 'email-status-message error';
+      msg.textContent = 'Could not send verification email. Please try again.';
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  }
   
   // Initialize intl-tel-input when phone edit form is shown
   function editPhone() {

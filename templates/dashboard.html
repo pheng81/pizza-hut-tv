@@ -12741,8 +12741,8 @@ allowfullscreen></iframe></div>`;
                                                     <div class="rp-schedule-hint">Switch to add mode from the screen action menu when you want to create a new scheduled slot with repeat days, dates, and duration.</div>
                                                 </div>
                                                 <div id="rp-schedule-editor" class="rp-schedule-editor" style="display:none;">
-                                                    <div class="rp-side-title">Schedule Settings</div>
-                                                    <div class="rp-side-copy">Define when this scheduled media should run.</div>
+                                                    <div class="rp-side-title" id="rp-schedule-editor-title">Schedule Settings</div>
+                                                    <div class="rp-side-copy" id="rp-schedule-editor-copy">Define when this scheduled media should run.</div>
                                                     <div class="rp-schedule-row">
                                                         <span class="rp-subtitle">Repeat</span>
                                                         <div class="weekday-row" id="rp-schedule-days">
@@ -12764,14 +12764,14 @@ allowfullscreen></iframe></div>`;
                                                                     <span>Date</span>
                                                                     <div class="rp-schedule-control">
                                                                         <svg class="rp-schedule-control__icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M16 3v4M8 3v4M3 10h18"></path></svg>
-                                                                        <input type="date" id="rp-start-date" onchange="renderRpSelection()">
+                                                                        <input type="date" id="rp-start-date" onchange="handleRpScheduleDraftChanged()">
                                                                     </div>
                                                                 </div>
                                                                 <div class="rp-schedule-control-group">
                                                                     <span>Time</span>
                                                                     <div class="rp-schedule-control" onclick="openRpScheduleTimePicker('rp-start-time', event)">
                                                                         <svg class="rp-schedule-control__icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
-                                                                        <input class="tp-input" readonly id="rp-start-time" type="text" inputmode="numeric" pattern="[0-9]{2}:[0-9]{2}(:[0-9]{2})?" data-lane="replace" data-field="start" placeholder="HH:MM:SS" onclick="openRpScheduleTimePicker('rp-start-time', event)" onchange="renderRpSelection()" oninput="renderRpSelection()">
+                                                                        <input class="tp-input" readonly id="rp-start-time" type="text" inputmode="numeric" pattern="[0-9]{2}:[0-9]{2}(:[0-9]{2})?" data-lane="replace" data-field="start" placeholder="HH:MM:SS" onclick="openRpScheduleTimePicker('rp-start-time', event)" onchange="handleRpScheduleDraftChanged()" oninput="handleRpScheduleDraftChanged()">
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -12783,26 +12783,26 @@ allowfullscreen></iframe></div>`;
                                                                     <span>Date</span>
                                                                     <div class="rp-schedule-control">
                                                                         <svg class="rp-schedule-control__icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M16 3v4M8 3v4M3 10h18"></path></svg>
-                                                                        <input type="date" id="rp-end-date" onchange="renderRpSelection()">
+                                                                        <input type="date" id="rp-end-date" onchange="handleRpScheduleDraftChanged()">
                                                                     </div>
                                                                 </div>
                                                                 <div class="rp-schedule-control-group">
                                                                     <span>Time</span>
                                                                     <div class="rp-schedule-control" onclick="openRpScheduleTimePicker('rp-end-time', event)">
                                                                         <svg class="rp-schedule-control__icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
-                                                                        <input class="tp-input" readonly id="rp-end-time" type="text" inputmode="numeric" pattern="[0-9]{2}:[0-9]{2}(:[0-9]{2})?" data-lane="replace" data-field="end" placeholder="HH:MM:SS" onclick="openRpScheduleTimePicker('rp-end-time', event)" onchange="renderRpSelection()" oninput="renderRpSelection()">
+                                                                        <input class="tp-input" readonly id="rp-end-time" type="text" inputmode="numeric" pattern="[0-9]{2}:[0-9]{2}(:[0-9]{2})?" data-lane="replace" data-field="end" placeholder="HH:MM:SS" onclick="openRpScheduleTimePicker('rp-end-time', event)" onchange="handleRpScheduleDraftChanged()" oninput="handleRpScheduleDraftChanged()">
                                                                     </div>
                                                                 </div>
                                                             </div>
                                                         </div>
                                                         <div class="rp-schedule-field">
                                                             <strong>Duration</strong>
-                                                            <div class="rp-duration-row">
-                                                                <button type="button" class="rp-duration-btn" onclick="adjustRpDuration(-1)">−</button>
-                                                                <input id="rp-duration" class="rp-duration-input" type="number" min="1" step="1" value="10" onchange="renderRpSelection()" oninput="renderRpSelection()">
-                                                                <span class="rp-duration-unit">seconds</span>
-                                                                <button type="button" class="rp-duration-btn" onclick="adjustRpDuration(1)">+</button>
-                                                            </div>
+                                                        <div class="rp-duration-row">
+                                                            <button type="button" class="rp-duration-btn" onclick="adjustRpDuration(-1)">−</button>
+                                                            <input id="rp-duration" class="rp-duration-input" type="number" min="1" step="1" value="10" onchange="handleRpScheduleDraftChanged()" oninput="handleRpScheduleDraftChanged()">
+                                                            <span class="rp-duration-unit">seconds</span>
+                                                            <button type="button" class="rp-duration-btn" onclick="adjustRpDuration(1)">+</button>
+                                                        </div>
                                                         </div>
                                                     </div>
                                                     <div class="rp-schedule-row">
@@ -12824,6 +12824,7 @@ allowfullscreen></iframe></div>`;
                                                         </div>
                                                     </div>
                                                     <div class="rp-schedule-hint" id="rp-schedule-summary-box">Schedule will use the current duration and any repeat/date settings you choose here.</div>
+                                                    <button type="button" class="btn primary" id="rp-save-schedule-only" onclick="saveRpScheduleOnly()" style="display:none;">Save schedule changes</button>
                                                 </div>
                                                 <div class="rp-source-tools">
                                                     <div>
@@ -12910,6 +12911,123 @@ allowfullscreen></iframe></div>`;
                 const RP_NEW_SCREEN_VALUE = '__rp_new_screen__';
                 let rpCtx = null; // {screenId,itemId}
                 let rpPrefix = '';
+                let rpScheduleDirty = false;
+                let rpReplaceScheduleLoaded = false;
+                function setRpScheduleDirty(isDirty){
+                    rpScheduleDirty = !!isDirty;
+                }
+                function handleRpScheduleDraftChanged(){
+                    setRpScheduleDirty(true);
+                    renderRpSelection();
+                }
+                function normalizeRpEditorTime(value){
+                    const raw = String(value || '').trim();
+                    if(!raw) return '';
+                    const timePart = raw.includes('T') ? raw.split('T')[1] : raw;
+                    const clean = timePart.replace(/Z$/i, '').split(/[+-]\d{2}:?\d{2}$/)[0].split('.')[0];
+                    const parts = clean.split(':').map((part) => part.trim());
+                    if(parts.length < 2 || !parts[0]) return '';
+                    while(parts.length < 3) parts.push('00');
+                    return parts.slice(0, 3).map((part, index) => {
+                        const number = parseInt(part, 10);
+                        const fallback = index === 0 ? 0 : 0;
+                        return String(Number.isFinite(number) ? number : fallback).padStart(2, '0');
+                    }).join(':');
+                }
+                function splitRpScheduleValueForEditor(value){
+                    const raw = String(value || '').trim();
+                    if(!raw) return { date:'', time:'' };
+                    if(raw.includes('T')){
+                        const parts = raw.split('T');
+                        const date = /^\d{4}-\d{2}-\d{2}$/.test(parts[0]) ? parts[0] : '';
+                        return { date, time: normalizeRpEditorTime(raw) };
+                    }
+                    if(/^\d{4}-\d{2}-\d{2}$/.test(raw)){
+                        return { date: raw, time:'' };
+                    }
+                    return { date:'', time: normalizeRpEditorTime(raw) };
+                }
+                function setRpInputValue(id, value){
+                    const el = document.getElementById(id);
+                    if(el) el.value = value || '';
+                }
+                function getRpCachedPlaylistItem(screenId, itemId){
+                    try {
+                        const storeScreens = (((allStoresData || {}).screens || {})[currentStoreId] || {});
+                        const screen = storeScreens[screenId] || storeScreens[String(screenId || '').split('_').slice(1).join('_')] || null;
+                        const playlist = screen && Array.isArray(screen.playlist) ? screen.playlist : [];
+                        return playlist.find((item) => String(item && item.id) === String(itemId)) || null;
+                    } catch {
+                        return null;
+                    }
+                }
+                function getRpPrimaryScheduleSource(item){
+                    if(!item || typeof item !== 'object') return null;
+                    if(item.start || item.end) return item;
+                    const windows = Array.isArray(item.schedule)
+                        ? item.schedule.filter((win) => win && typeof win === 'object' && !win.sync_master)
+                        : [];
+                    if(!windows.length) return item;
+                    return Object.assign({}, item, windows[0], {
+                        duration: item.duration,
+                        effect: windows[0].effect || item.effect,
+                    });
+                }
+                function populateRpScheduleEditorFromItem(item, options){
+                    const opts = options || {};
+                    if(!item || (!opts.force && rpScheduleDirty)) return false;
+                    const source = getRpPrimaryScheduleSource(item);
+                    const start = splitRpScheduleValueForEditor(source && source.start);
+                    const end = splitRpScheduleValueForEditor(source && source.end);
+                    setRpInputValue('rp-start-date', start.date);
+                    setRpInputValue('rp-start-time', start.time);
+                    setRpInputValue('rp-end-date', end.date);
+                    setRpInputValue('rp-end-time', end.time);
+                    const duration = parseInt(String(item.duration || source.duration || '10'), 10);
+                    setRpInputValue('rp-duration', String(Number.isFinite(duration) && duration > 0 ? duration : 10));
+                    const days = new Set(Array.isArray(source.days) ? source.days.map((day) => String(day || '').toLowerCase().slice(0, 3)) : []);
+                    const dayWrap = document.getElementById('rp-schedule-days');
+                    if(dayWrap){
+                        Array.from(dayWrap.querySelectorAll('.weekday-btn')).forEach((btn) => {
+                            btn.classList.toggle('active', days.has(String(btn.getAttribute('data-day') || '').toLowerCase()));
+                        });
+                    }
+                    const effect = String(source.effect || item.effect || '').trim();
+                    const effectWrap = document.getElementById('rp-effect-picker');
+                    if(effectWrap){
+                        let matched = false;
+                        Array.from(effectWrap.querySelectorAll('.effect-btn')).forEach((btn) => {
+                            const isActive = String(btn.getAttribute('data-effect') || '') === effect;
+                            if(isActive) matched = true;
+                            btn.classList.toggle('active', isActive);
+                        });
+                        if(!matched){
+                            Array.from(effectWrap.querySelectorAll('.effect-btn')).forEach((btn) => {
+                                btn.classList.toggle('active', String(btn.getAttribute('data-effect') || '') === '');
+                            });
+                        }
+                    }
+                    rpReplaceScheduleLoaded = true;
+                    setRpScheduleDirty(false);
+                    refreshRpDraftScheduleText();
+                    return true;
+                }
+                async function loadRpExistingItemSchedule(screenId, itemId){
+                    if(!screenId || !itemId || itemId === 'SINGLE') return;
+                    const cached = getRpCachedPlaylistItem(screenId, itemId);
+                    if(cached) populateRpScheduleEditorFromItem(cached, { force:true });
+                    try {
+                        const response = await fetch(`/playlist/${currentStoreId}/${screenId}?skip_schedule_filter=1&_=${Date.now()}`, { cache:'no-store' });
+                        const result = await response.json();
+                        if(!response.ok || !result.success || !Array.isArray(result.playlist)) return;
+                        if(!rpCtx || String(rpCtx.screenId) !== String(screenId) || String(rpCtx.itemId) !== String(itemId)) return;
+                        const fresh = result.playlist.find((item) => String(item && item.id) === String(itemId));
+                        if(fresh) populateRpScheduleEditorFromItem(fresh, { force:false });
+                        renderRpSelection();
+                    } catch (error) {
+                        console.warn('Failed to load replace item schedule', error);
+                    }
+                }
                 function openRpWallVideo(){
                     const targetScreenId = getRpSelectedTargetScreenId();
                     if(!targetScreenId){
@@ -12919,6 +13037,8 @@ allowfullscreen></iframe></div>`;
                     openAutoSliceModal(targetScreenId);
                 }
                 function resetRpScheduleEditor(){
+                    rpReplaceScheduleLoaded = false;
+                    setRpScheduleDirty(false);
                     const dayWrap = document.getElementById('rp-schedule-days');
                     if(dayWrap){
                         Array.from(dayWrap.querySelectorAll('.weekday-btn')).forEach((btn) => btn.classList.remove('active'));
@@ -13087,7 +13207,15 @@ allowfullscreen></iframe></div>`;
                     if(screen) screen.textContent = formatRpScreenLabel(targetScreenId);
                     if(previewScreen) previewScreen.textContent = formatRpScreenLabel(targetScreenId);
                     if(storeName) storeName.textContent = currentStoreId ? getCurrentStoreName(currentStoreId) : 'No store selected';
-                    setRpScheduleEditorVisible(addMode);
+                    setRpScheduleEditorVisible(true);
+                    const editorTitle = document.getElementById('rp-schedule-editor-title');
+                    const editorCopy = document.getElementById('rp-schedule-editor-copy');
+                    const saveScheduleBtn = document.getElementById('rp-save-schedule-only');
+                    if(editorTitle) editorTitle.textContent = addMode ? 'Schedule Settings' : 'Replace settings';
+                    if(editorCopy) editorCopy.textContent = addMode
+                        ? 'Define when this scheduled media should run.'
+                        : 'Replace the media and optionally adjust the existing schedule. Drag the start/end handles or edit the fields here, then save.';
+                    if(saveScheduleBtn) saveScheduleBtn.style.display = addMode ? 'none' : 'inline-flex';
                     renderRpPanelScheduleControls();
                 }
                 function presentRpOverlay(mode){
@@ -13138,7 +13266,6 @@ allowfullscreen></iframe></div>`;
                     }
                     ensureReplaceModal(); rpCtx={screenId,itemId}; rpPrefix='';
                     presentRpOverlay('replace');
-                    updateReplaceModalContext();
                     const previewDate = document.getElementById('rp-preview-current-date');
                     if(previewDate){
                         try{
@@ -13147,6 +13274,10 @@ allowfullscreen></iframe></div>`;
                     }
                     clearRpSelection();
                     resetRpScheduleEditor();
+                    updateReplaceModalContext();
+                    if(itemId !== 'SINGLE'){
+                        loadRpExistingItemSchedule(screenId, itemId);
+                    }
                     resetRpUploadUI();
                     switchRpTab('lib');
                     const appsGroup = document.getElementById('rp-group-apps');
@@ -13359,6 +13490,7 @@ allowfullscreen></iframe></div>`;
                     const input = getRpPreviewInputForField(field);
                     if(!input) return;
                     input.value = formatRpMinutesAsClock(minutes);
+                    setRpScheduleDirty(true);
                     if(renderFull){
                         renderRpSelection();
                     } else {
@@ -13411,13 +13543,13 @@ allowfullscreen></iframe></div>`;
                 function toggleRpScheduleDay(code, el){
                     if(!el) return;
                     el.classList.toggle('active');
-                    renderRpSelection();
+                    handleRpScheduleDraftChanged();
                 }
                 function setRpScheduleEffect(effect, btn){
                     const row = document.getElementById('rp-effect-picker');
                     if(!row) return;
                     row.querySelectorAll('.effect-btn').forEach((button) => button.classList.toggle('active', button === btn));
-                    renderRpSelection();
+                    handleRpScheduleDraftChanged();
                 }
                 function adjustRpDuration(delta){
                     const input = document.getElementById('rp-duration');
@@ -13425,7 +13557,7 @@ allowfullscreen></iframe></div>`;
                     const current = parseInt(String(input.value || '10'), 10);
                     const safe = Number.isFinite(current) ? current : 10;
                     input.value = String(Math.max(1, safe + delta));
-                    renderRpSelection();
+                    handleRpScheduleDraftChanged();
                 }
                 function getRpDraftScheduleMeta(){
                     const durationInput = document.getElementById('rp-duration');
@@ -13491,6 +13623,48 @@ allowfullscreen></iframe></div>`;
                         throw new Error(result.error || 'Failed to save schedule');
                     }
                     return true;
+                }
+                function shouldRpIncludeScheduleOnReplace(){
+                    return !!(rpScheduleDirty || rpReplaceScheduleLoaded);
+                }
+                function buildRpReplacePayload(fileName, screenId){
+                    const payload = { file: fileName };
+                    if(shouldRpIncludeScheduleOnReplace()){
+                        const schedulePayload = buildRpPopupSchedulePayload(screenId);
+                        if(!schedulePayload) return null;
+                        Object.assign(payload, schedulePayload);
+                    }
+                    return payload;
+                }
+                async function saveRpScheduleOnly(){
+                    if(!rpCtx || rpCtx.itemId === 'SINGLE'){
+                        return;
+                    }
+                    const sid = rpCtx.screenId;
+                    const iid = rpCtx.itemId;
+                    const btn = document.getElementById('rp-save-schedule-only');
+                    const originalText = btn ? btn.textContent : '';
+                    if(btn){
+                        btn.disabled = true;
+                        btn.textContent = 'Saving...';
+                    }
+                    try {
+                        const saved = await applyRpScheduleToItem(sid, iid);
+                        if(saved === false) return;
+                        setRpScheduleDirty(false);
+                        rpReplaceScheduleLoaded = true;
+                        closeReplaceModal();
+                        refreshPlaylist(sid);
+                        try { if(typeof loadScreensForStore === 'function' && currentStoreId) loadScreensForStore(currentStoreId); } catch {}
+                        showMessage('Schedule updated.', '#28a745');
+                    } catch (error) {
+                        alert('Failed to save schedule: ' + (error && error.message ? error.message : 'unknown'));
+                    } finally {
+                        if(btn){
+                            btn.disabled = false;
+                            btn.textContent = originalText || 'Save schedule changes';
+                        }
+                    }
                 }
                 async function findRpItemIdByFile(screenId, fileName){
                     const response = await fetch(`/playlist/${currentStoreId}/${screenId}?skip_schedule_filter=1&_=${Date.now()}`, { cache:'no-store' });
@@ -14348,13 +14522,16 @@ allowfullscreen></iframe></div>`;
                         } catch {}
                         return true;
                     }
-                    const response = await fetch(`/playlist/item/${currentStoreId}/${sid}/${iid}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({file:name})});
+                    const replacePayload = buildRpReplacePayload(name, sid);
+                    if(!replacePayload) return false;
+                    const response = await fetch(`/playlist/item/${currentStoreId}/${sid}/${iid}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(replacePayload)});
                     const d = await response.json();
                     if(!d.success){
                         throw new Error(d.error||'unknown');
                     }
                     closeReplaceModal();
                     refreshPlaylist(sid);
+                    try { if(typeof loadScreensForStore === 'function' && currentStoreId) loadScreensForStore(currentStoreId); } catch {}
                     return true;
                 }
                 function applyRpSelectedMedia(){
