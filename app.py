@@ -16621,7 +16621,11 @@ def add_screen():
             screen_type = 'screen'
         
         if not store_id:
-            return jsonify({'error': 'Store ID is required'}), 400
+            return jsonify({
+                'success': False,
+                'error': 'Please add or select a store before adding screens.',
+                'requires_store': True,
+            }), 400
 
         # Check subscription requirement: ALL users need subscription to add screens
         # EXCEPT: test9@gmail.com (hardcoded admin bypass)

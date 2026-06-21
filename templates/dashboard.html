@@ -4556,6 +4556,9 @@
                 <div class="store-management">
                     <label for="storeSelect">Select Store:</label>
                     <select id="storeSelect" onchange="switchStore(this.value)">
+                        {% if not config.stores %}
+                        <option value="" selected>No stores yet - add a store first</option>
+                        {% endif %}
                         {% for store in config.stores %}
                         <option value="{{ store.id }}" {% if loop.first %}selected{% endif %}>
                             {{ store.id }} - {{ store.name }}
@@ -6064,7 +6067,11 @@
             }
 
             if (!resolvedStoreId) {
-                storeSelect.selectedIndex = -1;
+                if (storeSelect.options.length > 0) {
+                    storeSelect.value = '';
+                } else {
+                    storeSelect.selectedIndex = -1;
+                }
                 return null;
             }
 
@@ -8933,7 +8940,15 @@ allowfullscreen></iframe></div>`;
         async function addNewScreen(screenType, options = {}) {
             try {
                 console.log('Adding new screen:', screenType, 'for store:', currentStoreId);
-                
+
+                if (!resolveValidStoreId(currentStoreId)) {
+                    const openStoreSetup = confirm('Please add a store before adding screens.\n\nClick OK to open Add Store now, then enter a Store ID and Store Name.');
+                    if (openStoreSetup) {
+                        showAddStoreDialog();
+                    }
+                    return null;
+                }
+
                 // First check if user will need to pay for this screen
                 const checkResp = await fetch('/check_screen_limit', {
                     method: 'GET',
