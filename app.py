@@ -335,12 +335,22 @@ def init_db():
             'current_period_end INTEGER, '
             'trial_end INTEGER, '
             'cancel_at_period_end INTEGER DEFAULT 0, '
+            'welcome_email_sent_at INTEGER, '
+            'welcome_email_subscription_id TEXT, '
             'created_at INTEGER, '
             'updated_at INTEGER, '
             'UNIQUE(user_id), '
             'FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE'
             ')'
         )
+        try:
+            sub_cols = [r[1] for r in db.execute('PRAGMA table_info(subscriptions)').fetchall()]
+            if 'welcome_email_sent_at' not in sub_cols:
+                db.execute('ALTER TABLE subscriptions ADD COLUMN welcome_email_sent_at INTEGER')
+            if 'welcome_email_subscription_id' not in sub_cols:
+                db.execute('ALTER TABLE subscriptions ADD COLUMN welcome_email_subscription_id TEXT')
+        except Exception:
+            pass
         db.execute('CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status)')
         db.execute('CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_id ON subscriptions(stripe_subscription_id)')
         
@@ -2736,6 +2746,115 @@ def _record_subscription_status(user_id: int, status: str, stripe_subscription_i
     except Exception as _e:
         logging.warning('Failed to record subscription status: %s', _e)
 
+
+def _public_app_url(path: str = '') -> str:
+    base = (
+        os.environ.get('PUBLIC_BASE_URL')
+        or os.environ.get('APP_BASE_URL')
+        or os.environ.get('SITE_URL')
+        or ''
+    ).strip()
+    if not base:
+        try:
+            if has_request_context():
+                base = url_for('dashboard', _external=True).rsplit('/dashboard', 1)[0]
+        except Exception:
+            base = ''
+    if not base:
+        base = 'https://everydayadvertise.com'
+    return base.rstrip('/') + ('/' + path.lstrip('/') if path else '')
+
+
+def _format_billing_timestamp(value) -> str:
+    try:
+        timestamp = int(value or 0)
+        if timestamp > 0:
+            return datetime.fromtimestamp(timestamp).strftime('%B %d, %Y')
+    except Exception:
+        pass
+    return ''
+
+
+def _send_subscription_welcome_email_once(user_id: int, subscription_obj=None) -> bool:
+    """Send the account holder one subscription-start email per Stripe subscription."""
+    try:
+        if not user_id:
+            return False
+        subscription_obj = subscription_obj or {}
+        stripe_sub_id = str(subscription_obj.get('id') or '').strip()
+        status = str(subscription_obj.get('status') or '').strip().lower()
+
+        db = get_db()
+        row = db.execute(
+            'SELECT s.stripe_subscription_id, s.status, s.current_period_end, s.trial_end, '
+            's.welcome_email_sent_at, s.welcome_email_subscription_id, u.username '
+            'FROM subscriptions s JOIN users u ON u.id = s.user_id WHERE s.user_id = ?',
+            (user_id,),
+        ).fetchone()
+        if not row:
+            return False
+
+        if not stripe_sub_id:
+            stripe_sub_id = str(row['stripe_subscription_id'] or '').strip()
+        if not status:
+            status = str(row['status'] or '').strip().lower()
+        if status not in ('active', 'trialing'):
+            return False
+
+        sent_for = str(row['welcome_email_subscription_id'] or '').strip()
+        sent_at = int(row['welcome_email_sent_at'] or 0)
+        if stripe_sub_id and sent_for == stripe_sub_id and sent_at > 0:
+            return True
+
+        email = str(row['username'] or '').strip().lower()
+        if '@' not in email:
+            logging.warning('Subscription welcome email skipped; user %s has no valid email', user_id)
+            return False
+        if not _mail_configured():
+            logging.warning('Subscription welcome email skipped for %s; SMTP not configured', email)
+            return False
+
+        policy = _get_user_billing_policy(user_id)
+        price_display = policy.get('price_display') or STRIPE_PRICE_DISPLAY or '$5 per screen / month'
+        current_period_end = subscription_obj.get('current_period_end') or row['current_period_end']
+        trial_end = subscription_obj.get('trial_end') or row['trial_end']
+        period_label = _format_billing_timestamp(current_period_end)
+        trial_label = _format_billing_timestamp(trial_end)
+        dashboard_url = _public_app_url('/dashboard')
+        account_url = _public_app_url('/account')
+
+        subject = 'Your EverydayAdvertise subscription is active'
+        opening = 'Your free trial is active.' if status == 'trialing' else 'Your subscription is active.'
+        trial_line = f'\nTrial ends: {trial_label}' if trial_label else ''
+        period_line = f'\nCurrent period ends: {period_label}' if period_label else ''
+        body = (
+            f'Hi,\n\n'
+            f'{opening}\n\n'
+            f'Plan: {price_display}'
+            f'{trial_line}'
+            f'{period_line}\n\n'
+            f'You can now add and manage screens from your dashboard:\n{dashboard_url}\n\n'
+            f'Billing and account settings:\n{account_url}\n\n'
+            f'If you did not start this subscription, please contact support at support@everydayadvertise.com.\n\n'
+            f'Thank you,\nEverydayAdvertise'
+        )
+
+        if not send_email(email, subject, body):
+            logging.warning('Subscription welcome email failed to send to %s', email)
+            return False
+
+        db.execute(
+            'UPDATE subscriptions SET welcome_email_sent_at = ?, welcome_email_subscription_id = ? WHERE user_id = ?',
+            (int(time.time()), stripe_sub_id, user_id),
+        )
+        db.commit()
+        logging.info('Subscription welcome email sent to %s for subscription %s', email, stripe_sub_id)
+        return True
+    except Exception as e:
+        logging.warning('Subscription welcome email error for user %s: %s', user_id, e, exc_info=True)
+        return False
+
+
 def _user_has_active_subscription(user_id: int|None = None) -> bool:
     if not _stripe_enabled():
         return True
@@ -2992,6 +3111,7 @@ def _sync_subscription_from_stripe(subscription_obj):
             trial_end=subscription_obj.get('trial_end'),
             cancel_at_period_end=subscription_obj.get('cancel_at_period_end')
         )
+        _send_subscription_welcome_email_once(int(row['id']), subscription_obj)
     except Exception as _e:
         logging.warning('Failed to sync Stripe subscription: %s', _e)
 
