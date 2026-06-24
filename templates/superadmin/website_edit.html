@@ -67,6 +67,14 @@
       color: white;
     }
     .btn--primary:hover { background: #1a202c; }
+    .btn--secondary {
+      background: #e8f0ff;
+      color: #1d4ed8;
+      border: 1px solid rgba(37, 99, 235, 0.18);
+    }
+    .btn--secondary:hover {
+      background: #dbeafe;
+    }
     main {
       max-width: min(1680px, 94vw);
       margin: 0 auto;
@@ -950,6 +958,57 @@
       object-fit: cover;
       display: block;
     }
+    .logo-intro-editor-grid {
+      display: grid;
+      grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.2fr);
+      gap: 16px;
+      align-items: stretch;
+    }
+    .logo-intro-preview-panel {
+      display: grid;
+      gap: 12px;
+      align-content: start;
+    }
+    .logo-intro-preview-frame {
+      min-height: 220px;
+      padding: 22px;
+      border-radius: 20px;
+      border: 1px solid rgba(15, 23, 42, 0.16);
+      background:
+        radial-gradient(circle at 20% 20%, rgba(59, 130, 246, 0.22), transparent 30%),
+        radial-gradient(circle at 80% 30%, rgba(236, 72, 153, 0.22), transparent 32%),
+        #0b0b0f;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+    }
+    .logo-intro-preview-frame img {
+      width: min(100%, 460px);
+      height: auto;
+      display: block;
+    }
+    .logo-intro-code {
+      min-height: 360px;
+      font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.55;
+      white-space: pre;
+      overflow: auto;
+    }
+    .logo-intro-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .logo-intro-meta {
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: rgba(219, 234, 254, 0.55);
+      color: #334155;
+      font-size: 12px;
+      line-height: 1.55;
+    }
     .hero-rotation-manager {
       border: 1px solid rgba(148, 163, 184, 0.2);
       border-radius: 18px;
@@ -1431,11 +1490,46 @@
       color: #64748b;
       line-height: 1.5;
     }
+    .feature-icon-preview {
+      width: 64px;
+      height: 64px;
+      flex: 0 0 auto;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      border: 1px solid #dbeafe;
+      border-radius: 16px;
+      background: #f8fbff;
+      color: #1d4ed8;
+      font-size: 30px;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+    }
+    .feature-icon-preview img,
+    .feature-icon-preview video,
+    .feature-icon-preview object {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+    .feature-icon-preview object {
+      pointer-events: none;
+    }
     .feature-card-fields {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 12px;
       align-items: start;
+    }
+    .feature-file-input {
+      padding: 10px;
+      cursor: pointer;
+      background: #fff;
+    }
+    .feature-upload-status,
+    .media-upload-status {
+      color: #2563eb;
+      font-weight: 700;
     }
     .feature-card-toolbar {
       display: flex;
@@ -1737,6 +1831,9 @@
       .preview-stack {
         display: none !important;
       }
+      .logo-intro-editor-grid {
+        grid-template-columns: 1fr;
+      }
       .page-head {
         left: 0;
       }
@@ -2032,12 +2129,59 @@
       </div>
       <div class="section-nav">
         <a href="#hero-settings">Homepage</a>
+        <a href="#logo-intro-manager">Logo Intro</a>
         <a href="#feature-manager">Features</a>
         <a href="#body-media-manager">Body Media</a>
         <a href="#preview-panel">Preview</a>
       </div>
     <div class="layout">
       <section class="card layout-main">
+        <section class="editor-section" id="logo-intro-manager">
+          <div class="section-header">
+            <div>
+              <div class="section-kicker">Logo Intro</div>
+              <h2>Homepage Opening Logo</h2>
+              <p class="section-copy">Upload or edit the animated SVG that appears when visitors first open the public homepage. This updates <strong>static/logo-intro.svg</strong>.</p>
+            </div>
+            <div class="section-statline">
+              <span class="section-pill">Animated SVG</span>
+              <span class="section-pill">Homepage Intro</span>
+            </div>
+          </div>
+          <form method="post" action="/superadmin/website/logo-intro" enctype="multipart/form-data">
+            <input type="hidden" name="return_to" value="#logo-intro-manager">
+            <div class="logo-intro-editor-grid">
+              <div class="logo-intro-preview-panel">
+                <div class="logo-intro-preview-frame">
+                  <img id="logoIntroEditorPreview" src="{{ logo_intro_svg_url }}?v={{ logo_intro_svg_mtime or 0 }}" alt="Current logo intro preview">
+                </div>
+                <div class="logo-intro-meta">
+                  This is the same SVG used by the opening overlay on the public website. Keep the animation lightweight so the homepage appears quickly.
+                </div>
+                <div class="field-group">
+                  <label class="field-label" for="logo_intro_duration_ms">Intro Duration</label>
+                  <input id="logo_intro_duration_ms" type="number" name="logo_intro_duration_ms" min="500" max="15000" step="100" value="{{ home_content.logo_intro_duration_ms or 4800 }}">
+                  <div class="help">Milliseconds. Example: 4800 = 4.8 seconds. Allowed range: 500 to 15000.</div>
+                </div>
+                <div class="field-group">
+                  <label class="field-label" for="logo_intro_svg_file">Upload Replacement SVG</label>
+                  <input id="logo_intro_svg_file" type="file" name="logo_intro_svg_file" accept=".svg,image/svg+xml">
+                  <div class="help">Selecting a file will load it into the editor below before saving.</div>
+                </div>
+              </div>
+              <div class="field-group">
+                <label class="field-label" for="logo_intro_svg_source">SVG Source</label>
+                <textarea id="logo_intro_svg_source" class="logo-intro-code" name="logo_intro_svg_source" spellcheck="false" wrap="off">{{ logo_intro_svg_source }}</textarea>
+                <div class="help">Scripts, JavaScript URLs, embedded objects, and foreignObject markup are blocked for safety.</div>
+                <div class="logo-intro-actions">
+                  <button class="btn btn--primary" type="submit">Save Intro Logo</button>
+                  <a class="btn btn--secondary" href="{{ logo_intro_svg_url }}?v={{ logo_intro_svg_mtime or 0 }}" target="_blank" rel="noreferrer">Open SVG</a>
+                </div>
+              </div>
+            </div>
+          </form>
+        </section>
+
         <section class="editor-section" id="hero-settings">
           <div class="section-header">
             <div>
@@ -2097,6 +2241,42 @@
             <div class="field-group">
               <label class="field-label" for="hero_proof_tertiary">Hero Proof Item 3</label>
               <input id="hero_proof_tertiary" type="text" name="hero_proof_tertiary" value="{{ home_content.hero_proof_tertiary }}" placeholder="24/7 Support">
+            </div>
+
+            <div class="field-group">
+              <label class="field-label" for="hero_template_max_width">Hero Template Width (px)</label>
+              <input id="hero_template_max_width" type="number" min="960" max="2560" step="20" name="hero_template_max_width" value="{{ home_content.hero_template_max_width }}">
+              <div class="help">Controls the full top hero area width. Try 1440, 1680, 1920, or 2200 for wider screens.</div>
+            </div>
+
+            <div class="field-group">
+              <label class="field-label" for="hero_template_side_padding">Hero Side Padding (px)</label>
+              <input id="hero_template_side_padding" type="number" min="0" max="180" step="4" name="hero_template_side_padding" value="{{ home_content.hero_template_side_padding }}">
+              <div class="help">Space inside the hero container. Lower values make the template use more width.</div>
+            </div>
+
+            <div class="field-group">
+              <label class="field-label" for="hero_text_column_percent">Hero Text Column (%)</label>
+              <input id="hero_text_column_percent" type="number" min="30" max="70" step="1" name="hero_text_column_percent" value="{{ home_content.hero_text_column_percent }}">
+              <div class="help">How much of the hero row belongs to the text side. The image side gets the remaining space.</div>
+            </div>
+
+            <div class="field-group">
+              <label class="field-label" for="hero_text_max_width">Hero Text Max Width (px)</label>
+              <input id="hero_text_max_width" type="number" min="320" max="1200" step="20" name="hero_text_max_width" value="{{ home_content.hero_text_max_width }}">
+              <div class="help">Controls how wide the headline, subtitle, buttons, and proof text can stretch.</div>
+            </div>
+
+            <div class="field-group">
+              <label class="field-label" for="hero_media_max_width">Hero Media Max Width (px)</label>
+              <input id="hero_media_max_width" type="number" min="320" max="1400" step="20" name="hero_media_max_width" value="{{ home_content.hero_media_max_width }}">
+              <div class="help">Controls the actual hero image/template size, beyond the Medium/Large presets.</div>
+            </div>
+
+            <div class="field-group">
+              <label class="field-label" for="hero_column_gap">Hero Text / Media Gap (px)</label>
+              <input id="hero_column_gap" type="number" min="0" max="220" step="4" name="hero_column_gap" value="{{ home_content.hero_column_gap }}">
+              <div class="help">Horizontal space between the text and image. Use a smaller gap when widening the layout.</div>
             </div>
 
             <div class="hero-media-panel">
@@ -2265,6 +2445,18 @@
               </select>
             </div>
 
+            <div class="field-group">
+              <label class="field-label" for="features_bg_color">Features Background Color</label>
+              <input id="features_bg_color" type="color" name="features_bg_color" value="{{ home_content.features_bg_color or '#ffffff' }}">
+              <div class="help">Applies behind the full width of the Why Choose section.</div>
+            </div>
+
+            <div class="field-group">
+              <label class="field-label" for="features_min_height">Features Minimum Height (px)</label>
+              <input id="features_min_height" type="number" name="features_min_height" min="0" max="1400" step="10" value="{{ home_content.features_min_height or 0 }}">
+              <div class="help">Use 0 for automatic height, or enter a height like 720.</div>
+            </div>
+
             <div class="checkbox-row full">
               <input id="reset_hero_image" type="checkbox" name="reset_hero_image" value="1">
               <label for="reset_hero_image">Use the default homepage hero image again</label>
@@ -2296,18 +2488,29 @@
               <span class="section-pill">{{ home_features|length }} Live</span>
             </div>
           </div>
-          <form method="post" action="/superadmin/website/feature/add">
+          <form method="post" action="/superadmin/website/feature/add" enctype="multipart/form-data">
             <div class="settings-grid">
               <div class="field-group">
                 <label class="field-label" for="new-feature-icon-kind">Icon Type</label>
                 <select id="new-feature-icon-kind" name="icon_kind">
                   <option value="emoji">Emoji</option>
-                  <option value="image">Image Path</option>
+                  <option value="image">Image / SVG / Animation Path</option>
                 </select>
               </div>
               <div class="field-group">
                 <label class="field-label" for="new-feature-icon-value">Icon Value</label>
                 <input id="new-feature-icon-value" type="text" name="icon_value" placeholder="🎬 or store_screens.webp">
+              </div>
+              <div class="field-group">
+                <label class="field-label" for="new-feature-icon-size">Icon Size (px)</label>
+                <input id="new-feature-icon-size" type="number" name="icon_size" min="24" max="260" step="1" value="48">
+                <div class="help">Controls how large this icon appears on the public homepage.</div>
+              </div>
+              <div class="field-group full">
+                <label class="field-label" for="new-feature-icon-file">Upload Icon / Animation File</label>
+                <input class="feature-file-input" id="new-feature-icon-file" type="file" name="icon_file" accept=".png,.jpg,.jpeg,.webp,.gif,.svg,.avif,.heic,.heif,.bmp,.mp4,.webm,.ogg,.mov,.avi,.mkv,.m4v">
+                <div class="help">Optional. Upload PNG, JPG, WebP, GIF, SVG up to 5 MB, or a short video file. The uploaded file will be used on the homepage.</div>
+                <div class="help feature-upload-status" data-feature-upload-status>No replacement file selected yet.</div>
               </div>
               <div class="field-group">
                 <label class="field-label" for="new-feature-title">Title</label>
@@ -2324,11 +2527,29 @@
           <div class="feature-grid">
             {% for feature_item in home_features %}
             <div class="media-card feature-card">
-              <form method="post" action="/superadmin/website/feature/{{ feature_item.id }}/update" class="feature-card-form" id="feature-form-{{ feature_item.id }}">
+              <form method="post" action="/superadmin/website/feature/{{ feature_item.id }}/update" class="feature-card-form" id="feature-form-{{ feature_item.id }}" enctype="multipart/form-data">
                 <div class="feature-card-header">
                   <div class="feature-card-title">
                     <strong>{{ feature_item.title or 'Feature item' }}</strong>
                     <span>Icon type: {{ feature_item.icon_kind }}</span>
+                  </div>
+                  <div class="feature-icon-preview" aria-label="Current feature icon preview">
+                    {% set editor_icon_value = feature_item.icon_value or '' %}
+                    {% set editor_icon_lower = editor_icon_value|lower %}
+                    {% set editor_icon_ext = editor_icon_lower.rsplit('.', 1)[-1] if '.' in editor_icon_lower else '' %}
+                    {% if feature_item.icon_kind == 'image' and editor_icon_value %}
+                      {% if editor_icon_ext in ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv', 'm4v'] %}
+                    <video autoplay muted loop playsinline preload="metadata">
+                      <source src="{{ url_for('static', filename=editor_icon_value) }}?v={{ asset_bust or 0 }}">
+                    </video>
+                      {% elif editor_icon_ext == 'svg' %}
+                    <object data="{{ url_for('static', filename=editor_icon_value) }}?v={{ asset_bust or 0 }}" type="image/svg+xml" aria-label="{{ feature_item.title }}"></object>
+                      {% else %}
+                    <img src="{{ url_for('static', filename=editor_icon_value) }}?v={{ asset_bust or 0 }}" alt="">
+                      {% endif %}
+                    {% else %}
+                    <span>{{ feature_item.icon_value }}</span>
+                    {% endif %}
                   </div>
                 </div>
                 <div class="feature-card-fields">
@@ -2336,12 +2557,23 @@
                     <label class="field-label" for="feature-icon-kind-{{ feature_item.id }}">Icon Type</label>
                     <select id="feature-icon-kind-{{ feature_item.id }}" name="icon_kind">
                       <option value="emoji" {% if feature_item.icon_kind == 'emoji' %}selected{% endif %}>Emoji</option>
-                      <option value="image" {% if feature_item.icon_kind == 'image' %}selected{% endif %}>Image Path</option>
+                      <option value="image" {% if feature_item.icon_kind == 'image' %}selected{% endif %}>Image / SVG / Animation Path</option>
                     </select>
                   </div>
                   <div class="field-group">
                     <label class="field-label" for="feature-icon-value-{{ feature_item.id }}">Icon Value</label>
                     <input id="feature-icon-value-{{ feature_item.id }}" type="text" name="icon_value" value="{{ feature_item.icon_value }}" placeholder="🎬 or store_screens.webp">
+                  </div>
+                  <div class="field-group">
+                    <label class="field-label" for="feature-icon-size-{{ feature_item.id }}">Icon Size (px)</label>
+                    <input id="feature-icon-size-{{ feature_item.id }}" type="number" name="icon_size" min="24" max="260" step="1" value="{{ feature_item.icon_size or (80 if feature_item.icon_kind == 'image' else 48) }}">
+                    <div class="help">Homepage display size for this icon.</div>
+                  </div>
+                  <div class="field-group full">
+                    <label class="field-label" for="feature-icon-file-{{ feature_item.id }}">Upload Replacement File</label>
+                    <input class="feature-file-input" id="feature-icon-file-{{ feature_item.id }}" type="file" name="icon_file" accept=".png,.jpg,.jpeg,.webp,.gif,.svg,.avif,.heic,.heif,.bmp,.mp4,.webm,.ogg,.mov,.avi,.mkv,.m4v">
+                    <div class="help">Choose a file and press save. This replaces the icon path and updates the live homepage. SVG files can be up to 5 MB.</div>
+                    <div class="help feature-upload-status" data-feature-upload-status>No replacement file selected yet.</div>
                   </div>
                   <div class="field-group full">
                     <label class="field-label" for="feature-title-{{ feature_item.id }}">Title</label>
@@ -2773,9 +3005,15 @@
                   {% endif %}
                 </span>
               </div>
-              <form method="post" action="/superadmin/website/media/{{ media_item.id }}/update" class="media-card-form" id="media-form-{{ media_item.id }}">
+              <form method="post" action="/superadmin/website/media/{{ media_item.id }}/update" class="media-card-form" id="media-form-{{ media_item.id }}" enctype="multipart/form-data">
                 <input type="hidden" name="return_to" value="media-item-{{ media_item.id }}">
                 <div class="media-card-fields">
+                  <div class="field-group full">
+                    <label class="field-label" for="replacement-media-{{ media_item.id }}">Replace Media File</label>
+                    <input class="feature-file-input body-media-replace-input" id="replacement-media-{{ media_item.id }}" type="file" name="replacement_media" accept=".png,.jpg,.jpeg,.webp,.gif,.svg,.bmp,.tif,.tiff,.avif,.heic,.heif,.mp4,.webm,.ogg,.mov,.avi,.mkv,.m4v">
+                    <div class="help">Optional. Choose a new image, SVG, GIF, or video, then press save. Caption, layout, and order stay the same.</div>
+                    <div class="help media-upload-status" data-media-upload-status>No replacement file selected yet.</div>
+                  </div>
                   <div class="field-group">
                     <label class="field-label" for="caption-{{ media_item.id }}">Caption</label>
                     <input id="caption-{{ media_item.id }}" type="text" name="caption" value="{{ media_item.caption }}" placeholder="Optional caption shown below this media block">
@@ -3322,6 +3560,73 @@
     }());
 
     (function () {
+      const source = document.getElementById('logo_intro_svg_source');
+      const fileInput = document.getElementById('logo_intro_svg_file');
+      const preview = document.getElementById('logoIntroEditorPreview');
+      const durationInput = document.getElementById('logo_intro_duration_ms');
+      let previewUrl = null;
+      let previewTimer = null;
+
+      function setPreviewFromSource() {
+        if (!source || !preview) {
+          return;
+        }
+        const svg = source.value.trim();
+        if (!svg) {
+          return;
+        }
+        if (previewUrl) {
+          URL.revokeObjectURL(previewUrl);
+          previewUrl = null;
+        }
+        previewUrl = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+        preview.src = previewUrl;
+      }
+
+      function schedulePreviewUpdate() {
+        window.clearTimeout(previewTimer);
+        previewTimer = window.setTimeout(setPreviewFromSource, 350);
+      }
+
+      if (source) {
+        source.addEventListener('input', schedulePreviewUpdate);
+      }
+
+      if (fileInput && source) {
+        fileInput.addEventListener('change', () => {
+          const file = (fileInput.files || [])[0];
+          if (!file) {
+            return;
+          }
+          const reader = new FileReader();
+          reader.onload = () => {
+            source.value = String(reader.result || '');
+            fileInput.value = '';
+            setPreviewFromSource();
+          };
+          reader.readAsText(file);
+        });
+      }
+
+      if (durationInput && preview) {
+        durationInput.addEventListener('change', () => {
+          if (previewUrl) {
+            setPreviewFromSource();
+            return;
+          }
+          const baseSrc = preview.src.split('?')[0];
+          preview.src = baseSrc + '?v=' + Date.now();
+        });
+      }
+
+      window.addEventListener('beforeunload', () => {
+        if (previewUrl) {
+          URL.revokeObjectURL(previewUrl);
+        }
+      });
+    }());
+
+    (function () {
       function bindPreview(inputId, previewId) {
         const input = document.getElementById(inputId);
         const preview = document.getElementById(previewId);
@@ -3359,6 +3664,186 @@
       }
 
       bindPreview('hero_image', 'heroImageUploadPreview');
+    }());
+
+    (function () {
+      const videoExts = new Set(['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv', 'm4v']);
+      const svgMaxBytes = 5 * 1024 * 1024;
+
+      function extensionFor(file) {
+        const name = String((file && file.name) || '').toLowerCase();
+        const parts = name.split('.');
+        return parts.length > 1 ? parts.pop() : '';
+      }
+
+      function renderSelectedFeaturePreview(input, file, ext) {
+        const card = input.closest('.feature-card');
+        const preview = card ? card.querySelector('.feature-icon-preview') : null;
+        if (!preview || !file) {
+          return;
+        }
+        if (preview._featurePreviewUrl) {
+          URL.revokeObjectURL(preview._featurePreviewUrl);
+          preview._featurePreviewUrl = null;
+        }
+        const url = URL.createObjectURL(file);
+        preview._featurePreviewUrl = url;
+        preview.replaceChildren();
+        if (videoExts.has(ext)) {
+          const video = document.createElement('video');
+          video.autoplay = true;
+          video.muted = true;
+          video.loop = true;
+          video.playsInline = true;
+          video.preload = 'metadata';
+          const source = document.createElement('source');
+          source.src = url;
+          video.appendChild(source);
+          preview.appendChild(video);
+          return;
+        }
+        if (ext === 'svg') {
+          const object = document.createElement('object');
+          object.type = 'image/svg+xml';
+          object.data = url;
+          object.setAttribute('aria-label', file.name || 'Selected SVG preview');
+          preview.appendChild(object);
+          return;
+        }
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = file.name || 'Selected feature icon preview';
+        img.addEventListener('load', () => {
+          if (preview._featurePreviewUrl === url) {
+            URL.revokeObjectURL(url);
+            preview._featurePreviewUrl = null;
+          }
+        }, { once: true });
+        preview.appendChild(img);
+      }
+
+      document.querySelectorAll('input[type="file"][name="icon_file"]').forEach((input) => {
+        input.addEventListener('change', () => {
+          const file = (input.files || [])[0];
+          const form = input.form;
+          const status = input.closest('.field-group')?.querySelector('[data-feature-upload-status]');
+          const kindSelect = form ? form.querySelector('select[name="icon_kind"]') : null;
+          const sizeInput = form ? form.querySelector('input[name="icon_size"]') : null;
+          if (kindSelect && file) {
+            kindSelect.value = 'image';
+            if (sizeInput && (!sizeInput.value || Number(sizeInput.value) === 48)) {
+              sizeInput.value = '80';
+            }
+          }
+          if (!file) {
+            if (status) {
+              status.textContent = 'No replacement file selected yet.';
+            }
+            return;
+          }
+          const ext = extensionFor(file);
+          const sizeMb = file.size ? (file.size / 1024 / 1024).toFixed(2) : '0.00';
+          if (status) {
+            status.textContent = `Selected: ${file.name} (${ext || 'unknown'}, ${sizeMb} MB). Press save to replace the homepage feature icon.`;
+            if (ext === 'svg' && file.size > svgMaxBytes) {
+              status.textContent = `Selected SVG is ${sizeMb} MB. Please keep feature SVG files under 5 MB before saving.`;
+            }
+          }
+          renderSelectedFeaturePreview(input, file, ext);
+        });
+      });
+
+      document.querySelectorAll('select[name="icon_kind"]').forEach((select) => {
+        select.addEventListener('change', () => {
+          const sizeInput = select.form ? select.form.querySelector('input[name="icon_size"]') : null;
+          if (!sizeInput) {
+            return;
+          }
+          const current = Number(sizeInput.value || 0);
+          if (select.value === 'emoji' && (!current || current === 80)) {
+            sizeInput.value = '48';
+          }
+          if (select.value === 'image' && (!current || current === 48)) {
+            sizeInput.value = '80';
+          }
+        });
+      });
+
+      window.addEventListener('beforeunload', () => {
+        document.querySelectorAll('.feature-icon-preview').forEach((preview) => {
+          if (preview._featurePreviewUrl) {
+            URL.revokeObjectURL(preview._featurePreviewUrl);
+          }
+        });
+      });
+    }());
+
+    (function () {
+      const videoExts = new Set(['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv', 'm4v']);
+
+      function extensionFor(file) {
+        const name = String((file && file.name) || '').toLowerCase();
+        const parts = name.split('.');
+        return parts.length > 1 ? parts.pop() : '';
+      }
+
+      function renderReplacementPreview(input, file, ext) {
+        const card = input.closest('.media-card');
+        const thumb = card ? card.querySelector('.media-thumb') : null;
+        if (!thumb || !file) {
+          return;
+        }
+        if (thumb._replacementPreviewUrl) {
+          URL.revokeObjectURL(thumb._replacementPreviewUrl);
+          thumb._replacementPreviewUrl = null;
+        }
+        const url = URL.createObjectURL(file);
+        thumb._replacementPreviewUrl = url;
+        thumb.replaceChildren();
+        if (videoExts.has(ext)) {
+          const video = document.createElement('video');
+          video.controls = true;
+          video.muted = true;
+          video.playsInline = true;
+          video.preload = 'metadata';
+          const source = document.createElement('source');
+          source.src = url;
+          video.appendChild(source);
+          thumb.appendChild(video);
+          return;
+        }
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = file.name || 'Selected homepage media preview';
+        thumb.appendChild(img);
+      }
+
+      document.querySelectorAll('input[type="file"][name="replacement_media"]').forEach((input) => {
+        input.addEventListener('change', () => {
+          const file = (input.files || [])[0];
+          const status = input.closest('.field-group')?.querySelector('[data-media-upload-status]');
+          if (!file) {
+            if (status) {
+              status.textContent = 'No replacement file selected yet.';
+            }
+            return;
+          }
+          const ext = extensionFor(file);
+          const sizeMb = file.size ? (file.size / 1024 / 1024).toFixed(2) : '0.00';
+          if (status) {
+            status.textContent = `Selected: ${file.name} (${ext || 'unknown'}, ${sizeMb} MB). Press save to replace this homepage media.`;
+          }
+          renderReplacementPreview(input, file, ext);
+        });
+      });
+
+      window.addEventListener('beforeunload', () => {
+        document.querySelectorAll('.media-thumb').forEach((thumb) => {
+          if (thumb._replacementPreviewUrl) {
+            URL.revokeObjectURL(thumb._replacementPreviewUrl);
+          }
+        });
+      });
     }());
 
     // Auto-dismiss notifications after 2 seconds

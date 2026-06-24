@@ -461,7 +461,14 @@ def init_db():
             'hero_media_shape TEXT, '
             'hero_media_size TEXT, '
             'hero_media_fit_mode TEXT, '
+            'hero_template_max_width INTEGER, '
+            'hero_template_side_padding INTEGER, '
+            'hero_text_column_percent INTEGER, '
+            'hero_text_max_width INTEGER, '
+            'hero_media_max_width INTEGER, '
+            'hero_column_gap INTEGER, '
             'hero_rotate_on_refresh INTEGER, '
+            'logo_intro_duration_ms INTEGER, '
             'promo_enabled INTEGER, '
             'promo_text TEXT, '
             'promo_bg_color TEXT, '
@@ -477,6 +484,8 @@ def init_db():
             'promo_direction TEXT, '
             'features_title TEXT, '
             'features_style TEXT, '
+            'features_bg_color TEXT, '
+            'features_min_height INTEGER, '
             'body_media_display_size TEXT, '
             'body_media_width_mode TEXT, '
             'body_media_max_width INTEGER, '
@@ -518,6 +527,12 @@ def init_db():
             db.commit()
         if 'features_style' not in homepage_settings_columns:
             db.execute('ALTER TABLE homepage_settings ADD COLUMN features_style TEXT')
+            db.commit()
+        if 'features_bg_color' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN features_bg_color TEXT')
+            db.commit()
+        if 'features_min_height' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN features_min_height INTEGER')
             db.commit()
         if 'promo_enabled' not in homepage_settings_columns:
             db.execute('ALTER TABLE homepage_settings ADD COLUMN promo_enabled INTEGER')
@@ -567,8 +582,29 @@ def init_db():
         if 'hero_media_fit_mode' not in homepage_settings_columns:
             db.execute('ALTER TABLE homepage_settings ADD COLUMN hero_media_fit_mode TEXT')
             db.commit()
+        if 'hero_template_max_width' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN hero_template_max_width INTEGER')
+            db.commit()
+        if 'hero_template_side_padding' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN hero_template_side_padding INTEGER')
+            db.commit()
+        if 'hero_text_column_percent' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN hero_text_column_percent INTEGER')
+            db.commit()
+        if 'hero_text_max_width' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN hero_text_max_width INTEGER')
+            db.commit()
+        if 'hero_media_max_width' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN hero_media_max_width INTEGER')
+            db.commit()
+        if 'hero_column_gap' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN hero_column_gap INTEGER')
+            db.commit()
         if 'hero_rotate_on_refresh' not in homepage_settings_columns:
             db.execute('ALTER TABLE homepage_settings ADD COLUMN hero_rotate_on_refresh INTEGER')
+            db.commit()
+        if 'logo_intro_duration_ms' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN logo_intro_duration_ms INTEGER')
             db.commit()
         if 'body_media_display_size' not in homepage_settings_columns:
             db.execute('ALTER TABLE homepage_settings ADD COLUMN body_media_display_size TEXT')
@@ -699,11 +735,20 @@ def init_db():
             'id INTEGER PRIMARY KEY AUTOINCREMENT, '
             'icon_kind TEXT NOT NULL DEFAULT "emoji", '
             'icon_value TEXT NOT NULL, '
+            'icon_size INTEGER, '
             'title TEXT NOT NULL, '
             'description TEXT NOT NULL, '
             'sort_order INTEGER NOT NULL DEFAULT 0, '
             'created_at INTEGER NOT NULL'
             ')'
+        )
+        homepage_features_columns = {row['name'] for row in db.execute('PRAGMA table_info(homepage_features)').fetchall()}
+        if 'icon_size' not in homepage_features_columns:
+            db.execute('ALTER TABLE homepage_features ADD COLUMN icon_size INTEGER')
+        db.execute(
+            'UPDATE homepage_features '
+            'SET icon_size = CASE WHEN LOWER(COALESCE(icon_kind, "")) = "image" THEN 80 ELSE 48 END '
+            'WHERE icon_size IS NULL'
         )
         db.commit()
     except Exception as _homepage_features_e:
@@ -1013,7 +1058,14 @@ def _default_homepage_settings() -> dict:
         'hero_media_shape': 'landscape',
         'hero_media_size': 'large',
         'hero_media_fit_mode': 'cover',
+        'hero_template_max_width': 1200,
+        'hero_template_side_padding': 40,
+        'hero_text_column_percent': 50,
+        'hero_text_max_width': 620,
+        'hero_media_max_width': 700,
+        'hero_column_gap': 60,
         'hero_rotate_on_refresh': 0,
+        'logo_intro_duration_ms': 4800,
         'promo_enabled': 0,
         'promo_text': 'Launch special: 14-day free trial + first screen free. Setup in minutes.',
         'promo_bg_color': '#111827',
@@ -1029,6 +1081,8 @@ def _default_homepage_settings() -> dict:
         'promo_direction': 'left',
         'features_title': 'Why Choose EverydayAdvertise?',
         'features_style': 'flat',
+        'features_bg_color': '#ffffff',
+        'features_min_height': 0,
         'body_media_display_size': 'standard',
         'body_media_width_mode': 'contained',
         'body_media_max_width': 1200,
@@ -1076,7 +1130,14 @@ _HOMEPAGE_SETTINGS_FIELDS = (
     'hero_media_shape',
     'hero_media_size',
     'hero_media_fit_mode',
+    'hero_template_max_width',
+    'hero_template_side_padding',
+    'hero_text_column_percent',
+    'hero_text_max_width',
+    'hero_media_max_width',
+    'hero_column_gap',
     'hero_rotate_on_refresh',
+    'logo_intro_duration_ms',
     'promo_enabled',
     'promo_text',
     'promo_bg_color',
@@ -1092,6 +1153,8 @@ _HOMEPAGE_SETTINGS_FIELDS = (
     'promo_direction',
     'features_title',
     'features_style',
+    'features_bg_color',
+    'features_min_height',
     'body_media_display_size',
     'body_media_width_mode',
     'body_media_max_width',
@@ -1272,6 +1335,7 @@ def _normalize_homepage_settings(row) -> dict:
         'promo_text_align',
         'promo_direction',
         'features_title',
+        'features_bg_color',
         'pricing_title',
         'pricing_subtitle',
     ):
@@ -1284,9 +1348,58 @@ def _normalize_homepage_settings(row) -> dict:
     if normalized['hero_media_fit_mode'] not in ('cover', 'contain'):
         normalized['hero_media_fit_mode'] = defaults['hero_media_fit_mode']
     try:
+        normalized['hero_template_max_width'] = min(
+            2560,
+            max(960, int(data.get('hero_template_max_width') or defaults['hero_template_max_width']))
+        )
+    except Exception:
+        normalized['hero_template_max_width'] = defaults['hero_template_max_width']
+    try:
+        normalized['hero_template_side_padding'] = min(
+            180,
+            max(0, int(data.get('hero_template_side_padding') or defaults['hero_template_side_padding']))
+        )
+    except Exception:
+        normalized['hero_template_side_padding'] = defaults['hero_template_side_padding']
+    try:
+        normalized['hero_text_column_percent'] = min(
+            70,
+            max(30, int(data.get('hero_text_column_percent') or defaults['hero_text_column_percent']))
+        )
+    except Exception:
+        normalized['hero_text_column_percent'] = defaults['hero_text_column_percent']
+    try:
+        normalized['hero_text_max_width'] = min(
+            1200,
+            max(320, int(data.get('hero_text_max_width') or defaults['hero_text_max_width']))
+        )
+    except Exception:
+        normalized['hero_text_max_width'] = defaults['hero_text_max_width']
+    try:
+        normalized['hero_media_max_width'] = min(
+            1400,
+            max(320, int(data.get('hero_media_max_width') or defaults['hero_media_max_width']))
+        )
+    except Exception:
+        normalized['hero_media_max_width'] = defaults['hero_media_max_width']
+    try:
+        normalized['hero_column_gap'] = min(
+            220,
+            max(0, int(data.get('hero_column_gap') or defaults['hero_column_gap']))
+        )
+    except Exception:
+        normalized['hero_column_gap'] = defaults['hero_column_gap']
+    try:
         normalized['hero_rotate_on_refresh'] = 1 if int(data.get('hero_rotate_on_refresh') or 0) == 1 else 0
     except Exception:
         normalized['hero_rotate_on_refresh'] = defaults['hero_rotate_on_refresh']
+    try:
+        normalized['logo_intro_duration_ms'] = min(
+            15000,
+            max(500, int(data.get('logo_intro_duration_ms') or defaults['logo_intro_duration_ms']))
+        )
+    except Exception:
+        normalized['logo_intro_duration_ms'] = defaults['logo_intro_duration_ms']
     try:
         normalized['promo_enabled'] = 1 if int(data.get('promo_enabled') or 0) == 1 else 0
     except Exception:
@@ -1321,6 +1434,14 @@ def _normalize_homepage_settings(row) -> dict:
     if features_style not in ('flat', 'cards'):
         features_style = defaults['features_style']
     normalized['features_style'] = features_style
+    normalized['features_bg_color'] = _normalize_hex_color(data.get('features_bg_color'), defaults['features_bg_color'])
+    try:
+        normalized['features_min_height'] = min(
+            1400,
+            max(0, int(data.get('features_min_height') or defaults['features_min_height']))
+        )
+    except Exception:
+        normalized['features_min_height'] = defaults['features_min_height']
     _normalize_homepage_media_profile_settings(data, defaults, 'body_media', normalized)
     _normalize_homepage_media_profile_settings(data, defaults, 'body_media_video', normalized)
     _normalize_homepage_media_profile_settings(data, defaults, 'body_media_carousel', normalized)
@@ -1358,13 +1479,21 @@ def _get_homepage_settings() -> dict:
 
 def _default_homepage_features() -> list[dict]:
     return [
-        {'icon_kind': 'emoji', 'icon_value': '🎬', 'title': 'Perfect Sync', 'description': 'Industry-leading synchronization technology keeps all your screens in perfect harmony. Create stunning video walls that wow customers.'},
-        {'icon_kind': 'image', 'icon_value': 'store_screens.webp', 'title': 'Easy Management', 'description': 'Powerful dashboard lets you manage all screens from anywhere. Upload content, schedule playlists, and monitor status in real-time.'},
-        {'icon_kind': 'emoji', 'icon_value': '⚡', 'title': 'Lightning Fast', 'description': 'Optimized for performance. Content loads instantly and transitions are buttery smooth. No lag, no buffering.'},
-        {'icon_kind': 'emoji', 'icon_value': '🔄', 'title': 'Auto Updates', 'description': 'Change your menu once, update everywhere. All screens refresh automatically when you make changes.'},
-        {'icon_kind': 'emoji', 'icon_value': '🎯', 'title': 'Multi-Store Support', 'description': 'Manage multiple locations from one dashboard. Different menus for different stores, all in one place.'},
-        {'icon_kind': 'emoji', 'icon_value': '🛡️', 'title': 'Rock Solid', 'description': 'Enterprise-grade reliability. Your menus stay up 24/7 with automatic failover and offline support.'},
+        {'icon_kind': 'emoji', 'icon_value': '🎬', 'icon_size': 48, 'title': 'Perfect Sync', 'description': 'Industry-leading synchronization technology keeps all your screens in perfect harmony. Create stunning video walls that wow customers.'},
+        {'icon_kind': 'image', 'icon_value': 'store_screens.webp', 'icon_size': 80, 'title': 'Easy Management', 'description': 'Powerful dashboard lets you manage all screens from anywhere. Upload content, schedule playlists, and monitor status in real-time.'},
+        {'icon_kind': 'emoji', 'icon_value': '⚡', 'icon_size': 48, 'title': 'Lightning Fast', 'description': 'Optimized for performance. Content loads instantly and transitions are buttery smooth. No lag, no buffering.'},
+        {'icon_kind': 'emoji', 'icon_value': '🔄', 'icon_size': 48, 'title': 'Auto Updates', 'description': 'Change your menu once, update everywhere. All screens refresh automatically when you make changes.'},
+        {'icon_kind': 'emoji', 'icon_value': '🎯', 'icon_size': 48, 'title': 'Multi-Store Support', 'description': 'Manage multiple locations from one dashboard. Different menus for different stores, all in one place.'},
+        {'icon_kind': 'emoji', 'icon_value': '🛡️', 'icon_size': 48, 'title': 'Rock Solid', 'description': 'Enterprise-grade reliability. Your menus stay up 24/7 with automatic failover and offline support.'},
     ]
+
+
+def _normalize_homepage_feature_icon_size(value, icon_kind: str = 'image') -> int:
+    default_size = 80 if (icon_kind or '').strip().lower() == 'image' else 48
+    try:
+        return min(260, max(24, int(value if value not in (None, '') else default_size)))
+    except Exception:
+        return default_size
 
 
 def _normalize_homepage_feature_row(row) -> dict:
@@ -1389,10 +1518,12 @@ def _normalize_homepage_feature_row(row) -> dict:
         created_at = int(data.get('created_at') or time.time())
     except Exception:
         created_at = int(time.time())
+    icon_size = _normalize_homepage_feature_icon_size(data.get('icon_size'), icon_kind)
     return {
         'id': feature_id,
         'icon_kind': icon_kind,
         'icon_value': icon_value,
+        'icon_size': icon_size,
         'title': title,
         'description': description,
         'sort_order': sort_order,
@@ -1407,8 +1538,8 @@ def _ensure_homepage_features_seeded():
         return
     for index, item in enumerate(_default_homepage_features(), start=1):
         db.execute(
-            'INSERT INTO homepage_features (icon_kind, icon_value, title, description, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-            (item['icon_kind'], item['icon_value'], item['title'], item['description'], index, int(time.time())),
+            'INSERT INTO homepage_features (icon_kind, icon_value, icon_size, title, description, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            (item['icon_kind'], item['icon_value'], item['icon_size'], item['title'], item['description'], index, int(time.time())),
         )
     db.commit()
 
@@ -1734,6 +1865,13 @@ def _cleanup_homepage_asset(rel_path: str | None):
         logging.warning('Failed to remove old homepage asset %s: %s', rel_path, e)
 
 
+def _cleanup_homepage_feature_asset(rel_path: str | None):
+    path = (rel_path or '').replace('\\', '/').strip()
+    if not path.startswith('uploads/site/homepage-feature-'):
+        return
+    _cleanup_homepage_asset(path)
+
+
 def _save_homepage_image(file_storage, current_path: str | None = None) -> str:
     if not file_storage or not getattr(file_storage, 'filename', ''):
         return _normalize_homepage_settings({'hero_image_path': current_path}).get('hero_image_path')
@@ -1779,6 +1917,104 @@ def _save_homepage_body_media(file_storage) -> dict:
         'media_path': rel_path.replace('\\', '/'),
         'media_type': media_type,
     }
+
+
+FEATURE_ICON_SVG_MAX_BYTES = 5 * 1024 * 1024
+
+
+def _save_homepage_feature_icon(file_storage) -> str:
+    if not file_storage or not getattr(file_storage, 'filename', ''):
+        raise ValueError('Please choose an image, SVG, GIF, or video file.')
+
+    filename = secure_filename(file_storage.filename or '')
+    if not filename or not allowed_file(filename):
+        raise ValueError('Only supported image, SVG, GIF, or video files can be uploaded.')
+
+    ext = filename.rsplit('.', 1)[1].lower()
+    media_type = classify_media(filename)
+    if media_type not in ('image', 'animated', 'video'):
+        raise ValueError('Unsupported feature icon media type.')
+
+    site_content_folder = os.path.join(UPLOAD_FOLDER, 'site')
+    os.makedirs(site_content_folder, exist_ok=True)
+    rel_path = f'uploads/site/homepage-feature-{int(time.time())}-{secrets.token_hex(4)}.{ext}'
+    abs_path = os.path.join('static', rel_path)
+    os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+
+    if ext == 'svg':
+        raw = file_storage.read(FEATURE_ICON_SVG_MAX_BYTES + 1)
+        if len(raw) > FEATURE_ICON_SVG_MAX_BYTES:
+            raise ValueError('SVG file is too large. Keep feature SVG files under 5 MB.')
+        svg = _validate_safe_svg_source(raw.decode('utf-8-sig'), FEATURE_ICON_SVG_MAX_BYTES)
+        with open(abs_path, 'w', encoding='utf-8', newline='\n') as fh:
+            fh.write(svg)
+    else:
+        file_storage.save(abs_path)
+
+    return rel_path.replace('\\', '/')
+
+
+LOGO_INTRO_STATIC_FILENAME = 'logo-intro.svg'
+LOGO_INTRO_MAX_BYTES = 512 * 1024
+
+
+def _logo_intro_svg_path() -> str:
+    return os.path.join(os.path.dirname(__file__), 'static', LOGO_INTRO_STATIC_FILENAME)
+
+
+def _read_logo_intro_svg_source() -> str:
+    try:
+        with open(_logo_intro_svg_path(), 'r', encoding='utf-8') as fh:
+            return fh.read()
+    except FileNotFoundError:
+        return ''
+    except Exception as e:
+        logging.warning('Failed to read intro logo SVG: %s', e)
+        return ''
+
+
+def _logo_intro_svg_mtime() -> int:
+    try:
+        return int(os.path.getmtime(_logo_intro_svg_path()))
+    except Exception:
+        return 0
+
+
+def _validate_safe_svg_source(source: str, max_bytes: int) -> str:
+    svg = (source or '').strip()
+    if not svg:
+        raise ValueError('SVG source is empty.')
+
+    encoded = svg.encode('utf-8')
+    if len(encoded) > max_bytes:
+        raise ValueError('SVG file is too large.')
+
+    lowered = svg.lower()
+    if '<svg' not in lowered[:600] or '</svg>' not in lowered:
+        raise ValueError('Please provide a valid SVG document.')
+
+    blocked_tokens = ('<script', 'javascript:', '<iframe', '<object', '<embed', '<foreignobject')
+    if any(token in lowered for token in blocked_tokens):
+        raise ValueError('For safety, SVG scripts, embedded objects, and foreignObject markup are not allowed.')
+
+    return svg + '\n'
+
+
+def _validate_logo_intro_svg_source(source: str) -> str:
+    try:
+        return _validate_safe_svg_source(source, LOGO_INTRO_MAX_BYTES)
+    except ValueError as exc:
+        if str(exc) == 'SVG file is too large.':
+            raise ValueError('SVG file is too large. Keep it under 512 KB.')
+        raise
+
+
+def _save_logo_intro_svg_source(source: str) -> None:
+    svg = _validate_logo_intro_svg_source(source)
+    path = _logo_intro_svg_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'w', encoding='utf-8', newline='\n') as fh:
+        fh.write(svg)
 
 
 def _apply_billing_policy_to_existing_users(policy: dict, source: str) -> int:
@@ -4526,6 +4762,7 @@ def home():
         import os, time as _t
         templates_dir = os.path.join(os.path.dirname(__file__), 'templates')
         logo_path = os.path.join(os.path.dirname(__file__), 'static', 'ea-logo.svg')
+        intro_logo_path = _logo_intro_svg_path()
         primary_home_template = 'home.html'
         fallback_home_template = 'home_new.html'
         selected_home_template = primary_home_template
@@ -4534,9 +4771,10 @@ def home():
             selected_home_template = fallback_home_template
             home_template_path = os.path.join(templates_dir, fallback_home_template)
         logo_mtime = int(os.path.getmtime(logo_path)) if os.path.exists(logo_path) else 0
+        intro_logo_mtime = int(os.path.getmtime(intro_logo_path)) if os.path.exists(intro_logo_path) else 0
         template_mtime = int(os.path.getmtime(home_template_path)) if os.path.exists(home_template_path) else 0
-        asset_bust = max(logo_mtime, template_mtime, int(_t.time()))
-        page_version = str(max(logo_mtime, template_mtime, 4000))
+        asset_bust = max(logo_mtime, intro_logo_mtime, template_mtime, int(_t.time()))
+        page_version = str(max(logo_mtime, intro_logo_mtime, template_mtime, 4000))
     except Exception:
         selected_home_template = 'home.html'
         asset_bust = 0
@@ -9433,6 +9671,12 @@ def superadmin_website_editor():
                 'hero_media_shape': request.form.get('hero_media_shape'),
                 'hero_media_size': request.form.get('hero_media_size'),
                 'hero_media_fit_mode': request.form.get('hero_media_fit_mode'),
+                'hero_template_max_width': request.form.get('hero_template_max_width'),
+                'hero_template_side_padding': request.form.get('hero_template_side_padding'),
+                'hero_text_column_percent': request.form.get('hero_text_column_percent'),
+                'hero_text_max_width': request.form.get('hero_text_max_width'),
+                'hero_media_max_width': request.form.get('hero_media_max_width'),
+                'hero_column_gap': request.form.get('hero_column_gap'),
                 'hero_rotate_on_refresh': 1 if request.form.get('hero_rotate_on_refresh') == '1' else 0,
                 'promo_enabled': 1 if request.form.get('promo_enabled') == '1' else 0,
                 'promo_text': request.form.get('promo_text'),
@@ -9449,6 +9693,8 @@ def superadmin_website_editor():
                 'promo_direction': request.form.get('promo_direction'),
                 'features_title': request.form.get('features_title'),
                 'features_style': request.form.get('features_style'),
+                'features_bg_color': request.form.get('features_bg_color'),
+                'features_min_height': request.form.get('features_min_height'),
                 'pricing_title': request.form.get('pricing_title'),
                 'pricing_subtitle': request.form.get('pricing_subtitle'),
                 'updated_at': int(time.time()),
@@ -9498,6 +9744,9 @@ def superadmin_website_editor():
             home_body_media=_get_homepage_body_media(),
             home_billing=_get_global_billing_settings(),
             home_pricing_feature=_public_home_pricing_feature(_get_global_billing_settings()),
+            logo_intro_svg_source=_read_logo_intro_svg_source(),
+            logo_intro_svg_url=url_for('static', filename=LOGO_INTRO_STATIC_FILENAME),
+            logo_intro_svg_mtime=_logo_intro_svg_mtime(),
             public_home_url=url_for('home'),
         )
     except Exception as e:
@@ -9523,6 +9772,41 @@ def _superadmin_website_editor_redirect(hash_fragment: str | None = None):
     if embedded == '1':
         return redirect(url_for('superadmin_website_editor', embedded='1') + target_fragment)
     return redirect(url_for('superadmin_website_editor') + target_fragment)
+
+
+@app.route('/superadmin/website/logo-intro', methods=['POST'])
+@superadmin_required
+def superadmin_website_logo_intro_update():
+    try:
+        uploaded = request.files.get('logo_intro_svg_file')
+        if uploaded and getattr(uploaded, 'filename', ''):
+            filename = secure_filename(uploaded.filename or '')
+            if not filename.lower().endswith('.svg'):
+                raise ValueError('Please upload an SVG file.')
+            raw = uploaded.read(LOGO_INTRO_MAX_BYTES + 1)
+            if len(raw) > LOGO_INTRO_MAX_BYTES:
+                raise ValueError('SVG file is too large. Keep it under 512 KB.')
+            source = raw.decode('utf-8-sig')
+        else:
+            source = request.form.get('logo_intro_svg_source') or ''
+
+        _save_logo_intro_svg_source(source)
+        current = _get_homepage_settings()
+        payload = _normalize_homepage_settings({
+            **current,
+            'logo_intro_duration_ms': request.form.get('logo_intro_duration_ms'),
+            'updated_at': int(time.time()),
+        })
+        db = get_db()
+        _write_homepage_settings(db, payload)
+        db.commit()
+        flash('Intro logo SVG updated. The homepage will use it on the next refresh.', 'success')
+    except UnicodeDecodeError:
+        flash('Failed to update intro logo: SVG must be UTF-8 text.', 'error')
+    except Exception as e:
+        logging.error('Failed to update intro logo SVG: %s', e, exc_info=True)
+        flash(f'Failed to update intro logo: {e}', 'error')
+    return _superadmin_website_editor_redirect('#logo-intro-manager')
 
 
 def _superadmin_agents_redirect(endpoint='superadmin_agents', **values):
@@ -9738,21 +10022,48 @@ def superadmin_website_media_update(media_id: int):
         if not row:
             flash('Homepage media item not found.', 'error')
             return _superadmin_website_editor_redirect()
+        existing = _normalize_homepage_body_media_row(dict(row))
 
         caption = (request.form.get('caption') or '').strip()
         layout_style = (request.form.get('layout_style') or 'full').strip().lower()
         if layout_style not in ('full', 'half', 'third', 'quarter', 'slice', 'carousel'):
             layout_style = 'full'
         edge_to_edge = 1 if request.form.get('edge_to_edge') == '1' else 0
+        replacement = request.files.get('replacement_media')
+        replacement_name = ''
+        replacement_payload = None
+        if replacement and getattr(replacement, 'filename', ''):
+            replacement_name = secure_filename(replacement.filename or '')
+            replacement_payload = _save_homepage_body_media(replacement)
 
-        db.execute(
-            'UPDATE homepage_body_media SET caption = ?, layout_style = ?, edge_to_edge = ? WHERE id = ?',
-            (caption, layout_style, edge_to_edge, media_id),
-        )
+        if replacement_payload:
+            db.execute(
+                'UPDATE homepage_body_media SET media_path = ?, media_type = ?, caption = ?, layout_style = ?, edge_to_edge = ? WHERE id = ?',
+                (
+                    replacement_payload['media_path'],
+                    replacement_payload['media_type'],
+                    caption,
+                    layout_style,
+                    edge_to_edge,
+                    media_id,
+                ),
+            )
+        else:
+            db.execute(
+                'UPDATE homepage_body_media SET caption = ?, layout_style = ?, edge_to_edge = ? WHERE id = ?',
+                (caption, layout_style, edge_to_edge, media_id),
+            )
         grouped_count = _apply_homepage_row_layout_group(db, media_id, layout_style)
         db.commit()
+        if replacement_payload:
+            _cleanup_homepage_asset(existing.get('media_path'))
         if grouped_count > 1:
-            flash(f'Homepage media layout updated and grouped into a {layout_style} row with {grouped_count} items.', 'success')
+            if replacement_name:
+                flash(f'Homepage media replaced with {replacement_name} and grouped into a {layout_style} row with {grouped_count} items.', 'success')
+            else:
+                flash(f'Homepage media layout updated and grouped into a {layout_style} row with {grouped_count} items.', 'success')
+        elif replacement_name:
+            flash(f'Homepage media replaced with {replacement_name}.', 'success')
         else:
             flash('Homepage media layout updated.', 'success')
     except Exception as e:
@@ -9827,17 +10138,28 @@ def superadmin_website_feature_add():
         icon_kind = (request.form.get('icon_kind') or 'emoji').strip().lower()
         if icon_kind not in ('emoji', 'image'):
             icon_kind = 'emoji'
-        icon_value = (request.form.get('icon_value') or '').strip() or ('✨' if icon_kind == 'emoji' else 'store_screens.webp')
+        uploaded_icon = request.files.get('icon_file')
+        uploaded_icon_name = ''
+        if uploaded_icon and getattr(uploaded_icon, 'filename', ''):
+            uploaded_icon_name = secure_filename(uploaded_icon.filename or '')
+            icon_value = _save_homepage_feature_icon(uploaded_icon)
+            icon_kind = 'image'
+        else:
+            icon_value = (request.form.get('icon_value') or '').strip() or ('✨' if icon_kind == 'emoji' else 'store_screens.webp')
+        icon_size = _normalize_homepage_feature_icon_size(request.form.get('icon_size'), icon_kind)
         title = (request.form.get('title') or '').strip() or 'New Feature'
         description = (request.form.get('description') or '').strip() or 'Describe this feature here.'
         db = get_db()
         next_sort = db.execute('SELECT COALESCE(MAX(sort_order), 0) + 1 FROM homepage_features').fetchone()[0]
         db.execute(
-            'INSERT INTO homepage_features (icon_kind, icon_value, title, description, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-            (icon_kind, icon_value, title, description, int(next_sort or 1), int(time.time())),
+            'INSERT INTO homepage_features (icon_kind, icon_value, icon_size, title, description, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            (icon_kind, icon_value, icon_size, title, description, int(next_sort or 1), int(time.time())),
         )
         db.commit()
-        flash('Homepage feature added.', 'success')
+        if uploaded_icon_name:
+            flash(f'Homepage feature added with uploaded file: {uploaded_icon_name}', 'success')
+        else:
+            flash('Homepage feature added.', 'success')
     except Exception as e:
         logging.error('Failed to add homepage feature: %s', e, exc_info=True)
         flash(f'Failed to add homepage feature: {e}', 'error')
@@ -9853,20 +10175,36 @@ def superadmin_website_feature_update(feature_id: int):
         if not row:
             flash('Homepage feature not found.', 'error')
             return _superadmin_website_editor_redirect()
+        existing = _normalize_homepage_feature_row(dict(row))
 
         icon_kind = (request.form.get('icon_kind') or 'emoji').strip().lower()
         if icon_kind not in ('emoji', 'image'):
             icon_kind = 'emoji'
-        icon_value = (request.form.get('icon_value') or '').strip() or ('✨' if icon_kind == 'emoji' else 'store_screens.webp')
+        uploaded_icon = request.files.get('icon_file')
+        old_uploaded_icon = ''
+        uploaded_icon_name = ''
+        if uploaded_icon and getattr(uploaded_icon, 'filename', ''):
+            uploaded_icon_name = secure_filename(uploaded_icon.filename or '')
+            icon_value = _save_homepage_feature_icon(uploaded_icon)
+            icon_kind = 'image'
+            old_uploaded_icon = existing.get('icon_value') or ''
+        else:
+            icon_value = (request.form.get('icon_value') or '').strip() or ('✨' if icon_kind == 'emoji' else 'store_screens.webp')
+        icon_size = _normalize_homepage_feature_icon_size(request.form.get('icon_size'), icon_kind)
         title = (request.form.get('title') or '').strip() or 'Feature'
         description = (request.form.get('description') or '').strip() or 'Describe this feature here.'
 
         db.execute(
-            'UPDATE homepage_features SET icon_kind = ?, icon_value = ?, title = ?, description = ? WHERE id = ?',
-            (icon_kind, icon_value, title, description, feature_id),
+            'UPDATE homepage_features SET icon_kind = ?, icon_value = ?, icon_size = ?, title = ?, description = ? WHERE id = ?',
+            (icon_kind, icon_value, icon_size, title, description, feature_id),
         )
         db.commit()
-        flash('Homepage feature updated.', 'success')
+        if old_uploaded_icon and old_uploaded_icon != icon_value:
+            _cleanup_homepage_feature_asset(old_uploaded_icon)
+        if uploaded_icon_name:
+            flash(f'Homepage feature updated with uploaded file: {uploaded_icon_name}', 'success')
+        else:
+            flash('Homepage feature updated.', 'success')
     except Exception as e:
         logging.error('Failed to update homepage feature: %s', e, exc_info=True)
         flash(f'Failed to update homepage feature: {e}', 'error')
@@ -19305,6 +19643,7 @@ def assign_to_screen():
         store_id = data.get('store_id')
         screen_id = data.get('screen_id')
         apply_to_all = bool(data.get('apply_to_all', False))
+        allow_create_screen = bool(data.get('create_screen', False) or data.get('allow_create_screen', False))
         incoming = data.get('filename') or data.get('file') or ''
 
         if not store_id or not screen_id or not incoming:
@@ -19505,8 +19844,14 @@ def assign_to_screen():
                 'applied_to_all': False
             })
         
-        # Auto-create screen if it doesn't exist
-        if store_id in config.get('screens', {}):
+        # Do not create missing screens from a normal media assignment. Screen creation
+        # must come from explicit Add Screen / sync workflows so schedule edits cannot
+        # accidentally create a new display.
+        if store_id in config.get('screens', {}) and not allow_create_screen:
+            return jsonify({'success': False, 'error': 'screen not found; create the screen first'}), 404
+
+        # Explicit auto-create path for legacy/admin callers that opt in.
+        if store_id in config.get('screens', {}) and allow_create_screen:
             # Determine if this is a promo screen (vertical) or regular screen (horizontal)
             screen_type = screen_id.split('_', 1)[-1] if '_' in screen_id else screen_id
             is_promo = screen_type.startswith('promo')

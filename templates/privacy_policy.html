@@ -3,51 +3,152 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Privacy Policy • EverydayAdvertise</title>
+  <title>Privacy Policy | EverydayAdvertise</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; margin: 0; color: #1f2937; background: #f8fafc; }
-    .wrap { max-width: 900px; margin: 40px auto; padding: 0 16px; }
-    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 24px; }
-    h1 { margin: 0 0 12px; font-size: 30px; }
-    h2 { margin-top: 24px; font-size: 18px; }
-    p, li { line-height: 1.65; }
-    a { color: #2563eb; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    .toplink { display: inline-block; margin-bottom: 12px; }
-    .muted { color: #6b7280; font-size: 14px; }
+    :root {
+      --ink: #111827;
+      --muted: #5f6f86;
+      --line: #dbe4f0;
+      --panel: #ffffff;
+      --soft: #f4f8fc;
+      --accent: #2563eb;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      margin: 0;
+      color: var(--ink);
+      background: var(--soft);
+    }
+    .wrap { max-width: 980px; margin: 36px auto; padding: 0 18px; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: clamp(22px, 4vw, 42px);
+      box-shadow: 0 20px 60px rgba(15, 23, 42, 0.08);
+    }
+    .toplink { display: inline-block; margin-bottom: 14px; color: var(--accent); text-decoration: none; font-weight: 700; }
+    .toplink:hover, a:hover { text-decoration: underline; }
+    h1 { margin: 0 0 10px; font-size: clamp(32px, 5vw, 48px); letter-spacing: -0.04em; }
+    h2 { margin: 32px 0 10px; font-size: 21px; }
+    h3 { margin: 20px 0 8px; font-size: 16px; }
+    p, li { line-height: 1.68; color: #233044; }
+    a { color: var(--accent); text-decoration: none; }
+    ul { padding-left: 22px; }
+    .muted { color: var(--muted); font-size: 14px; }
+    .notice {
+      border: 1px solid #bfdbfe;
+      background: #eff6ff;
+      border-radius: 14px;
+      padding: 14px 16px;
+      margin: 18px 0;
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin: 20px 0 6px;
+    }
+    .summary-card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+      background: #fbfdff;
+    }
+    .summary-card strong { display: block; margin-bottom: 6px; }
+    code {
+      background: #eef2ff;
+      color: #1e3a8a;
+      border-radius: 6px;
+      padding: 2px 6px;
+      font-size: 0.95em;
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <a class="toplink" href="/">← Back to Home</a>
+    <a class="toplink" href="/">Back to Home</a>
     <div class="card">
       <h1>Privacy Policy</h1>
-      <p class="muted">Last updated: March 9, 2026</p>
+      <p class="muted">Last updated: June 23, 2026</p>
 
-      <p>EverydayAdvertise (“we”, “our”, “us”) respects your privacy and is committed to protecting your information.</p>
+      <p>EverydayAdvertise ("EverydayAdvertise", "we", "our", or "us") provides digital signage software for uploading media, scheduling content, managing display screens, and monitoring playback. This Privacy Policy explains how we collect, use, store, share, and protect information when you use everydayadvertise.com, the EverydayAdvertise dashboard, connected screen players, and related services.</p>
+
+      <div class="notice">
+        <strong>Google user data summary:</strong>
+        EverydayAdvertise uses Google Sign-In only to identify the signed-in dashboard user. Google Drive access is optional and read-only. Drive access is used only when you choose Google Drive inside the scheduling workspace to browse your own folders and import a selected image or video into your EverydayAdvertise media library.
+      </div>
 
       <h2>1. Information We Collect</h2>
+      <div class="summary-grid">
+        <div class="summary-card">
+          <strong>Account information</strong>
+          Email address, username, profile name, authentication provider, verification status, phone number if provided, billing/subscription state, and support contact details.
+        </div>
+        <div class="summary-card">
+          <strong>Dashboard and screen data</strong>
+          Store names, screen names, pairing codes, playlist schedules, uploaded media, imported media, device status, display settings, and playback configuration.
+        </div>
+        <div class="summary-card">
+          <strong>Technical data</strong>
+          Browser/device information, IP address, logs, error reports, cookies/session identifiers, and security/audit events needed to operate and protect the service.
+        </div>
+      </div>
+
+      <h2>2. Google Account and Google Drive Data</h2>
+      <p>If you use Google Sign-In or connect Google Drive, EverydayAdvertise may request access to the following Google OAuth scopes:</p>
       <ul>
-        <li>Account information such as email, username, and profile details.</li>
-        <li>Service usage data needed to deliver screen management and playback features.</li>
-        <li>Device and technical data required for reliability, diagnostics, and support.</li>
+        <li><code>openid</code>, <code>userinfo.email</code>, and <code>userinfo.profile</code>: used to sign you in, create or match your EverydayAdvertise account, show your account email/profile name, and protect access to your dashboard.</li>
+        <li><code>https://www.googleapis.com/auth/drive.readonly</code>: used only when you choose Google Drive in the scheduling workspace. This lets EverydayAdvertise read your Drive file list and download selected files, but it does not let EverydayAdvertise edit, delete, rename, share, or upload files to your Google Drive.</li>
       </ul>
 
-      <h2>2. How We Use Information</h2>
+      <h3>How Google Drive data is used</h3>
       <ul>
-        <li>Provide and maintain the service.</li>
-        <li>Improve reliability and user experience.</li>
-        <li>Communicate account, billing, and support updates.</li>
+        <li>We show folders and supported image/video files so you can choose media for a screen schedule.</li>
+        <li>We may display file names, file type, size, modified date, and thumbnails/previews to help you identify the file.</li>
+        <li>We download only the specific image or video file you select for import.</li>
+        <li>The imported copy is stored in your EverydayAdvertise media library and can be scheduled to your digital signage screens.</li>
+        <li>Google Drive data is not used for advertising, sold, or shared with third parties for their own purposes.</li>
       </ul>
 
-      <h2>3. Data Security</h2>
-      <p>We use reasonable technical and organizational measures to protect personal information from unauthorized access, loss, or misuse.</p>
+      <h3>How Google Drive data is stored and disconnected</h3>
+      <ul>
+        <li>Google Drive access tokens are kept in your dashboard session so the Drive browser can work while you are connected.</li>
+        <li>We do not store a permanent copy of your full Google Drive file list.</li>
+        <li>Imported media is stored as an EverydayAdvertise media file because you selected it for use in the service.</li>
+        <li>You can disconnect Google Drive from the scheduling workspace at any time. You can also remove the app's access from your Google Account permissions page.</li>
+      </ul>
 
-      <h2>4. Third-Party Services</h2>
-      <p>Our platform may rely on third-party infrastructure and integrations. These services may process data as required to provide core functionality.</p>
+      <h2>3. How We Use Information</h2>
+      <ul>
+        <li>Provide account login, authentication, and user verification.</li>
+        <li>Upload, import, store, schedule, and play media on digital signage screens.</li>
+        <li>Show dashboard status, screen status, playlist previews, location maps, and device health information.</li>
+        <li>Process billing, subscriptions, trial eligibility, and account notices.</li>
+        <li>Send service emails such as verification, billing, subscription, and security messages.</li>
+        <li>Prevent abuse, troubleshoot errors, maintain reliability, and improve the service.</li>
+      </ul>
 
-      <h2>5. Contact</h2>
-      <p>For privacy questions, contact <a href="mailto:support@everydayadvertise.com">support@everydayadvertise.com</a>.</p>
+      <h2>4. Sharing and Third-Party Services</h2>
+      <p>We do not sell personal information or Google user data. We share information only as needed to operate EverydayAdvertise, comply with law, or protect users and the service. Service providers may include hosting, storage, email delivery, payment processing, analytics/diagnostics, maps/geocoding, and authentication providers. These providers may process information only as necessary to provide their services to EverydayAdvertise.</p>
+
+      <h2>5. Data Retention and Deletion</h2>
+      <p>We keep account, billing, media, schedule, and device data for as long as needed to provide the service, meet legal obligations, resolve disputes, and maintain security. You may request deletion of your account or personal information by contacting us. Some records may be retained where required for billing, tax, fraud prevention, backups, legal compliance, or legitimate business operations.</p>
+
+      <h2>6. Data Security</h2>
+      <p>We use reasonable technical and organizational safeguards designed to protect information from unauthorized access, misuse, loss, or disclosure. No online service can guarantee absolute security, but we work to protect access through authentication, access controls, session protection, encryption where appropriate, and operational monitoring.</p>
+
+      <h2>7. Cookies and Sessions</h2>
+      <p>EverydayAdvertise uses cookies and session storage to keep you signed in, secure OAuth connections, remember dashboard state, and support core service features. You can control cookies through your browser settings, but disabling them may prevent the dashboard from working correctly.</p>
+
+      <h2>8. Children</h2>
+      <p>EverydayAdvertise is intended for businesses and is not directed to children. We do not knowingly collect personal information from children.</p>
+
+      <h2>9. Changes to This Policy</h2>
+      <p>We may update this Privacy Policy when our practices, integrations, or legal requirements change. If we materially change how we access, use, store, or share Google user data, we will update this page and provide notice where appropriate.</p>
+
+      <h2>10. Contact</h2>
+      <p>For privacy questions, data requests, or Google user data questions, contact <a href="mailto:service@everydayadvertise.com">service@everydayadvertise.com</a>.</p>
     </div>
   </div>
 </body>

@@ -1850,6 +1850,16 @@
     .rp-drive-card__hint { color:#2563eb; font-size:10px; font-weight:700; margin-top:5px; }
     .rp-drive-empty { padding:20px; border:1px dashed #cbd5e1; background:#fff; color:#64748b; font-size:13px; line-height:1.65; }
     .rp-drive-link-box { display:grid; gap:10px; padding:14px; border:1px solid #dbe3ee; background:#fff; }
+    #rp-preview-panel-zone .rp-drive-inline { gap:6px; }
+    #rp-preview-panel-zone .rp-drive-inline__head { gap:6px; }
+    #rp-preview-panel-zone .rp-drive-browser { min-height:0; max-height:min(34vh, 360px); padding:8px; }
+    #rp-preview-panel-zone .rp-drive-grid { grid-template-columns:repeat(auto-fill, minmax(118px, 1fr)); gap:8px; }
+    #rp-preview-panel-zone .rp-drive-card { min-height:124px; padding:7px; gap:6px; }
+    #rp-preview-panel-zone .rp-drive-card__thumb { height:62px; }
+    #rp-preview-panel-zone .rp-drive-card__name { font-size:11px; }
+    #rp-preview-panel-zone .rp-drive-card__meta,
+    #rp-preview-panel-zone .rp-drive-card__hint { font-size:10px; }
+    #rp-preview-panel-zone .rp-drive-link-box { display:none; }
     .rp-upload-layout { display:grid; grid-template-columns:minmax(0, 1fr) 320px; height:100%; min-height:0; }
     .rp-upload-dropzone { display:flex; flex-direction:column; gap:8px; padding:22px; border:1.5px dashed #93c5fd; background:linear-gradient(180deg, #eff6ff 0%, #f8fbff 100%); }
     .rp-upload-dropzone strong { color:#0f172a; font-size:16px; font-weight:700; }
@@ -4357,6 +4367,44 @@
             border-radius: 0;
             box-shadow: none;
             border-left: 1px solid #e5e7eb;
+            overflow-x: hidden;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+        }
+
+        .rp-overlay.dashboard-side-sheet .rp-body,
+        .rp-overlay.dashboard-side-sheet .rp-body > div,
+        .rp-overlay.dashboard-side-sheet .rp-shell,
+        .rp-overlay.dashboard-side-sheet .rp-upload-layout {
+            height: auto;
+            min-height: 0;
+            overflow: visible;
+        }
+
+        .rp-overlay.dashboard-side-sheet .rp-shell {
+            min-height: calc(100vh - 82px);
+            align-items: start;
+        }
+
+        .rp-overlay.dashboard-side-sheet .rp-panel {
+            height: auto;
+            min-height: 0;
+        }
+
+        .rp-overlay.dashboard-side-sheet .rp-panel--schedule {
+            overflow: visible;
+        }
+
+        .rp-overlay.dashboard-side-sheet .rp-panel--library {
+            position: sticky;
+            top: 0;
+            max-height: calc(100vh - 82px);
+            overflow: hidden;
+        }
+
+        .rp-overlay.dashboard-side-sheet .rp-library-pane {
+            min-height: 0;
+            max-height: calc(100vh - 230px);
         }
 
         .rp-overlay.dashboard-side-sheet.rp-overlay--library {
@@ -4656,6 +4704,8 @@
                 <a class="item" href="#" onclick="openLibraryManager(); return false;">Manage Library</a>
                 <a class="item" href="{{ url_for('menu_studio') }}">Menu Studio</a>
                 <a class="item" href="{{ url_for('profile') }}">Profile</a>
+                <a class="item" href="{{ url_for('privacy_policy') }}" target="_blank" rel="noreferrer">Privacy Policy</a>
+                <a class="item" href="{{ url_for('terms_of_service') }}" target="_blank" rel="noreferrer">Terms of Service</a>
                 <a class="item" href="{{ url_for('logout') }}">Log out</a>
             </div>
             
@@ -4755,6 +4805,23 @@
                     <button class="action-subitem" id="piSetupSubitem" onclick="return openPiSetupSubitem()">New Pi Setup</button>
                 </div>
             </div>
+            <div class="menu-divider" aria-hidden="true"></div>
+            <a class="action-item" href="{{ url_for('privacy_policy') }}" target="_blank" rel="noreferrer" title="Privacy Policy">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 3l7 3v5c0 4.5-2.8 8.4-7 10-4.2-1.6-7-5.5-7-10V6z"></path>
+                    <path d="M9.5 12.2l1.6 1.6 3.6-3.8"></path>
+                </svg>
+                <span>Privacy Policy</span>
+            </a>
+            <a class="action-item" href="{{ url_for('terms_of_service') }}" target="_blank" rel="noreferrer" title="Terms of Service">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M7 3h7l4 4v14H7z"></path>
+                    <path d="M14 3v5h5"></path>
+                    <path d="M9 13h7"></path>
+                    <path d="M9 17h5"></path>
+                </svg>
+                <span>Terms of Service</span>
+            </a>
             <a class="action-item" href="{{ url_for('logout') }}" title="Log out">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -9415,6 +9482,9 @@ allowfullscreen></iframe></div>`;
             const followerMasterLabel = screenBinding.isFollower && screenBinding.masterScreenId
                 ? escapeHtml(getScreenDisplayName(screenBinding.masterScreenId))
                 : 'master screen';
+            const addSlotTargetScreenId = screenBinding.isFollower && screenBinding.masterScreenId
+                ? screenBinding.masterScreenId
+                : screenId;
             // Keep current DOM to avoid the temporary blank area; just mark as loading
             if (section) section.classList.add('loading');
             const requestStartedAt = Date.now();
@@ -9467,7 +9537,7 @@ allowfullscreen></iframe></div>`;
                             <div class="schedule-section">
                                 <div class="schedule-header">
                                     <div class="schedule-title">Schedule</div>
-                                    <button type="button" class="add-slot-btn" onclick="openReplaceModal('${screenId}','SINGLE')" title="Add a scheduled slot via the master screen">+</button>
+                                    <button type="button" class="add-slot-btn" onclick="openReplaceModal('${addSlotTargetScreenId}','SINGLE')" title="Add a scheduled slot via the master screen">+</button>
                                 </div>
                                 <div style="font-size:11px; color:#666;">This wall follower is controlled by ${followerMasterLabel}.</div>
                             </div>` : `
@@ -9648,7 +9718,7 @@ allowfullscreen></iframe></div>`;
                                                 <div class="schedule-details">
                                                     <div class="schedule-header">
                                                         <div class="schedule-title">Schedule</div>
-                                                        ${isFollowerSyncItem ? `<button type="button" class="add-slot-btn" onclick="openReplaceModal('${screenId}','SINGLE')" title="Add a scheduled slot via the master screen">+</button>` : `<button type="button" class="add-slot-btn" onclick="openReplaceModal('${screenId}','SINGLE')" title="Add scheduled media">+</button>`}
+                                                        ${isFollowerSyncItem ? `<button type="button" class="add-slot-btn" onclick="openReplaceModal('${addSlotTargetScreenId}','SINGLE')" title="Add a scheduled slot via the master screen">+</button>` : `<button type="button" class="add-slot-btn" onclick="openReplaceModal('${screenId}','SINGLE')" title="Add scheduled media">+</button>`}
                                                     </div>
                                                     <div style="margin-top:4px;font-size:11px;font-weight:600;color:#555;display:flex;align-items:center;gap:6px;">
                                                         <span style="letter-spacing:.3px;">${isFollowerSyncItem ? 'Repeat (sync):' : 'Repeat:'}</span>
@@ -13098,15 +13168,12 @@ allowfullscreen></iframe></div>`;
                     const select = document.getElementById('rp-target-screen');
                     const screenIds = getRpStoreScreenIds();
                     if(select){
-                        if(select.value === RP_NEW_SCREEN_VALUE){
-                            return getRpNextScreenId(screenIds);
-                        }
-                        if(select.value){
+                        if(select.value && select.value !== RP_NEW_SCREEN_VALUE){
                             return select.value;
                         }
                     }
                     if(rpCtx && rpCtx.screenId && rpCtx.screenId !== 'SINGLE') return rpCtx.screenId;
-                    return screenIds[0] || getRpNextScreenId(screenIds);
+                    return screenIds[0] || '';
                 }
                 function syncRpTargetScreenPicker(){
                     const picker = document.getElementById('rp-target-picker');
@@ -13119,19 +13186,18 @@ allowfullscreen></iframe></div>`;
                         return;
                     }
                     const screenIds = getRpStoreScreenIds();
-                    const nextScreenId = getRpNextScreenId(screenIds);
                     const currentValue = select.value;
                     const preferredExisting = (rpCtx && rpCtx.screenId && rpCtx.screenId !== 'SINGLE')
                         ? String(rpCtx.screenId)
                         : String(window.__rpLibraryTargetScreen || '').trim();
-                    select.innerHTML = `${screenIds.map((screenId) => `<option value="${escapeHtml(screenId)}">${escapeHtml(formatRpScreenLabel(screenId))}</option>`).join('')}<option value="${RP_NEW_SCREEN_VALUE}">+ New next screen (${escapeHtml(formatRpScreenLabel(nextScreenId))})</option>`;
+                    select.innerHTML = screenIds.length
+                        ? screenIds.map((screenId) => `<option value="${escapeHtml(screenId)}">${escapeHtml(formatRpScreenLabel(screenId))}</option>`).join('')
+                        : '<option value="">Create a screen first</option>';
                     let nextValue = '';
-                    if(currentValue === RP_NEW_SCREEN_VALUE){
-                        nextValue = RP_NEW_SCREEN_VALUE;
-                    } else if(currentValue && screenIds.includes(currentValue)){
-                        nextValue = currentValue;
-                    } else if(preferredExisting && screenIds.includes(preferredExisting)){
+                    if(preferredExisting && screenIds.includes(preferredExisting)){
                         nextValue = preferredExisting;
+                    } else if(currentValue && currentValue !== RP_NEW_SCREEN_VALUE && screenIds.includes(currentValue)){
+                        nextValue = currentValue;
                     } else if(screenIds.length){
                         nextValue = screenIds[0];
                     } else {
@@ -13150,8 +13216,6 @@ allowfullscreen></iframe></div>`;
                     if(select.value && select.value !== RP_NEW_SCREEN_VALUE){
                         rpCtx.screenId = select.value;
                         window.__rpLibraryTargetScreen = select.value;
-                    } else if(select.value === RP_NEW_SCREEN_VALUE){
-                        rpCtx.screenId = getRpNextScreenId();
                     }
                     updateReplaceModalContext();
                     renderRpSelection();
@@ -13160,19 +13224,6 @@ allowfullscreen></iframe></div>`;
                     const targetScreenId = getRpSelectedTargetScreenId();
                     if(!targetScreenId){
                         throw new Error('No target screen available');
-                    }
-                    const wallSelection = !!(rpSelectedMedia && Array.isArray(rpSelectedMedia.wallSet) && rpSelectedMedia.wallSet.length > 1);
-                    if(isRpCreatingNewScreen() && !wallSelection){
-                        const createdScreenId = await addNewScreen('screen', { skipSuccessAlert: true });
-                        if(!createdScreenId) return null;
-                        rpCtx.screenId = createdScreenId;
-                        window.__rpLibraryTargetScreen = createdScreenId;
-                        syncRpTargetScreenPicker();
-                        const select = document.getElementById('rp-target-screen');
-                        if(select) select.value = createdScreenId;
-                        updateReplaceModalContext();
-                        renderRpSelection();
-                        return createdScreenId;
                     }
                     rpCtx.screenId = targetScreenId;
                     return targetScreenId;
@@ -14487,12 +14538,6 @@ allowfullscreen></iframe></div>`;
                         closeReplaceModal();
                         markAsSaved();
                         refreshPlaylist(sid);
-                        if(typeof detectExpandableSyncGroup === 'function') {
-                            const st = detectExpandableSyncGroup();
-                            if(st.has && st.count < 5) {
-                                await addSyncFollower();
-                            }
-                        }
                         return true;
                     }
                     if(rpSelectedMedia && Array.isArray(rpSelectedMedia.wallSet) && rpSelectedMedia.wallSet.length > 1){
@@ -14568,8 +14613,6 @@ allowfullscreen></iframe></div>`;
                         return;
                     }
                     if(which === 'drive'){
-                        const previewPanelZone = document.getElementById('rp-preview-panel-zone');
-                        if(previewPanelZone) previewPanelZone.scrollIntoView({ behavior:'smooth', block:'nearest' });
                         ensureRpDriveReady().catch(() => {});
                         return;
                     }

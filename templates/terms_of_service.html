@@ -3,50 +3,178 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Terms of Service • EverydayAdvertise</title>
+  <title>Terms of Service | EverydayAdvertise</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; margin: 0; color: #1f2937; background: #f8fafc; }
-    .wrap { max-width: 900px; margin: 40px auto; padding: 0 16px; }
-    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 24px; }
-    h1 { margin: 0 0 12px; font-size: 30px; }
-    h2 { margin-top: 24px; font-size: 18px; }
-    p, li { line-height: 1.65; }
-    a { color: #2563eb; text-decoration: none; }
+    :root {
+      --ink: #0f172a;
+      --muted: #52617a;
+      --line: #dbe4f0;
+      --panel: #ffffff;
+      --bg: #f4f8fc;
+      --accent: #2563eb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      margin: 0;
+      color: var(--ink);
+      background: var(--bg);
+    }
+    .wrap {
+      max-width: 980px;
+      margin: 42px auto;
+      padding: 0 18px;
+    }
+    .toplink {
+      display: inline-block;
+      margin-bottom: 14px;
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: clamp(24px, 4vw, 42px);
+      box-shadow: 0 18px 50px rgba(15, 23, 42, 0.07);
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(32px, 5vw, 48px);
+      line-height: 1.05;
+      letter-spacing: -0.04em;
+    }
+    h2 {
+      margin: 28px 0 10px;
+      font-size: 20px;
+    }
+    h3 {
+      margin: 18px 0 8px;
+      font-size: 16px;
+    }
+    p, li {
+      line-height: 1.68;
+      color: #24324a;
+    }
+    ul {
+      padding-left: 22px;
+    }
+    a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 700;
+    }
     a:hover { text-decoration: underline; }
-    .toplink { display: inline-block; margin-bottom: 12px; }
-    .muted { color: #6b7280; font-size: 14px; }
+    .muted {
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .notice {
+      margin: 22px 0;
+      padding: 16px 18px;
+      border: 1px solid #bfdbfe;
+      border-radius: 14px;
+      background: #eff6ff;
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <a class="toplink" href="/">← Back to Home</a>
-    <div class="card">
+    <a class="toplink" href="/">Back to Home</a>
+    <main class="card">
       <h1>Terms of Service</h1>
-      <p class="muted">Last updated: March 9, 2026</p>
+      <p class="muted">Last updated: June 23, 2026</p>
 
-      <p>By using EverydayAdvertise, you agree to these Terms of Service.</p>
+      <p>These Terms of Service ("Terms") govern your access to and use of EverydayAdvertise, including everydayadvertise.com, the dashboard, media library, scheduling tools, Google Drive import tools, connected screens, web players, Android TV players, Raspberry Pi players, and related services (the "Service"). By creating an account, signing in, subscribing, uploading content, importing content, pairing a screen, or using the Service, you agree to these Terms.</p>
 
-      <h2>1. Use of Service</h2>
+      <div class="notice">
+        <p><strong>Important:</strong> EverydayAdvertise is a digital signage and content scheduling platform. You are responsible for the stores, screens, uploaded media, imported files, playlist schedules, and public display content you manage through your account.</p>
+      </div>
+
+      <h2>1. Who May Use The Service</h2>
       <ul>
-        <li>You are responsible for account security and lawful use.</li>
-        <li>You may not use the platform for illegal or unauthorized activities.</li>
+        <li>You must be able to form a binding agreement and use the Service for lawful business or organizational purposes.</li>
+        <li>You are responsible for keeping your login details, paired device codes, store access, and administrator access secure.</li>
+        <li>If you use the Service for a company, store, franchise, client, or organization, you represent that you have authority to manage content and screens for that entity.</li>
       </ul>
 
-      <h2>2. Content and Media</h2>
+      <h2>2. Accounts, Stores, And Screens</h2>
+      <p>You may create stores, screen groups, screen profiles, schedules, and device pairings. Store names, addresses, screen names, location data, playlist assignments, and screen status information are used to operate the Service. You agree that this information must be accurate enough for your intended use and must not mislead customers, viewers, staff, or other users.</p>
+      <p>You are responsible for each screen connected to your account, including any Raspberry Pi, Android TV, web player, browser, or other device displaying your content. If a device is lost, sold, transferred, or no longer authorized, you should remove or disconnect it from your account.</p>
+
+      <h2>3. Your Content And Media</h2>
+      <p>"User Content" means any image, video, SVG, animation, menu, logo, text, playlist, store information, Google Drive imported file, public-link imported file, schedule, promotion, or other material you upload, import, create, edit, schedule, or display through the Service.</p>
       <ul>
-        <li>You retain responsibility for media and content you upload.</li>
-        <li>You must have rights to use and display uploaded content.</li>
+        <li>You keep ownership of your User Content, subject to the rights you grant us to provide the Service.</li>
+        <li>You grant EverydayAdvertise a limited license to host, copy, process, convert, cache, transmit, display, and distribute your User Content only as needed to operate, secure, support, and improve the Service.</li>
+        <li>You must have all rights, licenses, permissions, and releases needed to upload, import, schedule, and publicly display your User Content.</li>
+        <li>You are responsible for making sure your public signage content is accurate, legal, safe, and suitable for your store, location, industry, customers, and viewers.</li>
       </ul>
 
-      <h2>3. Availability</h2>
-      <p>We aim for high availability but cannot guarantee uninterrupted service at all times.</p>
+      <h2>4. Store And Public Display Policy</h2>
+      <p>Because EverydayAdvertise is used for public-facing screens, you agree not to display or schedule content that:</p>
+      <ul>
+        <li>Violates law, regulations, advertising rules, food/menu disclosure rules, privacy rights, publicity rights, intellectual property rights, or contractual obligations.</li>
+        <li>Contains misleading pricing, misleading promotions, expired offers, false claims, or unauthorized use of another brand's logo, product, menu, or creative work.</li>
+        <li>Contains malware, hidden tracking, deceptive QR codes, phishing links, or content intended to harm viewers, customers, stores, devices, or networks.</li>
+        <li>Is unlawful, abusive, harassing, hateful, threatening, exploitative, or otherwise inappropriate for the commercial or public environment where it is displayed.</li>
+      </ul>
+      <p>We may remove or disable access to content, screens, stores, or accounts if we believe they violate these Terms, create security risk, infringe rights, or could harm EverydayAdvertise, users, viewers, stores, or third parties.</p>
 
-      <h2>4. Limitation of Liability</h2>
-      <p>To the extent permitted by law, we are not liable for indirect or consequential damages arising from service use.</p>
+      <h2>5. Google Sign-In And Google Drive</h2>
+      <h3>Google Sign-In</h3>
+      <p>If you choose to sign in with Google, EverydayAdvertise uses Google Sign-In scopes such as openid, email, and profile only to identify and authenticate your dashboard account and show the account identity used with the Service.</p>
 
-      <h2>5. Contact</h2>
-      <p>For terms questions, contact <a href="mailto:support@everydayadvertise.com">support@everydayadvertise.com</a>.</p>
-    </div>
+      <h3>Optional Google Drive Import</h3>
+      <p>The Google Drive connection is optional. If you choose Google Drive inside the scheduling or media workspace, you may authorize EverydayAdvertise to use a read-only Google Drive scope so you can browse your own Drive folders, view file names and thumbnails, and import a selected image or video into your EverydayAdvertise media library.</p>
+      <ul>
+        <li>EverydayAdvertise does not edit, delete, rename, share, or upload files to your Google Drive.</li>
+        <li>EverydayAdvertise only downloads the specific file you select for import, then stores the imported copy in your EverydayAdvertise account so it can be scheduled to your screens.</li>
+        <li>You must have the right to import, store, use, and publicly display any Google Drive file you select.</li>
+        <li>You may disconnect Google Drive access at any time from the dashboard or from your Google Account permissions page.</li>
+      </ul>
+      <p>EverydayAdvertise's use and transfer of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noreferrer">Google API Services User Data Policy</a>, including the Limited Use requirements. We do not sell Google user data, use Google Drive data for advertising, or transfer Google Drive data to third-party advertising platforms, data brokers, or information resellers.</p>
+
+      <h2>6. Public Links And Third-Party Imports</h2>
+      <p>The Service may let you import media from public links, Dropbox, Google Drive, OneDrive, YouTube, or other third-party services. You are responsible for making sure you are allowed to access, copy, import, schedule, and display that content. Third-party services are governed by their own terms and privacy policies, and we are not responsible for changes, outages, restrictions, or removals by those services.</p>
+
+      <h2>7. Subscriptions, Trials, And Billing</h2>
+      <ul>
+        <li>Paid features may be billed per active screen, per account, per plan, or as otherwise shown at checkout or in the dashboard.</li>
+        <li>If a free trial is offered, the trial length and included screens are shown in the product or checkout flow.</li>
+        <li>Unless stated otherwise, subscriptions renew automatically until cancelled.</li>
+        <li>You are responsible for taxes, payment method accuracy, and charges created by screens or services active in your account.</li>
+        <li>Cancellation stops future renewals but does not automatically remove your uploaded content or paired screens.</li>
+      </ul>
+
+      <h2>8. Acceptable Use And Security</h2>
+      <p>You agree not to misuse the Service, attempt unauthorized access, interfere with other users, bypass limits, probe or attack systems, upload malicious files, scrape private data, reverse engineer non-public parts of the Service, or use the Service in a way that damages EverydayAdvertise, connected devices, networks, users, viewers, or third parties.</p>
+
+      <h2>9. Privacy</h2>
+      <p>Our <a href="/privacy-policy">Privacy Policy</a> explains how we collect, use, store, share, and protect personal information and Google user data. By using the Service, you acknowledge that we process information as described in the Privacy Policy.</p>
+
+      <h2>10. Service Changes And Availability</h2>
+      <p>We work to keep EverydayAdvertise reliable, but we do not guarantee uninterrupted or error-free operation. Maintenance, updates, internet outages, third-party provider issues, browser limitations, device failures, or configuration problems may affect availability or playback. We may modify, suspend, or discontinue features where needed for security, reliability, legal compliance, or product improvement.</p>
+
+      <h2>11. Termination</h2>
+      <p>You may stop using the Service at any time. We may suspend or terminate access if you violate these Terms, create security risk, fail to pay amounts due, misuse Google APIs or third-party integrations, infringe rights, or use the Service in a way that may harm EverydayAdvertise, users, viewers, stores, or third parties.</p>
+
+      <h2>12. Disclaimers</h2>
+      <p>To the extent permitted by law, the Service is provided "as is" and "as available" without warranties of any kind, whether express, implied, or statutory. We do not guarantee that content will always display exactly as expected on every browser, screen, device, network, player, or operating environment.</p>
+
+      <h2>13. Limitation Of Liability</h2>
+      <p>To the extent permitted by law, EverydayAdvertise will not be liable for indirect, incidental, special, consequential, exemplary, or punitive damages, including lost profits, lost revenue, lost data, business interruption, store downtime, missed promotions, or display errors. Nothing in these Terms limits rights that cannot be excluded under applicable consumer protection laws.</p>
+
+      <h2>14. Indemnity</h2>
+      <p>You agree to defend, indemnify, and hold harmless EverydayAdvertise from claims, losses, liabilities, damages, costs, and expenses arising from your User Content, your stores or screens, your use of Google Drive or third-party imports, your public display of content, your violation of these Terms, or your violation of law or third-party rights.</p>
+
+      <h2>15. Changes To These Terms</h2>
+      <p>We may update these Terms as the Service, integrations, pricing, legal requirements, or Google API requirements change. If changes are material, we will provide notice where appropriate. Continued use of the Service after updated Terms are posted means you accept the updated Terms.</p>
+
+      <h2>16. Contact</h2>
+      <p>For Terms, Google Drive, privacy, billing, or account questions, contact <a href="mailto:service@everydayadvertise.com">service@everydayadvertise.com</a>.</p>
+    </main>
   </div>
 </body>
 </html>
