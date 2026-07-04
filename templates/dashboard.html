@@ -12270,14 +12270,14 @@ allowfullscreen></iframe></div>`;
                                 <div style="font-size:12px; color:#64748b; margin-top:3px;">Preview and adjust how Live POS will sit with media or menu content.</div>
                             </div>
                             <div id="panel-pos-wizard-preview-screen-${screenId}" style="position:relative; min-height:260px; aspect-ratio:16/9; border:1px solid #cbd5e1; background:#f8fafc; overflow:hidden;">
-                                <div style="position:absolute; inset:0; padding:20px; display:grid; grid-template-columns:1fr 1fr; gap:18px; color:#111827; background:linear-gradient(90deg,#fff 0%,#fff 50%,#f8fafc 50%,#f8fafc 100%);">
+                                <div style="position:absolute; inset:0; padding:20px; display:grid; grid-template-columns:1fr 1fr; gap:18px; color:#111827; background:linear-gradient(90deg,#fff 0%,#fff 52%,#f8fafc 52%,#f8fafc 100%);">
                                     <div>
                                         <div style="font-size:18px; font-weight:900; margin-bottom:14px;">MENU</div>
                                         ${['HOT DESSERTS','NUTELLA COOKIE','HERSHEY COOKIE','CHOC LAVA CAKE'].map((name, index) => `<div style="display:flex; justify-content:space-between; gap:10px; font-size:13px; font-weight:800; margin:8px 0;"><span>${name}</span><span>${(8.95 + index).toFixed(2)}</span></div>`).join('')}
                                     </div>
                                     <div>
-                                        <div style="font-size:18px; font-weight:900; margin-bottom:14px;">PICKUP</div>
-                                        <div style="font-size:13px; color:#64748b;">Live POS can appear full screen, beside menu content, or as a scheduled playlist row.</div>
+                                        <div style="font-size:18px; font-weight:900; margin-bottom:14px;">SCREEN CONTENT</div>
+                                        <div style="font-size:13px; color:#64748b; line-height:1.35;">Media or menu content continues here when POS is used as a side overlay.</div>
                                     </div>
                                 </div>
                                 <div id="panel-pos-wizard-preview-pos-${screenId}" style="position:absolute; inset:0; background:#fff; color:#17172a; overflow:hidden;"></div>
@@ -13004,11 +13004,11 @@ allowfullscreen></iframe></div>`;
             const overlayPercent = normalizePanelOverlayPercent(document.getElementById(`panel-pos-wizard-overlay-percent-${screenId}`)?.value || 25);
             const bgRgb = hexToRgb(appearance.backgroundColor) || { r: 255, g: 255, b: 255 };
             const usesSideImage = appearance.posDisplayStyle === 'order_board' && appearance.backgroundImageDataUrl && ['image_left','image_right'].includes(appearance.boardLayout);
-            pos.style.inset = '0';
-            pos.style.left = '';
-            pos.style.right = '';
-            pos.style.top = '';
-            pos.style.bottom = '';
+            pos.style.inset = 'auto';
+            pos.style.left = '0';
+            pos.style.right = '0';
+            pos.style.top = '0';
+            pos.style.bottom = '0';
             pos.style.width = '';
             pos.style.height = '';
             pos.style.border = '0';
@@ -13032,18 +13032,30 @@ allowfullscreen></iframe></div>`;
             }
             if(displayMode === 'overlay_right'){
                 pos.style.left = 'auto';
+                pos.style.right = '0';
+                pos.style.top = '0';
+                pos.style.bottom = '0';
                 pos.style.width = `${overlayPercent}%`;
                 pos.style.borderLeft = '1px solid rgba(15,23,42,.12)';
             } else if(displayMode === 'overlay_left'){
+                pos.style.left = '0';
                 pos.style.right = 'auto';
+                pos.style.top = '0';
+                pos.style.bottom = '0';
                 pos.style.width = `${overlayPercent}%`;
                 pos.style.borderRight = '1px solid rgba(15,23,42,.12)';
             } else if(displayMode === 'overlay_bottom'){
+                pos.style.left = '0';
+                pos.style.right = '0';
                 pos.style.top = 'auto';
+                pos.style.bottom = '0';
                 pos.style.height = `${overlayPercent}%`;
                 pos.style.borderTop = '1px solid rgba(15,23,42,.12)';
             } else if(displayMode === 'connection_only'){
-                pos.style.inset = '18% 16%';
+                pos.style.left = '16%';
+                pos.style.right = '16%';
+                pos.style.top = '18%';
+                pos.style.bottom = '18%';
                 pos.style.border = '1px dashed rgba(15,23,42,.18)';
             }
             const reference = getPanelPosWizardReferenceSize(displayMode, overlayPercent);
