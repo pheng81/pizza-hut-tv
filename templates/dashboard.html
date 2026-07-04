@@ -12143,6 +12143,10 @@ allowfullscreen></iframe></div>`;
         }
 
         function closePanelPosWizard(){
+            if(window.panelPosWizardPreviewRefreshTimer){
+                clearInterval(window.panelPosWizardPreviewRefreshTimer);
+                window.panelPosWizardPreviewRefreshTimer = null;
+            }
             const overlay = document.getElementById('panel-pos-wizard-modal');
             if(overlay) overlay.remove();
         }
@@ -12276,32 +12280,7 @@ allowfullscreen></iframe></div>`;
                                         <div style="font-size:13px; color:#64748b;">Live POS can appear full screen, beside menu content, or as a scheduled playlist row.</div>
                                     </div>
                                 </div>
-                                <div id="panel-pos-wizard-preview-pos-${screenId}" style="position:absolute; inset:0; display:flex; flex-direction:column; gap:12px; padding:22px; background:#fff; color:#17172a; overflow:hidden;">
-                                    <img id="panel-pos-wizard-preview-logo-${screenId}" alt="" style="position:absolute; display:none; width:96px; height:auto; max-height:30%; object-fit:contain; z-index:2;">
-                                    <div id="panel-pos-wizard-preview-board-${screenId}" style="display:grid; grid-template-columns:minmax(0,1.7fr) minmax(0,1fr); gap:20px; height:100%; position:relative;">
-                                        <div id="panel-pos-wizard-preview-note-${screenId}" style="display:none; position:absolute; z-index:3; max-width:42%; white-space:pre-line; line-height:1.22; font-weight:700; color:#64748b;"></div>
-                                        <div id="panel-pos-wizard-preview-side-image-${screenId}" style="display:none; min-width:0; min-height:0; border-radius:10px; background:#f1f5f9 center/cover no-repeat;"></div>
-                                        <div id="panel-pos-wizard-prepared-column-${screenId}" style="display:flex; flex-direction:column; min-width:0; gap:18px;">
-                                            <div id="panel-pos-wizard-preview-preparing-title-${screenId}" style="font-size:22px; font-weight:900; margin-bottom:14px;">Being prepared</div>
-                                            <div id="panel-pos-wizard-preview-prepared-grid-${screenId}" style="display:flex; flex-wrap:wrap; gap:8px;">
-                                                ${['1005','1006','1007','1008','1009','1010'].map((n) => `<span class="panel-pos-wizard-ticket-${screenId} panel-pos-wizard-prepared-ticket-${screenId}" style="border:1px solid rgba(15,23,42,.16); border-radius:6px; padding:8px 10px; font-size:18px; font-weight:900;">${n}</span>`).join('')}
-                                            </div>
-                                        </div>
-                                        <div id="panel-pos-wizard-ready-column-${screenId}" style="display:flex; flex-direction:column; min-width:0; border-left:1px solid transparent; padding-left:20px; gap:18px;">
-                                            <div id="panel-pos-wizard-preview-ready-title-${screenId}" style="font-size:22px; font-weight:900; margin-bottom:14px;">Ready for pickup</div>
-                                            <div id="panel-pos-wizard-preview-ready-grid-${screenId}" style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-start;">
-                                                ${['1001','1002','1003'].map((n) => `<span class="panel-pos-wizard-ticket-${screenId} panel-pos-wizard-ready-chip-${screenId}" style="background:#32d296; border-radius:7px; padding:10px 18px; font-size:24px; font-weight:950; color:#fff;">${n}</span>`).join('')}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div id="panel-pos-wizard-preview-card-${screenId}" style="display:none; height:100%; align-items:center; justify-content:center; text-align:center;">
-                                        <div>
-                                            <div style="font-size:13px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:inherit; opacity:.75;">Now serving</div>
-                                            <div style="font-size:48px; font-weight:950; line-height:1.05; margin-top:10px;">1001</div>
-                                            <div style="font-size:18px; margin-top:8px; opacity:.72;">Ready for pickup</div>
-                                        </div>
-                                    </div>
-                                </div>
+                                <div id="panel-pos-wizard-preview-pos-${screenId}" style="position:absolute; inset:0; background:#fff; color:#17172a; overflow:hidden;"></div>
                             </div>
                             <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px;">
                                 <label style="display:flex; flex-direction:column; gap:5px; font-size:12px; color:#475569;">
@@ -12535,6 +12514,19 @@ allowfullscreen></iframe></div>`;
             document.body.appendChild(overlay);
             updatePanelPosWizardFields(screenId);
             updatePanelPosWizardPreview(screenId);
+            window.panelPosWizardPreviewRefreshTimer = setInterval(() => {
+                if(!document.getElementById('panel-pos-wizard-modal')){
+                    clearInterval(window.panelPosWizardPreviewRefreshTimer);
+                    window.panelPosWizardPreviewRefreshTimer = null;
+                    return;
+                }
+                try{
+                    refreshPlaylist(screenId);
+                    setTimeout(() => updatePanelPosWizardPreview(screenId), 450);
+                }catch(error){
+                    console.warn('POS wizard live preview refresh failed', error);
+                }
+            }, 5000);
         }
 
         function updatePanelPosWizardFields(screenId){
@@ -12885,64 +12877,159 @@ allowfullscreen></iframe></div>`;
             }
         }
 
+        function getPanelPosWizardPreviewOrderNumber(item){
+            const direct = String((item && (item.order_number || item.orderNumber || item.ticket || item.number)) || '').trim();
+            if(direct) return direct;
+            const text = `${(item && item.title) || ''} ${(item && item.body) || ''}`;
+            const match = text.match(/(?:order\s*#?|#)\s*([a-z0-9-]+)/i) || text.match(/\b(\d{3,6})\b/);
+            return match ? String(match[1]).trim() : '';
+        }
+
+        function getPanelPosWizardPreviewStatus(item){
+            return String((item && item.status) || '').trim().toLowerCase().replace(/\s+/g, '_');
+        }
+
+        function getPanelPosWizardPreviewItems(screenId){
+            const state = normalizePanelPosFeed(getPanelZoneState(screenId));
+            const live = Array.isArray(state.liveQueue) ? state.liveQueue.filter((item) => item && typeof item === 'object') : [];
+            if(live.length){
+                return live.map((item) => ({
+                    order: getPanelPosWizardPreviewOrderNumber(item) || String(item.external_id || '').slice(-4) || 'LIVE',
+                    status: getPanelPosWizardPreviewStatus(item) || 'preparing',
+                    title: String(item.title || ''),
+                    body: String(item.body || '')
+                }));
+            }
+            return [
+                { order:'1005', status:'preparing', title:'Being prepared', body:'Order #1005' },
+                { order:'1006', status:'accepted', title:'Being prepared', body:'Order #1006' },
+                { order:'1007', status:'being_prepared', title:'Being prepared', body:'Order #1007' },
+                { order:'1001', status:'ready', title:'Ready for pickup', body:'Order #1001' },
+                { order:'1002', status:'serving', title:'Ready for pickup', body:'Order #1002' }
+            ];
+        }
+
+        function buildPanelPosWizardBoardMarkup(screenId, appearance, previewScale, displayMode){
+            const items = getPanelPosWizardPreviewItems(screenId);
+            const readyStatuses = new Set((appearance.boardReadyStatuses || ['ready','serving']).map((item) => String(item).toLowerCase()));
+            const preparingStatuses = new Set((appearance.boardPreparingStatuses || ['preparing','being_prepared','accepted']).map((item) => String(item).toLowerCase()));
+            const preparing = [];
+            const ready = [];
+            items.forEach((item) => {
+                const ticket = String(item.order || '').trim();
+                if(!ticket) return;
+                const status = String(item.status || '').toLowerCase();
+                if(readyStatuses.has(status)) ready.push(ticket);
+                else if(preparingStatuses.has(status) || !status) preparing.push(ticket);
+                else preparing.push(ticket);
+            });
+            const usesSideImage = appearance.backgroundImageDataUrl && ['image_left','image_right'].includes(appearance.boardLayout);
+            const sideImage = usesSideImage
+                ? `<div style="min-width:0; min-height:0; border-radius:${Math.max(2, Math.round(appearance.ticketRadius * previewScale))}px; background-image:url('${appearance.backgroundImageDataUrl}'); background-size:${appearance.backgroundImageFit === 'stretch' ? '100% 100%' : escapeHtml(appearance.backgroundImageFit)}; background-position:center; background-repeat:no-repeat; opacity:${appearance.backgroundImageOpacity}; order:${appearance.boardLayout === 'image_right' ? 3 : 0};"></div>`
+                : '';
+            const gridColumns = usesSideImage
+                ? (appearance.boardLayout === 'image_left'
+                    ? `${appearance.sideImageWidth}% minmax(0, ${appearance.preparedColumnRatio}fr) minmax(0, ${appearance.readyColumnRatio}fr)`
+                    : `minmax(0, ${appearance.preparedColumnRatio}fr) minmax(0, ${appearance.readyColumnRatio}fr) ${appearance.sideImageWidth}%`)
+                : `minmax(0, ${appearance.preparedColumnRatio}fr) minmax(0, ${appearance.readyColumnRatio}fr)`;
+            const fullMode = !String(displayMode || '').startsWith('overlay_');
+            const headingBase = fullMode ? 72 : 34;
+            const preparedBase = fullMode ? 66 : 36;
+            const readyBase = fullMode ? 144 : 36;
+            const headingPx = Math.max(12, Math.round(headingBase * appearance.headingFontScale * previewScale));
+            const preparedPx = Math.max(10, Math.round(preparedBase * appearance.preparedTicketFontScale * previewScale));
+            const readyPx = Math.max(10, Math.round(readyBase * appearance.readyTicketFontScale * previewScale));
+            const ticketGap = Math.max(2, Math.round(appearance.ticketGap * previewScale));
+            const ticketRadius = Math.max(2, Math.round(appearance.ticketRadius * previewScale));
+            const prepPadY = Math.max(4, Math.round(appearance.ticketPadding * 0.62 * previewScale));
+            const prepPadX = Math.max(5, Math.round(appearance.ticketPadding * previewScale));
+            const readyPadY = Math.max(6, Math.round(appearance.ticketPadding * 1.05 * previewScale));
+            const readyPadX = Math.max(8, Math.round(appearance.ticketPadding * 1.45 * previewScale));
+            const prepMinWidth = Math.max(18, Math.round(appearance.preparedTicketMinWidth * previewScale));
+            const readyMinWidth = Math.max(22, Math.round(appearance.readyTicketMinWidth * previewScale));
+            const columnGap = Math.max(0, Math.round(appearance.columnGap * previewScale));
+            const dividerPadding = Math.max(0, Math.round(appearance.readyColumnPadding * previewScale));
+            const dividerWidth = appearance.dividerEnabled && appearance.dividerWidth > 0 ? Math.max(1, Math.round(appearance.dividerWidth * previewScale)) : 0;
+            const sectionGap = Math.max(0, Math.round(appearance.columnSectionGap * previewScale));
+            const margin = `${Math.round(appearance.boardMarginTop * previewScale)}px ${Math.round(appearance.boardMarginRight * previewScale)}px ${Math.round(appearance.boardMarginBottom * previewScale)}px ${Math.round(appearance.boardMarginLeft * previewScale)}px`;
+            const prepTickets = preparing.map((ticket) => `<span style="display:inline-flex; align-items:center; justify-content:center; min-width:${prepMinWidth}px; border:1px solid rgba(15,23,42,.16); border-radius:${ticketRadius}px; padding:${prepPadY}px ${prepPadX}px; font-size:${preparedPx}px; font-weight:900; line-height:1; text-align:center; color:${escapeHtml(appearance.boardTextColor)}; box-sizing:border-box;">${escapeHtml(ticket)}</span>`).join('');
+            const readyTickets = ready.slice().reverse().map((ticket, index) => `<span style="display:inline-flex; align-items:center; justify-content:center; min-width:${index ? Math.max(18, Math.round(readyMinWidth * 0.64)) : readyMinWidth}px; background:${escapeHtml(appearance.boardReadyColor)}; border-radius:${ticketRadius}px; padding:${readyPadY}px ${readyPadX}px; font-size:${index ? Math.max(10, Math.round(readyPx * 0.54)) : readyPx}px; font-weight:950; line-height:1; color:#fff; text-align:center; box-sizing:border-box;">${escapeHtml(ticket)}</span>`).join('');
+            const note = String(appearance.boardCustomText || '').trim()
+                ? `<div style="position:absolute; z-index:4; max-width:42%; white-space:pre-line; line-height:1.22; font-weight:700; color:${escapeHtml(appearance.boardCustomTextColor)}; font-size:${Math.max(9, Math.round(appearance.boardCustomTextSize * previewScale))}px; ${getPanelPosWizardNoteStyle(appearance.boardCustomTextPosition, Math.max(4, ticketGap))}">${escapeHtml(appearance.boardCustomText)}</div>`
+                : '';
+            const logo = appearance.logoDataUrl
+                ? `<img src="${appearance.logoDataUrl}" alt="" style="position:absolute; z-index:5; width:${Math.max(20, Math.round(appearance.logoSize * previewScale))}px; height:auto; max-height:30%; object-fit:contain; ${getPanelPosWizardLogoStyle(appearance.logoPosition, Math.max(6, Math.round(18 * previewScale)))}">`
+                : '';
+            return `
+                <div style="position:relative; display:grid; grid-template-columns:${gridColumns}; gap:${columnGap}px; width:calc(100% - ${Math.round(appearance.boardMarginLeft * previewScale) + Math.round(appearance.boardMarginRight * previewScale)}px); height:calc(100% - ${Math.round(appearance.boardMarginTop * previewScale) + Math.round(appearance.boardMarginBottom * previewScale)}px); margin:${margin}; color:${escapeHtml(appearance.boardTextColor)}; text-shadow:${appearance.shadowEnabled ? '0 2px 14px rgba(0,0,0,.24)' : 'none'}; box-sizing:border-box;">
+                    ${logo}
+                    ${note}
+                    ${sideImage}
+                    <section style="display:flex; flex-direction:column; min-width:0; gap:${sectionGap}px; overflow:hidden; order:1;">
+                        <div style="font-size:${headingPx}px; font-weight:950; line-height:1.04; letter-spacing:0; text-align:${appearance.preparedAlign}; color:${escapeHtml(appearance.boardTextColor)};">${escapeHtml(appearance.boardPreparingTitle)}</div>
+                        <div style="display:flex; flex-wrap:wrap; gap:${ticketGap}px; justify-content:${appearance.preparedAlign === 'center' ? 'center' : appearance.preparedAlign === 'right' ? 'flex-end' : 'flex-start'}; align-content:flex-start; overflow:hidden;">${prepTickets || `<div style="font-size:${Math.max(10, Math.round(16 * previewScale))}px; opacity:.62;">No orders preparing</div>`}</div>
+                    </section>
+                    <section style="display:flex; flex-direction:column; min-width:0; gap:${sectionGap}px; overflow:hidden; order:2; border-left:${dividerWidth}px solid ${dividerWidth ? escapeHtml(appearance.dividerColor) : 'transparent'}; padding-left:${dividerPadding}px;">
+                        <div style="font-size:${headingPx}px; font-weight:950; line-height:1.04; letter-spacing:0; text-align:${appearance.readyAlign}; color:${escapeHtml(appearance.boardTextColor)};">${escapeHtml(appearance.boardReadyTitle)}</div>
+                        <div style="display:flex; flex-wrap:wrap; gap:${ticketGap}px; justify-content:${appearance.readyAlign === 'center' ? 'center' : appearance.readyAlign === 'right' ? 'flex-end' : 'flex-start'}; align-content:flex-start; overflow:hidden;">${readyTickets || `<div style="font-size:${Math.max(10, Math.round(16 * previewScale))}px; opacity:.62;">Waiting for ready orders</div>`}</div>
+                    </section>
+                </div>`;
+        }
+
+        function getPanelPosWizardLogoStyle(position, offset){
+            const pos = String(position || 'top-left');
+            return `${pos.startsWith('top') ? `top:${offset}px;` : `bottom:${offset}px;`} ${pos.endsWith('left') ? `left:${offset}px;` : `right:${offset}px;`}`;
+        }
+
+        function getPanelPosWizardNoteStyle(position, offset){
+            const pos = String(position || 'bottom-left');
+            if(pos === 'top-center') return `top:${offset}px; left:50%; transform:translateX(-50%); text-align:center;`;
+            if(pos === 'bottom-center') return `bottom:${offset}px; left:50%; transform:translateX(-50%); text-align:center;`;
+            if(pos === 'top-right') return `top:${offset}px; right:${offset}px; text-align:right;`;
+            if(pos === 'bottom-right') return `bottom:${offset}px; right:${offset}px; text-align:right;`;
+            if(pos === 'top-left') return `top:${offset}px; left:${offset}px; text-align:left;`;
+            return `bottom:${offset}px; left:${offset}px; text-align:left;`;
+        }
+
         function updatePanelPosWizardPreview(screenId){
             const screen = document.getElementById(`panel-pos-wizard-preview-screen-${screenId}`);
             const pos = document.getElementById(`panel-pos-wizard-preview-pos-${screenId}`);
-            const board = document.getElementById(`panel-pos-wizard-preview-board-${screenId}`);
-            const card = document.getElementById(`panel-pos-wizard-preview-card-${screenId}`);
-            const logo = document.getElementById(`panel-pos-wizard-preview-logo-${screenId}`);
-            const note = document.getElementById(`panel-pos-wizard-preview-note-${screenId}`);
-            const sideImage = document.getElementById(`panel-pos-wizard-preview-side-image-${screenId}`);
-            const preparedGrid = document.getElementById(`panel-pos-wizard-preview-prepared-grid-${screenId}`);
-            const readyGrid = document.getElementById(`panel-pos-wizard-preview-ready-grid-${screenId}`);
-            const preparedColumn = document.getElementById(`panel-pos-wizard-prepared-column-${screenId}`);
-            if(!screen || !pos || !board || !card) return;
+            if(!screen || !pos) return;
             const displayMode = String(document.getElementById(`panel-pos-wizard-display-${screenId}`)?.value || 'schedule_board');
             const appearance = getPanelPosWizardAppearance(screenId);
             const opacityValue = document.getElementById(`panel-pos-wizard-opacity-value-${screenId}`);
             const bgImageOpacityValue = document.getElementById(`panel-pos-wizard-bg-image-opacity-value-${screenId}`);
-            const preparingTitle = document.getElementById(`panel-pos-wizard-preview-preparing-title-${screenId}`);
-            const readyTitle = document.getElementById(`panel-pos-wizard-preview-ready-title-${screenId}`);
-            const readyColumn = document.getElementById(`panel-pos-wizard-ready-column-${screenId}`);
-            const bgRgb = hexToRgb(appearance.backgroundColor) || { r: 255, g: 255, b: 255 };
-            const bg = rgbToCss(bgRgb, appearance.backgroundOpacity);
             if(opacityValue) opacityValue.textContent = `${Math.round(appearance.backgroundOpacity * 100)}%`;
             if(bgImageOpacityValue) bgImageOpacityValue.textContent = `${Math.round(appearance.backgroundImageOpacity * 100)}%`;
-            if(logo){
-                logo.style.display = appearance.logoDataUrl ? 'block' : 'none';
-                logo.src = appearance.logoDataUrl || '';
-            }
-            pos.style.backgroundColor = bg;
+            const overlayPercent = normalizePanelOverlayPercent(document.getElementById(`panel-pos-wizard-overlay-percent-${screenId}`)?.value || 25);
+            const bgRgb = hexToRgb(appearance.backgroundColor) || { r: 255, g: 255, b: 255 };
             const usesSideImage = appearance.posDisplayStyle === 'order_board' && appearance.backgroundImageDataUrl && ['image_left','image_right'].includes(appearance.boardLayout);
+            pos.style.inset = '0';
+            pos.style.left = '';
+            pos.style.right = '';
+            pos.style.top = '';
+            pos.style.bottom = '';
+            pos.style.width = '';
+            pos.style.height = '';
+            pos.style.border = '0';
+            pos.style.borderLeft = '0';
+            pos.style.borderRight = '0';
+            pos.style.borderTop = '0';
+            pos.style.backgroundColor = rgbToCss(bgRgb, appearance.backgroundOpacity);
+            pos.style.color = appearance.boardTextColor;
+            pos.style.boxSizing = 'border-box';
             if(appearance.backgroundImageDataUrl && !usesSideImage){
                 const overlayAlpha = Math.max(0, Math.min(1, 1 - appearance.backgroundImageOpacity));
                 pos.style.backgroundImage = `linear-gradient(${rgbToCss(bgRgb, overlayAlpha)}, ${rgbToCss(bgRgb, overlayAlpha)}), url("${appearance.backgroundImageDataUrl}")`;
                 pos.style.backgroundRepeat = 'no-repeat, no-repeat';
                 pos.style.backgroundPosition = 'center center, center center';
-                pos.style.backgroundSize = appearance.backgroundImageFit === 'stretch'
-                    ? '100% 100%, 100% 100%'
-                    : `100% 100%, ${appearance.backgroundImageFit}`;
+                pos.style.backgroundSize = appearance.backgroundImageFit === 'stretch' ? '100% 100%, 100% 100%' : `100% 100%, ${appearance.backgroundImageFit}`;
             } else {
                 pos.style.backgroundImage = 'none';
                 pos.style.backgroundRepeat = '';
                 pos.style.backgroundPosition = '';
                 pos.style.backgroundSize = '';
             }
-            pos.style.color = appearance.boardTextColor;
-            pos.style.textShadow = appearance.shadowEnabled ? '0 2px 14px rgba(0,0,0,.24)' : 'none';
-            pos.style.boxShadow = 'none';
-            pos.style.border = '0';
-            pos.style.inset = '0';
-            pos.style.width = '';
-            pos.style.height = '';
-            pos.style.left = '';
-            pos.style.right = '';
-            pos.style.top = '';
-            pos.style.bottom = '';
-            pos.style.borderLeft = '0';
-            pos.style.borderRight = '0';
-            pos.style.borderTop = '0';
-            const overlayPercent = normalizePanelOverlayPercent(document.getElementById(`panel-pos-wizard-overlay-percent-${screenId}`)?.value || 25);
             if(displayMode === 'overlay_right'){
                 pos.style.left = 'auto';
                 pos.style.width = `${overlayPercent}%`;
@@ -12960,112 +13047,21 @@ allowfullscreen></iframe></div>`;
                 pos.style.border = '1px dashed rgba(15,23,42,.18)';
             }
             const reference = getPanelPosWizardReferenceSize(displayMode, overlayPercent);
-            const posRect = pos.getBoundingClientRect();
-            const scale = Math.max(0.12, Math.min(posRect.width / Math.max(1, reference.width), posRect.height / Math.max(1, reference.height)));
-            const actualPadding = displayMode === 'overlay_bottom'
-                ? { vertical: 22, horizontal: 28 }
-                : displayMode.startsWith('overlay_')
-                    ? { vertical: 34, horizontal: 28 }
-                    : { vertical: 96, horizontal: 96 };
-            pos.style.padding = `${Math.round(actualPadding.vertical * scale)}px ${Math.round(actualPadding.horizontal * scale)}px`;
-            if(logo){
-                const logoOffset = Math.max(6, Math.round(18 * scale));
-                logo.style.width = `${Math.max(20, Math.round(appearance.logoSize * scale))}px`;
-                logo.style.top = appearance.logoPosition.startsWith('top') ? `${logoOffset}px` : 'auto';
-                logo.style.bottom = appearance.logoPosition.startsWith('bottom') ? `${logoOffset}px` : 'auto';
-                logo.style.left = appearance.logoPosition.endsWith('left') ? `${logoOffset}px` : 'auto';
-                logo.style.right = appearance.logoPosition.endsWith('right') ? `${logoOffset}px` : 'auto';
+            const rect = pos.getBoundingClientRect();
+            const previewScale = Math.max(0.12, Math.min(rect.width / Math.max(1, reference.width), rect.height / Math.max(1, reference.height)));
+            if(appearance.posDisplayStyle === 'single_card'){
+                const item = getPanelPosWizardPreviewItems(screenId).find((entry) => ['ready','serving'].includes(entry.status)) || getPanelPosWizardPreviewItems(screenId)[0] || { order:'1001', status:'ready' };
+                pos.innerHTML = `
+                    <div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; text-align:center; color:${escapeHtml(appearance.boardTextColor)}; text-shadow:${appearance.shadowEnabled ? '0 2px 14px rgba(0,0,0,.24)' : 'none'}; padding:${Math.max(10, Math.round(96 * previewScale))}px; box-sizing:border-box;">
+                        <div>
+                            <div style="font-size:${Math.max(10, Math.round(24 * previewScale))}px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; opacity:.75;">Now serving</div>
+                            <div style="font-size:${Math.max(24, Math.round(154 * appearance.readyTicketFontScale * previewScale))}px; font-weight:950; line-height:1.02; margin-top:${Math.max(4, Math.round(18 * previewScale))}px;">${escapeHtml(item.order || '1001')}</div>
+                            <div style="font-size:${Math.max(10, Math.round(34 * previewScale))}px; margin-top:${Math.max(4, Math.round(12 * previewScale))}px; opacity:.72;">${escapeHtml(item.status === 'ready' || item.status === 'serving' ? appearance.boardReadyTitle : appearance.boardPreparingTitle)}</div>
+                        </div>
+                    </div>`;
+                return;
             }
-            board.style.display = appearance.posDisplayStyle === 'order_board' ? 'grid' : 'none';
-            card.style.display = appearance.posDisplayStyle === 'single_card' ? 'flex' : 'none';
-            if(sideImage){
-                sideImage.style.display = usesSideImage ? 'block' : 'none';
-                sideImage.style.backgroundImage = usesSideImage ? `url("${appearance.backgroundImageDataUrl}")` : 'none';
-                sideImage.style.backgroundSize = appearance.backgroundImageFit === 'stretch' ? '100% 100%' : appearance.backgroundImageFit;
-                sideImage.style.opacity = String(appearance.backgroundImageOpacity);
-                sideImage.style.order = appearance.boardLayout === 'image_right' ? '5' : '0';
-            }
-            const fullMode = !displayMode.startsWith('overlay_');
-            const headingBase = fullMode ? 72 : 34;
-            const preparedBase = fullMode ? 66 : 36;
-            const readyBase = fullMode ? 144 : 36;
-            const noteBase = appearance.boardCustomTextSize;
-            const preparedWidthPx = Math.max(18, Math.round(appearance.preparedTicketMinWidth * scale));
-            const readyWidthPx = Math.max(22, Math.round(appearance.readyTicketMinWidth * scale));
-            const ticketGapPx = Math.max(2, Math.round(appearance.ticketGap * scale));
-            const ticketPadXPx = Math.max(5, Math.round(appearance.ticketPadding * scale));
-            const ticketPadYPx = Math.max(4, Math.round(appearance.ticketPadding * 0.62 * scale));
-            const readyPadXPx = Math.max(8, Math.round(appearance.ticketPadding * 1.45 * scale));
-            const readyPadYPx = Math.max(6, Math.round(appearance.ticketPadding * 1.05 * scale));
-            const marginTopPx = Math.round(appearance.boardMarginTop * scale);
-            const marginRightPx = Math.round(appearance.boardMarginRight * scale);
-            const marginBottomPx = Math.round(appearance.boardMarginBottom * scale);
-            const marginLeftPx = Math.round(appearance.boardMarginLeft * scale);
-            const columnGapPx = Math.max(0, Math.round(appearance.columnGap * scale));
-            const dividerPaddingPx = Math.max(0, Math.round(appearance.readyColumnPadding * scale));
-            const sectionGapPx = Math.max(0, Math.round(appearance.columnSectionGap * scale));
-            if(usesSideImage){
-                board.style.gridTemplateColumns = appearance.boardLayout === 'image_left'
-                    ? `${appearance.sideImageWidth}% minmax(0, ${appearance.preparedColumnRatio}fr) minmax(0, ${appearance.readyColumnRatio}fr)`
-                    : `minmax(0, ${appearance.preparedColumnRatio}fr) minmax(0, ${appearance.readyColumnRatio}fr) ${appearance.sideImageWidth}%`;
-            } else {
-                board.style.gridTemplateColumns = `minmax(0, ${appearance.preparedColumnRatio}fr) minmax(0, ${appearance.readyColumnRatio}fr)`;
-            }
-            board.style.gap = `${columnGapPx}px`;
-            board.style.margin = `${marginTopPx}px ${marginRightPx}px ${marginBottomPx}px ${marginLeftPx}px`;
-            if(preparedColumn) preparedColumn.style.gap = `${sectionGapPx}px`;
-            if(readyColumn){
-                readyColumn.style.gap = `${sectionGapPx}px`;
-                readyColumn.style.borderLeft = appearance.dividerEnabled && appearance.dividerWidth > 0
-                    ? `${Math.max(1, Math.round(appearance.dividerWidth * scale))}px solid ${appearance.dividerColor}`
-                    : '0';
-                readyColumn.style.paddingLeft = `${dividerPaddingPx}px`;
-            }
-            if(preparedGrid){
-                preparedGrid.style.gap = `${ticketGapPx}px`;
-                preparedGrid.style.justifyContent = appearance.preparedAlign === 'center' ? 'center' : appearance.preparedAlign === 'right' ? 'flex-end' : 'flex-start';
-            }
-            if(readyGrid){
-                readyGrid.style.gap = `${ticketGapPx}px`;
-                readyGrid.style.justifyContent = appearance.readyAlign === 'center' ? 'center' : appearance.readyAlign === 'right' ? 'flex-end' : 'flex-start';
-            }
-            if(preparingTitle){
-                preparingTitle.textContent = appearance.boardPreparingTitle;
-                preparingTitle.style.marginBottom = '0';
-                preparingTitle.style.fontSize = `${Math.max(12, Math.round(headingBase * appearance.headingFontScale * scale))}px`;
-                preparingTitle.style.textAlign = appearance.preparedAlign;
-            }
-            if(readyTitle){
-                readyTitle.textContent = appearance.boardReadyTitle;
-                readyTitle.style.marginBottom = '0';
-                readyTitle.style.fontSize = `${Math.max(12, Math.round(headingBase * appearance.headingFontScale * scale))}px`;
-                readyTitle.style.textAlign = appearance.readyAlign;
-            }
-            document.querySelectorAll(`.panel-pos-wizard-ticket-${screenId}`).forEach((ticket) => {
-                ticket.style.borderRadius = `${Math.max(2, Math.round(appearance.ticketRadius * scale))}px`;
-                ticket.style.borderWidth = `${Math.max(1, Math.round(2 * scale))}px`;
-            });
-            document.querySelectorAll(`.panel-pos-wizard-ready-chip-${screenId}`).forEach((chip) => {
-                chip.style.background = appearance.boardReadyColor;
-                chip.style.minWidth = `${readyWidthPx}px`;
-                chip.style.fontSize = `${Math.max(10, Math.round(readyBase * appearance.readyTicketFontScale * scale))}px`;
-                chip.style.padding = `${readyPadYPx}px ${readyPadXPx}px`;
-                chip.style.textAlign = 'center';
-            });
-            document.querySelectorAll(`.panel-pos-wizard-prepared-ticket-${screenId}`).forEach((ticket) => {
-                ticket.style.minWidth = `${preparedWidthPx}px`;
-                ticket.style.padding = `${ticketPadYPx}px ${ticketPadXPx}px`;
-                ticket.style.fontSize = `${Math.max(10, Math.round(preparedBase * appearance.preparedTicketFontScale * scale))}px`;
-                ticket.style.textAlign = 'center';
-            });
-            if(note){
-                const customText = String(appearance.boardCustomText || '').trim();
-                note.style.display = customText ? 'block' : 'none';
-                note.textContent = customText;
-                note.style.fontSize = `${Math.max(9, Math.round(noteBase * scale))}px`;
-                note.style.color = appearance.boardCustomTextColor;
-                positionPanelPosWizardNote(note, appearance.boardCustomTextPosition, Math.max(4, Math.round(appearance.ticketGap * scale)));
-            }
+            pos.innerHTML = buildPanelPosWizardBoardMarkup(screenId, appearance, previewScale, displayMode);
         }
 
         function buildPanelPosWizardPayload(screenId){
@@ -13233,6 +13229,7 @@ allowfullscreen></iframe></div>`;
                 renderRpPanelScheduleControls();
                 renderPanelScheduleSection(screenId, latestPanelZone, getWallSyncBinding(currentStoreId, screenId, null));
                 refreshPlaylist(screenId);
+                setTimeout(() => updatePanelPosWizardPreview(screenId), 450);
             }catch(error){
                 alert('Network error saving POS wizard setup: ' + (error && error.message ? error.message : 'unknown'));
             }
@@ -13267,7 +13264,10 @@ allowfullscreen></iframe></div>`;
                 }
                 const accepted = data.accepted !== false && (!data.result || data.result.accepted !== false);
                 showMessage(accepted ? `Test ${cleanStatus} ticket sent` : `Test ticket received but filtered: ${cleanStatus}`, accepted ? '#2563eb' : '#d97706');
-                setTimeout(() => refreshPlaylist(screenId), 350);
+                setTimeout(() => {
+                    refreshPlaylist(screenId);
+                    setTimeout(() => updatePanelPosWizardPreview(screenId), 450);
+                }, 350);
             }catch(error){
                 alert('Network error sending test ticket: ' + (error && error.message ? error.message : 'unknown'));
             }
