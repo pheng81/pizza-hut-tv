@@ -11221,6 +11221,7 @@ allowfullscreen></iframe></div>`;
         }
 
         function updatePanelPosPreview(screenId){
+            syncPanelPosWizardFromManual(screenId);
             const titleNode = document.getElementById(`panel-pos-preview-title-${screenId}`);
             const bodyNode = document.getElementById(`panel-pos-preview-body-${screenId}`);
             const metaNode = document.getElementById(`panel-pos-preview-meta-${screenId}`);
@@ -12546,7 +12547,99 @@ allowfullscreen></iframe></div>`;
                     note.innerHTML = '<strong>Connection only.</strong> Save the POS/webhook connection now, then decide layout later in the manual controls.';
                 }
             }
+            syncPanelPosManualFromWizard(screenId);
             updatePanelPosWizardPreview(screenId);
+        }
+
+        function setPanelControlValue(id, value){
+            const node = document.getElementById(id);
+            if(!node) return false;
+            if(node.type === 'checkbox'){
+                node.checked = !!value;
+            } else if(value !== undefined && value !== null){
+                node.value = String(value);
+            }
+            return true;
+        }
+
+        function syncPanelPosWizardFromManual(screenId){
+            if(window.panelPosSyncing) return;
+            if(!document.getElementById(`panel-pos-wizard-display-style-${screenId}`)) return;
+            window.panelPosSyncing = true;
+            try{
+                const panelZone = getPanelZoneState(screenId) || {};
+                const sourceSelect = document.getElementById(`panel-source-${screenId}`);
+                const layoutSelect = document.getElementById(`panel-layout-${screenId}`);
+                const overlayInput = document.getElementById(`panel-overlay-percent-${screenId}`);
+                const connectorSelect = document.getElementById(`panel-pos-connector-${screenId}`);
+                const connectorType = String(connectorSelect ? connectorSelect.value : normalizePanelPosFeed(panelZone).connectorType || 'generic_webhook');
+                let provider = ['zapier','make','n8n'].includes(connectorType) ? 'automation' : connectorType === 'square' ? 'square' : 'direct';
+                const sourceMode = String(sourceSelect ? sourceSelect.value : panelZone.source_mode || 'manual');
+                const layoutMode = String(layoutSelect ? layoutSelect.value : panelZone.layout_mode || 'off');
+                let displayMode = 'connection_only';
+                if(sourceMode === 'pos_webhook'){
+                    displayMode = layoutMode === 'split-left-25'
+                        ? 'overlay_left'
+                        : layoutMode === 'split-bottom-25'
+                            ? 'overlay_bottom'
+                            : layoutMode === 'split-right-25'
+                                ? 'overlay_right'
+                                : 'schedule_board';
+                }
+                setPanelControlValue(`panel-pos-wizard-provider-${screenId}`, provider);
+                setPanelControlValue(`panel-pos-wizard-display-${screenId}`, displayMode);
+                setPanelControlValue(`panel-pos-wizard-overlay-percent-${screenId}`, normalizePanelOverlayPercent(overlayInput ? overlayInput.value : panelZone.overlay_percent || 25));
+                setPanelControlValue(`panel-pos-wizard-square-env-${screenId}`, document.getElementById(`panel-pos-square-env-${screenId}`)?.value || 'production');
+                setPanelControlValue(`panel-pos-wizard-square-version-${screenId}`, document.getElementById(`panel-pos-square-version-${screenId}`)?.value || '2026-05-20');
+                setPanelControlValue(`panel-pos-wizard-square-token-${screenId}`, document.getElementById(`panel-pos-square-token-${screenId}`)?.value || '');
+                setPanelControlValue(`panel-pos-wizard-display-style-${screenId}`, document.getElementById(`panel-pos-display-${screenId}`)?.value || 'order_board');
+                setPanelControlValue(`panel-pos-wizard-bg-${screenId}`, document.getElementById(`panel-pos-bg-${screenId}`)?.value || '#ffffff');
+                setPanelControlValue(`panel-pos-wizard-opacity-${screenId}`, document.getElementById(`panel-pos-opacity-${screenId}`)?.value || 100);
+                setPanelControlValue(`panel-pos-wizard-text-${screenId}`, document.getElementById(`panel-pos-board-text-color-${screenId}`)?.value || '#17172a');
+                setPanelControlValue(`panel-pos-wizard-ready-color-${screenId}`, document.getElementById(`panel-pos-board-ready-color-${screenId}`)?.value || '#32d296');
+                setPanelControlValue(`panel-pos-wizard-preparing-title-${screenId}`, document.getElementById(`panel-pos-board-preparing-title-${screenId}`)?.value || 'Being prepared');
+                setPanelControlValue(`panel-pos-wizard-ready-title-${screenId}`, document.getElementById(`panel-pos-board-ready-title-${screenId}`)?.value || 'Ready for pickup');
+                setPanelControlValue(`panel-pos-wizard-shadow-${screenId}`, !!document.getElementById(`panel-pos-shadow-${screenId}`)?.checked);
+                updatePanelPosWizardFields(screenId);
+            } finally {
+                window.panelPosSyncing = false;
+            }
+        }
+
+        function syncPanelPosManualFromWizard(screenId){
+            if(window.panelPosSyncing) return;
+            if(!document.getElementById(`panel-pos-wizard-display-${screenId}`)) return;
+            window.panelPosSyncing = true;
+            try{
+                const provider = String(document.getElementById(`panel-pos-wizard-provider-${screenId}`)?.value || 'square');
+                const displayMode = String(document.getElementById(`panel-pos-wizard-display-${screenId}`)?.value || 'schedule_board');
+                const connectorType = provider === 'square' ? 'square' : provider === 'automation' ? 'zapier' : 'generic_webhook';
+                const layoutMap = {
+                    overlay_right: 'split-right-25',
+                    overlay_left: 'split-left-25',
+                    overlay_bottom: 'split-bottom-25',
+                    schedule_board: 'off',
+                    connection_only: 'off'
+                };
+                setPanelControlValue(`panel-source-${screenId}`, 'pos_webhook');
+                setPanelControlValue(`panel-layout-${screenId}`, layoutMap[displayMode] || 'off');
+                setPanelControlValue(`panel-overlay-percent-${screenId}`, normalizePanelOverlayPercent(document.getElementById(`panel-pos-wizard-overlay-percent-${screenId}`)?.value || 25));
+                setPanelControlValue(`panel-pos-connector-${screenId}`, connectorType);
+                setPanelControlValue(`panel-pos-square-env-${screenId}`, document.getElementById(`panel-pos-wizard-square-env-${screenId}`)?.value || 'production');
+                setPanelControlValue(`panel-pos-square-version-${screenId}`, document.getElementById(`panel-pos-wizard-square-version-${screenId}`)?.value || '2026-05-20');
+                setPanelControlValue(`panel-pos-square-token-${screenId}`, document.getElementById(`panel-pos-wizard-square-token-${screenId}`)?.value || '');
+                setPanelControlValue(`panel-pos-display-${screenId}`, document.getElementById(`panel-pos-wizard-display-style-${screenId}`)?.value || 'order_board');
+                setPanelControlValue(`panel-pos-bg-${screenId}`, document.getElementById(`panel-pos-wizard-bg-${screenId}`)?.value || '#ffffff');
+                setPanelControlValue(`panel-pos-opacity-${screenId}`, document.getElementById(`panel-pos-wizard-opacity-${screenId}`)?.value || 100);
+                setPanelControlValue(`panel-pos-board-text-color-${screenId}`, document.getElementById(`panel-pos-wizard-text-${screenId}`)?.value || '#17172a');
+                setPanelControlValue(`panel-pos-board-ready-color-${screenId}`, document.getElementById(`panel-pos-wizard-ready-color-${screenId}`)?.value || '#32d296');
+                setPanelControlValue(`panel-pos-board-preparing-title-${screenId}`, document.getElementById(`panel-pos-wizard-preparing-title-${screenId}`)?.value || 'Being prepared');
+                setPanelControlValue(`panel-pos-board-ready-title-${screenId}`, document.getElementById(`panel-pos-wizard-ready-title-${screenId}`)?.value || 'Ready for pickup');
+                setPanelControlValue(`panel-pos-shadow-${screenId}`, !!document.getElementById(`panel-pos-wizard-shadow-${screenId}`)?.checked);
+                updatePanelPosPreview(screenId);
+            } finally {
+                window.panelPosSyncing = false;
+            }
         }
 
         function getPanelPosWizardAppearance(screenId){
@@ -12992,6 +13085,7 @@ allowfullscreen></iframe></div>`;
         }
 
         function updatePanelPosWizardPreview(screenId){
+            syncPanelPosManualFromWizard(screenId);
             const screen = document.getElementById(`panel-pos-wizard-preview-screen-${screenId}`);
             const pos = document.getElementById(`panel-pos-wizard-preview-pos-${screenId}`);
             const background = document.getElementById(`panel-pos-wizard-preview-background-${screenId}`);
@@ -13481,6 +13575,8 @@ allowfullscreen></iframe></div>`;
                 } catch {}
                 applyPanelPosResponseState(data);
                 showMessage(layoutMode === 'off' ? 'Info panel turned off' : 'Info panel layout updated');
+                syncPanelPosWizardFromManual(screenId);
+                updatePanelPosWizardPreview(screenId);
                 renderRpPanelScheduleControls();
                 refreshPlaylist(screenId);
             }).catch(() => {
@@ -13510,6 +13606,8 @@ allowfullscreen></iframe></div>`;
                 } catch {}
                 applyPanelPosResponseState(data);
                 showMessage(`Overlay size set to ${percent}%`);
+                syncPanelPosWizardFromManual(screenId);
+                updatePanelPosWizardPreview(screenId);
                 renderRpPanelScheduleControls();
                 refreshPlaylist(screenId);
             }).catch(() => {
