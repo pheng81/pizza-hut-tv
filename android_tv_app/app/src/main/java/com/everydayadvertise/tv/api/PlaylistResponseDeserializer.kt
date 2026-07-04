@@ -41,6 +41,8 @@ class PlaylistResponseDeserializer : JsonDeserializer<PlaylistResponse> {
 				val start = item.get("start")?.asString
 				val end = item.get("end")?.asString
 				val mediaType = item.get("media_type")?.asString
+				val livePosTitle = item.get("live_pos_title")?.asString
+				val livePosBody = item.get("live_pos_body")?.asString
 				
 			// Parse schedule array if present (but don't fail if malformed)
 			val schedule = try {
@@ -99,6 +101,8 @@ class PlaylistResponseDeserializer : JsonDeserializer<PlaylistResponse> {
 						schedule = schedule,
 						days = days,
 						mediaType = mediaType,
+						livePosTitle = livePosTitle,
+						livePosBody = livePosBody,
 						syncRef = syncRef
 					)
 				)

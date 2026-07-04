@@ -130,7 +130,7 @@ class _EverydayMobileAppState extends State<EverydayMobileApp> {
         ),
         filledButtonTheme: FilledButtonThemeData(
           style: FilledButton.styleFrom(
-            minimumSize: const Size.fromHeight(46),
+            minimumSize: const Size(0, 46),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),

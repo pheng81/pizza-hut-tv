@@ -1223,11 +1223,13 @@
     
     /* Features Section */
     .features {
-      width: 100%;
-      max-width: none;
+      width: 100vw;
+      max-width: 100vw;
       min-height: var(--features-min-height, 0px);
-      margin: 100px 0;
-      padding: 90px 40px 70px;
+      margin: 0;
+      margin-left: calc(50% - 50vw);
+      margin-right: calc(50% - 50vw);
+      padding: 100px 40px;
       background: var(--features-bg-color, transparent);
       box-sizing: border-box;
     }
@@ -1321,7 +1323,9 @@
     @media (max-width: 768px) {
       .features {
         max-width: 100%;
-        margin: 36px 0 6px;
+        margin: 0;
+        margin-left: calc(50% - 50vw);
+        margin-right: calc(50% - 50vw);
         padding: 32px 0;
         overflow: hidden;
       }

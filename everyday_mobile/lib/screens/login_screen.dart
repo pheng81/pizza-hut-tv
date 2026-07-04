@@ -14,10 +14,12 @@ class LoginScreen extends StatefulWidget {
     super.key,
     required this.apiClient,
     required this.onLoginSuccess,
+    this.enableSocialAuthBootstrap = true,
   });
 
   final ApiClient apiClient;
   final Future<void> Function() onLoginSuccess;
+  final bool enableSocialAuthBootstrap;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -56,7 +58,11 @@ class _LoginScreenState extends State<LoginScreen>
       duration: const Duration(seconds: 12),
     )..repeat();
 
-    _initSocialAuth();
+    if (widget.enableSocialAuthBootstrap) {
+      _initSocialAuth();
+    } else {
+      _checkingProviders = false;
+    }
   }
 
   @override
@@ -263,7 +269,7 @@ class _LoginScreenState extends State<LoginScreen>
 
       final auth = await account.authentication;
       final idToken = (auth.idToken ?? '').trim();
-      final serverAuthCode = (auth.serverAuthCode ?? '').trim();
+      final serverAuthCode = (account.serverAuthCode ?? '').trim();
       if (idToken.isEmpty && serverAuthCode.isEmpty) {
         if (!mounted) {
           return;

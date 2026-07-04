@@ -423,6 +423,9 @@ class _AccountPageState extends State<AccountPage> {
     if (!confirmed) {
       return;
     }
+    if (!mounted) {
+      return;
+    }
 
     final reasonResult = await showDialog<_CancellationReasonResult>(
       context: context,
@@ -484,9 +487,12 @@ class _AccountPageState extends State<AccountPage> {
     if (!firstConfirm) {
       return;
     }
+    if (!mounted) {
+      return;
+    }
 
     final doubleConfirmed = await showDialog<bool>(
-          context: context,
+      context: context,
           builder: (context) => const _DeleteAllConfirmDialog(),
         ) ??
         false;

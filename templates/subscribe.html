@@ -186,8 +186,17 @@
               {% if next_renewal %} • Next renewal {{ next_renewal }}{% endif %}
             </div>
           {% endif %}
+          {% if pending_add_screen %}
+            <div class="alert alert-success" style="margin-top:24px;">
+              Complete checkout and we'll add your new {{ 'promo screen' if pending_screen_type == 'promo' else 'screen' }} automatically.
+            </div>
+          {% endif %}
           <form method="post" action="{{ url_for('billing_checkout') }}">
-            <button type="submit">Start Subscription Securely</button>
+            {% if pending_add_screen %}
+              <input type="hidden" name="pending_store_id" value="{{ pending_store_id }}">
+              <input type="hidden" name="pending_screen_type" value="{{ pending_screen_type }}">
+            {% endif %}
+            <button type="submit">{{ 'Pay and Add Screen' if pending_add_screen else 'Start Subscription Securely' }}</button>
           </form>
         </div>
         <div class="cta-row">

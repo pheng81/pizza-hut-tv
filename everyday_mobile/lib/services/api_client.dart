@@ -812,6 +812,186 @@ class ApiClient {
     }
   }
 
+  Future<Map<String, dynamic>> updatePanelZone({
+    required String storeId,
+    required String screenId,
+    String? layoutMode,
+    String? sourceMode,
+    bool? enabled,
+  }) async {
+    final payload = <String, dynamic>{};
+    if (layoutMode != null) {
+      payload['layout_mode'] = layoutMode.trim();
+    }
+    if (sourceMode != null) {
+      payload['source_mode'] = sourceMode.trim();
+    }
+    if (enabled != null) {
+      payload['enabled'] = enabled;
+    }
+    if (payload.isEmpty) {
+      return const {};
+    }
+
+    final response = await _dio.patch(
+      '/panel_zone/$storeId/$screenId',
+      data: payload,
+    );
+    final data = _asMap(response.data);
+    if (data['success'] != true) {
+      throw Exception(
+          (data['error'] ?? 'Failed to update info panel').toString());
+    }
+    return data;
+  }
+
+  Future<Map<String, dynamic>> addLivePosPlaylistItem({
+    required String storeId,
+    required String screenId,
+    String displayName = 'Live POS',
+    int duration = 120,
+    bool reuseExisting = true,
+  }) async {
+    final response = await _dio.post(
+      '/playlist/live_pos/$storeId/$screenId',
+      data: {
+        'displayName': displayName.trim().isEmpty
+            ? 'Live POS'
+            : displayName.trim(),
+        'duration': duration < 1 ? 1 : duration,
+        'reuse_existing': reuseExisting,
+      },
+    );
+    final data = _asMap(response.data);
+    if (data['success'] != true) {
+      throw Exception(
+          (data['error'] ?? 'Failed to add Live POS schedule').toString());
+    }
+    return data;
+  }
+
+  Future<Map<String, dynamic>> addPanelPlaylistItem({
+    required String storeId,
+    required String screenId,
+    required String title,
+    String body = '',
+  }) async {
+    final response = await _dio.post(
+      '/panel_playlist/item/$storeId/$screenId',
+      data: {
+        'title': title.trim(),
+        'body': body,
+      },
+    );
+    final data = _asMap(response.data);
+    if (data['success'] != true) {
+      throw Exception((data['error'] ?? 'Failed to add info card').toString());
+    }
+    return data;
+  }
+
+  Future<Map<String, dynamic>> updatePanelPlaylistItem({
+    required String storeId,
+    required String screenId,
+    required String itemId,
+    String? title,
+    String? body,
+    String? start,
+    String? end,
+    bool? enabled,
+    bool? repeat,
+    int? duration,
+    List<String>? days,
+  }) async {
+    final payload = <String, dynamic>{};
+    if (title != null) {
+      payload['title'] = title;
+    }
+    if (body != null) {
+      payload['body'] = body;
+    }
+    if (start != null) {
+      payload['start'] = _normalizeScheduleDateTime(start);
+    }
+    if (end != null) {
+      payload['end'] = _normalizeScheduleDateTime(end);
+    }
+    if (enabled != null) {
+      payload['enabled'] = enabled;
+    }
+    if (repeat != null) {
+      payload['repeat'] = repeat;
+    }
+    if (duration != null) {
+      payload['duration'] = duration;
+    }
+    if (days != null) {
+      payload['days'] = days;
+    }
+    if (payload.isEmpty) {
+      return const {};
+    }
+
+    final response = await _dio.patch(
+      '/panel_playlist/item/$storeId/$screenId/$itemId',
+      data: payload,
+    );
+    final data = _asMap(response.data);
+    if (data['success'] != true) {
+      throw Exception(
+          (data['error'] ?? 'Failed to update info card').toString());
+    }
+    return data;
+  }
+
+  Future<Map<String, dynamic>> updatePanelPosFeed({
+    required String storeId,
+    required String screenId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _dio.patch(
+      '/panel_pos_feed/$storeId/$screenId',
+      data: payload,
+    );
+    final data = _asMap(response.data);
+    if (data['success'] != true) {
+      throw Exception(
+          (data['error'] ?? 'Failed to save Live POS setup').toString());
+    }
+    return data;
+  }
+
+  Future<Map<String, dynamic>> sendPanelPosSample({
+    required String storeId,
+    required String screenId,
+  }) async {
+    final response = await _dio.post(
+      '/panel_pos_feed/$storeId/$screenId/sample',
+    );
+    final data = _asMap(response.data);
+    if (data['success'] != true) {
+      throw Exception(
+          (data['error'] ?? 'Failed to send Live POS sample').toString());
+    }
+    return data;
+  }
+
+  Future<Map<String, dynamic>> deletePanelPlaylistItem({
+    required String storeId,
+    required String screenId,
+    required String itemId,
+  }) async {
+    final response = await _dio.delete(
+      '/panel_playlist/item/$storeId/$screenId/$itemId',
+    );
+    final data = _asMap(response.data);
+    if (data['success'] != true) {
+      throw Exception(
+          (data['error'] ?? 'Failed to delete info card').toString());
+    }
+    return data;
+  }
+
   Future<Map<String, dynamic>> addScheduleWindow({
     required String storeId,
     required String screenId,
@@ -905,17 +1085,40 @@ class ApiClient {
       return const {};
     }
 
-    final cookies = await _cookieJar.loadForRequest(uri);
-    if (cookies.isEmpty) {
-      return const {};
+    final headers = <String, String>{};
+    final token = (_mobileAuthToken ?? '').trim();
+    if (token.isNotEmpty && _isSameSiteUrl(uri)) {
+      headers['X-Mobile-Auth'] = token;
     }
 
+    final cookies = await _cookieJar.loadForRequest(uri);
     cookies.sort((a, b) => a.name.compareTo(b.name));
     final cookieHeader = cookies.map((c) => '${c.name}=${c.value}').join('; ');
-    if (cookieHeader.isEmpty) {
-      return const {};
+    if (cookieHeader.isNotEmpty) {
+      headers['Cookie'] = cookieHeader;
     }
-    return {'Cookie': cookieHeader};
+
+    return headers;
+  }
+
+  bool _isSameSiteUrl(Uri uri) {
+    try {
+      final base = Uri.parse(_dio.options.baseUrl);
+      final host = uri.host.toLowerCase();
+      final baseHost = base.host.toLowerCase();
+      if (host == baseHost) {
+        return true;
+      }
+      if (baseHost.startsWith('api.') && host == baseHost.substring(4)) {
+        return true;
+      }
+      if (host.startsWith('api.') && host.substring(4) == baseHost) {
+        return true;
+      }
+    } catch (_) {
+      return false;
+    }
+    return false;
   }
 
   Future<List<AndroidTvDevice>> getAndroidTvDevices() async {

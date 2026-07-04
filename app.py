@@ -3142,13 +3142,19 @@ def _get_user_screens_list() -> list:
         screens_list = []
         for store_id, store_screens in screens_dict.items():
             store_name = stores.get(store_id, f'Store {store_id}')
-            for screen in store_screens:
+            for screen_id, screen_data in (store_screens or {}).items():
+                if not isinstance(screen_data, dict):
+                    screen_data = {}
+                if str(screen_id).startswith(f'{store_id}_promo') or str(screen_id).startswith('promo'):
+                    screen_type = 'promo'
+                else:
+                    screen_type = 'screen'
                 screens_list.append({
-                    'id': screen.get('id'),
-                    'name': screen.get('name', 'Unnamed Screen'),
+                    'id': screen_id,
+                    'name': screen_data.get('name') or screen_data.get('screen_name') or screen_id,
                     'store_id': store_id,
                     'store_name': store_name,
-                    'type': screen.get('type', 'screen')
+                    'type': screen_data.get('type') or screen_type,
                 })
         return screens_list
     except Exception as _e:
@@ -3208,6 +3214,163 @@ def _create_screen_subscription(user_id: int, screen_id: str, store_id: str, scr
     except Exception as e:
         logging.error(f'Failed to create screen subscription: {e}', exc_info=True)
         return None
+
+
+def _create_screen_record_for_store(
+    store_id: str,
+    screen_type: str = 'screen',
+    *,
+    create_screen_subscription: bool = True,
+) -> dict:
+    """Create a new screen record for the current user and optional billing record."""
+    current_username = session.get('user', {}).get('name', '')
+    is_admin_user = (current_username == 'test9@gmail.com')
+
+    if screen_type not in ('screen', 'promo'):
+        screen_type = 'screen'
+
+    if not store_id:
+        raise ValueError('Please add or select a store before adding screens.')
+
+    ukey = _safe_user_key()
+    config = load_store_config_for_user_safe_key(ukey) if ukey else load_store_config()
+
+    if store_id not in config['screens']:
+        config['screens'][store_id] = {}
+
+    if screen_type == 'screen':
+        stray_promo = f"{store_id}_promo1"
+        if (
+            stray_promo in config['screens'][store_id]
+            and not config['screens'][store_id][stray_promo].get('file')
+            and not config['screens'][store_id][stray_promo].get('playlist')
+        ):
+            try:
+                del config['screens'][store_id][stray_promo]
+            except Exception:
+                pass
+
+    try:
+        groups = config.get('sync_groups') or {}
+        to_del = []
+        for gid, grp in list(groups.items()):
+            if grp.get('store_id') != store_id:
+                continue
+            base = grp.get('base')
+            if base and base not in config['screens'][store_id]:
+                to_del.append(gid)
+        if to_del:
+            for gid in to_del:
+                groups.pop(gid, None)
+            if groups:
+                config['sync_groups'] = groups
+            else:
+                config.pop('sync_groups', None)
+    except Exception:
+        pass
+
+    store_prefix = f"{store_id}_"
+    existing_screens = []
+    for existing_screen_id in config['screens'][store_id].keys():
+        if existing_screen_id.startswith(store_prefix):
+            screen_part = existing_screen_id[len(store_prefix):]
+            if screen_part.startswith(screen_type):
+                existing_screens.append(screen_part)
+
+    used = set()
+    for existing_screen in existing_screens:
+        try:
+            num_str = existing_screen.replace(screen_type, '')
+            if num_str:
+                used.add(int(num_str))
+        except Exception:
+            pass
+
+    gap = 1
+    while gap in used:
+        gap += 1
+    new_screen_id = f"{store_id}_{screen_type}{gap}"
+
+    is_promo = screen_type.startswith('promo')
+    config['screens'][store_id][new_screen_id] = {
+        'file': None,
+        'vertical': is_promo,
+        'horizontal': not is_promo,
+        'rotation': 0,
+        'protected': False,
+        'playlist': [],
+        'fresh': True,
+    }
+
+    if ukey:
+        save_store_config_for_user_safe_key(ukey, config)
+    else:
+        save_store_config(config)
+
+    subscription_created = False
+    if create_screen_subscription and not is_admin_user:
+        user_id = _current_user_id()
+        if user_id:
+            screen_name = new_screen_id
+            db = get_db()
+            sub_row = db.execute(
+                'SELECT status, current_period_end, created_at FROM subscriptions WHERE user_id = ?',
+                (user_id,)
+            ).fetchone()
+
+            if sub_row:
+                status = sub_row['status']
+                period_end = sub_row['current_period_end']
+                period_start = sub_row['created_at'] or int(time.time())
+            else:
+                status = 'trialing'
+                period_start = int(time.time())
+                period_end = period_start + (14 * 24 * 60 * 60)
+
+            try:
+                db.execute(
+                    'INSERT OR REPLACE INTO screen_subscriptions '
+                    '(user_id, screen_id, store_id, screen_name, status, '
+                    'current_period_start, current_period_end, cancel_at_period_end, created_at, updated_at) '
+                    'VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)',
+                    (
+                        user_id,
+                        new_screen_id,
+                        store_id,
+                        screen_name,
+                        status,
+                        period_start,
+                        period_end,
+                        int(time.time()),
+                        int(time.time()),
+                    )
+                )
+                db.commit()
+                subscription_created = True
+
+                if _stripe_enabled():
+                    sub_result = _create_screen_subscription(
+                        user_id,
+                        new_screen_id,
+                        store_id,
+                        screen_name,
+                    )
+                    if sub_result:
+                        db.execute(
+                            'UPDATE screen_subscriptions SET stripe_subscription_id = ? WHERE user_id = ? AND screen_id = ?',
+                            (sub_result['subscription_id'], user_id, new_screen_id)
+                        )
+                        db.commit()
+
+                logging.info('Screen subscription record created for %s', new_screen_id)
+            except Exception as e:
+                logging.error('Failed to create screen subscription record: %s', e)
+
+    return {
+        'screen_id': new_screen_id,
+        'screen': config['screens'][store_id][new_screen_id],
+        'subscription_created': subscription_created,
+    }
 
 def _get_screen_subscriptions(user_id: int) -> list:
     """Get all screen subscriptions for a user with billing details"""
@@ -3326,6 +3489,10 @@ def _sync_subscription_from_stripe(subscription_obj):
         if not row:
             logging.warning('Stripe webhook for unknown customer %s', customer_id)
             return
+        metadata = subscription_obj.get('metadata') if isinstance(subscription_obj.get('metadata'), dict) else {}
+        screen_id = str(metadata.get('screen_id') or '').strip()
+        store_id = str(metadata.get('store_id') or '').strip()
+        screen_name = str(metadata.get('screen_name') or screen_id).strip()
         plan_info = None
         quantity = None
         price_id = None
@@ -3336,6 +3503,40 @@ def _sync_subscription_from_stripe(subscription_obj):
             plan_info = first_item.get('plan') or {}
             price_id = (plan_info.get('id') or first_item.get('price', {}).get('id'))
         plan_name = (plan_info.get('nickname') if isinstance(plan_info, dict) else None) or subscription_obj.get('description') or price_id
+        if screen_id and store_id:
+            now = int(time.time())
+            db.execute(
+                'INSERT INTO screen_subscriptions '
+                '(user_id, screen_id, store_id, screen_name, stripe_subscription_id, stripe_price_id, status, '
+                'current_period_start, current_period_end, cancel_at_period_end, created_at, updated_at) '
+                'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) '
+                'ON CONFLICT(user_id, screen_id, store_id) DO UPDATE SET '
+                'screen_name=excluded.screen_name,'
+                'stripe_subscription_id=excluded.stripe_subscription_id,'
+                'stripe_price_id=excluded.stripe_price_id,'
+                'status=excluded.status,'
+                'current_period_start=excluded.current_period_start,'
+                'current_period_end=excluded.current_period_end,'
+                'cancel_at_period_end=excluded.cancel_at_period_end,'
+                'updated_at=excluded.updated_at',
+                (
+                    row['id'],
+                    screen_id,
+                    store_id,
+                    screen_name,
+                    subscription_obj.get('id'),
+                    price_id,
+                    subscription_obj.get('status'),
+                    subscription_obj.get('current_period_start'),
+                    subscription_obj.get('current_period_end'),
+                    1 if subscription_obj.get('cancel_at_period_end') else 0,
+                    now,
+                    now,
+                ),
+            )
+            db.commit()
+            logging.info('Synced Stripe screen subscription %s for %s/%s', subscription_obj.get('id'), store_id, screen_id)
+            return
         _record_subscription_status(
             user_id=row['id'],
             status=subscription_obj.get('status'),
@@ -4408,11 +4609,16 @@ def import_from_url():
 def google_drive_status():
     try:
         configured = bool((os.environ.get('GOOGLE_CLIENT_ID') or '').strip() and (os.environ.get('GOOGLE_CLIENT_SECRET') or '').strip())
+        picker_configured = bool(
+            ((os.environ.get('GOOGLE_PICKER_API_KEY') or os.environ.get('GOOGLE_API_KEY') or '').strip()) and
+            ((os.environ.get('GOOGLE_CLOUD_PROJECT_NUMBER') or os.environ.get('GOOGLE_PROJECT_NUMBER') or '').strip())
+        )
         info = _google_drive_session()
         connected = bool(_google_drive_access_token())
         return jsonify({
             'success': True,
             'configured': configured,
+            'picker_configured': picker_configured,
             'connected': connected,
             'email': str(info.get('email') or '').strip(),
         })
@@ -4427,6 +4633,32 @@ def google_drive_disconnect():
         session.pop('google_drive_auth', None)
         session.pop('google_oauth_mode', None)
         return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/google-drive/picker-config', methods=['GET'])
+@login_required
+def google_drive_picker_config():
+    try:
+        developer_key = (os.environ.get('GOOGLE_PICKER_API_KEY') or os.environ.get('GOOGLE_API_KEY') or '').strip()
+        app_id = (os.environ.get('GOOGLE_CLOUD_PROJECT_NUMBER') or os.environ.get('GOOGLE_PROJECT_NUMBER') or '').strip()
+        if not developer_key or not app_id:
+            return jsonify({
+                'success': False,
+                'error': 'Google Picker is not configured on this server yet. Add GOOGLE_PICKER_API_KEY and GOOGLE_CLOUD_PROJECT_NUMBER.',
+            }), 400
+
+        token = _google_drive_access_token()
+        if not token:
+            return jsonify({'success': False, 'error': 'Google Drive is not connected'}), 401
+
+        return jsonify({
+            'success': True,
+            'developerKey': developer_key,
+            'appId': app_id,
+            'oauthToken': token,
+        })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -4467,12 +4699,49 @@ def google_drive_thumbnail(file_id):
             return jsonify({'success': False, 'error': 'file_id required'}), 400
 
         with _google_drive_api_request(f'files/{urllib.parse.quote(clean_file_id, safe="")}', params={
-            'fields': 'id,name,mimeType,thumbnailLink'
+            'fields': 'id,name,mimeType,thumbnailLink,size'
         }) as meta_resp:
             meta = json.loads(meta_resp.read().decode('utf-8') or '{}')
 
         thumb_url = str(meta.get('thumbnailLink') or '').strip()
+        mime_type = str(meta.get('mimeType') or '').strip().lower()
         if not thumb_url:
+            if mime_type.startswith('image/') and mime_type != 'image/svg+xml':
+                max_preview_bytes = int(os.environ.get('GOOGLE_DRIVE_PREVIEW_MAX_BYTES', '26214400'))
+                with _google_drive_api_request(
+                    f'files/{urllib.parse.quote(clean_file_id, safe="")}',
+                    params={'alt': 'media', 'acknowledgeAbuse': 'true'},
+                    headers={'Accept': 'application/octet-stream'},
+                    timeout=30.0,
+                ) as media_resp:
+                    raw = media_resp.read(max_preview_bytes + 1)
+                if len(raw) > max_preview_bytes:
+                    return jsonify({'success': False, 'error': 'preview too large'}), 413
+                try:
+                    from io import BytesIO
+                    from PIL import Image, ImageOps  # type: ignore
+                    source = BytesIO(raw)
+                    with Image.open(source) as im:
+                        im = ImageOps.exif_transpose(im)
+                        resampling_enum = getattr(Image, 'Resampling', None)
+                        resampling = getattr(resampling_enum, 'LANCZOS', None) if resampling_enum else getattr(Image, 'LANCZOS', 1)
+                        im.thumbnail((640, 640), resampling)
+                        if im.mode not in ('RGB', 'L'):
+                            bg = Image.new('RGB', im.size, (255, 255, 255))
+                            if im.mode in ('RGBA', 'LA'):
+                                bg.paste(im, mask=im.getchannel('A'))
+                            else:
+                                bg.paste(im.convert('RGB'))
+                            im = bg
+                        elif im.mode == 'L':
+                            im = im.convert('RGB')
+                        out = BytesIO()
+                        im.save(out, format='JPEG', quality=84, optimize=True)
+                        response = Response(out.getvalue(), mimetype='image/jpeg')
+                        response.headers['Cache-Control'] = 'private, max-age=300'
+                        return response
+                except Exception as preview_e:
+                    logging.warning('google_drive_thumbnail generated preview failed for %s: %s', clean_file_id, preview_e)
             return jsonify({'success': False, 'error': 'thumbnail not available'}), 404
 
         # Drive thumbnail links are short-lived. Proxy them with this user's token
@@ -4836,14 +5105,22 @@ def home():
     return resp
 
 
-@app.route('/privacy-policy')
 @app.route('/privacy')
+def privacy_redirect():
+    return redirect(url_for('privacy_policy'), code=301)
+
+
+@app.route('/privacy-policy')
 def privacy_policy():
     return render_template('privacy_policy.html')
 
 
-@app.route('/terms-of-service')
 @app.route('/terms')
+def terms_redirect():
+    return redirect(url_for('terms_of_service'), code=301)
+
+
+@app.route('/terms-of-service')
 def terms_of_service():
     return render_template('terms_of_service.html')
 
@@ -4852,6 +5129,11 @@ def terms_of_service():
 def subscribe():
     user_id = _current_user_id()
     billing_policy = _get_user_billing_policy(user_id)
+    pending_add_screen = request.args.get('pending_add_screen') == '1'
+    pending_store_id = (request.args.get('store_id') or '').strip()
+    pending_screen_type = (request.args.get('screen_type') or 'screen').strip().lower()
+    if pending_screen_type not in ('screen', 'promo'):
+        pending_screen_type = 'screen'
     subscription_row = None
     if user_id:
         try:
@@ -4878,6 +5160,9 @@ def subscribe():
         'price_id': billing_policy['stripe_price_id'],
         'free_screens': billing_policy['free_screens'],
         'next_renewal': next_renewal,
+        'pending_add_screen': pending_add_screen and bool(pending_store_id),
+        'pending_store_id': pending_store_id,
+        'pending_screen_type': pending_screen_type,
     }
     return render_template('subscribe.html', **template_ctx)
 
@@ -4896,6 +5181,18 @@ def billing_checkout():
     if not eligible:
         flash(eligibility_error or 'You are not eligible to subscribe yet.', 'error')
         return redirect(url_for('account'))
+
+    pending_store_id = (request.form.get('pending_store_id') or '').strip()
+    pending_screen_type = (request.form.get('pending_screen_type') or 'screen').strip().lower()
+    if pending_screen_type not in ('screen', 'promo'):
+        pending_screen_type = 'screen'
+    if pending_store_id:
+        session['pending_add_screen'] = {
+            'store_id': pending_store_id,
+            'screen_type': pending_screen_type,
+        }
+    else:
+        session.pop('pending_add_screen', None)
 
     try:
         billing_policy = _get_user_billing_policy(user_id)
@@ -5081,6 +5378,31 @@ def billing_success():
                 _sync_subscription_from_stripe(sub)
         except Exception as _e:
             logging.warning('Checkout success sync failed: %s', _e)
+    pending_add = session.pop('pending_add_screen', None)
+    if pending_add:
+        store_id = str(pending_add.get('store_id') or '').strip()
+        screen_type = str(pending_add.get('screen_type') or 'screen').strip().lower()
+        if screen_type not in ('screen', 'promo'):
+            screen_type = 'screen'
+        if store_id:
+            try:
+                result = _create_screen_record_for_store(
+                    store_id,
+                    screen_type,
+                    create_screen_subscription=False,
+                )
+                flash(
+                    f"Subscription activated and {result['screen_id']} was added successfully.",
+                    'success',
+                )
+                return redirect(url_for('dashboard', store_id=store_id))
+            except Exception as _e:
+                logging.error('Failed to create pending screen after checkout: %s', _e, exc_info=True)
+                flash(
+                    'Subscription activated, but the new screen could not be created automatically. Please try adding it again from the dashboard.',
+                    'error',
+                )
+                return redirect(url_for('dashboard', store_id=store_id))
     flash('Subscription activated! You can now access your dashboard.', 'success')
     return redirect(url_for('dashboard'))
 
@@ -8164,7 +8486,7 @@ def stream_media(filename):
 
 def ensure_playlists_structure(config):
     changed = False
-    valid_panel_layouts = {'off', 'split-right-25', 'split-left-25', 'split-bottom-25'}
+    valid_panel_layouts = {'off', 'split-right-25', 'split-left-25', 'split-bottom-25', 'full-screen'}
     if not isinstance(config.get('panel_pos_shared_feeds'), dict):
         config['panel_pos_shared_feeds'] = {'stores': {}, 'chain': {}}
         changed = True
@@ -8228,6 +8550,14 @@ def ensure_playlists_structure(config):
             if panel_zone.get('layout_mode') != panel_layout_mode:
                 panel_zone['layout_mode'] = panel_layout_mode
                 changed = True
+            try:
+                panel_overlay_percent = int(panel_zone.get('overlay_percent') or 25)
+            except Exception:
+                panel_overlay_percent = 25
+            panel_overlay_percent = max(10, min(60, panel_overlay_percent))
+            if panel_zone.get('overlay_percent') != panel_overlay_percent:
+                panel_zone['overlay_percent'] = panel_overlay_percent
+                changed = True
             if 'playlist' not in panel_zone or not isinstance(panel_zone.get('playlist'), list):
                 panel_zone['playlist'] = []
                 changed = True
@@ -8265,6 +8595,9 @@ PANEL_POS_SHARED_SETTING_KEYS = (
     'name',
     'webhook_token',
     'connector_type',
+    'square_access_token',
+    'square_environment',
+    'square_api_version',
     'field_map',
     'title_template',
     'body_template',
@@ -8280,6 +8613,9 @@ def _panel_pos_feed_defaults(include_runtime: bool = True) -> dict:
         'name': '',
         'webhook_token': '',
         'connector_type': 'generic_webhook',
+        'square_access_token': '',
+        'square_environment': 'production',
+        'square_api_version': '2026-05-20',
         'field_map': {
             'customer_name': 'customer.name',
             'order_number': 'order.number',
@@ -8316,9 +8652,18 @@ def _normalize_panel_pos_feed_state(pos_feed: Optional[dict], include_runtime: b
     pos_feed['name'] = str(pos_feed.get('name') or default_feed['name']).strip()
     pos_feed['webhook_token'] = str(pos_feed.get('webhook_token') or default_feed['webhook_token']).strip()
     connector_type = str(pos_feed.get('connector_type') or default_feed['connector_type']).strip().lower()
-    if connector_type not in {'generic_webhook', 'zapier', 'make', 'n8n', 'developer'}:
+    if connector_type not in {'generic_webhook', 'zapier', 'make', 'n8n', 'developer', 'square'}:
         connector_type = default_feed['connector_type']
     pos_feed['connector_type'] = connector_type
+    pos_feed['square_access_token'] = str(pos_feed.get('square_access_token') or default_feed['square_access_token']).strip()
+    square_environment = str(pos_feed.get('square_environment') or default_feed['square_environment']).strip().lower()
+    if square_environment not in {'production', 'sandbox'}:
+        square_environment = default_feed['square_environment']
+    pos_feed['square_environment'] = square_environment
+    square_api_version = str(pos_feed.get('square_api_version') or default_feed['square_api_version']).strip()
+    if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', square_api_version):
+        square_api_version = default_feed['square_api_version']
+    pos_feed['square_api_version'] = square_api_version
 
     field_map = pos_feed.get('field_map')
     if not isinstance(field_map, dict):
@@ -8348,7 +8693,7 @@ def _normalize_panel_pos_feed_state(pos_feed: Optional[dict], include_runtime: b
     except Exception:
         pos_feed['display_seconds'] = default_feed['display_seconds']
     try:
-        pos_feed['max_items'] = max(1, min(20, int(pos_feed.get('max_items') or default_feed['max_items'])))
+        pos_feed['max_items'] = max(1, min(100, int(pos_feed.get('max_items') or default_feed['max_items'])))
     except Exception:
         pos_feed['max_items'] = default_feed['max_items']
     pos_feed['store_selector_path'] = str(pos_feed.get('store_selector_path') or default_feed['store_selector_path']).strip() or default_feed['store_selector_path']
@@ -8445,14 +8790,59 @@ def _panel_zone_defaults() -> dict:
     return {
         'enabled': False,
         'layout_mode': 'off',
+        'overlay_percent': 25,
         'playlist': [],
         'rotation_meta': {'last_index': 0, 'last_ts': 0},
         'source_mode': 'manual',
         'feed_scope': 'screen',
         'appearance': {
             'background_color': '#201206',
+            'background_opacity': 0.72,
+            'background_image_data_url': '',
+            'background_image_opacity': 1.0,
+            'background_image_fit': 'cover',
             'content_align': 'center',
             'body_rows': 4,
+            'shadow_enabled': False,
+            'pos_display_style': 'single_card',
+            'board_preparing_title': 'Being prepared',
+            'board_ready_title': 'Ready for pickup',
+            'board_preparing_statuses': ['preparing', 'being_prepared', 'accepted'],
+            'board_ready_statuses': ['ready', 'serving'],
+            'board_ready_color': '#32d296',
+            'board_text_color': '#17172a',
+            'board_layout': 'standard',
+            'side_image_width': 42,
+            'logo_data_url': '',
+            'logo_position': 'top-left',
+            'logo_size': 96,
+            'ticket_font_scale': 1.0,
+            'prepared_ticket_font_scale': 1.0,
+            'ready_ticket_font_scale': 1.0,
+            'heading_font_scale': 1.0,
+            'ticket_gap': 14,
+            'ticket_padding': 16,
+            'ticket_radius': 10,
+            'divider_enabled': True,
+            'divider_color': '#d1d5db',
+            'divider_width': 1,
+            'board_margin_top': 0,
+            'board_margin_right': 0,
+            'board_margin_bottom': 0,
+            'board_margin_left': 0,
+            'column_gap': 70,
+            'ready_column_padding': 64,
+            'prepared_column_ratio': 1.7,
+            'ready_column_ratio': 1.0,
+            'prepared_align': 'left',
+            'ready_align': 'left',
+            'column_section_gap': 22,
+            'prepared_ticket_min_width': 160,
+            'ready_ticket_min_width': 280,
+            'board_custom_text': '',
+            'board_custom_text_color': '#64748b',
+            'board_custom_text_size': 28,
+            'board_custom_text_position': 'bottom-left',
         },
         'pos_feed': _panel_pos_feed_defaults(include_runtime=True),
         'live_queue': [],
@@ -8469,12 +8859,87 @@ def _normalize_panel_zone_color(value, default: str = '#201206') -> str:
     return default
 
 
+def _normalize_panel_zone_opacity(value, default: float = 0.72) -> float:
+    try:
+        raw_value = float(value)
+    except Exception:
+        raw_value = default
+    if raw_value > 1:
+        raw_value = raw_value / 100.0
+    return round(max(0.15, min(1.0, raw_value)), 2)
+
+
+def _normalize_panel_zone_bool(value, default: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    text = str(value).strip().lower()
+    if text in {'1', 'true', 'yes', 'on'}:
+        return True
+    if text in {'0', 'false', 'no', 'off'}:
+        return False
+    return default
+
+
+def _normalize_panel_zone_text(value, default: str, max_len: int = 80) -> str:
+    text = str(value or '').strip()
+    if not text:
+        return default
+    return text[:max_len]
+
+
+def _normalize_panel_zone_data_url(value, default: str = '', max_len: int = 350_000) -> str:
+    text = str(value or '').strip()
+    if not text:
+        return default
+    if len(text) > max_len:
+        return default
+    if re.match(r'^data:image/(png|jpe?g|webp|gif|svg\+xml);base64,[A-Za-z0-9+/=\s]+$', text, re.IGNORECASE):
+        return re.sub(r'\s+', '', text)
+    return default
+
+
+def _normalize_panel_zone_int(value, default: int, min_value: int, max_value: int) -> int:
+    try:
+        return max(min_value, min(max_value, int(float(value))))
+    except Exception:
+        return default
+
+
+def _normalize_panel_zone_float(value, default: float, min_value: float, max_value: float) -> float:
+    try:
+        numeric = float(value)
+    except Exception:
+        numeric = default
+    return round(max(min_value, min(max_value, numeric)), 2)
+
+
+def _normalize_panel_zone_status_list(value, default: list[str]) -> list[str]:
+    if isinstance(value, str):
+        raw_values = [part.strip().lower() for part in value.split(',')]
+    elif isinstance(value, list):
+        raw_values = [str(part).strip().lower() for part in value]
+    else:
+        raw_values = list(default)
+    out: list[str] = []
+    for raw in raw_values:
+        cleaned = re.sub(r'\s+', '_', raw.strip())
+        if cleaned and cleaned not in out:
+            out.append(cleaned[:40])
+    return out or list(default)
+
+
 def _normalize_panel_zone_state(panel_zone: Optional[dict]) -> dict:
     if not isinstance(panel_zone, dict):
         panel_zone = {}
     defaults = _panel_zone_defaults()
     panel_zone.setdefault('enabled', defaults['enabled'])
     panel_zone.setdefault('layout_mode', defaults['layout_mode'])
+    try:
+        panel_zone['overlay_percent'] = max(10, min(60, int(panel_zone.get('overlay_percent') or defaults['overlay_percent'])))
+    except Exception:
+        panel_zone['overlay_percent'] = defaults['overlay_percent']
     panel_zone.setdefault('playlist', [])
     panel_zone.setdefault('rotation_meta', {'last_index': 0, 'last_ts': 0})
     source_mode = str(panel_zone.get('source_mode') or 'manual').strip().lower()
@@ -8494,6 +8959,23 @@ def _normalize_panel_zone_state(panel_zone: Optional[dict]) -> dict:
         appearance.get('background_color'),
         default_appearance['background_color'],
     )
+    appearance['background_opacity'] = _normalize_panel_zone_opacity(
+        appearance.get('background_opacity'),
+        default_appearance['background_opacity'],
+    )
+    appearance['background_image_data_url'] = _normalize_panel_zone_data_url(
+        appearance.get('background_image_data_url'),
+        default_appearance['background_image_data_url'],
+        max_len=1_200_000,
+    )
+    appearance['background_image_opacity'] = _normalize_panel_zone_opacity(
+        appearance.get('background_image_opacity'),
+        default_appearance['background_image_opacity'],
+    )
+    bg_fit = str(appearance.get('background_image_fit') or default_appearance['background_image_fit']).strip().lower()
+    if bg_fit not in {'cover', 'contain', 'stretch'}:
+        bg_fit = default_appearance['background_image_fit']
+    appearance['background_image_fit'] = bg_fit
     content_align = str(appearance.get('content_align') or default_appearance['content_align']).strip().lower()
     if content_align not in {'top', 'center', 'bottom'}:
         content_align = default_appearance['content_align']
@@ -8502,6 +8984,194 @@ def _normalize_panel_zone_state(panel_zone: Optional[dict]) -> dict:
         appearance['body_rows'] = max(1, min(6, int(appearance.get('body_rows') or default_appearance['body_rows'])))
     except Exception:
         appearance['body_rows'] = default_appearance['body_rows']
+    appearance['shadow_enabled'] = _normalize_panel_zone_bool(
+        appearance.get('shadow_enabled'),
+        default_appearance['shadow_enabled'],
+    )
+    display_style = str(appearance.get('pos_display_style') or default_appearance['pos_display_style']).strip().lower()
+    if display_style not in {'single_card', 'order_board'}:
+        display_style = default_appearance['pos_display_style']
+    appearance['pos_display_style'] = display_style
+    appearance['board_preparing_title'] = _normalize_panel_zone_text(
+        appearance.get('board_preparing_title'),
+        default_appearance['board_preparing_title'],
+    )
+    appearance['board_ready_title'] = _normalize_panel_zone_text(
+        appearance.get('board_ready_title'),
+        default_appearance['board_ready_title'],
+    )
+    appearance['board_preparing_statuses'] = _normalize_panel_zone_status_list(
+        appearance.get('board_preparing_statuses'),
+        default_appearance['board_preparing_statuses'],
+    )
+    appearance['board_ready_statuses'] = _normalize_panel_zone_status_list(
+        appearance.get('board_ready_statuses'),
+        default_appearance['board_ready_statuses'],
+    )
+    appearance['board_ready_color'] = _normalize_panel_zone_color(
+        appearance.get('board_ready_color'),
+        default_appearance['board_ready_color'],
+    )
+    appearance['board_text_color'] = _normalize_panel_zone_color(
+        appearance.get('board_text_color'),
+        default_appearance['board_text_color'],
+    )
+    board_layout = str(appearance.get('board_layout') or default_appearance['board_layout']).strip().lower()
+    if board_layout not in {'standard', 'image_left', 'image_right'}:
+        board_layout = default_appearance['board_layout']
+    appearance['board_layout'] = board_layout
+    appearance['side_image_width'] = _normalize_panel_zone_int(
+        appearance.get('side_image_width'),
+        default_appearance['side_image_width'],
+        20,
+        70,
+    )
+    appearance['logo_data_url'] = _normalize_panel_zone_data_url(
+        appearance.get('logo_data_url'),
+        default_appearance['logo_data_url'],
+    )
+    logo_position = str(appearance.get('logo_position') or default_appearance['logo_position']).strip().lower()
+    if logo_position not in {'top-left', 'top-right', 'bottom-left', 'bottom-right'}:
+        logo_position = default_appearance['logo_position']
+    appearance['logo_position'] = logo_position
+    appearance['logo_size'] = _normalize_panel_zone_int(
+        appearance.get('logo_size'),
+        default_appearance['logo_size'],
+        32,
+        260,
+    )
+    appearance['ticket_font_scale'] = _normalize_panel_zone_float(
+        appearance.get('ticket_font_scale'),
+        default_appearance['ticket_font_scale'],
+        0.55,
+        1.8,
+    )
+    appearance['prepared_ticket_font_scale'] = _normalize_panel_zone_float(
+        appearance.get('prepared_ticket_font_scale', appearance.get('ticket_font_scale')),
+        default_appearance['prepared_ticket_font_scale'],
+        0.55,
+        1.8,
+    )
+    appearance['ready_ticket_font_scale'] = _normalize_panel_zone_float(
+        appearance.get('ready_ticket_font_scale', appearance.get('ticket_font_scale')),
+        default_appearance['ready_ticket_font_scale'],
+        0.55,
+        1.8,
+    )
+    appearance['heading_font_scale'] = _normalize_panel_zone_float(
+        appearance.get('heading_font_scale'),
+        default_appearance['heading_font_scale'],
+        0.65,
+        1.8,
+    )
+    appearance['ticket_gap'] = _normalize_panel_zone_int(
+        appearance.get('ticket_gap'),
+        default_appearance['ticket_gap'],
+        2,
+        60,
+    )
+    appearance['ticket_padding'] = _normalize_panel_zone_int(
+        appearance.get('ticket_padding'),
+        default_appearance['ticket_padding'],
+        4,
+        60,
+    )
+    appearance['ticket_radius'] = _normalize_panel_zone_int(
+        appearance.get('ticket_radius'),
+        default_appearance['ticket_radius'],
+        0,
+        40,
+    )
+    appearance['divider_enabled'] = _normalize_panel_zone_bool(
+        appearance.get('divider_enabled'),
+        default_appearance['divider_enabled'],
+    )
+    appearance['divider_color'] = _normalize_panel_zone_color(
+        appearance.get('divider_color'),
+        default_appearance['divider_color'],
+    )
+    appearance['divider_width'] = _normalize_panel_zone_int(
+        appearance.get('divider_width'),
+        default_appearance['divider_width'],
+        0,
+        12,
+    )
+    for spacing_key in ('board_margin_top', 'board_margin_right', 'board_margin_bottom', 'board_margin_left'):
+        appearance[spacing_key] = _normalize_panel_zone_int(
+            appearance.get(spacing_key),
+            default_appearance[spacing_key],
+            0,
+            320,
+        )
+    appearance['column_gap'] = _normalize_panel_zone_int(
+        appearance.get('column_gap'),
+        default_appearance['column_gap'],
+        0,
+        260,
+    )
+    appearance['ready_column_padding'] = _normalize_panel_zone_int(
+        appearance.get('ready_column_padding'),
+        default_appearance['ready_column_padding'],
+        0,
+        260,
+    )
+    appearance['prepared_column_ratio'] = _normalize_panel_zone_float(
+        appearance.get('prepared_column_ratio'),
+        default_appearance['prepared_column_ratio'],
+        0.6,
+        4.0,
+    )
+    appearance['ready_column_ratio'] = _normalize_panel_zone_float(
+        appearance.get('ready_column_ratio'),
+        default_appearance['ready_column_ratio'],
+        0.6,
+        4.0,
+    )
+    prepared_align = str(appearance.get('prepared_align') or default_appearance['prepared_align']).strip().lower()
+    if prepared_align not in {'left', 'center', 'right'}:
+        prepared_align = default_appearance['prepared_align']
+    appearance['prepared_align'] = prepared_align
+    ready_align = str(appearance.get('ready_align') or default_appearance['ready_align']).strip().lower()
+    if ready_align not in {'left', 'center', 'right'}:
+        ready_align = default_appearance['ready_align']
+    appearance['ready_align'] = ready_align
+    appearance['column_section_gap'] = _normalize_panel_zone_int(
+        appearance.get('column_section_gap'),
+        default_appearance['column_section_gap'],
+        0,
+        160,
+    )
+    appearance['prepared_ticket_min_width'] = _normalize_panel_zone_int(
+        appearance.get('prepared_ticket_min_width'),
+        default_appearance['prepared_ticket_min_width'],
+        48,
+        420,
+    )
+    appearance['ready_ticket_min_width'] = _normalize_panel_zone_int(
+        appearance.get('ready_ticket_min_width'),
+        default_appearance['ready_ticket_min_width'],
+        64,
+        520,
+    )
+    appearance['board_custom_text'] = _normalize_panel_zone_text(
+        appearance.get('board_custom_text'),
+        default_appearance['board_custom_text'],
+        max_len=240,
+    )
+    appearance['board_custom_text_color'] = _normalize_panel_zone_color(
+        appearance.get('board_custom_text_color'),
+        default_appearance['board_custom_text_color'],
+    )
+    appearance['board_custom_text_size'] = _normalize_panel_zone_int(
+        appearance.get('board_custom_text_size'),
+        default_appearance['board_custom_text_size'],
+        12,
+        120,
+    )
+    custom_text_position = str(appearance.get('board_custom_text_position') or default_appearance['board_custom_text_position']).strip().lower()
+    if custom_text_position not in {'top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right'}:
+        custom_text_position = default_appearance['board_custom_text_position']
+    appearance['board_custom_text_position'] = custom_text_position
 
     pos_feed = _normalize_panel_pos_feed_state(panel_zone.get('pos_feed'), include_runtime=True)
     panel_zone['pos_feed'] = pos_feed
@@ -8526,6 +9196,8 @@ def _normalize_panel_zone_state(panel_zone: Optional[dict]) -> dict:
         live_copy.setdefault('repeat', True)
         live_copy.setdefault('days', [])
         live_copy.setdefault('external_id', '')
+        live_copy.setdefault('customer_name', '')
+        live_copy.setdefault('order_number', '')
         live_copy.setdefault('status', '')
         live_copy.setdefault('created_at', None)
         normalized_live_queue.append(live_copy)
@@ -8587,9 +9259,214 @@ def _panel_pos_payload_preview(payload: dict, limit: int = 4000) -> str:
     return text
 
 
+def _square_api_base(environment: str) -> str:
+    return 'https://connect.squareupsandbox.com' if str(environment or '').lower() == 'sandbox' else 'https://connect.squareup.com'
+
+
+def _square_api_get(path: str, access_token: str, environment: str, api_version: str) -> dict:
+    token = str(access_token or '').strip()
+    if not token:
+        raise ValueError('Square access token is required')
+    req = urllib.request.Request(
+        f"{_square_api_base(environment)}{path}",
+        headers={
+            'Authorization': f'Bearer {token}',
+            'Square-Version': str(api_version or '2026-05-20'),
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+        },
+        method='GET',
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            return json.loads(resp.read().decode('utf-8') or '{}')
+    except urllib.error.HTTPError as err:
+        try:
+            body = err.read().decode('utf-8')
+        except Exception:
+            body = str(err)
+        raise ValueError(f'Square API error {err.code}: {body[:500]}') from err
+
+
+def _square_find_value(payload: dict, keys: tuple[str, ...]) -> str:
+    stack = [payload] if isinstance(payload, dict) else []
+    seen = 0
+    while stack and seen < 250:
+        seen += 1
+        current = stack.pop()
+        if isinstance(current, dict):
+            for key in keys:
+                value = current.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+            stack.extend([value for value in current.values() if isinstance(value, (dict, list))])
+        elif isinstance(current, list):
+            stack.extend([value for value in current if isinstance(value, (dict, list))])
+    return ''
+
+
+def _square_extract_order_id(payload: dict) -> str:
+    order_id = _square_find_value(payload, ('order_id',))
+    if order_id:
+        return order_id
+    data = payload.get('data') if isinstance(payload, dict) else None
+    if isinstance(data, dict) and str(data.get('type') or '').startswith('order_'):
+        return str(data.get('id') or '').strip()
+    return ''
+
+
+def _square_extract_payment_id(payload: dict) -> str:
+    payment_id = _square_find_value(payload, ('payment_id',))
+    if payment_id:
+        return payment_id
+    data = payload.get('data') if isinstance(payload, dict) else None
+    if isinstance(data, dict) and str(data.get('type') or '').startswith('payment'):
+        return str(data.get('id') or '').strip()
+    return ''
+
+
+def _square_fulfillment_state(order: dict) -> str:
+    fulfillments = order.get('fulfillments') if isinstance(order, dict) else None
+    if not isinstance(fulfillments, list):
+        return ''
+    priority = {'PREPARED': 50, 'RESERVED': 40, 'PROPOSED': 30, 'COMPLETED': 20, 'CANCELED': 10, 'FAILED': 10}
+    best_state = ''
+    best_score = -1
+    for fulfillment in fulfillments:
+        if isinstance(fulfillment, dict):
+            state = str(fulfillment.get('state') or '').strip().upper()
+            score = priority.get(state, 0)
+            if score > best_score:
+                best_state = state
+                best_score = score
+    return best_state
+
+
+def _square_customer_name(order: dict) -> str:
+    fulfillments = order.get('fulfillments') if isinstance(order, dict) else None
+    if isinstance(fulfillments, list):
+        for fulfillment in fulfillments:
+            if not isinstance(fulfillment, dict):
+                continue
+            for detail_key in ('pickup_details', 'delivery_details', 'shipment_details'):
+                details = fulfillment.get(detail_key)
+                recipient = details.get('recipient') if isinstance(details, dict) else None
+                if isinstance(recipient, dict):
+                    name = str(recipient.get('display_name') or recipient.get('given_name') or '').strip()
+                    if name:
+                        return name
+    return ''
+
+
+def _square_line_item_summary(order: dict) -> str:
+    line_items = order.get('line_items') if isinstance(order, dict) else None
+    if not isinstance(line_items, list):
+        return ''
+    lines = []
+    for item in line_items[:8]:
+        if not isinstance(item, dict):
+            continue
+        qty = str(item.get('quantity') or '1').strip()
+        name = str(item.get('name') or 'Item').strip()
+        lines.append(f"{qty} x {name}")
+    if len(line_items) > len(lines):
+        lines.append(f"+ {len(line_items) - len(lines)} more")
+    return '\n'.join(lines)
+
+
+def _square_order_number(order: dict, payment: Optional[dict] = None) -> str:
+    if isinstance(payment, dict):
+        receipt_number = str(payment.get('receipt_number') or '').strip()
+        if receipt_number:
+            return receipt_number
+    for key in ('ticket_name', 'reference_id'):
+        value = str(order.get(key) or '').strip()
+        if value:
+            return value
+    order_id = str(order.get('id') or '').strip()
+    return order_id[-8:] if order_id else ''
+
+
+def _square_status(order: dict, payment: Optional[dict] = None) -> str:
+    fulfillment_state = _square_fulfillment_state(order)
+    if fulfillment_state == 'PREPARED':
+        return 'ready'
+    if fulfillment_state in {'PROPOSED', 'RESERVED'}:
+        return 'preparing'
+    if fulfillment_state == 'COMPLETED':
+        return 'completed'
+    if fulfillment_state in {'CANCELED', 'FAILED'}:
+        return 'canceled'
+    if isinstance(payment, dict):
+        payment_status = str(payment.get('status') or '').strip().upper()
+        if payment_status == 'COMPLETED':
+            return 'preparing'
+        if payment_status in {'CANCELED', 'FAILED'}:
+            return 'canceled'
+    order_state = str(order.get('state') or '').strip().upper()
+    if order_state == 'COMPLETED':
+        return 'completed'
+    if order_state == 'CANCELED':
+        return 'canceled'
+    return 'preparing'
+
+
+def _square_payload_from_order(order: dict, payment: Optional[dict] = None, original_payload: Optional[dict] = None) -> dict:
+    order_number = _square_order_number(order, payment)
+    order_id = str(order.get('id') or (payment or {}).get('order_id') or order_number).strip()
+    return {
+        'customer': {'name': _square_customer_name(order)},
+        'order': {
+            'id': order_id or order_number,
+            'number': order_number,
+            'status': _square_status(order, payment),
+            'body': _square_line_item_summary(order),
+            'source': 'square',
+            'location_id': str(order.get('location_id') or ''),
+        },
+        'square': {
+            'event_type': str((original_payload or {}).get('type') or ''),
+            'order_id': order_id,
+            'payment_id': str((payment or {}).get('id') or ''),
+            'receipt_number': str((payment or {}).get('receipt_number') or ''),
+            'receipt_url': str((payment or {}).get('receipt_url') or ''),
+            'fulfillment_state': _square_fulfillment_state(order),
+        },
+    }
+
+
+def _transform_square_panel_pos_payload(pos_feed: dict, payload: dict) -> dict:
+    access_token = str(pos_feed.get('square_access_token') or '').strip()
+    environment = str(pos_feed.get('square_environment') or 'production').strip().lower()
+    api_version = str(pos_feed.get('square_api_version') or '2026-05-20').strip()
+    payment = None
+    payment_id = _square_extract_payment_id(payload)
+    if payment_id:
+        payment_resp = _square_api_get(f"/v2/payments/{urllib.parse.quote(payment_id)}", access_token, environment, api_version)
+        payment = payment_resp.get('payment') if isinstance(payment_resp, dict) else None
+    order_id = _square_extract_order_id(payload) or (str((payment or {}).get('order_id') or '').strip() if isinstance(payment, dict) else '')
+    if not order_id:
+        raise ValueError('Square webhook did not include an order_id or payment order_id')
+    order_resp = _square_api_get(f"/v2/orders/{urllib.parse.quote(order_id)}", access_token, environment, api_version)
+    order = order_resp.get('order') if isinstance(order_resp, dict) else None
+    if not isinstance(order, dict):
+        raise ValueError('Square order lookup did not return an order')
+    return _square_payload_from_order(order, payment=payment if isinstance(payment, dict) else None, original_payload=payload)
+
+
 def _apply_panel_pos_event(panel_zone: dict, payload: dict) -> dict:
     panel_zone = _normalize_panel_zone_state(panel_zone)
     pos_feed = panel_zone['pos_feed']
+    has_direct_order_payload = isinstance(payload, dict) and isinstance(payload.get('order'), dict) and bool(str((payload.get('order') or {}).get('number') or '').strip())
+    if str(pos_feed.get('connector_type') or '').strip().lower() == 'square' and not has_direct_order_payload:
+        try:
+            payload = _transform_square_panel_pos_payload(pos_feed, payload if isinstance(payload, dict) else {})
+        except Exception as square_err:
+            pos_feed['event_count'] = max(0, int(pos_feed.get('event_count') or 0)) + 1
+            pos_feed['last_event_at'] = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+            pos_feed['last_event_result'] = 'error'
+            pos_feed['last_payload_preview'] = _panel_pos_payload_preview({'square_error': str(square_err), 'payload': payload})
+            return {'accepted': False, 'reason': 'square_lookup_failed', 'error': str(square_err)}
     field_map = pos_feed.get('field_map') or {}
     payload_dict = payload if isinstance(payload, dict) else {}
     customer_name = _panel_pos_lookup_value(payload_dict, field_map.get('customer_name') or '')
@@ -8611,7 +9488,20 @@ def _apply_panel_pos_event(panel_zone: dict, payload: dict) -> dict:
         'external_id': external_text,
     }
 
-    allowed_statuses = [str(value).strip().lower() for value in (pos_feed.get('allowed_statuses') or []) if str(value).strip()]
+    allowed_statuses = [str(value).strip().lower().replace(' ', '_') for value in (pos_feed.get('allowed_statuses') or []) if str(value).strip()]
+    appearance = panel_zone.get('appearance') if isinstance(panel_zone.get('appearance'), dict) else {}
+    if appearance:
+        for status_group_key in ('board_preparing_statuses', 'board_ready_statuses'):
+            status_group = appearance.get(status_group_key)
+            if isinstance(status_group, str):
+                status_values = [part.strip().lower().replace(' ', '_') for part in status_group.split(',') if part.strip()]
+            elif isinstance(status_group, list):
+                status_values = [str(part).strip().lower().replace(' ', '_') for part in status_group if str(part).strip()]
+            else:
+                status_values = []
+            for status_value in status_values:
+                if status_value and status_value not in allowed_statuses:
+                    allowed_statuses.append(status_value)
     live_queue = [dict(item) for item in (panel_zone.get('live_queue') or []) if isinstance(item, dict)]
     existing_index = next((idx for idx, item in enumerate(live_queue) if str(item.get('external_id') or '').strip() == external_text), -1)
 
@@ -8651,6 +9541,8 @@ def _apply_panel_pos_event(panel_zone: dict, payload: dict) -> dict:
         'repeat': True,
         'days': [],
         'external_id': external_text,
+        'customer_name': customer_text,
+        'order_number': order_text,
         'status': status_text,
         'created_at': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
     }
@@ -8732,7 +9624,7 @@ def _find_shared_panel_pos_feed_by_webhook_token(token: str):
     if not token_text:
         return None
 
-    search_targets = [(None, CONFIG_FILE)]
+    search_targets = []
     try:
         import glob
 
@@ -8742,6 +9634,7 @@ def _find_shared_panel_pos_feed_by_webhook_token(token: str):
             search_targets.append((safe_key, path))
     except Exception:
         pass
+    search_targets.append((None, CONFIG_FILE))
 
     for safe_key, path in search_targets:
         if not os.path.exists(path):
@@ -8783,7 +9676,7 @@ def _find_panel_zone_by_webhook_token(token: str):
     if not token_text:
         return None
 
-    search_targets = [(None, CONFIG_FILE)]
+    search_targets = []
     try:
         import glob
 
@@ -8793,6 +9686,7 @@ def _find_panel_zone_by_webhook_token(token: str):
             search_targets.append((safe_key, path))
     except Exception:
         pass
+    search_targets.append((None, CONFIG_FILE))
 
     for safe_key, path in search_targets:
         if not os.path.exists(path):
@@ -12888,7 +13782,7 @@ def _google_drive_authorize_url():
         'client_id': gid,
         'redirect_uri': _google_oauth_redirect_uri(),
         'response_type': 'code',
-        'scope': 'openid email profile https://www.googleapis.com/auth/drive.readonly',
+        'scope': 'openid email profile https://www.googleapis.com/auth/drive.file',
         'state': state,
         'prompt': 'consent',
         'include_granted_scopes': 'false',
@@ -12936,8 +13830,8 @@ def _handle_google_drive_manual_callback():
             return _google_drive_popup_response(False, 'Google Drive token was not returned')
 
         scope_text = str(token_json.get('scope') or '')
-        if 'https://www.googleapis.com/auth/drive.readonly' not in scope_text.split():
-            return _google_drive_popup_response(False, 'Google did not grant Drive read-only access. Please reconnect and allow Drive access.')
+        if 'https://www.googleapis.com/auth/drive.file' not in scope_text.split():
+            return _google_drive_popup_response(False, 'Google did not grant Drive file access. Please reconnect and allow Drive access.')
 
         email = ''
         try:
@@ -14358,6 +15252,26 @@ def pick_active_panel_playlist_item(screen):
         return _pick_active_scheduled_record(_panel_zone_active_items(panel_zone), runtime_holder=panel_zone)
     except Exception:
         return None, False
+
+
+def _live_pos_playlist_active_item(screen: dict, panel_zone: Optional[dict] = None) -> tuple[dict, bool]:
+    """Return the current POS card for a schedulable Live POS playlist item."""
+    panel_zone = _normalize_panel_zone_state(panel_zone if isinstance(panel_zone, dict) else screen.get('panel_zone'))
+    active_item, advanced = _pick_active_scheduled_record(_panel_zone_active_items(panel_zone), runtime_holder=panel_zone)
+    if isinstance(active_item, dict):
+        return dict(active_item), advanced
+    pos_feed = panel_zone.get('pos_feed') if isinstance(panel_zone.get('pos_feed'), dict) else {}
+    feed_name = str(pos_feed.get('feed_name') or '').strip() or 'Live POS'
+    source_mode = str(panel_zone.get('source_mode') or 'manual').strip().lower()
+    return {
+        'id': 'live-pos-waiting',
+        'title': feed_name if source_mode == 'pos_webhook' else 'Live POS',
+        'body': 'Waiting for the next order...' if source_mode == 'pos_webhook' else 'Configure Live POS setup for this screen.',
+        'duration': 10,
+        'enabled': True,
+        'source': 'pos_webhook_waiting',
+    }, advanced
+
 
 def pick_active_playlist_item(screen, parent_config=None, store_id=None, screen_id=None):
     pl = screen.get('playlist', [])
@@ -17103,163 +18017,22 @@ def add_screen():
                     'requires_subscription': True,
                     'current_screens': current_screen_count
                 }), 403
-        # Respect per-user segmented config if present
-        ukey = _safe_user_key()
-        config = load_store_config_for_user_safe_key(ukey) if ukey else load_store_config()
-        
-        if store_id not in config['screens']:
-            config['screens'][store_id] = {}
-
-        # If this is a brand-new store namespace and an old stray promo seed like f"{store_id}_promo1" exists, remove it unless user explicitly requested promo
-        if screen_type == 'screen':
-            stray_promo = f"{store_id}_promo1"
-            if stray_promo in config['screens'][store_id] and not config['screens'][store_id][stray_promo].get('file') and not config['screens'][store_id][stray_promo].get('playlist'):
-                try:
-                    del config['screens'][store_id][stray_promo]
-                except Exception:
-                    pass
-
-        # Purge any sync groups whose base screen no longer exists (prevents resurrecting old sync state when reusing ids)
-        try:
-            groups = config.get('sync_groups') or {}
-            to_del = []
-            for gid, grp in list(groups.items()):
-                if grp.get('store_id') != store_id:
-                    continue
-                base = grp.get('base')
-                if base and base not in config['screens'][store_id]:
-                    to_del.append(gid)
-            if to_del:
-                for gid in to_del:
-                    groups.pop(gid, None)
-                if groups:
-                    config['sync_groups'] = groups
-                else:
-                    config.pop('sync_groups', None)
-        except Exception:
-            pass
-        
-        # Find next available screen number for store-specific screen IDs
-        store_prefix = f"{store_id}_"
-        existing_screens = []
-        
-        for screen_id in config['screens'][store_id].keys():
-            # Check if this screen belongs to current store and is of the requested type
-            if screen_id.startswith(store_prefix):
-                # Extract the part after store prefix (e.g., "screen1" from "1931_screen1")
-                screen_part = screen_id[len(store_prefix):]
-                if screen_part.startswith(screen_type):
-                    existing_screens.append(screen_part)
-        
-        if existing_screens:
-            # Extract numbers and find the highest
-            numbers = []
-            for screen in existing_screens:
-                try:
-                    # Remove the screen_type prefix to get just the number
-                    num_str = screen.replace(screen_type, '')
-                    if num_str:  # Make sure there's a number part
-                        num = int(num_str)
-                        numbers.append(num)
-                except ValueError:
-                    continue
-            next_num = max(numbers) + 1 if numbers else 1
-        else:
-            next_num = 1
-
-        # Create store-specific screen ID; fill gaps (e.g. if screen1 deleted, reuse 1)
-        used = set()
-        for s in existing_screens:
-            try:
-                num_str = s.replace(screen_type, '')
-                if num_str:
-                    used.add(int(num_str))
-            except Exception:
-                pass
-        gap = 1
-        while gap in used:
-            gap += 1
-        new_screen_id = f"{store_id}_{screen_type}{gap}"
-        
-        # Set default orientation based on screen type
-        is_promo = screen_type.startswith('promo')
-        
-        # Add new screen with default settings
-        config['screens'][store_id][new_screen_id] = {
-            'file': None,
-            'vertical': is_promo,  # Promos default to vertical
-            'horizontal': not is_promo,  # Regular screens default to horizontal
-            'rotation': 0,
-            'protected': False,
-            'playlist': [],
-            'fresh': True  # Hint for UI to treat as new, not part of any prior sync
-        }
-        
-        if ukey:
-            save_store_config_for_user_safe_key(ukey, config)
-        else:
-            save_store_config(config)
-        
-        # Create individual screen subscription record (skip for admin)
-        subscription_created = False
-        if not is_admin_user:
-            user_id = _current_user_id()
-            if user_id:
-                # Get screen name for billing
-                screen_name = new_screen_id
-                
-                # Always create database record
-                db = get_db()
-                
-                # Get subscription info or create trial
-                sub_row = db.execute(
-                    'SELECT status, current_period_end, created_at FROM subscriptions WHERE user_id = ?',
-                    (user_id,)
-                ).fetchone()
-                
-                if sub_row:
-                    status = sub_row['status']
-                    period_end = sub_row['current_period_end']
-                    period_start = sub_row['created_at'] or int(time.time())
-                else:
-                    status = 'trialing'
-                    period_start = int(time.time())
-                    period_end = period_start + (14 * 24 * 60 * 60)
-                
-                # Insert screen subscription record
-                try:
-                    db.execute(
-                        'INSERT OR REPLACE INTO screen_subscriptions '
-                        '(user_id, screen_id, store_id, screen_name, status, '
-                        'current_period_start, current_period_end, cancel_at_period_end, created_at, updated_at) '
-                        'VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)',
-                        (user_id, new_screen_id, store_id, screen_name, status, period_start, period_end,
-                         int(time.time()), int(time.time()))
-                    )
-                    db.commit()
-                    subscription_created = True
-                    
-                    # If Stripe enabled, create actual subscription
-                    if _stripe_enabled():
-                        sub_result = _create_screen_subscription(user_id, new_screen_id, store_id, screen_name)
-                        if sub_result:
-                            # Update with Stripe subscription ID
-                            db.execute(
-                                'UPDATE screen_subscriptions SET stripe_subscription_id = ? WHERE user_id = ? AND screen_id = ?',
-                                (sub_result['subscription_id'], user_id, new_screen_id)
-                            )
-                            db.commit()
-                    
-                    logging.info(f'Screen subscription record created for {new_screen_id}')
-                except Exception as e:
-                    logging.error(f'Failed to create screen subscription record: {e}')
+        result = _create_screen_record_for_store(store_id, screen_type)
+        logging.info(
+            'ADD_SCREEN CREATED: user=%s store=%s screen_type=%s screen_id=%s subscription_created=%s',
+            current_username,
+            store_id,
+            screen_type,
+            result['screen_id'],
+            result['subscription_created'],
+        )
         
         return jsonify({
             'success': True,
-            'screen_id': new_screen_id,
-            'screen': config['screens'][store_id][new_screen_id],
-            'subscription_created': subscription_created,
-            'message': f'Added {new_screen_id} successfully'
+            'screen_id': result['screen_id'],
+            'screen': result['screen'],
+            'subscription_created': result['subscription_created'],
+            'message': f"Added {result['screen_id']} successfully"
         })
         
     except Exception as e:
@@ -18035,7 +18808,8 @@ def get_playlist(store_id, screen_id):
         removed = 0
         for item in original:
             f = item.get('file')
-            if (item.get('media_type') or '').lower() == 'web':
+            media_type_for_cleanup = (item.get('media_type') or '').lower()
+            if media_type_for_cleanup in ('web', 'live_pos') or str(f or '').lower().startswith('livepos:'):
                 cleaned.append(item)
                 continue
             if f:
@@ -18057,6 +18831,14 @@ def get_playlist(store_id, screen_id):
     else:
         print("DEBUG: R2 enabled - skipping local file existence check to preserve CDN-based playlists")
     pl = screen.get('playlist', [])
+    has_live_pos_playlist_item = any(
+        isinstance(item, dict)
+        and (
+            str(item.get('media_type') or '').strip().lower() == 'live_pos'
+            or str(item.get('file') or '').strip().lower().startswith('livepos:')
+        )
+        for item in (pl or [])
+    )
     # Effective User-Agent detection with optional override via query for debugging/testing
     try:
         _ua_override = (request.args.get('ua_override') or request.args.get('ua') or '').strip().lower()
@@ -18107,6 +18889,14 @@ def get_playlist(store_id, screen_id):
     # Decorate with public URL and last known status for clients/dashboard
     last_status = screen.get('last_item_status') or {}
     out = []
+    live_pos_panel_zone = None
+    live_pos_active_item = None
+    live_pos_advanced = False
+    try:
+        live_pos_panel_zone = _normalize_panel_zone_state(screen.get('panel_zone') if isinstance(screen.get('panel_zone'), dict) else {})
+        live_pos_active_item, live_pos_advanced = _live_pos_playlist_active_item(screen, live_pos_panel_zone)
+    except Exception as live_pos_err:
+        print(f"WARNING: Live POS playlist state build failed: {live_pos_err}")
     for item in pl:
         try:
             # SCHEDULE FILTERING: Only include items that should be playing now
@@ -18121,6 +18911,20 @@ def get_playlist(store_id, screen_id):
                     print(f"DEBUG: ✓ Item PASSED schedule filter - will be included")
             
             it = dict(item)
+
+            media_kind = str(it.get('media_type') or '').strip().lower()
+            file_value = str(it.get('file') or '').strip()
+            if media_kind == 'live_pos' or file_value.lower().startswith('livepos:'):
+                it['media_type'] = 'live_pos'
+                it['file'] = file_value or f"livepos:{it.get('id') or 'screen'}"
+                it['url'] = ''
+                it['displayName'] = it.get('displayName') or it.get('name') or 'Live POS'
+                it['live_pos_active_item'] = dict(live_pos_active_item or {})
+                it['live_pos_title'] = str((live_pos_active_item or {}).get('title') or (live_pos_active_item or {}).get('name') or it['displayName'])
+                it['live_pos_body'] = str((live_pos_active_item or {}).get('body') or (live_pos_active_item or {}).get('text') or '')
+                it['live_pos_layout_mode'] = 'full-screen'
+                out.append(it)
+                continue
 
             # Always start with the plain public URL
             base_url = build_public_url(it.get('file'))
@@ -18563,6 +19367,7 @@ def get_playlist(store_id, screen_id):
     panel_zone_resp = {
         'enabled': False,
         'layout_mode': 'off',
+        'overlay_percent': 25,
         'playlist': [],
         'active_item': None,
         'source_mode': 'manual',
@@ -18575,6 +19380,18 @@ def get_playlist(store_id, screen_id):
         if isinstance(panel_zone, dict):
             panel_zone = _normalize_panel_zone_state(panel_zone)
             panel_layout_mode = str(panel_zone.get('layout_mode') or 'off').strip().lower()
+            if has_live_pos_playlist_item and str(panel_zone.get('source_mode') or 'manual').strip().lower() == 'pos_webhook':
+                if panel_layout_mode != 'off' or bool(panel_zone.get('enabled')):
+                    panel_zone['enabled'] = False
+                    panel_zone['layout_mode'] = 'off'
+                    panel_layout_mode = 'off'
+                    try:
+                        if ukey:
+                            save_store_config_for_user_safe_key(ukey, cfg)
+                        else:
+                            save_store_config(cfg)
+                    except Exception as overlay_save_err:
+                        print(f"Live POS schedule overlay auto-disable save failed: {overlay_save_err}")
             panel_enabled = bool(panel_zone.get('enabled')) and panel_layout_mode != 'off'
             panel_source_mode = str(panel_zone.get('source_mode') or 'manual').strip().lower()
             panel_out = []
@@ -18591,6 +19408,8 @@ def get_playlist(store_id, screen_id):
                 panel_active_item, panel_advanced = pick_active_panel_playlist_item(screen)
                 if isinstance(panel_active_item, dict):
                     panel_active_item = dict(panel_active_item)
+                elif panel_source_mode == 'pos_webhook':
+                    panel_active_item, panel_advanced = _live_pos_playlist_active_item(screen, panel_zone)
             if panel_advanced:
                 try:
                     if ukey:
@@ -18602,6 +19421,7 @@ def get_playlist(store_id, screen_id):
             panel_zone_resp = {
                 'enabled': panel_enabled,
                 'layout_mode': panel_layout_mode if panel_enabled else 'off',
+                'overlay_percent': max(10, min(60, int(panel_zone.get('overlay_percent') or 25))),
                 'playlist': panel_out,
                 'active_item': panel_active_item,
                 'source_mode': panel_source_mode,
@@ -19890,6 +20710,100 @@ def assign_to_screen():
         print(f"assign_to_screen error: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
+@app.route('/playlist/live_pos/<store_id>/<screen_id>', methods=['POST'])
+@login_required
+def add_live_pos_playlist_item(store_id, screen_id):
+    try:
+        payload = request.get_json() or {}
+        ukey = _safe_user_key()
+        cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
+        screens = cfg.get('screens', {}).get(store_id, {})
+        if screen_id not in screens:
+            if '_' in screen_id:
+                short = screen_id.split('_', 1)[1]
+                prefixed = f"{store_id}_{short}"
+                if prefixed in screens:
+                    screen_id = prefixed
+                elif short in screens:
+                    screen_id = short
+            else:
+                prefixed = f"{store_id}_{screen_id}"
+                if prefixed in screens:
+                    screen_id = prefixed
+        screen = cfg.get('screens', {}).get(store_id, {}).get(screen_id)
+        if not screen:
+            return jsonify({'success': False, 'error': 'screen not found'}), 404
+
+        panel_zone = _normalize_panel_zone_state(screen.setdefault('panel_zone', _panel_zone_defaults()))
+        panel_zone['source_mode'] = 'pos_webhook'
+        if not bool(payload.get('keep_overlay', False)):
+            panel_zone['enabled'] = False
+            panel_zone['layout_mode'] = 'off'
+        else:
+            panel_zone['enabled'] = True
+            if str(panel_zone.get('layout_mode') or 'off').strip().lower() == 'off':
+                panel_zone['layout_mode'] = 'split-right-25'
+        pos_feed = panel_zone.setdefault('pos_feed', _panel_zone_defaults()['pos_feed'])
+        if not str(pos_feed.get('webhook_token') or '').strip():
+            pos_feed['webhook_token'] = secrets.token_urlsafe(18)
+
+        duration = 120
+        try:
+            duration = max(1, int(str(payload.get('duration', duration)).strip()))
+        except Exception:
+            duration = 120
+        item_id = str(uuid.uuid4())
+        item = {
+            'id': item_id,
+            'file': f'livepos:{item_id}',
+            'displayName': str(payload.get('displayName') or payload.get('name') or 'Live POS').strip() or 'Live POS',
+            'enabled': True,
+            'start': payload.get('start') if 'start' in payload else None,
+            'end': payload.get('end') if 'end' in payload else None,
+            'schedule': payload.get('schedule') if isinstance(payload.get('schedule'), list) else [],
+            'duration': duration,
+            'repeat': bool(payload.get('repeat', True)),
+            'link_next': False,
+            'media_type': 'live_pos',
+        }
+        if isinstance(payload.get('days'), list):
+            item['days'] = [str(d).lower()[:3] for d in payload.get('days') if d]
+        if 'effect' in payload and str(payload.get('effect') or '').strip():
+            item['effect'] = str(payload.get('effect')).strip()
+        playlist = screen.setdefault('playlist', [])
+        existing_item = None
+        if bool(payload.get('reuse_existing', False)):
+            existing_item = next(
+                (
+                    existing
+                    for existing in playlist
+                    if str(existing.get('media_type') or '').lower() == 'live_pos'
+                    or str(existing.get('file') or '').lower().startswith('livepos:')
+                ),
+                None,
+            )
+        if existing_item:
+            existing_item.update({
+                'displayName': item['displayName'],
+                'enabled': True,
+                'duration': duration,
+                'media_type': 'live_pos',
+            })
+            item = existing_item
+        else:
+            playlist.append(item)
+        _enqueue_command_in_cfg(cfg, store_id, screen_id, 'reload')
+        if ukey:
+            save_store_config_for_user_safe_key(ukey, cfg)
+        else:
+            save_store_config(cfg)
+        return jsonify({'success': True, 'item': item, 'panel_zone': panel_zone})
+    except Exception as e:
+        print(f"add_live_pos_playlist_item error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 # Safe diagnostics for current session user
 @app.route('/debug/assign_recent')
 @login_required
@@ -20591,11 +21505,21 @@ def update_panel_zone(store_id, screen_id):
         return jsonify({'success': False, 'error': 'screen not found'}), 404
     payload = request.get_json() or {}
     panel_zone = _normalize_panel_zone_state(screen.setdefault('panel_zone', _panel_zone_defaults()))
-    valid_layouts = {'off', 'split-right-25', 'split-left-25', 'split-bottom-25'}
+    has_live_pos_playlist_item = any(
+        isinstance(item, dict)
+        and (
+            str(item.get('media_type') or '').strip().lower() == 'live_pos'
+            or str(item.get('file') or '').strip().lower().startswith('livepos:')
+        )
+        for item in (screen.get('playlist') or [])
+    )
+    valid_layouts = {'off', 'split-right-25', 'split-left-25', 'split-bottom-25', 'full-screen'}
     if 'layout_mode' in payload:
         layout_mode = str(payload.get('layout_mode') or 'off').strip().lower()
         if layout_mode not in valid_layouts:
             return jsonify({'success': False, 'error': 'invalid layout mode'}), 400
+        if has_live_pos_playlist_item and layout_mode != 'off':
+            return jsonify({'success': False, 'error': 'Live POS is already scheduled as a playlist row. Remove that row before enabling a 25% overlay.'}), 400
         panel_zone['layout_mode'] = layout_mode
         panel_zone['enabled'] = layout_mode != 'off'
     elif 'enabled' in payload:
@@ -20604,6 +21528,11 @@ def update_panel_zone(store_id, screen_id):
             panel_zone['layout_mode'] = 'off'
         elif str(panel_zone.get('layout_mode') or 'off').strip().lower() == 'off':
             panel_zone['layout_mode'] = 'split-right-25'
+    if 'overlay_percent' in payload:
+        try:
+            panel_zone['overlay_percent'] = max(10, min(60, int(payload.get('overlay_percent') or 25)))
+        except Exception:
+            return jsonify({'success': False, 'error': 'invalid overlay percent'}), 400
     if 'source_mode' in payload:
         source_mode = str(payload.get('source_mode') or 'manual').strip().lower()
         if source_mode not in {'manual', 'pos_webhook'}:
@@ -20621,7 +21550,10 @@ def update_panel_zone(store_id, screen_id):
                     if not str(shared_feed.get('webhook_token') or '').strip():
                         shared_feed['webhook_token'] = secrets.token_urlsafe(18)
                     panel_zone['pos_feed'] = _copy_panel_pos_feed_settings(shared_feed, pos_feed)
-            if str(panel_zone.get('layout_mode') or 'off').strip().lower() == 'off':
+            if has_live_pos_playlist_item:
+                panel_zone['layout_mode'] = 'off'
+                panel_zone['enabled'] = False
+            elif str(panel_zone.get('layout_mode') or 'off').strip().lower() == 'off':
                 panel_zone['layout_mode'] = 'split-right-25'
                 panel_zone['enabled'] = True
     if 'feed_scope' in payload:
@@ -20629,12 +21561,86 @@ def update_panel_zone(store_id, screen_id):
         if feed_scope not in PANEL_POS_SCOPE_VALUES:
             return jsonify({'success': False, 'error': 'invalid feed scope'}), 400
         panel_zone['feed_scope'] = feed_scope
+    appearance = panel_zone.setdefault('appearance', dict(_panel_zone_defaults()['appearance']))
+    active_feed = panel_zone.setdefault('pos_feed', dict(_panel_zone_defaults()['pos_feed']))
     if 'appearance' in payload and isinstance(payload.get('appearance'), dict):
-        appearance = panel_zone.setdefault('appearance', _panel_zone_defaults()['appearance'])
         appearance_payload = payload.get('appearance') or {}
-        for appearance_key in ('background_color', 'content_align', 'body_rows'):
+        for appearance_key in (
+            'background_color',
+            'background_opacity',
+            'background_image_data_url',
+            'background_image_opacity',
+            'background_image_fit',
+            'content_align',
+            'body_rows',
+            'shadow_enabled',
+            'pos_display_style',
+            'board_preparing_title',
+            'board_ready_title',
+            'board_preparing_statuses',
+            'board_ready_statuses',
+            'board_ready_color',
+            'board_text_color',
+            'board_layout',
+            'side_image_width',
+            'logo_data_url',
+            'logo_position',
+            'logo_size',
+            'ticket_font_scale',
+            'prepared_ticket_font_scale',
+            'ready_ticket_font_scale',
+            'heading_font_scale',
+            'ticket_gap',
+            'ticket_padding',
+            'ticket_radius',
+            'divider_enabled',
+            'divider_color',
+            'divider_width',
+            'board_margin_top',
+            'board_margin_right',
+            'board_margin_bottom',
+            'board_margin_left',
+            'column_gap',
+            'ready_column_padding',
+            'prepared_column_ratio',
+            'ready_column_ratio',
+            'prepared_align',
+            'ready_align',
+            'column_section_gap',
+            'prepared_ticket_min_width',
+            'ready_ticket_min_width',
+            'board_custom_text',
+            'board_custom_text_color',
+            'board_custom_text_size',
+            'board_custom_text_position',
+        ):
             if appearance_key in appearance_payload:
                 appearance[appearance_key] = appearance_payload.get(appearance_key)
+    if str((appearance or {}).get('pos_display_style') or '').strip().lower() == 'order_board':
+        try:
+            active_feed['max_items'] = max(50, int(active_feed.get('max_items') or 5))
+        except Exception:
+            active_feed['max_items'] = 50
+        board_statuses = []
+        for status_group_key in ('board_preparing_statuses', 'board_ready_statuses'):
+            status_group = appearance.get(status_group_key)
+            if isinstance(status_group, str):
+                board_statuses.extend([part.strip().lower() for part in status_group.split(',') if part.strip()])
+            elif isinstance(status_group, list):
+                board_statuses.extend([str(part).strip().lower() for part in status_group if str(part).strip()])
+        existing_statuses = active_feed.get('allowed_statuses')
+        if isinstance(existing_statuses, str):
+            existing_statuses = [part.strip().lower() for part in existing_statuses.split(',') if part.strip()]
+        elif isinstance(existing_statuses, list):
+            existing_statuses = [str(part).strip().lower() for part in existing_statuses if str(part).strip()]
+        else:
+            existing_statuses = []
+        merged_statuses = []
+        for status_value in [*existing_statuses, *board_statuses]:
+            normalized_status = re.sub(r'\s+', '_', str(status_value or '').strip().lower())
+            if normalized_status and normalized_status not in merged_statuses:
+                merged_statuses.append(normalized_status)
+        active_feed['allowed_statuses'] = merged_statuses
     panel_zone = _normalize_panel_zone_state(panel_zone)
     if str(panel_zone.get('source_mode') or 'manual').strip().lower() == 'pos_webhook':
         feed_scope = str(panel_zone.get('feed_scope') or 'screen').strip().lower()
@@ -20668,6 +21674,14 @@ def update_panel_pos_feed(store_id, screen_id):
 
     payload = request.get_json() or {}
     panel_zone = _normalize_panel_zone_state(screen.setdefault('panel_zone', _panel_zone_defaults()))
+    has_live_pos_playlist_item = any(
+        isinstance(item, dict)
+        and (
+            str(item.get('media_type') or '').strip().lower() == 'live_pos'
+            or str(item.get('file') or '').strip().lower().startswith('livepos:')
+        )
+        for item in (screen.get('playlist') or [])
+    )
     old_scope = str(panel_zone.get('feed_scope') or 'screen').strip().lower()
     pos_feed = panel_zone.setdefault('pos_feed', _panel_zone_defaults()['pos_feed'])
     appearance = panel_zone.setdefault('appearance', _panel_zone_defaults()['appearance'])
@@ -20684,7 +21698,10 @@ def update_panel_pos_feed(store_id, screen_id):
 
     if payload.get('enable_source'):
         panel_zone['source_mode'] = 'pos_webhook'
-        if str(panel_zone.get('layout_mode') or 'off').strip().lower() == 'off':
+        if has_live_pos_playlist_item:
+            panel_zone['layout_mode'] = 'off'
+            panel_zone['enabled'] = False
+        elif str(panel_zone.get('layout_mode') or 'off').strip().lower() == 'off':
             panel_zone['layout_mode'] = 'split-right-25'
             panel_zone['enabled'] = True
 
@@ -20707,6 +21724,12 @@ def update_panel_pos_feed(store_id, screen_id):
         active_feed['name'] = str(payload.get('name') or '').strip()
     if 'connector_type' in payload:
         active_feed['connector_type'] = str(payload.get('connector_type') or '').strip().lower()
+    if 'square_access_token' in payload:
+        active_feed['square_access_token'] = str(payload.get('square_access_token') or '').strip()
+    if 'square_environment' in payload:
+        active_feed['square_environment'] = str(payload.get('square_environment') or '').strip().lower()
+    if 'square_api_version' in payload:
+        active_feed['square_api_version'] = str(payload.get('square_api_version') or '').strip()
     if 'field_map' in payload and isinstance(payload.get('field_map'), dict):
         for field_key in ('customer_name', 'order_number', 'status', 'external_id'):
             if field_key in payload['field_map']:
@@ -20725,7 +21748,55 @@ def update_panel_pos_feed(store_id, screen_id):
         active_feed['max_items'] = payload.get('max_items')
     if 'appearance' in payload and isinstance(payload.get('appearance'), dict):
         appearance_payload = payload.get('appearance') or {}
-        for appearance_key in ('background_color', 'content_align', 'body_rows'):
+        for appearance_key in (
+            'background_color',
+            'background_opacity',
+            'background_image_data_url',
+            'background_image_opacity',
+            'background_image_fit',
+            'content_align',
+            'body_rows',
+            'shadow_enabled',
+            'pos_display_style',
+            'board_preparing_title',
+            'board_ready_title',
+            'board_preparing_statuses',
+            'board_ready_statuses',
+            'board_ready_color',
+            'board_text_color',
+            'board_layout',
+            'side_image_width',
+            'logo_data_url',
+            'logo_position',
+            'logo_size',
+            'ticket_font_scale',
+            'prepared_ticket_font_scale',
+            'ready_ticket_font_scale',
+            'heading_font_scale',
+            'ticket_gap',
+            'ticket_padding',
+            'ticket_radius',
+            'divider_enabled',
+            'divider_color',
+            'divider_width',
+            'board_margin_top',
+            'board_margin_right',
+            'board_margin_bottom',
+            'board_margin_left',
+            'column_gap',
+            'ready_column_padding',
+            'prepared_column_ratio',
+            'ready_column_ratio',
+            'prepared_align',
+            'ready_align',
+            'column_section_gap',
+            'prepared_ticket_min_width',
+            'ready_ticket_min_width',
+            'board_custom_text',
+            'board_custom_text_color',
+            'board_custom_text_size',
+            'board_custom_text_position',
+        ):
             if appearance_key in appearance_payload:
                 appearance[appearance_key] = appearance_payload.get(appearance_key)
     panel_zone = _normalize_panel_zone_state(panel_zone)

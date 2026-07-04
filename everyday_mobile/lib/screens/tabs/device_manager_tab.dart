@@ -382,6 +382,9 @@ class _DeviceManagerTabState extends State<DeviceManagerTab> {
     } catch (_) {
       // Keep empty initial value if location not available.
     }
+    if (!mounted) {
+      return;
+    }
 
     final result = await showDialog<_PiLocationDraft>(
       context: context,
@@ -436,6 +439,9 @@ class _DeviceManagerTabState extends State<DeviceManagerTab> {
         storeId: selectedStoreId,
         screenId: selectedScreenId,
       );
+    }
+    if (!mounted) {
+      return;
     }
 
     final payload = await showDialog<Map<String, String>>(

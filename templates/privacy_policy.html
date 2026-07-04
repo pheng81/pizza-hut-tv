@@ -99,12 +99,12 @@
       <p>If you use Google Sign-In or connect Google Drive, EverydayAdvertise may request access to the following Google OAuth scopes:</p>
       <ul>
         <li><code>openid</code>, <code>userinfo.email</code>, and <code>userinfo.profile</code>: used to sign you in, create or match your EverydayAdvertise account, show your account email/profile name, and protect access to your dashboard.</li>
-        <li><code>https://www.googleapis.com/auth/drive.readonly</code>: used only when you choose Google Drive in the scheduling workspace. This lets EverydayAdvertise read your Drive file list and download selected files, but it does not let EverydayAdvertise edit, delete, rename, share, or upload files to your Google Drive.</li>
+        <li><code>https://www.googleapis.com/auth/drive.file</code>: used only when you choose Google Drive in the scheduling workspace. This lets EverydayAdvertise access only the specific Google Drive files you choose to use with EverydayAdvertise for import. It does not give EverydayAdvertise broad access to all files in your Google Drive.</li>
       </ul>
 
       <h3>How Google Drive data is used</h3>
       <ul>
-        <li>We show folders and supported image/video files so you can choose media for a screen schedule.</li>
+        <li>We use Google Picker to let you choose supported image and video files from Google Drive for a screen schedule.</li>
         <li>We may display file names, file type, size, modified date, and thumbnails/previews to help you identify the file.</li>
         <li>We download only the specific image or video file you select for import.</li>
         <li>The imported copy is stored in your EverydayAdvertise media library and can be scheduled to your digital signage screens.</li>

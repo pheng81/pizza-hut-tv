@@ -39,6 +39,10 @@ class ScreenItem {
     this.rotation = 0,
     this.protected = false,
     this.muted = false,
+    this.address = '',
+    this.vertical = false,
+    this.horizontal = true,
+    this.panelZone = const {},
   });
 
   final String id;
@@ -46,17 +50,30 @@ class ScreenItem {
   final int rotation;
   final bool protected;
   final bool muted;
+  final String address;
+  final bool vertical;
+  final bool horizontal;
+  final Map<String, dynamic> panelZone;
 
   factory ScreenItem.fromJson(String id, Map<String, dynamic> json) {
     final rawRotation = int.tryParse('${json['rotation'] ?? 0}') ?? 0;
     final normalizedRotation =
         <int>{0, 90, 180, 270}.contains(rawRotation) ? rawRotation : 0;
+    final rawPanelZone = json['panel_zone'];
     return ScreenItem(
       id: id,
       name: (json['name'] ?? id).toString(),
       rotation: normalizedRotation,
       protected: (json['protected'] ?? false) == true,
       muted: (json['muted'] ?? false) == true,
+      address: (json['address'] ?? '').toString().trim(),
+      vertical: (json['vertical'] ?? false) == true,
+      horizontal: (json['horizontal'] ?? true) != false,
+      panelZone: rawPanelZone is Map
+          ? rawPanelZone.map(
+              (key, value) => MapEntry(key.toString(), value),
+            )
+          : const {},
     );
   }
 }

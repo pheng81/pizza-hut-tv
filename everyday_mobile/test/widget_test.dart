@@ -7,14 +7,30 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:everyday_mobile/main.dart';
+import 'package:everyday_mobile/screens/login_screen.dart';
+import 'package:everyday_mobile/services/api_client.dart';
 
 void main() {
   testWidgets('Login screen renders', (WidgetTester tester) async {
-    await tester.pumpWidget(const EverydayMobileApp());
+    SharedPreferences.setMockInitialValues({});
+    final apiClient = ApiClient();
+    await apiClient.init();
 
-    expect(find.text('Everyday Mobile Login'), findsOneWidget);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LoginScreen(
+          apiClient: apiClient,
+          onLoginSuccess: () async {},
+          enableSocialAuthBootstrap: false,
+        ),
+      ),
+    );
+
+    expect(find.text('Sign in'), findsWidgets);
+    expect(find.text('Use your dashboard account credentials.'), findsOneWidget);
+    expect(find.text('API Base URL'), findsOneWidget);
     expect(find.byType(TextFormField), findsWidgets);
   });
 }

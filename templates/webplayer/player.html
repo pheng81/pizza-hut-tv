@@ -113,6 +113,10 @@
 			--panel-kicker-color: rgba(255, 228, 181, 0.82);
 			--panel-title-color: #fff4dc;
 			--panel-body-color: rgba(255, 246, 230, 0.92);
+			--panel-shadow-right: none;
+			--panel-shadow-left: none;
+			--panel-shadow-bottom: none;
+			--panel-text-shadow: none;
 			position: fixed;
 			top: 0;
 			right: 0;
@@ -124,7 +128,7 @@
 				linear-gradient(180deg, var(--panel-bg-primary) 0%, var(--panel-bg-secondary) 100%),
 				radial-gradient(circle at top right, var(--panel-bg-accent), transparent 44%);
 			border-left: 1px solid var(--panel-border-color);
-			box-shadow: -18px 0 48px rgba(0, 0, 0, 0.38);
+			box-shadow: var(--panel-shadow-right);
 			overflow: hidden;
 		}
 		#panel-zone.visible { display: block; }
@@ -133,7 +137,7 @@
 			right: auto;
 			border-left: none;
 			border-right: 1px solid var(--panel-border-color);
-			box-shadow: 18px 0 48px rgba(0, 0, 0, 0.38);
+			box-shadow: var(--panel-shadow-left);
 		}
 		#panel-zone.layout-bottom {
 			left: 0;
@@ -143,7 +147,18 @@
 			height: 25vh;
 			border-left: none;
 			border-top: 1px solid var(--panel-border-color);
-			box-shadow: 0 -18px 48px rgba(0, 0, 0, 0.38);
+			box-shadow: var(--panel-shadow-bottom);
+		}
+		#panel-zone.layout-full {
+			left: 0;
+			right: 0;
+			top: 0;
+			bottom: 0;
+			width: 100vw;
+			height: 100vh;
+			border-left: none;
+			border-top: none;
+			box-shadow: none;
 		}
 		#panel-zone-content {
 			height: 100%;
@@ -160,12 +175,19 @@
 			align-items: center;
 			justify-content: space-between;
 		}
+		#panel-zone.layout-full #panel-zone-content {
+			padding: clamp(44px, 6vw, 96px);
+			gap: clamp(22px, 3vw, 52px);
+			align-items: center;
+			text-align: center;
+		}
 		.panel-kicker {
 			font-size: 12px;
 			font-weight: 700;
 			letter-spacing: 0.14em;
 			text-transform: uppercase;
 			color: var(--panel-kicker-color);
+			text-shadow: var(--panel-text-shadow);
 		}
 		.panel-title {
 			font-size: clamp(28px, 3vw, 54px);
@@ -173,11 +195,15 @@
 			font-weight: 800;
 			color: var(--panel-title-color);
 			text-wrap: balance;
-			text-shadow: 0 2px 14px rgba(0, 0, 0, 0.26);
+			text-shadow: var(--panel-text-shadow);
 		}
 		#panel-zone.layout-bottom .panel-title {
 			font-size: clamp(24px, 2.4vw, 44px);
 			max-width: 34vw;
+		}
+		#panel-zone.layout-full .panel-title {
+			font-size: clamp(54px, 7.8vw, 138px);
+			max-width: 82vw;
 		}
 		.panel-body {
 			font-size: clamp(18px, 1.55vw, 30px);
@@ -186,12 +212,17 @@
 			white-space: pre-wrap;
 			overflow-wrap: anywhere;
 			word-break: break-word;
-			text-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+			text-shadow: var(--panel-text-shadow);
 		}
 		#panel-zone.layout-bottom .panel-body {
 			font-size: clamp(16px, 1.15vw, 22px);
 			max-width: 46vw;
 			text-align: right;
+		}
+		#panel-zone.layout-full .panel-body {
+			font-size: clamp(34px, 4.4vw, 78px);
+			max-width: 78vw;
+			text-align: center;
 		}
 		.panel-chip {
 			display: inline-flex;
@@ -206,6 +237,171 @@
 			letter-spacing: 0.08em;
 			text-transform: uppercase;
 			color: var(--panel-chip-color);
+		}
+		.panel-order-board {
+			width: calc(100% - var(--panel-board-margin-left, 0px) - var(--panel-board-margin-right, 0px));
+			height: calc(100% - var(--panel-board-margin-top, 0px) - var(--panel-board-margin-bottom, 0px));
+			display: grid;
+			grid-template-columns: minmax(0, var(--panel-prepared-column-ratio, 1.7fr)) minmax(0, var(--panel-ready-column-ratio, 1fr));
+			gap: var(--panel-column-gap, clamp(24px, 4vw, 70px));
+			color: var(--panel-board-text-color, #17172a);
+			position: relative;
+			margin: var(--panel-board-margin-top, 0px) var(--panel-board-margin-right, 0px) var(--panel-board-margin-bottom, 0px) var(--panel-board-margin-left, 0px);
+		}
+		.panel-order-board.has-logo {
+			padding-top: calc(var(--panel-logo-size, 0px) * 0.58);
+		}
+		.panel-order-board--image-left {
+			grid-template-columns: var(--panel-side-image-width, 42%) minmax(0, var(--panel-prepared-column-ratio, 1.7fr)) minmax(0, var(--panel-ready-column-ratio, 1fr));
+		}
+		.panel-order-board--image-right {
+			grid-template-columns: minmax(0, var(--panel-prepared-column-ratio, 1.7fr)) minmax(0, var(--panel-ready-column-ratio, 1fr)) var(--panel-side-image-width, 42%);
+		}
+		.panel-order-board__side-image {
+			min-width: 0;
+			min-height: 0;
+			border-radius: var(--panel-ticket-radius, 10px);
+			background-position: center;
+			background-repeat: no-repeat;
+			background-size: cover;
+			overflow: hidden;
+		}
+		.panel-order-board--image-right .panel-order-board__side-image {
+			order: 4;
+		}
+		.panel-order-board__logo {
+			position: absolute;
+			width: var(--panel-logo-size, 96px);
+			height: auto;
+			max-width: 32%;
+			max-height: 22%;
+			object-fit: contain;
+			z-index: 2;
+		}
+		.panel-order-board__logo--top-left { top: 0; left: 0; }
+		.panel-order-board__logo--top-right { top: 0; right: 0; }
+		.panel-order-board__logo--bottom-left { bottom: 0; left: 0; }
+		.panel-order-board__logo--bottom-right { bottom: 0; right: 0; }
+		.panel-order-board__column {
+			display: flex;
+			flex-direction: column;
+			gap: var(--panel-column-section-gap, clamp(16px, 2vw, 30px));
+			min-width: 0;
+		}
+		.panel-order-board__column--prepared .panel-order-board__heading {
+			text-align: var(--panel-prepared-text-align, left);
+		}
+		.panel-order-board__column--ready {
+			border-left: var(--panel-divider-width, 1px) solid var(--panel-divider-color, rgba(15, 23, 42, 0.10));
+			padding-left: var(--panel-divider-padding, clamp(24px, 4vw, 64px));
+		}
+		.panel-order-board__column--ready .panel-order-board__heading {
+			text-align: var(--panel-ready-text-align, left);
+		}
+		.panel-order-board__heading {
+			font-size: calc(clamp(30px, 3.8vw, 72px) * var(--panel-heading-font-scale, 1));
+			line-height: 1.04;
+			font-weight: 900;
+			color: var(--panel-board-text-color, #17172a);
+		}
+		.panel-order-board__grid {
+			display: flex;
+			flex-wrap: wrap;
+			align-content: flex-start;
+			gap: var(--panel-ticket-gap, clamp(12px, 1.2vw, 22px));
+		}
+		.panel-order-board__grid--prepared {
+			justify-content: var(--panel-prepared-justify, flex-start);
+		}
+		.panel-order-board__grid--ready {
+			justify-content: var(--panel-ready-justify, flex-start);
+		}
+		.panel-order-board__ticket {
+			min-width: var(--panel-prepared-ticket-min-width, clamp(96px, 8.5vw, 160px));
+			text-align: center;
+			border-radius: var(--panel-ticket-radius, 10px);
+			padding: var(--panel-ticket-padding-y, clamp(10px, 1vw, 18px)) var(--panel-ticket-padding-x, clamp(14px, 1.2vw, 22px));
+			font-size: calc(clamp(30px, 3.5vw, 66px) * var(--panel-prepared-ticket-font-scale, var(--panel-ticket-font-scale, 1)));
+			line-height: 1;
+			font-weight: 900;
+			color: var(--panel-board-text-color, #17172a);
+			border: 2px solid rgba(15, 23, 42, 0.10);
+			background: rgba(255,255,255,0.56);
+		}
+		.panel-order-board__ticket--ready {
+			min-width: var(--panel-ready-ticket-min-width, clamp(130px, 12vw, 280px));
+			padding: var(--panel-ticket-ready-padding-y, clamp(18px, 2vw, 34px)) var(--panel-ticket-ready-padding-x, clamp(22px, 2.4vw, 44px));
+			font-size: calc(clamp(44px, 7.5vw, 154px) * var(--panel-ready-ticket-font-scale, var(--panel-ticket-font-scale, 1)));
+			color: #fff;
+			border: none;
+			background: var(--panel-board-ready-color, #32d296);
+		}
+		.panel-order-board__ticket--ready.panel-order-board__ticket--small {
+			min-width: var(--panel-ready-ticket-small-min-width, clamp(104px, 8vw, 180px));
+			font-size: calc(clamp(30px, 3.6vw, 70px) * var(--panel-ready-ticket-font-scale, var(--panel-ticket-font-scale, 1)));
+			padding: clamp(12px, 1.3vw, 20px) clamp(16px, 1.6vw, 28px);
+		}
+		.panel-order-board--dense .panel-order-board__grid {
+			gap: clamp(8px, .8vw, 14px);
+		}
+		.panel-order-board--dense .panel-order-board__ticket {
+			min-width: max(72px, calc(var(--panel-prepared-ticket-min-width, 118px) * 0.74));
+			font-size: calc(clamp(22px, 2.5vw, 44px) * var(--panel-prepared-ticket-font-scale, var(--panel-ticket-font-scale, 1)));
+			padding: clamp(8px, .7vw, 12px) clamp(10px, .9vw, 16px);
+		}
+		.panel-order-board--dense .panel-order-board__ticket--ready {
+			min-width: max(92px, calc(var(--panel-ready-ticket-min-width, 170px) * 0.61));
+			font-size: calc(clamp(30px, 4.2vw, 76px) * var(--panel-ready-ticket-font-scale, var(--panel-ticket-font-scale, 1)));
+			padding: clamp(12px, 1.2vw, 18px) clamp(14px, 1.4vw, 24px);
+		}
+		.panel-order-board--ultra .panel-order-board__heading {
+			font-size: clamp(24px, 2.8vw, 50px);
+		}
+		.panel-order-board--ultra .panel-order-board__ticket,
+		.panel-order-board--ultra .panel-order-board__ticket--ready {
+			min-width: max(54px, calc(var(--panel-prepared-ticket-min-width, 88px) * 0.55));
+			font-size: calc(clamp(16px, 1.7vw, 30px) * var(--panel-ticket-font-scale, 1));
+			padding: clamp(6px, .5vw, 9px) clamp(8px, .65vw, 12px);
+			border-radius: 7px;
+		}
+		.panel-order-board__empty {
+			font-size: clamp(18px, 1.5vw, 30px);
+			color: rgba(23, 23, 42, 0.56);
+		}
+		.panel-order-board__note {
+			position: absolute;
+			z-index: 3;
+			max-width: min(38%, 680px);
+			font-size: var(--panel-custom-text-size, clamp(18px, 1.8vw, 32px));
+			line-height: 1.22;
+			font-weight: 700;
+			color: var(--panel-custom-text-color, rgba(23, 23, 42, 0.72));
+			white-space: pre-line;
+			text-wrap: balance;
+			pointer-events: none;
+		}
+		.panel-order-board__note--top-left { top: 0; left: 0; text-align: left; }
+		.panel-order-board__note--top-center { top: 0; left: 50%; transform: translateX(-50%); text-align: center; }
+		.panel-order-board__note--top-right { top: 0; right: 0; text-align: right; }
+		.panel-order-board__note--bottom-left { bottom: 0; left: 0; text-align: left; }
+		.panel-order-board__note--bottom-center { bottom: 0; left: 50%; transform: translateX(-50%); text-align: center; }
+		.panel-order-board__note--bottom-right { bottom: 0; right: 0; text-align: right; }
+		#panel-zone:not(.layout-full) .panel-order-board {
+			grid-template-columns: 1fr;
+			gap: 20px;
+		}
+		#panel-zone:not(.layout-full) .panel-order-board__column--ready {
+			border-left: none;
+			padding-left: 0;
+		}
+		#panel-zone:not(.layout-full) .panel-order-board__heading {
+			font-size: clamp(22px, 2.2vw, 34px);
+		}
+		#panel-zone:not(.layout-full) .panel-order-board__ticket,
+		#panel-zone:not(.layout-full) .panel-order-board__ticket--ready {
+			min-width: 74px;
+			font-size: clamp(22px, 2.4vw, 36px);
+			padding: 10px 12px;
 		}
 		.layer { position:absolute; top:0; left:0; right:0; bottom:0; display:block; background:transparent; text-align:center;
 			/* SMOOTH TRANSITION OPTIMIZATION */
@@ -491,6 +687,14 @@
 			if(f) return String(f).split('/').pop()||'';
 			const u = item.url || '';
 			try{ const p = new URL(u).pathname; return (p.split('/').pop()||''); }catch{ return (String(u).split('/').pop()||''); }
+		}
+		function isLivePosItem(item){
+			try{
+				if(!item) return false;
+				const mediaType = String(item.media_type || '').toLowerCase();
+				const file = String(item.file || '').toLowerCase();
+				return mediaType === 'live_pos' || file.startsWith('livepos:');
+			}catch{ return false; }
 		}
 		function relKeyFrom(item){
 			try{
@@ -1177,14 +1381,97 @@
 			return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
 		}
 
+		function normalizePanelOpacity(value, fallback = 0.72){
+			let numeric = Number(value);
+			if(!Number.isFinite(numeric)) numeric = fallback;
+			if(numeric > 1) numeric = numeric / 100;
+			return Math.max(0.15, Math.min(1, numeric));
+		}
+
+		function normalizePanelBool(value, fallback = false){
+			if(typeof value === 'boolean') return value;
+			if(value === undefined || value === null || value === '') return fallback;
+			const text = String(value).trim().toLowerCase();
+			if(['1','true','yes','on'].includes(text)) return true;
+			if(['0','false','no','off'].includes(text)) return false;
+			return fallback;
+		}
+
+		function normalizePanelOverlayPercent(value, fallback = 25){
+			let numeric = parseInt(String(value ?? fallback), 10);
+			if(!Number.isFinite(numeric)) numeric = fallback;
+			return Math.max(10, Math.min(60, numeric));
+		}
+
+		function normalizePanelStatusList(value, fallback = ['ready','serving']){
+			const raw = Array.isArray(value) ? value : String(value || '').split(',');
+			const out = raw
+				.map((item) => String(item || '').trim().toLowerCase().replace(/\s+/g, '_'))
+				.filter(Boolean)
+				.filter((item, index, array) => array.indexOf(item) === index);
+			return out.length ? out : fallback.slice();
+		}
+
 		function normalizePanelAppearance(zone){
 			const raw = (zone && typeof zone.appearance === 'object' && zone.appearance) ? zone.appearance : {};
 			const contentAlign = String(raw.content_align || 'center').trim().toLowerCase();
 			return {
 				backgroundColor: normalizePanelHexColor(raw.background_color || '#201206', '#201206'),
+				backgroundOpacity: normalizePanelOpacity(raw.background_opacity, 0.72),
+				backgroundImageDataUrl: String(raw.background_image_data_url || ''),
+				backgroundImageOpacity: normalizePanelOpacity(raw.background_image_opacity, 1),
+				backgroundImageFit: ['cover','contain','stretch'].includes(String(raw.background_image_fit || '').trim().toLowerCase()) ? String(raw.background_image_fit).trim().toLowerCase() : 'cover',
 				contentAlign: ['top', 'center', 'bottom'].includes(contentAlign) ? contentAlign : 'center',
-				bodyRows: Math.max(1, Math.min(6, parseInt(String(raw.body_rows || 4), 10) || 4))
+				bodyRows: Math.max(1, Math.min(6, parseInt(String(raw.body_rows || 4), 10) || 4)),
+				shadowEnabled: normalizePanelBool(raw.shadow_enabled, false),
+				posDisplayStyle: ['single_card', 'order_board'].includes(String(raw.pos_display_style || '').trim().toLowerCase())
+					? String(raw.pos_display_style).trim().toLowerCase()
+					: 'single_card',
+				boardPreparingTitle: String(raw.board_preparing_title || 'Being prepared'),
+				boardReadyTitle: String(raw.board_ready_title || 'Ready for pickup'),
+				boardPreparingStatuses: normalizePanelStatusList(raw.board_preparing_statuses, ['preparing','being_prepared','accepted']),
+				boardReadyStatuses: normalizePanelStatusList(raw.board_ready_statuses, ['ready','serving']),
+				boardReadyColor: normalizePanelHexColor(raw.board_ready_color || '#32d296', '#32d296'),
+				boardTextColor: normalizePanelHexColor(raw.board_text_color || '#17172a', '#17172a'),
+				boardLayout: ['standard','image_left','image_right'].includes(String(raw.board_layout || '').trim().toLowerCase()) ? String(raw.board_layout).trim().toLowerCase() : 'standard',
+				sideImageWidth: Math.max(20, Math.min(70, parseInt(String(raw.side_image_width || 42), 10) || 42)),
+				logoDataUrl: String(raw.logo_data_url || ''),
+				logoPosition: ['top-left','top-right','bottom-left','bottom-right'].includes(String(raw.logo_position || '').trim().toLowerCase()) ? String(raw.logo_position).trim().toLowerCase() : 'top-left',
+				logoSize: Math.max(32, Math.min(260, parseInt(String(raw.logo_size || 96), 10) || 96)),
+				ticketFontScale: Math.max(0.55, Math.min(1.8, Number(raw.ticket_font_scale || 1) || 1)),
+				preparedTicketFontScale: Math.max(0.55, Math.min(1.8, Number(raw.prepared_ticket_font_scale || raw.ticket_font_scale || 1) || 1)),
+				readyTicketFontScale: Math.max(0.55, Math.min(1.8, Number(raw.ready_ticket_font_scale || raw.ticket_font_scale || 1) || 1)),
+				headingFontScale: Math.max(0.65, Math.min(1.8, Number(raw.heading_font_scale || 1) || 1)),
+				ticketGap: Math.max(2, Math.min(60, parseInt(String(raw.ticket_gap || 14), 10) || 14)),
+				ticketPadding: Math.max(4, Math.min(60, parseInt(String(raw.ticket_padding || 16), 10) || 16)),
+				ticketRadius: Math.max(0, Math.min(40, parseInt(String(raw.ticket_radius || 10), 10) || 10)),
+				dividerEnabled: normalizePanelBool(raw.divider_enabled, true),
+				dividerColor: normalizePanelHexColor(raw.divider_color || '#d1d5db', '#d1d5db'),
+				dividerWidth: Math.max(0, Math.min(12, parseInt(String(raw.divider_width ?? 1), 10) || 0)),
+				boardMarginTop: Math.max(0, Math.min(320, parseInt(String(raw.board_margin_top || 0), 10) || 0)),
+				boardMarginRight: Math.max(0, Math.min(320, parseInt(String(raw.board_margin_right || 0), 10) || 0)),
+				boardMarginBottom: Math.max(0, Math.min(320, parseInt(String(raw.board_margin_bottom || 0), 10) || 0)),
+				boardMarginLeft: Math.max(0, Math.min(320, parseInt(String(raw.board_margin_left || 0), 10) || 0)),
+				columnGap: Math.max(0, Math.min(260, parseInt(String(raw.column_gap || 70), 10) || 70)),
+				readyColumnPadding: Math.max(0, Math.min(260, parseInt(String(raw.ready_column_padding || 64), 10) || 64)),
+				preparedColumnRatio: Math.max(0.6, Math.min(4, Number(raw.prepared_column_ratio || 1.7) || 1.7)),
+				readyColumnRatio: Math.max(0.6, Math.min(4, Number(raw.ready_column_ratio || 1) || 1)),
+				preparedAlign: ['left','center','right'].includes(String(raw.prepared_align || '').trim().toLowerCase()) ? String(raw.prepared_align).trim().toLowerCase() : 'left',
+				readyAlign: ['left','center','right'].includes(String(raw.ready_align || '').trim().toLowerCase()) ? String(raw.ready_align).trim().toLowerCase() : 'left',
+				columnSectionGap: Math.max(0, Math.min(160, parseInt(String(raw.column_section_gap || 22), 10) || 22)),
+				preparedTicketMinWidth: Math.max(48, Math.min(420, parseInt(String(raw.prepared_ticket_min_width || 160), 10) || 160)),
+				readyTicketMinWidth: Math.max(64, Math.min(520, parseInt(String(raw.ready_ticket_min_width || 280), 10) || 280)),
+				boardCustomText: String(raw.board_custom_text || ''),
+				boardCustomTextColor: normalizePanelHexColor(raw.board_custom_text_color || '#64748b', '#64748b'),
+				boardCustomTextSize: Math.max(12, Math.min(120, parseInt(String(raw.board_custom_text_size || 28), 10) || 28)),
+				boardCustomTextPosition: ['top-left','top-center','top-right','bottom-left','bottom-center','bottom-right'].includes(String(raw.board_custom_text_position || '').trim().toLowerCase())
+					? String(raw.board_custom_text_position).trim().toLowerCase()
+					: 'bottom-left'
 			};
+		}
+
+		function escapePanelHtmlMultiline(value){
+			return escapePanelHtml(value).replace(/\n/g, '<br>');
 		}
 
 		function insertPanelSoftBreaks(text, maxTokenLength = 14){
@@ -1212,6 +1499,85 @@
 			return output;
 		}
 
+		function escapePanelHtml(value){
+			return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+				'&': '&amp;',
+				'<': '&lt;',
+				'>': '&gt;',
+				'"': '&quot;',
+				"'": '&#39;'
+			}[char] || char));
+		}
+
+		function isUglyPanelTicketId(value){
+			const text = String(value || '').trim();
+			if(!text) return true;
+			if(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(text)) return true;
+			if(text.length > 24 && /^[0-9a-f-]+$/i.test(text)) return true;
+			return false;
+		}
+
+		function panelOrderNumber(item){
+			const direct = String((item && (item.order_number || item.orderNumber)) || '').trim();
+			if(direct) return direct;
+			const sourceText = `${String((item && (item.body || item.text)) || '')}\n${String((item && (item.title || item.name)) || '')}`;
+			const orderMatch = sourceText.match(/(?:order|ord|docket|receipt|ticket)\s*#?\s*[:\-]?\s*([A-Za-z0-9-]{2,24})/i);
+			if(orderMatch && !isUglyPanelTicketId(orderMatch[1])) return orderMatch[1];
+			const external = String((item && item.external_id) || '').trim();
+			if(external && !isUglyPanelTicketId(external) && external.length <= 18) return external;
+			const customer = String((item && (item.customer_name || item.customerName)) || '').trim();
+			return customer && customer.length <= 24 ? customer : '';
+		}
+
+		function renderPanelOrderBoard(zone, appearance){
+			const queue = Array.isArray(zone && zone.live_queue) ? zone.live_queue : [];
+			const readyStatuses = new Set(appearance.boardReadyStatuses || []);
+			const preparingStatuses = new Set(appearance.boardPreparingStatuses || []);
+			const ready = [];
+			const preparing = [];
+			queue.forEach((item) => {
+				const status = String((item && item.status) || '').trim().toLowerCase().replace(/\s+/g, '_');
+				const ticket = panelOrderNumber(item);
+				if(!ticket) return;
+				if(readyStatuses.has(status)){
+					ready.push(ticket);
+				}else if(preparingStatuses.has(status) || !status){
+					preparing.push(ticket);
+				}else{
+					preparing.push(ticket);
+				}
+			});
+			const prepTickets = preparing.map((ticket) => `<span class="panel-order-board__ticket">${escapePanelHtml(ticket)}</span>`).join('');
+			const readyTickets = ready.slice().reverse().map((ticket, index) => `<span class="panel-order-board__ticket panel-order-board__ticket--ready${index > 0 ? ' panel-order-board__ticket--small' : ''}">${escapePanelHtml(ticket)}</span>`).join('');
+			const totalTickets = preparing.length + ready.length;
+			const densityClass = totalTickets > 50 ? ' panel-order-board--ultra' : totalTickets > 20 ? ' panel-order-board--dense' : '';
+			const usesSideImage = appearance.backgroundImageDataUrl && ['image_left','image_right'].includes(appearance.boardLayout);
+			const layoutClass = usesSideImage ? ` panel-order-board--${appearance.boardLayout.replace('_', '-')}` : '';
+			const sideImageMarkup = usesSideImage
+				? `<div class="panel-order-board__side-image" style="background-image:url('${escapePanelHtml(appearance.backgroundImageDataUrl)}'); background-size:${appearance.backgroundImageFit === 'stretch' ? '100% 100%' : escapePanelHtml(appearance.backgroundImageFit)}; opacity:${appearance.backgroundImageOpacity};"></div>`
+				: '';
+			const logoMarkup = appearance.logoDataUrl
+				? `<img class="panel-order-board__logo panel-order-board__logo--${escapePanelHtml(appearance.logoPosition)}" src="${escapePanelHtml(appearance.logoDataUrl)}" alt="">`
+				: '';
+			const noteMarkup = appearance.boardCustomText
+				? `<div class="panel-order-board__note panel-order-board__note--${escapePanelHtml(appearance.boardCustomTextPosition)}">${escapePanelHtmlMultiline(appearance.boardCustomText)}</div>`
+				: '';
+			return `
+				<div class="panel-order-board${densityClass}${layoutClass}${logoMarkup ? ' has-logo' : ''}">
+					${logoMarkup}
+					${noteMarkup}
+					${sideImageMarkup}
+					<section class="panel-order-board__column panel-order-board__column--prepared">
+						<div class="panel-order-board__heading">${escapePanelHtml(appearance.boardPreparingTitle)}</div>
+						<div class="panel-order-board__grid panel-order-board__grid--prepared">${prepTickets || '<div class="panel-order-board__empty">No orders preparing</div>'}</div>
+					</section>
+					<section class="panel-order-board__column panel-order-board__column--ready">
+						<div class="panel-order-board__heading">${escapePanelHtml(appearance.boardReadyTitle)}</div>
+						<div class="panel-order-board__grid panel-order-board__grid--ready">${readyTickets || '<div class="panel-order-board__empty">Waiting for ready orders</div>'}</div>
+					</section>
+				</div>`;
+		}
+
 		function applyPanelZoneAppearance(zone, layout){
 			if(!panelZone || !panelZoneContent) return normalizePanelAppearance(zone);
 			const appearance = normalizePanelAppearance(zone);
@@ -1220,9 +1586,24 @@
 			const lighterRgb = mixPanelRgb(baseRgb, { r: 255, g: 255, b: 255 }, 0.18);
 			const contrastScore = ((baseRgb.r * 299) + (baseRgb.g * 587) + (baseRgb.b * 114)) / 1000;
 			const isLight = contrastScore >= 170;
-			panelZone.style.setProperty('--panel-bg-primary', panelRgbCss(baseRgb, 0.95));
-			panelZone.style.setProperty('--panel-bg-secondary', panelRgbCss(darkerRgb, 0.98));
+			panelZone.style.setProperty('--panel-bg-primary', panelRgbCss(baseRgb, appearance.backgroundOpacity));
+			panelZone.style.setProperty('--panel-bg-secondary', panelRgbCss(darkerRgb, Math.min(1, appearance.backgroundOpacity + 0.04)));
 			panelZone.style.setProperty('--panel-bg-accent', panelRgbCss(lighterRgb, 0.28));
+			const usesSideImage = appearance.backgroundImageDataUrl && ['image_left','image_right'].includes(appearance.boardLayout);
+			if(appearance.backgroundImageDataUrl && !usesSideImage){
+				const overlayAlpha = Math.max(0, Math.min(1, 1 - appearance.backgroundImageOpacity));
+				panelZone.style.backgroundImage = `linear-gradient(${panelRgbCss(baseRgb, overlayAlpha)}, ${panelRgbCss(baseRgb, overlayAlpha)}), url("${appearance.backgroundImageDataUrl}")`;
+				panelZone.style.backgroundRepeat = 'no-repeat, no-repeat';
+				panelZone.style.backgroundPosition = 'center center, center center';
+				panelZone.style.backgroundSize = appearance.backgroundImageFit === 'stretch'
+					? '100% 100%, 100% 100%'
+					: `100% 100%, ${appearance.backgroundImageFit}`;
+			}else{
+				panelZone.style.backgroundImage = `linear-gradient(180deg, var(--panel-bg-primary) 0%, var(--panel-bg-secondary) 100%), radial-gradient(circle at top right, var(--panel-bg-accent), transparent 44%)`;
+				panelZone.style.backgroundRepeat = '';
+				panelZone.style.backgroundPosition = '';
+				panelZone.style.backgroundSize = '';
+			}
 			panelZone.style.setProperty('--panel-border-color', isLight ? 'rgba(15, 23, 42, 0.14)' : 'rgba(255, 214, 153, 0.26)');
 			panelZone.style.setProperty('--panel-chip-bg', isLight ? 'rgba(255, 255, 255, 0.56)' : 'rgba(255, 255, 255, 0.10)');
 			panelZone.style.setProperty('--panel-chip-border', isLight ? 'rgba(15, 23, 42, 0.12)' : 'rgba(255, 233, 196, 0.18)');
@@ -1230,6 +1611,44 @@
 			panelZone.style.setProperty('--panel-kicker-color', isLight ? 'rgba(15, 23, 42, 0.68)' : 'rgba(255, 228, 181, 0.82)');
 			panelZone.style.setProperty('--panel-title-color', isLight ? '#0f172a' : '#fff4dc');
 			panelZone.style.setProperty('--panel-body-color', isLight ? 'rgba(15, 23, 42, 0.88)' : 'rgba(255, 246, 230, 0.92)');
+			panelZone.style.setProperty('--panel-shadow-right', appearance.shadowEnabled ? '-18px 0 48px rgba(0, 0, 0, 0.38)' : 'none');
+			panelZone.style.setProperty('--panel-shadow-left', appearance.shadowEnabled ? '18px 0 48px rgba(0, 0, 0, 0.38)' : 'none');
+			panelZone.style.setProperty('--panel-shadow-bottom', appearance.shadowEnabled ? '0 -18px 48px rgba(0, 0, 0, 0.38)' : 'none');
+			panelZone.style.setProperty('--panel-text-shadow', appearance.shadowEnabled ? '0 2px 14px rgba(0, 0, 0, 0.26)' : 'none');
+			panelZone.style.setProperty('--panel-board-ready-color', appearance.boardReadyColor);
+			panelZone.style.setProperty('--panel-board-text-color', appearance.boardTextColor);
+			panelZone.style.setProperty('--panel-side-image-width', `${appearance.sideImageWidth}%`);
+			panelZone.style.setProperty('--panel-logo-size', `${appearance.logoSize}px`);
+			panelZone.style.setProperty('--panel-ticket-font-scale', String(appearance.ticketFontScale));
+			panelZone.style.setProperty('--panel-prepared-ticket-font-scale', String(appearance.preparedTicketFontScale));
+			panelZone.style.setProperty('--panel-ready-ticket-font-scale', String(appearance.readyTicketFontScale));
+			panelZone.style.setProperty('--panel-heading-font-scale', String(appearance.headingFontScale));
+			panelZone.style.setProperty('--panel-ticket-gap', `${appearance.ticketGap}px`);
+			panelZone.style.setProperty('--panel-ticket-radius', `${appearance.ticketRadius}px`);
+			panelZone.style.setProperty('--panel-ticket-padding-y', `${Math.max(4, Math.round(appearance.ticketPadding * 0.62))}px`);
+			panelZone.style.setProperty('--panel-ticket-padding-x', `${appearance.ticketPadding}px`);
+			panelZone.style.setProperty('--panel-ticket-ready-padding-y', `${Math.max(6, Math.round(appearance.ticketPadding * 1.05))}px`);
+			panelZone.style.setProperty('--panel-ticket-ready-padding-x', `${Math.max(10, Math.round(appearance.ticketPadding * 1.45))}px`);
+			panelZone.style.setProperty('--panel-divider-color', appearance.dividerEnabled ? appearance.dividerColor : 'transparent');
+			panelZone.style.setProperty('--panel-divider-width', appearance.dividerEnabled ? `${appearance.dividerWidth}px` : '0px');
+			panelZone.style.setProperty('--panel-divider-padding', `${appearance.readyColumnPadding}px`);
+			panelZone.style.setProperty('--panel-board-margin-top', `${appearance.boardMarginTop}px`);
+			panelZone.style.setProperty('--panel-board-margin-right', `${appearance.boardMarginRight}px`);
+			panelZone.style.setProperty('--panel-board-margin-bottom', `${appearance.boardMarginBottom}px`);
+			panelZone.style.setProperty('--panel-board-margin-left', `${appearance.boardMarginLeft}px`);
+			panelZone.style.setProperty('--panel-column-gap', `${appearance.columnGap}px`);
+			panelZone.style.setProperty('--panel-prepared-column-ratio', `${appearance.preparedColumnRatio}fr`);
+			panelZone.style.setProperty('--panel-ready-column-ratio', `${appearance.readyColumnRatio}fr`);
+			panelZone.style.setProperty('--panel-column-section-gap', `${appearance.columnSectionGap}px`);
+			panelZone.style.setProperty('--panel-prepared-ticket-min-width', `${appearance.preparedTicketMinWidth}px`);
+			panelZone.style.setProperty('--panel-ready-ticket-min-width', `${appearance.readyTicketMinWidth}px`);
+			panelZone.style.setProperty('--panel-ready-ticket-small-min-width', `${Math.max(48, Math.round(appearance.readyTicketMinWidth * 0.64))}px`);
+			panelZone.style.setProperty('--panel-custom-text-size', `${appearance.boardCustomTextSize}px`);
+			panelZone.style.setProperty('--panel-custom-text-color', appearance.boardCustomTextColor);
+			panelZone.style.setProperty('--panel-prepared-text-align', appearance.preparedAlign);
+			panelZone.style.setProperty('--panel-ready-text-align', appearance.readyAlign);
+			panelZone.style.setProperty('--panel-prepared-justify', appearance.preparedAlign === 'center' ? 'center' : appearance.preparedAlign === 'right' ? 'flex-end' : 'flex-start');
+			panelZone.style.setProperty('--panel-ready-justify', appearance.readyAlign === 'center' ? 'center' : appearance.readyAlign === 'right' ? 'flex-end' : 'flex-start');
 			if(layout === 'split-bottom-25'){
 				panelZoneContent.style.justifyContent = 'space-between';
 				panelZoneContent.style.alignItems = appearance.contentAlign === 'top'
@@ -1250,8 +1669,10 @@
 
 		function hidePanelZone(){
 			if(panelZone){
-				panelZone.classList.remove('visible', 'layout-left', 'layout-right', 'layout-bottom');
+				panelZone.classList.remove('visible', 'layout-left', 'layout-right', 'layout-bottom', 'layout-full');
 				panelZone.setAttribute('aria-hidden', 'true');
+				panelZone.style.width = '';
+				panelZone.style.height = '';
 			}
 			if(panelZoneContent){
 				panelZoneContent.innerHTML = '';
@@ -1261,32 +1682,50 @@
 
 		function renderPanelZone(mainItem){
 			const zone = panelZoneState || {};
-			const activeItem = zone.active_item || null;
-			const layout = String(zone.layout_mode || 'off').toLowerCase();
-			if(!panelZone || !panelZoneContent || !zone.enabled || !activeItem || layout === 'off' || isSyncOrWallMedia(mainItem)){
+			const livePosItem = isLivePosItem(mainItem);
+			const activeItem = livePosItem
+				? (mainItem.live_pos_active_item || { title: mainItem.live_pos_title || mainItem.displayName || 'Live POS', body: mainItem.live_pos_body || 'Waiting for the next order...' })
+				: (zone.active_item || null);
+			const layout = livePosItem ? 'full-screen' : String(zone.layout_mode || 'off').toLowerCase();
+			const enabled = livePosItem || !!zone.enabled;
+			if(!panelZone || !panelZoneContent || !enabled || !activeItem || layout === 'off' || isSyncOrWallMedia(mainItem) || (layout === 'full-screen' && mainItem && !livePosItem)){
 				hidePanelZone();
-				return;
+				return false;
 			}
-			panelZone.classList.remove('layout-left', 'layout-right', 'layout-bottom');
+			panelZone.classList.remove('layout-left', 'layout-right', 'layout-bottom', 'layout-full');
 			panelZone.classList.add('visible');
 			panelZone.setAttribute('aria-hidden', 'false');
 			resetStageBounds();
+			const overlayPercent = normalizePanelOverlayPercent(zone.overlay_percent || 25);
+			const overlayWidth = `${overlayPercent}vw`;
+			const overlayHeight = `${overlayPercent}vh`;
+			panelZone.style.width = '';
+			panelZone.style.height = '';
 			if(layout === 'split-left-25'){
 				panelZone.classList.add('layout-left');
-				stage.style.left = '25vw';
+				panelZone.style.width = overlayWidth;
+				stage.style.left = overlayWidth;
 			} else if(layout === 'split-bottom-25'){
 				panelZone.classList.add('layout-bottom');
-				stage.style.bottom = '25vh';
+				panelZone.style.height = overlayHeight;
+				stage.style.bottom = overlayHeight;
+			} else if(layout === 'full-screen'){
+				panelZone.classList.add('layout-full');
 			} else {
 				panelZone.classList.add('layout-right');
-				stage.style.right = '25vw';
+				panelZone.style.width = overlayWidth;
+				stage.style.right = overlayWidth;
 			}
 			const appearance = applyPanelZoneAppearance(zone, layout);
+			if(appearance.posDisplayStyle === 'order_board' && (livePosItem || String(zone.source_mode || '').toLowerCase() === 'pos_webhook')){
+				panelZoneContent.innerHTML = renderPanelOrderBoard(zone, appearance);
+				return true;
+			}
 			const title = String(activeItem.title || activeItem.name || 'Info');
 			const body = String(activeItem.body || activeItem.text || '');
 			panelZoneContent.innerHTML = `
 				<div class="panel-chip">Live order info</div>
-				<div class="panel-kicker">Scheduled panel</div>
+				<div class="panel-kicker">${livePosItem ? 'Scheduled Live POS' : 'Scheduled panel'}</div>
 				<div class="panel-title"></div>
 				<div class="panel-body"></div>`;
 			const titleNode = panelZoneContent.querySelector('.panel-title');
@@ -1297,6 +1736,7 @@
 				bodyNode.style.maxHeight = `${(appearance.bodyRows * 1.4).toFixed(2)}em`;
 				bodyNode.style.overflow = 'hidden';
 			}
+			return true;
 		}
 		
 		// Client-side schedule filtering (matches server logic)
@@ -1562,8 +2002,12 @@
 			lastFetchTs = Date.now();
 			if(!playlist.length){
 				currentMainItem = null;
-				renderPanelZone(null);
-				showIdleState('Waiting for schedule…');
+				const panelVisible = renderPanelZone(null);
+				if(panelVisible){
+					hideIdleState();
+				}else{
+					showIdleState('Waiting for schedule…');
+				}
 			}else{
 				hideIdleState();
 			}
@@ -2700,6 +3144,17 @@
 			});
 			
 			const currentKey = keyFrom(item);
+			if(isLivePosItem(item)){
+				hideIdleState();
+				currentItemKey = currentKey;
+				try { sendClientEvent('load_ok', item, null).catch(() => {}); } catch {}
+				if(Date.now() - lastFetchTs > PLAYLIST_REFRESH_MIN_MS){
+					fetchPlaylist().catch(fetchErr => console.warn('Playlist refresh failed', fetchErr));
+				}
+				if(timer){ clearTimeout(timer); }
+				timer = setTimeout(tick, Math.max(1, Math.round(dur * 1000)));
+				return;
+			}
 			const singleItemLoop = activePlaylist.length === 1 && currentItemKey && currentItemKey === currentKey;
 
 			if(singleItemLoop){

@@ -24,6 +24,7 @@ class UploadTab extends StatefulWidget {
 
 class _UploadTabState extends State<UploadTab> {
   File? _file;
+  String? _fileSourceLabel;
   String? _selectedLibraryFile;
   String? _message;
   bool _busy = false;
@@ -40,6 +41,50 @@ class _UploadTabState extends State<UploadTab> {
     }
     setState(() {
       _file = File(path);
+      _fileSourceLabel = null;
+      _selectedLibraryFile = null;
+      _message = null;
+    });
+  }
+
+  Future<void> _pickFromGoogleDrive() async {
+    final result = await FilePicker.platform.pickFiles(
+      dialogTitle: 'Choose from Google Drive',
+      type: FileType.custom,
+      allowedExtensions: const [
+        'jpg',
+        'jpeg',
+        'png',
+        'webp',
+        'gif',
+        'bmp',
+        'mp4',
+        'mov',
+        'm4v',
+        'webm',
+        'mkv',
+        'avi',
+      ],
+      withData: false,
+    );
+    if (result == null || result.files.isEmpty) {
+      setState(() {
+        _message =
+            'No Drive file selected. If Google Drive is not listed, install the Google Drive app, sign in, or download the file and choose it from Downloads.';
+      });
+      return;
+    }
+    final path = result.files.single.path;
+    if (path == null || path.trim().isEmpty) {
+      setState(() {
+        _message =
+            'Android did not return a readable Drive file. Download it locally from Drive and try again.';
+      });
+      return;
+    }
+    setState(() {
+      _file = File(path);
+      _fileSourceLabel = 'Google Drive';
       _selectedLibraryFile = null;
       _message = null;
     });
@@ -56,6 +101,7 @@ class _UploadTabState extends State<UploadTab> {
       }
       setState(() {
         _file = File(picked.path);
+        _fileSourceLabel = 'Camera';
         _selectedLibraryFile = null;
         _message = null;
       });
@@ -88,6 +134,7 @@ class _UploadTabState extends State<UploadTab> {
     setState(() {
       _selectedLibraryFile = selected.trim();
       _file = null;
+      _fileSourceLabel = null;
       _message = null;
     });
   }
@@ -133,6 +180,7 @@ class _UploadTabState extends State<UploadTab> {
             ? 'Photo/file uploaded and assigned successfully. Check Stores tab Current Media.'
             : 'Assigned media from server library successfully. Check Stores tab Current Media.';
         _file = null;
+        _fileSourceLabel = null;
         _selectedLibraryFile = null;
       });
     } catch (e) {
@@ -243,6 +291,22 @@ class _UploadTabState extends State<UploadTab> {
                   ],
                 ),
                 const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _busy ? null : _pickFromGoogleDrive,
+                    icon: const Icon(Icons.add_to_drive),
+                    label: const Text('Choose from Google Drive'),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'If Recent opens, use the menu to choose Drive. If Drive is missing, install Google Drive and sign in first.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 8),
                 Container(
                   width: double.infinity,
                   padding:
@@ -255,7 +319,7 @@ class _UploadTabState extends State<UploadTab> {
                   child: Text(
                     _file == null
                         ? 'No local file selected'
-                        : 'Selected local file: ${_file!.uri.pathSegments.last}',
+                        : 'Selected ${_fileSourceLabel ?? 'local file'}: ${_file!.uri.pathSegments.last}',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodyMedium,
                   ),

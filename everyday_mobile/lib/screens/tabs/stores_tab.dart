@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 
@@ -623,6 +624,19 @@ class _StoresTabState extends State<StoresTab> {
         .join('/');
   }
 
+  String _normalizeUploadedMediaPath(String raw) {
+    var path = raw.trim().replaceAll('\\', '/');
+    while (path.startsWith('/')) {
+      path = path.substring(1);
+    }
+    for (final prefix in const ['static/uploads/', 'uploads/', 'media/']) {
+      if (path.toLowerCase().startsWith(prefix)) {
+        return path.substring(prefix.length);
+      }
+    }
+    return path;
+  }
+
   String _toAbsoluteUrlForPreview(String value) {
     final text = value.trim();
     if (text.isEmpty) {
@@ -673,7 +687,7 @@ class _StoresTabState extends State<StoresTab> {
       if (file.isNotEmpty &&
           !file.startsWith('http://') &&
           !file.startsWith('https://')) {
-        final normalizedFile = file.startsWith('/') ? file.substring(1) : file;
+        final normalizedFile = _normalizeUploadedMediaPath(file);
         final lower = normalizedFile.toLowerCase();
         final encoded = _encodePathPreservingSlashes(normalizedFile);
         final isVideo = lower.contains('.mp4') ||
@@ -746,19 +760,22 @@ class _StoresTabState extends State<StoresTab> {
       return;
     }
 
-    await showModalBottomSheet<void>(
+    await showDialog<void>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      useSafeArea: false,
       builder: (context) {
-        return FractionallySizedBox(
-          heightFactor: 0.94,
+        return Dialog.fullscreen(
           child: _ScreenMediaEditorSheet(
             apiClient: widget.apiClient,
             storeId: storeId,
             screenId: screen.id,
             screenName: screen.name,
+            screenStatus: _screenStatus[screen.id] ?? 'offline',
+            screenAddress: screen.address,
+            screenProtected: screen.protected,
+            screenVertical: screen.vertical,
+            screenHorizontal: screen.horizontal,
+            screenPanelZone: screen.panelZone,
           ),
         );
       },
@@ -773,6 +790,33 @@ class _StoresTabState extends State<StoresTab> {
         .where((screen) =>
             (_screenStatus[screen.id] ?? '').toLowerCase() == 'online')
         .length;
+
+    Widget compactPickerAction({
+      required VoidCallback? onPressed,
+      required IconData icon,
+      required String tooltip,
+      Color? iconColor,
+    }) {
+      return Tooltip(
+        message: tooltip,
+        child: SizedBox(
+          width: 42,
+          height: 42,
+          child: OutlinedButton(
+            onPressed: onPressed,
+            style: OutlinedButton.styleFrom(
+              padding: EdgeInsets.zero,
+              visualDensity: VisualDensity.compact,
+              side: BorderSide(color: scheme.outlineVariant),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: Icon(icon, size: 18, color: iconColor),
+          ),
+        ),
+      );
+    }
 
     return RefreshIndicator(
       onRefresh: _loadStores,
@@ -858,63 +902,81 @@ class _StoresTabState extends State<StoresTab> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    value: widget.selectedStoreId,
-                    items: _stores
-                        .map((store) => DropdownMenuItem(
-                              value: store.id,
-                              child: Text('${store.id} - ${store.name}'),
-                            ))
-                        .toList(),
-                    onChanged: _loading ? null : _onSelectStore,
-                    decoration: const InputDecoration(labelText: 'Store'),
-                  ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      OutlinedButton.icon(
-                        onPressed: _loading ? null : _addStore,
-                        icon: const Icon(Icons.add_business),
-                        label: const Text('Add Store'),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: widget.selectedStoreId,
+                          isExpanded: true,
+                          items: _stores
+                              .map((store) => DropdownMenuItem(
+                                    value: store.id,
+                                    child: Text(
+                                      '${store.id} - ${store.name}',
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ))
+                              .toList(),
+                          onChanged: _loading ? null : _onSelectStore,
+                          decoration: const InputDecoration(labelText: 'Store'),
+                        ),
                       ),
-                      OutlinedButton.icon(
+                      const SizedBox(width: 8),
+                      compactPickerAction(
+                        onPressed: _loading ? null : _addStore,
+                        icon: Icons.add_business,
+                        tooltip: 'Add store',
+                      ),
+                      const SizedBox(width: 6),
+                      compactPickerAction(
                         onPressed: _loading || widget.selectedStoreId == null
                             ? null
                             : _deleteSelectedStore,
-                        icon: const Icon(Icons.delete_outline),
-                        label: const Text('Delete Store'),
+                        icon: Icons.delete_outline,
+                        tooltip: 'Delete store',
+                        iconColor: widget.selectedStoreId == null || _loading
+                            ? null
+                            : scheme.error,
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  DropdownButtonFormField<String>(
-                    value: widget.selectedScreenId,
-                    items: _screens
-                        .map((screen) => DropdownMenuItem(
-                              value: screen.id,
-                              child: Text('${screen.id} - ${screen.name}'),
-                            ))
-                        .toList(),
-                    onChanged: _loading
-                        ? null
-                        : (value) {
-                            widget.onSelectionChanged(
-                                widget.selectedStoreId, value);
-                          },
-                    decoration: const InputDecoration(labelText: 'Screen'),
-                  ),
-                  const SizedBox(height: 10),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: OutlinedButton.icon(
-                      onPressed: _loading || widget.selectedStoreId == null
-                          ? null
-                          : _addScreen,
-                      icon: const Icon(Icons.add_to_photos_outlined),
-                      label: const Text('Add Screen'),
-                    ),
+                  const SizedBox(height: 8),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: widget.selectedScreenId,
+                          isExpanded: true,
+                          items: _screens
+                              .map((screen) => DropdownMenuItem(
+                                    value: screen.id,
+                                    child: Text(
+                                      '${screen.id} - ${screen.name}',
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ))
+                              .toList(),
+                          onChanged: _loading
+                              ? null
+                              : (value) {
+                                  widget.onSelectionChanged(
+                                      widget.selectedStoreId, value);
+                                },
+                          decoration:
+                              const InputDecoration(labelText: 'Screen'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      compactPickerAction(
+                        onPressed: _loading || widget.selectedStoreId == null
+                            ? null
+                            : _addScreen,
+                        icon: Icons.add_to_photos_outlined,
+                        tooltip: 'Add screen',
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -1235,12 +1297,22 @@ class ScreenMediaEditorSheet extends StatelessWidget {
     required this.storeId,
     required this.screenId,
     required this.screenName,
+    this.screenStatus = 'offline',
+    this.screenAddress = '',
+    this.screenProtected = false,
+    this.screenVertical = false,
+    this.screenHorizontal = true,
   });
 
   final ApiClient apiClient;
   final String storeId;
   final String screenId;
   final String screenName;
+  final String screenStatus;
+  final String screenAddress;
+  final bool screenProtected;
+  final bool screenVertical;
+  final bool screenHorizontal;
 
   @override
   Widget build(BuildContext context) {
@@ -1249,6 +1321,11 @@ class ScreenMediaEditorSheet extends StatelessWidget {
       storeId: storeId,
       screenId: screenId,
       screenName: screenName,
+      screenStatus: screenStatus,
+      screenAddress: screenAddress,
+      screenProtected: screenProtected,
+      screenVertical: screenVertical,
+      screenHorizontal: screenHorizontal,
     );
   }
 }
@@ -1259,12 +1336,24 @@ class _ScreenMediaEditorSheet extends StatefulWidget {
     required this.storeId,
     required this.screenId,
     required this.screenName,
+    this.screenStatus = 'offline',
+    this.screenAddress = '',
+    this.screenProtected = false,
+    this.screenVertical = false,
+    this.screenHorizontal = true,
+    this.screenPanelZone = const {},
   });
 
   final ApiClient apiClient;
   final String storeId;
   final String screenId;
   final String screenName;
+  final String screenStatus;
+  final String screenAddress;
+  final bool screenProtected;
+  final bool screenVertical;
+  final bool screenHorizontal;
+  final Map<String, dynamic> screenPanelZone;
 
   @override
   State<_ScreenMediaEditorSheet> createState() =>
@@ -1300,8 +1389,6 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
 
   final _startController = TextEditingController();
   final _endController = TextEditingController();
-  final _windowStartController = TextEditingController();
-  final _windowEndController = TextEditingController();
 
   Timer? _liveSyncTimer;
   Timer? _autoSaveTimer;
@@ -1316,14 +1403,61 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
   int _itemDuration = 10;
   int _itemEffectId = 1;
   Set<String> _itemDays = <String>{};
-  bool _windowEnabled = true;
-  Set<String> _windowDays = <String>{};
-  bool _showNewWindowForm = false;
   bool _quickActionBusy = false;
   int _screenRotation = 0;
   bool _screenMuted = false;
+  String _screenAddress = '';
+  bool _screenProtected = false;
+  bool _screenVertical = false;
+  bool _screenHorizontal = true;
+  Map<String, dynamic> _screenPanelZone = const {};
+  bool _isPanelInfoExpanded = false;
+  final Set<String> _expandedPanelItemIds = <String>{};
+  bool _isMasterStore = false;
   File? _pickedFile;
   List<Map<String, dynamic>> _playlist = const [];
+
+  static const Map<String, String> _panelLayoutLabels = {
+    'off': 'Off',
+    'split-right-25': 'Right 25%',
+    'split-left-25': 'Left 25%',
+    'split-bottom-25': 'Bottom 25%',
+    'full-screen': 'Full screen 100%',
+  };
+
+  static const Map<String, String> _panelSourceLabels = {
+    'manual': 'Manual cards',
+    'pos_webhook': 'Live POS',
+  };
+
+  static const Map<String, String> _panelScopeTitles = {
+    'screen': 'This screen only',
+    'store': 'This store',
+    'chain': 'Multi-store chain',
+  };
+
+  static const Map<String, String> _panelScopeSubtitles = {
+    'screen': 'One webhook just for this screen',
+    'store': 'One shared webhook for screens in this store',
+    'chain': 'One shared webhook across many stores',
+  };
+
+  static const Map<String, String> _panelConnectorLabels = {
+    'generic_webhook': 'Direct webhook',
+    'zapier': 'Zapier',
+    'make': 'Make',
+    'n8n': 'n8n',
+    'developer': 'Developer',
+  };
+
+  static const Map<String, String> _panelConnectorSubtitles = {
+    'generic_webhook':
+        'Connect any POS through a direct webhook or a bridge like Zapier, Make, or n8n.',
+    'zapier': 'Use when the POS already connects to Zapier.',
+    'make': 'Good for multi-step automations.',
+    'n8n': 'Best for self-hosted workflows.',
+    'developer': 'Use your own backend, plugin, or script.',
+  };
 
   Map<String, dynamic>? get _currentItem {
     if (_playlist.isEmpty) {
@@ -1373,6 +1507,2473 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
     return url.isNotEmpty && (mediaType == 'image' || mediaType == 'video');
   }
 
+  bool _isLivePosPlaylistItem(Map<String, dynamic> item) {
+    final mediaType = (item['media_type'] ?? '').toString().toLowerCase();
+    final file = (item['file'] ?? '').toString().toLowerCase();
+    return mediaType == 'live_pos' || file.startsWith('livepos:');
+  }
+
+  bool get _hasLivePosSchedule {
+    return _playlist.any(_isLivePosPlaylistItem);
+  }
+
+  Map<String, dynamic> _normalizedPanelZone(Map<String, dynamic>? raw) {
+    final zone = _asMap(raw);
+    final posFeed = _asMap(zone['pos_feed']);
+    final fieldMap = _asMap(posFeed['field_map']);
+    final appearance = _asMap(zone['appearance']);
+    return {
+      'enabled': zone['enabled'] == true,
+      'layout_mode': (zone['layout_mode'] ?? 'off').toString().trim(),
+      'source_mode': (zone['source_mode'] ?? 'manual').toString().trim(),
+      'feed_scope': (zone['feed_scope'] ?? 'screen').toString().trim(),
+      'playlist': zone['playlist'] is List
+          ? (zone['playlist'] as List).map(_asMap).toList()
+          : const <Map<String, dynamic>>[],
+      'live_queue': zone['live_queue'] is List
+          ? (zone['live_queue'] as List).map(_asMap).toList()
+          : const <Map<String, dynamic>>[],
+      'appearance': {
+        'background_color':
+            (appearance['background_color'] ?? '#201206').toString(),
+        'content_align': (appearance['content_align'] ?? 'center').toString(),
+        'body_rows': int.tryParse('${appearance['body_rows'] ?? 4}') ?? 4,
+      },
+      'pos_feed': {
+        'name': (posFeed['name'] ?? '').toString(),
+        'webhook_token': (posFeed['webhook_token'] ?? '').toString(),
+        'connector_type':
+            (posFeed['connector_type'] ?? 'generic_webhook').toString(),
+        'field_map': {
+          'customer_name':
+              (fieldMap['customer_name'] ?? 'customer.name').toString(),
+          'order_number':
+              (fieldMap['order_number'] ?? 'order.number').toString(),
+          'status': (fieldMap['status'] ?? 'order.status').toString(),
+          'external_id': (fieldMap['external_id'] ?? 'order.id').toString(),
+        },
+        'title_template':
+            (posFeed['title_template'] ?? 'Now serving').toString(),
+        'body_template': (posFeed['body_template'] ??
+                '{{customer_name}}\nOrder #{{order_number}}')
+            .toString(),
+        'allowed_statuses': posFeed['allowed_statuses'] is List
+            ? (posFeed['allowed_statuses'] as List)
+                .map((value) => value.toString().trim())
+                .where((value) => value.isNotEmpty)
+                .toList()
+            : const <String>['ready', 'serving'],
+        'display_seconds':
+            int.tryParse('${posFeed['display_seconds'] ?? 10}') ?? 10,
+        'max_items': int.tryParse('${posFeed['max_items'] ?? 5}') ?? 5,
+        'store_selector_path':
+            (posFeed['store_selector_path'] ?? 'store.id').toString(),
+        'event_count': int.tryParse('${posFeed['event_count'] ?? 0}') ?? 0,
+        'last_event_at': (posFeed['last_event_at'] ?? '').toString(),
+        'last_event_result': (posFeed['last_event_result'] ?? '').toString(),
+        'last_event_summary': _asMap(posFeed['last_event_summary']),
+        'last_payload_preview':
+            (posFeed['last_payload_preview'] ?? '').toString(),
+      },
+    };
+  }
+
+  String _panelLayoutLabel(String layoutMode) {
+    return _panelLayoutLabels[layoutMode] ?? 'Custom';
+  }
+
+  String _panelTimeSummary(dynamic value) {
+    final text = (value ?? '').toString().trim();
+    if (text.isEmpty) {
+      return '';
+    }
+    final normalized = text.contains('T') ? text.split('T').last : text;
+    final match = RegExp(r'^(\d{1,2}):(\d{2})').firstMatch(normalized);
+    if (match == null) {
+      return normalized;
+    }
+    final hour = int.tryParse(match.group(1) ?? '') ?? 0;
+    final minute = int.tryParse(match.group(2) ?? '') ?? 0;
+    final suffix = hour >= 12 ? 'PM' : 'AM';
+    final hour12 = hour % 12 == 0 ? 12 : hour % 12;
+    return '$hour12:${minute.toString().padLeft(2, '0')} $suffix';
+  }
+
+  String _panelTimeRangeSummary({
+    dynamic start,
+    dynamic end,
+  }) {
+    final startLabel = _panelTimeSummary(start);
+    final endLabel = _panelTimeSummary(end);
+    if (startLabel.isNotEmpty && endLabel.isNotEmpty) {
+      return '$startLabel - $endLabel';
+    }
+    if (startLabel.isNotEmpty) {
+      return 'Starts $startLabel';
+    }
+    if (endLabel.isNotEmpty) {
+      return 'Until $endLabel';
+    }
+    return 'No time window';
+  }
+
+  List<Map<String, dynamic>> _activePanelItems(Map<String, dynamic> panelZone) {
+    final sourceMode = (panelZone['source_mode'] ?? 'manual').toString();
+    final rawItems = sourceMode == 'pos_webhook'
+        ? panelZone['live_queue']
+        : panelZone['playlist'];
+    if (rawItems is! List) {
+      return const [];
+    }
+    return rawItems.map(_asMap).where((item) => item.isNotEmpty).toList();
+  }
+
+  String _panelQueueStatusLabel(String result, bool hasItems, bool hasToken) {
+    final normalized = result.trim().toLowerCase();
+    if (normalized == 'accepted' || (hasItems && hasToken)) {
+      return 'Connected';
+    }
+    if (normalized == 'filtered') {
+      return 'Filtered';
+    }
+    if (normalized == 'error') {
+      return 'Error';
+    }
+    return hasToken ? 'Waiting' : 'Not set';
+  }
+
+  Color _panelQueueStatusBackground(String label) {
+    switch (label) {
+      case 'Connected':
+        return const Color(0xFFDDF7E7);
+      case 'Filtered':
+        return const Color(0xFFFFF3CD);
+      case 'Error':
+        return const Color(0xFFFCE2E2);
+      default:
+        return const Color(0xFFE8EEF8);
+    }
+  }
+
+  Color _panelQueueStatusForeground(String label) {
+    switch (label) {
+      case 'Connected':
+        return const Color(0xFF166534);
+      case 'Filtered':
+        return const Color(0xFF92400E);
+      case 'Error':
+        return const Color(0xFFB91C1C);
+      default:
+        return const Color(0xFF1D4ED8);
+    }
+  }
+
+  Widget _buildPanelStatusBadge(String label) {
+    final background = _panelQueueStatusBackground(label);
+    final foreground = _panelQueueStatusForeground(label);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: foreground.withValues(alpha: 0.18)),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: foreground,
+              fontWeight: FontWeight.w700,
+            ),
+      ),
+    );
+  }
+
+  String _panelItemScheduleSummary(Map<String, dynamic> panelItem) {
+    final range = _panelTimeRangeSummary(
+      start: panelItem['start'],
+      end: panelItem['end'],
+    );
+    final days = _normalizeDays(panelItem['days'])
+        .map((day) => day.toUpperCase())
+        .join(' ');
+    final parts = <String>[];
+    parts.add(range);
+    if (days.isNotEmpty) {
+      parts.add(days);
+    }
+    return parts.join(' • ');
+  }
+
+  Future<void> _updatePanelZone({
+    String? layoutMode,
+    String? sourceMode,
+  }) async {
+    setState(() {
+      _saving = true;
+      _message = null;
+    });
+    try {
+      final data = await widget.apiClient.updatePanelZone(
+        storeId: widget.storeId,
+        screenId: widget.screenId,
+        layoutMode: layoutMode,
+        sourceMode: sourceMode,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        final updatedZone = _asMap(data['panel_zone']);
+        _screenPanelZone = _normalizedPanelZone(updatedZone);
+        _isPanelInfoExpanded = true;
+        if (sourceMode != null) {
+          _message = sourceMode == 'pos_webhook'
+              ? 'Live POS mode enabled.'
+              : 'Manual info cards enabled.';
+        } else if (layoutMode != null) {
+          _message = layoutMode == 'off'
+              ? 'Info panel turned off.'
+              : 'Info panel layout updated.';
+        }
+      });
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _message = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _addLivePosScheduleFromPanel() async {
+    if (_hasLivePosSchedule) {
+      return;
+    }
+    final panelZone = _normalizedPanelZone(_screenPanelZone);
+    final posFeed = _asMap(panelZone['pos_feed']);
+    final displayName = (posFeed['name'] ?? '').toString().trim();
+    final parsedDuration = int.tryParse('${posFeed['display_seconds'] ?? 10}');
+    final duration = (parsedDuration ?? 10).clamp(1, 120).toInt();
+    setState(() {
+      _saving = true;
+      _message = null;
+    });
+    try {
+      final data = await widget.apiClient.addLivePosPlaylistItem(
+        storeId: widget.storeId,
+        screenId: widget.screenId,
+        displayName: displayName.isEmpty ? 'Live POS' : displayName,
+        duration: duration,
+        reuseExisting: true,
+      );
+      if (!mounted) {
+        return;
+      }
+      final updatedZone = _normalizedPanelZone(_asMap(data['panel_zone']));
+      setState(() {
+        _screenPanelZone = updatedZone;
+        _isPanelInfoExpanded = true;
+        _message = 'Live POS added to this screen schedule.';
+      });
+      await _loadPlaylist();
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _message = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _togglePanelCardEnabled(Map<String, dynamic> panelItem) async {
+    final itemId = (panelItem['id'] ?? '').toString();
+    if (itemId.isEmpty) {
+      return;
+    }
+    final nextEnabled = !((panelItem['enabled'] ?? true) == true);
+    setState(() {
+      _saving = true;
+      _message = null;
+    });
+    try {
+      await widget.apiClient.updatePanelPlaylistItem(
+        storeId: widget.storeId,
+        screenId: widget.screenId,
+        itemId: itemId,
+        enabled: nextEnabled,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _message = nextEnabled ? 'Info card enabled.' : 'Info card disabled.';
+      });
+      await _loadPlaylist();
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _message = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _togglePanelCardDay(
+    Map<String, dynamic> panelItem,
+    String day,
+  ) async {
+    final itemId = (panelItem['id'] ?? '').toString();
+    if (itemId.isEmpty) {
+      return;
+    }
+    final nextDays = _normalizeDays(panelItem['days']).toSet();
+    if (nextDays.contains(day)) {
+      nextDays.remove(day);
+    } else {
+      nextDays.add(day);
+    }
+
+    setState(() {
+      _saving = true;
+      _message = null;
+    });
+    try {
+      await widget.apiClient.updatePanelPlaylistItem(
+        storeId: widget.storeId,
+        screenId: widget.screenId,
+        itemId: itemId,
+        days: nextDays.toList(),
+      );
+      if (!mounted) {
+        return;
+      }
+      await _loadPlaylist();
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _message = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _updatePanelCardBoundary({
+    required Map<String, dynamic> panelItem,
+    required bool isStart,
+    required bool pickDate,
+  }) async {
+    final itemId = (panelItem['id'] ?? '').toString();
+    if (itemId.isEmpty) {
+      return;
+    }
+    final existing =
+        _formatDisplayDateTime(panelItem[isStart ? 'start' : 'end']).trim();
+    final nextValue = pickDate
+        ? await _selectDateValue(existing)
+        : await _selectTimeValue(existing);
+    if (nextValue == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _message = null;
+    });
+    try {
+      await widget.apiClient.updatePanelPlaylistItem(
+        storeId: widget.storeId,
+        screenId: widget.screenId,
+        itemId: itemId,
+        start: isStart ? nextValue : null,
+        end: isStart ? null : nextValue,
+      );
+      if (!mounted) {
+        return;
+      }
+      await _loadPlaylist();
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _message = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _clearPanelCardBoundary({
+    required Map<String, dynamic> panelItem,
+    required bool isStart,
+  }) async {
+    final itemId = (panelItem['id'] ?? '').toString();
+    if (itemId.isEmpty) {
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _message = null;
+    });
+    try {
+      await widget.apiClient.updatePanelPlaylistItem(
+        storeId: widget.storeId,
+        screenId: widget.screenId,
+        itemId: itemId,
+        start: isStart ? '' : null,
+        end: isStart ? null : '',
+      );
+      if (!mounted) {
+        return;
+      }
+      await _loadPlaylist();
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _message = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
+  }
+
+  void _applyPanelZoneResponse(
+    Map<String, dynamic> data, {
+    String? message,
+  }) {
+    final updatedZone = _normalizedPanelZone(_asMap(data['panel_zone']));
+    setState(() {
+      _screenPanelZone = updatedZone;
+      _isPanelInfoExpanded = true;
+      if (message != null) {
+        _message = message;
+      }
+    });
+  }
+
+  List<String> _parsePanelStatusList(String text) {
+    return text
+        .split(',')
+        .map((value) => value.trim().toLowerCase())
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList();
+  }
+
+  String _normalizePanelColor(String raw) {
+    final text = raw.trim();
+    if (RegExp(r'^#?[0-9a-fA-F]{6}$').hasMatch(text)) {
+      return '#${text.replaceFirst('#', '').toLowerCase()}';
+    }
+    if (RegExp(r'^#?[0-9a-fA-F]{3}$').hasMatch(text)) {
+      final compact = text.replaceFirst('#', '').toLowerCase();
+      return '#${compact.split('').map((ch) => '$ch$ch').join()}';
+    }
+    return '#201206';
+  }
+
+  String _panelPosWebhookUrl(String token) {
+    final cleanToken = token.trim();
+    if (cleanToken.isEmpty) {
+      return '';
+    }
+    try {
+      final base = Uri.parse(widget.apiClient.baseUrl);
+      return base
+          .resolve('/api/panel-pos-webhook/${Uri.encodeComponent(cleanToken)}')
+          .toString();
+    } catch (_) {
+      return '/api/panel-pos-webhook/$cleanToken';
+    }
+  }
+
+  Widget _buildPanelPosMetricBadge({
+    required String label,
+    required IconData icon,
+  }) {
+    return _buildInfoBadge(
+      icon: icon,
+      label: label,
+      background: const Color(0xFFE8F0FE),
+      foreground: const Color(0xFF1D4ED8),
+    );
+  }
+
+  Future<void> _openPanelPosSetupSheet() async {
+    final panelZone = _normalizedPanelZone(_screenPanelZone);
+    final posFeed = _asMap(panelZone['pos_feed']);
+    final fieldMap = _asMap(posFeed['field_map']);
+    final appearance = _asMap(panelZone['appearance']);
+
+    final nameController = TextEditingController(
+      text: (posFeed['name'] ?? '').toString(),
+    );
+    final statusesController = TextEditingController(
+      text: (posFeed['allowed_statuses'] as List? ?? const ['ready', 'serving'])
+          .map((value) => value.toString())
+          .join(', '),
+    );
+    final durationController = TextEditingController(
+      text: '${int.tryParse('${posFeed['display_seconds'] ?? 10}') ?? 10}',
+    );
+    final maxItemsController = TextEditingController(
+      text: '${int.tryParse('${posFeed['max_items'] ?? 5}') ?? 5}',
+    );
+    final titleController = TextEditingController(
+      text: (posFeed['title_template'] ?? 'Now serving').toString(),
+    );
+    final bodyController = TextEditingController(
+      text: (posFeed['body_template'] ??
+              '{{customer_name}}\nOrder #{{order_number}}')
+          .toString(),
+    );
+    final customerController = TextEditingController(
+      text: (fieldMap['customer_name'] ?? 'customer.name').toString(),
+    );
+    final orderController = TextEditingController(
+      text: (fieldMap['order_number'] ?? 'order.number').toString(),
+    );
+    final statusController = TextEditingController(
+      text: (fieldMap['status'] ?? 'order.status').toString(),
+    );
+    final externalController = TextEditingController(
+      text: (fieldMap['external_id'] ?? 'order.id').toString(),
+    );
+    final storeSelectorController = TextEditingController(
+      text: (posFeed['store_selector_path'] ?? 'store.id').toString(),
+    );
+    final backgroundController = TextEditingController(
+      text: (appearance['background_color'] ?? '#201206').toString(),
+    );
+    final bodyRowsController = TextEditingController(
+      text: '${int.tryParse('${appearance['body_rows'] ?? 4}') ?? 4}',
+    );
+
+    var localScope = (panelZone['feed_scope'] ?? 'screen').toString();
+    var localConnector =
+        (posFeed['connector_type'] ?? 'generic_webhook').toString();
+    var localAlign = (appearance['content_align'] ?? 'center').toString();
+    var localWebhookToken = (posFeed['webhook_token'] ?? '').toString();
+    var localEventCount = int.tryParse('${posFeed['event_count'] ?? 0}') ?? 0;
+    var localLastEventAt = (posFeed['last_event_at'] ?? '').toString();
+    var localLastEventResult = (posFeed['last_event_result'] ?? '').toString();
+    var localLastEventSummary = _asMap(posFeed['last_event_summary']);
+    var localLastPayload = (posFeed['last_payload_preview'] ?? '').toString();
+    var localQueueCount = _activePanelItems(panelZone).length;
+    var localSaving = false;
+
+    Future<void> saveSetup(StateSetter setSheetState) async {
+      setSheetState(() {
+        localSaving = true;
+      });
+      try {
+        final data = await widget.apiClient.updatePanelPosFeed(
+          storeId: widget.storeId,
+          screenId: widget.screenId,
+          payload: {
+            'enable_source': true,
+            'feed_scope': localScope,
+            'name': nameController.text.trim(),
+            'connector_type': localConnector,
+            'field_map': {
+              'customer_name': customerController.text.trim(),
+              'order_number': orderController.text.trim(),
+              'status': statusController.text.trim(),
+              'external_id': externalController.text.trim(),
+            },
+            'store_selector_path': storeSelectorController.text.trim(),
+            'title_template': titleController.text.trim(),
+            'body_template': bodyController.text.trim(),
+            'allowed_statuses':
+                _parsePanelStatusList(statusesController.text.trim()),
+            'display_seconds':
+                int.tryParse(durationController.text.trim()) ?? 10,
+            'max_items': int.tryParse(maxItemsController.text.trim()) ?? 5,
+            'appearance': {
+              'background_color':
+                  _normalizePanelColor(backgroundController.text.trim()),
+              'content_align': localAlign,
+              'body_rows': int.tryParse(bodyRowsController.text.trim()) ?? 4,
+            },
+          },
+        );
+        if (!mounted) {
+          return;
+        }
+        final updatedZone = _normalizedPanelZone(_asMap(data['panel_zone']));
+        final updatedFeed = _asMap(updatedZone['pos_feed']);
+        localWebhookToken = (updatedFeed['webhook_token'] ?? '').toString();
+        localEventCount =
+            int.tryParse('${updatedFeed['event_count'] ?? 0}') ?? 0;
+        localLastEventAt = (updatedFeed['last_event_at'] ?? '').toString();
+        localLastEventResult =
+            (updatedFeed['last_event_result'] ?? '').toString();
+        localLastEventSummary = _asMap(updatedFeed['last_event_summary']);
+        localLastPayload =
+            (updatedFeed['last_payload_preview'] ?? '').toString();
+        localQueueCount = _activePanelItems(updatedZone).length;
+        _applyPanelZoneResponse(data, message: 'Live POS setup saved.');
+      } catch (e) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _message = e.toString().replaceFirst('Exception: ', '');
+        });
+      } finally {
+        if (mounted) {
+          setSheetState(() {
+            localSaving = false;
+          });
+        }
+      }
+    }
+
+    Future<void> updateQueueAction(
+      StateSetter setSheetState, {
+      bool resetToken = false,
+      bool clearQueue = false,
+      String? successMessage,
+    }) async {
+      setSheetState(() {
+        localSaving = true;
+      });
+      try {
+        final data = await widget.apiClient.updatePanelPosFeed(
+          storeId: widget.storeId,
+          screenId: widget.screenId,
+          payload: {
+            'enable_source': true,
+            'feed_scope': localScope,
+            if (resetToken) 'reset_token': true,
+            if (clearQueue) 'clear_queue': true,
+          },
+        );
+        if (!mounted) {
+          return;
+        }
+        final updatedZone = _normalizedPanelZone(_asMap(data['panel_zone']));
+        final updatedFeed = _asMap(updatedZone['pos_feed']);
+        localWebhookToken = (updatedFeed['webhook_token'] ?? '').toString();
+        localEventCount =
+            int.tryParse('${updatedFeed['event_count'] ?? 0}') ?? 0;
+        localLastEventAt = (updatedFeed['last_event_at'] ?? '').toString();
+        localLastEventResult =
+            (updatedFeed['last_event_result'] ?? '').toString();
+        localLastEventSummary = _asMap(updatedFeed['last_event_summary']);
+        localLastPayload =
+            (updatedFeed['last_payload_preview'] ?? '').toString();
+        localQueueCount = _activePanelItems(updatedZone).length;
+        _applyPanelZoneResponse(data, message: successMessage);
+      } catch (e) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _message = e.toString().replaceFirst('Exception: ', '');
+        });
+      } finally {
+        if (mounted) {
+          setSheetState(() {
+            localSaving = false;
+          });
+        }
+      }
+    }
+
+    Future<void> sendSample(StateSetter setSheetState) async {
+      setSheetState(() {
+        localSaving = true;
+      });
+      try {
+        final data = await widget.apiClient.sendPanelPosSample(
+          storeId: widget.storeId,
+          screenId: widget.screenId,
+        );
+        if (!mounted) {
+          return;
+        }
+        final updatedZone = _normalizedPanelZone(_asMap(data['panel_zone']));
+        final updatedFeed = _asMap(updatedZone['pos_feed']);
+        localWebhookToken = (updatedFeed['webhook_token'] ?? '').toString();
+        localEventCount =
+            int.tryParse('${updatedFeed['event_count'] ?? 0}') ?? 0;
+        localLastEventAt = (updatedFeed['last_event_at'] ?? '').toString();
+        localLastEventResult =
+            (updatedFeed['last_event_result'] ?? '').toString();
+        localLastEventSummary = _asMap(updatedFeed['last_event_summary']);
+        localLastPayload =
+            (updatedFeed['last_payload_preview'] ?? '').toString();
+        localQueueCount = _activePanelItems(updatedZone).length;
+        _applyPanelZoneResponse(data, message: 'Sample POS event sent.');
+      } catch (e) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _message = e.toString().replaceFirst('Exception: ', '');
+        });
+      } finally {
+        if (mounted) {
+          setSheetState(() {
+            localSaving = false;
+          });
+        }
+      }
+    }
+
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final webhookUrl = _panelPosWebhookUrl(localWebhookToken);
+            final statusLabel = _panelQueueStatusLabel(
+              localLastEventResult,
+              localEventCount > 0,
+              localWebhookToken.isNotEmpty,
+            );
+            final previewTitle = titleController.text.trim().isEmpty
+                ? 'Now serving'
+                : titleController.text.trim();
+            final previewBody = bodyController.text.trim().isEmpty
+                ? 'Jane Smith\nOrder #A104'
+                : bodyController.text.trim();
+            final lastSummaryLine =
+                '${(localLastEventSummary['customer_name'] ?? '').toString().trim()}${(localLastEventSummary['order_number'] ?? '').toString().trim().isNotEmpty ? ' • Order #${(localLastEventSummary['order_number'] ?? '').toString().trim()}' : ''}${(localLastEventSummary['status'] ?? '').toString().trim().isNotEmpty ? ' • ${(localLastEventSummary['status'] ?? '').toString().trim()}' : ''}';
+
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 8,
+                  bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+                ),
+                child: SizedBox(
+                  height: MediaQuery.of(sheetContext).size.height * 0.9,
+                  child: ListView(
+                    children: [
+                      Text('Live POS Setup', style: theme.textTheme.titleLarge),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Connect any POS through a direct webhook or a bridge like Zapier, Make, or n8n.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _buildPanelStatusBadge(statusLabel),
+                          _buildPanelPosMetricBadge(
+                            label:
+                                '$localEventCount event${localEventCount == 1 ? '' : 's'}',
+                            icon: Icons.bolt_outlined,
+                          ),
+                          _buildPanelPosMetricBadge(
+                            label:
+                                '$localQueueCount/${int.tryParse(maxItemsController.text.trim()) ?? 5} queued',
+                            icon: Icons.queue_outlined,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      DropdownButtonFormField<String>(
+                        value: localScope,
+                        items: _panelScopeTitles.entries
+                            .map(
+                              (entry) => DropdownMenuItem<String>(
+                                value: entry.key,
+                                child: Text(entry.value),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: localSaving
+                            ? null
+                            : (value) {
+                                if (value == null) {
+                                  return;
+                                }
+                                setSheetState(() {
+                                  localScope = value;
+                                });
+                              },
+                        decoration: const InputDecoration(
+                          labelText: 'Webhook scope',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<String>(
+                        value: localConnector,
+                        items: _panelConnectorLabels.entries
+                            .map(
+                              (entry) => DropdownMenuItem<String>(
+                                value: entry.key,
+                                child: Text(entry.value),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: localSaving
+                            ? null
+                            : (value) {
+                                if (value == null) {
+                                  return;
+                                }
+                                setSheetState(() {
+                                  localConnector = value;
+                                });
+                              },
+                        decoration: const InputDecoration(
+                          labelText: 'How will you connect?',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: nameController,
+                        enabled: !localSaving,
+                        decoration: const InputDecoration(
+                          labelText: 'POS or feed name',
+                          hintText: 'Front Counter POS',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: statusesController,
+                        enabled: !localSaving,
+                        decoration: const InputDecoration(
+                          labelText: 'Statuses to show',
+                          hintText: 'ready, serving',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: durationController,
+                              enabled: !localSaving,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Seconds visible',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: TextField(
+                              controller: maxItemsController,
+                              enabled: !localSaving,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Max queue size',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        'On-screen template',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: titleController,
+                        enabled: !localSaving,
+                        decoration: const InputDecoration(
+                          labelText: 'Title template',
+                        ),
+                        onChanged: (_) => setSheetState(() {}),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: bodyController,
+                        enabled: !localSaving,
+                        minLines: 3,
+                        maxLines: 5,
+                        decoration: const InputDecoration(
+                          labelText: 'Body template',
+                        ),
+                        onChanged: (_) => setSheetState(() {}),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: backgroundController,
+                              enabled: !localSaving,
+                              decoration: const InputDecoration(
+                                labelText: 'Background colour',
+                                hintText: '#201206',
+                              ),
+                              onChanged: (_) => setSheetState(() {}),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              value: localAlign,
+                              items: const [
+                                DropdownMenuItem(
+                                  value: 'top',
+                                  child: Text('Top'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'center',
+                                  child: Text('Center'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'bottom',
+                                  child: Text('Bottom'),
+                                ),
+                              ],
+                              onChanged: localSaving
+                                  ? null
+                                  : (value) {
+                                      if (value == null) {
+                                        return;
+                                      }
+                                      setSheetState(() {
+                                        localAlign = value;
+                                      });
+                                    },
+                              decoration: const InputDecoration(
+                                labelText: 'Content position',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: bodyRowsController,
+                        enabled: !localSaving,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Visible body rows',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Color(
+                            int.parse(
+                              _normalizePanelColor(backgroundController.text)
+                                  .replaceFirst('#', '0xFF'),
+                            ),
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFFF3C48C)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: localAlign == 'top'
+                              ? CrossAxisAlignment.start
+                              : localAlign == 'bottom'
+                                  ? CrossAxisAlignment.end
+                                  : CrossAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: const Text(
+                                'LIVE ORDER INFO',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              previewTitle,
+                              textAlign: localAlign == 'center'
+                                  ? TextAlign.center
+                                  : localAlign == 'bottom'
+                                      ? TextAlign.right
+                                      : TextAlign.left,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              previewBody,
+                              textAlign: localAlign == 'center'
+                                  ? TextAlign.center
+                                  : localAlign == 'bottom'
+                                      ? TextAlign.right
+                                      : TextAlign.left,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        'Advanced mapping',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: customerController,
+                        enabled: !localSaving,
+                        decoration: const InputDecoration(
+                          labelText: 'Customer path',
+                          hintText: 'customer.name',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: orderController,
+                        enabled: !localSaving,
+                        decoration: const InputDecoration(
+                          labelText: 'Order path',
+                          hintText: 'order.number',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: statusController,
+                        enabled: !localSaving,
+                        decoration: const InputDecoration(
+                          labelText: 'Status path',
+                          hintText: 'order.status',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: externalController,
+                        enabled: !localSaving,
+                        decoration: const InputDecoration(
+                          labelText: 'External id path',
+                          hintText: 'order.id',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: storeSelectorController,
+                        enabled: !localSaving,
+                        decoration: const InputDecoration(
+                          labelText: 'Store id path (chain)',
+                          hintText: 'store.id',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        readOnly: true,
+                        controller: TextEditingController(text: webhookUrl),
+                        decoration: InputDecoration(
+                          labelText: 'Webhook URL',
+                          suffixIcon: IconButton(
+                            tooltip: 'Copy webhook URL',
+                            onPressed: webhookUrl.isEmpty
+                                ? null
+                                : () async {
+                                    await Clipboard.setData(
+                                      ClipboardData(text: webhookUrl),
+                                    );
+                                    if (mounted) {
+                                      _showSheetMessage('Webhook URL copied.');
+                                    }
+                                  },
+                            icon: const Icon(Icons.copy_outlined),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      if (localLastEventAt.isNotEmpty ||
+                          lastSummaryLine.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: scheme.surfaceContainerLow,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: scheme.outlineVariant),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Latest order snapshot',
+                                style: theme.textTheme.labelLarge?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              if (localLastEventAt.isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                Text(
+                                  localLastEventAt.replaceFirst('T', ' '),
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                              if (lastSummaryLine.isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                Text(
+                                  lastSummaryLine,
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      if (localLastPayload.trim().isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: scheme.surfaceContainerLow,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: scheme.outlineVariant),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Last payload received',
+                                style: theme.textTheme.labelLarge?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              SelectableText(
+                                localLastPayload,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  fontFamily: 'Consolas',
+                                  height: 1.45,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          FilledButton.icon(
+                            onPressed: localSaving
+                                ? null
+                                : () => saveSetup(setSheetState),
+                            icon: localSaving
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.save_outlined),
+                            label: const Text('Save setup'),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: localSaving
+                                ? null
+                                : () => sendSample(setSheetState),
+                            icon: const Icon(Icons.send_outlined),
+                            label: const Text('Send sample'),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: localSaving
+                                ? null
+                                : () => updateQueueAction(
+                                      setSheetState,
+                                      resetToken: true,
+                                      successMessage:
+                                          'Webhook URL regenerated.',
+                                    ),
+                            icon: const Icon(Icons.refresh_outlined),
+                            label: const Text('Reset webhook'),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: localSaving
+                                ? null
+                                : () => updateQueueAction(
+                                      setSheetState,
+                                      clearQueue: true,
+                                      successMessage: 'POS queue cleared.',
+                                    ),
+                            icon: const Icon(Icons.layers_clear_outlined),
+                            label: const Text('Clear queue'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    nameController.dispose();
+    statusesController.dispose();
+    durationController.dispose();
+    maxItemsController.dispose();
+    titleController.dispose();
+    bodyController.dispose();
+    customerController.dispose();
+    orderController.dispose();
+    statusController.dispose();
+    externalController.dispose();
+    storeSelectorController.dispose();
+    backgroundController.dispose();
+    bodyRowsController.dispose();
+  }
+
+  void _togglePanelItemExpanded(String itemId) {
+    if (itemId.isEmpty) {
+      return;
+    }
+    setState(() {
+      if (_expandedPanelItemIds.contains(itemId)) {
+        _expandedPanelItemIds.remove(itemId);
+      } else {
+        _expandedPanelItemIds.add(itemId);
+      }
+    });
+  }
+
+  Future<void> _openPanelCardEditor({Map<String, dynamic>? panelItem}) async {
+    final isEditing = panelItem != null;
+    final titleController = TextEditingController(
+      text: (panelItem?['title'] ?? '').toString(),
+    );
+    final bodyController = TextEditingController(
+      text: (panelItem?['body'] ?? '').toString(),
+    );
+    final startController = TextEditingController(
+      text: _formatDisplayDateTime(panelItem?['start']),
+    );
+    final endController = TextEditingController(
+      text: _formatDisplayDateTime(panelItem?['end']),
+    );
+    final durationController = TextEditingController(
+      text: '${int.tryParse('${panelItem?['duration'] ?? 10}') ?? 10}',
+    );
+    var localEnabled = (panelItem?['enabled'] ?? true) == true;
+    var localRepeat = (panelItem?['repeat'] ?? true) == true;
+    final localDays = _normalizeDays(panelItem?['days']).toSet();
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text(isEditing ? 'Edit Info Card' : 'Add Info Card'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: titleController,
+                      decoration: const InputDecoration(labelText: 'Title'),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: bodyController,
+                      minLines: 3,
+                      maxLines: 5,
+                      decoration: const InputDecoration(labelText: 'Body'),
+                    ),
+                    const SizedBox(height: 12),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Enabled'),
+                      value: localEnabled,
+                      onChanged: (value) {
+                        setDialogState(() {
+                          localEnabled = value;
+                        });
+                      },
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Repeat'),
+                      value: localRepeat,
+                      onChanged: (value) {
+                        setDialogState(() {
+                          localRepeat = value;
+                        });
+                      },
+                    ),
+                    TextField(
+                      controller: durationController,
+                      keyboardType: TextInputType.number,
+                      decoration:
+                          const InputDecoration(labelText: 'Duration (s)'),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: startController,
+                      decoration: const InputDecoration(
+                        labelText: 'Start',
+                        hintText: 'YYYY-MM-DD HH:MM:SS',
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: endController,
+                      decoration: const InputDecoration(
+                        labelText: 'End',
+                        hintText: 'YYYY-MM-DD HH:MM:SS',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: _weekDays.map((day) {
+                        final selected = localDays.contains(day);
+                        return FilterChip(
+                          label: Text(day.toUpperCase()),
+                          selected: selected,
+                          onSelected: (value) {
+                            setDialogState(() {
+                              if (value) {
+                                localDays.add(day);
+                              } else {
+                                localDays.remove(day);
+                              }
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: Text(isEditing ? 'Save' : 'Add'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (saved != true || !mounted) {
+      titleController.dispose();
+      bodyController.dispose();
+      startController.dispose();
+      endController.dispose();
+      durationController.dispose();
+      return;
+    }
+
+    final title = titleController.text.trim();
+    final duration = int.tryParse(durationController.text.trim()) ?? 10;
+
+    setState(() {
+      _saving = true;
+      _message = null;
+    });
+    try {
+      if (isEditing) {
+        final itemId = (panelItem['id'] ?? '').toString();
+        if (itemId.isEmpty) {
+          throw Exception('Info card id missing');
+        }
+        await widget.apiClient.updatePanelPlaylistItem(
+          storeId: widget.storeId,
+          screenId: widget.screenId,
+          itemId: itemId,
+          title: title,
+          body: bodyController.text,
+          start:
+              startController.text.trim().isEmpty ? null : startController.text,
+          end: endController.text.trim().isEmpty ? null : endController.text,
+          enabled: localEnabled,
+          repeat: localRepeat,
+          duration: duration < 1 ? 1 : duration,
+          days: localDays.toList(),
+        );
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _message = 'Info card updated.';
+        });
+      } else {
+        final created = await widget.apiClient.addPanelPlaylistItem(
+          storeId: widget.storeId,
+          screenId: widget.screenId,
+          title: title,
+          body: bodyController.text,
+        );
+        final createdItem = _asMap(created['item']);
+        final createdItemId = (createdItem['id'] ?? '').toString();
+        if (createdItemId.isNotEmpty) {
+          await widget.apiClient.updatePanelPlaylistItem(
+            storeId: widget.storeId,
+            screenId: widget.screenId,
+            itemId: createdItemId,
+            title: title,
+            body: bodyController.text,
+            start: startController.text.trim().isEmpty
+                ? null
+                : startController.text,
+            end: endController.text.trim().isEmpty ? null : endController.text,
+            enabled: localEnabled,
+            repeat: localRepeat,
+            duration: duration < 1 ? 1 : duration,
+            days: localDays.toList(),
+          );
+        }
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _message = 'Info card added.';
+        });
+      }
+      await _loadPlaylist();
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _message = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      titleController.dispose();
+      bodyController.dispose();
+      startController.dispose();
+      endController.dispose();
+      durationController.dispose();
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
+  }
+
+  void _togglePanelInfoExpanded() {
+    setState(() {
+      _isPanelInfoExpanded = !_isPanelInfoExpanded;
+    });
+  }
+
+  Future<void> _openLivePosQueueSheet(List<Map<String, dynamic>> items) async {
+    if (items.isEmpty) {
+      return;
+    }
+    final theme = Theme.of(context);
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 8,
+              bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+            ),
+            child: SizedBox(
+              height: MediaQuery.of(sheetContext).size.height * 0.72,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Live POS Orders', style: theme.textTheme.titleLarge),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${items.length} queued ${items.length == 1 ? 'order' : 'orders'} for this screen',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: items.length,
+                      itemBuilder: (context, index) {
+                        return _buildPanelItemTile(
+                          panelItem: items[index],
+                          sourceMode: 'pos_webhook',
+                          allowActions: false,
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPanelItemTile({
+    required Map<String, dynamic> panelItem,
+    required String sourceMode,
+    required bool allowActions,
+  }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final panelItemId = (panelItem['id'] ?? '').toString();
+    final isExpanded =
+        panelItemId.isNotEmpty && _expandedPanelItemIds.contains(panelItemId);
+    final title = (panelItem['title'] ?? 'Panel item').toString();
+    final body = (panelItem['body'] ?? '').toString().trim();
+    final status = (panelItem['status'] ?? 'live').toString();
+    final duration = int.tryParse('${panelItem['duration'] ?? 10}') ?? 10;
+    final createdAt = _formatDisplayDateTime(panelItem['created_at']).trim();
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () => _togglePanelItemExpanded(panelItemId),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: sourceMode == 'pos_webhook'
+              ? const Color(0xFFFFF7ED)
+              : scheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: sourceMode == 'pos_webhook'
+                ? const Color(0xFFFED7AA)
+                : scheme.outlineVariant,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: isExpanded ? 92 : 72,
+                  height: isExpanded ? 56 : 42,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: sourceMode == 'pos_webhook'
+                        ? const Color(0xFFFFE9BF)
+                        : scheme.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: sourceMode == 'pos_webhook'
+                          ? const Color(0xFFF7D08A)
+                          : scheme.outlineVariant,
+                    ),
+                  ),
+                  child: Text(
+                    sourceMode == 'pos_webhook' ? 'POS' : 'CARD',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: sourceMode == 'pos_webhook'
+                          ? const Color(0xFF9A5A00)
+                          : scheme.primary,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${status.isEmpty ? 'live' : status}  $duration s',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                      if (!isExpanded &&
+                          sourceMode == 'pos_webhook' &&
+                          createdAt.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          createdAt,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                      if (!isExpanded && sourceMode != 'pos_webhook') ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          _panelItemScheduleSummary(panelItem),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  isExpanded
+                      ? Icons.expand_less_rounded
+                      : Icons.expand_more_rounded,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ],
+            ),
+            if (isExpanded) ...[
+              const SizedBox(height: 8),
+              if (body.isNotEmpty) ...[
+                Text(
+                  body,
+                  style: theme.textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 6),
+              ],
+              if (sourceMode != 'pos_webhook') ...[
+                Text(
+                  _panelItemScheduleSummary(panelItem),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _buildInfoBadge(
+                      icon: (panelItem['enabled'] ?? true) == true
+                          ? Icons.check_circle_outline
+                          : Icons.pause_circle_outline,
+                      label: (panelItem['enabled'] ?? true) == true
+                          ? 'Enabled'
+                          : 'Disabled',
+                      background: (panelItem['enabled'] ?? true) == true
+                          ? scheme.primaryContainer
+                          : scheme.surfaceContainerHigh,
+                      foreground: (panelItem['enabled'] ?? true) == true
+                          ? scheme.onPrimaryContainer
+                          : scheme.onSurfaceVariant,
+                    ),
+                    _buildInfoBadge(
+                      icon: Icons.repeat,
+                      label: (panelItem['repeat'] ?? true) == true
+                          ? 'Repeat'
+                          : 'Once',
+                    ),
+                  ],
+                ),
+                if (allowActions) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: _saving
+                            ? null
+                            : () => _openPanelCardEditor(
+                                  panelItem: panelItem,
+                                ),
+                        icon: const Icon(Icons.edit_outlined),
+                        label: const Text('Edit'),
+                      ),
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        onPressed:
+                            _saving ? null : () => _deletePanelCard(panelItem),
+                        icon: const Icon(Icons.delete_outline),
+                        label: const Text('Delete'),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _deletePanelCard(Map<String, dynamic> panelItem) async {
+    final itemId = (panelItem['id'] ?? '').toString();
+    if (itemId.isEmpty) {
+      return;
+    }
+
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Info Card'),
+        content: const Text('Delete this info panel card?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (accepted != true || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _message = null;
+    });
+    try {
+      await widget.apiClient.deletePanelPlaylistItem(
+        storeId: widget.storeId,
+        screenId: widget.screenId,
+        itemId: itemId,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _message = 'Info card deleted.';
+      });
+      await _loadPlaylist();
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _message = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
+  }
+
+  Widget _buildPanelMenuButton({
+    required IconData icon,
+    required String value,
+    required Map<String, String> options,
+    required ValueChanged<String> onSelected,
+    bool enabled = true,
+  }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return PopupMenuButton<String>(
+      enabled: enabled,
+      tooltip: '',
+      onSelected: onSelected,
+      itemBuilder: (context) {
+        return options.entries
+            .map(
+              (entry) => PopupMenuItem<String>(
+                value: entry.key,
+                child: Text(entry.value),
+              ),
+            )
+            .toList();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        decoration: BoxDecoration(
+          color: enabled ? Colors.white : scheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: scheme.outlineVariant),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: scheme.onSurfaceVariant),
+            const SizedBox(width: 6),
+            Text(
+              options[value] ?? value,
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: enabled
+                    ? scheme.onSurface
+                    : scheme.onSurfaceVariant.withValues(alpha: 0.8),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(
+              Icons.arrow_drop_down_rounded,
+              color: scheme.onSurfaceVariant,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPanelBoundaryCard({
+    required String label,
+    required dynamic value,
+    required VoidCallback? onPickDate,
+    required VoidCallback? onPickTime,
+    required VoidCallback? onClear,
+  }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final text = _formatDisplayDateTime(value).trim();
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            text.isEmpty ? 'No time set' : text,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: text.isEmpty ? scheme.onSurfaceVariant : scheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              IconButton(
+                onPressed: onPickDate,
+                tooltip: 'Pick date',
+                icon: const Icon(Icons.date_range_outlined, size: 18),
+                visualDensity: VisualDensity.compact,
+              ),
+              IconButton(
+                onPressed: onPickTime,
+                tooltip: 'Pick time',
+                icon: const Icon(Icons.access_time_outlined, size: 18),
+                visualDensity: VisualDensity.compact,
+              ),
+              IconButton(
+                onPressed: onClear,
+                tooltip: 'Clear',
+                icon: const Icon(Icons.close_rounded, size: 18),
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildManualPanelItemTile(Map<String, dynamic> panelItem) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final title = (panelItem['title'] ?? 'Info card').toString();
+    final body = (panelItem['body'] ?? '').toString().trim();
+    final rangeSummary = _panelTimeRangeSummary(
+      start: panelItem['start'],
+      end: panelItem['end'],
+    );
+    final duration = int.tryParse('${panelItem['duration'] ?? 10}') ?? 10;
+    final enabled = (panelItem['enabled'] ?? true) == true;
+    final days = _normalizeDays(panelItem['days']).toSet();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 82,
+                height: 50,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF3D8),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFF3C48C)),
+                ),
+                child: Text(
+                  'INFO',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: const Color(0xFF8A4B00),
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$rangeSummary  •  ${duration}s',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: scheme.outlineVariant),
+            ),
+            child: Text(
+              body.isEmpty ? 'No body text' : body,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: body.isEmpty ? scheme.onSurfaceVariant : null,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Repeat:',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: _weekDays.map((day) {
+                    final selected = days.contains(day);
+                    return FilterChip(
+                      label: Text(day[0].toUpperCase()),
+                      selected: selected,
+                      visualDensity: VisualDensity.compact,
+                      onSelected: _saving
+                          ? null
+                          : (_) => _togglePanelCardDay(panelItem, day),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _buildPanelBoundaryCard(
+                  label: 'Start',
+                  value: panelItem['start'],
+                  onPickDate: _saving
+                      ? null
+                      : () => _updatePanelCardBoundary(
+                            panelItem: panelItem,
+                            isStart: true,
+                            pickDate: true,
+                          ),
+                  onPickTime: _saving
+                      ? null
+                      : () => _updatePanelCardBoundary(
+                            panelItem: panelItem,
+                            isStart: true,
+                            pickDate: false,
+                          ),
+                  onClear: _saving
+                      ? null
+                      : () => _clearPanelCardBoundary(
+                            panelItem: panelItem,
+                            isStart: true,
+                          ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildPanelBoundaryCard(
+                  label: 'End',
+                  value: panelItem['end'],
+                  onPickDate: _saving
+                      ? null
+                      : () => _updatePanelCardBoundary(
+                            panelItem: panelItem,
+                            isStart: false,
+                            pickDate: true,
+                          ),
+                  onPickTime: _saving
+                      ? null
+                      : () => _updatePanelCardBoundary(
+                            panelItem: panelItem,
+                            isStart: false,
+                            pickDate: false,
+                          ),
+                  onClear: _saving
+                      ? null
+                      : () => _clearPanelCardBoundary(
+                            panelItem: panelItem,
+                            isStart: false,
+                          ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton.tonal(
+                onPressed:
+                    _saving ? null : () => _togglePanelCardEnabled(panelItem),
+                child: Text(enabled ? 'On' : 'Off'),
+              ),
+              OutlinedButton.icon(
+                onPressed: _saving
+                    ? null
+                    : () => _openPanelCardEditor(panelItem: panelItem),
+                icon: const Icon(Icons.schedule_outlined),
+                label: Text('${duration}s'),
+              ),
+              OutlinedButton.icon(
+                onPressed: _saving
+                    ? null
+                    : () => _openPanelCardEditor(panelItem: panelItem),
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('Edit'),
+              ),
+              OutlinedButton.icon(
+                onPressed: _saving ? null : () => _deletePanelCard(panelItem),
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('Delete'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPanelInfoCard() {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final panelZone = _normalizedPanelZone(_screenPanelZone);
+    final sourceMode = (panelZone['source_mode'] ?? 'manual').toString();
+    final layoutMode = (panelZone['layout_mode'] ?? 'off').toString();
+    final enabled = panelZone['enabled'] == true;
+    final items = _activePanelItems(panelZone);
+    final posFeed = _asMap(panelZone['pos_feed']);
+    final connectorType =
+        (posFeed['connector_type'] ?? 'generic_webhook').toString();
+    final connectorLabel =
+        _panelConnectorLabels[connectorType] ?? 'Direct webhook';
+    final connectorSubtitle = _panelConnectorSubtitles[connectorType] ??
+        _panelConnectorSubtitles['generic_webhook']!;
+    final feedScope = (panelZone['feed_scope'] ?? 'screen').toString();
+    final scopeTitle = _panelScopeTitles[feedScope] ?? 'This screen only';
+    final scopeSubtitle =
+        _panelScopeSubtitles[feedScope] ?? 'One webhook just for this screen';
+    final lastEventSummary = _asMap(posFeed['last_event_summary']);
+    final eventCount = int.tryParse('${posFeed['event_count'] ?? 0}') ?? 0;
+    final maxItems = int.tryParse('${posFeed['max_items'] ?? 5}') ?? 5;
+    final hasToken =
+        (posFeed['webhook_token'] ?? '').toString().trim().isNotEmpty;
+    final statusLabel = _panelQueueStatusLabel(
+      (posFeed['last_event_result'] ?? '').toString(),
+      items.isNotEmpty,
+      hasToken,
+    );
+    final hasLivePosSchedule = _hasLivePosSchedule;
+    final collapsedSummary = sourceMode == 'pos_webhook'
+        ? '$statusLabel | $eventCount event${eventCount == 1 ? '' : 's'} | ${items.length}/$maxItems queued | ${enabled ? _panelLayoutLabel(layoutMode) : 'Off'}'
+        : '${items.length} info card${items.length == 1 ? '' : 's'} | ${enabled ? _panelLayoutLabel(layoutMode) : 'Off'}';
+    final panelBackground =
+        sourceMode == 'pos_webhook' ? const Color(0xFFF8FBFF) : scheme.surface;
+    final panelBorder = sourceMode == 'pos_webhook'
+        ? const Color(0xFFD8E4FB)
+        : scheme.outlineVariant;
+
+    return Card(
+      elevation: 0,
+      color: panelBackground,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: panelBorder),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: _togglePanelInfoExpanded,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Icon(
+                      sourceMode == 'pos_webhook'
+                          ? Icons.receipt_long_outlined
+                          : Icons.view_sidebar_outlined,
+                      size: 20,
+                      color: enabled ? scheme.primary : scheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Info Panel Schedule',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      enabled ? _panelLayoutLabel(layoutMode) : 'Off',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(
+                      _isPanelInfoExpanded
+                          ? Icons.expand_less_rounded
+                          : Icons.expand_more_rounded,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (!_isPanelInfoExpanded)
+              Text(
+                collapsedSummary,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              )
+            else ...[
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  _buildPanelMenuButton(
+                    icon: Icons.tune_outlined,
+                    value: sourceMode,
+                    options: _panelSourceLabels,
+                    enabled: !_saving,
+                    onSelected: (next) {
+                      if (next != sourceMode) {
+                        _updatePanelZone(sourceMode: next);
+                      }
+                    },
+                  ),
+                  _buildPanelMenuButton(
+                    icon: Icons.view_sidebar_outlined,
+                    value: layoutMode,
+                    options: _panelLayoutLabels,
+                    enabled: !_saving,
+                    onSelected: (next) {
+                      if (next != layoutMode) {
+                        _updatePanelZone(layoutMode: next);
+                      }
+                    },
+                  ),
+                  if (sourceMode != 'pos_webhook')
+                    FilledButton.tonalIcon(
+                      onPressed: _saving ? null : _openPanelCardEditor,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add Info Card'),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              if (sourceMode == 'pos_webhook') ...[
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Live POS Setup',
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              color: const Color(0xFF1E40AF),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            connectorSubtitle,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _buildInfoBadge(
+                      icon: Icons.cable_outlined,
+                      label: connectorLabel,
+                      background: scheme.surfaceContainerHigh,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '$scopeTitle: $scopeSubtitle',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilledButton.tonalIcon(
+                      onPressed: _saving ? null : _openPanelPosSetupSheet,
+                      icon: const Icon(Icons.settings_outlined),
+                      label: const Text('Configure Live POS'),
+                    ),
+                    if (hasToken)
+                      OutlinedButton.icon(
+                        onPressed: _saving
+                            ? null
+                            : () async {
+                                final webhookUrl = _panelPosWebhookUrl(
+                                  (posFeed['webhook_token'] ?? '').toString(),
+                                );
+                                if (webhookUrl.isEmpty) {
+                                  return;
+                                }
+                                await Clipboard.setData(
+                                  ClipboardData(text: webhookUrl),
+                                );
+                                if (mounted) {
+                                  _showSheetMessage('Webhook URL copied.');
+                                }
+                              },
+                        icon: const Icon(Icons.copy_outlined),
+                        label: const Text('Copy webhook'),
+                      ),
+                  ],
+                ),
+                if (lastEventSummary.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    '${(lastEventSummary['customer_name'] ?? '').toString().trim()}${(lastEventSummary['order_number'] ?? '').toString().trim().isNotEmpty ? ' • Order #${(lastEventSummary['order_number'] ?? '').toString().trim()}' : ''}${(lastEventSummary['status'] ?? '').toString().trim().isNotEmpty ? ' • ${(lastEventSummary['status'] ?? '').toString().trim()}' : ''}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _buildPanelStatusBadge(statusLabel),
+                    _buildInfoBadge(
+                      icon: Icons.bolt_outlined,
+                      label: '$eventCount events',
+                      background: const Color(0xFFE8F0FE),
+                      foreground: const Color(0xFF1D4ED8),
+                    ),
+                    _buildInfoBadge(
+                      icon: Icons.queue_outlined,
+                      label: '${items.length}/$maxItems queued',
+                      background: const Color(0xFFE8F0FE),
+                      foreground: const Color(0xFF1D4ED8),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                FilledButton.icon(
+                  onPressed: _saving || hasLivePosSchedule
+                      ? null
+                      : _addLivePosScheduleFromPanel,
+                  icon: Icon(hasLivePosSchedule
+                      ? Icons.check_circle_outline
+                      : Icons.add),
+                  label: Text(hasLivePosSchedule
+                      ? 'Live POS schedule added'
+                      : 'Add Live POS to schedule'),
+                ),
+              ],
+              const SizedBox(height: 10),
+              if (sourceMode == 'pos_webhook' && items.isNotEmpty) ...[
+                FilledButton.tonalIcon(
+                  onPressed: () => _openLivePosQueueSheet(items),
+                  icon: const Icon(Icons.receipt_long_outlined),
+                  label: Text('View live orders (${items.length})'),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Live POS orders stay hidden here and only open when you tap the button.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ] else if (items.isEmpty)
+                Text(
+                  sourceMode == 'pos_webhook'
+                      ? 'No Live POS cards queued yet.'
+                      : '(No info panel cards yet)',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                )
+              else
+                ...items.map((panelItem) {
+                  return sourceMode == 'pos_webhook'
+                      ? _buildPanelItemTile(
+                          panelItem: panelItem,
+                          sourceMode: sourceMode,
+                          allowActions: true,
+                        )
+                      : _buildManualPanelItemTile(panelItem);
+                }),
+              const SizedBox(height: 8),
+              Text(
+                'The info panel auto-hides during sync or wall video playback and only appears on normal media.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   String _resolvePreviewUrl(Map<String, dynamic>? item) {
     if (item == null) {
       return '';
@@ -1390,10 +3991,10 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
     if (file.isNotEmpty &&
         !file.startsWith('youtube:') &&
         !file.startsWith('http://') &&
-        !file.startsWith('https://') &&
-        !file.startsWith('/')) {
-      final lower = file.toLowerCase();
-      final encoded = _encodePathPreservingSlashes(file);
+        !file.startsWith('https://')) {
+      final normalizedFile = _normalizeUploadedMediaPath(file);
+      final lower = normalizedFile.toLowerCase();
+      final encoded = _encodePathPreservingSlashes(normalizedFile);
       final isVideo = lower.contains('.mp4') ||
           lower.contains('.mov') ||
           lower.contains('.webm') ||
@@ -1436,7 +4037,8 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
     if (file.startsWith('/')) {
       return _toAbsoluteUrl(file);
     }
-    return _toAbsoluteUrl('/static/uploads/$file');
+    return _toAbsoluteUrl(
+        '/static/uploads/${_normalizeUploadedMediaPath(file)}');
   }
 
   String _encodePathPreservingSlashes(String value) {
@@ -1445,6 +4047,19 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
         .where((segment) => segment.trim().isNotEmpty)
         .map(Uri.encodeComponent)
         .join('/');
+  }
+
+  String _normalizeUploadedMediaPath(String raw) {
+    var path = raw.trim().replaceAll('\\', '/');
+    while (path.startsWith('/')) {
+      path = path.substring(1);
+    }
+    for (final prefix in const ['static/uploads/', 'uploads/', 'media/']) {
+      if (path.toLowerCase().startsWith(prefix)) {
+        return path.substring(prefix.length);
+      }
+    }
+    return path;
   }
 
   String _toAbsoluteUrl(String raw) {
@@ -1520,9 +4135,79 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
     return rawType;
   }
 
+  Widget _buildCompactMediaThumb(
+    Map<String, dynamic>? item, {
+    double iconSize = 20,
+  }) {
+    final itemUrl = _resolvePreviewUrl(item);
+    final mediaType = _resolveMediaType(item, itemUrl);
+    final file = (item?['file'] ?? '').toString().trim();
+    final isYouTube = file.startsWith('youtube:');
+
+    if (mediaType == 'image' && itemUrl.isNotEmpty) {
+      return Image.network(
+        itemUrl,
+        headers: _previewHeaders,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Icon(
+          Icons.broken_image_outlined,
+          size: iconSize,
+        ),
+      );
+    }
+
+    if (mediaType == 'video' && itemUrl.isNotEmpty) {
+      if (isYouTube) {
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.network(
+              itemUrl,
+              headers: _previewHeaders,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Icon(
+                Icons.broken_image_outlined,
+                size: iconSize,
+              ),
+            ),
+            Container(color: Colors.black26),
+            Center(
+              child: Icon(
+                Icons.play_circle_fill,
+                size: iconSize + 8,
+                color: Colors.white70,
+              ),
+            ),
+          ],
+        );
+      }
+
+      return _VideoPreview(
+        key: ValueKey('compact-$itemUrl'),
+        url: itemUrl,
+        headers: _previewHeaders,
+        compact: true,
+      );
+    }
+
+    return Icon(
+      mediaType == 'video'
+          ? Icons.movie_outlined
+          : mediaType == 'image'
+              ? Icons.image_outlined
+              : Icons.perm_media_outlined,
+      size: iconSize,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
+    _screenAddress = widget.screenAddress;
+    _screenProtected = widget.screenProtected;
+    _screenVertical = widget.screenVertical;
+    _screenHorizontal = widget.screenHorizontal;
+    _screenPanelZone = _normalizedPanelZone(widget.screenPanelZone);
     _loadPlaylist();
     _liveSyncTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _refreshLivePlaylist();
@@ -1535,8 +4220,6 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
     _autoSaveTimer?.cancel();
     _startController.dispose();
     _endController.dispose();
-    _windowStartController.dispose();
-    _windowEndController.dispose();
     super.dispose();
   }
 
@@ -1563,11 +4246,28 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
         storeId: widget.storeId,
         screenId: widget.screenId,
       );
+      final screens = await widget.apiClient.getScreens(widget.storeId);
+      ScreenItem? matchingScreen;
+      for (final screen in screens) {
+        if (screen.id == widget.screenId) {
+          matchingScreen = screen;
+          break;
+        }
+      }
       if (!mounted) {
         return;
       }
       setState(() {
         _playlist = playlist;
+        if (matchingScreen != null) {
+          _screenRotation = matchingScreen.rotation;
+          _screenMuted = matchingScreen.muted;
+          _screenAddress = matchingScreen.address;
+          _screenProtected = matchingScreen.protected;
+          _screenVertical = matchingScreen.vertical;
+          _screenHorizontal = matchingScreen.horizontal;
+          _screenPanelZone = _normalizedPanelZone(matchingScreen.panelZone);
+        }
         if (_selectedItemId != null &&
             !_playlist.any((p) => p['id']?.toString() == _selectedItemId)) {
           _selectedItemId = null;
@@ -1592,12 +4292,28 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
         screenId: widget.screenId,
       );
       final screens = await widget.apiClient.getScreens(widget.storeId);
+      String? masterStoreId;
+      try {
+        masterStoreId = await widget.apiClient.getMasterStoreId();
+      } catch (_) {
+        masterStoreId = null;
+      }
       int rotation = _screenRotation;
       bool muted = _screenMuted;
+      String address = _screenAddress;
+      bool protected = _screenProtected;
+      bool vertical = _screenVertical;
+      bool horizontal = _screenHorizontal;
+      Map<String, dynamic> panelZone = _screenPanelZone;
       for (final screen in screens) {
         if (screen.id == widget.screenId) {
           rotation = screen.rotation;
           muted = screen.muted;
+          address = screen.address;
+          protected = screen.protected;
+          vertical = screen.vertical;
+          horizontal = screen.horizontal;
+          panelZone = _normalizedPanelZone(screen.panelZone);
           break;
         }
       }
@@ -1608,6 +4324,13 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
         _playlist = playlist;
         _screenRotation = rotation;
         _screenMuted = muted;
+        _screenAddress = address;
+        _screenProtected = protected;
+        _screenVertical = vertical;
+        _screenHorizontal = horizontal;
+        _screenPanelZone = panelZone;
+        _isMasterStore =
+            masterStoreId != null && masterStoreId == widget.storeId;
         if (_selectedItemId != null &&
             !_playlist.any((p) => p['id']?.toString() == _selectedItemId)) {
           _selectedItemId = null;
@@ -1670,38 +4393,22 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
                     final item = _playlist[index];
                     final itemId = (item['id'] ?? '').toString();
                     final label = _itemLabel(item);
-                    final url = _resolvePreviewUrl(item);
                     return ListTile(
                       selected: itemId == _selectedItemId,
-                      leading: ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: url.isNotEmpty
-                            ? Image.network(
-                                url,
-                                headers: _previewHeaders,
-                                width: 52,
-                                height: 34,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(
-                                  width: 52,
-                                  height: 34,
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .surfaceContainerHighest,
-                                  alignment: Alignment.center,
-                                  child: const Icon(Icons.image_not_supported,
-                                      size: 16),
-                                ),
-                              )
-                            : Container(
-                                width: 52,
-                                height: 34,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .surfaceContainerHighest,
-                                alignment: Alignment.center,
-                                child: const Icon(Icons.image, size: 16),
-                              ),
+                      leading: Container(
+                        width: 52,
+                        height: 34,
+                        clipBehavior: Clip.antiAlias,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(6),
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest,
+                        ),
+                        child: _buildCompactMediaThumb(
+                          item,
+                          iconSize: 16,
+                        ),
                       ),
                       title: Text(
                         label,
@@ -2578,30 +5285,23 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
       _saving = true;
       _message = null;
     });
+    int? createdIndex;
     try {
-      await widget.apiClient.addScheduleWindow(
+      final created = await widget.apiClient.addScheduleWindow(
         storeId: widget.storeId,
         screenId: widget.screenId,
         itemId: itemId,
-        start: _windowStartController.text.trim().isEmpty
-            ? null
-            : _windowStartController.text.trim(),
-        end: _windowEndController.text.trim().isEmpty
-            ? null
-            : _windowEndController.text.trim(),
-        days: _windowDays.toList(),
-        enabled: _windowEnabled,
+        start: null,
+        end: null,
+        days: const <String>[],
+        enabled: true,
       );
+      createdIndex = int.tryParse('${created['index'] ?? ''}');
 
       if (!mounted) {
         return;
       }
       setState(() {
-        _windowStartController.clear();
-        _windowEndController.clear();
-        _windowDays = <String>{};
-        _windowEnabled = true;
-        _showNewWindowForm = false;
         _message = 'Schedule window added.';
       });
       await _loadPlaylist();
@@ -2618,6 +5318,14 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
           _saving = false;
         });
       }
+    }
+
+    if (!mounted || createdIndex == null) {
+      return;
+    }
+    final windows = _scheduleWindows();
+    if (createdIndex >= 0 && createdIndex < windows.length) {
+      await _editScheduleWindow(createdIndex, windows[createdIndex]);
     }
   }
 
@@ -2814,21 +5522,14 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
     });
   }
 
-  Future<void> _replaceMedia() async {
-    if (_pickedFile == null) {
-      setState(() {
-        _message = 'Choose an image or video first.';
-      });
-      return;
-    }
-
+  Future<void> _applyReplacementFile(File file) async {
     setState(() {
       _saving = true;
       _message = null;
     });
 
     try {
-      final filename = await widget.apiClient.uploadMedia(_pickedFile!);
+      final filename = await widget.apiClient.uploadMedia(file);
       final item = _currentItem;
       final itemId = item?['id']?.toString() ?? '';
 
@@ -2868,6 +5569,230 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
           _saving = false;
         });
       }
+    }
+  }
+
+  Future<void> _applyReplacementFilename(String filename) async {
+    final cleanFilename = filename.trim();
+    if (cleanFilename.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _message = null;
+    });
+
+    try {
+      final item = _currentItem;
+      final itemId = item?['id']?.toString() ?? '';
+      if (itemId.isNotEmpty) {
+        await widget.apiClient.updatePlaylistItem(
+          storeId: widget.storeId,
+          screenId: widget.screenId,
+          itemId: itemId,
+          file: cleanFilename,
+        );
+      } else {
+        await widget.apiClient.assignToScreen(
+          storeId: widget.storeId,
+          screenId: widget.screenId,
+          filename: cleanFilename,
+        );
+      }
+
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _pickedFile = null;
+        _message = 'Media updated successfully.';
+      });
+      await _loadPlaylist();
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _message = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
+  }
+
+  Future<File?> _pickReplacementFile({bool preferDrive = false}) async {
+    final result = await FilePicker.platform.pickFiles(
+      dialogTitle: preferDrive ? 'Choose from Google Drive' : null,
+      type: FileType.custom,
+      allowedExtensions: const [
+        'jpg',
+        'jpeg',
+        'png',
+        'webp',
+        'gif',
+        'bmp',
+        'mp4',
+        'mov',
+        'm4v',
+        'webm',
+        'mkv',
+        'avi',
+      ],
+      withData: false,
+    );
+    if (result == null || result.files.isEmpty) {
+      return null;
+    }
+    final path = result.files.single.path;
+    if (path == null || path.trim().isEmpty) {
+      setState(() {
+        _message = preferDrive
+            ? 'Android did not return a readable Drive file. Download it locally from Drive and try again.'
+            : 'Android did not return a readable file. Try choosing a downloaded copy.';
+      });
+      return null;
+    }
+    return File(path);
+  }
+
+  Future<void> _replaceMedia() async {
+    if (_pickedFile == null) {
+      setState(() {
+        _message = 'Choose an image or video first.';
+      });
+      return;
+    }
+    await _applyReplacementFile(_pickedFile!);
+  }
+
+  Future<void> _quickReplaceFromDevice({bool preferDrive = false}) async {
+    if (_saving) {
+      return;
+    }
+    final file = await _pickReplacementFile(preferDrive: preferDrive);
+    if (file == null || !mounted) {
+      return;
+    }
+    await _applyReplacementFile(file);
+  }
+
+  Future<void> _quickReplaceYouTube() async {
+    if (_saving) {
+      return;
+    }
+    final currentFile = (_currentItem?['file'] ?? '').toString().trim();
+    final initialValue = currentFile.toLowerCase().startsWith('youtube:')
+        ? currentFile.substring('youtube:'.length).trim()
+        : '';
+    final submittedValue = await showDialog<String>(
+      context: context,
+      builder: (popupContext) {
+        return _YouTubeInputDialog(initialValue: initialValue);
+      },
+    );
+    if (submittedValue == null || submittedValue.trim().isEmpty || !mounted) {
+      return;
+    }
+    final parsed = _extractYouTubeId(submittedValue.trim());
+    if (parsed == null || parsed.trim().length != 11) {
+      setState(() {
+        _message = 'Enter a valid YouTube URL or video ID.';
+      });
+      return;
+    }
+    await _applyReplacementFilename('youtube:${parsed.trim()}');
+  }
+
+  Future<void> _openQuickReplaceMedia() async {
+    if (_saving) {
+      return;
+    }
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Replace media',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.folder_open),
+                title: const Text('Choose from device'),
+                subtitle: const Text('Pick an image or video from this phone'),
+                onTap: () => Navigator.of(sheetContext).pop('device'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.add_to_drive),
+                title: const Text('Google Drive'),
+                subtitle:
+                    const Text('If Recent opens, use the menu to choose Drive'),
+                onTap: () => Navigator.of(sheetContext).pop('drive'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.collections),
+                title: const Text('Server library'),
+                subtitle: const Text('Use media already uploaded here'),
+                onTap: () => Navigator.of(sheetContext).pop('library'),
+              ),
+              const Divider(height: 8),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Apps',
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.smart_display_rounded),
+                title: const Text('YouTube'),
+                subtitle: const Text('Replace with a YouTube URL or video ID'),
+                onTap: () => Navigator.of(sheetContext).pop('youtube'),
+              ),
+              ListTile(
+                enabled: false,
+                leading: const Icon(Icons.apps_rounded),
+                title: const Text('Other apps'),
+                subtitle: const Text('More app sources coming soon'),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+    if (choice == null || !mounted) {
+      return;
+    }
+    if (choice == 'library') {
+      await _replaceFromLibrary();
+    } else if (choice == 'drive') {
+      await _quickReplaceFromDevice(preferDrive: true);
+    } else if (choice == 'device') {
+      await _quickReplaceFromDevice();
+    } else if (choice == 'youtube') {
+      await _quickReplaceYouTube();
     }
   }
 
@@ -2940,9 +5865,12 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
     final startController = TextEditingController();
     final endController = TextEditingController();
     final durationController = TextEditingController(text: '10');
+    final youtubeController = TextEditingController();
 
     File? selectedUpload;
+    String? selectedUploadSource;
     String? selectedLibraryFile;
+    String? selectedYouTubeId;
     bool enabled = true;
     bool repeat = true;
     int effectId = 0;
@@ -3006,330 +5934,1408 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            return AlertDialog(
-              title: const Text('New Playlist Schedule'),
-              content: SizedBox(
-                width: 520,
-                child: SingleChildScrollView(
+            String selectedMediaSummary() {
+              if (selectedUpload != null) {
+                final source = (selectedUploadSource ?? 'upload').trim();
+                return 'Selected $source: ${selectedUpload!.uri.pathSegments.last}';
+              }
+              if (selectedLibraryFile != null) {
+                return 'Selected library: ${selectedLibraryFile!}';
+              }
+              if ((selectedYouTubeId ?? '').isNotEmpty) {
+                return 'Selected YouTube: $selectedYouTubeId';
+              }
+              return 'No media selected yet';
+            }
+
+            IconData selectedMediaIcon() {
+              if (selectedUpload != null) {
+                if ((selectedUploadSource ?? '').toLowerCase() ==
+                    'google drive') {
+                  return Icons.add_to_drive;
+                }
+                return Icons.upload_file_rounded;
+              }
+              if (selectedLibraryFile != null) {
+                return Icons.photo_library_rounded;
+              }
+              if ((selectedYouTubeId ?? '').isNotEmpty) {
+                return Icons.smart_display_rounded;
+              }
+              return Icons.perm_media_rounded;
+            }
+
+            final theme = Theme.of(context);
+
+            String selectedAppLabel() {
+              if ((selectedYouTubeId ?? '').isNotEmpty) {
+                return 'YouTube';
+              }
+              return 'App';
+            }
+
+            IconData selectedAppIcon() {
+              if ((selectedYouTubeId ?? '').isNotEmpty) {
+                return Icons.smart_display_rounded;
+              }
+              return Icons.apps_rounded;
+            }
+
+            Future<void> pickGoogleDriveMedia(
+              void Function(void Function()) setModalState,
+            ) async {
+              final pick = await FilePicker.platform.pickFiles(
+                dialogTitle: 'Choose from Google Drive',
+                type: FileType.custom,
+                allowedExtensions: const [
+                  'jpg',
+                  'jpeg',
+                  'png',
+                  'webp',
+                  'gif',
+                  'bmp',
+                  'mp4',
+                  'mov',
+                  'm4v',
+                  'webm',
+                  'mkv',
+                  'avi',
+                ],
+                withData: false,
+              );
+              if (pick == null || pick.files.isEmpty) {
+                setModalState(() {
+                  localError =
+                      'No Drive file selected. If Google Drive is not listed, install the Google Drive app, sign in, or download the file and choose it from Downloads.';
+                });
+                return;
+              }
+              final path = pick.files.first.path;
+              if (path == null || path.trim().isEmpty) {
+                setModalState(() {
+                  localError =
+                      'Android did not return a readable Drive file. Download it locally from Drive and try again.';
+                });
+                return;
+              }
+              setModalState(() {
+                selectedUpload = File(path);
+                selectedUploadSource = 'Google Drive';
+                selectedLibraryFile = null;
+                selectedYouTubeId = null;
+                youtubeController.clear();
+                localError = null;
+              });
+            }
+
+            Future<void> openAppPicker() async {
+              final pickedApp = await showModalBottomSheet<String>(
+                context: context,
+                showDragHandle: true,
+                builder: (sheetContext) {
+                  Widget appTile({
+                    required String id,
+                    required String label,
+                    required String subtitle,
+                    required IconData icon,
+                    required Color brandColor,
+                    required bool enabled,
+                  }) {
+                    return ListTile(
+                      enabled: enabled,
+                      leading: Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: enabled
+                              ? brandColor.withAlpha(30)
+                              : theme.colorScheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(11),
+                        ),
+                        child: Icon(
+                          icon,
+                          size: 22,
+                          color: enabled
+                              ? brandColor
+                              : theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      title: Text(label),
+                      subtitle: Text(subtitle),
+                      trailing: enabled
+                          ? null
+                          : Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 9, vertical: 4),
+                              decoration: BoxDecoration(
+                                color:
+                                    theme.colorScheme.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                'Soon',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                      onTap: enabled
+                          ? () => Navigator.of(sheetContext).pop(id)
+                          : null,
+                    );
+                  }
+
+                  return SafeArea(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Choose an app',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                        appTile(
+                          id: 'youtube',
+                          label: 'YouTube',
+                          subtitle: 'Use a video link or ID',
+                          icon: Icons.smart_display_rounded,
+                          brandColor: const Color(0xFFFF0000),
+                          enabled: true,
+                        ),
+                        appTile(
+                          id: 'gdrive',
+                          label: 'Google Drive',
+                          subtitle:
+                              'Opens Android Files. If Drive is missing, install/sign in.',
+                          icon: Icons.add_to_drive,
+                          brandColor: const Color(0xFF1FA463),
+                          enabled: true,
+                        ),
+                        appTile(
+                          id: 'dropbox',
+                          label: 'Dropbox',
+                          subtitle: 'Play media from Dropbox',
+                          icon: Icons.cloud_rounded,
+                          brandColor: const Color(0xFF0061FF),
+                          enabled: false,
+                        ),
+                        appTile(
+                          id: 'onedrive',
+                          label: 'OneDrive',
+                          subtitle: 'Play media from OneDrive',
+                          icon: Icons.cloud_queue_rounded,
+                          brandColor: const Color(0xFF0078D4),
+                          enabled: false,
+                        ),
+                        if ((selectedYouTubeId ?? '').isNotEmpty)
+                          ListTile(
+                            leading: const Icon(Icons.clear_rounded),
+                            title: const Text('Clear app source'),
+                            onTap: () =>
+                                Navigator.of(sheetContext).pop('clear'),
+                          ),
+                        const SizedBox(height: 8),
+                      ],
+                    ),
+                  );
+                },
+              );
+              if (pickedApp == null) {
+                return;
+              }
+              if (pickedApp == 'clear') {
+                setModalState(() {
+                  selectedYouTubeId = null;
+                  youtubeController.clear();
+                  localError = null;
+                });
+                return;
+              }
+              if (pickedApp == 'gdrive') {
+                await pickGoogleDriveMedia(setModalState);
+                return;
+              }
+              if (pickedApp != 'youtube') {
+                return;
+              }
+              if (!dialogContext.mounted) {
+                return;
+              }
+              // Let the bottom sheet finish its dismiss animation before
+              // opening the input dialog. Showing an autofocus field while the
+              // sheet route is still deactivating triggers a framework
+              // assertion (_dependents.isEmpty) and a red screen.
+              await Future<void>.delayed(const Duration(milliseconds: 250));
+              if (!dialogContext.mounted) {
+                return;
+              }
+
+              final submittedValue = await showDialog<String>(
+                context: dialogContext,
+                builder: (popupContext) {
+                  return _YouTubeInputDialog(
+                    initialValue: youtubeController.text.trim().isNotEmpty
+                        ? youtubeController.text.trim()
+                        : (selectedYouTubeId ?? ''),
+                  );
+                },
+              );
+              if (submittedValue == null || submittedValue.trim().isEmpty) {
+                return;
+              }
+
+              final parsed = _extractYouTubeId(submittedValue.trim());
+              if (parsed == null || parsed.trim().length != 11) {
+                setModalState(() {
+                  localError = 'Enter a valid YouTube URL or video ID.';
+                });
+                return;
+              }
+
+              setModalState(() {
+                selectedYouTubeId = parsed.trim();
+                youtubeController.text = submittedValue.trim();
+                selectedUpload = null;
+                selectedUploadSource = null;
+                selectedLibraryFile = null;
+                localError = null;
+              });
+            }
+
+            Widget compactToggle({
+              required String label,
+              required bool value,
+              required ValueChanged<bool>? onChanged,
+            }) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    height: 40,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: GestureDetector(
+                        onTap:
+                            onChanged == null ? null : () => onChanged(!value),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 160),
+                          width: 46,
+                          height: 26,
+                          padding: const EdgeInsets.all(3),
+                          decoration: BoxDecoration(
+                            color: value
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: AnimatedAlign(
+                            duration: const Duration(milliseconds: 160),
+                            alignment: value
+                                ? Alignment.centerRight
+                                : Alignment.centerLeft,
+                            child: Container(
+                              width: 20,
+                              height: 20,
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.surface,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }
+
+            Widget compactDurationField() {
+              void adjustDuration(int delta) {
+                final current =
+                    int.tryParse(durationController.text.trim()) ?? 10;
+                final next = (current + delta).clamp(1, 3600);
+                durationController.text = next.toString();
+                setModalState(() {});
+              }
+
+              Widget stepButton(IconData icon, VoidCallback onTap) {
+                return InkResponse(
+                  onTap: creating ? null : onTap,
+                  radius: 22,
+                  child: SizedBox(
+                    width: 30,
+                    height: 40,
+                    child: Icon(
+                      icon,
+                      size: 22,
+                      color: creating
+                          ? theme.colorScheme.outline
+                          : theme.colorScheme.primary,
+                    ),
+                  ),
+                );
+              }
+
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Duration (s)',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    height: 40,
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        stepButton(
+                            Icons.remove_rounded, () => adjustDuration(-1)),
+                        Expanded(
+                          child: TextField(
+                            controller: durationController,
+                            keyboardType: TextInputType.number,
+                            textAlign: TextAlign.center,
+                            decoration: const InputDecoration(
+                              isCollapsed: true,
+                              border: InputBorder.none,
+                              hintText: '10',
+                            ),
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        stepButton(Icons.add_rounded, () => adjustDuration(1)),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            }
+
+            bool isImageMedia(String path) {
+              final p = path.toLowerCase();
+              return p.endsWith('.png') ||
+                  p.endsWith('.jpg') ||
+                  p.endsWith('.jpeg') ||
+                  p.endsWith('.gif') ||
+                  p.endsWith('.webp') ||
+                  p.endsWith('.bmp');
+            }
+
+            Future<void> pickUploadMedia() async {
+              final pick = await FilePicker.platform.pickFiles(
+                type: FileType.custom,
+                allowedExtensions: const [
+                  'jpg',
+                  'jpeg',
+                  'png',
+                  'webp',
+                  'gif',
+                  'bmp',
+                  'mp4',
+                  'mov',
+                  'm4v',
+                  'webm',
+                  'mkv',
+                  'avi',
+                ],
+                withData: false,
+              );
+              if (pick == null ||
+                  pick.files.isEmpty ||
+                  pick.files.first.path == null) {
+                return;
+              }
+              setModalState(() {
+                selectedUpload = File(pick.files.first.path!);
+                selectedUploadSource = null;
+                selectedLibraryFile = null;
+                selectedYouTubeId = null;
+                youtubeController.clear();
+                localError = null;
+              });
+            }
+
+            Future<void> pickGalleryMedia() async {
+              final selected = await showModalBottomSheet<String>(
+                context: context,
+                isScrollControlled: true,
+                builder: (context) => FractionallySizedBox(
+                  heightFactor: 0.88,
+                  child: _LibraryPickerSheet(
+                    apiClient: widget.apiClient,
+                  ),
+                ),
+              );
+              if (selected == null || selected.trim().isEmpty) {
+                return;
+              }
+              setModalState(() {
+                selectedLibraryFile = selected;
+                selectedUpload = null;
+                selectedUploadSource = null;
+                selectedYouTubeId = null;
+                youtubeController.clear();
+                localError = null;
+              });
+            }
+
+            Future<void> chooseMedia() async {
+              final choice = await showModalBottomSheet<String>(
+                context: context,
+                builder: (sheetContext) => SafeArea(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.upload_file_rounded),
+                        title: const Text('Upload'),
+                        subtitle: const Text(
+                            'Pick an image or video from this device'),
+                        onTap: () => Navigator.of(sheetContext).pop('upload'),
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.add_to_drive),
+                        title: const Text('Google Drive'),
+                        subtitle: const Text(
+                            'If Recent opens, use the menu to choose Drive. If Drive is missing, install/sign in first.'),
+                        onTap: () => Navigator.of(sheetContext).pop('gdrive'),
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.photo_library_rounded),
+                        title: const Text('Gallery'),
+                        subtitle: const Text('Choose from your media library'),
+                        onTap: () => Navigator.of(sheetContext).pop('gallery'),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+              if (choice == 'upload') {
+                await pickUploadMedia();
+              } else if (choice == 'gdrive') {
+                await pickGoogleDriveMedia(setModalState);
+              } else if (choice == 'gallery') {
+                await pickGalleryMedia();
+              }
+            }
+
+            return Dialog.fullscreen(
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
                           Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: creating
-                                  ? null
-                                  : () async {
-                                      final pick = await FilePicker.platform
-                                          .pickFiles(withData: false);
-                                      if (pick == null ||
-                                          pick.files.isEmpty ||
-                                          pick.files.first.path == null) {
-                                        return;
-                                      }
-                                      setModalState(() {
-                                        selectedUpload =
-                                            File(pick.files.first.path!);
-                                        selectedLibraryFile = null;
-                                        localError = null;
-                                      });
-                                    },
-                              icon: const Icon(Icons.upload_file),
-                              label: const Text('Upload Media'),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Add Scheduled Media',
+                                  style:
+                                      theme.textTheme.headlineSmall?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: creating
-                                  ? null
-                                  : () async {
-                                      final selected =
-                                          await showModalBottomSheet<String>(
-                                        context: context,
-                                        isScrollControlled: true,
-                                        builder: (context) =>
-                                            FractionallySizedBox(
-                                          heightFactor: 0.88,
-                                          child: _LibraryPickerSheet(
-                                            apiClient: widget.apiClient,
+                          IconButton(
+                            tooltip: 'Close',
+                            onPressed: creating
+                                ? null
+                                : () => Navigator.of(dialogContext).pop(false),
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: (selectedUpload != null ||
+                                        selectedLibraryFile != null ||
+                                        (selectedYouTubeId ?? '').isNotEmpty)
+                                    ? EdgeInsets.zero
+                                    : const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: (selectedUpload != null ||
+                                          selectedLibraryFile != null ||
+                                          (selectedYouTubeId ?? '').isNotEmpty)
+                                      ? theme.colorScheme.primary.withAlpha(18)
+                                      : theme.colorScheme.surfaceContainerLow,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Builder(
+                                      builder: (context) {
+                                        Widget fallback() => Column(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                Icon(
+                                                  selectedMediaIcon(),
+                                                  size: 40,
+                                                  color:
+                                                      theme.colorScheme.primary,
+                                                ),
+                                                const SizedBox(height: 8),
+                                                Padding(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                      horizontal: 16),
+                                                  child: Text(
+                                                    selectedMediaSummary(),
+                                                    maxLines: 2,
+                                                    textAlign: TextAlign.center,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: theme
+                                                        .textTheme.bodySmall
+                                                        ?.copyWith(
+                                                      color: theme.colorScheme
+                                                          .onSurfaceVariant,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            );
+
+                                        final hasMedia =
+                                            selectedUpload != null ||
+                                                selectedLibraryFile != null ||
+                                                (selectedYouTubeId ?? '')
+                                                    .isNotEmpty;
+
+                                        if (!hasMedia) {
+                                          return Material(
+                                            color: Colors.transparent,
+                                            child: InkWell(
+                                              onTap:
+                                                  creating ? null : chooseMedia,
+                                              borderRadius:
+                                                  BorderRadius.circular(16),
+                                              child: Container(
+                                                width: double.infinity,
+                                                height: 150,
+                                                decoration: BoxDecoration(
+                                                  color: theme.colorScheme
+                                                      .surfaceContainerHighest,
+                                                  borderRadius:
+                                                      BorderRadius.circular(16),
+                                                ),
+                                                child: Column(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    Container(
+                                                      width: 52,
+                                                      height: 52,
+                                                      decoration: BoxDecoration(
+                                                        color: theme
+                                                            .colorScheme.primary
+                                                            .withAlpha(20),
+                                                        shape: BoxShape.circle,
+                                                      ),
+                                                      child: Icon(
+                                                        Icons
+                                                            .add_photo_alternate_rounded,
+                                                        size: 26,
+                                                        color: theme.colorScheme
+                                                            .primary,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 10),
+                                                    Text(
+                                                      'Upload or Gallery',
+                                                      style: theme
+                                                          .textTheme.titleSmall
+                                                          ?.copyWith(
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 2),
+                                                    Text(
+                                                      'Tap to choose an image or video',
+                                                      style: theme
+                                                          .textTheme.bodySmall
+                                                          ?.copyWith(
+                                                        color: theme.colorScheme
+                                                            .onSurfaceVariant,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          );
+                                        }
+
+                                        Widget preview;
+                                        if (selectedUpload != null &&
+                                            isImageMedia(
+                                                selectedUpload!.path)) {
+                                          preview = Image.file(
+                                            selectedUpload!,
+                                            width: double.infinity,
+                                            height: double.infinity,
+                                            fit: BoxFit.cover,
+                                          );
+                                        } else if (selectedLibraryFile !=
+                                            null) {
+                                          final base = widget.apiClient.baseUrl
+                                              .replaceAll(RegExp(r'/$'), '');
+                                          var rel = selectedLibraryFile!
+                                              .trim()
+                                              .replaceAll('\\', '/');
+                                          while (rel.startsWith('/')) {
+                                            rel = rel.substring(1);
+                                          }
+                                          for (final prefix in const [
+                                            'static/uploads/',
+                                            'uploads/',
+                                            'media/'
+                                          ]) {
+                                            if (rel
+                                                .toLowerCase()
+                                                .startsWith(prefix)) {
+                                              rel =
+                                                  rel.substring(prefix.length);
+                                              break;
+                                            }
+                                          }
+                                          final encoded = rel
+                                              .split('/')
+                                              .where((s) => s.trim().isNotEmpty)
+                                              .map(Uri.encodeComponent)
+                                              .join('/');
+                                          final lower = rel.toLowerCase();
+                                          final isVideo =
+                                              lower.contains('.mp4') ||
+                                                  lower.contains('.mov') ||
+                                                  lower.contains('.webm') ||
+                                                  lower.contains('.mkv') ||
+                                                  lower.contains('.m3u8');
+                                          final thumbUrl =
+                                              '$base/${isVideo ? 'vthumb' : 'thumb'}/320/$encoded';
+                                          preview = Image.network(
+                                            thumbUrl,
+                                            width: double.infinity,
+                                            height: double.infinity,
+                                            fit: BoxFit.cover,
+                                            errorBuilder:
+                                                (context, error, stack) =>
+                                                    fallback(),
+                                          );
+                                        } else if ((selectedYouTubeId ?? '')
+                                            .isNotEmpty) {
+                                          final ytId = selectedYouTubeId!;
+                                          preview = Stack(
+                                            fit: StackFit.expand,
+                                            children: [
+                                              Image.network(
+                                                'https://img.youtube.com/vi/$ytId/hqdefault.jpg',
+                                                width: double.infinity,
+                                                height: double.infinity,
+                                                fit: BoxFit.cover,
+                                                errorBuilder:
+                                                    (context, error, stack) =>
+                                                        fallback(),
+                                              ),
+                                              Center(
+                                                child: Container(
+                                                  width: 54,
+                                                  height: 54,
+                                                  decoration: BoxDecoration(
+                                                    color:
+                                                        const Color(0xFFFF0000),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            12),
+                                                  ),
+                                                  child: const Icon(
+                                                    Icons.play_arrow_rounded,
+                                                    color: Colors.white,
+                                                    size: 34,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          );
+                                        } else {
+                                          preview = fallback();
+                                        }
+
+                                        return ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(20),
+                                          child: Stack(
+                                            children: [
+                                              AspectRatio(
+                                                aspectRatio: 16 / 9,
+                                                child: Container(
+                                                  width: double.infinity,
+                                                  color: theme.colorScheme
+                                                      .surfaceContainerHighest,
+                                                  child: preview,
+                                                ),
+                                              ),
+                                              Positioned(
+                                                top: 8,
+                                                right: 8,
+                                                child: Material(
+                                                  color: Colors.black
+                                                      .withAlpha(140),
+                                                  borderRadius:
+                                                      BorderRadius.circular(20),
+                                                  child: InkWell(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            20),
+                                                    onTap: creating
+                                                        ? null
+                                                        : chooseMedia,
+                                                    child: const Padding(
+                                                      padding:
+                                                          EdgeInsets.symmetric(
+                                                        horizontal: 12,
+                                                        vertical: 7,
+                                                      ),
+                                                      child: Row(
+                                                        mainAxisSize:
+                                                            MainAxisSize.min,
+                                                        children: [
+                                                          Icon(
+                                                            Icons.edit_rounded,
+                                                            size: 16,
+                                                            color: Colors.white,
+                                                          ),
+                                                          SizedBox(width: 6),
+                                                          Text(
+                                                            'Change',
+                                                            style: TextStyle(
+                                                              color:
+                                                                  Colors.white,
+                                                              fontSize: 13,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w600,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Container(
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.surfaceContainerLow,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Playback',
+                                      style:
+                                          theme.textTheme.titleSmall?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    LayoutBuilder(
+                                      builder: (context, constraints) {
+                                        final hasApp = (selectedYouTubeId ?? '')
+                                            .isNotEmpty;
+                                        return Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Expanded(
+                                              child: Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    'App',
+                                                    style: theme
+                                                        .textTheme.labelMedium
+                                                        ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      color: theme.colorScheme
+                                                          .onSurfaceVariant,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 6),
+                                                  Material(
+                                                    color: Colors.transparent,
+                                                    child: InkWell(
+                                                      onTap: creating
+                                                          ? null
+                                                          : openAppPicker,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              12),
+                                                      child: Ink(
+                                                        height: 40,
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .symmetric(
+                                                          horizontal: 10,
+                                                        ),
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          color: hasApp
+                                                              ? theme
+                                                                  .colorScheme
+                                                                  .primary
+                                                                  .withAlpha(22)
+                                                              : theme
+                                                                  .colorScheme
+                                                                  .surfaceContainerHighest,
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(12),
+                                                        ),
+                                                        child: Row(
+                                                          children: [
+                                                            Icon(
+                                                              selectedAppIcon(),
+                                                              size: 16,
+                                                              color: hasApp
+                                                                  ? theme
+                                                                      .colorScheme
+                                                                      .primary
+                                                                  : theme
+                                                                      .colorScheme
+                                                                      .onSurfaceVariant,
+                                                            ),
+                                                            const SizedBox(
+                                                                width: 6),
+                                                            Expanded(
+                                                              child: Text(
+                                                                selectedAppLabel(),
+                                                                maxLines: 1,
+                                                                overflow:
+                                                                    TextOverflow
+                                                                        .ellipsis,
+                                                                style: theme
+                                                                    .textTheme
+                                                                    .labelLarge
+                                                                    ?.copyWith(
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w700,
+                                                                  fontSize: 13,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                            Icon(
+                                                              Icons
+                                                                  .expand_more_rounded,
+                                                              size: 18,
+                                                              color: theme
+                                                                  .colorScheme
+                                                                  .onSurfaceVariant,
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            compactToggle(
+                                              label: 'Enable',
+                                              value: enabled,
+                                              onChanged: creating
+                                                  ? null
+                                                  : (value) =>
+                                                      setModalState(() {
+                                                        enabled = value;
+                                                      }),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            compactToggle(
+                                              label: 'Repeat',
+                                              value: repeat,
+                                              onChanged: creating
+                                                  ? null
+                                                  : (value) =>
+                                                      setModalState(() {
+                                                        repeat = value;
+                                                      }),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            SizedBox(
+                                              width: 116,
+                                              child: compactDurationField(),
+                                            ),
+                                          ],
+                                        );
+                                      },
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Effect',
+                                          style: theme.textTheme.labelMedium
+                                              ?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                            color: theme
+                                                .colorScheme.onSurfaceVariant,
                                           ),
                                         ),
-                                      );
-                                      if (selected == null ||
-                                          selected.trim().isEmpty) {
-                                        return;
-                                      }
-                                      setModalState(() {
-                                        selectedLibraryFile = selected;
-                                        selectedUpload = null;
-                                        localError = null;
-                                      });
-                                    },
-                              icon: const Icon(Icons.collections),
-                              label: const Text('Choose Library'),
-                            ),
+                                        const SizedBox(height: 6),
+                                        Row(
+                                          children: List.generate(11, (i) {
+                                            final selected = effectId == i;
+                                            final isLast = i == 10;
+                                            return Expanded(
+                                              child: Padding(
+                                                padding: EdgeInsets.only(
+                                                    right: isLast ? 0 : 4),
+                                                child: GestureDetector(
+                                                  onTap: creating
+                                                      ? null
+                                                      : () => setModalState(() {
+                                                            effectId = i;
+                                                          }),
+                                                  child: Container(
+                                                    height: 34,
+                                                    alignment: Alignment.center,
+                                                    decoration: BoxDecoration(
+                                                      color: selected
+                                                          ? theme.colorScheme
+                                                              .primary
+                                                          : theme.colorScheme
+                                                              .surfaceContainerHighest,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              8),
+                                                    ),
+                                                    child: Text(
+                                                      i == 0 ? '·' : '$i',
+                                                      style: theme
+                                                          .textTheme.labelSmall
+                                                          ?.copyWith(
+                                                        fontSize: 11,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                        color: selected
+                                                            ? theme.colorScheme
+                                                                .onPrimary
+                                                            : theme.colorScheme
+                                                                .onSurfaceVariant,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          }),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Container(
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.surfaceContainerLow,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Days',
+                                        style: theme.textTheme.titleSmall),
+                                    const SizedBox(height: 6),
+                                    Row(
+                                      children: _weekDays.map((day) {
+                                        final selected = days.contains(day);
+                                        final isLast = day == _weekDays.last;
+                                        return Expanded(
+                                          child: Padding(
+                                            padding: EdgeInsets.only(
+                                                right: isLast ? 0 : 4),
+                                            child: GestureDetector(
+                                              onTap: creating
+                                                  ? null
+                                                  : () => setModalState(() {
+                                                        if (selected) {
+                                                          days.remove(day);
+                                                        } else {
+                                                          days.add(day);
+                                                        }
+                                                      }),
+                                              child: Container(
+                                                height: 36,
+                                                alignment: Alignment.center,
+                                                decoration: BoxDecoration(
+                                                  color: selected
+                                                      ? theme
+                                                          .colorScheme.primary
+                                                      : theme.colorScheme
+                                                          .surfaceContainerHighest,
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                ),
+                                                child: Text(
+                                                  day.toUpperCase(),
+                                                  style: theme
+                                                      .textTheme.labelSmall
+                                                      ?.copyWith(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: selected
+                                                        ? theme.colorScheme
+                                                            .onPrimary
+                                                        : theme.colorScheme
+                                                            .onSurfaceVariant,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                    const SizedBox(height: 14),
+                                    Text('Start / End',
+                                        style: theme.textTheme.titleSmall),
+                                    const SizedBox(height: 6),
+                                    LayoutBuilder(
+                                      builder: (context, constraints) {
+                                        final startField = TextField(
+                                          controller: startController,
+                                          decoration: InputDecoration(
+                                            labelText: 'Start',
+                                            isDense: true,
+                                            contentPadding:
+                                                const EdgeInsets.symmetric(
+                                                    horizontal: 10,
+                                                    vertical: 14),
+                                            suffixIcon: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                IconButton(
+                                                  visualDensity:
+                                                      VisualDensity.compact,
+                                                  constraints:
+                                                      const BoxConstraints(),
+                                                  padding:
+                                                      const EdgeInsets.all(4),
+                                                  onPressed: creating
+                                                      ? null
+                                                      : () => pickDateFor(
+                                                            startController,
+                                                            setModalState,
+                                                          ),
+                                                  icon: const Icon(
+                                                      Icons.date_range,
+                                                      size: 20),
+                                                ),
+                                                IconButton(
+                                                  visualDensity:
+                                                      VisualDensity.compact,
+                                                  constraints:
+                                                      const BoxConstraints(),
+                                                  padding:
+                                                      const EdgeInsets.all(4),
+                                                  onPressed: creating
+                                                      ? null
+                                                      : () => pickTimeFor(
+                                                            startController,
+                                                            setModalState,
+                                                          ),
+                                                  icon: const Icon(
+                                                      Icons.access_time,
+                                                      size: 20),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                        final endField = TextField(
+                                          controller: endController,
+                                          decoration: InputDecoration(
+                                            labelText: 'End',
+                                            isDense: true,
+                                            contentPadding:
+                                                const EdgeInsets.symmetric(
+                                                    horizontal: 10,
+                                                    vertical: 14),
+                                            suffixIcon: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                IconButton(
+                                                  visualDensity:
+                                                      VisualDensity.compact,
+                                                  constraints:
+                                                      const BoxConstraints(),
+                                                  padding:
+                                                      const EdgeInsets.all(4),
+                                                  onPressed: creating
+                                                      ? null
+                                                      : () => pickDateFor(
+                                                            endController,
+                                                            setModalState,
+                                                          ),
+                                                  icon: const Icon(
+                                                      Icons.date_range,
+                                                      size: 20),
+                                                ),
+                                                IconButton(
+                                                  visualDensity:
+                                                      VisualDensity.compact,
+                                                  constraints:
+                                                      const BoxConstraints(),
+                                                  padding:
+                                                      const EdgeInsets.all(4),
+                                                  onPressed: creating
+                                                      ? null
+                                                      : () => pickTimeFor(
+                                                            endController,
+                                                            setModalState,
+                                                          ),
+                                                  icon: const Icon(
+                                                      Icons.access_time,
+                                                      size: 20),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                        return Column(
+                                          children: [
+                                            startField,
+                                            const SizedBox(height: 12),
+                                            endField,
+                                          ],
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (localError != null) ...[
+                                const SizedBox(height: 12),
+                                Text(
+                                  localError!,
+                                  style: TextStyle(
+                                    color: theme.colorScheme.error,
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 24),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        selectedUpload != null
-                            ? 'Selected upload: ${selectedUpload!.uri.pathSegments.last}'
-                            : selectedLibraryFile != null
-                                ? 'Selected library: ${selectedLibraryFile!}'
-                                : 'No media selected yet',
-                      ),
-                      const SizedBox(height: 10),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Enabled'),
-                        value: enabled,
-                        onChanged: creating
-                            ? null
-                            : (value) => setModalState(() {
-                                  enabled = value;
-                                }),
-                      ),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Repeat'),
-                        value: repeat,
-                        onChanged: creating
-                            ? null
-                            : (value) => setModalState(() {
-                                  repeat = value;
-                                }),
-                      ),
-                      TextField(
-                        controller: durationController,
-                        keyboardType: TextInputType.number,
-                        decoration:
-                            const InputDecoration(labelText: 'Duration (s)'),
-                      ),
-                      const SizedBox(height: 10),
-                      const Text('Effect'),
-                      const SizedBox(height: 6),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
+                      const SizedBox(height: 12),
+                      Row(
                         children: [
-                          ChoiceChip(
-                            label: const Text('·'),
-                            selected: effectId == 0,
-                            onSelected: creating
+                          TextButton(
+                            onPressed: creating
                                 ? null
-                                : (_) => setModalState(() {
-                                      effectId = 0;
-                                    }),
+                                : () => Navigator.of(dialogContext).pop(false),
+                            child: const Text('Cancel'),
                           ),
-                          ...List.generate(10, (index) {
-                            final id = index + 1;
-                            return ChoiceChip(
-                              label: Text('$id'),
-                              selected: effectId == id,
-                              onSelected: creating
-                                  ? null
-                                  : (_) => setModalState(() {
-                                        effectId = id;
-                                      }),
-                            );
-                          }),
+                          const Spacer(),
+                          FilledButton.icon(
+                            onPressed: creating
+                                ? null
+                                : () async {
+                                    final parsedYouTube =
+                                        (selectedYouTubeId ?? '').trim();
+                                    if (selectedUpload == null &&
+                                        (selectedLibraryFile == null ||
+                                            selectedLibraryFile!
+                                                .trim()
+                                                .isEmpty) &&
+                                        parsedYouTube.isEmpty) {
+                                      setModalState(() {
+                                        localError =
+                                            'Select media first: upload, library, or YouTube.';
+                                      });
+                                      return;
+                                    }
+
+                                    if (selectedUpload == null &&
+                                        (selectedLibraryFile == null ||
+                                            selectedLibraryFile!
+                                                .trim()
+                                                .isEmpty) &&
+                                        parsedYouTube.length != 11) {
+                                      setModalState(() {
+                                        localError =
+                                            'Enter a valid YouTube URL or video ID.';
+                                      });
+                                      return;
+                                    }
+
+                                    setModalState(() {
+                                      creating = true;
+                                      localError = null;
+                                    });
+
+                                    try {
+                                      String filename;
+                                      if (selectedUpload != null) {
+                                        filename = await widget.apiClient
+                                            .uploadMedia(selectedUpload!);
+                                      } else if (selectedLibraryFile != null &&
+                                          selectedLibraryFile!
+                                              .trim()
+                                              .isNotEmpty) {
+                                        filename = selectedLibraryFile!.trim();
+                                      } else {
+                                        filename = 'youtube:$parsedYouTube';
+                                      }
+
+                                      await widget.apiClient.assignToScreen(
+                                        storeId: widget.storeId,
+                                        screenId: widget.screenId,
+                                        filename: filename,
+                                      );
+
+                                      final playlist =
+                                          await widget.apiClient.getPlaylist(
+                                        storeId: widget.storeId,
+                                        screenId: widget.screenId,
+                                      );
+
+                                      String? createdItemId;
+                                      for (int i = playlist.length - 1;
+                                          i >= 0;
+                                          i--) {
+                                        final file = (playlist[i]['file'] ?? '')
+                                            .toString()
+                                            .trim();
+                                        if (file == filename) {
+                                          createdItemId =
+                                              (playlist[i]['id'] ?? '')
+                                                  .toString()
+                                                  .trim();
+                                          break;
+                                        }
+                                      }
+                                      createdItemId ??= (playlist.isNotEmpty
+                                              ? '${playlist.last['id'] ?? ''}'
+                                              : '')
+                                          .trim();
+
+                                      if (createdItemId.isNotEmpty) {
+                                        final parsedDuration = int.tryParse(
+                                                durationController.text
+                                                    .trim()) ??
+                                            10;
+                                        await widget.apiClient
+                                            .updatePlaylistItem(
+                                          storeId: widget.storeId,
+                                          screenId: widget.screenId,
+                                          itemId: createdItemId,
+                                          start: startController.text.trim(),
+                                          end: endController.text.trim(),
+                                          enabled: enabled,
+                                          repeat: repeat,
+                                          duration: parsedDuration < 1
+                                              ? 1
+                                              : parsedDuration,
+                                          days: days.toList(),
+                                          effectId: effectId,
+                                        );
+                                      }
+
+                                      if (dialogContext.mounted) {
+                                        Navigator.of(dialogContext).pop(true);
+                                      }
+                                    } catch (e) {
+                                      setModalState(() {
+                                        localError = e
+                                            .toString()
+                                            .replaceFirst('Exception: ', '');
+                                        creating = false;
+                                      });
+                                    }
+                                  },
+                            icon: creating
+                                ? const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.add),
+                            label: Text(
+                                creating ? 'Creating...' : 'Add to Screen'),
+                          ),
                         ],
                       ),
-                      const SizedBox(height: 10),
-                      const Text('Days'),
-                      const SizedBox(height: 6),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: _weekDays.map((day) {
-                          final selected = days.contains(day);
-                          return FilterChip(
-                            label: Text(day.toUpperCase()),
-                            selected: selected,
-                            onSelected: creating
-                                ? null
-                                : (value) => setModalState(() {
-                                      if (value) {
-                                        days.add(day);
-                                      } else {
-                                        days.remove(day);
-                                      }
-                                    }),
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: startController,
-                        decoration: InputDecoration(
-                          labelText: 'Start',
-                          hintText: 'YYYY-MM-DD HH:MM:SS',
-                          suffixIcon: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                onPressed: creating
-                                    ? null
-                                    : () => pickDateFor(
-                                        startController, setModalState),
-                                icon: const Icon(Icons.date_range),
-                              ),
-                              IconButton(
-                                onPressed: creating
-                                    ? null
-                                    : () => pickTimeFor(
-                                        startController, setModalState),
-                                icon: const Icon(Icons.access_time),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: endController,
-                        decoration: InputDecoration(
-                          labelText: 'End',
-                          hintText: 'YYYY-MM-DD HH:MM:SS',
-                          suffixIcon: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                onPressed: creating
-                                    ? null
-                                    : () => pickDateFor(
-                                        endController, setModalState),
-                                icon: const Icon(Icons.date_range),
-                              ),
-                              IconButton(
-                                onPressed: creating
-                                    ? null
-                                    : () => pickTimeFor(
-                                        endController, setModalState),
-                                icon: const Icon(Icons.access_time),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      if (localError != null) ...[
-                        const SizedBox(height: 10),
-                        Text(
-                          localError!,
-                          style: TextStyle(
-                              color: Theme.of(context).colorScheme.error),
-                        ),
-                      ],
                     ],
                   ),
                 ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: creating
-                      ? null
-                      : () => Navigator.of(dialogContext).pop(false),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton.icon(
-                  onPressed: creating
-                      ? null
-                      : () async {
-                          if (selectedUpload == null &&
-                              (selectedLibraryFile == null ||
-                                  selectedLibraryFile!.trim().isEmpty)) {
-                            setModalState(() {
-                              localError =
-                                  'Select media (upload or library) first.';
-                            });
-                            return;
-                          }
-
-                          setModalState(() {
-                            creating = true;
-                            localError = null;
-                          });
-
-                          try {
-                            String filename;
-                            if (selectedUpload != null) {
-                              filename = await widget.apiClient
-                                  .uploadMedia(selectedUpload!);
-                            } else {
-                              filename = selectedLibraryFile!.trim();
-                            }
-
-                            await widget.apiClient.assignToScreen(
-                              storeId: widget.storeId,
-                              screenId: widget.screenId,
-                              filename: filename,
-                            );
-
-                            final playlist = await widget.apiClient.getPlaylist(
-                              storeId: widget.storeId,
-                              screenId: widget.screenId,
-                            );
-
-                            String? createdItemId;
-                            for (int i = playlist.length - 1; i >= 0; i--) {
-                              final file =
-                                  (playlist[i]['file'] ?? '').toString().trim();
-                              if (file == filename) {
-                                createdItemId =
-                                    (playlist[i]['id'] ?? '').toString().trim();
-                                break;
-                              }
-                            }
-                            createdItemId ??= (playlist.isNotEmpty
-                                    ? '${playlist.last['id'] ?? ''}'
-                                    : '')
-                                .trim();
-
-                            if (createdItemId.isNotEmpty) {
-                              final parsedDuration = int.tryParse(
-                                      durationController.text.trim()) ??
-                                  10;
-                              await widget.apiClient.updatePlaylistItem(
-                                storeId: widget.storeId,
-                                screenId: widget.screenId,
-                                itemId: createdItemId,
-                                start: startController.text.trim(),
-                                end: endController.text.trim(),
-                                enabled: enabled,
-                                repeat: repeat,
-                                duration:
-                                    parsedDuration < 1 ? 1 : parsedDuration,
-                                days: days.toList(),
-                                effectId: effectId,
-                              );
-                            }
-
-                            if (dialogContext.mounted) {
-                              Navigator.of(dialogContext).pop(true);
-                            }
-                          } catch (e) {
-                            setModalState(() {
-                              localError =
-                                  e.toString().replaceFirst('Exception: ', '');
-                              creating = false;
-                            });
-                          }
-                        },
-                  icon: creating
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.add),
-                  label:
-                      Text(creating ? 'Creating...' : 'Create Playlist Item'),
-                ),
-              ],
             );
           },
         );
@@ -3339,10 +7345,11 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
     startController.dispose();
     endController.dispose();
     durationController.dispose();
+    youtubeController.dispose();
 
     if (created == true && mounted) {
       setState(() {
-        _message = 'New playlist item created.';
+        _message = 'Scheduled media added.';
       });
       await _loadPlaylist();
     }
@@ -3413,10 +7420,10 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
     }
   }
 
-  Future<void> _pickDateFor(TextEditingController controller) async {
+  Future<String?> _selectDateValue(String raw) async {
     final now = DateTime.now();
     DateTime initialDate = now;
-    final text = controller.text.trim();
+    final text = raw.trim();
     if (text.length >= 10) {
       try {
         initialDate = DateTime.parse(text.substring(0, 10));
@@ -3430,19 +7437,24 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
       lastDate: DateTime(2100),
     );
     if (picked == null) {
-      return;
-    }
-    if (!mounted) {
-      return;
+      return null;
     }
 
     final month = picked.month.toString().padLeft(2, '0');
     final day = picked.day.toString().padLeft(2, '0');
     final existingTime = _extractTimePart(text);
+    return existingTime == null
+        ? '${picked.year}-$month-$day'
+        : '${picked.year}-$month-$day $existingTime';
+  }
+
+  Future<void> _pickDateFor(TextEditingController controller) async {
+    final nextValue = await _selectDateValue(controller.text);
+    if (nextValue == null || !mounted) {
+      return;
+    }
     setState(() {
-      controller.text = existingTime == null
-          ? '${picked.year}-$month-$day'
-          : '${picked.year}-$month-$day $existingTime';
+      controller.text = nextValue;
     });
     _queueAutoSave();
   }
@@ -3479,8 +7491,8 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
     return null;
   }
 
-  Future<void> _pickTimeFor(TextEditingController controller) async {
-    final text = controller.text.trim();
+  Future<String?> _selectTimeValue(String raw) async {
+    final text = raw.trim();
     final now = TimeOfDay.now();
     TimeOfDay initial = now;
     final existing = _extractTimePart(text);
@@ -3497,54 +7509,179 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
       context: context,
       initialTime: initial,
     );
-    if (picked == null || !mounted) {
-      return;
+    if (picked == null) {
+      return null;
     }
 
     final hh = picked.hour.toString().padLeft(2, '0');
     final mm = picked.minute.toString().padLeft(2, '0');
     final datePart = _extractDatePart(text);
+    return datePart == null ? '$hh:$mm:00' : '$datePart $hh:$mm:00';
+  }
+
+  Future<void> _pickTimeFor(TextEditingController controller) async {
+    final nextValue = await _selectTimeValue(controller.text);
+    if (nextValue == null || !mounted) {
+      return;
+    }
     setState(() {
-      controller.text =
-          datePart == null ? '$hh:$mm:00' : '$datePart $hh:$mm:00';
+      controller.text = nextValue;
     });
     _queueAutoSave();
   }
 
-  Widget _buildSectionCaption(String text) {
+  Widget _buildInfoBadge({
+    required IconData icon,
+    required String label,
+    Color? background,
+    Color? foreground,
+  }) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    return Text(
-      text,
-      style: theme.textTheme.labelLarge?.copyWith(
-        color: scheme.onSurfaceVariant,
-        fontWeight: FontWeight.w600,
+    final chipBackground = background ?? scheme.surfaceContainerHigh;
+    final chipForeground = foreground ?? scheme.onSurfaceVariant;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: chipBackground,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: chipForeground),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: chipForeground,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildCompactToggleTile({
+  Widget _buildPillToggle({
     required String label,
     required bool value,
-    required ValueChanged<bool> onChanged,
+    required ValueChanged<bool>? onChanged,
   }) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: scheme.outlineVariant),
-      ),
-      child: Row(
-        children: [
-          Expanded(child: Text(label)),
-          Switch.adaptive(
-            value: value,
-            onChanged: _saving ? null : onChanged,
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: theme.textTheme.labelMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: scheme.onSurfaceVariant,
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 6),
+        SizedBox(
+          height: 40,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: GestureDetector(
+              onTap: onChanged == null ? null : () => onChanged(!value),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                width: 46,
+                height: 26,
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color:
+                      value ? scheme.primary : scheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: AnimatedAlign(
+                  duration: const Duration(milliseconds: 160),
+                  alignment:
+                      value ? Alignment.centerRight : Alignment.centerLeft,
+                  child: Container(
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: scheme.surface,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPillDurationField() {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    void adjust(int delta) {
+      setState(() {
+        _itemDuration = (_itemDuration + delta).clamp(1, 3600);
+      });
+      _queueAutoSave();
+    }
+
+    Widget stepButton(IconData icon, VoidCallback? onTap) {
+      return InkResponse(
+        onTap: onTap,
+        radius: 22,
+        child: SizedBox(
+          width: 30,
+          height: 40,
+          child: Icon(
+            icon,
+            size: 22,
+            color: onTap == null ? scheme.outline : scheme.primary,
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Duration (s)',
+          style: theme.textTheme.labelMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              stepButton(
+                  Icons.remove_rounded, _saving ? null : () => adjust(-1)),
+              Expanded(
+                child: Text(
+                  '$_itemDuration',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              stepButton(Icons.add_rounded, _saving ? null : () => adjust(1)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -3596,6 +7733,18 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
         (mediaType == 'image' || mediaType == 'animated') && itemUrl.isNotEmpty;
     final hasVideo = mediaType == 'video' && itemUrl.isNotEmpty;
     final rotationAngle = _screenRotation * (3.1415926535897932 / 180.0);
+    final lowerStatus = widget.screenStatus.toLowerCase();
+    final isOnline = lowerStatus == 'online';
+    final addressLabel = _screenAddress.trim().isEmpty
+        ? 'Screen or store address'
+        : 'Saved screen address';
+    final currentItemLabel = _itemLabel(item ?? const {});
+    final currentDuration = item == null
+        ? null
+        : int.tryParse('${item['duration'] ?? _itemDuration}') ?? _itemDuration;
+    final currentRunning = item != null && _looksRunning(item);
+    final playlistModeLabel =
+        _isMasterStore ? 'Playlist (Master Override Enabled)' : 'Playlist';
 
     return Column(
       children: [
@@ -3661,14 +7810,282 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
                   children: [
                     Card(
                       child: Padding(
-                        padding: const EdgeInsets.all(14),
+                        padding: const EdgeInsets.all(10),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Current Media',
-                                style: theme.textTheme.titleMedium),
+                            Row(
+                              children: [
+                                _buildInfoBadge(
+                                  icon: isOnline
+                                      ? Icons.wifi_tethering
+                                      : Icons.wifi_tethering_off,
+                                  label: isOnline ? 'Online' : 'Offline',
+                                  background: isOnline
+                                      ? const Color(0xFFDCFCE7)
+                                      : const Color(0xFFFEE2E2),
+                                  foreground: isOnline
+                                      ? const Color(0xFF166534)
+                                      : const Color(0xFF991B1B),
+                                ),
+                                if (_screenProtected) ...[
+                                  const SizedBox(width: 8),
+                                  _buildInfoBadge(
+                                    icon: Icons.lock_outline,
+                                    label: 'Protected',
+                                    background: scheme.surfaceContainerHigh,
+                                  ),
+                                ],
+                                const Spacer(),
+                                _buildInfoBadge(
+                                  icon: Icons.screen_rotation_alt_outlined,
+                                  label: '$_screenRotation°',
+                                  background: scheme.surfaceContainerHigh,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              addressLabel,
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _screenAddress.trim().isEmpty
+                                  ? 'No saved screen or store address'
+                                  : _screenAddress,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: _screenAddress.trim().isEmpty
+                                    ? scheme.onSurfaceVariant
+                                    : scheme.onSurface,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    playlistModeLabel,
+                                    style: theme.textTheme.titleSmall,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: scheme.surfaceContainerLow,
+                                borderRadius: BorderRadius.circular(12),
+                                border:
+                                    Border.all(color: scheme.outlineVariant),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 48,
+                                    height: 48,
+                                    clipBehavior: Clip.antiAlias,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(10),
+                                      color: scheme.surfaceContainerHigh,
+                                    ),
+                                    child: _buildCompactMediaThumb(
+                                      item,
+                                      iconSize: 22,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          currentItemLabel,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: theme.textTheme.titleSmall,
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          currentRunning
+                                              ? 'Running now'
+                                              : 'Ready in playlist',
+                                          style: theme.textTheme.bodySmall
+                                              ?.copyWith(
+                                            color: scheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (currentDuration != null)
+                                    Text(
+                                      '$currentDuration s',
+                                      style:
+                                          theme.textTheme.labelMedium?.copyWith(
+                                        color: scheme.onSurfaceVariant,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
                             if (_playlist.length > 1) ...[
                               const SizedBox(height: 10),
+                              Text(
+                                'All Playlist Items',
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              ..._playlist.map((playlistItem) {
+                                final playlistItemId =
+                                    (playlistItem['id'] ?? '').toString();
+                                final isSelected = (_selectedItemId == null &&
+                                        identical(playlistItem, item)) ||
+                                    _selectedItemId == playlistItemId;
+                                final playlistDuration = int.tryParse(
+                                      '${playlistItem['duration'] ?? 10}',
+                                    ) ??
+                                    10;
+                                final playlistRunning =
+                                    _looksRunning(playlistItem);
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 6),
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(12),
+                                    onTap: () {
+                                      setState(() {
+                                        _selectedItemId = playlistItemId;
+                                      });
+                                      _loadItemFieldsFromCurrent();
+                                      _refreshPreviewHeaders();
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: isSelected
+                                            ? scheme.primaryContainer
+                                            : scheme.surface,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: isSelected
+                                              ? scheme.primary
+                                              : scheme.outlineVariant,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            width: 42,
+                                            height: 42,
+                                            clipBehavior: Clip.antiAlias,
+                                            decoration: BoxDecoration(
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              color:
+                                                  scheme.surfaceContainerHigh,
+                                            ),
+                                            child: _buildCompactMediaThumb(
+                                              playlistItem,
+                                              iconSize: 20,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  _itemLabel(playlistItem),
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: theme
+                                                      .textTheme.titleSmall,
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  playlistRunning
+                                                      ? 'Running now'
+                                                      : 'Scheduled item',
+                                                  style: theme
+                                                      .textTheme.bodySmall
+                                                      ?.copyWith(
+                                                    color:
+                                                        scheme.onSurfaceVariant,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          Text(
+                                            '$playlistDuration s',
+                                            style: theme.textTheme.labelMedium
+                                                ?.copyWith(
+                                              color: scheme.onSurfaceVariant,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text('Current Media',
+                                    style: theme.textTheme.titleMedium),
+                                const Spacer(),
+                                SizedBox(
+                                  width: 36,
+                                  height: 36,
+                                  child: IconButton.outlined(
+                                    tooltip: 'Replace media',
+                                    onPressed:
+                                        _saving ? null : _openQuickReplaceMedia,
+                                    icon: const Icon(Icons.swap_horiz_rounded,
+                                        size: 18),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                SizedBox(
+                                  width: 36,
+                                  height: 36,
+                                  child: IconButton.outlined(
+                                    tooltip: 'Delete current item',
+                                    onPressed: _saving || item == null
+                                        ? null
+                                        : _deleteCurrentPlaylistItem,
+                                    icon: const Icon(Icons.delete_outline,
+                                        size: 18),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (_playlist.length > 1) ...[
+                              const SizedBox(height: 8),
                               InkWell(
                                 borderRadius: BorderRadius.circular(10),
                                 onTap: _pickPlaylistItemVisual,
@@ -3692,7 +8109,7 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
                                 ),
                               ),
                             ],
-                            const SizedBox(height: 10),
+                            const SizedBox(height: 8),
                             ClipRRect(
                               borderRadius: BorderRadius.circular(12),
                               child: AspectRatio(
@@ -3720,18 +8137,26 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
                                                         'yt-$youTubeId'),
                                                     videoId: youTubeId,
                                                   )
-                                                : const Center(
-                                                    child: Column(
-                                                      mainAxisSize:
-                                                          MainAxisSize.min,
-                                                      children: [
-                                                        Icon(Icons.movie,
-                                                            size: 40),
-                                                        SizedBox(height: 8),
-                                                        Text('Video selected'),
-                                                      ],
-                                                    ),
-                                                  ))
+                                                : itemUrl.isNotEmpty
+                                                    ? _VideoPreview(
+                                                        key: ValueKey(itemUrl),
+                                                        url: itemUrl,
+                                                        headers:
+                                                            _previewHeaders,
+                                                      )
+                                                    : const Center(
+                                                        child: Column(
+                                                          mainAxisSize:
+                                                              MainAxisSize.min,
+                                                          children: [
+                                                            Icon(Icons.movie,
+                                                                size: 40),
+                                                            SizedBox(height: 8),
+                                                            Text(
+                                                                'Video selected'),
+                                                          ],
+                                                        ),
+                                                      ))
                                             : const Center(
                                                 child: Column(
                                                   mainAxisSize:
@@ -3750,23 +8175,36 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
                               ),
                             ),
                             const SizedBox(height: 8),
-                            Text(
-                              item == null
-                                  ? 'Upload an image/video below to assign this screen.'
-                                  : 'Type: ${mediaType.isEmpty ? 'unknown' : mediaType}',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: scheme.onSurfaceVariant,
+                            if (item == null)
+                              Text(
+                                'Upload or assign media to start syncing this screen.',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              )
+                            else
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  _buildInfoBadge(
+                                    icon: hasVideo
+                                        ? Icons.movie_outlined
+                                        : hasImage
+                                            ? Icons.image_outlined
+                                            : Icons.perm_media_outlined,
+                                    label:
+                                        'Type ${mediaType.isEmpty ? 'unknown' : mediaType}',
+                                  ),
+                                  _buildInfoBadge(
+                                    icon: Icons.sync,
+                                    label: 'Website sync 5s',
+                                    background: scheme.primaryContainer,
+                                    foreground: scheme.onPrimaryContainer,
+                                  ),
+                                ],
                               ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Live sync with website: every 5 seconds',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: scheme.primary,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
+                            const SizedBox(height: 8),
                             SingleChildScrollView(
                               scrollDirection: Axis.horizontal,
                               child: Row(
@@ -3823,7 +8261,7 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
                                   ),
                                   const SizedBox(width: 6),
                                   _buildQuickActionButton(
-                                    tooltip: 'Display',
+                                    tooltip: 'TV',
                                     icon: Icons.open_in_browser,
                                     background: const Color(0xFF0EA5E9),
                                     onPressed: (_saving || _quickActionBusy)
@@ -3840,17 +8278,6 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
                                 borderRadius: BorderRadius.circular(999),
                               ),
                             ],
-                            const SizedBox(height: 10),
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: OutlinedButton.icon(
-                                onPressed: _saving || item == null
-                                    ? null
-                                    : _deleteCurrentPlaylistItem,
-                                icon: const Icon(Icons.delete_outline),
-                                label: const Text('Delete Current Item'),
-                              ),
-                            ),
                           ],
                         ),
                       ),
@@ -3868,218 +8295,215 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
                       ),
                     ],
                     const SizedBox(height: 10),
+                    _buildPanelInfoCard(),
+                    const SizedBox(height: 10),
                     Card(
+                      elevation: 0,
+                      color: scheme.surface,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
                       child: Padding(
                         padding: const EdgeInsets.all(14),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Playback & Timeline',
-                                style: theme.textTheme.titleMedium),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Control enabled, repeat, duration, days, and primary timeline like website.',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            _buildSectionCaption('Playback Controls'),
-                            const SizedBox(height: 8),
-                            LayoutBuilder(
-                              builder: (context, constraints) {
-                                final stacked = constraints.maxWidth < 560;
-                                final enabledTile = _buildCompactToggleTile(
-                                  label: 'Enabled',
-                                  value: _itemEnabled,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      _itemEnabled = value;
-                                    });
-                                    _queueAutoSave();
-                                  },
-                                );
-                                final repeatTile = _buildCompactToggleTile(
-                                  label: 'Repeat',
-                                  value: _itemRepeat,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      _itemRepeat = value;
-                                    });
-                                    _queueAutoSave();
-                                  },
-                                );
-                                if (stacked) {
-                                  return Column(
-                                    children: [
-                                      enabledTile,
-                                      const SizedBox(height: 8),
-                                      repeatTile,
-                                    ],
-                                  );
-                                }
-                                return Row(
-                                  children: [
-                                    Expanded(child: enabledTile),
-                                    const SizedBox(width: 8),
-                                    Expanded(child: repeatTile),
-                                  ],
-                                );
-                              },
-                            ),
-                            const SizedBox(height: 12),
                             Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: scheme.surfaceContainerLow,
-                                borderRadius: BorderRadius.circular(12),
-                                border:
-                                    Border.all(color: scheme.outlineVariant),
-                              ),
-                              child: Row(
+                              padding: EdgeInsets.zero,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Expanded(child: Text('Duration (s)')),
-                                  IconButton(
-                                    visualDensity: VisualDensity.compact,
-                                    onPressed: _saving
-                                        ? null
-                                        : () {
-                                            setState(() {
-                                              if (_itemDuration > 1) {
-                                                _itemDuration--;
-                                              }
-                                            });
-                                            _queueAutoSave();
-                                          },
-                                    icon:
-                                        const Icon(Icons.remove_circle_outline),
+                                  Text('Playback',
+                                      style: theme.textTheme.titleSmall),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      _buildPillToggle(
+                                        label: 'Enabled',
+                                        value: _itemEnabled,
+                                        onChanged: _saving
+                                            ? null
+                                            : (value) {
+                                                setState(() {
+                                                  _itemEnabled = value;
+                                                });
+                                                _queueAutoSave();
+                                              },
+                                      ),
+                                      const SizedBox(width: 18),
+                                      _buildPillToggle(
+                                        label: 'Repeat',
+                                        value: _itemRepeat,
+                                        onChanged: _saving
+                                            ? null
+                                            : (value) {
+                                                setState(() {
+                                                  _itemRepeat = value;
+                                                });
+                                                _queueAutoSave();
+                                              },
+                                      ),
+                                      const Spacer(),
+                                      SizedBox(
+                                        width: 128,
+                                        child: _buildPillDurationField(),
+                                      ),
+                                    ],
                                   ),
+                                  const SizedBox(height: 12),
                                   Text(
-                                    '$_itemDuration',
-                                    style: theme.textTheme.titleMedium,
+                                    'Effect',
+                                    style:
+                                        theme.textTheme.labelMedium?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      color: scheme.onSurfaceVariant,
+                                    ),
                                   ),
-                                  IconButton(
-                                    visualDensity: VisualDensity.compact,
-                                    onPressed: _saving
-                                        ? null
-                                        : () {
-                                            setState(() {
-                                              _itemDuration++;
-                                            });
-                                            _queueAutoSave();
-                                          },
-                                    icon: const Icon(Icons.add_circle_outline),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    children: List.generate(11, (i) {
+                                      final selected = _itemEffectId == i;
+                                      final isLast = i == 10;
+                                      return Expanded(
+                                        child: Padding(
+                                          padding: EdgeInsets.only(
+                                              right: isLast ? 0 : 4),
+                                          child: GestureDetector(
+                                            onTap: _saving
+                                                ? null
+                                                : () {
+                                                    setState(() {
+                                                      _itemEffectId = i;
+                                                    });
+                                                    _queueAutoSave();
+                                                  },
+                                            child: Container(
+                                              height: 34,
+                                              alignment: Alignment.center,
+                                              decoration: BoxDecoration(
+                                                color: selected
+                                                    ? scheme.primary
+                                                    : scheme
+                                                        .surfaceContainerHighest,
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              child: Text(
+                                                i == 0 ? '·' : '$i',
+                                                style: theme
+                                                    .textTheme.labelSmall
+                                                    ?.copyWith(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: selected
+                                                      ? scheme.onPrimary
+                                                      : scheme.onSurfaceVariant,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }),
                                   ),
                                 ],
                               ),
                             ),
                             const SizedBox(height: 12),
-                            _buildSectionCaption('Effect'),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                ChoiceChip(
-                                  label: const Text('·'),
-                                  selected: _itemEffectId == 0,
-                                  onSelected: _saving
-                                      ? null
-                                      : (_) {
-                                          setState(() {
-                                            _itemEffectId = 0;
-                                          });
-                                          _queueAutoSave();
-                                        },
-                                ),
-                                ...List.generate(10, (index) {
-                                  final effectId = index + 1;
-                                  return ChoiceChip(
-                                    label: Text('$effectId'),
-                                    selected: effectId == _itemEffectId,
-                                    onSelected: _saving
-                                        ? null
-                                        : (_) {
-                                            setState(() {
-                                              _itemEffectId = effectId;
-                                            });
-                                            _queueAutoSave();
-                                          },
-                                  );
-                                }),
-                              ],
+                            Divider(color: scheme.outlineVariant),
+                            const SizedBox(height: 12),
+                            Container(
+                              padding: EdgeInsets.zero,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Days',
+                                      style: theme.textTheme.titleSmall),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    children: _weekDays.map((day) {
+                                      final selected = _itemDays.contains(day);
+                                      final isLast = day == _weekDays.last;
+                                      return Expanded(
+                                        child: Padding(
+                                          padding: EdgeInsets.only(
+                                              right: isLast ? 0 : 4),
+                                          child: GestureDetector(
+                                            onTap: _saving
+                                                ? null
+                                                : () {
+                                                    setState(() {
+                                                      if (selected) {
+                                                        _itemDays.remove(day);
+                                                      } else {
+                                                        _itemDays.add(day);
+                                                      }
+                                                    });
+                                                    _queueAutoSave();
+                                                  },
+                                            child: Container(
+                                              height: 36,
+                                              alignment: Alignment.center,
+                                              decoration: BoxDecoration(
+                                                color: selected
+                                                    ? scheme.primary
+                                                    : scheme
+                                                        .surfaceContainerHighest,
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              child: Text(
+                                                day.toUpperCase(),
+                                                style: theme
+                                                    .textTheme.labelSmall
+                                                    ?.copyWith(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: selected
+                                                      ? scheme.onPrimary
+                                                      : scheme.onSurfaceVariant,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                  const SizedBox(height: 14),
+                                  Text('Start / End',
+                                      style: theme.textTheme.titleSmall),
+                                  const SizedBox(height: 6),
+                                  _buildDateTimeField(
+                                    controller: _startController,
+                                    label: 'Start',
+                                    onPickDate: () =>
+                                        _pickDateFor(_startController),
+                                    onPickTime: () =>
+                                        _pickTimeFor(_startController),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  _buildDateTimeField(
+                                    controller: _endController,
+                                    label: 'End',
+                                    onPickDate: () =>
+                                        _pickDateFor(_endController),
+                                    onPickTime: () =>
+                                        _pickTimeFor(_endController),
+                                  ),
+                                ],
+                              ),
                             ),
                             const SizedBox(height: 12),
-                            _buildSectionCaption('Active Days'),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: _weekDays.map((day) {
-                                final selected = _itemDays.contains(day);
-                                return FilterChip(
-                                  label: Text(day.toUpperCase()),
-                                  selected: selected,
-                                  onSelected: _saving
-                                      ? null
-                                      : (value) {
-                                          setState(() {
-                                            if (value) {
-                                              _itemDays.add(day);
-                                            } else {
-                                              _itemDays.remove(day);
-                                            }
-                                          });
-                                          _queueAutoSave();
-                                        },
-                                );
-                              }).toList(),
-                            ),
-                            const SizedBox(height: 12),
-                            _buildSectionCaption('Primary Timeline'),
-                            const SizedBox(height: 8),
-                            LayoutBuilder(
-                              builder: (context, constraints) {
-                                final wide = constraints.maxWidth >= 700;
-                                final startField = _buildDateTimeField(
-                                  controller: _startController,
-                                  label: 'Start',
-                                  onPickDate: () =>
-                                      _pickDateFor(_startController),
-                                  onPickTime: () =>
-                                      _pickTimeFor(_startController),
-                                );
-                                final endField = _buildDateTimeField(
-                                  controller: _endController,
-                                  label: 'End',
-                                  onPickDate: () =>
-                                      _pickDateFor(_endController),
-                                  onPickTime: () =>
-                                      _pickTimeFor(_endController),
-                                );
-                                if (!wide) {
-                                  return Column(
-                                    children: [
-                                      startField,
-                                      const SizedBox(height: 10),
-                                      endField,
-                                    ],
-                                  );
-                                }
-                                return Row(
-                                  children: [
-                                    Expanded(child: startField),
-                                    const SizedBox(width: 10),
-                                    Expanded(child: endField),
-                                  ],
-                                );
-                              },
-                            ),
-                            const SizedBox(height: 10),
                             SizedBox(
                               width: double.infinity,
                               child: FilledButton.icon(
+                                style: FilledButton.styleFrom(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 12),
+                                ),
                                 onPressed: _saving ? null : _saveItemSettings,
                                 icon: const Icon(Icons.schedule),
                                 label: Text(_saving
@@ -4102,7 +8526,7 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
                                 style: theme.textTheme.titleMedium),
                             const SizedBox(height: 4),
                             Text(
-                              'Add multiple active windows like website schedule rows.',
+                              'Add a new image, video, or YouTube item to this screen, or add extra active windows to the selected media.',
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: scheme.onSurfaceVariant,
                               ),
@@ -4110,140 +8534,24 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
                             const SizedBox(height: 10),
                             SizedBox(
                               width: double.infinity,
-                              child: FilledButton.tonalIcon(
-                                onPressed: _saving
-                                    ? null
-                                    : () {
-                                        setState(() {
-                                          _showNewWindowForm = true;
-                                        });
-                                      },
+                              child: FilledButton.icon(
+                                onPressed:
+                                    _saving ? null : _openCreatePlaylistSetup,
                                 icon: const Icon(Icons.add),
-                                label: const Text('Add Schedule Window'),
+                                label: const Text('Add Scheduled Media'),
                               ),
                             ),
-                            if (_showNewWindowForm) ...[
-                              const SizedBox(height: 10),
-                              SwitchListTile(
-                                contentPadding: EdgeInsets.zero,
-                                title: const Text('New Window Enabled'),
-                                value: _windowEnabled,
-                                onChanged: _saving
-                                    ? null
-                                    : (value) {
-                                        setState(() {
-                                          _windowEnabled = value;
-                                        });
-                                      },
-                              ),
-                              TextField(
-                                controller: _windowStartController,
-                                decoration: InputDecoration(
-                                  labelText: 'Window Start',
-                                  hintText: 'YYYY-MM-DD HH:MM:SS',
-                                  suffixIcon: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                        tooltip: 'Pick date',
-                                        icon: const Icon(Icons.date_range),
-                                        onPressed: _saving
-                                            ? null
-                                            : () => _pickDateFor(
-                                                _windowStartController),
-                                      ),
-                                      IconButton(
-                                        tooltip: 'Pick time',
-                                        icon: const Icon(Icons.access_time),
-                                        onPressed: _saving
-                                            ? null
-                                            : () => _pickTimeFor(
-                                                _windowStartController),
-                                      ),
-                                    ],
-                                  ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: _saving ? null : _addScheduleWindow,
+                                icon: const Icon(Icons.event_repeat),
+                                label: const Text(
+                                  'Add Extra Window to Current Media',
                                 ),
                               ),
-                              const SizedBox(height: 10),
-                              TextField(
-                                controller: _windowEndController,
-                                decoration: InputDecoration(
-                                  labelText: 'Window End',
-                                  hintText: 'YYYY-MM-DD HH:MM:SS',
-                                  suffixIcon: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                        tooltip: 'Pick date',
-                                        icon: const Icon(Icons.date_range),
-                                        onPressed: _saving
-                                            ? null
-                                            : () => _pickDateFor(
-                                                _windowEndController),
-                                      ),
-                                      IconButton(
-                                        tooltip: 'Pick time',
-                                        icon: const Icon(Icons.access_time),
-                                        onPressed: _saving
-                                            ? null
-                                            : () => _pickTimeFor(
-                                                _windowEndController),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Wrap(
-                                spacing: 6,
-                                runSpacing: 6,
-                                children: _weekDays.map((day) {
-                                  final selected = _windowDays.contains(day);
-                                  return FilterChip(
-                                    label: Text(day.toUpperCase()),
-                                    selected: selected,
-                                    onSelected: _saving
-                                        ? null
-                                        : (value) {
-                                            setState(() {
-                                              if (value) {
-                                                _windowDays.add(day);
-                                              } else {
-                                                _windowDays.remove(day);
-                                              }
-                                            });
-                                          },
-                                  );
-                                }).toList(),
-                              ),
-                              const SizedBox(height: 10),
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: [
-                                  FilledButton.icon(
-                                    onPressed:
-                                        _saving ? null : _addScheduleWindow,
-                                    icon: const Icon(Icons.check),
-                                    label: const Text('Save New Window'),
-                                  ),
-                                  OutlinedButton(
-                                    onPressed: _saving
-                                        ? null
-                                        : () {
-                                            setState(() {
-                                              _showNewWindowForm = false;
-                                              _windowStartController.clear();
-                                              _windowEndController.clear();
-                                              _windowDays = <String>{};
-                                              _windowEnabled = true;
-                                            });
-                                          },
-                                    child: const Text('Cancel'),
-                                  ),
-                                ],
-                              ),
-                            ],
+                            ),
                             const SizedBox(height: 10),
                             if (_scheduleWindows().isEmpty)
                               Text(
@@ -4410,11 +8718,15 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
 
 class _VideoPreview extends StatefulWidget {
   const _VideoPreview({
+    super.key,
     required this.url,
+    required this.headers,
+    this.compact = false,
   });
 
   final String url;
   final Map<String, String> headers;
+  final bool compact;
 
   @override
   State<_VideoPreview> createState() => _VideoPreviewState();
@@ -4742,6 +9054,7 @@ class _LibraryPickerSheetState extends State<_LibraryPickerSheet> {
 class _VideoPreviewState extends State<_VideoPreview> {
   VideoPlayerController? _controller;
   bool _ready = false;
+  bool _failed = false;
   int _initToken = 0;
 
   @override
@@ -4762,6 +9075,11 @@ class _VideoPreviewState extends State<_VideoPreview> {
   Future<void> _init({required bool allowKeepExisting}) async {
     final token = ++_initToken;
     final previous = _controller;
+    if (!allowKeepExisting || previous == null) {
+      setState(() {
+        _failed = false;
+      });
+    }
     try {
       final controller = VideoPlayerController.networkUrl(
         Uri.parse(widget.url),
@@ -4779,6 +9097,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
       setState(() {
         _controller = controller;
         _ready = true;
+        _failed = false;
       });
 
       if (previous != null && previous != controller) {
@@ -4792,11 +9111,13 @@ class _VideoPreviewState extends State<_VideoPreview> {
         setState(() {
           _controller = null;
           _ready = false;
+          _failed = true;
         });
         return;
       }
       setState(() {
         _ready = _controller != null && _controller!.value.isInitialized;
+        _failed = false;
       });
     }
   }
@@ -4828,16 +9149,33 @@ class _VideoPreviewState extends State<_VideoPreview> {
         ),
       );
     }
-    return const Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.video_library, size: 36),
-          SizedBox(height: 8),
-          Text('Video preview unavailable'),
-        ],
-      ),
-    );
+    if (_failed) {
+      if (widget.compact) {
+        return const Center(
+          child: Icon(Icons.video_library_outlined, size: 18),
+        );
+      }
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.video_library, size: 36),
+            SizedBox(height: 8),
+            Text('Video preview unavailable'),
+          ],
+        ),
+      );
+    }
+    if (widget.compact) {
+      return const Center(
+        child: SizedBox(
+          width: 16,
+          height: 16,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+    return const Center(child: CircularProgressIndicator());
   }
 }
 
@@ -4917,6 +9255,56 @@ class _YouTubePreviewState extends State<_YouTubePreview> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _YouTubeInputDialog extends StatefulWidget {
+  const _YouTubeInputDialog({required this.initialValue});
+
+  final String initialValue;
+
+  @override
+  State<_YouTubeInputDialog> createState() => _YouTubeInputDialogState();
+}
+
+class _YouTubeInputDialogState extends State<_YouTubeInputDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('YouTube'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        decoration: const InputDecoration(
+          labelText: 'YouTube URL or video ID',
+          hintText: 'Paste link or 11-character ID',
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+          child: const Text('Use YouTube'),
+        ),
+      ],
     );
   }
 }

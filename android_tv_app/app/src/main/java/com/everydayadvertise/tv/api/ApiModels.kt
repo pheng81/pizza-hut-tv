@@ -24,6 +24,8 @@ data class PlaylistItem(
 	@SerializedName("schedule") val schedule: ArrayList<ScheduleWindow>? = null,
 	@SerializedName("days") val days: ArrayList<String>? = null,
 	@SerializedName("media_type") val mediaType: String? = null,
+	@SerializedName("live_pos_title") val livePosTitle: String? = null,
+	@SerializedName("live_pos_body") val livePosBody: String? = null,
 	@SerializedName("effect") val effect: String? = null,
 	@SerializedName("sync_ref") val syncRef: SyncRef? = null
 )

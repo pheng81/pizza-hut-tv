@@ -48,8 +48,10 @@ import android.graphics.drawable.GradientDrawable
 
 data class PanelAppearanceConfig(
     val backgroundColor: String = "#201206",
+    val backgroundOpacity: Float = 0.72f,
     val contentAlign: String = "center",
-    val bodyRows: Int = 4
+    val bodyRows: Int = 4,
+    val shadowEnabled: Boolean = false
 )
 
 data class PanelActiveItemConfig(
@@ -60,6 +62,7 @@ data class PanelActiveItemConfig(
 data class PanelZoneConfig(
     val enabled: Boolean = false,
     val layoutMode: String = "off",
+    val overlayPercent: Int = 25,
     val appearance: PanelAppearanceConfig = PanelAppearanceConfig(),
     val activeItem: PanelActiveItemConfig? = null
 )
@@ -386,23 +389,23 @@ class TvDisplayActivity : AppCompatActivity() {
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
-    fun renderPanelOverlay(currentItem: com.everydayadvertise.tv.api.PlaylistItem?) {
+    fun renderPanelOverlay(currentItem: com.everydayadvertise.tv.api.PlaylistItem?): Boolean {
         ensurePanelOverlayViews()
         val state = panelZoneState
         val activeItem = state.activeItem
-        if (!state.enabled || activeItem == null || state.layoutMode == "off" || currentItem?.syncRef != null) {
+        val currentMediaType = currentItem?.mediaType?.lowercase(Locale.US) ?: ""
+        val currentFile = currentItem?.file?.lowercase(Locale.US) ?: ""
+        val currentIsLivePos = currentMediaType == "live_pos" || currentFile.startsWith("livepos:")
+        if (!state.enabled || activeItem == null || state.layoutMode == "off" || currentItem?.syncRef != null || (state.layoutMode == "full-screen" && currentItem != null && !currentIsLivePos)) {
             hidePanelOverlay()
-            return
+            return false
         }
-        val container = panelContainer ?: return
-        val content = panelContent ?: return
-        val bodyView = panelBody ?: return
-        val titleView = panelTitle ?: return
-        val chipView = panelChip ?: return
-        val kickerView = panelKicker ?: return
-        val metaView = panelMeta ?: return
+        val container = panelContainer ?: return false
+        val bodyView = panelBody ?: return false
+        val titleView = panelTitle ?: return false
+        val metaView = panelMeta ?: return false
 
-        applyPanelLayout(state.layoutMode)
+        applyPanelLayout(state.layoutMode, state.overlayPercent)
         applyPanelAppearance(state.appearance, state.layoutMode)
 
         titleView.text = formatPanelDisplayText(if (activeItem.title.isNotBlank()) activeItem.title else "Info", 18)
@@ -411,31 +414,35 @@ class TvDisplayActivity : AppCompatActivity() {
         metaView.text = ""
         container.visibility = View.VISIBLE
         bringUiOverlaysToFront()
+        return true
     }
 
     fun hidePanelOverlay() {
         panelContainer?.visibility = View.GONE
-        applyMediaInsets("off")
+        applyMediaInsets("off", 25)
     }
 
-    private fun applyPanelLayout(layoutMode: String) {
+    private fun applyPanelLayout(layoutMode: String, overlayPercent: Int = panelZoneState.overlayPercent) {
         val container = panelContainer ?: return
         val metrics = resources.displayMetrics
-        val panelWidth = (metrics.widthPixels * 0.25f).toInt()
-        val panelHeight = (metrics.heightPixels * 0.25f).toInt()
+        val ratio = overlayPercent.coerceIn(10, 60) / 100f
+        val panelWidth = (metrics.widthPixels * ratio).toInt()
+        val panelHeight = (metrics.heightPixels * ratio).toInt()
         val params = when (layoutMode) {
+            "full-screen" -> FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.START or Gravity.TOP)
             "split-left-25" -> FrameLayout.LayoutParams(panelWidth, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.START or Gravity.TOP)
             "split-bottom-25" -> FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, panelHeight, Gravity.BOTTOM)
             else -> FrameLayout.LayoutParams(panelWidth, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.END or Gravity.TOP)
         }
         container.layoutParams = params
-        applyMediaInsets(layoutMode)
+        applyMediaInsets(layoutMode, overlayPercent)
     }
 
-    fun applyMediaInsets(layoutMode: String) {
+    fun applyMediaInsets(layoutMode: String, overlayPercent: Int = panelZoneState.overlayPercent) {
         val metrics = resources.displayMetrics
-        val panelWidth = (metrics.widthPixels * 0.25f).toInt()
-        val panelHeight = (metrics.heightPixels * 0.25f).toInt()
+        val ratio = overlayPercent.coerceIn(10, 60) / 100f
+        val panelWidth = (metrics.widthPixels * ratio).toInt()
+        val panelHeight = (metrics.heightPixels * ratio).toInt()
         val applyToView: (View?) -> Unit = { view ->
             if (view != null) {
                 val params = FrameLayout.LayoutParams(
@@ -470,10 +477,12 @@ class TvDisplayActivity : AppCompatActivity() {
         val darkerColor = blendColor(baseColor, Color.BLACK, 0.34f)
         val lighterColor = blendColor(baseColor, Color.WHITE, 0.18f)
         val isLight = android.graphics.Color.luminance(baseColor) >= 0.55f
+        val backgroundAlpha = (appearance.backgroundOpacity.coerceIn(0.15f, 1f) * 255f).toInt()
+        val backgroundAlphaEnd = ((appearance.backgroundOpacity.coerceIn(0.15f, 1f) + 0.04f).coerceAtMost(1f) * 255f).toInt()
 
         container.background = GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,
-            intArrayOf(withAlpha(baseColor, 242), withAlpha(darkerColor, 250))
+            intArrayOf(withAlpha(baseColor, backgroundAlpha), withAlpha(darkerColor, backgroundAlphaEnd))
         ).apply {
             cornerRadius = dp(0).toFloat()
             setStroke(dp(1), if (isLight) withAlpha(Color.BLACK, 36) else withAlpha(Color.parseColor("#ffd699"), 72))
@@ -490,10 +499,16 @@ class TvDisplayActivity : AppCompatActivity() {
         titleView.setTextColor(if (isLight) Color.parseColor("#0f172a") else Color.parseColor("#fff4dc"))
         bodyView.setTextColor(if (isLight) withAlpha(Color.parseColor("#0f172a"), 225) else Color.parseColor("#fff6e6"))
         metaView.setTextColor(if (isLight) withAlpha(Color.parseColor("#0f172a"), 143) else withAlpha(Color.parseColor("#e2e8f0"), 199))
-        val shadowAlpha = if (isLight) 72 else 132
-        titleView.setShadowLayer(dp(2).toFloat(), 0f, dp(1).toFloat(), withAlpha(Color.BLACK, shadowAlpha))
-        bodyView.setShadowLayer(dp(2).toFloat(), 0f, dp(1).toFloat(), withAlpha(Color.BLACK, shadowAlpha))
-        kickerView.setShadowLayer(dp(1).toFloat(), 0f, dp(1).toFloat(), withAlpha(Color.BLACK, shadowAlpha / 2))
+        if (appearance.shadowEnabled) {
+            val shadowAlpha = if (isLight) 72 else 132
+            titleView.setShadowLayer(dp(2).toFloat(), 0f, dp(1).toFloat(), withAlpha(Color.BLACK, shadowAlpha))
+            bodyView.setShadowLayer(dp(2).toFloat(), 0f, dp(1).toFloat(), withAlpha(Color.BLACK, shadowAlpha))
+            kickerView.setShadowLayer(dp(1).toFloat(), 0f, dp(1).toFloat(), withAlpha(Color.BLACK, shadowAlpha / 2))
+        } else {
+            titleView.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
+            bodyView.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
+            kickerView.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
+        }
 
         content.gravity = when (appearance.contentAlign) {
             "top" -> Gravity.TOP
@@ -501,7 +516,10 @@ class TvDisplayActivity : AppCompatActivity() {
             else -> Gravity.CENTER_VERTICAL
         }
         val panelScale = (resources.displayMetrics.widthPixels / 1920f).coerceIn(1.0f, 1.45f)
-        if (layoutMode == "split-bottom-25") {
+        if (layoutMode == "full-screen") {
+            bodyView.textSize = 52f * panelScale
+            titleView.textSize = 82f * panelScale
+        } else if (layoutMode == "split-bottom-25") {
             bodyView.textSize = 20f * panelScale
             titleView.textSize = 28f * panelScale
         } else {
@@ -560,6 +578,29 @@ class TvDisplayActivity : AppCompatActivity() {
 
     private fun withAlpha(color: Int, alpha: Int): Int = Color.argb(alpha.coerceIn(0, 255), Color.red(color), Color.green(color), Color.blue(color))
 
+    private fun normalizePanelOpacity(value: Any?, fallback: Float = 0.72f): Float {
+        val numeric = when (value) {
+            is Number -> value.toFloat()
+            is String -> value.trim().toFloatOrNull()
+            else -> null
+        } ?: fallback
+        val percentSafe = if (numeric > 1f) numeric / 100f else numeric
+        return percentSafe.coerceIn(0.15f, 1f)
+    }
+
+    private fun normalizePanelBool(value: Any?, fallback: Boolean = false): Boolean {
+        return when (value) {
+            is Boolean -> value
+            is Number -> value.toInt() != 0
+            is String -> when (value.trim().lowercase(Locale.US)) {
+                "1", "true", "yes", "on" -> true
+                "0", "false", "no", "off" -> false
+                else -> fallback
+            }
+            else -> fallback
+        }
+    }
+
     fun parsePanelZoneConfig(panelObj: JSONObject?): PanelZoneConfig {
         if (panelObj == null) return PanelZoneConfig()
         val enabled = panelObj.optBoolean("enabled", false)
@@ -567,8 +608,10 @@ class TvDisplayActivity : AppCompatActivity() {
         val appearanceObj = panelObj.optJSONObject("appearance")
         val appearance = PanelAppearanceConfig(
             backgroundColor = appearanceObj?.optString("background_color", "#201206") ?: "#201206",
+            backgroundOpacity = normalizePanelOpacity(appearanceObj?.opt("background_opacity")),
             contentAlign = appearanceObj?.optString("content_align", "center") ?: "center",
-            bodyRows = (appearanceObj?.optInt("body_rows", 4) ?: 4).coerceIn(1, 6)
+            bodyRows = (appearanceObj?.optInt("body_rows", 4) ?: 4).coerceIn(1, 6),
+            shadowEnabled = normalizePanelBool(appearanceObj?.opt("shadow_enabled"), false)
         )
         val activeObj = panelObj.optJSONObject("active_item")
         val activeItem = if (activeObj != null) {
@@ -582,6 +625,7 @@ class TvDisplayActivity : AppCompatActivity() {
         return PanelZoneConfig(
             enabled = enabled && layoutMode != "off",
             layoutMode = layoutMode,
+            overlayPercent = (panelObj.optInt("overlay_percent", 25)).coerceIn(10, 60),
             appearance = appearance,
             activeItem = activeItem
         )
@@ -1086,6 +1130,11 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
     fun isVideo(file: String) = videoExts.any { file.endsWith(".$it", true) }
     fun isAnimated(file: String) = animatedExts.any { file.endsWith(".$it", true) }
     fun isAdvancedStill(file: String) = advancedStillExts.any { file.endsWith(".$it", true) }
+    fun isLivePosItem(item: com.everydayadvertise.tv.api.PlaylistItem?): Boolean {
+        val mediaType = item?.mediaType?.lowercase(Locale.US) ?: ""
+        val file = item?.file?.lowercase(Locale.US) ?: ""
+        return mediaType == "live_pos" || file.startsWith("livepos:")
+    }
 
     fun loadAnimatedOrStatic(file: String, itemId: String?, preferredUrl: String?, effect: String?, onDone: (Boolean) -> Unit) {
         // Build a list of candidate URLs; try preferred (absolute or relative), then static/uploads, then uploads
@@ -1403,8 +1452,8 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
         }
     debugOverlay?.text = "idx=${state.index}/${state.items.size} cur=${currentItemFile ?: "-"}"
         if (next?.file == null) {
-            binding.message.text = "No items currently scheduled"
-            hidePanelOverlay()
+            val panelVisible = renderPanelOverlay(null)
+            binding.message.text = if (panelVisible) "" else "No items currently scheduled"
             imageView.postDelayed({ showAndSchedule() }, 5_000L)
             return
         }
@@ -1426,6 +1475,35 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
         renderPanelOverlay(next)
         // Record the moment we switched to a new item for watchdog purposes
         try { lastAdvanceAtMs = android.os.SystemClock.elapsedRealtime() } catch (_: Exception) {}
+        if (isLivePosItem(next)) {
+            cancelScheduled()
+            cancelItemOkPing()
+            try { exoPlayer?.stop(); exoPlayer?.clearMediaItems() } catch (_: Exception) {}
+            try { youTubeWebView?.let { it.visibility = View.GONE; it.loadUrl("about:blank") } } catch (_: Exception) {}
+            try { legacyVideoView?.stopPlayback(); legacyVideoView?.visibility = View.GONE } catch (_: Exception) {}
+            playerView.visibility = View.GONE
+            imageView.visibility = View.GONE
+            secondaryImageView?.visibility = View.GONE
+            panelZoneState = PanelZoneConfig(
+                enabled = true,
+                layoutMode = "full-screen",
+                appearance = panelZoneState.appearance,
+                activeItem = PanelActiveItemConfig(
+                    title = next.livePosTitle?.takeIf { it.isNotBlank() } ?: "Live POS",
+                    body = next.livePosBody?.takeIf { it.isNotBlank() } ?: "Waiting for the next order..."
+                )
+            )
+            renderPanelOverlay(next)
+            binding.message.text = ""
+            val durMs = (next.duration ?: 120).coerceAtLeast(1) * 1000L
+            currentItemDurationMs = durMs
+            lifecycleScope.launch(Dispatchers.IO) {
+                try { ApiClient.service.postClientEvent(com.everydayadvertise.tv.api.ClientEventReq(storeId, screenId, "load_ok", file = file, itemId = next.id)) } catch (_: Exception) {}
+            }
+            scheduledRotation = Runnable { showAndSchedule() }
+            imageView.postDelayed(scheduledRotation!!, durMs)
+            return
+        }
         // ── YouTube IFrame embed via WebView ─────────────────────────────────
         if (file.startsWith("youtube:") && !hasYoutubeProxyMp4) {
             val videoId = file.removePrefix("youtube:").trim()
@@ -2022,6 +2100,8 @@ function onYouTubeIframeAPIReady(){
                             val start = if (item.has("start") && !item.isNull("start")) item.optString("start") else null
                             val end = if (item.has("end") && !item.isNull("end")) item.optString("end") else null
                             val mediaType = if (item.has("media_type") && !item.isNull("media_type")) item.optString("media_type") else null
+                            val livePosTitle = if (item.has("live_pos_title") && !item.isNull("live_pos_title")) item.optString("live_pos_title") else null
+                            val livePosBody = if (item.has("live_pos_body") && !item.isNull("live_pos_body")) item.optString("live_pos_body") else null
                             val effect = if (item.has("effect") && !item.isNull("effect")) item.optString("effect") else null
                             
                             // Parse schedule array
@@ -2100,6 +2180,8 @@ function onYouTubeIframeAPIReady(){
                                 schedule = schedule,
                                 days = days,
                                 mediaType = mediaType,
+                                livePosTitle = livePosTitle,
+                                livePosBody = livePosBody,
                                 effect = effect,
                                 syncRef = syncRef
                             ))
@@ -2192,8 +2274,8 @@ function onYouTubeIframeAPIReady(){
                         showAndSchedule()
                     }
                 } else {
-                    binding.message.text = if (original.isNotEmpty()) "No items currently scheduled" else "No items in playlist"
-                    hidePanelOverlay()
+                    val panelVisible = renderPanelOverlay(null)
+                    binding.message.text = if (panelVisible) "" else if (original.isNotEmpty()) "No items currently scheduled" else "No items in playlist"
                 }
             } catch (e: Exception) {
                 android.util.Log.e("TvDisplayActivity", "fetchPlaylist error", e)
