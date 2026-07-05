@@ -12210,6 +12210,21 @@ allowfullscreen></iframe></div>`;
             if(overlay) overlay.remove();
         }
 
+        function syncPanelPosAdvancedModalPreview(screenId){
+            const sourceScreen = document.getElementById(`panel-pos-wizard-preview-screen-${screenId}`);
+            const sourceBackground = document.getElementById(`panel-pos-wizard-preview-background-${screenId}`);
+            const sourcePos = document.getElementById(`panel-pos-wizard-preview-pos-${screenId}`);
+            const targetScreen = document.getElementById(`panel-pos-advanced-preview-screen-${screenId}`);
+            const targetBackground = document.getElementById(`panel-pos-advanced-preview-background-${screenId}`);
+            const targetPos = document.getElementById(`panel-pos-advanced-preview-pos-${screenId}`);
+            if(!sourceScreen || !sourceBackground || !sourcePos || !targetScreen || !targetBackground || !targetPos) return;
+            targetScreen.style.cssText = sourceScreen.style.cssText;
+            targetBackground.style.cssText = sourceBackground.style.cssText;
+            targetPos.style.cssText = sourcePos.style.cssText;
+            targetBackground.innerHTML = sourceBackground.innerHTML;
+            targetPos.innerHTML = sourcePos.innerHTML;
+        }
+
         function openPanelPosAdvancedTools(screenId){
             let advancedTools = document.getElementById(`panel-pos-advanced-tools-${screenId}`);
             let wasTemporarilyExpanded = false;
@@ -12249,7 +12264,7 @@ allowfullscreen></iframe></div>`;
             overlay.id = 'panel-pos-advanced-modal';
             overlay.style.cssText = 'position:fixed; inset:0; background:rgba(15,23,42,.58); backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center; padding:18px; z-index:10120;';
             overlay.innerHTML = `
-                <div style="width:min(880px, 100%); max-height:min(84vh, 960px); background:#fff; border-radius:18px; box-shadow:0 24px 80px rgba(15,23,42,.28); display:flex; flex-direction:column; overflow:hidden;">
+                <div style="width:min(1320px, calc(100vw - 32px)); max-height:min(88vh, 980px); background:#fff; border-radius:18px; box-shadow:0 24px 80px rgba(15,23,42,.28); display:flex; flex-direction:column; overflow:hidden;">
                     <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:18px 20px 14px; border-bottom:1px solid #e5e7eb; background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);">
                         <div>
                             <div style="font-size:18px; font-weight:800; color:#0f172a;">Advanced Mapping And Developer Tools</div>
@@ -12261,7 +12276,19 @@ allowfullscreen></iframe></div>`;
                         <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:12px; padding:10px 12px; font-size:12px; color:#1e3a8a; line-height:1.45;">
                             Changes here update the same advanced POS settings below the wizard. Use <strong>Save setup</strong> when you are done.
                         </div>
-                        <div id="panel-pos-advanced-modal-body" style="background:#fff; border:1px solid #d8e4fb; border-radius:16px; padding:16px;"></div>
+                        <div style="display:grid; grid-template-columns:minmax(0, 1.4fr) minmax(320px, .95fr); gap:16px; align-items:start;">
+                            <div id="panel-pos-advanced-modal-body" style="min-width:0; background:#fff; border:1px solid #d8e4fb; border-radius:16px; padding:16px;"></div>
+                            <div style="position:sticky; top:0; display:flex; flex-direction:column; gap:10px; min-width:0; background:#fff; border:1px solid #d8e4fb; border-radius:16px; padding:16px;">
+                                <div>
+                                    <div style="font-size:14px; font-weight:800; color:#0f172a;">Screen result</div>
+                                    <div style="font-size:12px; color:#64748b; margin-top:3px; line-height:1.45;">This mirrors the current POS screen preview from the wizard so you can check the result while editing advanced settings.</div>
+                                </div>
+                                <div id="panel-pos-advanced-preview-screen-${screenId}" style="position:relative; min-height:260px; aspect-ratio:16/9; border:1px solid #cbd5e1; background:#f8fafc; overflow:hidden; border-radius:12px;">
+                                    <div id="panel-pos-advanced-preview-background-${screenId}" style="position:absolute; inset:0;"></div>
+                                    <div id="panel-pos-advanced-preview-pos-${screenId}" style="position:absolute; inset:0;"></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; padding:14px 20px 18px; border-top:1px solid #e5e7eb; background:#fff;">
                         <button type="button" class="btn" onclick="clearPanelPosQueue('${screenId}')">Clear queue</button>
@@ -12276,6 +12303,7 @@ allowfullscreen></iframe></div>`;
             document.body.appendChild(overlay);
             const modalBody = document.getElementById('panel-pos-advanced-modal-body');
             if(modalBody) modalBody.appendChild(advancedTools);
+            syncPanelPosAdvancedModalPreview(screenId);
         }
 
         function getPanelPosWizardState(screenId){
@@ -13390,9 +13418,11 @@ allowfullscreen></iframe></div>`;
                             <div style="font-size:${Math.max(10, Math.round(34 * previewScale))}px; margin-top:${Math.max(4, Math.round(12 * previewScale))}px; opacity:.72;">${escapeHtml(item.status === 'ready' || item.status === 'serving' ? appearance.boardReadyTitle : appearance.boardPreparingTitle)}</div>
                         </div>
                     </div>`;
+                syncPanelPosAdvancedModalPreview(screenId);
                 return;
             }
             pos.innerHTML = buildPanelPosWizardBoardMarkup(screenId, appearance, previewScale, displayMode);
+            syncPanelPosAdvancedModalPreview(screenId);
         }
 
         function buildPanelPosWizardPayload(screenId){
