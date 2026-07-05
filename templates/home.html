@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -1523,6 +1523,19 @@
     
     /* Responsive */
     @media (max-width: 768px) {
+      html,
+      body {
+        width: 100%;
+        max-width: 100%;
+        overflow-x: hidden;
+        overscroll-behavior-x: none;
+      }
+
+      body {
+        position: relative;
+        touch-action: pan-y;
+      }
+
       .brand img { height: 56px; }
       .hero h1 {
         font-size: 35px;
@@ -1622,6 +1635,16 @@
         max-width: 540px;
         margin: 0 auto;
       }
+
+      .homepage-body-media-shell.is-full-bleed-shell,
+      .homepage-body-media-carousel.is-edge-to-edge,
+      .features {
+        width: 100%;
+        max-width: 100%;
+        margin-left: 0;
+        margin-right: 0;
+      }
+
       .homepage-body-media-shell {
         --homepage-media-gap: 12px;
         --homepage-media-grid-height: clamp(220px, 62vw, 360px);
@@ -1646,6 +1669,14 @@
       .homepage-body-media-shell.width-edge-to-edge .homepage-body-media-grid,
       .homepage-body-media-carousel.is-edge-to-edge {
         padding: 0;
+      }
+
+      .homepage-body-media-shell.is-full-bleed-shell .homepage-body-media-grid,
+      .homepage-body-media-carousel.is-edge-to-edge .homepage-carousel-shell {
+        width: 100%;
+        max-width: 100%;
+        margin-left: 0;
+        margin-right: 0;
       }
 
       .homepage-body-media-card,
@@ -1716,6 +1747,33 @@
         width: 40px;
         height: 40px;
         font-size: 20px;
+      }
+
+      .features {
+        padding: 32px 20px;
+      }
+
+      .features .section-title {
+        padding: 0;
+      }
+
+      .feature-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 14px;
+        overflow: visible;
+        padding: 0;
+        scroll-padding-left: 0;
+        scroll-snap-type: none;
+      }
+
+      .feature-card,
+      .features.features-cards .feature-card {
+        flex: initial;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        scroll-snap-align: unset;
       }
     }
     
