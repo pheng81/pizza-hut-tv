@@ -8047,6 +8047,8 @@ allowfullscreen></iframe></div>`;
                             </select>
                             <input id="panel-overlay-percent-${screenId}" type="number" min="10" max="60" step="1" value="25" onchange="updatePanelOverlayPercent('${screenId}', this.value)" style="height:28px; width:58px; border:1px solid #dcdfe3; background:#fff; color:#1d1d1f; font-size:11px; padding:0 6px;" ${isWallFollower ? 'disabled' : ''} title="Overlay size percent">
                             <span id="panel-overlay-percent-label-${screenId}" style="font-size:11px; color:#64748b;">%</span>
+                            <span id="panel-pos-display-summary-${screenId}" style="display:none; height:28px; align-items:center; padding:0 10px; border:1px solid #bfdbfe; border-radius:999px; background:#eff6ff; color:#1d4ed8; font-size:11px; font-weight:700;"></span>
+                            <button type="button" class="btn" id="panel-pos-display-edit-${screenId}" onclick="openPanelPosWizard('${screenId}')" style="display:none; height:28px; padding:0 10px; font-size:11px;">Display settings</button>
                             <button type="button" class="add-slot-btn" onclick="addPanelCard('${screenId}')" title="Add a scheduled text card" ${isWallFollower ? 'disabled' : ''}>+</button>
                             <button type="button" class="btn" id="panel-toggle-${screenId}" onclick="togglePanelSectionCollapsed('${screenId}')" title="Expand info panel section" aria-label="Expand info panel section" style="width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; padding:0; border-radius:999px;">v</button>
                         </div>
@@ -11933,18 +11935,40 @@ allowfullscreen></iframe></div>`;
             const overlayPercent = normalizePanelOverlayPercent((panelZone && panelZone.overlay_percent) || 25);
             const percentInput = document.getElementById(`panel-overlay-percent-${screenId}`);
             const percentLabel = document.getElementById(`panel-overlay-percent-label-${screenId}`);
+            const posDisplaySummary = document.getElementById(`panel-pos-display-summary-${screenId}`);
+            const posDisplayEdit = document.getElementById(`panel-pos-display-edit-${screenId}`);
             const selectedLayout = hasLivePosSchedule && sourceMode === 'pos_webhook'
                 ? 'off'
                 : String((panelZone && panelZone.layout_mode) || 'off');
             const percentApplies = ['split-right-25', 'split-left-25', 'split-bottom-25'].includes(selectedLayout);
+            const posModeUsesWizard = sourceMode === 'pos_webhook';
             if(percentInput){
                 percentInput.value = overlayPercent;
                 percentInput.disabled = !!(screenBinding && screenBinding.isFollower) || (hasLivePosSchedule && sourceMode === 'pos_webhook') || !percentApplies;
-                percentInput.style.display = percentApplies ? '' : 'none';
+                percentInput.style.display = posModeUsesWizard ? 'none' : (percentApplies ? '' : 'none');
             }
             if(percentLabel){
                 percentLabel.textContent = percentApplies ? '%' : '';
-                percentLabel.style.display = percentApplies ? '' : 'none';
+                percentLabel.style.display = posModeUsesWizard ? 'none' : (percentApplies ? '' : 'none');
+            }
+            if(select){
+                select.style.display = posModeUsesWizard ? 'none' : '';
+            }
+            if(posDisplaySummary){
+                const displaySummary = hasLivePosSchedule
+                    ? 'Scheduled board'
+                    : selectedLayout === 'split-right-25'
+                        ? `Overlay right ${overlayPercent}%`
+                        : selectedLayout === 'split-left-25'
+                            ? `Overlay left ${overlayPercent}%`
+                            : selectedLayout === 'split-bottom-25'
+                                ? `Overlay bottom ${overlayPercent}%`
+                                : 'Connection only';
+                posDisplaySummary.textContent = displaySummary;
+                posDisplaySummary.style.display = posModeUsesWizard ? 'inline-flex' : 'none';
+            }
+            if(posDisplayEdit){
+                posDisplayEdit.style.display = posModeUsesWizard ? 'inline-flex' : 'none';
             }
             const addBtn = document.querySelector(`#panel-zone-${screenId} .add-slot-btn`);
             if(addBtn){
