@@ -12175,6 +12175,7 @@ allowfullscreen></iframe></div>`;
         }
 
         function closePanelPosWizard(){
+            closePanelPosAdvancedToolsModal();
             if(window.panelPosWizardPreviewRefreshTimer){
                 clearInterval(window.panelPosWizardPreviewRefreshTimer);
                 window.panelPosWizardPreviewRefreshTimer = null;
@@ -12183,14 +12184,80 @@ allowfullscreen></iframe></div>`;
             if(overlay) overlay.remove();
         }
 
+        function closePanelPosAdvancedToolsModal(){
+            const overlay = document.getElementById('panel-pos-advanced-modal');
+            const host = window.panelPosAdvancedToolsHost;
+            if(host && host.details && host.placeholder && host.placeholder.parentNode){
+                host.details.setAttribute('style', host.originalStyle);
+                host.details.open = host.originalOpen;
+                if(host.summary){
+                    host.summary.style.display = host.originalSummaryDisplay;
+                }
+                if(host.content){
+                    host.content.style.marginTop = host.originalContentMarginTop;
+                }
+                host.placeholder.parentNode.insertBefore(host.details, host.placeholder);
+                host.placeholder.remove();
+            }
+            window.panelPosAdvancedToolsHost = null;
+            if(overlay) overlay.remove();
+        }
+
         function openPanelPosAdvancedTools(screenId){
             const advancedTools = document.getElementById(`panel-pos-advanced-tools-${screenId}`);
-            closePanelPosWizard();
             if(!advancedTools) return;
+            closePanelPosAdvancedToolsModal();
+            const placeholder = document.createElement('div');
+            placeholder.style.display = 'none';
+            advancedTools.parentNode.insertBefore(placeholder, advancedTools);
+            const summary = advancedTools.querySelector('summary');
+            const content = advancedTools.querySelector(':scope > div');
+            window.panelPosAdvancedToolsHost = {
+                screenId,
+                details: advancedTools,
+                placeholder,
+                summary,
+                content,
+                originalStyle: advancedTools.getAttribute('style') || '',
+                originalOpen: advancedTools.open,
+                originalSummaryDisplay: summary ? summary.style.display : '',
+                originalContentMarginTop: content ? content.style.marginTop : ''
+            };
             advancedTools.open = true;
-            requestAnimationFrame(() => {
-                advancedTools.scrollIntoView({ behavior:'smooth', block:'start' });
+            advancedTools.style.cssText = 'background:transparent; border:0; border-radius:0; padding:0; margin:0;';
+            if(summary) summary.style.display = 'none';
+            if(content) content.style.marginTop = '0';
+            const overlay = document.createElement('div');
+            overlay.id = 'panel-pos-advanced-modal';
+            overlay.style.cssText = 'position:fixed; inset:0; background:rgba(15,23,42,.58); backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center; padding:18px; z-index:10120;';
+            overlay.innerHTML = `
+                <div style="width:min(880px, 100%); max-height:min(84vh, 960px); background:#fff; border-radius:18px; box-shadow:0 24px 80px rgba(15,23,42,.28); display:flex; flex-direction:column; overflow:hidden;">
+                    <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:18px 20px 14px; border-bottom:1px solid #e5e7eb; background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);">
+                        <div>
+                            <div style="font-size:18px; font-weight:800; color:#0f172a;">Advanced Mapping And Developer Tools</div>
+                            <div style="font-size:12px; color:#64748b; margin-top:4px; line-height:1.45; max-width:620px;">Edit payload paths, mapping presets, webhook examples, and debug tools here. These are the same live controls used by the manual setup for this screen.</div>
+                        </div>
+                        <button type="button" class="btn" onclick="closePanelPosAdvancedToolsModal()" aria-label="Close advanced tools" style="width:34px; height:34px; display:inline-flex; align-items:center; justify-content:center; padding:0; border-radius:999px; font-size:18px;">&times;</button>
+                    </div>
+                    <div style="padding:16px 20px 18px; overflow:auto; background:#f8fafc; display:flex; flex-direction:column; gap:14px;">
+                        <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:12px; padding:10px 12px; font-size:12px; color:#1e3a8a; line-height:1.45;">
+                            Changes here update the same advanced POS settings below the wizard. Use <strong>Save setup</strong> when you are done.
+                        </div>
+                        <div id="panel-pos-advanced-modal-body" style="background:#fff; border:1px solid #d8e4fb; border-radius:16px; padding:16px;"></div>
+                    </div>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; padding:14px 20px 18px; border-top:1px solid #e5e7eb; background:#fff;">
+                        <button type="button" class="btn" onclick="clearPanelPosQueue('${screenId}')">Clear queue</button>
+                        <button type="button" class="btn" onclick="resetPanelPosWebhookToken('${screenId}')">Reset webhook</button>
+                        <button type="button" class="btn" onclick="sendPanelPosSample('${screenId}')">Send sample</button>
+                        <button type="button" class="btn primary" onclick="savePanelPosFeed('${screenId}')">Save setup</button>
+                    </div>
+                </div>`;
+            overlay.addEventListener('click', (event) => {
+                if(event.target === overlay) closePanelPosAdvancedToolsModal();
             });
+            document.body.appendChild(overlay);
+            const modalBody = document.getElementById('panel-pos-advanced-modal-body');
+            if(modalBody) modalBody.appendChild(advancedTools);
         }
 
         function getPanelPosWizardState(screenId){
