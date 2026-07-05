@@ -11587,60 +11587,19 @@ allowfullscreen></iframe></div>`;
                     <div style="display:flex; flex-direction:column; gap:12px; padding-top:2px; border-top:1px solid #e5e7eb;">
                         <div style="display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:8px;">
                             <div style="font-size:13px; font-weight:800; color:#0f172a;">Connection basics</div>
-                            <div style="font-size:11px; color:#64748b;">Webhook scope, connector, credentials, and order timing.</div>
+                            <div style="font-size:11px; color:#64748b;">Moved into the POS setup wizard.</div>
                         </div>
-                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px;">
-                        <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
-                            <span>Webhook scope</span>
-                            <select id="panel-pos-scope-${screenId}" onchange="updatePanelPosGuide('${screenId}')" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
-                                ${scopeOptions}
-                            </select>
-                        </label>
-                        <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
-                            <span>POS or feed name</span>
-                            <input id="panel-pos-name-${screenId}" type="text" value="${escapeHtml(state.name)}" placeholder="Front Counter POS" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
-                        </label>
-                        <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
-                            <span>How will you connect?</span>
-                            <select id="panel-pos-connector-${screenId}" onchange="updatePanelPosGuide('${screenId}'); syncPanelPosWizardFromManual('${screenId}')" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
-                                ${connectorOptions}
-                            </select>
-                        </label>
-                        <label class="panel-pos-square-field-${screenId}" style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
-                            <span>Square environment</span>
-                            <select id="panel-pos-square-env-${screenId}" onchange="updatePanelPosGuide('${screenId}'); syncPanelPosWizardFromManual('${screenId}')" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
-                                <option value="production" ${state.squareEnvironment === 'production' ? 'selected' : ''}>Production</option>
-                                <option value="sandbox" ${state.squareEnvironment === 'sandbox' ? 'selected' : ''}>Sandbox</option>
-                            </select>
-                        </label>
-                        <label class="panel-pos-square-field-${screenId}" style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
-                            <span>Square API version</span>
-                            <input id="panel-pos-square-version-${screenId}" type="text" value="${escapeHtml(state.squareApiVersion)}" placeholder="2026-05-20" oninput="syncPanelPosWizardFromManual('${screenId}')" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
-                        </label>
-                        <label class="panel-pos-square-field-${screenId}" style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563; grid-column:1/-1;">
-                            <span>Square access token</span>
-                            <input id="panel-pos-square-token-${screenId}" type="password" value="${escapeHtml(state.squareAccessToken)}" placeholder="Square Production or Sandbox access token" autocomplete="off" oninput="syncPanelPosWizardFromManual('${screenId}')" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
-                        </label>
-                        <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
-                            <span>Statuses to show</span>
-                            <input id="panel-pos-statuses-${screenId}" type="text" value="${escapeHtml(state.allowedStatuses.join(', '))}" placeholder="ready, serving" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
-                        </label>
-                        <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
-                            <span>Seconds each order stays visible</span>
-                            <input id="panel-pos-duration-${screenId}" type="number" min="1" max="120" value="${state.displaySeconds}" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
-                        </label>
-                    </div>
-                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px;">
-                        <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
-                            <span>Maximum queue size</span>
-                            <input id="panel-pos-max-${screenId}" type="number" min="1" max="100" value="${state.maxItems}" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
-                        </label>
-                        <div style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
-                            <span>Last event received</span>
-                            <div style="height:34px; display:flex; align-items:center; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff; color:#475569;">${escapeHtml(lastEventLabel)}</div>
+                        <div style="font-size:11px; color:#475569; line-height:1.55; max-width:720px;">Webhook scope, feed name, connector type, Square credentials, statuses, order timing, queue size, webhook URL, and setup steps now live in the wizard so there is only one place to edit them.</div>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                            <span style="font-size:10px; font-weight:700; color:#1d4ed8; background:#eff6ff; border:1px solid #bfdbfe; border-radius:999px; padding:5px 10px;">${escapeHtml(connectorMeta.label)}</span>
+                            <span style="font-size:10px; font-weight:700; color:#334155; background:#f8fafc; border:1px solid #dbe4ee; border-radius:999px; padding:5px 10px;">${escapeHtml(scopeMeta.label)}</span>
+                            <span style="font-size:10px; font-weight:700; color:#334155; background:#f8fafc; border:1px solid #dbe4ee; border-radius:999px; padding:5px 10px;">${state.displaySeconds}s each</span>
+                            <span style="font-size:10px; font-weight:700; color:#334155; background:#f8fafc; border:1px solid #dbe4ee; border-radius:999px; padding:5px 10px;">${state.maxItems} max queued</span>
+                        </div>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                            <button type="button" class="btn primary" onclick="openPanelPosWizard('${screenId}')" ${disabledAttr} style="font-size:11px; padding:8px 12px; border-radius:10px;">Edit connection basics</button>
                         </div>
                     </div>
-                    <div id="panel-pos-guide-${screenId}"></div>
                     <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:16px; padding-top:6px; border-top:1px solid #eef2f7; align-items:start;">
                         <div style="display:flex; flex-direction:column; gap:10px; min-width:0;">
                             <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start; flex-wrap:wrap;">
@@ -13707,36 +13666,64 @@ allowfullscreen></iframe></div>`;
 
         function savePanelPosFeed(screenId){
             const wizardOpen = !!document.getElementById(`panel-pos-wizard-display-${screenId}`);
+            const state = normalizePanelPosFeed(getPanelZoneState(screenId));
             if(wizardOpen){
-                syncPanelPosWizardFromManual(screenId);
+                syncPanelPosManualFromWizard(screenId);
             }
             const displayStyle = (document.getElementById(`panel-pos-display-${screenId}`)?.value || 'single_card').trim().toLowerCase();
             const boardPreparingStatuses = normalizePanelStatusList(document.getElementById(`panel-pos-board-preparing-statuses-${screenId}`)?.value || 'preparing, being_prepared, accepted', ['preparing','being_prepared','accepted']);
             const boardReadyStatuses = normalizePanelStatusList(document.getElementById(`panel-pos-board-ready-statuses-${screenId}`)?.value || 'ready, serving', ['ready','serving']);
-            let allowedStatuses = (document.getElementById(`panel-pos-statuses-${screenId}`)?.value || '')
+            const connectorType = wizardOpen
+                ? (document.getElementById(`panel-pos-wizard-provider-${screenId}`)?.value === 'square'
+                    ? 'square'
+                    : document.getElementById(`panel-pos-wizard-provider-${screenId}`)?.value === 'automation'
+                        ? 'zapier'
+                        : 'generic_webhook')
+                : (document.getElementById(`panel-pos-connector-${screenId}`)?.value || state.connectorType || 'generic_webhook').trim();
+            const feedScope = String((wizardOpen
+                ? document.getElementById(`panel-pos-wizard-scope-${screenId}`)?.value
+                : document.getElementById(`panel-pos-scope-${screenId}`)?.value) || state.feedScope || 'screen').trim();
+            const feedName = String((wizardOpen
+                ? document.getElementById(`panel-pos-wizard-name-${screenId}`)?.value
+                : document.getElementById(`panel-pos-name-${screenId}`)?.value) || state.name || '').trim();
+            let allowedStatuses = String((wizardOpen
+                ? document.getElementById(`panel-pos-wizard-statuses-${screenId}`)?.value
+                : document.getElementById(`panel-pos-statuses-${screenId}`)?.value) || state.allowedStatuses.join(', '))
                 .split(',')
                 .map((value) => value.trim().toLowerCase().replace(/\s+/g, '_'))
                 .filter(Boolean);
             if(displayStyle === 'order_board'){
                 allowedStatuses = [...allowedStatuses, ...boardPreparingStatuses, ...boardReadyStatuses]
                     .filter((value, index, array) => value && array.indexOf(value) === index);
-                const statusesInput = document.getElementById(`panel-pos-statuses-${screenId}`);
+                const statusesInput = wizardOpen
+                    ? document.getElementById(`panel-pos-wizard-statuses-${screenId}`)
+                    : document.getElementById(`panel-pos-statuses-${screenId}`);
                 if(statusesInput) statusesInput.value = allowedStatuses.join(', ');
             }
-            let maxItems = Math.max(1, Math.min(100, parseInt(String(document.getElementById(`panel-pos-max-${screenId}`)?.value || '5'), 10) || 5));
+            let maxItems = Math.max(1, Math.min(100, parseInt(String((wizardOpen
+                ? document.getElementById(`panel-pos-wizard-max-${screenId}`)?.value
+                : document.getElementById(`panel-pos-max-${screenId}`)?.value) || state.maxItems || '5'), 10) || 5));
             if(displayStyle === 'order_board' && maxItems < 50){
                 maxItems = 50;
-                const maxInput = document.getElementById(`panel-pos-max-${screenId}`);
+                const maxInput = wizardOpen
+                    ? document.getElementById(`panel-pos-wizard-max-${screenId}`)
+                    : document.getElementById(`panel-pos-max-${screenId}`);
                 if(maxInput) maxInput.value = String(maxItems);
             }
             const payload = {
                 enable_source: true,
-                feed_scope: (document.getElementById(`panel-pos-scope-${screenId}`)?.value || 'screen').trim(),
-                name: (document.getElementById(`panel-pos-name-${screenId}`)?.value || '').trim(),
-                connector_type: (document.getElementById(`panel-pos-connector-${screenId}`)?.value || 'generic_webhook').trim(),
-                square_access_token: (document.getElementById(`panel-pos-square-token-${screenId}`)?.value || '').trim(),
-                square_environment: (document.getElementById(`panel-pos-square-env-${screenId}`)?.value || 'production').trim().toLowerCase(),
-                square_api_version: (document.getElementById(`panel-pos-square-version-${screenId}`)?.value || '2026-05-20').trim(),
+                feed_scope: feedScope,
+                name: feedName,
+                connector_type: connectorType,
+                square_access_token: String((wizardOpen
+                    ? document.getElementById(`panel-pos-wizard-square-token-${screenId}`)?.value
+                    : document.getElementById(`panel-pos-square-token-${screenId}`)?.value) || state.squareAccessToken || '').trim(),
+                square_environment: String((wizardOpen
+                    ? document.getElementById(`panel-pos-wizard-square-env-${screenId}`)?.value
+                    : document.getElementById(`panel-pos-square-env-${screenId}`)?.value) || state.squareEnvironment || 'production').trim().toLowerCase(),
+                square_api_version: String((wizardOpen
+                    ? document.getElementById(`panel-pos-wizard-square-version-${screenId}`)?.value
+                    : document.getElementById(`panel-pos-square-version-${screenId}`)?.value) || state.squareApiVersion || '2026-05-20').trim(),
                 field_map: {
                     customer_name: (document.getElementById(`panel-pos-customer-${screenId}`)?.value || '').trim(),
                     order_number: (document.getElementById(`panel-pos-order-${screenId}`)?.value || '').trim(),
@@ -13747,7 +13734,9 @@ allowfullscreen></iframe></div>`;
                 title_template: (document.getElementById(`panel-pos-title-${screenId}`)?.value || '').trim(),
                 body_template: (document.getElementById(`panel-pos-body-${screenId}`)?.value || '').trim(),
                 allowed_statuses: allowedStatuses,
-                display_seconds: parseInt(String(document.getElementById(`panel-pos-duration-${screenId}`)?.value || '10'), 10) || 10,
+                display_seconds: Math.max(1, Math.min(120, parseInt(String((wizardOpen
+                    ? document.getElementById(`panel-pos-wizard-duration-${screenId}`)?.value
+                    : document.getElementById(`panel-pos-duration-${screenId}`)?.value) || state.displaySeconds || '10'), 10) || 10)),
                 max_items: maxItems,
                 appearance: {
                     background_color: normalizeHexColor(document.getElementById(`panel-pos-bg-${screenId}`)?.value || '#201206', '#201206'),
