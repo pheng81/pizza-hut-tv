@@ -12343,6 +12343,8 @@ allowfullscreen></iframe></div>`;
             const wizard = getPanelPosWizardState(screenId);
             const state = wizard.state;
             const webhookUrl = getPanelPosWebhookUrl(screenId);
+            const scopeOptions = Object.entries(PANEL_POS_SCOPE_META).map(([key, meta]) => `<option value="${key}" ${state.feedScope === key ? 'selected' : ''}>${escapeHtml(meta.label)}</option>`).join('');
+            const lastEventLabel = state.lastEventAt ? state.lastEventAt.replace('T', ' ').replace('Z', ' UTC') : 'No events yet';
             window.panelPosWizardLogoDataUrls = window.panelPosWizardLogoDataUrls || {};
             window.panelPosWizardLogoDataUrls[screenId] = state.appearance.logoDataUrl || '';
             window.panelPosWizardBackgroundDataUrls = window.panelPosWizardBackgroundDataUrls || {};
@@ -12421,6 +12423,40 @@ allowfullscreen></iframe></div>`;
                             </div>
                             <input id="panel-pos-wizard-webhook-${screenId}" type="text" readonly value="${escapeHtml(webhookUrl || 'Save setup first to generate the webhook URL')}" style="height:38px; border:1px solid #cbd5e1; border-radius:8px; padding:0 10px; background:#fff; font-size:12px;">
                             <div style="font-size:11px; color:#64748b;">Use this URL in Square, Zapier, Make, n8n, or a custom POS webhook.</div>
+                        </div>
+                        <div style="border-top:1px solid #e5e7eb; padding-top:14px; display:flex; flex-direction:column; gap:10px;">
+                            <div style="display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:8px;">
+                                <div style="font-size:13px; font-weight:800; color:#0f172a;">Connection basics</div>
+                                <div style="font-size:11px; color:#64748b;">These now save from the wizard too.</div>
+                            </div>
+                            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px;">
+                                <label style="display:flex; flex-direction:column; gap:6px; font-size:12px; color:#475569;">
+                                    <span style="font-weight:700; color:#0f172a;">Webhook scope</span>
+                                    <select id="panel-pos-wizard-scope-${screenId}" onchange="syncPanelPosManualFromWizard('${screenId}')" style="height:38px; border:1px solid #cbd5e1; border-radius:8px; padding:0 10px; background:#fff;">
+                                        ${scopeOptions}
+                                    </select>
+                                </label>
+                                <label style="display:flex; flex-direction:column; gap:6px; font-size:12px; color:#475569;">
+                                    <span style="font-weight:700; color:#0f172a;">POS or feed name</span>
+                                    <input id="panel-pos-wizard-name-${screenId}" type="text" value="${escapeHtml(state.name || (wizard.provider === 'square' ? 'Square POS' : wizard.provider === 'automation' ? 'POS automation' : 'Live POS'))}" oninput="syncPanelPosManualFromWizard('${screenId}')" style="height:38px; border:1px solid #cbd5e1; border-radius:8px; padding:0 10px; background:#fff;">
+                                </label>
+                                <label style="display:flex; flex-direction:column; gap:6px; font-size:12px; color:#475569; grid-column:1/-1;">
+                                    <span style="font-weight:700; color:#0f172a;">Statuses to show</span>
+                                    <input id="panel-pos-wizard-statuses-${screenId}" type="text" value="${escapeHtml((state.allowedStatuses || []).join(', '))}" oninput="syncPanelPosManualFromWizard('${screenId}')" placeholder="preparing, ready, serving" style="height:38px; border:1px solid #cbd5e1; border-radius:8px; padding:0 10px; background:#fff;">
+                                </label>
+                                <label style="display:flex; flex-direction:column; gap:6px; font-size:12px; color:#475569;">
+                                    <span style="font-weight:700; color:#0f172a;">Seconds each order stays visible</span>
+                                    <input id="panel-pos-wizard-duration-${screenId}" type="number" min="1" max="120" value="${state.displaySeconds || (wizard.displayMode === 'schedule_board' ? 120 : 10)}" oninput="syncPanelPosManualFromWizard('${screenId}')" style="height:38px; border:1px solid #cbd5e1; border-radius:8px; padding:0 10px; background:#fff;">
+                                </label>
+                                <label style="display:flex; flex-direction:column; gap:6px; font-size:12px; color:#475569;">
+                                    <span style="font-weight:700; color:#0f172a;">Maximum queue size</span>
+                                    <input id="panel-pos-wizard-max-${screenId}" type="number" min="1" max="100" value="${state.maxItems || (state.appearance.posDisplayStyle === 'order_board' ? 50 : 10)}" oninput="syncPanelPosManualFromWizard('${screenId}')" style="height:38px; border:1px solid #cbd5e1; border-radius:8px; padding:0 10px; background:#fff;">
+                                </label>
+                                <label style="display:flex; flex-direction:column; gap:6px; font-size:12px; color:#475569;">
+                                    <span style="font-weight:700; color:#0f172a;">Last event received</span>
+                                    <div style="height:38px; display:flex; align-items:center; border:1px solid #cbd5e1; border-radius:8px; padding:0 10px; background:#f8fafc; color:#475569;">${escapeHtml(lastEventLabel)}</div>
+                                </label>
+                            </div>
                         </div>
                         <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; border-top:1px solid #e5e7eb; padding-top:14px;">
                             <button type="button" class="btn primary" onclick="savePanelPosWizard('${screenId}')" style="padding:9px 14px;">Save setup</button>
@@ -12767,6 +12803,11 @@ allowfullscreen></iframe></div>`;
                 setPanelControlValue(`panel-pos-wizard-provider-${screenId}`, provider);
                 setPanelControlValue(`panel-pos-wizard-display-${screenId}`, displayMode);
                 setPanelControlValue(`panel-pos-wizard-overlay-percent-${screenId}`, normalizePanelOverlayPercent(overlayInput ? overlayInput.value : panelZone.overlay_percent || 25));
+                setPanelControlValue(`panel-pos-wizard-scope-${screenId}`, document.getElementById(`panel-pos-scope-${screenId}`)?.value || normalizePanelPosFeed(panelZone).feedScope || 'screen');
+                setPanelControlValue(`panel-pos-wizard-name-${screenId}`, document.getElementById(`panel-pos-name-${screenId}`)?.value || normalizePanelPosFeed(panelZone).name || 'Live POS');
+                setPanelControlValue(`panel-pos-wizard-statuses-${screenId}`, document.getElementById(`panel-pos-statuses-${screenId}`)?.value || normalizePanelPosFeed(panelZone).allowedStatuses.join(', '));
+                setPanelControlValue(`panel-pos-wizard-duration-${screenId}`, document.getElementById(`panel-pos-duration-${screenId}`)?.value || normalizePanelPosFeed(panelZone).displaySeconds || 10);
+                setPanelControlValue(`panel-pos-wizard-max-${screenId}`, document.getElementById(`panel-pos-max-${screenId}`)?.value || normalizePanelPosFeed(panelZone).maxItems || 10);
                 setPanelControlValue(`panel-pos-wizard-square-env-${screenId}`, document.getElementById(`panel-pos-square-env-${screenId}`)?.value || 'production');
                 setPanelControlValue(`panel-pos-wizard-square-version-${screenId}`, document.getElementById(`panel-pos-square-version-${screenId}`)?.value || '2026-05-20');
                 setPanelControlValue(`panel-pos-wizard-square-token-${screenId}`, document.getElementById(`panel-pos-square-token-${screenId}`)?.value || '');
@@ -12840,6 +12881,11 @@ allowfullscreen></iframe></div>`;
                 setPanelControlValue(`panel-source-${screenId}`, 'pos_webhook');
                 setPanelControlValue(`panel-layout-${screenId}`, layoutMap[displayMode] || 'off');
                 setPanelControlValue(`panel-overlay-percent-${screenId}`, normalizePanelOverlayPercent(document.getElementById(`panel-pos-wizard-overlay-percent-${screenId}`)?.value || 25));
+                setPanelControlValue(`panel-pos-scope-${screenId}`, document.getElementById(`panel-pos-wizard-scope-${screenId}`)?.value || 'screen');
+                setPanelControlValue(`panel-pos-name-${screenId}`, document.getElementById(`panel-pos-wizard-name-${screenId}`)?.value || 'Live POS');
+                setPanelControlValue(`panel-pos-statuses-${screenId}`, document.getElementById(`panel-pos-wizard-statuses-${screenId}`)?.value || 'preparing, being_prepared, accepted, ready, serving');
+                setPanelControlValue(`panel-pos-duration-${screenId}`, document.getElementById(`panel-pos-wizard-duration-${screenId}`)?.value || 10);
+                setPanelControlValue(`panel-pos-max-${screenId}`, document.getElementById(`panel-pos-wizard-max-${screenId}`)?.value || 10);
                 setPanelControlValue(`panel-pos-connector-${screenId}`, connectorType);
                 setPanelControlValue(`panel-pos-square-env-${screenId}`, document.getElementById(`panel-pos-wizard-square-env-${screenId}`)?.value || 'production');
                 setPanelControlValue(`panel-pos-square-version-${screenId}`, document.getElementById(`panel-pos-wizard-square-version-${screenId}`)?.value || '2026-05-20');
@@ -13447,13 +13493,27 @@ allowfullscreen></iframe></div>`;
                 : provider === 'automation'
                     ? 'zapier'
                     : 'generic_webhook';
-            const statuses = ['preparing','being_prepared','accepted','ready','serving'];
+            const boardPreparingStatuses = appearance.boardPreparingStatuses || ['preparing','being_prepared','accepted'];
+            const boardReadyStatuses = appearance.boardReadyStatuses || ['ready','serving'];
+            let allowedStatuses = normalizePanelStatusList(document.getElementById(`panel-pos-wizard-statuses-${screenId}`)?.value || '', ['preparing','being_prepared','accepted','ready','serving']);
+            if(isBoard){
+                allowedStatuses = [...allowedStatuses, ...boardPreparingStatuses, ...boardReadyStatuses]
+                    .filter((value, index, array) => value && array.indexOf(value) === index);
+                const statusesInput = document.getElementById(`panel-pos-wizard-statuses-${screenId}`);
+                if(statusesInput) statusesInput.value = allowedStatuses.join(', ');
+            }
+            let maxItems = Math.max(1, Math.min(100, parseInt(String(document.getElementById(`panel-pos-wizard-max-${screenId}`)?.value || (isBoard ? 50 : 10)), 10) || (isBoard ? 50 : 10)));
+            if(isBoard && maxItems < 50){
+                maxItems = 50;
+                const maxInput = document.getElementById(`panel-pos-wizard-max-${screenId}`);
+                if(maxInput) maxInput.value = String(maxItems);
+            }
             return {
                 displayMode,
                 payload: {
                     enable_source: true,
-                    feed_scope: 'screen',
-                    name: provider === 'square' ? 'Square POS' : provider === 'automation' ? 'POS automation' : 'Live POS',
+                    feed_scope: (document.getElementById(`panel-pos-wizard-scope-${screenId}`)?.value || 'screen').trim(),
+                    name: (document.getElementById(`panel-pos-wizard-name-${screenId}`)?.value || (provider === 'square' ? 'Square POS' : provider === 'automation' ? 'POS automation' : 'Live POS')).trim(),
                     connector_type: connectorType,
                     square_access_token: (document.getElementById(`panel-pos-wizard-square-token-${screenId}`)?.value || '').trim(),
                     square_environment: (document.getElementById(`panel-pos-wizard-square-env-${screenId}`)?.value || 'production').trim().toLowerCase(),
@@ -13467,9 +13527,9 @@ allowfullscreen></iframe></div>`;
                     store_selector_path: 'store.id',
                     title_template: 'Now serving',
                     body_template: '{{customer_name}}\nOrder #{{order_number}}',
-                    allowed_statuses: statuses,
-                    display_seconds: displayMode === 'schedule_board' ? 120 : 10,
-                    max_items: isBoard ? 50 : 10,
+                    allowed_statuses: allowedStatuses,
+                    display_seconds: Math.max(1, Math.min(120, parseInt(String(document.getElementById(`panel-pos-wizard-duration-${screenId}`)?.value || (displayMode === 'schedule_board' ? 120 : 10)), 10) || (displayMode === 'schedule_board' ? 120 : 10))),
+                    max_items: maxItems,
                     appearance: {
                         background_color: appearance.backgroundColor,
                         background_opacity: appearance.backgroundOpacity,
