@@ -11592,24 +11592,24 @@ allowfullscreen></iframe></div>`;
                         </label>
                         <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
                             <span>How will you connect?</span>
-                            <select id="panel-pos-connector-${screenId}" onchange="updatePanelPosGuide('${screenId}')" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
+                            <select id="panel-pos-connector-${screenId}" onchange="updatePanelPosGuide('${screenId}'); syncPanelPosWizardFromManual('${screenId}')" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
                                 ${connectorOptions}
                             </select>
                         </label>
                         <label class="panel-pos-square-field-${screenId}" style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
                             <span>Square environment</span>
-                            <select id="panel-pos-square-env-${screenId}" onchange="updatePanelPosGuide('${screenId}')" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
+                            <select id="panel-pos-square-env-${screenId}" onchange="updatePanelPosGuide('${screenId}'); syncPanelPosWizardFromManual('${screenId}')" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
                                 <option value="production" ${state.squareEnvironment === 'production' ? 'selected' : ''}>Production</option>
                                 <option value="sandbox" ${state.squareEnvironment === 'sandbox' ? 'selected' : ''}>Sandbox</option>
                             </select>
                         </label>
                         <label class="panel-pos-square-field-${screenId}" style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
                             <span>Square API version</span>
-                            <input id="panel-pos-square-version-${screenId}" type="text" value="${escapeHtml(state.squareApiVersion)}" placeholder="2026-05-20" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
+                            <input id="panel-pos-square-version-${screenId}" type="text" value="${escapeHtml(state.squareApiVersion)}" placeholder="2026-05-20" oninput="syncPanelPosWizardFromManual('${screenId}')" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
                         </label>
                         <label class="panel-pos-square-field-${screenId}" style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563; grid-column:1/-1;">
                             <span>Square access token</span>
-                            <input id="panel-pos-square-token-${screenId}" type="password" value="${escapeHtml(state.squareAccessToken)}" placeholder="Square Production or Sandbox access token" autocomplete="off" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
+                            <input id="panel-pos-square-token-${screenId}" type="password" value="${escapeHtml(state.squareAccessToken)}" placeholder="Square Production or Sandbox access token" autocomplete="off" oninput="syncPanelPosWizardFromManual('${screenId}')" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
                         </label>
                         <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
                             <span>Statuses to show</span>
@@ -11632,7 +11632,12 @@ allowfullscreen></iframe></div>`;
                     </div>
                     <div id="panel-pos-guide-${screenId}"></div>
                     <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:10px;">
-                        <div style="background:#fff; border:1px solid #d8e4fb; border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:8px;">
+                        <div style="background:#fff; border:1px solid #d8e4fb; border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:10px;">
+                            <div style="font-size:12px; font-weight:700; color:#0f172a;">Screen design</div>
+                            <div style="font-size:11px; color:#475569; line-height:1.45;">The display is edited in one place now. Open the setup wizard to change layout, preview, colors, images, logo, tickets, and overlay position for this screen.</div>
+                            <button type="button" class="btn primary" onclick="openPanelPosWizard('${screenId}')" ${disabledAttr} style="width:max-content; font-size:11px; padding:7px 10px;">Edit display</button>
+                        </div>
+                        <div style="display:none;">
                             <div style="display:flex; justify-content:space-between; gap:8px; align-items:center; flex-wrap:wrap;">
                                 <div style="font-size:12px; font-weight:700; color:#0f172a;">On-screen template</div>
                                 <div style="display:flex; gap:6px; flex-wrap:wrap;">${templateButtons}</div>
@@ -12098,6 +12103,8 @@ allowfullscreen></iframe></div>`;
                 } catch {}
                 applyPanelPosResponseState(data);
                 showMessage(sourceMode === 'pos_webhook' ? 'Live POS mode enabled' : 'Manual info cards enabled');
+                syncPanelPosWizardFromManual(screenId);
+                updatePanelPosWizardPreview(screenId);
                 renderRpPanelScheduleControls();
                 refreshPlaylist(screenId);
             }).catch(() => {
@@ -12606,6 +12613,44 @@ allowfullscreen></iframe></div>`;
             }
         }
 
+        function syncPanelPosManualUiState(screenId){
+            const panelZone = getPanelZoneState(screenId) || {};
+            const sourceSelect = document.getElementById(`panel-source-${screenId}`);
+            const layoutSelect = document.getElementById(`panel-layout-${screenId}`);
+            const percentInput = document.getElementById(`panel-overlay-percent-${screenId}`);
+            const percentLabel = document.getElementById(`panel-overlay-percent-label-${screenId}`);
+            const guide = document.getElementById(`panel-pos-guide-${screenId}`);
+            const sourceMode = String(sourceSelect ? sourceSelect.value : panelZone.source_mode || 'manual');
+            const layoutMode = String(layoutSelect ? layoutSelect.value : panelZone.layout_mode || 'off');
+            if(layoutSelect){
+                const labels = sourceMode === 'pos_webhook'
+                    ? {
+                        off: 'No overlay',
+                        'split-right-25': 'Overlay right',
+                        'split-left-25': 'Overlay left',
+                        'split-bottom-25': 'Overlay bottom',
+                        'full-screen': 'Full-screen fallback'
+                    }
+                    : {
+                        off: 'Off',
+                        'split-right-25': 'Right',
+                        'split-left-25': 'Left',
+                        'split-bottom-25': 'Bottom',
+                        'full-screen': 'Full screen 100%'
+                    };
+                Array.from(layoutSelect.options || []).forEach((option) => {
+                    if(labels[option.value]) option.textContent = labels[option.value];
+                });
+            }
+            const percentApplies = ['split-right-25', 'split-left-25', 'split-bottom-25'].includes(layoutMode);
+            if(percentInput) percentInput.style.display = percentApplies ? '' : 'none';
+            if(percentLabel){
+                percentLabel.textContent = percentApplies ? '%' : '';
+                percentLabel.style.display = percentApplies ? '' : 'none';
+            }
+            if(guide) updatePanelPosGuide(screenId);
+        }
+
         function syncPanelPosManualFromWizard(screenId){
             if(window.panelPosSyncing) return;
             if(!document.getElementById(`panel-pos-wizard-display-${screenId}`)) return;
@@ -12636,6 +12681,7 @@ allowfullscreen></iframe></div>`;
                 setPanelControlValue(`panel-pos-board-preparing-title-${screenId}`, document.getElementById(`panel-pos-wizard-preparing-title-${screenId}`)?.value || 'Being prepared');
                 setPanelControlValue(`panel-pos-board-ready-title-${screenId}`, document.getElementById(`panel-pos-wizard-ready-title-${screenId}`)?.value || 'Ready for pickup');
                 setPanelControlValue(`panel-pos-shadow-${screenId}`, !!document.getElementById(`panel-pos-wizard-shadow-${screenId}`)?.checked);
+                syncPanelPosManualUiState(screenId);
                 updatePanelPosPreview(screenId);
             } finally {
                 window.panelPosSyncing = false;
@@ -13405,6 +13451,10 @@ allowfullscreen></iframe></div>`;
         }
 
         function savePanelPosFeed(screenId){
+            const wizardOpen = !!document.getElementById(`panel-pos-wizard-display-${screenId}`);
+            if(wizardOpen){
+                syncPanelPosWizardFromManual(screenId);
+            }
             const displayStyle = (document.getElementById(`panel-pos-display-${screenId}`)?.value || 'single_card').trim().toLowerCase();
             const boardPreparingStatuses = normalizePanelStatusList(document.getElementById(`panel-pos-board-preparing-statuses-${screenId}`)?.value || 'preparing, being_prepared, accepted', ['preparing','being_prepared','accepted']);
             const boardReadyStatuses = normalizePanelStatusList(document.getElementById(`panel-pos-board-ready-statuses-${screenId}`)?.value || 'ready, serving', ['ready','serving']);
@@ -13459,6 +13509,12 @@ allowfullscreen></iframe></div>`;
                     board_text_color: normalizeHexColor(document.getElementById(`panel-pos-board-text-color-${screenId}`)?.value || '#17172a', '#17172a')
                 }
             };
+            if(wizardOpen){
+                const wizardPayload = buildPanelPosWizardPayload(screenId);
+                if(wizardPayload && wizardPayload.payload && wizardPayload.payload.appearance){
+                    payload.appearance = Object.assign({}, wizardPayload.payload.appearance, payload.appearance);
+                }
+            }
             if(payload.connector_type === 'square'){
                 payload.field_map = {
                     customer_name: 'customer.name',
@@ -13484,6 +13540,9 @@ allowfullscreen></iframe></div>`;
                 showMessage('Live POS setup saved');
                 renderRpPanelScheduleControls();
                 refreshPlaylist(screenId);
+                if(wizardOpen){
+                    setTimeout(() => updatePanelPosWizardPreview(screenId), 450);
+                }
             }).catch(() => alert('Network error saving POS settings'));
         }
 
