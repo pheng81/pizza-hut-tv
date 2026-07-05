@@ -455,6 +455,8 @@ def init_db():
             'hero_primary_cta_url TEXT, '
             'hero_secondary_cta_text TEXT, '
             'hero_secondary_cta_url TEXT, '
+            'telegram_contact_url TEXT, '
+            'whatsapp_contact_url TEXT, '
             'hero_proof_secondary TEXT, '
             'hero_proof_tertiary TEXT, '
             'hero_image_path TEXT, '
@@ -605,6 +607,12 @@ def init_db():
             db.commit()
         if 'logo_intro_duration_ms' not in homepage_settings_columns:
             db.execute('ALTER TABLE homepage_settings ADD COLUMN logo_intro_duration_ms INTEGER')
+            db.commit()
+        if 'telegram_contact_url' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN telegram_contact_url TEXT')
+            db.commit()
+        if 'whatsapp_contact_url' not in homepage_settings_columns:
+            db.execute('ALTER TABLE homepage_settings ADD COLUMN whatsapp_contact_url TEXT')
             db.commit()
         if 'body_media_display_size' not in homepage_settings_columns:
             db.execute('ALTER TABLE homepage_settings ADD COLUMN body_media_display_size TEXT')
@@ -1052,6 +1060,8 @@ def _default_homepage_settings() -> dict:
         'hero_primary_cta_url': '/login',
         'hero_secondary_cta_text': 'See Features',
         'hero_secondary_cta_url': '#features',
+        'telegram_contact_url': '',
+        'whatsapp_contact_url': '',
         'hero_proof_secondary': 'Setup in 5 minutes',
         'hero_proof_tertiary': '24/7 Support',
         'hero_image_path': 'imag2.png',
@@ -1124,6 +1134,8 @@ _HOMEPAGE_SETTINGS_FIELDS = (
     'hero_primary_cta_url',
     'hero_secondary_cta_text',
     'hero_secondary_cta_url',
+    'telegram_contact_url',
+    'whatsapp_contact_url',
     'hero_proof_secondary',
     'hero_proof_tertiary',
     'hero_image_path',
@@ -1341,6 +1353,8 @@ def _normalize_homepage_settings(row) -> dict:
     ):
         value = (data.get(key) or '').strip()
         normalized[key] = value or defaults[key]
+    normalized['telegram_contact_url'] = _normalize_homepage_telegram_url(data.get('telegram_contact_url'))
+    normalized['whatsapp_contact_url'] = _normalize_homepage_whatsapp_url(data.get('whatsapp_contact_url'))
     if normalized['hero_media_shape'] not in ('landscape', 'square', 'portrait'):
         normalized['hero_media_shape'] = defaults['hero_media_shape']
     if normalized['hero_media_size'] not in ('medium', 'large', 'xlarge'):
@@ -2575,6 +2589,57 @@ def _url_host(value: str | None) -> str:
         return host
     except Exception:
         return ''
+
+
+def _normalize_homepage_telegram_url(value: str | None) -> str:
+    text = str(value or '').strip()
+    if not text:
+        return ''
+    lower = text.lower()
+    if lower.startswith('javascript:') or lower.startswith('data:'):
+        return ''
+    if text.startswith('@'):
+        username = text[1:].strip().lstrip('/')
+        return f'https://t.me/{username}' if username else ''
+    if re.match(r'^(?:t\.me|telegram\.me)/', text, re.IGNORECASE):
+        text = f'https://{text}'
+    try:
+        parsed = urllib.parse.urlparse(text)
+    except Exception:
+        return ''
+    scheme = (parsed.scheme or '').lower()
+    host = (parsed.hostname or '').lower().rstrip('.')
+    if scheme == 'tg':
+        return text
+    if scheme in ('http', 'https') and host in ('t.me', 'telegram.me', 'www.telegram.me'):
+        return text
+    return ''
+
+
+def _normalize_homepage_whatsapp_url(value: str | None) -> str:
+    text = str(value or '').strip()
+    if not text:
+        return ''
+    lower = text.lower()
+    if lower.startswith('javascript:') or lower.startswith('data:'):
+        return ''
+    if re.fullmatch(r'[+\d][\d\s().-]{7,}', text):
+        digits = re.sub(r'\D+', '', text)
+        if 8 <= len(digits) <= 15:
+            return f'https://wa.me/{digits}'
+    if re.match(r'^(?:wa\.me|api\.whatsapp\.com)/', text, re.IGNORECASE):
+        text = f'https://{text}'
+    try:
+        parsed = urllib.parse.urlparse(text)
+    except Exception:
+        return ''
+    scheme = (parsed.scheme or '').lower()
+    host = (parsed.hostname or '').lower().rstrip('.')
+    if scheme == 'whatsapp':
+        return text
+    if scheme in ('http', 'https') and host in ('wa.me', 'api.whatsapp.com', 'www.whatsapp.com'):
+        return text
+    return ''
 
 def login_required(view):
     @wraps(view)
@@ -10559,6 +10624,8 @@ def superadmin_website_editor():
                 'hero_primary_cta_url': request.form.get('hero_primary_cta_url'),
                 'hero_secondary_cta_text': request.form.get('hero_secondary_cta_text'),
                 'hero_secondary_cta_url': request.form.get('hero_secondary_cta_url'),
+                'telegram_contact_url': request.form.get('telegram_contact_url'),
+                'whatsapp_contact_url': request.form.get('whatsapp_contact_url'),
                 'hero_proof_secondary': request.form.get('hero_proof_secondary'),
                 'hero_proof_tertiary': request.form.get('hero_proof_tertiary'),
                 'hero_image_path': hero_image_path,

@@ -2457,6 +2457,18 @@
               <div class="help">Use 0 for automatic height, or enter a height like 720.</div>
             </div>
 
+            <div class="field-group full">
+              <label class="field-label" for="telegram_contact_url">Top Bar Telegram Link</label>
+              <input id="telegram_contact_url" type="text" name="telegram_contact_url" value="{{ home_content.telegram_contact_url or '' }}" placeholder="https://t.me/your_username or @your_username">
+              <div class="help">Shows a Telegram icon in the public homepage header when this is filled in.</div>
+            </div>
+
+            <div class="field-group full">
+              <label class="field-label" for="whatsapp_contact_url">Top Bar WhatsApp Link</label>
+              <input id="whatsapp_contact_url" type="text" name="whatsapp_contact_url" value="{{ home_content.whatsapp_contact_url or '' }}" placeholder="https://wa.me/61400000000 or +61400000000">
+              <div class="help">Shows a WhatsApp icon in the public homepage header when this is filled in.</div>
+            </div>
+
             <div class="checkbox-row full">
               <input id="reset_hero_image" type="checkbox" name="reset_hero_image" value="1">
               <label for="reset_hero_image">Use the default homepage hero image again</label>
