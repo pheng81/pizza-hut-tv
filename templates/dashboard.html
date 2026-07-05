@@ -11745,7 +11745,7 @@ allowfullscreen></iframe></div>`;
                             </div>
                         </div>
                     </div>
-                    <details style="background:#fff; border:1px solid #d8e4fb; border-radius:12px; padding:10px 12px;">
+                    <details id="panel-pos-advanced-tools-${screenId}" style="background:#fff; border:1px solid #d8e4fb; border-radius:12px; padding:10px 12px;">
                         <summary style="cursor:pointer; font-size:12px; font-weight:700; color:#0f172a;">Advanced mapping and developer tools</summary>
                         <div style="display:flex; flex-direction:column; gap:10px; margin-top:10px;">
                             <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
@@ -12183,6 +12183,16 @@ allowfullscreen></iframe></div>`;
             if(overlay) overlay.remove();
         }
 
+        function openPanelPosAdvancedTools(screenId){
+            const advancedTools = document.getElementById(`panel-pos-advanced-tools-${screenId}`);
+            closePanelPosWizard();
+            if(!advancedTools) return;
+            advancedTools.open = true;
+            requestAnimationFrame(() => {
+                advancedTools.scrollIntoView({ behavior:'smooth', block:'start' });
+            });
+        }
+
         function getPanelPosWizardState(screenId){
             const panelZone = getPanelZoneState(screenId) || {};
             const state = normalizePanelPosFeed(panelZone);
@@ -12295,6 +12305,11 @@ allowfullscreen></iframe></div>`;
                             <button type="button" class="btn" onclick="closePanelPosWizard()">Done</button>
                         </div>
                         <div style="font-size:11px; color:#64748b;">Advanced mapping and developer tools are still available in the manual setup below.</div>
+                        <div style="border:1px dashed #cbd5e1; border-radius:14px; background:#f8fafc; padding:16px; display:flex; flex-direction:column; gap:10px; align-items:flex-start; min-height:120px; justify-content:center;">
+                            <div style="font-size:13px; font-weight:800; color:#0f172a;">Need manual advanced mapping?</div>
+                            <div style="font-size:12px; color:#64748b; line-height:1.45; max-width:340px;">Open the full developer section for field mapping, payload examples, presets, and raw webhook tools.</div>
+                            <button type="button" class="btn" onclick="openPanelPosAdvancedTools('${screenId}')" style="height:36px; padding:0 14px; border-radius:999px;">Open advanced tools</button>
+                        </div>
                         </div>
                         <div style="display:flex; flex-direction:column; gap:14px; min-width:0; border-left:1px solid #e5e7eb; padding-left:20px;">
                             <div>
