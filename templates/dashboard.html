@@ -12199,12 +12199,29 @@ allowfullscreen></iframe></div>`;
                 host.placeholder.parentNode.insertBefore(host.details, host.placeholder);
                 host.placeholder.remove();
             }
+            if(host && host.wasTemporarilyExpanded){
+                setPanelPosFeedCollapsed(host.screenId, true);
+                const screenData = (((allStoresData || {}).screens || {})[currentStoreId] || {})[host.screenId] || {};
+                const panelZone = screenData.panel_zone || {};
+                const screenBinding = getWallSyncBinding(currentStoreId, host.screenId, screenData);
+                renderPanelScheduleSection(host.screenId, panelZone, screenBinding);
+            }
             window.panelPosAdvancedToolsHost = null;
             if(overlay) overlay.remove();
         }
 
         function openPanelPosAdvancedTools(screenId){
-            const advancedTools = document.getElementById(`panel-pos-advanced-tools-${screenId}`);
+            let advancedTools = document.getElementById(`panel-pos-advanced-tools-${screenId}`);
+            let wasTemporarilyExpanded = false;
+            if(!advancedTools && isPanelPosFeedCollapsed(screenId)){
+                setPanelPosFeedCollapsed(screenId, false);
+                const screenData = (((allStoresData || {}).screens || {})[currentStoreId] || {})[screenId] || {};
+                const panelZone = screenData.panel_zone || {};
+                const screenBinding = getWallSyncBinding(currentStoreId, screenId, screenData);
+                renderPanelScheduleSection(screenId, panelZone, screenBinding);
+                advancedTools = document.getElementById(`panel-pos-advanced-tools-${screenId}`);
+                wasTemporarilyExpanded = !!advancedTools;
+            }
             if(!advancedTools) return;
             closePanelPosAdvancedToolsModal();
             const placeholder = document.createElement('div');
@@ -12218,6 +12235,7 @@ allowfullscreen></iframe></div>`;
                 placeholder,
                 summary,
                 content,
+                wasTemporarilyExpanded,
                 originalStyle: advancedTools.getAttribute('style') || '',
                 originalOpen: advancedTools.open,
                 originalSummaryDisplay: summary ? summary.style.display : '',
