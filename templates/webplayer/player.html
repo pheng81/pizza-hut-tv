@@ -1622,13 +1622,14 @@
 			panelZone.style.setProperty('--panel-ticket-font-scale', String(appearance.ticketFontScale));
 			panelZone.style.setProperty('--panel-prepared-ticket-font-scale', String(appearance.preparedTicketFontScale));
 			panelZone.style.setProperty('--panel-ready-ticket-font-scale', String(appearance.readyTicketFontScale));
+			const unifiedTicketSizing = Math.abs(appearance.preparedTicketFontScale - appearance.readyTicketFontScale) < 0.001;
 			panelZone.style.setProperty('--panel-heading-font-scale', String(appearance.headingFontScale));
 			panelZone.style.setProperty('--panel-ticket-gap', `${appearance.ticketGap}px`);
 			panelZone.style.setProperty('--panel-ticket-radius', `${appearance.ticketRadius}px`);
 			panelZone.style.setProperty('--panel-ticket-padding-y', `${Math.max(4, Math.round(appearance.ticketPadding * 0.62))}px`);
 			panelZone.style.setProperty('--panel-ticket-padding-x', `${appearance.ticketPadding}px`);
-			panelZone.style.setProperty('--panel-ticket-ready-padding-y', `${Math.max(6, Math.round(appearance.ticketPadding * 1.05))}px`);
-			panelZone.style.setProperty('--panel-ticket-ready-padding-x', `${Math.max(10, Math.round(appearance.ticketPadding * 1.45))}px`);
+			panelZone.style.setProperty('--panel-ticket-ready-padding-y', unifiedTicketSizing ? `${Math.max(4, Math.round(appearance.ticketPadding * 0.62))}px` : `${Math.max(6, Math.round(appearance.ticketPadding * 1.05))}px`);
+			panelZone.style.setProperty('--panel-ticket-ready-padding-x', unifiedTicketSizing ? `${appearance.ticketPadding}px` : `${Math.max(10, Math.round(appearance.ticketPadding * 1.45))}px`);
 			panelZone.style.setProperty('--panel-divider-color', appearance.dividerEnabled ? appearance.dividerColor : 'transparent');
 			panelZone.style.setProperty('--panel-divider-width', appearance.dividerEnabled ? `${appearance.dividerWidth}px` : '0px');
 			panelZone.style.setProperty('--panel-divider-padding', `${appearance.readyColumnPadding}px`);
@@ -1641,8 +1642,8 @@
 			panelZone.style.setProperty('--panel-ready-column-ratio', `${appearance.readyColumnRatio}fr`);
 			panelZone.style.setProperty('--panel-column-section-gap', `${appearance.columnSectionGap}px`);
 			panelZone.style.setProperty('--panel-prepared-ticket-min-width', `${appearance.preparedTicketMinWidth}px`);
-			panelZone.style.setProperty('--panel-ready-ticket-min-width', `${appearance.readyTicketMinWidth}px`);
-			panelZone.style.setProperty('--panel-ready-ticket-small-min-width', `${Math.max(48, Math.round(appearance.readyTicketMinWidth * 0.64))}px`);
+			panelZone.style.setProperty('--panel-ready-ticket-min-width', unifiedTicketSizing ? `${appearance.preparedTicketMinWidth}px` : `${appearance.readyTicketMinWidth}px`);
+			panelZone.style.setProperty('--panel-ready-ticket-small-min-width', unifiedTicketSizing ? `${appearance.preparedTicketMinWidth}px` : `${Math.max(48, Math.round(appearance.readyTicketMinWidth * 0.64))}px`);
 			panelZone.style.setProperty('--panel-custom-text-size', `${appearance.boardCustomTextSize}px`);
 			panelZone.style.setProperty('--panel-custom-text-color', appearance.boardCustomTextColor);
 			panelZone.style.setProperty('--panel-prepared-text-align', appearance.preparedAlign);

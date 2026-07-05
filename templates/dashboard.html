@@ -13093,21 +13093,24 @@ allowfullscreen></iframe></div>`;
             const headingPx = Math.max(12, Math.round(headingBase * appearance.headingFontScale * previewScale));
             const preparedPx = Math.max(10, Math.round(preparedBase * appearance.preparedTicketFontScale * previewScale));
             const readyPx = Math.max(10, Math.round(readyBase * appearance.readyTicketFontScale * previewScale));
+            const unifiedTicketSizing = Math.abs(appearance.preparedTicketFontScale - appearance.readyTicketFontScale) < 0.001;
             const ticketGap = Math.max(2, Math.round(appearance.ticketGap * previewScale));
             const ticketRadius = Math.max(2, Math.round(appearance.ticketRadius * previewScale));
             const prepPadY = Math.max(4, Math.round(appearance.ticketPadding * 0.62 * previewScale));
             const prepPadX = Math.max(5, Math.round(appearance.ticketPadding * previewScale));
-            const readyPadY = Math.max(6, Math.round(appearance.ticketPadding * 1.05 * previewScale));
-            const readyPadX = Math.max(8, Math.round(appearance.ticketPadding * 1.45 * previewScale));
+            const readyPadY = unifiedTicketSizing ? prepPadY : Math.max(6, Math.round(appearance.ticketPadding * 1.05 * previewScale));
+            const readyPadX = unifiedTicketSizing ? prepPadX : Math.max(8, Math.round(appearance.ticketPadding * 1.45 * previewScale));
             const prepMinWidth = Math.max(18, Math.round(appearance.preparedTicketMinWidth * previewScale));
-            const readyMinWidth = Math.max(22, Math.round(appearance.readyTicketMinWidth * previewScale));
+            const readyMinWidth = unifiedTicketSizing
+                ? prepMinWidth
+                : Math.max(22, Math.round(appearance.readyTicketMinWidth * previewScale));
             const columnGap = Math.max(0, Math.round(appearance.columnGap * previewScale));
             const dividerPadding = Math.max(0, Math.round(appearance.readyColumnPadding * previewScale));
             const dividerWidth = appearance.dividerEnabled && appearance.dividerWidth > 0 ? Math.max(1, Math.round(appearance.dividerWidth * previewScale)) : 0;
             const sectionGap = Math.max(0, Math.round(appearance.columnSectionGap * previewScale));
             const margin = `${Math.round(appearance.boardMarginTop * previewScale)}px ${Math.round(appearance.boardMarginRight * previewScale)}px ${Math.round(appearance.boardMarginBottom * previewScale)}px ${Math.round(appearance.boardMarginLeft * previewScale)}px`;
             const prepTickets = preparing.map((ticket) => `<span style="display:inline-flex; align-items:center; justify-content:center; min-width:${prepMinWidth}px; border:1px solid rgba(15,23,42,.16); border-radius:${ticketRadius}px; padding:${prepPadY}px ${prepPadX}px; font-size:${preparedPx}px; font-weight:900; line-height:1; text-align:center; color:${escapeHtml(appearance.boardTextColor)}; box-sizing:border-box;">${escapeHtml(ticket)}</span>`).join('');
-            const readyTickets = ready.slice().reverse().map((ticket, index) => `<span style="display:inline-flex; align-items:center; justify-content:center; min-width:${index ? Math.max(18, Math.round(readyMinWidth * 0.64)) : readyMinWidth}px; background:${escapeHtml(appearance.boardReadyColor)}; border-radius:${ticketRadius}px; padding:${readyPadY}px ${readyPadX}px; font-size:${index ? Math.max(10, Math.round(readyPx * 0.54)) : readyPx}px; font-weight:950; line-height:1; color:#fff; text-align:center; box-sizing:border-box;">${escapeHtml(ticket)}</span>`).join('');
+            const readyTickets = ready.slice().reverse().map((ticket, index) => `<span style="display:inline-flex; align-items:center; justify-content:center; min-width:${index ? (unifiedTicketSizing ? readyMinWidth : Math.max(18, Math.round(readyMinWidth * 0.64))) : readyMinWidth}px; background:${escapeHtml(appearance.boardReadyColor)}; border-radius:${ticketRadius}px; padding:${readyPadY}px ${readyPadX}px; font-size:${index ? (unifiedTicketSizing ? readyPx : Math.max(10, Math.round(readyPx * 0.54))) : readyPx}px; font-weight:950; line-height:1; color:#fff; text-align:center; box-sizing:border-box;">${escapeHtml(ticket)}</span>`).join('');
             const note = String(appearance.boardCustomText || '').trim()
                 ? `<div style="position:absolute; z-index:4; max-width:42%; white-space:pre-line; line-height:1.22; font-weight:700; color:${escapeHtml(appearance.boardCustomTextColor)}; font-size:${Math.max(9, Math.round(appearance.boardCustomTextSize * previewScale))}px; ${getPanelPosWizardNoteStyle(appearance.boardCustomTextPosition, Math.max(4, ticketGap))}">${escapeHtml(appearance.boardCustomText)}</div>`
                 : '';
