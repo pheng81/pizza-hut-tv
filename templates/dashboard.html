@@ -11552,36 +11552,44 @@ allowfullscreen></iframe></div>`;
             const expandIconUrl = `/static/icons/panel-expand.svg?v={{ asset_bust }}`;
             const expandIconButton = `<button type="button" class="btn" onclick="togglePanelPosFeedCollapsed('${screenId}')" title="Expand Live POS setup" aria-label="Expand Live POS setup" style="position:absolute; top:10px; right:10px; width:30px; height:30px; display:inline-flex; align-items:center; justify-content:center; padding:0; border-radius:999px; color:#334155;"><img src="${expandIconUrl}" alt="" aria-hidden="true" style="width:16px; height:16px; display:block;"></button>`;
             wrap.innerHTML = `
-                <div style="position:relative; display:flex; flex-direction:column; gap:12px; background:linear-gradient(180deg,#f8fbff 0%,#f3f8ff 100%); border:1px solid #d7e6ff; border-radius:12px; padding:12px;">
+                <div style="position:relative; display:flex; flex-direction:column; gap:18px; background:#ffffff; border:1px solid #d8e4f0; box-shadow:0 14px 34px rgba(15,23,42,.06); border-radius:18px; padding:16px;">
                     ${isCollapsed ? expandIconButton : collapseIconButton}
-                    <div style="display:flex; flex-direction:column; gap:10px; align-items:flex-start;">
-                        <div style="padding-right:40px;">
-                            <div style="font-size:12px; font-weight:700; color:#1d4ed8;">Live POS Setup</div>
-                            <div style="font-size:11px; color:#5b6472; margin-top:3px;">Connect any POS through a direct webhook or a bridge like Zapier, Make, or n8n. The screen will rotate the newest eligible orders automatically.</div>
-                            <div style="font-size:11px; color:#334155; margin-top:6px;"><strong>${escapeHtml(scopeMeta.label)}:</strong> ${escapeHtml(scopeMeta.subtitle)}</div>
-                            <div style="font-size:11px; color:${hasLivePosSchedule ? '#166534' : '#92400e'}; background:${hasLivePosSchedule ? '#dcfce7' : '#fff7ed'}; border:1px solid ${hasLivePosSchedule ? '#bbf7d0' : '#fed7aa'}; border-radius:10px; padding:8px 10px; margin-top:8px;">
+                    <div style="display:flex; flex-direction:column; gap:12px; align-items:flex-start;">
+                        <div style="width:100%; display:flex; flex-direction:column; gap:10px; padding-right:40px;">
+                            <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+                                <div style="font-size:15px; font-weight:800; color:#0f172a; letter-spacing:-.01em;">Live POS Setup</div>
+                                <span style="font-size:10px; font-weight:700; color:#1d4ed8; background:#eff6ff; border:1px solid #bfdbfe; border-radius:999px; padding:4px 9px;">${escapeHtml(scopeMeta.label)}</span>
+                            </div>
+                            <div style="font-size:12px; color:#5b6472; line-height:1.55; max-width:760px;">Connect any POS through a direct webhook or a bridge like Zapier, Make, or n8n. The screen will rotate the newest eligible orders automatically.</div>
+                            <div style="font-size:11px; color:#475569; line-height:1.45;">${escapeHtml(scopeMeta.subtitle)}</div>
+                            <div style="font-size:11px; color:${hasLivePosSchedule ? '#166534' : '#92400e'}; background:${hasLivePosSchedule ? '#f0fdf4' : '#fff7ed'}; border:1px solid ${hasLivePosSchedule ? '#bbf7d0' : '#fdba74'}; border-radius:12px; padding:10px 12px;">
                                 ${hasLivePosSchedule
                                     ? 'Scheduled mode is active: the green Live POS row above controls when this appears and for how long.'
                                     : 'To rotate Live POS between media, add it as a schedule row. The 25% choices below are only for optional side overlays.'}
                             </div>
                             ${overlayAlsoOn ? `
-                                <div style="font-size:11px; color:#92400e; background:#fff7ed; border:1px solid #fed7aa; border-radius:10px; padding:8px 10px; margin-top:8px;">
+                                <div style="font-size:11px; color:#92400e; background:#fff7ed; border:1px solid #fdba74; border-radius:12px; padding:10px 12px;">
                                     Overlay is also on (${escapeHtml(overlayLayoutMode)}). Turn it off if you only want Live POS during the green schedule row.
                                 </div>` : ''}
                         </div>
-                        <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
-                            <span style="font-size:10px; font-weight:700; color:${statusColor}; background:${statusBg}; border:1px solid rgba(148,163,184,.25); border-radius:999px; padding:4px 8px;">${escapeHtml(statusLabel)}</span>
-                            <span style="font-size:10px; font-weight:700; color:#1e3a8a; background:#dbeafe; border:1px solid #bfdbfe; border-radius:999px; padding:4px 8px;">${state.eventCount} event${state.eventCount === 1 ? '' : 's'}</span>
-                            <span style="font-size:10px; font-weight:700; color:#334155; background:#eef2ff; border:1px solid #dbeafe; border-radius:999px; padding:4px 8px;">${queueCount}/${state.maxItems} queued</span>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                            <span style="font-size:10px; font-weight:700; color:${statusColor}; background:${statusBg}; border:1px solid rgba(148,163,184,.25); border-radius:999px; padding:5px 10px;">${escapeHtml(statusLabel)}</span>
+                            <span style="font-size:10px; font-weight:700; color:#1e3a8a; background:#eff6ff; border:1px solid #bfdbfe; border-radius:999px; padding:5px 10px;">${state.eventCount} event${state.eventCount === 1 ? '' : 's'}</span>
+                            <span style="font-size:10px; font-weight:700; color:#334155; background:#f8fafc; border:1px solid #dbe4ee; border-radius:999px; padding:5px 10px;">${queueCount}/${state.maxItems} queued</span>
                         </div>
-                        <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
-                            <button type="button" class="btn primary" onclick="openPanelPosWizard('${screenId}')" ${disabledAttr} style="font-size:11px; padding:7px 10px;">POS setup wizard</button>
-                            <button type="button" class="btn ${hasLivePosSchedule ? '' : 'primary'}" onclick="addLivePosScheduleFromPanel('${screenId}')" ${disabledAttr} ${hasLivePosSchedule ? 'disabled' : ''} title="${escapeHtml(scheduleButtonTitle)}" style="font-size:11px; padding:7px 10px;">${escapeHtml(scheduleButtonLabel)}</button>
-                            ${overlayAlsoOn ? `<button type="button" class="btn" onclick="updatePanelLayout('${screenId}','off')" ${disabledAttr} style="font-size:11px; padding:7px 10px;">Turn overlay off</button>` : ''}
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                            <button type="button" class="btn primary" onclick="openPanelPosWizard('${screenId}')" ${disabledAttr} style="font-size:11px; padding:8px 12px; border-radius:10px;">POS setup wizard</button>
+                            <button type="button" class="btn ${hasLivePosSchedule ? '' : 'primary'}" onclick="addLivePosScheduleFromPanel('${screenId}')" ${disabledAttr} ${hasLivePosSchedule ? 'disabled' : ''} title="${escapeHtml(scheduleButtonTitle)}" style="font-size:11px; padding:8px 12px; border-radius:10px;">${escapeHtml(scheduleButtonLabel)}</button>
+                            ${overlayAlsoOn ? `<button type="button" class="btn" onclick="updatePanelLayout('${screenId}','off')" ${disabledAttr} style="font-size:11px; padding:8px 12px; border-radius:10px;">Turn overlay off</button>` : ''}
                         </div>
                     </div>
                     ${isCollapsed ? `` : `
-                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:8px;">
+                    <div style="display:flex; flex-direction:column; gap:12px; padding-top:2px; border-top:1px solid #e5e7eb;">
+                        <div style="display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:8px;">
+                            <div style="font-size:13px; font-weight:800; color:#0f172a;">Connection basics</div>
+                            <div style="font-size:11px; color:#64748b;">Webhook scope, connector, credentials, and order timing.</div>
+                        </div>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px;">
                         <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
                             <span>Webhook scope</span>
                             <select id="panel-pos-scope-${screenId}" onchange="updatePanelPosGuide('${screenId}')" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
@@ -11622,7 +11630,7 @@ allowfullscreen></iframe></div>`;
                             <input id="panel-pos-duration-${screenId}" type="number" min="1" max="120" value="${state.displaySeconds}" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
                         </label>
                     </div>
-                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:8px;">
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px;">
                         <label style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#4b5563;">
                             <span>Maximum queue size</span>
                             <input id="panel-pos-max-${screenId}" type="number" min="1" max="100" value="${state.maxItems}" ${disabledAttr} style="height:34px; border:1px solid #d6dbe5; border-radius:8px; padding:0 10px; background:#fff;">
@@ -11633,11 +11641,14 @@ allowfullscreen></iframe></div>`;
                         </div>
                     </div>
                     <div id="panel-pos-guide-${screenId}"></div>
-                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:10px;">
-                        <div style="background:#fff; border:1px solid #d8e4fb; border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:10px;">
-                            <div style="font-size:12px; font-weight:700; color:#0f172a;">Screen design</div>
-                            <div style="font-size:11px; color:#475569; line-height:1.45;">The display is edited in one place now. Open the setup wizard to change layout, preview, colors, images, logo, tickets, and overlay position for this screen.</div>
-                            <button type="button" class="btn primary" onclick="openPanelPosWizard('${screenId}')" ${disabledAttr} style="width:max-content; font-size:11px; padding:7px 10px;">Edit display</button>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px; padding-top:4px; border-top:1px solid #eef2f7;">
+                        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:14px; padding:14px; display:flex; flex-direction:column; gap:10px;">
+                            <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start; flex-wrap:wrap;">
+                                <div style="font-size:13px; font-weight:800; color:#0f172a;">Screen design</div>
+                                <span style="font-size:10px; font-weight:700; color:#475569; background:#fff; border:1px solid #dbe4ee; border-radius:999px; padding:4px 8px;">One edit place</span>
+                            </div>
+                            <div style="font-size:11px; color:#475569; line-height:1.55;">Open the setup wizard to change layout, preview, colours, images, logo, tickets, and overlay position for this screen.</div>
+                            <button type="button" class="btn primary" onclick="openPanelPosWizard('${screenId}')" ${disabledAttr} style="width:max-content; font-size:11px; padding:8px 12px; border-radius:10px;">Edit display</button>
                         </div>
                         <div style="display:none;">
                             <div style="display:flex; justify-content:space-between; gap:8px; align-items:center; flex-wrap:wrap;">
@@ -11722,20 +11733,20 @@ allowfullscreen></iframe></div>`;
                                 </div>
                             </div>
                         </div>
-                        <div style="background:#fff; border:1px solid #d8e4fb; border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:8px;">
-                            <div style="font-size:12px; font-weight:700; color:#0f172a;">Connection status</div>
-                            <div style="display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px;">
-                                <div style="background:#f8fafc; border:1px solid #e5e7eb; border-radius:10px; padding:10px;">
+                        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:14px; padding:14px; display:flex; flex-direction:column; gap:10px;">
+                            <div style="font-size:13px; font-weight:800; color:#0f172a;">Connection status</div>
+                            <div style="display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:10px;">
+                                <div style="background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:12px;">
                                     <div style="font-size:10px; font-weight:700; color:#2563eb; text-transform:uppercase; letter-spacing:.04em;">Status</div>
                                     <div style="font-size:12px; color:#334155; margin-top:4px;">${escapeHtml(statusLabel)}</div>
                                 </div>
-                                <div style="background:#f8fafc; border:1px solid #e5e7eb; border-radius:10px; padding:10px;">
+                                <div style="background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:12px;">
                                     <div style="font-size:10px; font-weight:700; color:#2563eb; text-transform:uppercase; letter-spacing:.04em;">Events received</div>
                                     <div style="font-size:12px; color:#334155; margin-top:4px;">${state.eventCount}</div>
                                 </div>
                             </div>
                             <div style="font-size:11px; color:#475569;">Latest order snapshot</div>
-                            <div style="background:#f8fafc; border:1px solid #e5e7eb; border-radius:10px; padding:10px; font-size:11px; color:#334155; line-height:1.5;">
+                            <div style="background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:12px; font-size:11px; color:#334155; line-height:1.55;">
                                 ${hasSummary ? `
                                     <div><strong>Customer:</strong> ${escapeHtml(state.lastEventSummary.customer_name || '—')}</div>
                                     <div><strong>Order:</strong> ${escapeHtml(state.lastEventSummary.order_number || '—')}</div>
@@ -11745,9 +11756,9 @@ allowfullscreen></iframe></div>`;
                             </div>
                         </div>
                     </div>
-                    <details id="panel-pos-advanced-tools-${screenId}" style="background:#fff; border:1px solid #d8e4fb; border-radius:12px; padding:10px 12px;">
-                        <summary style="cursor:pointer; font-size:12px; font-weight:700; color:#0f172a;">Advanced mapping and developer tools</summary>
-                        <div style="display:flex; flex-direction:column; gap:10px; margin-top:10px;">
+                    <details id="panel-pos-advanced-tools-${screenId}" style="background:#fbfdff; border:1px solid #dbe4ee; border-radius:14px; padding:12px 14px;">
+                        <summary style="cursor:pointer; font-size:13px; font-weight:800; color:#0f172a; list-style:none;">Advanced mapping and developer tools</summary>
+                        <div style="display:flex; flex-direction:column; gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid #e5e7eb;">
                             <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
                                 <span style="font-size:11px; color:#4b5563;">Mapping presets:</span>
                                 ${mappingButtons}
@@ -11790,11 +11801,11 @@ allowfullscreen></iframe></div>`;
                             </div>
                         </div>
                     </details>
-                    <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                        <button type="button" class="btn" onclick="savePanelPosFeed('${screenId}')" ${disabledAttr}>Save setup</button>
-                        <button type="button" class="btn" onclick="sendPanelPosSample('${screenId}')" ${disabledAttr}>Send sample</button>
-                        <button type="button" class="btn" onclick="resetPanelPosWebhookToken('${screenId}')" ${disabledAttr}>Reset webhook</button>
-                        <button type="button" class="btn" onclick="clearPanelPosQueue('${screenId}')" ${disabledAttr}>Clear queue</button>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; align-items:center; padding-top:4px; border-top:1px solid #e5e7eb;">
+                        <button type="button" class="btn" onclick="clearPanelPosQueue('${screenId}')" ${disabledAttr} style="border-radius:10px;">Clear queue</button>
+                        <button type="button" class="btn" onclick="resetPanelPosWebhookToken('${screenId}')" ${disabledAttr} style="border-radius:10px;">Reset webhook</button>
+                        <button type="button" class="btn" onclick="sendPanelPosSample('${screenId}')" ${disabledAttr} style="border-radius:10px;">Send sample</button>
+                        <button type="button" class="btn primary" onclick="savePanelPosFeed('${screenId}')" ${disabledAttr} style="border-radius:10px;">Save setup</button>
                     </div>
                     `}
                 </div>`;
