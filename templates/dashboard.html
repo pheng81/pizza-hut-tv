@@ -12981,6 +12981,21 @@ allowfullscreen></iframe></div>`;
             return { width, height, full: true };
         }
 
+        function getPanelPosWizardContentPadding(displayMode, previewScale){
+            if(displayMode === 'schedule_board'){
+                const inset = Math.max(10, Math.round(96 * previewScale));
+                return `${inset}px`;
+            }
+            if(displayMode === 'overlay_bottom'){
+                const padY = Math.max(6, Math.round(22 * previewScale));
+                const padX = Math.max(8, Math.round(28 * previewScale));
+                return `${padY}px ${padX}px`;
+            }
+            const padY = Math.max(8, Math.round(34 * previewScale));
+            const padX = Math.max(8, Math.round(28 * previewScale));
+            return `${padY}px ${padX}px`;
+        }
+
         function positionPanelPosWizardNote(note, position, offsetPx){
             if(!note) return;
             note.style.top = 'auto';
@@ -13169,6 +13184,7 @@ allowfullscreen></iframe></div>`;
             pos.style.backgroundColor = rgbToCss(bgRgb, appearance.backgroundOpacity);
             pos.style.color = appearance.boardTextColor;
             pos.style.boxSizing = 'border-box';
+            pos.style.padding = '0';
             if(appearance.backgroundImageDataUrl && !usesSideImage){
                 const overlayAlpha = Math.max(0, Math.min(1, 1 - appearance.backgroundImageOpacity));
                 pos.style.backgroundImage = `linear-gradient(${rgbToCss(bgRgb, overlayAlpha)}, ${rgbToCss(bgRgb, overlayAlpha)}), url("${appearance.backgroundImageDataUrl}")`;
@@ -13226,6 +13242,7 @@ allowfullscreen></iframe></div>`;
             const reference = getPanelPosWizardReferenceSize(displayMode, overlayPercent);
             const rect = pos.getBoundingClientRect();
             const previewScale = Math.max(0.12, Math.min(rect.width / Math.max(1, reference.width), rect.height / Math.max(1, reference.height)));
+            pos.style.padding = getPanelPosWizardContentPadding(displayMode, previewScale);
             if(appearance.posDisplayStyle === 'single_card'){
                 const item = getPanelPosWizardPreviewItems(screenId).find((entry) => ['ready','serving'].includes(entry.status)) || getPanelPosWizardPreviewItems(screenId)[0] || { order:'1001', status:'ready' };
                 pos.innerHTML = `
