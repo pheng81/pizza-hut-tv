@@ -13089,7 +13089,7 @@ allowfullscreen></iframe></div>`;
             const fullMode = !String(displayMode || '').startsWith('overlay_');
             const headingBase = fullMode ? 72 : 34;
             const preparedBase = fullMode ? 66 : 36;
-            const readyBase = fullMode ? 144 : 36;
+            const readyBase = preparedBase;
             const headingPx = Math.max(12, Math.round(headingBase * appearance.headingFontScale * previewScale));
             const preparedPx = Math.max(10, Math.round(preparedBase * appearance.preparedTicketFontScale * previewScale));
             const readyPx = Math.max(10, Math.round(readyBase * appearance.readyTicketFontScale * previewScale));
