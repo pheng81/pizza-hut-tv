@@ -58,6 +58,16 @@ class _LoginScreenState extends State<LoginScreen>
     return platform == TargetPlatform.iOS || platform == TargetPlatform.macOS;
   }
 
+  bool get _shouldShowGoogleSignIn {
+    if (_googleEnabled || _googleClientId.trim().isNotEmpty) {
+      return true;
+    }
+    final platform = defaultTargetPlatform;
+    return platform == TargetPlatform.android ||
+        platform == TargetPlatform.iOS ||
+        platform == TargetPlatform.macOS;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -1066,7 +1076,7 @@ class _LoginScreenState extends State<LoginScreen>
                                         const LinearProgressIndicator(
                                             minHeight: 2)
                                       else ...[
-                                        if (_googleEnabled)
+                                        if (_shouldShowGoogleSignIn)
                                           SizedBox(
                                             width: double.infinity,
                                             child: OutlinedButton.icon(
@@ -1082,7 +1092,8 @@ class _LoginScreenState extends State<LoginScreen>
                                                   : 'Continue with Google'),
                                             ),
                                           ),
-                                        if (_googleEnabled || _microsoftEnabled)
+                                        if (_shouldShowGoogleSignIn ||
+                                            _microsoftEnabled)
                                           const SizedBox(height: 8),
                                         if (_microsoftEnabled)
                                           SizedBox(
@@ -1098,7 +1109,7 @@ class _LoginScreenState extends State<LoginScreen>
                                             ),
                                           ),
                                         if (_shouldShowAppleSignIn) ...[
-                                          if (_googleEnabled ||
+                                          if (_shouldShowGoogleSignIn ||
                                               _microsoftEnabled)
                                             const SizedBox(height: 8),
                                           SizedBox(
