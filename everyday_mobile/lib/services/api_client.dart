@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/app_models.dart';
@@ -10,6 +11,8 @@ import '../models/app_models.dart';
 class ApiClient {
   ApiClient();
 
+  static const String _apiBaseUrlOverride =
+      String.fromEnvironment('API_BASE_URL');
   static const String _baseUrlKey = 'api_base_url';
   static const String _mobileAuthTokenKey = 'mobile_auth_token';
   static const String _lastLoginUsernameKey = 'last_login_username';
@@ -28,7 +31,10 @@ class ApiClient {
 
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
-    _baseUrl = (prefs.getString(_baseUrlKey) ?? _defaultBaseUrl).trim();
+    final configuredBaseUrl = _apiBaseUrlOverride.trim().isNotEmpty
+        ? _apiBaseUrlOverride
+        : (prefs.getString(_baseUrlKey) ?? _defaultBaseUrl);
+    _baseUrl = configuredBaseUrl.trim();
     _mobileAuthToken = (prefs.getString(_mobileAuthTokenKey) ?? '').trim();
     if (_mobileAuthToken!.isEmpty) {
       _mobileAuthToken = null;
@@ -134,12 +140,18 @@ class ApiClient {
 
   Future<void> login(
       {required String username, required String password}) async {
+    debugPrint(
+      'API LOGIN: POST $_baseUrl/api/auth/local-login username="$username" passwordLength=${password.length}',
+    );
     final response = await _dio.post(
       '/api/auth/local-login',
       data: {
         'username': username,
         'password': password,
       },
+    );
+    debugPrint(
+      'API LOGIN: response status=${response.statusCode} bodyType=${response.data.runtimeType}',
     );
 
     final data = _asMap(response.data);
@@ -163,6 +175,7 @@ class ApiClient {
     if (!ok) {
       throw Exception('Login failed: invalid credentials or access denied');
     }
+    debugPrint('API LOGIN: session check passed');
   }
 
   Future<Map<String, dynamic>> signup({

@@ -23026,9 +23026,10 @@ def slice_video(video_path):
             )
             return response
 
+        safe_video_path = video_path.replace('/', '_').replace(chr(92), '_')
         cache_key = (
             f"{SLICE_ENCODER_VERSION}__"
-            f"{video_path.replace('/', '_').replace('\\', '_')}"
+            f"{safe_video_path}"
             f"_slice_{slice_mode}_{slice_count}_{slice_order}"
         )
         cached_slice_path = os.path.join(SLICE_CACHE_FOLDER, f"{cache_key}.mp4")

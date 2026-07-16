@@ -322,6 +322,8 @@ class _LoginScreenState extends State<LoginScreen>
       final isDeveloperConfigError = lower.contains('apiexception: 10') ||
           lower.contains('api10') ||
           lower.contains('developer_error') ||
+          lower.contains('gidclientid') ||
+          lower.contains('no active configuration') ||
           (e is PlatformException && e.code == 'sign_in_failed');
 
       if (isDeveloperConfigError) {
@@ -416,6 +418,22 @@ class _LoginScreenState extends State<LoginScreen>
       await _startSocialLogin('apple');
     } catch (e) {
       final rawError = e.toString().replaceFirst('Exception: ', '');
+      final lower = rawError.toLowerCase();
+      final shouldFallbackToWeb = lower.contains('akauthenticationerror') ||
+          lower.contains('authorizationerror') ||
+          lower.contains('code=1000') ||
+          lower.contains('code=1001') ||
+          lower.contains('code=-7003') ||
+          lower.contains('code=-7034') ||
+          (e is PlatformException &&
+              (e.code == 'authorization-error' ||
+                  e.code == 'sign_in_with_apple_error'));
+
+      if (shouldFallbackToWeb) {
+        await _startSocialLogin('apple');
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -691,7 +709,11 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> _login() async {
+    debugPrint(
+      'LOGIN: tapped, username="${_usernameController.text.trim()}", passwordLength=${_passwordController.text.length}',
+    );
     if (!_formKey.currentState!.validate()) {
+      debugPrint('LOGIN: form validation failed');
       return;
     }
 
@@ -701,12 +723,15 @@ class _LoginScreenState extends State<LoginScreen>
     });
 
     try {
+      debugPrint('LOGIN: form valid, calling apiClient.login()');
       await widget.apiClient.login(
         username: _usernameController.text.trim(),
         password: _passwordController.text,
       );
+      debugPrint('LOGIN: apiClient.login() succeeded');
       await widget.onLoginSuccess();
     } catch (e) {
+      debugPrint('LOGIN: failed with error: $e');
       if (!mounted) {
         return;
       }
