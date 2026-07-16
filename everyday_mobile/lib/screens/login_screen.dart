@@ -50,6 +50,14 @@ class _LoginScreenState extends State<LoginScreen>
   final AppLinks _appLinks = AppLinks();
   StreamSubscription<Uri>? _linkSub;
 
+  bool get _shouldShowAppleSignIn {
+    if (_appleEnabled) {
+      return true;
+    }
+    final platform = defaultTargetPlatform;
+    return platform == TargetPlatform.iOS || platform == TargetPlatform.macOS;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -1089,7 +1097,7 @@ class _LoginScreenState extends State<LoginScreen>
                                                   'Continue with Microsoft'),
                                             ),
                                           ),
-                                        if (_appleEnabled) ...[
+                                        if (_shouldShowAppleSignIn) ...[
                                           if (_googleEnabled ||
                                               _microsoftEnabled)
                                             const SizedBox(height: 8),
