@@ -312,6 +312,12 @@ def init_db():
                 db.execute('ALTER TABLE users ADD COLUMN phone_verification_request_id TEXT')
             except Exception:
                 pass
+        if 'apple_sub' not in cols:
+            try:
+                db.execute('ALTER TABLE users ADD COLUMN apple_sub TEXT')
+                db.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_apple_sub ON users(apple_sub)')
+            except Exception:
+                pass
     except Exception:
         pass
     db.commit()
@@ -2935,6 +2941,84 @@ def _upsert_oauth_user(email: str, full_name: str | None, method: str = 'google'
         'is_admin': is_admin,
     }
 
+def _upsert_apple_oauth_user(apple_sub: str, email: str, full_name: str | None) -> dict:
+    """Create/update Apple OAuth user and support repeat sign-ins without email."""
+    db = get_db()
+    subject = (apple_sub or '').strip()
+    uname = (email or '').strip().lower()
+    if not subject:
+        raise RuntimeError('Missing Apple subject')
+
+    row = db.execute(
+        'SELECT id, username, role FROM users WHERE apple_sub = ?',
+        (subject,),
+    ).fetchone()
+
+    if row:
+        existing_username = (row['username'] or '').strip().lower()
+        resolved_username = existing_username or uname
+        if not resolved_username:
+            raise RuntimeError('Apple account exists without username/email')
+        db.execute(
+            'UPDATE users SET full_name = COALESCE(?, full_name), email_verified = 1 WHERE id = ?',
+            (full_name, row['id']),
+        )
+    else:
+        if not uname:
+            raise RuntimeError('Apple login failed: no email returned for first sign-in')
+        existing_by_email = db.execute(
+            'SELECT id, username, role FROM users WHERE username = ?',
+            (uname,),
+        ).fetchone()
+        if existing_by_email:
+            db.execute(
+                'UPDATE users SET full_name = ?, email_verified = 1, apple_sub = ? WHERE id = ?',
+                (full_name or uname, subject, existing_by_email['id']),
+            )
+            resolved_username = uname
+        else:
+            db.execute(
+                'INSERT INTO users (username, full_name, email_verified, apple_sub) VALUES (?, ?, 1, ?)',
+                (uname, full_name or uname, subject),
+            )
+            resolved_username = uname
+
+    db.commit()
+
+    row2 = db.execute(
+        'SELECT id, username, role FROM users WHERE apple_sub = ? OR username = ?',
+        (subject, resolved_username),
+    ).fetchone()
+    if not row2:
+        raise RuntimeError('Apple user upsert failed')
+
+    resolved_username = (row2['username'] or resolved_username).strip().lower()
+
+    try:
+        _ensure_user_billing_policy(int(row2['id']), source='oauth_apple')
+    except Exception as _billing_e:
+        logging.warning('Failed to ensure billing policy for Apple OAuth user %s: %s', resolved_username, _billing_e)
+
+    try:
+        _ensure_user_link_code(resolved_username)
+    except Exception:
+        pass
+
+    is_admin = False
+    try:
+        user_role = (row2['role'] or '').strip().lower()
+        is_admin = user_role == 'admin'
+    except Exception:
+        pass
+
+    return {
+        'id': row2['id'],
+        'name': resolved_username,
+        'email': resolved_username,
+        'method': 'apple',
+        'is_admin': is_admin,
+    }
+
 def _current_user_id() -> int|None:
     try:
         user = session.get('user') or {}
@@ -4260,24 +4344,29 @@ def api_auth_apple_native():
 
         issuer = str(claims.get('iss') or '').strip()
         audience = str(claims.get('aud') or '').strip()
+        apple_sub = str(claims.get('sub') or '').strip()
         email = str(claims.get('email') or payload.get('email') or '').strip().lower()
 
         if issuer != 'https://appleid.apple.com':
             return jsonify({'success': False, 'error': 'Invalid Apple token issuer'}), 401
         if audience != apple_client_id:
             return jsonify({'success': False, 'error': 'Apple token audience mismatch'}), 401
-        if not email:
-            return jsonify({'success': False, 'error': 'Apple login failed: no email returned'}), 400
+        if not apple_sub:
+            return jsonify({'success': False, 'error': 'Apple token missing subject'}), 401
 
         allowed_domain = (os.environ.get('APPLE_ALLOWED_DOMAIN') or '').strip().lower()
-        if allowed_domain and not email.endswith('@' + allowed_domain):
+        if allowed_domain and email and not email.endswith('@' + allowed_domain):
             return jsonify({'success': False, 'error': 'Email domain not allowed'}), 403
 
         given_name = (payload.get('given_name') or '').strip()
         family_name = (payload.get('family_name') or '').strip()
         full_name = f'{given_name} {family_name}'.strip() or None
 
-        user = _upsert_oauth_user(email=email, full_name=full_name, method='apple')
+        user = _upsert_apple_oauth_user(
+            apple_sub=apple_sub,
+            email=email,
+            full_name=full_name,
+        )
         session['user'] = user
         session.permanent = True
 
@@ -6320,6 +6409,7 @@ def auth_apple_callback():
             except Exception:
                 user_info = {}
 
+        apple_sub = str(claims.get('sub') or '').strip()
         email = (claims.get('email') or user_info.get('email') or '')
         email = str(email).strip().lower()
 
@@ -6327,16 +6417,20 @@ def auth_apple_callback():
         last_name = ((user_info.get('name') or {}).get('lastName') or '').strip()
         full_name = (f'{first_name} {last_name}').strip() or None
 
-        if not email:
-            flash('Apple login failed: no email returned from Apple', 'error')
+        if not apple_sub:
+            flash('Apple login failed: no Apple subject returned', 'error')
             return redirect(url_for('login'))
 
         allowed_domain = (os.environ.get('APPLE_ALLOWED_DOMAIN') or '').strip().lower()
-        if allowed_domain and not email.endswith('@' + allowed_domain):
+        if allowed_domain and email and not email.endswith('@' + allowed_domain):
             flash('Email domain not allowed', 'error')
             return redirect(url_for('login'))
 
-        user = _upsert_oauth_user(email=email, full_name=full_name, method='apple')
+        user = _upsert_apple_oauth_user(
+            apple_sub=apple_sub,
+            email=email,
+            full_name=full_name,
+        )
         session['user'] = user
         session.permanent = True
 
