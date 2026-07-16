@@ -34,7 +34,6 @@ class _LoginScreenState extends State<LoginScreen>
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  final _baseUrlController = TextEditingController();
 
   bool _loading = false;
   bool _socialLoading = false;
@@ -54,7 +53,6 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void initState() {
     super.initState();
-    _baseUrlController.text = widget.apiClient.baseUrl;
     _bgController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 12),
@@ -74,7 +72,6 @@ class _LoginScreenState extends State<LoginScreen>
     _usernameController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
-    _baseUrlController.dispose();
     _bgController.dispose();
     super.dispose();
   }
@@ -411,6 +408,19 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
+  Widget _buildSocialButtonLogo(String assetPath, {double size = 18}) {
+    return Image.asset(
+      assetPath,
+      width: size,
+      height: size,
+      fit: BoxFit.contain,
+      errorBuilder: (context, error, stackTrace) => SizedBox(
+        width: size,
+        height: size,
+      ),
+    );
+  }
+
   Widget _buildAnimatedWordBackground() {
     return AnimatedBuilder(
       animation: _bgController,
@@ -743,25 +753,6 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
-  Future<void> _saveBaseUrl() async {
-    try {
-      await widget.apiClient.setBaseUrl(_baseUrlController.text);
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Base URL updated')),
-      );
-    } catch (e) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -892,29 +883,6 @@ class _LoginScreenState extends State<LoginScreen>
                                                 color: scheme.onSurfaceVariant,
                                               ),
                                         ),
-                                      const SizedBox(height: 14),
-                                      TextFormField(
-                                        controller: _baseUrlController,
-                                        keyboardType: TextInputType.url,
-                                        textInputAction: TextInputAction.next,
-                                        decoration: InputDecoration(
-                                          labelText: 'API Base URL',
-                                          prefixIcon: const Icon(Icons.link),
-                                          suffixIcon: IconButton(
-                                            tooltip: 'Save URL',
-                                            icon:
-                                                const Icon(Icons.save_outlined),
-                                            onPressed: _saveBaseUrl,
-                                          ),
-                                        ),
-                                        validator: (value) {
-                                          if (value == null ||
-                                              value.trim().isEmpty) {
-                                            return 'Required';
-                                          }
-                                          return null;
-                                        },
-                                      ),
                                       const SizedBox(height: 12),
                                       if (_isSignupMode) ...[
                                         TextFormField(
@@ -1069,26 +1037,14 @@ class _LoginScreenState extends State<LoginScreen>
                                         ),
                                       SizedBox(
                                         width: double.infinity,
-                                        child: FilledButton.icon(
+                                        child: FilledButton(
                                           onPressed:
                                               (_loading || _socialLoading)
                                                   ? null
                                                   : (_isSignupMode
                                                       ? _signup
                                                       : _login),
-                                          icon: _loading
-                                              ? const SizedBox(
-                                                  height: 16,
-                                                  width: 16,
-                                                  child:
-                                                      CircularProgressIndicator(
-                                                    strokeWidth: 2,
-                                                  ),
-                                                )
-                                              : Icon(_isSignupMode
-                                                  ? Icons.person_add_alt_1
-                                                  : Icons.login),
-                                          label: Text(_loading
+                                          child: Text(_loading
                                               ? (_isSignupMode
                                                   ? 'Creating account...'
                                                   : 'Signing in...')
@@ -1110,8 +1066,9 @@ class _LoginScreenState extends State<LoginScreen>
                                                       _socialLoading)
                                                   ? null
                                                   : _startGoogleLoginNativeFirst,
-                                              icon: const Icon(
-                                                  Icons.g_mobiledata),
+                                              icon: _buildSocialButtonLogo(
+                                                'assets/images/google.png',
+                                              ),
                                               label: Text(_socialLoading
                                                   ? 'Signing in with Google...'
                                                   : 'Continue with Google'),
@@ -1122,15 +1079,13 @@ class _LoginScreenState extends State<LoginScreen>
                                         if (_microsoftEnabled)
                                           SizedBox(
                                             width: double.infinity,
-                                            child: OutlinedButton.icon(
+                                            child: OutlinedButton(
                                               onPressed:
                                                   (_loading || _socialLoading)
                                                       ? null
                                                       : () => _startSocialLogin(
                                                           'microsoft'),
-                                              icon: const Icon(
-                                                  Icons.window_rounded),
-                                              label: const Text(
+                                              child: const Text(
                                                   'Continue with Microsoft'),
                                             ),
                                           ),
@@ -1145,7 +1100,9 @@ class _LoginScreenState extends State<LoginScreen>
                                                       _socialLoading)
                                                   ? null
                                                   : _startAppleLoginNativeFirst,
-                                              icon: const Icon(Icons.apple),
+                                              icon: _buildSocialButtonLogo(
+                                                'assets/images/apple.png',
+                                              ),
                                               label: const Text(
                                                   'Continue with Apple'),
                                             ),
