@@ -1,0 +1,1331 @@
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5002
+ * Running on http://192.168.1.117:5002
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug:127.0.0.1 - - [27/Jun/2026 13:00:19] "GET /login HTTP/1.1" 200 -
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\config.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\add_user.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\activate_user.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_rotation_fix_complete.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\auto_configure_pi.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\bootstrap_server.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\clear_phone.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\config.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\complete_pi_client.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\complete_pi_client_working.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\create_superadmin.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\db_migrate.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\detailed_debug.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\generate_play_store_assets.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\git_version.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\migrate_to_per_screen_subscriptions.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\pi_client_ui.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\pi_mobile_sync_addon.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\pi_uploader.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\pi_video_player.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\pi_vnc_tunnel.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\reset_password.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\reset_admin_password.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\restore_test9_user.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\setup_pi_client.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\playlist_probe.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\scripts\\geocode_store_configs_osm.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\scripts\\geocode_store_configs.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\transition_engine.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\1.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\1.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\1.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\1.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\1.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\1.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\1.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\1.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\1.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\1.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\everyday_mobile\\build\\app\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\1.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\1.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\1.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\1.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\1.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\1.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\1.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\1.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\1.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\1.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\1.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\1.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\1.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\1.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\1.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\1.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\1.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\1.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\1.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\0.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\1.zip', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\android_tv_app\\app\\build\\snapshot\\kotlin\\compileDebugKotlin\\2.zip', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+Exception in thread Thread-4 (serve_forever):
+Traceback (most recent call last):
+  File "C:\Python312\Lib\threading.py", line 1075, in _bootstrap_inner
+    self.run()
+  File "C:\Python312\Lib\threading.py", line 1012, in run
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\encodings\\cp1252.py', reloading
+Exception in thread Thread-4 (serve_forever):
+Traceback (most recent call last):
+  File "C:\Python312\Lib\threading.py", line 1075, in _bootstrap_inner
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\bitarray\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\bitarray\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\bitarray\\test_bitarray.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\bitarray\\test_bitarray.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\bitarray\\test_util.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\bitarray\\test_util.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\bitarray\\util.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\bitarray\\util.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\tlz\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\tlz\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\tlz\\_build_tlz.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\tlz\\_build_tlz.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\_signatures.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\_signatures.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\compatibility.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\compatibility.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\dicttoolz.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\dicttoolz.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\functoolz.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\functoolz.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\itertoolz.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\itertoolz.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\recipes.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\recipes.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\utils.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\utils.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\curried\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\curried\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\curried\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\curried\\exceptions.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\curried\\exceptions.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\curried\\operator.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\curried\\operator.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\sandbox\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\sandbox\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\sandbox\\core.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\sandbox\\core.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\sandbox\\parallel.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\sandbox\\parallel.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\sandbox\\tests\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\sandbox\\tests\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\sandbox\\tests\\test_core.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\sandbox\\tests\\test_core.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\sandbox\\tests\\test_parallel.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\sandbox\\tests\\test_parallel.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\tests\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\tests\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\tests\\test_compatibility.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\tests\\test_compatibility.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\tests\\test_curried.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\tests\\test_curried.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\tests\\test_curried_doctests.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\tests\\test_curried_doctests.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\tests\\test_dicttoolz.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\tests\\test_dicttoolz.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\tests\\test_functoolz.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\tests\\test_functoolz.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\tests\\test_inspect_args.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\tests\\test_inspect_args.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\tests\\test_itertoolz.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\tests\\test_itertoolz.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\tests\\test_package.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\tests\\test_package.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\tests\\test_recipes.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\tests\\test_recipes.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\tests\\test_serialization.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\tests\\test_serialization.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\tests\\test_signatures.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\tests\\test_signatures.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\tests\\test_tlz.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\tests\\test_tlz.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\tests\\test_utils.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\toolz\\tests\\test_utils.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\regex\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\regex\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\regex\\_main.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\regex\\_main.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\regex\\_regex_core.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\regex\\_regex_core.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\regex\\tests\\test_regex.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\regex\\tests\\test_regex.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\AES.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\AES.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\AES.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\ARC2.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\ARC2.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\ARC4.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\ARC4.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\Blowfish.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\Blowfish.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\CAST.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\CAST.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\ChaCha20.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\ChaCha20.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\ChaCha20_Poly1305.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\ChaCha20_Poly1305.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\DES.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\DES.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\DES.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\DES3.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\DES3.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\PKCS1_OAEP.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\PKCS1_OAEP.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\PKCS1_v1_5.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\PKCS1_v1_5.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\Salsa20.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\Salsa20.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\_EKSBlowfish.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\_EKSBlowfish.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\_mode_cbc.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\_mode_cbc.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\_mode_ccm.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\_mode_ccm.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\_mode_cfb.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\_mode_cfb.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\_mode_ctr.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\_mode_ctr.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\_mode_eax.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\_mode_eax.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\_mode_ecb.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\_mode_ecb.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\_mode_gcm.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\_mode_gcm.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\_mode_kw.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\_mode_kw.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\_mode_kwp.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\_mode_kwp.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\_mode_ocb.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\_mode_ocb.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\_mode_ofb.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\_mode_ofb.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\_mode_openpgp.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\_mode_openpgp.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\_mode_siv.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\_mode_siv.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\_pkcs1_oaep_decode.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Cipher\\_pkcs1_oaep_decode.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\BLAKE2b.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\BLAKE2s.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\CMAC.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\BLAKE2b.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\BLAKE2b.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\BLAKE2s.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\BLAKE2s.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\CMAC.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\CMAC.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\HMAC.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\HMAC.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\KMAC128.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\KMAC128.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\KMAC256.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\KMAC256.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\KangarooTwelve.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\KangarooTwelve.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\MD2.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\MD2.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\MD4.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\MD4.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\MD5.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\MD5.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\Poly1305.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\Poly1305.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\RIPEMD.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\RIPEMD.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\RIPEMD160.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\RIPEMD160.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\SHA.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\SHA.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\SHA1.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\SHA1.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\SHA224.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\SHA224.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\SHA256.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\SHA256.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\SHA384.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\SHA384.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\SHA3_224.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\SHA3_224.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\SHA3_256.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\SHA3_256.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\SHA3_384.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\SHA3_384.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\SHA3_512.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\SHA3_512.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\SHA512.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\SHA512.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\SHAKE128.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\SHAKE128.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\SHAKE256.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\SHAKE256.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\TupleHash128.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\TupleHash128.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\TupleHash256.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\TupleHash256.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\TurboSHAKE128.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\TurboSHAKE128.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\TurboSHAKE256.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\TurboSHAKE256.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\cSHAKE128.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\cSHAKE128.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\cSHAKE256.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\cSHAKE256.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\keccak.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Hash\\keccak.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\IO\\PEM.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\IO\\PKCS8.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\IO\\PEM.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\IO\\PEM.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\IO\\PKCS8.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\IO\\PKCS8.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\IO\\_PBES.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\IO\\_PBES.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\IO\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\IO\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Math\\Numbers.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Math\\Numbers.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Math\\Numbers.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Math\\Primality.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Math\\Primality.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Math\\_IntegerBase.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Math\\_IntegerBase.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Math\\_IntegerCustom.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Math\\_IntegerCustom.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Math\\_IntegerGMP.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Math\\_IntegerGMP.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Math\\_IntegerNative.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Math\\_IntegerNative.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Math\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Protocol\\DH.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Protocol\\DH.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Protocol\\DH.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Protocol\\HPKE.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Protocol\\HPKE.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Protocol\\KDF.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Protocol\\KDF.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Protocol\\SecretSharing.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Protocol\\SecretSharing.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Protocol\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Protocol\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\PublicKey\\DSA.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\PublicKey\\DSA.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\PublicKey\\ECC.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\PublicKey\\ECC.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\PublicKey\\ElGamal.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\PublicKey\\ElGamal.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\PublicKey\\RSA.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\PublicKey\\RSA.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\PublicKey\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\PublicKey\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\PublicKey\\_curve.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\PublicKey\\_curve.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\PublicKey\\_edwards.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\PublicKey\\_edwards.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\PublicKey\\_montgomery.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\PublicKey\\_montgomery.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\PublicKey\\_nist_ecc.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\PublicKey\\_nist_ecc.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\PublicKey\\_openssh.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\PublicKey\\_openssh.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\PublicKey\\_point.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\PublicKey\\_point.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Random\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Random\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Random\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Random\\random.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\Random\\random.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\__main__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\__main__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\__main__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\loader.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\loader.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\st_common.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\st_common.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\common.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\common.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_AES.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_AES.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_ARC2.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_ARC2.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_ARC4.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_ARC4.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_Blowfish.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_Blowfish.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_CAST.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_CAST.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_CBC.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_CBC.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_CCM.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_CCM.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_CFB.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_CFB.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_CTR.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_CTR.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_ChaCha20.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_ChaCha20.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_ChaCha20_Poly1305.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_ChaCha20_Poly1305.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_DES.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_DES.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_DES3.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_DES3.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_EAX.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_EAX.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_GCM.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_GCM.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_KW.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_KW.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_OCB.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_OCB.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_OFB.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_OFB.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_OpenPGP.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_OpenPGP.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_SIV.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_SIV.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_Salsa20.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_Salsa20.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_pkcs1_15.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_pkcs1_15.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_pkcs1_oaep.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Cipher\\test_pkcs1_oaep.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\common.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\common.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_BLAKE2.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_BLAKE2.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_CMAC.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_CMAC.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_HMAC.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_HMAC.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_KMAC.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_KMAC.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_KangarooTwelve.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_KangarooTwelve.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_MD2.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_MD2.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_MD4.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_MD4.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_MD5.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_MD5.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_Poly1305.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_Poly1305.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_RIPEMD160.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_RIPEMD160.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_SHA1.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_SHA1.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_SHA224.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_SHA224.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_SHA256.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_SHA256.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_SHA384.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_SHA384.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_SHA3_224.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_SHA3_224.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_SHA3_256.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_SHA3_256.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_SHA3_384.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_SHA3_384.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_SHA3_512.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_SHA3_512.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_SHA512.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_SHA512.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_SHAKE.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_SHAKE.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_TupleHash.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_TupleHash.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_TurboSHAKE.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_TurboSHAKE.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_cSHAKE.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_cSHAKE.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_keccak.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Hash\\test_keccak.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\IO\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\IO\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\IO\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\IO\\test_PBES.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\IO\\test_PBES.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\IO\\test_PKCS8.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\IO\\test_PKCS8.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Math\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Math\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Math\\test_Numbers.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Math\\test_Numbers.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Math\\test_Primality.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Math\\test_Primality.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Math\\test_modexp.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Math\\test_modexp.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Math\\test_modmult.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Math\\test_modmult.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Protocol\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Protocol\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Protocol\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Protocol\\test_HPKE.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Protocol\\test_HPKE.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Protocol\\test_KDF.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Protocol\\test_KDF.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Protocol\\test_SecretSharing.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Protocol\\test_SecretSharing.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Protocol\\test_ecdh.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Protocol\\test_ecdh.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Protocol\\test_rfc1751.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\Protocol\\test_rfc1751.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\PublicKey\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\PublicKey\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\PublicKey\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\PublicKey\\test_DSA.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\PublicKey\\test_DSA.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\PublicKey\\test_ECC_Curve25519.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\PublicKey\\test_ECC_Curve25519.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\PublicKey\\test_ECC_Curve448.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\PublicKey\\test_ECC_Curve448.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\PublicKey\\test_ECC_Ed25519.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\PublicKey\\test_ECC_Ed25519.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\PublicKey\\test_ECC_Ed448.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\AppData\\Roaming\\Python\\Python312\\site-packages\\Crypto\\SelfTest\\PublicKey\\test_ECC_Ed448.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\base_events.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\constants.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\coroutines.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\events.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\format_helpers.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\base_futures.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\exceptions.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\base_tasks.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\futures.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\protocols.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\sslproto.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\transports.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\log.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\staggered.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\locks.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\mixins.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\tasks.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\timeouts.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\trsock.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\runners.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\queues.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\streams.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\subprocess.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\taskgroups.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\threads.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\windows_events.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\base_subprocess.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\proactor_events.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\selector_events.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\windows_utils.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\json\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\json\\decoder.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\ctypes\\util.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\zoneinfo\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\zoneinfo\\_tzpath.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\zoneinfo\\_common.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\base_events.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\constants.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\coroutines.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\events.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\format_helpers.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\base_futures.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\exceptions.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\base_tasks.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\futures.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\protocols.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\sslproto.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\transports.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\log.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\staggered.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\locks.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\mixins.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\tasks.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\timeouts.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\trsock.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\runners.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\queues.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\streams.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\subprocess.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\taskgroups.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\threads.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\windows_events.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\base_subprocess.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\proactor_events.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\selector_events.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\windows_utils.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+Exception in thread Thread-4 (serve_forever):
+Traceback (most recent call last):
+  File "C:\Python312\Lib\threading.py", line 1075, in _bootstrap_inner
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Users\\toeng\\Pizza Hut TV\\app.py', reloading
+INFO:werkzeug: * Restarting with watchdog (windowsapi)
+Server initialized for threading.
+INFO:engineio.server:Server initialized for threading.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 350-378-798
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\__init__.py', reloading
+INFO:werkzeug: * Detected change in 'C:\\Python312\\Lib\\asyncio\\base_events.py', reloading
+Exception in thread Thread-4 (serve_forever):
+Traceback (most recent call last):
+Fatal Python error: _enter_buffered_busy: could not acquire lock for <_io.BufferedWriter name='<stderr>'> at interpreter shutdown, possibly due to daemon threads
+Python runtime state: finalizing (tstate=0x00007fffe9270018)
+
+Current thread 0x00016cf0 (most recent call first):
+  <no Python frame>
+
+Extension modules: markupsafe._speedups, _wmi, _brotli, zstandard.backend_c, charset_normalizer.md, multidict._multidict, yarl._quoting_c, propcache._helpers_c, aiohttp._http_writer, aiohttp._http_parser, aiohttp._websocket.mask, aiohttp._websocket.reader_c, frozenlist._frozenlist, tornado.speedups, _cffi_backend, numpy.core._multiarray_umath, numpy.core._multiarray_tests, numpy.linalg._umath_linalg, numpy.fft._pocketfft_internal, numpy.random._common, numpy.random.bit_generator, numpy.random._bounded_integers, numpy.random._mt19937, numpy.random.mtrand, numpy.random._philox, numpy.random._pcg64, numpy.random._sfc64, numpy.random._generator, PIL._imaging (total: 29)

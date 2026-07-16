@@ -1,0 +1,367 @@
+Launching lib\main.dart on sdk gphone64 x86 64 in debug mode...
+Running Gradle task 'assembleDebug'...                          
+
+C:\Users\toeng\Pizza Hut TV\everyday_mobile\android>if "Windows_NT" == "Windows_NT" setlocal
+
+C:\Users\toeng\Pizza Hut TV\everyday_mobile\android>set DEFAULT_JVM_OPTS= 
+
+C:\Users\toeng\Pizza Hut TV\everyday_mobile\android>set DIRNAME=C:\Users\toeng\Pizza Hut TV\everyday_mobile\android\ 
+
+C:\Users\toeng\Pizza Hut TV\everyday_mobile\android>if "C:\Users\toeng\Pizza Hut TV\everyday_mobile\android\" == "" set DIRNAME=. 
+
+C:\Users\toeng\Pizza Hut TV\everyday_mobile\android>set APP_BASE_NAME=gradlew 
+
+C:\Users\toeng\Pizza Hut TV\everyday_mobile\android>set APP_HOME=C:\Users\toeng\Pizza Hut TV\everyday_mobile\android\ 
+
+C:\Users\toeng\Pizza Hut TV\everyday_mobile\android>if defined JAVA_HOME goto findJavaFromJavaHome 
+
+C:\Users\toeng\Pizza Hut TV\everyday_mobile\android>set JAVA_HOME=C:\Program Files\Java\jdk-17 
+
+C:\Users\toeng\Pizza Hut TV\everyday_mobile\android>set JAVA_EXE=C:\Program Files\Java\jdk-17/bin/java.exe 
+
+C:\Users\toeng\Pizza Hut TV\everyday_mobile\android>if exist "C:\Program Files\Java\jdk-17/bin/java.exe" goto init 
+
+C:\Users\toeng\Pizza Hut TV\everyday_mobile\android>if not "Windows_NT" == "Windows_NT" goto win9xME_args 
+
+C:\Users\toeng\Pizza Hut TV\everyday_mobile\android>if "@eval[2+2]" == "4" goto 4NT_args 
+
+C:\Users\toeng\Pizza Hut TV\everyday_mobile\android>set CMD_LINE_ARGS= 
+
+C:\Users\toeng\Pizza Hut TV\everyday_mobile\android>set _SKIP=2 
+
+C:\Users\toeng\Pizza Hut TV\everyday_mobile\android>if "x-q" == "x" goto execute 
+
+C:\Users\toeng\Pizza Hut TV\everyday_mobile\android>set CMD_LINE_ARGS=-q -Ptarget-platform=android-x64 "-Ptarget=C:\Users\toeng\Pizza Hut TV\everyday_mobile\lib\main.dart" -Pbase-application-name=android.app.Application -Pdart-obfuscation=false -Ptrack-widget-creation=true -Ptree-shake-icons=false -Pfilesystem-scheme=org-dartlang-root assembleDebug 
+
+C:\Users\toeng\Pizza Hut TV\everyday_mobile\android>goto execute 
+
+C:\Users\toeng\Pizza Hut TV\everyday_mobile\android>set CLASSPATH=C:\Users\toeng\Pizza Hut TV\everyday_mobile\android\\gradle\wrapper\gradle-wrapper.jar 
+
+C:\Users\toeng\Pizza Hut TV\everyday_mobile\android>"C:\Program Files\Java\jdk-17/bin/java.exe"    "-Dorg.gradle.appname=gradlew" -classpath "C:\Users\toeng\Pizza Hut TV\everyday_mobile\android\\gradle\wrapper\gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain -q -Ptarget-platform=android-x64 "-Ptarget=C:\Users\toeng\Pizza Hut TV\everyday_mobile\lib\main.dart" -Pbase-application-name=android.app.Application -Pdart-obfuscation=false -Ptrack-widget-creation=true -Ptree-shake-icons=false -Pfilesystem-scheme=org-dartlang-root assembleDebug 
+
+C:\Users\toeng\Pizza Hut TV\everyday_mobile\android>if "0" == "0" goto mainEnd 
+
+C:\Users\toeng\Pizza Hut TV\everyday_mobile\android>if "Windows_NT" == "Windows_NT" endlocal
+Running Gradle task 'assembleDebug'...                             15.8s
+√ Built build\app\outputs\flutter-apk\app-debug.apk
+Installing build\app\outputs\flutter-apk\app-debug.apk...        1,078ms
+I/flutter ( 7650): [IMPORTANT:flutter/shell/platform/android/android_context_vk_impeller.cc(60)] Using the Impeller rendering backend (Vulkan).
+D/FlutterGeolocator( 7650): Attaching Geolocator to activity
+D/FlutterGeolocator( 7650): Creating service.
+D/FlutterGeolocator( 7650): Binding to location service.
+D/FlutterGeolocator( 7650): Geolocator foreground service connected
+D/FlutterGeolocator( 7650): Initializing Geolocator services
+D/FlutterGeolocator( 7650): Flutter engine connected. Connected engine count 1
+Syncing files to device sdk gphone64 x86 64...                     141ms
+
+Flutter run key commands.
+r Hot reload. 
+R Hot restart.
+h List all available interactive commands.
+d Detach (terminate "flutter run" but leave application running).
+c Clear the screen
+q Quit (terminate the application on the device).
+
+A Dart VM Service on sdk gphone64 x86 64 is available at: http://127.0.0.1:32769/n8zP1C78VzA=/
+I/everyday_mobile( 7650): Compiler allocated 5042KB to compile void android.view.ViewRootImpl.performTraversals()
+The Flutter DevTools debugger and profiler on sdk gphone64 x86 64 is available at: http://127.0.0.1:9100?uri=http://127.0.0.1:32769/n8zP1C78VzA=/
+D/InsetsController( 7650): hide(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:229c567d: onCancelled at PHASE_CLIENT_ALREADY_HIDDEN
+D/ProfileInstaller( 7650): Installing profile for com.everydayadvertise.everyday_mobile
+I/everyday_mobile( 7650): AssetManager2(0x71df05fa0238) locale list changing from [] to [en-US]
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:d2cfd4b7: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+D/InsetsController( 7650): Setting requestedVisibleTypes to -1 (was -9)
+D/InputConnectionAdaptor( 7650): The input method toggled cursor monitoring on
+I/everyday_mobile( 7650): NativeAlloc concurrent mark compact GC freed 269KB AllocSpace bytes, 0(0B) LOS objects, 49% free, 2623KB/5247KB, paused 2.562ms,15.968ms total 72.328ms
+W/everyday_mobile( 7650): Reducing the number of considered missed Gc histogram windows from 237 to 100
+W/InteractionJankMonitor( 7650): Initializing without READ_DEVICE_CONFIG permission. enabled=true, interval=1, missedFrameThreshold=3, frameTimeThreshold=64, package=com.everydayadvertise.everyday_mobile
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:d2cfd4b7: onShown
+W/FrameTracker( 7650): Missed SF frame:JANK_COMPOSER, 1646363, 70608700, CUJ=J<IME_INSETS_SHOW_ANIMATION::0@1@com.everydayadvertise.everyday_mobile>
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:ff68a3a3: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:ff68a3a3: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:fe8d1f81: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:fe8d1f81: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:7d8f8026: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:7d8f8026: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+D/InputConnectionAdaptor( 7650): The input method toggled cursor monitoring on
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:df53db8d: onRequestHide at ORIGIN_CLIENT reason HIDE_SOFT_INPUT fromUser false
+D/InsetsController( 7650): hide(ime(), fromIme=false)
+W/WindowOnBackDispatcher( 7650): sendCancelIfRunning: isInProgress=false callback=android.view.ImeBackAnimationController@86b5958
+D/InsetsController( 7650): Setting requestedVisibleTypes to -9 (was -1)
+I/ImeTracker( 7650): system_server:99a122a7: onCancelled at PHASE_CLIENT_ON_CONTROLS_CHANGED
+W/FrameTracker( 7650): Missed SF frame:JANK_COMPOSER, 1650229, 19683644, CUJ=J<IME_INSETS_HIDE_ANIMATION::1@1@com.everydayadvertise.everyday_mobile>
+I/everyday_mobile( 7650): AssetManager2(0x71df05fcffd8) locale list changing from [] to [en-US]
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:7615384f: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+D/InsetsController( 7650): Setting requestedVisibleTypes to -1 (was -9)
+D/InputConnectionAdaptor( 7650): The input method toggled cursor monitoring on
+I/AssistStructure( 7650): Flattened final assist data: 456 bytes, containing 1 windows, 3 views
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:7615384f: onShown
+W/FrameTracker( 7650): Missed SF frame:JANK_COMPOSER, 1654315, 14055596, CUJ=J<IME_INSETS_SHOW_ANIMATION::0@1@com.everydayadvertise.everyday_mobile>
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:fe1cd261: onRequestHide at ORIGIN_CLIENT reason HIDE_SOFT_INPUT fromUser false
+D/InsetsController( 7650): hide(ime(), fromIme=false)
+W/WindowOnBackDispatcher( 7650): sendCancelIfRunning: isInProgress=false callback=android.view.ImeBackAnimationController@86b5958
+D/InsetsController( 7650): Setting requestedVisibleTypes to -9 (was -1)
+I/ImeTracker( 7650): system_server:71b62aba: onCancelled at PHASE_CLIENT_ON_CONTROLS_CHANGED
+W/FrameTracker( 7650): Missed SF frame:JANK_COMPOSER, 1654840, 12177020, CUJ=J<IME_INSETS_HIDE_ANIMATION::1@1@com.everydayadvertise.everyday_mobile>
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:5c37b0c6: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+D/InsetsController( 7650): Setting requestedVisibleTypes to -1 (was -9)
+D/InputConnectionAdaptor( 7650): The input method toggled cursor monitoring on
+I/everyday_mobile( 7650): Background concurrent mark compact GC freed 2099KB AllocSpace bytes, 8(416KB) LOS objects, 49% free, 2615KB/5230KB, paused 1.395ms,5.057ms total 50.461ms
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:5c37b0c6: onShown
+W/FrameTracker( 7650): Missed SF frame:JANK_COMPOSER, 1657104, 9094798, CUJ=J<IME_INSETS_SHOW_ANIMATION::0@1@com.everydayadvertise.everyday_mobile>
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:f81b6f09: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:f81b6f09: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+D/InputConnectionAdaptor( 7650): The input method toggled cursor monitoring on
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:f607664d: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:f607664d: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:75267823: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:75267823: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:74511ab9: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:74511ab9: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:a4a5098d: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:a4a5098d: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:b24e3f62: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:b24e3f62: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:89e800eb: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:89e800eb: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:7417533a: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:7417533a: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:fcb7c133: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:fcb7c133: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:5d174c42: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:5d174c42: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:8a4fbfde: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:8a4fbfde: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:8ee44316: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:8ee44316: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:603cbb92: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:603cbb92: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:efcda175: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:efcda175: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:b6379592: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:b6379592: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:2e9a5768: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:2e9a5768: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:79fa9f8c: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:79fa9f8c: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:7688c0cd: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:7688c0cd: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:78ab89da: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:78ab89da: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:50c980bc: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:50c980bc: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:c784416f: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:c784416f: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:4a5256f7: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:4a5256f7: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:ca2796a7: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:ca2796a7: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:6d8ac60d: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:6d8ac60d: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:faf368c1: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:faf368c1: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:9854b506: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:9854b506: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:c7a9c4ef: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:c7a9c4ef: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:2ba833f9: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:2ba833f9: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:6e48a528: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:6e48a528: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:d789010a: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:d789010a: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:c9eae784: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:c9eae784: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:ee953906: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:ee953906: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:8de6bf29: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:8de6bf29: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:42b801ad: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:42b801ad: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:5fcc4ae3: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:5fcc4ae3: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:c8d36b59: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:c8d36b59: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:ae108443: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:ae108443: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:64d65742: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:64d65742: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:53a855d2: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:53a855d2: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:e506d6d2: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:e506d6d2: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:c0699fe1: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:c0699fe1: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:ab2fe823: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:ab2fe823: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:f01b7022: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:f01b7022: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:f93c184f: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:f93c184f: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:9a128cf1: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:9a128cf1: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:215e2afa: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:215e2afa: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:ab4d4356: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:ab4d4356: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:2fb54739: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:2fb54739: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:492373f5: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:492373f5: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:4dae6003: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:4dae6003: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+D/InputConnectionAdaptor( 7650): The input method toggled cursor monitoring on
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:a2545aca: onRequestHide at ORIGIN_CLIENT reason HIDE_SOFT_INPUT fromUser false
+D/InsetsController( 7650): hide(ime(), fromIme=false)
+W/WindowOnBackDispatcher( 7650): sendCancelIfRunning: isInProgress=false callback=android.view.ImeBackAnimationController@86b5958
+D/InsetsController( 7650): Setting requestedVisibleTypes to -9 (was -1)
+I/ImeTracker( 7650): system_server:3dc3297c: onCancelled at PHASE_CLIENT_ON_CONTROLS_CHANGED
+W/FrameTracker( 7650): Missed SF frame:JANK_COMPOSER, 1704829, 9554466, CUJ=J<IME_INSETS_HIDE_ANIMATION::1@1@com.everydayadvertise.everyday_mobile>
+D/InsetsController( 7650): show(ime(), fromIme=false)
+D/InsetsController( 7650): Setting requestedVisibleTypes to -1 (was -9)
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.google.android.inputmethod.latin:6fa81bfe: onCancelled at PHASE_CLIENT_REPORT_REQUESTED_VISIBLE_TYPES
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:c949056f: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:c949056f: onCancelled at PHASE_CLIENT_REPORT_REQUESTED_VISIBLE_TYPES
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:ddd4c4c1: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:ddd4c4c1: onCancelled at PHASE_CLIENT_REPORT_REQUESTED_VISIBLE_TYPES
+D/InputConnectionAdaptor( 7650): The input method toggled cursor monitoring on
+I/ImeTracker( 7650): com.google.android.inputmethod.latin:6fa81bfe: onShown
+W/FrameTracker( 7650): Missed App frame:UNKNOWN: 3, 1705351, 26078432, CUJ=J<IME_INSETS_SHOW_ANIMATION::0@1@com.everydayadvertise.everyday_mobile>
+W/FrameTracker( 7650): Missed SF frame:UNKNOWN: 3, 1705351, 26078432, CUJ=J<IME_INSETS_SHOW_ANIMATION::0@1@com.everydayadvertise.everyday_mobile>
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:cb43c2ff: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:cb43c2ff: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+D/InputConnectionAdaptor( 7650): The input method toggled cursor monitoring on
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:4b85b438: onRequestHide at ORIGIN_CLIENT reason HIDE_SOFT_INPUT fromUser false
+D/InsetsController( 7650): hide(ime(), fromIme=false)
+W/WindowOnBackDispatcher( 7650): sendCancelIfRunning: isInProgress=false callback=android.view.ImeBackAnimationController@86b5958
+D/InsetsController( 7650): Setting requestedVisibleTypes to -9 (was -1)
+I/ImeTracker( 7650): system_server:5fdbb572: onCancelled at PHASE_CLIENT_ON_CONTROLS_CHANGED
+W/FrameTracker( 7650): Missed SF frame:JANK_COMPOSER, 1710621, 14126676, CUJ=J<IME_INSETS_HIDE_ANIMATION::1@1@com.everydayadvertise.everyday_mobile>
+D/InsetsController( 7650): show(ime(), fromIme=false)
+D/InsetsController( 7650): Setting requestedVisibleTypes to -1 (was -9)
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.google.android.inputmethod.latin:c00ff9b3: onCancelled at PHASE_CLIENT_REPORT_REQUESTED_VISIBLE_TYPES
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:e638277a: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:e638277a: onCancelled at PHASE_CLIENT_REPORT_REQUESTED_VISIBLE_TYPES
+D/InputConnectionAdaptor( 7650): The input method toggled cursor monitoring on
+I/ImeTracker( 7650): com.google.android.inputmethod.latin:c00ff9b3: onShown
+W/FrameTracker( 7650): Missed SF frame:JANK_COMPOSER, 1711157, 28354280, CUJ=J<IME_INSETS_SHOW_ANIMATION::0@1@com.everydayadvertise.everyday_mobile>
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:b122d60d: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:b122d60d: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:187ced84: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 7650): show(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:187ced84: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:439080e9: onRequestHide at ORIGIN_CLIENT reason HIDE_SOFT_INPUT fromUser false
+D/InsetsController( 7650): hide(ime(), fromIme=false)
+W/WindowOnBackDispatcher( 7650): sendCancelIfRunning: isInProgress=false callback=android.view.ImeBackAnimationController@86b5958
+D/InsetsController( 7650): Setting requestedVisibleTypes to -9 (was -1)
+I/ImeTracker( 7650): system_server:fc944db2: onCancelled at PHASE_CLIENT_ON_CONTROLS_CHANGED
+W/FrameTracker( 7650): Missed SF frame:JANK_COMPOSER, 1733563, 13430802, CUJ=J<IME_INSETS_HIDE_ANIMATION::1@1@com.everydayadvertise.everyday_mobile>
+W/WindowOnBackDispatcher( 7650): OnBackInvokedCallback is not enabled for the application.
+W/WindowOnBackDispatcher( 7650): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+W/WindowOnBackDispatcher( 7650): OnBackInvokedCallback is not enabled for the application.
+W/WindowOnBackDispatcher( 7650): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+I/everyday_mobile( 7650): AssetManager2(0x71df05fd8958) locale list changing from [] to [en-US]
+W/WindowOnBackDispatcher( 7650): OnBackInvokedCallback is not enabled for the application.
+W/WindowOnBackDispatcher( 7650): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+W/WindowOnBackDispatcher( 7650): OnBackInvokedCallback is not enabled for the application.
+W/WindowOnBackDispatcher( 7650): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+W/everyday_mobile( 7650): Reducing the number of considered missed Gc histogram windows from 1989 to 100
+D/VRI[MainActivity]( 7650): visibilityChanged oldVisibility=true newVisibility=false
+I/AutofillManager( 7650): onInvisibleForAutofill(): expiringResponse
+D/AutofillManager( 7650): onActivityFinishing(): calling cancelLocked()
+D/FlutterGeolocator( 7650): Detaching Geolocator from activity
+D/FlutterGeolocator( 7650): Flutter engine disconnected. Connected engine count 0
+D/FlutterGeolocator( 7650): Disposing Geolocator services
+E/FlutterGeolocator( 7650): Geolocator position updates stopped
+D/FlutterGeolocator( 7650): Stopping location service.
+W/WindowOnBackDispatcher( 7650): sendCancelIfRunning: isInProgress=false callback=android.view.ViewRootImpl$$ExternalSyntheticLambda13@d18d355
+D/ViewRootImpl( 7650): Skipping stats log for color mode
+I/Choreographer( 7650): Skipped 74 frames!  The application may be doing too much work on its main thread.
+D/FlutterGeolocator( 7650): Unbinding from location service.
+D/FlutterGeolocator( 7650): Destroying location service.
+D/FlutterGeolocator( 7650): Stopping location service.
+D/FlutterGeolocator( 7650): Destroyed location service.
+I/EGL_emulation( 7650): Opening libGLESv1_CM_emulation.so
+I/everyday_mobile( 7650): AssetManager2(0x71df05f8c058) locale list changing from [] to [en-US]
+I/EGL_emulation( 7650): Opening libGLESv2_emulation.so
+W/HWUI    ( 7650): Failed to choose config with EGL_SWAP_BEHAVIOR_PRESERVED, retrying without...
+W/HWUI    ( 7650): Failed to initialize 101010-2 format, error = EGL_SUCCESS
+W/libc    ( 7650): Access denied finding property "vendor.mesa.vk.trace.per.submit"
+W/libc    ( 7650): Access denied finding property "vendor.mesa.vk.trace.frame"
+W/libc    ( 7650): Access denied finding property "vendor.mesa.vk.wsi.headless.swa"
+I/flutter ( 7650): [IMPORTANT:flutter/shell/platform/android/android_context_vk_impeller.cc(60)] Using the Impeller rendering backend (Vulkan).
+D/com.llfbandit.app_links( 7650): Intent { act=android.intent.action.MAIN cat=[android.intent.category.LAUNCHER] flg=0x10200000 xflg=0x4 cmp=com.everydayadvertise.everyday_mobile/.MainActivity bnds=[540,1054][789,1359] }
+D/FlutterGeolocator( 7650): Attaching Geolocator to activity
+D/AutofillManager( 7650): Fill dialog is enabled:false, hints=[]
+D/FlutterGeolocator( 7650): Creating service.
+D/FlutterGeolocator( 7650): Binding to location service.
+D/FlutterGeolocator( 7650): Geolocator foreground service connected
+D/FlutterGeolocator( 7650): Initializing Geolocator services
+D/FlutterGeolocator( 7650): Flutter engine connected. Connected engine count 1
+D/WindowLayoutComponentImpl( 7650): Register WindowLayoutInfoListener on Context=com.everydayadvertise.everyday_mobile.MainActivity@9507a98, of which baseContext=android.app.ContextImpl@32a7557
+D/InsetsController( 7650): hide(ime(), fromIme=false)
+I/ImeTracker( 7650): com.everydayadvertise.everyday_mobile:58410326: onCancelled at PHASE_CLIENT_ALREADY_HIDDEN
+I/everyday_mobile( 7650): AssetManager2(0x71df05fd0938) locale list changing from [] to [en-US]
