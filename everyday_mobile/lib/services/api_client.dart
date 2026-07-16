@@ -324,6 +324,51 @@ class ApiClient {
     return mobileToken;
   }
 
+  Future<String> loginWithAppleNative({
+    required String identityToken,
+    String? authorizationCode,
+    String? givenName,
+    String? familyName,
+    String? email,
+  }) async {
+    final token = identityToken.trim();
+    final code = (authorizationCode ?? '').trim();
+    if (token.isEmpty) {
+      throw Exception('Missing Apple identity token');
+    }
+    final response = await _dio.post(
+      '/api/auth/apple/native',
+      data: {
+        'identity_token': token,
+        if (code.isNotEmpty) 'authorization_code': code,
+        if ((givenName ?? '').trim().isNotEmpty)
+          'given_name': givenName!.trim(),
+        if ((familyName ?? '').trim().isNotEmpty)
+          'family_name': familyName!.trim(),
+        if ((email ?? '').trim().isNotEmpty) 'email': email!.trim(),
+      },
+      options: Options(contentType: Headers.formUrlEncodedContentType),
+    );
+    final data = _asMap(response.data);
+    if (data['success'] != true) {
+      throw Exception((data['error'] ?? 'Apple login failed').toString());
+    }
+    final mobileToken = (data['mobile_auth_token'] ?? '').toString().trim();
+    if (mobileToken.isEmpty) {
+      throw Exception('Apple login failed: missing mobile token');
+    }
+    await setMobileAuthToken(mobileToken);
+    try {
+      final me = await getMe();
+      if (me.username.trim().isNotEmpty) {
+        await _rememberLoginUsername(me.username);
+      }
+    } catch (_) {
+      // best-effort only
+    }
+    return mobileToken;
+  }
+
   Uri buildMobileSocialStartUri({
     required String provider,
     String redirectUri = 'everydaymobile://oauth-callback',
@@ -855,9 +900,8 @@ class ApiClient {
     final response = await _dio.post(
       '/playlist/live_pos/$storeId/$screenId',
       data: {
-        'displayName': displayName.trim().isEmpty
-            ? 'Live POS'
-            : displayName.trim(),
+        'displayName':
+            displayName.trim().isEmpty ? 'Live POS' : displayName.trim(),
         'duration': duration < 1 ? 1 : duration,
         'reuse_existing': reuseExisting,
       },

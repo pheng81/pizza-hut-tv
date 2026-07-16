@@ -37,6 +37,8 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv, dotenv_values
 from flask_socketio import SocketIO, emit, join_room, leave_room
+from authlib.jose import JsonWebKey, JsonWebToken
+from authlib.jose.errors import JoseError
 
 # Vonage SMS for phone verification
 try:
@@ -4220,6 +4222,81 @@ def api_auth_google_native():
     except Exception as e:
         logging.error('Google native login failed: %s', e)
         return jsonify({'success': False, 'error': 'Google native login failed'}), 500
+
+@app.route('/api/auth/apple/native', methods=['POST'])
+def api_auth_apple_native():
+    """Native Sign in with Apple token exchange for mobile app."""
+    try:
+        payload = request.get_json(silent=True) or {}
+        if not payload:
+            payload = request.form.to_dict() if request.form else {}
+
+        identity_token = (payload.get('identity_token') or '').strip()
+        if not identity_token:
+            return jsonify({'success': False, 'error': 'identity_token is required'}), 400
+
+        apple_client_id = (os.environ.get('APPLE_CLIENT_ID') or '').strip()
+        if not apple_client_id:
+            return jsonify({'success': False, 'error': 'Apple Sign-In is not configured'}), 500
+
+        try:
+            import requests as _rq
+        except Exception:
+            return jsonify({'success': False, 'error': 'Server missing requests dependency'}), 500
+
+        try:
+            jwks_resp = _rq.get('https://appleid.apple.com/auth/keys', timeout=12)
+            jwks_resp.raise_for_status()
+            jwks = jwks_resp.json() if jwks_resp.content else {}
+            key_set = JsonWebKey.import_key_set(jwks)
+            claims = JsonWebToken(['RS256']).decode(identity_token, key_set)
+            claims.validate(leeway=15)
+        except JoseError as e:
+            logging.warning('Apple native token verify failed: %s', e)
+            return jsonify({'success': False, 'error': 'Invalid Apple identity token'}), 401
+        except Exception as e:
+            logging.warning('Apple native token fetch/verify failed: %s', e)
+            return jsonify({'success': False, 'error': 'Apple token verification failed'}), 502
+
+        issuer = str(claims.get('iss') or '').strip()
+        audience = str(claims.get('aud') or '').strip()
+        email = str(claims.get('email') or payload.get('email') or '').strip().lower()
+
+        if issuer != 'https://appleid.apple.com':
+            return jsonify({'success': False, 'error': 'Invalid Apple token issuer'}), 401
+        if audience != apple_client_id:
+            return jsonify({'success': False, 'error': 'Apple token audience mismatch'}), 401
+        if not email:
+            return jsonify({'success': False, 'error': 'Apple login failed: no email returned'}), 400
+
+        allowed_domain = (os.environ.get('APPLE_ALLOWED_DOMAIN') or '').strip().lower()
+        if allowed_domain and not email.endswith('@' + allowed_domain):
+            return jsonify({'success': False, 'error': 'Email domain not allowed'}), 403
+
+        given_name = (payload.get('given_name') or '').strip()
+        family_name = (payload.get('family_name') or '').strip()
+        full_name = f'{given_name} {family_name}'.strip() or None
+
+        user = _upsert_oauth_user(email=email, full_name=full_name, method='apple')
+        session['user'] = user
+        session.permanent = True
+
+        mobile_token = _issue_mobile_auth_token(user)
+        _cleanup_mobile_auth_tokens()
+
+        return jsonify({
+            'success': True,
+            'mobile_auth_token': mobile_token,
+            'user': {
+                'id': user.get('id'),
+                'name': user.get('name'),
+                'email': user.get('email'),
+                'is_admin': bool(user.get('is_admin')),
+            },
+        })
+    except Exception as e:
+        logging.error('Apple native login failed: %s', e)
+        return jsonify({'success': False, 'error': 'Apple native login failed'}), 500
 
 # ---------------------- Password reset (request + confirm) ----------------------
 def _issue_password_reset_token(username: str) -> Optional[str]:

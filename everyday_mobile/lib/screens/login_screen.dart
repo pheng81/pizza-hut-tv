@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:app_links/app_links.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'password_reset_screen.dart';
@@ -314,6 +316,91 @@ class _LoginScreenState extends State<LoginScreen>
         return;
       }
 
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _socialLoading = false;
+        _error = rawError;
+      });
+    }
+  }
+
+  Future<void> _startAppleLoginNativeFirst() async {
+    final platform = defaultTargetPlatform;
+    final supportsNativeApple =
+        platform == TargetPlatform.iOS || platform == TargetPlatform.macOS;
+    if (!supportsNativeApple) {
+      await _startSocialLogin('apple');
+      return;
+    }
+
+    setState(() {
+      _error = null;
+      _socialLoading = true;
+    });
+
+    try {
+      final available = await SignInWithApple.isAvailable();
+      if (!available) {
+        await _startSocialLogin('apple');
+        return;
+      }
+
+      final credential = await SignInWithApple.getAppleIDCredential(
+        scopes: const [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
+
+      final identityToken = (credential.identityToken ?? '').trim();
+      if (identityToken.isEmpty) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _socialLoading = false;
+          _error = 'Apple sign-in did not return an identity token.';
+        });
+        return;
+      }
+
+      await widget.apiClient.loginWithAppleNative(
+        identityToken: identityToken,
+        authorizationCode: credential.authorizationCode,
+        givenName: credential.givenName,
+        familyName: credential.familyName,
+        email: credential.email,
+      );
+      final ok = await widget.apiClient.checkSession();
+      if (!mounted) {
+        return;
+      }
+      if (ok) {
+        await widget.onLoginSuccess();
+        return;
+      }
+
+      setState(() {
+        _socialLoading = false;
+        _error = 'Apple sign-in did not create a valid session.';
+      });
+    } on SignInWithAppleAuthorizationException catch (e) {
+      if (e.code == AuthorizationErrorCode.canceled) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _socialLoading = false;
+          _error = 'Apple sign-in cancelled.';
+        });
+        return;
+      }
+
+      await _startSocialLogin('apple');
+    } catch (e) {
+      final rawError = e.toString().replaceFirst('Exception: ', '');
       if (!mounted) {
         return;
       }
@@ -1054,11 +1141,10 @@ class _LoginScreenState extends State<LoginScreen>
                                           SizedBox(
                                             width: double.infinity,
                                             child: OutlinedButton.icon(
-                                              onPressed:
-                                                  (_loading || _socialLoading)
-                                                      ? null
-                                                      : () => _startSocialLogin(
-                                                          'apple'),
+                                              onPressed: (_loading ||
+                                                      _socialLoading)
+                                                  ? null
+                                                  : _startAppleLoginNativeFirst,
                                               icon: const Icon(Icons.apple),
                                               label: const Text(
                                                   'Continue with Apple'),
