@@ -125,15 +125,6 @@
             "file": "40557d7b-b934-43d9-a44b-fde057dd2974-screen1.mp4",
             "item_id": "f62b1413-099e-4c64-b355-6704db7b3593"
           }
-        },
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
         }
       },
       "1000_screen2": {
@@ -209,15 +200,6 @@
             "file": "40557d7b-b934-43d9-a44b-fde057dd2974-screen2.mp4",
             "item_id": "713a7c6d-0be7-4519-b0e6-da3da0f0cf18"
           }
-        },
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
         }
       }
     },
@@ -272,18 +254,9 @@
         ],
         "rotation_meta": {
           "last_index": 1,
-          "last_ts": 1779700988
+          "last_ts": 1779661399
         },
-        "muted": false,
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
-        }
+        "muted": false
       },
       "1891_screen2": {
         "file": "users/test9_at_gmail.com/54cd48d7-e1bb-4fd8-a36a-0c018a2ae49b.png",
@@ -304,7 +277,6 @@
             "link_next": false,
             "media_type": "image",
             "days": [
-              "mon",
               "tue",
               "wed",
               "thu",
@@ -316,17 +288,9 @@
         "fresh": true,
         "rotation_meta": {
           "last_index": 0,
-          "last_ts": 1779700988
+          "last_ts": 1779661399
         },
-        "cmd_queue": [
-          {
-            "id": "5ea50b2f-cffc-447d-a2ed-c86ee9fb19df",
-            "ts": 1779684296,
-            "type": "reload",
-            "item_id": null,
-            "file": null
-          }
-        ],
+        "cmd_queue": [],
         "last_seen": 1779531055,
         "events": [
           {
@@ -344,15 +308,6 @@
             "error": null,
             "file": "54cd48d7-e1bb-4fd8-a36a-0c018a2ae49b.png",
             "item_id": "8a3538a0-6fd0-4b0d-b262-6e0392421685"
-          }
-        },
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
           }
         }
       },
@@ -380,7 +335,7 @@
         "fresh": true,
         "rotation_meta": {
           "last_index": 0,
-          "last_ts": 1779700988
+          "last_ts": 1779661399
         },
         "cmd_queue": [
           {
@@ -390,16 +345,7 @@
             "item_id": null,
             "file": null
           }
-        ],
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
-        }
+        ]
       }
     },
     "1712": {
@@ -423,21 +369,20 @@
             "id": "8cb75e2c-96ed-4dc8-ad11-14af6de62768"
           }
         ],
-        "cmd_queue": [],
+        "cmd_queue": [
+          {
+            "id": "89237b67-6beb-4225-913b-e60b129b22cf",
+            "ts": 1779534288,
+            "type": "reload",
+            "item_id": null,
+            "file": null
+          }
+        ],
         "rotation_meta": {
           "last_index": 0,
-          "last_ts": 1779700989
+          "last_ts": 1779661399
         },
-        "last_seen": 1764814200,
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
-        }
+        "last_seen": 1764814200
       },
       "1712_screen2": {
         "file": "users/test9_at_gmail.com/2025-10/1aecf5b0-7caf-47f4-9661-fd97351f13ae.png",
@@ -459,16 +404,7 @@
           "last_index": 0,
           "last_ts": 1779534214
         },
-        "last_seen": 1764824368,
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
-        }
+        "last_seen": 1764824368
       }
     },
     "1787": {
@@ -495,18 +431,9 @@
         "cmd_queue": [],
         "rotation_meta": {
           "last_index": 0,
-          "last_ts": 1779700989
+          "last_ts": 1779661399
         },
-        "last_seen": 1764638311,
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
-        }
+        "last_seen": 1764638311
       },
       "1787_promo1": {
         "file": "users/test9_at_gmail.com/2025-10/9f0acfa0-d629-4a12-912f-1ae91d7e3a23.png",
@@ -559,7 +486,7 @@
         "fresh": true,
         "rotation_meta": {
           "last_index": 2,
-          "last_ts": 1779700989
+          "last_ts": 1779661399
         },
         "last_seen": 1760828621,
         "events": [
@@ -1309,16 +1236,7 @@
             "item_id": null,
             "file": null
           }
-        ],
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
-        }
+        ]
       },
       "1787_screen1": {
         "file": "users/test9_at_gmail.com/54cd48d7-e1bb-4fd8-a36a-0c018a2ae49b.png",
@@ -1343,18 +1261,9 @@
         "fresh": true,
         "rotation_meta": {
           "last_index": 0,
-          "last_ts": 1779700989
+          "last_ts": 1779661399
         },
-        "last_seen": 1779531106,
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
-        }
+        "last_seen": 1779531106
       },
       "7058_screen2": {
         "file": null,
@@ -1366,15 +1275,6 @@
         "rotation_meta": {
           "last_index": 0,
           "last_ts": 0
-        },
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
         }
       },
       "1887_screen2": {
@@ -1387,15 +1287,6 @@
         "rotation_meta": {
           "last_index": 0,
           "last_ts": 0
-        },
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
         }
       },
       "1000_screen2": {
@@ -1408,15 +1299,6 @@
         "rotation_meta": {
           "last_index": 0,
           "last_ts": 1779484337
-        },
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
         }
       },
       "1887_screen4": {
@@ -1429,15 +1311,6 @@
         "rotation_meta": {
           "last_index": 0,
           "last_ts": 0
-        },
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
         }
       }
     },
@@ -1453,15 +1326,6 @@
         "rotation_meta": {
           "last_index": 0,
           "last_ts": 0
-        },
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
         }
       }
     },
@@ -2268,16 +2132,7 @@
             "item_id": "330f7728-e604-4007-8d91-33bdc842462c"
           }
         },
-        "pi_id": null,
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
-        }
+        "pi_id": null
       },
       "1111_promo2": {
         "file": "users/test9_at_gmail.com/2025-10/86c70b0c-7ef4-47bc-99c2-fadba86b1fd5.jpg",
@@ -2333,16 +2188,7 @@
             "item_id": null,
             "file": null
           }
-        ],
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
-        }
+        ]
       },
       "1111_screen1": {
         "horizontal": true,
@@ -3092,16 +2938,7 @@
             "item_id": "2cfc8eb2-5a12-4048-aa7f-973dd4e68963"
           }
         },
-        "cmd_queue": [],
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
-        }
+        "cmd_queue": []
       },
       "1111_screen2": {
         "horizontal": true,
@@ -3855,16 +3692,7 @@
             "item_id": "9a5f63ba-bd77-4eb9-811b-53adff704e61"
           }
         },
-        "cmd_queue": [],
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
-        }
+        "cmd_queue": []
       },
       "1111_screen3": {
         "file": "users/test9_at_gmail.com/2025-09/b71138b4-8aeb-488e-bb97-586ca3dba1ee.mp4",
@@ -3926,15 +3754,30 @@
           "last_ts": 0
         },
         "last_seen": 1773219336,
-        "cmd_queue": [],
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
+        "cmd_queue": []
+      },
+      "1887_screen4": {
+        "file": null,
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1891_screen4": {
+        "file": null,
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
         }
       }
     },
@@ -3999,15 +3842,6 @@
         "rotation_meta": {
           "last_index": 0,
           "last_ts": 0
-        },
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
         }
       },
       "1897_screen2": {
@@ -4035,16 +3869,7 @@
           "last_index": 0,
           "last_ts": 0
         },
-        "last_seen": 1764927641,
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
-        }
+        "last_seen": 1764927641
       },
       "1897_screen3": {
         "file": null,
@@ -4078,15 +3903,6 @@
         "rotation_meta": {
           "last_index": 0,
           "last_ts": 0
-        },
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
         }
       },
       "1897_promo1": {
@@ -4114,16 +3930,7 @@
           "last_index": 0,
           "last_ts": 0
         },
-        "last_seen": 1764622560,
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
-        }
+        "last_seen": 1764622560
       },
       "1897_promo2": {
         "file": null,
@@ -4149,15 +3956,6 @@
         "rotation_meta": {
           "last_index": 0,
           "last_ts": 0
-        },
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
         }
       },
       "1891_screen4": {
@@ -4170,15 +3968,6 @@
         "rotation_meta": {
           "last_index": 0,
           "last_ts": 0
-        },
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
         }
       }
     },
@@ -4715,15 +4504,6 @@
             "error": null,
             "file": "e17271aa-7c4a-4ac7-a737-46f02fd83753.jpeg",
             "item_id": "bd7bd32d-d625-427d-b86f-6ad1e899ad14"
-          }
-        },
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
           }
         }
       },
@@ -5495,15 +5275,6 @@
             "file": "e5ae6bcf-d004-4d00-a251-207d3996ad04.png",
             "item_id": "f09b47a2-4d21-45f5-bc89-1efe3a88330b"
           }
-        },
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
         }
       }
     },
@@ -5514,16 +5285,7 @@
           "last_index": 0,
           "last_ts": 0
         },
-        "last_seen": 1763164450,
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
-        }
+        "last_seen": 1763164450
       },
       "5022_screen2": {
         "file": null,
@@ -5536,16 +5298,7 @@
           "last_index": 0,
           "last_ts": 0
         },
-        "last_seen": 1763164453,
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
-        }
+        "last_seen": 1763164453
       }
     },
     "1797": {
@@ -5574,7 +5327,7 @@
         "fresh": true,
         "rotation_meta": {
           "last_index": 0,
-          "last_ts": 1779700990
+          "last_ts": 1779661400
         },
         "cmd_queue": [],
         "last_seen": 1779229534,
@@ -5616,15 +5369,6 @@
             "file": "742c2448-b961-42e0-8bb5-0ae2e1b7f0e7.png",
             "item_id": "80eaf52f-cb2d-48fe-a231-e776ed26aae9"
           }
-        },
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
         }
       },
       "1797_screen2": {
@@ -5652,7 +5396,7 @@
         "cmd_queue": [],
         "rotation_meta": {
           "last_index": 0,
-          "last_ts": 1779700990
+          "last_ts": 1779661400
         },
         "last_seen": 1779363530,
         "events": [
@@ -5686,15 +5430,6 @@
             "file": "4e18029b-5711-4505-b61f-652118922a12.png",
             "item_id": "92c280ac-6308-4852-8f7f-ab93e8719e12"
           }
-        },
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
         }
       },
       "1797_screen3": {
@@ -5722,7 +5457,7 @@
         "cmd_queue": [],
         "rotation_meta": {
           "last_index": 0,
-          "last_ts": 1779700990
+          "last_ts": 1779661400
         },
         "last_seen": 1779532633,
         "events": [
@@ -5769,15 +5504,6 @@
             "error": null,
             "file": "54cd48d7-e1bb-4fd8-a36a-0c018a2ae49b.png",
             "item_id": "e25f8353-08f0-40b2-9e45-6897dd8de746"
-          }
-        },
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
           }
         }
       }
@@ -5933,16 +5659,7 @@
             "item_id": null,
             "file": null
           }
-        ],
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
-        }
+        ]
       },
       "1078_screen2": {
         "file": "users/test9_at_gmail.com/2025-11/18e6dcb4-a17f-4c2e-8559-d53ad7c9d7db.png",
@@ -5986,16 +5703,7 @@
             "item_id": null,
             "file": null
           }
-        ],
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
-        }
+        ]
       },
       "1078_screen3": {
         "file": "/static/uploads/users/test9_at_gmail.com/2025-10/40557d7b-b934-43d9-a44b-fde057dd2974-screen1.mp4",
@@ -6045,16 +5753,7 @@
             "item_id": null,
             "file": null
           }
-        ],
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
-        }
+        ]
       },
       "1078_screen4": {
         "file": "/static/uploads/users/test9_at_gmail.com/2025-10/40557d7b-b934-43d9-a44b-fde057dd2974-screen2.mp4",
@@ -6104,16 +5803,7 @@
             "item_id": null,
             "file": null
           }
-        ],
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
-        }
+        ]
       }
     },
     "1931": {
@@ -6140,7 +5830,7 @@
         ],
         "rotation_meta": {
           "last_index": 0,
-          "last_ts": 1779700990
+          "last_ts": 1779661400
         },
         "cmd_queue": [],
         "last_seen": 1779535337,
@@ -6196,16 +5886,6 @@
             "file": "c5aa9454-060c-4331-8ac4-641431ba33e5.jpeg",
             "item_id": "63eec73c-ad24-4439-8572-ebd6fc8dbc96"
           }
-        },
-        "pi_id": "everydayadvertise-3ef9",
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
         }
       },
       "1931_screen2": {
@@ -6232,7 +5912,7 @@
         "fresh": true,
         "rotation_meta": {
           "last_index": 0,
-          "last_ts": 1779700990
+          "last_ts": 1779661400
         },
         "cmd_queue": [
           {
@@ -6242,15 +5922,42 @@
             "item_id": null,
             "file": null
           }
-        ],
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
+        ]
+      },
+      "1891_screen3": {
+        "file": null,
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1891_screen4": {
+        "file": null,
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1712_screen3": {
+        "file": null,
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
         }
       }
     },
@@ -6292,20 +5999,12 @@
         ],
         "rotation_meta": {
           "last_index": 0,
-          "last_ts": 1779700990
+          "last_ts": 1779661401
         },
         "last_seen": 1779662330,
         "fresh": true,
         "cmd_queue": [],
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
-        }
+        "pi_id": "raspberrypi-3ef9"
       },
       "1887_screen2": {
         "file": "/static/uploads/users/test9_at_gmail.com/2025-10/40557d7b-b934-43d9-a44b-fde057dd2974-screen2.mp4",
@@ -6344,7 +6043,7 @@
         ],
         "rotation_meta": {
           "last_index": 0,
-          "last_ts": 1779700990
+          "last_ts": 1779661401
         },
         "fresh": true,
         "cmd_queue": [],
@@ -6373,15 +6072,30 @@
             "file": "40557d7b-b934-43d9-a44b-fde057dd2974-screen2.mp4",
             "item_id": "9d71d4ad-afa7-46df-ac77-df69b09620bb"
           }
-        },
-        "panel_zone": {
-          "enabled": false,
-          "layout_mode": "off",
-          "playlist": [],
-          "rotation_meta": {
-            "last_index": 0,
-            "last_ts": 0
-          }
+        }
+      },
+      "1891_screen4": {
+        "file": null,
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
+        }
+      },
+      "1891_screen3": {
+        "file": null,
+        "vertical": false,
+        "horizontal": true,
+        "rotation": 0,
+        "protected": false,
+        "playlist": [],
+        "rotation_meta": {
+          "last_index": 0,
+          "last_ts": 0
         }
       }
     }
