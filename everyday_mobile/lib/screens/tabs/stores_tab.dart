@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geocoding/geocoding.dart' as geocoding;
@@ -1670,7 +1671,8 @@ class _ScreenMediaEditorSheet extends StatefulWidget {
       _ScreenMediaEditorSheetState();
 }
 
-class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
+class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet>
+    with SingleTickerProviderStateMixin {
   static const List<String> _weekDays = [
     'mon',
     'tue',
@@ -1726,6 +1728,7 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
   bool _isMasterStore = false;
   File? _pickedFile;
   List<Map<String, dynamic>> _playlist = const [];
+  late final AnimationController _headerAnim;
 
   static const Map<String, String> _panelLayoutLabels = {
     'off': 'Off',
@@ -4513,6 +4516,11 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
   @override
   void initState() {
     super.initState();
+    _headerAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+      value: 1,
+    );
     _screenAddress = widget.screenAddress;
     _screenProtected = widget.screenProtected;
     _screenVertical = widget.screenVertical;
@@ -4530,7 +4538,33 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
     _autoSaveTimer?.cancel();
     _startController.dispose();
     _endController.dispose();
+    _headerAnim.dispose();
     super.dispose();
+  }
+
+  bool _onHeaderScroll(ScrollNotification notification) {
+    if (notification.metrics.axis != Axis.vertical) {
+      return false;
+    }
+    // Always show the header when the list is at (or near) the top.
+    if (notification.metrics.pixels <=
+        notification.metrics.minScrollExtent + 4) {
+      _headerAnim.forward();
+      return false;
+    }
+    if (notification is UserScrollNotification) {
+      switch (notification.direction) {
+        case ScrollDirection.reverse:
+          _headerAnim.reverse(); // scrolling down -> hide header
+          break;
+        case ScrollDirection.forward:
+          _headerAnim.forward(); // scrolling up -> reveal header
+          break;
+        case ScrollDirection.idle:
+          break;
+      }
+    }
+    return false;
   }
 
   void _queueAutoSave() {
@@ -8059,9 +8093,14 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
         _isMasterStore ? 'Playlist (Master Override Enabled)' : 'Playlist';
 
     return SafeArea(
-      child: Column(
+      child: NotificationListener<ScrollNotification>(
+        onNotification: _onHeaderScroll,
+        child: Column(
       children: [
-        Container(
+        SizeTransition(
+          axisAlignment: -1,
+          sizeFactor: _headerAnim,
+          child: Container(
           padding: const EdgeInsets.fromLTRB(16, 12, 8, 10),
           decoration: BoxDecoration(
             color: Colors.white,
@@ -8114,6 +8153,7 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
               ),
             ],
           ),
+        ),
         ),
         Expanded(
           child: _loading
@@ -9025,6 +9065,7 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
                 ),
         ),
       ],
+      ),
       ),
     );
   }

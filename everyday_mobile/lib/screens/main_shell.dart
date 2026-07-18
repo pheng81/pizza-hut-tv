@@ -49,8 +49,16 @@ class _MainShellState extends State<MainShell>
   }
 
   bool _onScroll(ScrollNotification notification) {
-    if (notification is UserScrollNotification &&
-        notification.metrics.axis == Axis.vertical) {
+    if (notification.metrics.axis != Axis.vertical) {
+      return false;
+    }
+    // Always show the chrome when the list is at (or near) the top.
+    if (notification.metrics.pixels <=
+        notification.metrics.minScrollExtent + 4) {
+      _chrome.forward();
+      return false;
+    }
+    if (notification is UserScrollNotification) {
       switch (notification.direction) {
         case ScrollDirection.reverse:
           _chrome.reverse(); // scrolling down -> hide chrome
