@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 200" preserveAspectRatio="xMidYMax slice">
+  <!-- building silhouettes (skyline) -->
+  <g fill="#ffffff" fill-opacity="0.06">
+    <rect x="0"   y="70" width="240" height="130"/>
+    <rect x="240" y="44" width="240" height="156"/>
+    <rect x="480" y="86" width="240" height="114"/>
+    <rect x="720" y="58" width="240" height="142"/>
+    <rect x="960" y="76" width="240" height="124"/>
+  </g>
+  <!-- scalloped shop awnings -->
+  <g fill="#ffffff" fill-opacity="0.14">
+    <path d="M0 116 H240 V138 q-20 16 -40 0 q-20 16 -40 0 q-20 16 -40 0 q-20 16 -40 0 q-20 16 -40 0 q-20 16 -40 0 V116 Z"/>
+    <path d="M240 116 H480 V138 q-20 16 -40 0 q-20 16 -40 0 q-20 16 -40 0 q-20 16 -40 0 q-20 16 -40 0 q-20 16 -40 0 V116 Z"/>
+    <path d="M480 116 H720 V138 q-20 16 -40 0 q-20 16 -40 0 q-20 16 -40 0 q-20 16 -40 0 q-20 16 -40 0 q-20 16 -40 0 V116 Z"/>
+    <path d="M720 116 H960 V138 q-20 16 -40 0 q-20 16 -40 0 q-20 16 -40 0 q-20 16 -40 0 q-20 16 -40 0 q-20 16 -40 0 V116 Z"/>
+    <path d="M960 116 H1200 V138 q-20 16 -40 0 q-20 16 -40 0 q-20 16 -40 0 q-20 16 -40 0 q-20 16 -40 0 q-20 16 -40 0 V116 Z"/>
+  </g>
+  <!-- doors & windows -->
+  <g fill="#ffffff" fill-opacity="0.07">
+    <rect x="34"   y="150" width="52" height="48" rx="4"/>
+    <rect x="154"  y="150" width="52" height="48" rx="4"/>
+    <rect x="100"  y="160" width="40" height="38" rx="3"/>
+    <rect x="274"  y="150" width="52" height="48" rx="4"/>
+    <rect x="394"  y="150" width="52" height="48" rx="4"/>
+    <rect x="340"  y="160" width="40" height="38" rx="3"/>
+    <rect x="514"  y="150" width="52" height="48" rx="4"/>
+    <rect x="634"  y="150" width="52" height="48" rx="4"/>
+    <rect x="580"  y="160" width="40" height="38" rx="3"/>
+    <rect x="754"  y="150" width="52" height="48" rx="4"/>
+    <rect x="874"  y="150" width="52" height="48" rx="4"/>
+    <rect x="820"  y="160" width="40" height="38" rx="3"/>
+    <rect x="994"  y="150" width="52" height="48" rx="4"/>
+    <rect x="1114" y="150" width="52" height="48" rx="4"/>
+    <rect x="1060" y="160" width="40" height="38" rx="3"/>
+  </g>
+</svg>
