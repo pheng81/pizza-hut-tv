@@ -975,14 +975,11 @@ class _DeviceManagerTabState extends State<DeviceManagerTab> {
       return;
     }
 
-    await showModalBottomSheet<void>(
+    await showDialog<void>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      useSafeArea: false,
       builder: (context) {
-        return FractionallySizedBox(
-          heightFactor: 0.94,
+        return Dialog.fullscreen(
           child: ScreenMediaEditorSheet(
             apiClient: widget.apiClient,
             storeId: storeId,
