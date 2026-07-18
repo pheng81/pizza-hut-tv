@@ -440,17 +440,88 @@ class ApiClient {
   Future<void> addStore({
     required String storeId,
     required String storeName,
+    String? address,
   }) async {
+    final cleanAddress = address?.trim() ?? '';
     final response = await _dio.post(
       '/add_store',
       data: {
         'store_id': storeId.trim(),
         'store_name': storeName.trim(),
+        if (cleanAddress.isNotEmpty) 'address': cleanAddress,
       },
     );
     final data = _asMap(response.data);
     if (data['success'] != true) {
       throw Exception((data['error'] ?? 'Unable to add store').toString());
+    }
+  }
+
+  /// Address autocomplete suggestions for a partial query.
+  ///
+  /// Uses the same server-side Google lookup as the web dashboard
+  /// (`/api/google_address_search`) and falls back to OpenStreetMap
+  /// Nominatim when Google is unavailable or unconfigured.
+  Future<List<String>> searchAddressSuggestions(String query) async {
+    final q = query.trim();
+    if (q.length < 3) {
+      return const [];
+    }
+    try {
+      final response = await _dio.get(
+        '/api/google_address_search',
+        queryParameters: {'q': q},
+      );
+      final data = _asMap(response.data);
+      if (data['success'] == true) {
+        final results = (data['results'] as List?) ?? const [];
+        final out = <String>[];
+        for (final item in results) {
+          final name = (_asMap(item)['display_name'] ?? '').toString().trim();
+          if (name.isNotEmpty) {
+            out.add(name);
+          }
+        }
+        if (out.isNotEmpty) {
+          return out;
+        }
+      }
+    } catch (_) {
+      // Fall through to the Nominatim fallback below.
+    }
+    return _searchAddressesNominatim(q);
+  }
+
+  Future<List<String>> _searchAddressesNominatim(String query) async {
+    try {
+      final dio = Dio(
+        BaseOptions(
+          headers: {'User-Agent': 'EverydayAdvertiseMobile/1.0'},
+        ),
+      );
+      final response = await dio.get(
+        'https://nominatim.openstreetmap.org/search',
+        queryParameters: {
+          'format': 'jsonv2',
+          'addressdetails': 1,
+          'limit': 8,
+          'accept-language': 'en',
+          'countrycodes': 'au',
+          'q': query,
+        },
+      );
+      final data = response.data;
+      final list = data is List ? data : const [];
+      final out = <String>[];
+      for (final item in list) {
+        final name = (_asMap(item)['display_name'] ?? '').toString().trim();
+        if (name.isNotEmpty) {
+          out.add(name);
+        }
+      }
+      return out;
+    } catch (_) {
+      return const [];
     }
   }
 

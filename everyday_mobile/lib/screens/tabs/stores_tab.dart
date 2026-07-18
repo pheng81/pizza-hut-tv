@@ -168,54 +168,18 @@ class _StoresTabState extends State<StoresTab> {
   }
 
   Future<void> _addStore() async {
-    final idController = TextEditingController();
-    final nameController = TextEditingController();
-    void disposeControllersSafely() {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        idController.dispose();
-        nameController.dispose();
-      });
-    }
-
-    final accepted = await showDialog<bool>(
+    final result = await showDialog<Map<String, String>>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add Store'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: idController,
-              decoration: const InputDecoration(labelText: 'Store ID'),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: 'Store Name'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Add'),
-          ),
-        ],
-      ),
+      builder: (context) => _AddStoreDialog(apiClient: widget.apiClient),
     );
 
-    if (accepted != true) {
-      disposeControllersSafely();
+    if (result == null) {
       return;
     }
 
-    final storeId = idController.text.trim();
-    final storeName = nameController.text.trim();
-    disposeControllersSafely();
+    final storeId = (result['id'] ?? '').trim();
+    final storeName = (result['name'] ?? '').trim();
+    final storeAddress = (result['address'] ?? '').trim();
 
     if (storeId.isEmpty || storeName.isEmpty) {
       setState(() {
@@ -229,7 +193,11 @@ class _StoresTabState extends State<StoresTab> {
       _error = null;
     });
     try {
-      await widget.apiClient.addStore(storeId: storeId, storeName: storeName);
+      await widget.apiClient.addStore(
+        storeId: storeId,
+        storeName: storeName,
+        address: storeAddress,
+      );
       await _loadStores();
       widget.onSelectionChanged(storeId, null);
       await _onSelectStore(storeId);
@@ -9658,6 +9626,169 @@ class _YouTubeInputDialogState extends State<_YouTubeInputDialog> {
         FilledButton(
           onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
           child: const Text('Use YouTube'),
+        ),
+      ],
+    );
+  }
+}
+
+class _AddStoreDialog extends StatefulWidget {
+  const _AddStoreDialog({required this.apiClient});
+
+  final ApiClient apiClient;
+
+  @override
+  State<_AddStoreDialog> createState() => _AddStoreDialogState();
+}
+
+class _AddStoreDialogState extends State<_AddStoreDialog> {
+  final _idController = TextEditingController();
+  final _nameController = TextEditingController();
+  final _addressController = TextEditingController();
+
+  Timer? _debounce;
+  int _searchToken = 0;
+  bool _searching = false;
+  List<String> _suggestions = const [];
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _idController.dispose();
+    _nameController.dispose();
+    _addressController.dispose();
+    super.dispose();
+  }
+
+  void _onAddressChanged(String value) {
+    _debounce?.cancel();
+    final query = value.trim();
+    if (query.length < 3) {
+      setState(() {
+        _suggestions = const [];
+        _searching = false;
+      });
+      return;
+    }
+    setState(() => _searching = true);
+    _debounce = Timer(const Duration(milliseconds: 280), () async {
+      final token = ++_searchToken;
+      final results = await widget.apiClient.searchAddressSuggestions(query);
+      if (!mounted || token != _searchToken) {
+        return;
+      }
+      setState(() {
+        _suggestions = results;
+        _searching = false;
+      });
+    });
+  }
+
+  void _selectSuggestion(String value) {
+    _debounce?.cancel();
+    _searchToken++; // Invalidate any in-flight search.
+    _addressController.value = TextEditingValue(
+      text: value,
+      selection: TextSelection.collapsed(offset: value.length),
+    );
+    setState(() {
+      _suggestions = const [];
+      _searching = false;
+    });
+    FocusScope.of(context).unfocus();
+  }
+
+  void _submit() {
+    Navigator.of(context).pop(<String, String>{
+      'id': _idController.text.trim(),
+      'name': _nameController.text.trim(),
+      'address': _addressController.text.trim(),
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return AlertDialog(
+      title: const Text('Add Store'),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _idController,
+              textInputAction: TextInputAction.next,
+              decoration: const InputDecoration(labelText: 'Store ID'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _nameController,
+              textInputAction: TextInputAction.next,
+              decoration: const InputDecoration(labelText: 'Store Name'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _addressController,
+              onChanged: _onAddressChanged,
+              textInputAction: TextInputAction.done,
+              decoration: InputDecoration(
+                labelText: 'Store Address (optional)',
+                hintText: 'Start typing to search…',
+                suffixIcon: _searching
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : const Icon(Icons.search),
+              ),
+            ),
+            if (_suggestions.isNotEmpty)
+              Container(
+                margin: const EdgeInsets.only(top: 6),
+                constraints: const BoxConstraints(maxHeight: 220),
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerLowest,
+                  border: Border.all(color: scheme.outlineVariant),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  padding: EdgeInsets.zero,
+                  itemCount: _suggestions.length,
+                  separatorBuilder: (_, __) =>
+                      Divider(height: 1, color: scheme.outlineVariant),
+                  itemBuilder: (context, index) {
+                    final suggestion = _suggestions[index];
+                    return ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.location_on_outlined, size: 20),
+                      title: Text(
+                        suggestion,
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                      onTap: () => _selectSuggestion(suggestion),
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: const Text('Add'),
         ),
       ],
     );
