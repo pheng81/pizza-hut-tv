@@ -5,6 +5,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:geocoding/geocoding.dart' as geocoding;
+import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 
@@ -38,6 +41,8 @@ class _StoresTabState extends State<StoresTab> {
   Map<String, String> _screenStatus = const {};
   final Map<String, Future<_ScreenCardPreviewData>> _screenPreviewUrlFutures =
       {};
+  Future<List<_StoreMapMarkerData>>? _storeMapMarkersFuture;
+  final Map<String, LatLng?> _resolvedMapPoints = {};
 
   bool _isPhoneVerificationError(String? message) {
     final text = (message ?? '').toLowerCase();
@@ -72,7 +77,7 @@ class _StoresTabState extends State<StoresTab> {
     try {
       final stores = await widget.apiClient.getStores();
       String? storeId = widget.selectedStoreId;
-      if (storeId == null || stores.every((s) => s.id != storeId)) {
+      if (stores.every((s) => s.id != storeId)) {
         storeId = stores.isNotEmpty ? stores.first.id : null;
       }
 
@@ -81,12 +86,11 @@ class _StoresTabState extends State<StoresTab> {
       if (storeId != null) {
         screens = await widget.apiClient.getScreens(storeId);
         _screenStatus = await widget.apiClient.getScreenStatus(storeId);
-        if (screenId == null || screens.every((s) => s.id != screenId)) {
-          screenId = screens.isNotEmpty ? screens.first.id : null;
-        }
       } else {
-        screenId = null;
-        _screenStatus = const {};
+        _screenStatus = <String, String>{};
+      }
+      if (screenId == null || screens.every((s) => s.id != screenId)) {
+        screenId = screens.isNotEmpty ? screens.first.id : null;
       }
 
       if (!mounted) {
@@ -96,6 +100,11 @@ class _StoresTabState extends State<StoresTab> {
         _stores = stores;
         _screens = screens;
         _screenPreviewUrlFutures.clear();
+        _storeMapMarkersFuture = _loadStoreMapMarkers(
+          stores: stores,
+          selectedStoreId: storeId,
+          selectedStoreScreens: screens,
+        );
       });
       widget.onSelectionChanged(storeId, screenId);
     } catch (e) {
@@ -782,6 +791,293 @@ class _StoresTabState extends State<StoresTab> {
     );
   }
 
+  Future<List<_StoreMapMarkerData>> _loadStoreMapMarkers({
+    required List<StoreItem> stores,
+    required String? selectedStoreId,
+    required List<ScreenItem> selectedStoreScreens,
+  }) async {
+    final markers = await Future.wait(
+      stores.map(
+        (store) => _resolveStoreMapMarker(
+          store: store,
+          selectedStoreId: selectedStoreId,
+          selectedStoreScreens: selectedStoreScreens,
+        ),
+      ),
+    );
+    return markers.whereType<_StoreMapMarkerData>().toList();
+  }
+
+  Future<_StoreMapMarkerData?> _resolveStoreMapMarker({
+    required StoreItem store,
+    required String? selectedStoreId,
+    required List<ScreenItem> selectedStoreScreens,
+  }) async {
+    final directPoint = _toLatLng(store.latitude, store.longitude);
+    String detail = store.address.trim();
+
+    if (directPoint != null) {
+      return _StoreMapMarkerData(
+          store: store, point: directPoint, detail: detail);
+    }
+
+    List<ScreenItem> screensForStore = const [];
+    if (store.id == selectedStoreId) {
+      screensForStore = selectedStoreScreens;
+    } else {
+      try {
+        screensForStore = await widget.apiClient.getScreens(store.id);
+      } catch (_) {
+        screensForStore = const [];
+      }
+    }
+
+    final screenWithAddress = screensForStore.cast<ScreenItem?>().firstWhere(
+          (screen) => (screen?.address.trim().isNotEmpty ?? false),
+          orElse: () => null,
+        );
+    if (screenWithAddress != null) {
+      detail = screenWithAddress.address.trim();
+      final point = await _resolveMapPoint(detail);
+      if (point != null) {
+        return _StoreMapMarkerData(store: store, point: point, detail: detail);
+      }
+    }
+
+    if (store.address.trim().isNotEmpty) {
+      final point = await _resolveMapPoint(store.address.trim());
+      if (point != null) {
+        return _StoreMapMarkerData(
+          store: store,
+          point: point,
+          detail: store.address.trim(),
+        );
+      }
+    }
+
+    final fallbackQuery = '${store.name} ${store.id}'.trim();
+    final point = await _resolveMapPoint(fallbackQuery);
+    if (point == null) {
+      return null;
+    }
+    return _StoreMapMarkerData(store: store, point: point, detail: detail);
+  }
+
+  LatLng? _toLatLng(double? latitude, double? longitude) {
+    if (latitude == null || longitude == null) {
+      return null;
+    }
+    return LatLng(latitude, longitude);
+  }
+
+  Future<LatLng?> _resolveMapPoint(String query) async {
+    final normalized = query.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+    if (_resolvedMapPoints.containsKey(normalized)) {
+      return _resolvedMapPoints[normalized];
+    }
+    try {
+      final matches = await geocoding.locationFromAddress(normalized);
+      if (matches.isEmpty) {
+        _resolvedMapPoints[normalized] = null;
+        return null;
+      }
+      final point = LatLng(matches.first.latitude, matches.first.longitude);
+      _resolvedMapPoints[normalized] = point;
+      return point;
+    } catch (_) {
+      _resolvedMapPoints[normalized] = null;
+      return null;
+    }
+  }
+
+  Widget _buildStoreMapCard({
+    required ThemeData theme,
+    required ColorScheme scheme,
+  }) {
+    final future = _storeMapMarkersFuture;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  height: 34,
+                  width: 34,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE0F2FE),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.map_outlined, size: 18),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Store Map',
+                    style: theme.textTheme.titleMedium,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Showing store pins from saved coordinates or resolved addresses.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 260,
+              child: future == null
+                  ? const Center(child: CircularProgressIndicator())
+                  : FutureBuilder<List<_StoreMapMarkerData>>(
+                      future: future,
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                              child: CircularProgressIndicator());
+                        }
+                        final markers =
+                            snapshot.data ?? const <_StoreMapMarkerData>[];
+                        if (markers.isEmpty) {
+                          return Container(
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: scheme.surfaceContainerLow,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: scheme.outlineVariant),
+                            ),
+                            padding: const EdgeInsets.all(20),
+                            child: Text(
+                              'No store locations found yet. Add an address or coordinates to your stores/screens and pins will appear here.',
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                          );
+                        }
+
+                        final points =
+                            markers.map((marker) => marker.point).toList();
+                        final selectedMarker = markers.where(
+                          (marker) => marker.store.id == widget.selectedStoreId,
+                        );
+                        final initialCenter = selectedMarker.isNotEmpty
+                            ? selectedMarker.first.point
+                            : points.first;
+
+                        return ClipRRect(
+                          borderRadius: BorderRadius.circular(14),
+                          child: FlutterMap(
+                            options: MapOptions(
+                              initialCenter: initialCenter,
+                              initialZoom: markers.length == 1 ? 13 : 5.2,
+                              initialCameraFit: markers.length > 1
+                                  ? CameraFit.bounds(
+                                      bounds: LatLngBounds.fromPoints(points),
+                                      padding: const EdgeInsets.all(32),
+                                    )
+                                  : null,
+                            ),
+                            children: [
+                              TileLayer(
+                                urlTemplate:
+                                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                userAgentPackageName:
+                                    'com.everydayadvertise.everyday_mobile',
+                              ),
+                              MarkerLayer(
+                                markers: markers
+                                    .map(
+                                      (marker) => Marker(
+                                        point: marker.point,
+                                        width: 120,
+                                        height: 82,
+                                        child: GestureDetector(
+                                          onTap: () =>
+                                              _onSelectStore(marker.store.id),
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: 8,
+                                                  vertical: 4,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: marker.store.id ==
+                                                          widget.selectedStoreId
+                                                      ? scheme.primary
+                                                      : Colors.white,
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                          999),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: Colors.black
+                                                          .withValues(
+                                                        alpha: 0.08,
+                                                      ),
+                                                      blurRadius: 8,
+                                                      offset:
+                                                          const Offset(0, 2),
+                                                    ),
+                                                  ],
+                                                ),
+                                                child: Text(
+                                                  marker.store.name,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: theme
+                                                      .textTheme.labelSmall
+                                                      ?.copyWith(
+                                                    color: marker.store.id ==
+                                                            widget
+                                                                .selectedStoreId
+                                                        ? scheme.onPrimary
+                                                        : scheme.onSurface,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Icon(
+                                                Icons.location_on,
+                                                size: 34,
+                                                color: marker.store.id ==
+                                                        widget.selectedStoreId
+                                                    ? scheme.primary
+                                                    : const Color(0xFFDC2626),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                    .toList(),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1044,6 +1340,8 @@ class _StoresTabState extends State<StoresTab> {
             ),
           ),
           const SizedBox(height: 12),
+          _buildStoreMapCard(theme: theme, scheme: scheme),
+          const SizedBox(height: 12),
           if (_loading)
             const Padding(
               padding: EdgeInsets.only(top: 24),
@@ -1288,6 +1586,18 @@ class _ScreenCardPreviewData {
 
   final List<String> urls;
   final Map<String, String> headers;
+}
+
+class _StoreMapMarkerData {
+  const _StoreMapMarkerData({
+    required this.store,
+    required this.point,
+    this.detail = '',
+  });
+
+  final StoreItem store;
+  final LatLng point;
+  final String detail;
 }
 
 class ScreenMediaEditorSheet extends StatelessWidget {
@@ -5717,9 +6027,10 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
       showDragHandle: true,
       builder: (sheetContext) {
         return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
                 child: Align(
@@ -5777,7 +6088,8 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
                 subtitle: const Text('More app sources coming soon'),
               ),
               const SizedBox(height: 8),
-            ],
+              ],
+            ),
           ),
         );
       },
@@ -7746,7 +8058,8 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
     final playlistModeLabel =
         _isMasterStore ? 'Playlist (Master Override Enabled)' : 'Playlist';
 
-    return Column(
+    return SafeArea(
+      child: Column(
       children: [
         Container(
           padding: const EdgeInsets.fromLTRB(16, 12, 8, 10),
@@ -8712,6 +9025,7 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet> {
                 ),
         ),
       ],
+      ),
     );
   }
 }
