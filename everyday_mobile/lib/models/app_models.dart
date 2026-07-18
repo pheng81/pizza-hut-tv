@@ -19,15 +19,27 @@ class UserProfile {
 }
 
 class StoreItem {
-  StoreItem({required this.id, required this.name});
+  StoreItem({
+    required this.id,
+    required this.name,
+    this.address = '',
+    this.latitude,
+    this.longitude,
+  });
 
   final String id;
   final String name;
+  final String address;
+  final double? latitude;
+  final double? longitude;
 
   factory StoreItem.fromJson(Map<String, dynamic> json) {
     return StoreItem(
       id: (json['id'] ?? '').toString(),
       name: (json['name'] ?? json['id'] ?? '').toString(),
+      address: (json['address'] ?? '').toString().trim(),
+      latitude: double.tryParse((json['latitude'] ?? '').toString()),
+      longitude: double.tryParse((json['longitude'] ?? '').toString()),
     );
   }
 }
