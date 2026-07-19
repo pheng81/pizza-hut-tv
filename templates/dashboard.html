@@ -3748,11 +3748,38 @@
     /* Simple modal for Apply-All confirmation */
     .modal-backdrop { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:998; }
     .modal-backdrop.show { display:block; }
-    .modal { display:none; position:fixed; inset:0; z-index:999; align-items:center; justify-content:center; background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+    .modal { display:none; position:fixed; inset:0; z-index:1400; align-items:center; justify-content:center; background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
     .modal.show { display:flex; }
     .modal-content { background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-width:90vw; max-height:90vh; overflow:auto; }
     .modal-header { padding:18px 20px; border-bottom:1px solid #e5e5ea; display:flex; align-items:center; justify-content:space-between; }
     .modal-header h3 { margin:0; font-size:18px; font-weight:600; color:#1d1d1f; }
+
+    /* Store Groups has its own overlay so dashboard modal variants cannot hide it. */
+    .store-groups-modal {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 2147483600;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: rgba(15, 23, 42, 0.58);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+    }
+    .store-groups-modal.is-open { display: flex; }
+    .store-groups-modal .store-groups-shell {
+        display: block;
+        width: min(900px, calc(100vw - 32px));
+        max-width: 900px;
+        max-height: min(88vh, 920px);
+        margin: 0 auto;
+        overflow: auto;
+        background: #fff;
+        border: 2px solid rgba(37, 99, 235, 0.18);
+        border-radius: 16px;
+        box-shadow: 0 28px 80px rgba(0, 0, 0, 0.35);
+    }
     .modal-header .close { background:none; border:none; font-size:28px; cursor:pointer; color:#86868b; padding:0; width:32px; height:32px; display:flex; align-items:center; justify-content:center; border-radius:6px; }
     .modal-header .close:hover { background:#f5f5f7; }
     .modal-buttons { padding:18px 20px; border-top:1px solid #e5e5ea; display:flex; gap:10px; justify-content:flex-end; }
@@ -4291,6 +4318,7 @@
         #storeGroupsModal.dashboard-side-sheet {
             justify-content: stretch;
             background: #ffffff;
+            z-index: 1405;
         }
 
         #storeGroupsModal.dashboard-side-sheet .modal-content {
@@ -4783,10 +4811,10 @@
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
                 <span>Add Store</span>
             </button>
-            <button class="action-item" onclick="return openSidebarStoreGroups()" title="Manage Store Groups">
+            <a class="action-item" href="/store-groups" onclick="return openSidebarWorkspace(event, 'Store Groups', '/store-groups?embedded=1')" title="Manage Store Groups">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
                 <span>Store Groups</span>
-            </button>
+            </a>
             <button class="action-item" onclick="return openSidebarLibrary()" title="Manage Library">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z"></path></svg>
                 <span>Manage Library</span>
@@ -4994,9 +5022,31 @@
         showAddStoreDialog();
         return false;
     }
-    function openSidebarStoreGroups(){
+    function setDashboardPanelParam(panelName){
+        try {
+            const url = new URL(window.location.href);
+            if(panelName){
+                url.searchParams.set('panel', panelName);
+            } else {
+                url.searchParams.delete('panel');
+            }
+            window.history.replaceState({}, '', url.toString());
+        } catch (error) {
+            console.warn('Unable to update dashboard panel query param:', error);
+        }
+    }
+    function openSidebarStoreGroups(event){
+        if(event && event.preventDefault) event.preventDefault();
         closeDashboardTransientPanels();
-        openStoreGroupsManager();
+        try {
+            const opened = openStoreGroupsManager();
+            if(opened !== false){
+                setDashboardPanelParam('store-groups');
+            }
+        } catch (error) {
+            console.error('Failed to open Store Groups manager:', error);
+            showMessage('Store Groups could not open. Reload the page and try again.', '#c0392b');
+        }
         return false;
     }
     function openSidebarLibrary(){
@@ -8181,18 +8231,35 @@ allowfullscreen></iframe></div>`;
 
         // -------- Store Groups Management --------
         function getStoreGroups(){
-            const groups = allStoresData.store_groups || [];
+            if(!window.allStoresData || typeof window.allStoresData !== 'object'){
+                window.allStoresData = { stores: [], screens: {}, master_store_id: null, store_groups: [], settings: {} };
+            }
+            if(!Array.isArray(window.allStoresData.store_groups)){
+                window.allStoresData.store_groups = [];
+            }
+            const groups = window.allStoresData.store_groups;
             console.log('📁 getStoreGroups:', groups.length, 'groups found');
             return groups;
         }
         
         function saveStoreGroups(groups){
-            console.log('💾 Saving store groups:', groups);
-            allStoresData.store_groups = groups;
+            const normalizedGroups = Array.isArray(groups)
+                ? groups.map(group => ({
+                    ...group,
+                    store_ids: Array.isArray(group && group.store_ids)
+                        ? group.store_ids.map(id => String(id))
+                        : []
+                }))
+                : [];
+            console.log('💾 Saving store groups:', normalizedGroups);
+            if(!window.allStoresData || typeof window.allStoresData !== 'object'){
+                window.allStoresData = { stores: [], screens: {}, master_store_id: null, store_groups: [], settings: {} };
+            }
+            window.allStoresData.store_groups = normalizedGroups;
             fetch('/save_store_groups', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ groups: groups })
+                body: JSON.stringify({ groups: normalizedGroups })
             })
             .then(r=>r.json())
             .then(data=>{
@@ -8209,20 +8276,47 @@ allowfullscreen></iframe></div>`;
             });
         }
         
+        function ensureStoreGroupsModal(){
+            const modal = document.getElementById('storeGroupsModal');
+            if(!modal){
+                console.error('Store Groups modal not found in dashboard DOM');
+                showMessage('Store Groups panel is unavailable on this page.', '#c0392b');
+                return null;
+            }
+            if(modal.parentElement !== document.body){
+                document.body.appendChild(modal);
+            }
+            return modal;
+        }
+
         function openStoreGroupsManager(){
             console.log('🏪 Opening Store Groups Manager');
-            console.log('📋 Current allStoresData.store_groups:', allStoresData.store_groups);
-            const modal = document.getElementById('storeGroupsModal');
-            modal.classList.toggle('dashboard-side-sheet', isDesktopSidebarLayout());
-            modal.style.display = 'flex';
-            renderStoreGroups();
+            console.log('📋 Current allStoresData.store_groups:', (window.allStoresData && window.allStoresData.store_groups) || []);
+            const modal = ensureStoreGroupsModal();
+            if(!modal) return false;
+            modal.classList.add('is-open');
+            modal.setAttribute('aria-hidden', 'false');
+            try {
+                renderStoreGroups();
+            } catch (error) {
+                console.error('Store Groups render failed:', error);
+                showMessage('Store Groups could not load your stores.', '#c0392b');
+            }
             toggleDrawer(false);
+            return true;
         }
         
         function closeStoreGroupsManager(){
             const modal = document.getElementById('storeGroupsModal');
-            modal.style.display = 'none';
-            modal.classList.remove('dashboard-side-sheet');
+            if(!modal) return;
+            modal.classList.remove('is-open');
+            modal.setAttribute('aria-hidden', 'true');
+            try {
+                const panel = new URL(window.location.href).searchParams.get('panel');
+                if(panel === 'store-groups'){
+                    setDashboardPanelParam('');
+                }
+            } catch {}
         }
         
         function createStoreGroup(){
@@ -8250,13 +8344,14 @@ allowfullscreen></iframe></div>`;
             const groups = getStoreGroups();
             const group = groups.find(g => g.id === groupId);
             if(!group) return;
-            
+            const normalizedStoreId = String(storeId);
+
             if(checkbox.checked){
-                if(!group.store_ids.includes(storeId)){
-                    group.store_ids.push(storeId);
+                if(!group.store_ids.includes(normalizedStoreId)){
+                    group.store_ids.push(normalizedStoreId);
                 }
             } else {
-                group.store_ids = group.store_ids.filter(id => id !== storeId);
+                group.store_ids = group.store_ids.filter(id => String(id) !== normalizedStoreId);
             }
             saveStoreGroups(groups);
             
@@ -8294,8 +8389,12 @@ allowfullscreen></iframe></div>`;
         
         function renderStoreGroups(){
             const container = document.getElementById('groupsContainer');
+            if(!container){
+                console.warn('Store Groups container missing');
+                return;
+            }
             const groups = getStoreGroups();
-            const stores = allStoresData.stores || [];
+            const stores = Array.isArray(window.allStoresData && window.allStoresData.stores) ? window.allStoresData.stores : [];
             
             // Update group count badge
             const countBadge = document.getElementById('groupsCount');
@@ -8366,13 +8465,13 @@ allowfullscreen></iframe></div>`;
                             </div>
                             <div id="stores-list-${group.id}" style="max-height:250px; overflow-y:auto; display:grid; grid-template-columns:repeat(auto-fill, minmax(250px, 1fr)); gap:8px;">
                                 ${stores.map(store => {
-                                    const checked = (group.store_ids || []).includes(store.id);
+                                    const checked = (group.store_ids || []).includes(String(store.id));
                                     return `
                                         <label style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:${checked ? '#f0f8ff' : '#fafafa'}; border:1px solid ${checked ? '#0066cc' : '#ddd'}; border-radius:6px; cursor:pointer;"
                                             onmouseover="if(!this.querySelector('input').checked) this.style.background='#f5f5f5'"
                                             onmouseout="if(!this.querySelector('input').checked) this.style.background='#fafafa'">
                                             <input type="checkbox" ${checked ? 'checked' : ''} 
-                                                onchange="toggleStoreInGroup('${group.id}', '${store.id}', this); this.parentElement.style.borderColor = this.checked ? '#0066cc' : '#ddd'; this.parentElement.style.background = this.checked ? '#f0f8ff' : '#fafafa';" 
+                                                onchange="toggleStoreInGroup('${group.id}', '${String(store.id)}', this); this.parentElement.style.borderColor = this.checked ? '#0066cc' : '#ddd'; this.parentElement.style.background = this.checked ? '#f0f8ff' : '#fafafa';"
                                                 style="width:18px; height:18px; cursor:pointer;">
                                             <div style="flex:1; min-width:0;">
                                                 <div style="font-size:14px; font-weight:500; color:#333; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${store.name || store.id}</div>
@@ -8508,6 +8607,17 @@ allowfullscreen></iframe></div>`;
                 </button>`;
             }).join('');
             groupsSection.style.display = 'block';
+        }
+
+        function openDashboardPanelFromQuery(){
+            try {
+                const panel = new URL(window.location.href).searchParams.get('panel');
+                if(panel === 'store-groups'){
+                    openStoreGroupsManager();
+                }
+            } catch (error) {
+                console.warn('Unable to inspect dashboard panel query param:', error);
+            }
         }
 
         function openApplyAllModal(screenId, mode, selectedIds){
@@ -14289,6 +14399,7 @@ allowfullscreen></iframe></div>`;
             }
 
             initializeDashboardOverview();
+            openDashboardPanelFromQuery();
 
             // Check phone verification status and show popup if needed
             setTimeout(() => {
@@ -20154,7 +20265,7 @@ allowfullscreen></iframe></div>`;
     </div>
 
     <!-- Store Groups Manager Modal -->
-    <div id="storeGroupsModal" class="modal" role="dialog" aria-modal="true" onclick="if(event.target === this) closeStoreGroupsManager()">
+    <div id="storeGroupsModal" class="store-groups-modal" role="dialog" aria-modal="true" aria-hidden="true" onclick="if(event.target === this) closeStoreGroupsManager()">
         <div class="modal-content store-groups-shell" style="max-width: 900px;">
             <div class="modal-header">
                 <h3>🏪 Multi Store Setup</h3>

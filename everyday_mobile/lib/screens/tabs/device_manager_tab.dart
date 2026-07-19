@@ -1,6 +1,5 @@
-import 'dart:io';
+import 'dart:async';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart' as geocoding;
 import 'package:geolocator/geolocator.dart';
@@ -34,15 +33,22 @@ class _DeviceManagerTabState extends State<DeviceManagerTab> {
   bool _checkingPi = false;
   bool _checkedPiOnline = false;
   String _searchQuery = '';
+  Timer? _piPreviewRefreshTimer;
+  bool _refreshingPiPreviews = false;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _piPreviewRefreshTimer = Timer.periodic(
+      const Duration(seconds: 12),
+      (_) => _refreshPiCardPreviews(),
+    );
   }
 
   @override
   void dispose() {
+    _piPreviewRefreshTimer?.cancel();
     _piIdentifierController.dispose();
     super.dispose();
   }
@@ -154,56 +160,65 @@ class _DeviceManagerTabState extends State<DeviceManagerTab> {
   }
 
   Future<void> _refreshPiCardPreviews() async {
-    final assignments = <String, Map<String, String>>{};
-
-    for (final entry in _piStatusMap.entries) {
-      final piId = entry.key.trim();
-      if (piId.isEmpty) {
-        continue;
-      }
-      final storeId = (entry.value['store_id'] ?? '').toString().trim();
-      final screenId = (entry.value['screen_id'] ?? '').toString().trim();
-      if (storeId.isNotEmpty && screenId.isNotEmpty) {
-        assignments[piId] = {'store_id': storeId, 'screen_id': screenId};
-      }
-    }
-
-    for (final s in _screens) {
-      final piId = (s['device_id'] ?? '').toString().trim();
-      if (piId.isEmpty ||
-          piId == 'Not Assigned' ||
-          assignments.containsKey(piId)) {
-        continue;
-      }
-      final storeId = (s['store_id'] ?? '').toString().trim();
-      final screenId = (s['screen_id'] ?? '').toString().trim();
-      if (storeId.isNotEmpty && screenId.isNotEmpty) {
-        assignments[piId] = {'store_id': storeId, 'screen_id': screenId};
-      }
-    }
-
-    for (final entry in _localPiAssignmentIds.entries) {
-      assignments[entry.key] = entry.value;
-    }
-
-    final next = <String, _ScreenPreview?>{};
-    for (final entry in assignments.entries) {
-      try {
-        next[entry.key] = await _loadScreenPreview(
-          storeId: entry.value['store_id']!,
-          screenId: entry.value['screen_id']!,
-        );
-      } catch (_) {
-        next[entry.key] = null;
-      }
-    }
-
-    if (!mounted) {
+    if (_refreshingPiPreviews) {
       return;
     }
-    setState(() {
-      _piCardPreviews = next;
-    });
+    _refreshingPiPreviews = true;
+    try {
+      final assignments = <String, Map<String, String>>{};
+
+      for (final entry in _piStatusMap.entries) {
+        final piId = entry.key.trim();
+        if (piId.isEmpty) {
+          continue;
+        }
+        final storeId = (entry.value['store_id'] ?? '').toString().trim();
+        final screenId = (entry.value['screen_id'] ?? '').toString().trim();
+        if (storeId.isNotEmpty && screenId.isNotEmpty) {
+          assignments[piId] = {'store_id': storeId, 'screen_id': screenId};
+        }
+      }
+
+      for (final s in _screens) {
+        final piId = (s['device_id'] ?? '').toString().trim();
+        if (piId.isEmpty ||
+            piId == 'Not Assigned' ||
+            assignments.containsKey(piId)) {
+          continue;
+        }
+        final storeId = (s['store_id'] ?? '').toString().trim();
+        final screenId = (s['screen_id'] ?? '').toString().trim();
+        if (storeId.isNotEmpty && screenId.isNotEmpty) {
+          assignments[piId] = {'store_id': storeId, 'screen_id': screenId};
+        }
+      }
+
+      for (final entry in _localPiAssignmentIds.entries) {
+        assignments[entry.key] = entry.value;
+      }
+
+      final next = <String, _ScreenPreview?>{};
+      for (final entry in assignments.entries) {
+        try {
+          next[entry.key] = await _loadScreenPreview(
+            storeId: entry.value['store_id']!,
+            screenId: entry.value['screen_id']!,
+            activeOnly: true,
+          );
+        } catch (_) {
+          next[entry.key] = null;
+        }
+      }
+
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _piCardPreviews = next;
+      });
+    } finally {
+      _refreshingPiPreviews = false;
+    }
   }
 
   Future<void> _checkPiIdentifier() async {
@@ -336,6 +351,64 @@ class _DeviceManagerTabState extends State<DeviceManagerTab> {
     });
   }
 
+  Future<void> _restartPiClient(String piId) async {
+    final ok = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Restart Player'),
+            content: Text('Restart the EverydayAdvertise player on $piId?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Restart Player'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!ok) {
+      return;
+    }
+
+    await _runPiAction(piId, () async {
+      await widget.apiClient.restartPiClient(piId);
+      _showMessage('Player restart command sent to $piId.');
+    });
+  }
+
+  Future<void> _closePiScreen(String piId) async {
+    final ok = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Close Display'),
+            content: Text('Close the display player on $piId?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton.tonal(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Close Display'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!ok) {
+      return;
+    }
+
+    await _runPiAction(piId, () async {
+      await widget.apiClient.closePiScreen(piId);
+      _showMessage('Close display command sent to $piId.');
+    });
+  }
+
   Future<void> _deletePi(String piId) async {
     final ok = await showDialog<bool>(
           context: context,
@@ -389,6 +462,7 @@ class _DeviceManagerTabState extends State<DeviceManagerTab> {
     final result = await showDialog<_PiLocationDraft>(
       context: context,
       builder: (_) => _PiLocationDialog(
+        apiClient: widget.apiClient,
         initialLocationName: initialName,
         initialAddress: initialAddress,
         initialLatitude: initialLatitude,
@@ -416,6 +490,211 @@ class _DeviceManagerTabState extends State<DeviceManagerTab> {
     });
   }
 
+  Future<void> _openPiManager({
+    required String piId,
+    required String fallbackIp,
+  }) async {
+    final pi = _piStatusMap[piId] ?? const <String, dynamic>{};
+    final online =
+        (pi['status'] ?? 'offline').toString().toLowerCase() == 'online';
+    final assignmentStore =
+        (pi['store_name'] ?? pi['store_id'] ?? '').toString().trim();
+    final assignmentScreen =
+        (pi['screen_name'] ?? pi['screen_id'] ?? '').toString().trim();
+    Map<String, dynamic> savedLocation = const {};
+    try {
+      savedLocation = await widget.apiClient.getPiLocation(piId);
+    } catch (_) {
+      // A Pi may not have a location yet; keep the manager usable.
+    }
+    if (!mounted) {
+      return;
+    }
+    final savedLocationLabel =
+        (savedLocation['location_name'] ?? savedLocation['label'] ?? '')
+            .toString()
+            .trim();
+    final savedAddress = (savedLocation['address'] ?? '').toString().trim();
+    final savedLatitude =
+        double.tryParse((savedLocation['latitude'] ?? '').toString());
+    final savedLongitude =
+        double.tryParse((savedLocation['longitude'] ?? '').toString());
+
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => FractionallySizedBox(
+        heightFactor: 0.8,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+          children: [
+            Center(
+              child: Container(
+                width: 42,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Theme.of(sheetContext).colorScheme.outlineVariant,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text('Manage Pi',
+                style: Theme.of(sheetContext).textTheme.headlineSmall),
+            const SizedBox(height: 4),
+            Text(
+              piId,
+              style: Theme.of(sheetContext).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 12),
+            _buildPiChip(
+              sheetContext,
+              label: online ? 'Online' : 'Offline',
+              background:
+                  online ? const Color(0xFFDCFCE7) : const Color(0xFFFEE2E2),
+              foreground:
+                  online ? const Color(0xFF166534) : const Color(0xFF991B1B),
+            ),
+            if (assignmentStore.isNotEmpty || assignmentScreen.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Assigned to ${[
+                  assignmentStore,
+                  assignmentScreen
+                ].where((value) => value.isNotEmpty).join(' • ')}',
+                style: Theme.of(sheetContext).textTheme.bodyMedium,
+              ),
+            ],
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.tv_outlined),
+              title: const Text('Apply Screen'),
+              subtitle: const Text('Assign a store and screen to this Pi'),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _assignPiToScreen(piId: piId, fallbackIp: fallbackIp);
+              },
+            ),
+            ListTile(
+              enabled: online,
+              leading: const Icon(Icons.restart_alt),
+              title: const Text('Restart Player'),
+              subtitle: const Text('Restart the EverydayAdvertise display app'),
+              onTap: !online
+                  ? null
+                  : () {
+                      Navigator.of(sheetContext).pop();
+                      _restartPiClient(piId);
+                    },
+            ),
+            ListTile(
+              enabled: online,
+              leading: const Icon(Icons.power_settings_new),
+              title: const Text('Restart Pi'),
+              subtitle: const Text('Reboot the Raspberry Pi device'),
+              onTap: !online
+                  ? null
+                  : () {
+                      Navigator.of(sheetContext).pop();
+                      _restartPi(piId);
+                    },
+            ),
+            ListTile(
+              enabled: online,
+              leading: const Icon(Icons.visibility_off_outlined),
+              title: const Text('Close Display'),
+              subtitle: const Text('Stop the display app on this Pi'),
+              onTap: !online
+                  ? null
+                  : () {
+                      Navigator.of(sheetContext).pop();
+                      _closePiScreen(piId);
+                    },
+            ),
+            ListTile(
+              leading: const Icon(Icons.location_on_outlined),
+              title: const Text('Set Location'),
+              subtitle: const Text('Update the Pi location and coordinates'),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _setLocation(piId);
+              },
+            ),
+            if (savedLocationLabel.isNotEmpty || savedAddress.isNotEmpty) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color:
+                        Theme.of(sheetContext).colorScheme.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.location_on,
+                        color: Theme.of(sheetContext).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              savedLocationLabel.isNotEmpty
+                                  ? savedLocationLabel
+                                  : savedAddress,
+                              style:
+                                  Theme.of(sheetContext).textTheme.titleSmall,
+                            ),
+                            if (savedAddress.isNotEmpty &&
+                                savedAddress != savedLocationLabel) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                savedAddress,
+                                style:
+                                    Theme.of(sheetContext).textTheme.bodySmall,
+                              ),
+                            ],
+                            if (savedLatitude != null &&
+                                savedLongitude != null) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                '${savedLatitude.toStringAsFixed(6)}, ${savedLongitude.toStringAsFixed(6)}',
+                                style:
+                                    Theme.of(sheetContext).textTheme.labelSmall,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+            const Divider(),
+            ListTile(
+              leading:
+                  const Icon(Icons.delete_outline, color: Color(0xFFDC2626)),
+              title: const Text('Remove Pi',
+                  style: TextStyle(color: Color(0xFFDC2626))),
+              subtitle:
+                  const Text('Disconnect and remove this Pi from the account'),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _deletePi(piId);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _assignPiToScreen({
     required String piId,
     required String fallbackIp,
@@ -433,9 +712,9 @@ class _DeviceManagerTabState extends State<DeviceManagerTab> {
     List<ScreenItem> screens =
         await widget.apiClient.getScreens(selectedStoreId);
     String? selectedScreenId = screens.isNotEmpty ? screens.first.id : null;
-    _ScreenPreview? initialPreview;
+    List<Map<String, dynamic>> initialSchedule = const [];
     if (selectedScreenId != null) {
-      initialPreview = await _loadScreenPreview(
+      initialSchedule = await widget.apiClient.getPlaylist(
         storeId: selectedStoreId,
         screenId: selectedScreenId,
       );
@@ -448,35 +727,33 @@ class _DeviceManagerTabState extends State<DeviceManagerTab> {
       context: context,
       builder: (context) {
         bool loadingScreens = false;
-        bool loadingPreview = false;
-        _ScreenPreview? preview = initialPreview;
-        String? selectedLibraryFile;
-        File? selectedLocalFile;
+        bool loadingSchedule = false;
+        List<Map<String, dynamic>> schedule = initialSchedule;
 
         return StatefulBuilder(
           builder: (context, setStateDialog) {
-            Future<void> refreshPreview() async {
+            Future<void> refreshSchedule() async {
               final screenId = selectedScreenId;
               if (screenId == null) {
                 setStateDialog(() {
-                  preview = null;
+                  schedule = const [];
                 });
                 return;
               }
               setStateDialog(() {
-                loadingPreview = true;
+                loadingSchedule = true;
               });
               try {
-                final loaded = await _loadScreenPreview(
+                final loaded = await widget.apiClient.getPlaylist(
                   storeId: selectedStoreId,
                   screenId: screenId,
                 );
                 setStateDialog(() {
-                  preview = loaded;
+                  schedule = loaded;
                 });
               } finally {
                 setStateDialog(() {
-                  loadingPreview = false;
+                  loadingSchedule = false;
                 });
               }
             }
@@ -493,7 +770,7 @@ class _DeviceManagerTabState extends State<DeviceManagerTab> {
                   screens = next;
                   selectedScreenId = next.isNotEmpty ? next.first.id : null;
                 });
-                await refreshPreview();
+                await refreshSchedule();
               } finally {
                 setStateDialog(() {
                   loadingScreens = false;
@@ -501,52 +778,28 @@ class _DeviceManagerTabState extends State<DeviceManagerTab> {
               }
             }
 
-            Future<void> pickLibrary() async {
-              final picked = await showModalBottomSheet<String>(
-                context: context,
-                isScrollControlled: true,
-                useSafeArea: true,
-                builder: (_) => FractionallySizedBox(
-                  heightFactor: 0.88,
-                  child: _DeviceLibraryPickerSheet(apiClient: widget.apiClient),
-                ),
+            Future<void> editSchedule() async {
+              final screenId = selectedScreenId;
+              if (screenId == null) {
+                return;
+              }
+              final matches = screens.where((screen) => screen.id == screenId);
+              final screenName =
+                  matches.isEmpty ? screenId : matches.first.name;
+              await _openScreenModifySheet(
+                storeId: selectedStoreId,
+                screenId: screenId,
+                title: screenName,
               );
-              if (picked == null || picked.trim().isEmpty) {
-                return;
+              if (mounted) {
+                await refreshSchedule();
               }
-              setStateDialog(() {
-                selectedLibraryFile = picked.trim();
-                selectedLocalFile = null;
-              });
-            }
-
-            Future<void> pickLocalFile() async {
-              final result =
-                  await FilePicker.platform.pickFiles(withData: false);
-              if (result == null || result.files.isEmpty) {
-                return;
-              }
-              final path = result.files.single.path;
-              if (path == null || path.trim().isEmpty) {
-                return;
-              }
-              setStateDialog(() {
-                selectedLocalFile = File(path);
-                selectedLibraryFile = null;
-              });
             }
 
             final mq = MediaQuery.of(context).size;
 
-            return Dialog(
-              insetPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 18),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: SizedBox(
-                width: mq.width * 0.96,
-                height: mq.height * 0.86,
+            return Dialog.fullscreen(
+              child: SafeArea(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(18, 10, 18, 14),
                   child: Column(
@@ -608,7 +861,7 @@ class _DeviceManagerTabState extends State<DeviceManagerTab> {
                                           setStateDialog(() {
                                             selectedScreenId = value;
                                           });
-                                          await refreshPreview();
+                                          await refreshSchedule();
                                         },
                                 ),
                               if (screens.isEmpty) ...[
@@ -616,83 +869,85 @@ class _DeviceManagerTabState extends State<DeviceManagerTab> {
                                 const Text('No screens in selected store.'),
                               ],
                               const SizedBox(height: 14),
-                              Text(
-                                'Current Screen Media',
-                                style: Theme.of(context).textTheme.titleSmall,
-                              ),
-                              const SizedBox(height: 8),
-                              Container(
-                                width: double.infinity,
-                                height: 170,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .outlineVariant,
-                                  ),
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .surfaceContainerLow,
-                                ),
-                                child: loadingPreview
-                                    ? const Center(
-                                        child: CircularProgressIndicator())
-                                    : (preview?.url.isNotEmpty ?? false)
-                                        ? ClipRRect(
-                                            borderRadius:
-                                                BorderRadius.circular(12),
-                                            child: Image.network(
-                                              preview!.url,
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (_, __, ___) =>
-                                                  Center(
-                                                child: Text(
-                                                  preview!.label,
-                                                  textAlign: TextAlign.center,
-                                                ),
-                                              ),
-                                            ),
-                                          )
-                                        : const Center(
-                                            child: Text(
-                                              'No media assigned to this screen',
-                                            ),
-                                          ),
-                              ),
-                              const SizedBox(height: 12),
-                              Wrap(
-                                spacing: 10,
-                                runSpacing: 10,
+                              Row(
                                 children: [
-                                  OutlinedButton.icon(
-                                    onPressed: pickLibrary,
-                                    icon: const Icon(Icons.collections),
-                                    label: const Text('Choose Library'),
+                                  Text(
+                                    'Screen Schedule',
+                                    style:
+                                        Theme.of(context).textTheme.titleSmall,
                                   ),
-                                  OutlinedButton.icon(
-                                    onPressed: pickLocalFile,
-                                    icon: const Icon(Icons.folder_open),
-                                    label: const Text('Choose Device'),
+                                  const Spacer(),
+                                  TextButton.icon(
+                                    onPressed: selectedScreenId == null
+                                        ? null
+                                        : editSchedule,
+                                    icon: const Icon(Icons.edit_outlined,
+                                        size: 16),
+                                    label: const Text('Edit schedule'),
                                   ),
+                                  Text('${schedule.length} item(s)'),
                                 ],
                               ),
-                              if (selectedLibraryFile != null) ...[
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Selected library media: $selectedLibraryFile',
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
+                              const SizedBox(height: 8),
+                              if (loadingSchedule)
+                                const LinearProgressIndicator(minHeight: 2)
+                              else if (schedule.isEmpty)
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 12),
+                                  child: Text(
+                                      'No scheduled media on this screen.'),
+                                )
+                              else
+                                Wrap(
+                                  spacing: 10,
+                                  runSpacing: 10,
+                                  children:
+                                      schedule.asMap().entries.map((entry) {
+                                    final item = entry.value;
+                                    final file =
+                                        (item['file'] ?? '').toString().trim();
+                                    final mediaType =
+                                        (item['media_type'] ?? '').toString();
+                                    final previewUrl =
+                                        _resolvePreviewUrlFromItem(item);
+                                    final isLivePos =
+                                        mediaType.toLowerCase() == 'live_pos' ||
+                                            file
+                                                .toLowerCase()
+                                                .startsWith('livepos:');
+                                    return Material(
+                                      color: Colors.transparent,
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: InkWell(
+                                        borderRadius: BorderRadius.circular(10),
+                                        onTap: editSchedule,
+                                        child: SizedBox(
+                                          width: (mq.width - 58) / 2,
+                                          height: 132,
+                                          child: ClipRRect(
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                            child: previewUrl.isNotEmpty
+                                                ? Image.network(
+                                                    previewUrl,
+                                                    fit: BoxFit.cover,
+                                                    errorBuilder: (_, __,
+                                                            ___) =>
+                                                        _buildSchedulePreviewFallback(
+                                                      context,
+                                                      isLivePos: isLivePos,
+                                                    ),
+                                                  )
+                                                : _buildSchedulePreviewFallback(
+                                                    context,
+                                                    isLivePos: isLivePos,
+                                                  ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
                                 ),
-                              ],
-                              if (selectedLocalFile != null) ...[
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Selected local file: ${selectedLocalFile!.uri.pathSegments.last}',
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
                             ],
                           ),
                         ),
@@ -715,10 +970,6 @@ class _DeviceManagerTabState extends State<DeviceManagerTab> {
                                   Navigator.of(context).pop({
                                     'store_id': selectedStoreId,
                                     'screen_id': selectedScreenId!,
-                                    if (selectedLibraryFile != null)
-                                      'library_file': selectedLibraryFile!,
-                                    if (selectedLocalFile != null)
-                                      'local_path': selectedLocalFile!.path,
                                   });
                                 },
                           child: const Text('Apply'),
@@ -748,8 +999,6 @@ class _DeviceManagerTabState extends State<DeviceManagerTab> {
     final pairCode = (me.linkCode ?? '').trim();
 
     await _runPiAction(piId, () async {
-      final localPath = (payload['local_path'] ?? '').trim();
-      final libraryFile = (payload['library_file'] ?? '').trim();
       final assignedStoreId = payload['store_id']!;
       final assignedScreenId = payload['screen_id']!;
 
@@ -765,21 +1014,6 @@ class _DeviceManagerTabState extends State<DeviceManagerTab> {
           screens.where((s) => s.id == assignedScreenId).toList();
       if (matchedScreen.isNotEmpty) {
         assignedScreenName = matchedScreen.first.name;
-      }
-
-      if (localPath.isNotEmpty) {
-        final uploaded = await widget.apiClient.uploadMedia(File(localPath));
-        await widget.apiClient.assignToScreen(
-          storeId: assignedStoreId,
-          screenId: assignedScreenId,
-          filename: uploaded,
-        );
-      } else if (libraryFile.isNotEmpty) {
-        await widget.apiClient.assignToScreen(
-          storeId: assignedStoreId,
-          screenId: assignedScreenId,
-          filename: libraryFile,
-        );
       }
 
       await widget.apiClient.addPiDeviceAssignment(
@@ -834,13 +1068,32 @@ class _DeviceManagerTabState extends State<DeviceManagerTab> {
     });
   }
 
+  Widget _buildSchedulePreviewFallback(
+    BuildContext context, {
+    required bool isLivePos,
+  }) {
+    return Container(
+      color: isLivePos
+          ? const Color(0xFF1D4ED8)
+          : Theme.of(context).colorScheme.surfaceContainerHighest,
+      alignment: Alignment.center,
+      child: Icon(
+        isLivePos ? Icons.receipt_long_outlined : Icons.image_outlined,
+        color: isLivePos ? Colors.white : Theme.of(context).colorScheme.primary,
+        size: 34,
+      ),
+    );
+  }
+
   Future<_ScreenPreview?> _loadScreenPreview({
     required String storeId,
     required String screenId,
+    bool activeOnly = false,
   }) async {
     final playlist = await widget.apiClient.getPlaylist(
       storeId: storeId,
       screenId: screenId,
+      includeInactive: !activeOnly,
     );
     if (playlist.isEmpty) {
       return null;
@@ -870,7 +1123,10 @@ class _DeviceManagerTabState extends State<DeviceManagerTab> {
       return null;
     }
     final label = file.isEmpty ? 'Current media' : file;
-    return _ScreenPreview(url: previewUrl, label: label);
+    final liveUrl = activeOnly
+        ? '$previewUrl${previewUrl.contains('?') ? '&' : '?'}preview=${DateTime.now().millisecondsSinceEpoch}'
+        : previewUrl;
+    return _ScreenPreview(url: liveUrl, label: label);
   }
 
   String _encodePathPreservingSlashes(String path) {
@@ -929,7 +1185,7 @@ class _DeviceManagerTabState extends State<DeviceManagerTab> {
           lower.contains('.bmp');
 
       if (isVideo) {
-        return _toAbsoluteUrl('/vpreview/640/$encoded');
+        return _toAbsoluteUrl('/vthumb/640/$encoded');
       }
       if (isImage) {
         return _toAbsoluteUrl('/thumb/960/$encoded');
@@ -1291,11 +1547,11 @@ class _DeviceManagerTabState extends State<DeviceManagerTab> {
                           ),
                         if (_checkedPiId != null)
                           OutlinedButton(
-                            onPressed: () => _assignPiToScreen(
+                            onPressed: () => _openPiManager(
                               piId: _checkedPiId!,
                               fallbackIp: _checkedPiIp,
                             ),
-                            child: const Text('Apply Screen'),
+                            child: const Text('Manage Pi'),
                           ),
                         if (_checkedPiId != null)
                           Container(
@@ -1703,9 +1959,20 @@ class _DeviceManagerTabState extends State<DeviceManagerTab> {
                                       Row(
                                         children: [
                                           _buildRaspberryPiImageBadge(context),
-                                          const Spacer(),
-                                          SizedBox(
-                                            width: 150,
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: OutlinedButton(
+                                              onPressed: busy
+                                                  ? null
+                                                  : () => _openPiManager(
+                                                        piId: piId,
+                                                        fallbackIp: ip,
+                                                      ),
+                                              child: const Text('Manage'),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
                                             child: FilledButton.tonal(
                                               onPressed: busy
                                                   ? null
@@ -1714,7 +1981,7 @@ class _DeviceManagerTabState extends State<DeviceManagerTab> {
                                                       fallbackIp: ip),
                                               child: Text(busy
                                                   ? 'Working...'
-                                                  : 'Apply Screen'),
+                                                  : 'Apply'),
                                             ),
                                           ),
                                         ],
@@ -1924,8 +2191,29 @@ class _DeviceManagerTabState extends State<DeviceManagerTab> {
                                   OutlinedButton(
                                     onPressed: busy
                                         ? null
+                                        : () => _openPiManager(
+                                              piId: deviceId,
+                                              fallbackIp: ip,
+                                            ),
+                                    child: const Text('Manage Pi'),
+                                  ),
+                                  OutlinedButton(
+                                    onPressed: busy
+                                        ? null
                                         : () => _restartPi(deviceId),
                                     child: const Text('Restart'),
+                                  ),
+                                  OutlinedButton(
+                                    onPressed: busy
+                                        ? null
+                                        : () => _restartPiClient(deviceId),
+                                    child: const Text('Restart Player'),
+                                  ),
+                                  OutlinedButton(
+                                    onPressed: busy
+                                        ? null
+                                        : () => _closePiScreen(deviceId),
+                                    child: const Text('Close Display'),
                                   ),
                                   OutlinedButton(
                                     onPressed: busy
@@ -2034,12 +2322,14 @@ class _PiLocationDraft {
 
 class _PiLocationDialog extends StatefulWidget {
   const _PiLocationDialog({
+    required this.apiClient,
     required this.initialLocationName,
     required this.initialAddress,
     this.initialLatitude,
     this.initialLongitude,
   });
 
+  final ApiClient apiClient;
   final String initialLocationName;
   final String initialAddress;
   final double? initialLatitude;
@@ -2056,8 +2346,11 @@ class _PiLocationDialogState extends State<_PiLocationDialog> {
   double? _longitude;
   bool _usingCurrentLocation = false;
   bool _searchingAddress = false;
+  bool _loadingSuggestions = false;
   bool _saving = false;
   String? _error;
+  Timer? _addressSearchTimer;
+  List<Map<String, dynamic>> _addressSuggestions = const [];
 
   @override
   void initState() {
@@ -2071,9 +2364,77 @@ class _PiLocationDialogState extends State<_PiLocationDialog> {
 
   @override
   void dispose() {
+    _addressSearchTimer?.cancel();
     _locationNameController.dispose();
     _addressController.dispose();
     super.dispose();
+  }
+
+  void _onAddressChanged(String value) {
+    _addressSearchTimer?.cancel();
+    final query = value.trim();
+    if (query.length < 3) {
+      setState(() {
+        _addressSuggestions = const [];
+        _loadingSuggestions = false;
+      });
+      return;
+    }
+    _addressSearchTimer = Timer(const Duration(milliseconds: 350), () {
+      _loadAddressSuggestions(query);
+    });
+  }
+
+  Future<void> _loadAddressSuggestions(String query) async {
+    if (!mounted || _addressController.text.trim() != query) {
+      return;
+    }
+    setState(() {
+      _loadingSuggestions = true;
+      _error = null;
+    });
+    try {
+      final results = await widget.apiClient.searchGoogleAddresses(query);
+      if (!mounted || _addressController.text.trim() != query) {
+        return;
+      }
+      setState(() {
+        _addressSuggestions = results;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _addressSuggestions = const [];
+        _error = error.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingSuggestions = false;
+        });
+      }
+    }
+  }
+
+  void _selectAddressSuggestion(Map<String, dynamic> suggestion) {
+    final address = (suggestion['display_name'] ?? '').toString().trim();
+    final latitude = double.tryParse((suggestion['latitude'] ?? '').toString());
+    final longitude =
+        double.tryParse((suggestion['longitude'] ?? '').toString());
+    _addressSearchTimer?.cancel();
+    setState(() {
+      _addressController.text = address;
+      _latitude = latitude;
+      _longitude = longitude;
+      _addressSuggestions = const [];
+      _error = null;
+      if (_locationNameController.text.trim().isEmpty && address.isNotEmpty) {
+        _locationNameController.text = address.split(',').first.trim();
+      }
+    });
+    FocusScope.of(context).unfocus();
   }
 
   String _formatPlacemark(geocoding.Placemark placemark) {
@@ -2307,13 +2668,51 @@ class _PiLocationDialogState extends State<_PiLocationDialog> {
               const SizedBox(height: 12),
               TextField(
                 controller: _addressController,
+                onChanged: _onAddressChanged,
                 decoration: const InputDecoration(
                   labelText: 'Address or place',
-                  hintText: 'Search a street address or suburb',
+                  hintText: 'Start typing to search Google addresses',
                 ),
                 minLines: 1,
                 maxLines: 2,
               ),
+              if (_loadingSuggestions) ...[
+                const SizedBox(height: 6),
+                const LinearProgressIndicator(minHeight: 2),
+              ],
+              if (_addressSuggestions.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: theme.colorScheme.outlineVariant),
+                    borderRadius: BorderRadius.circular(12),
+                    color: theme.colorScheme.surface,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: _addressSuggestions.asMap().entries.map((entry) {
+                      final suggestion = entry.value;
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ListTile(
+                            dense: true,
+                            leading: const Icon(Icons.location_on_outlined),
+                            title: Text(
+                              (suggestion['display_name'] ?? '').toString(),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            onTap: () => _selectAddressSuggestion(suggestion),
+                          ),
+                          if (entry.key < _addressSuggestions.length - 1)
+                            const Divider(height: 1),
+                        ],
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ],
               const SizedBox(height: 12),
               Wrap(
                 spacing: 8,

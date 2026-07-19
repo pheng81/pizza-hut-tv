@@ -414,6 +414,31 @@ class ApiClient {
     return list;
   }
 
+  Future<List<StoreGroup>> getStoreGroups() async {
+    final response = await _dio.get('/api/mobile/store-groups');
+    final data = _asMap(response.data);
+    if (data['success'] != true) {
+      throw Exception(
+          (data['error'] ?? 'Unable to load store groups').toString());
+    }
+    return (data['groups'] as List? ?? const [])
+        .map((item) => StoreGroup.fromJson(_asMap(item)))
+        .where((group) => group.id.isNotEmpty && group.name.isNotEmpty)
+        .toList();
+  }
+
+  Future<void> saveStoreGroups(List<StoreGroup> groups) async {
+    final response = await _dio.post(
+      '/save_store_groups',
+      data: {'groups': groups.map((group) => group.toJson()).toList()},
+    );
+    final data = _asMap(response.data);
+    if (data['success'] != true) {
+      throw Exception(
+          (data['error'] ?? 'Unable to save store groups').toString());
+    }
+  }
+
   Future<String?> getMasterStoreId() async {
     final response = await _dio.get('/stores');
     final data = _asMap(response.data);
@@ -689,12 +714,11 @@ class ApiClient {
   Future<List<Map<String, dynamic>>> getPlaylist({
     required String storeId,
     required String screenId,
+    bool includeInactive = true,
   }) async {
     final response = await _dio.get(
       '/playlist/$storeId/$screenId',
-      queryParameters: {
-        'skip_schedule_filter': '1',
-      },
+      queryParameters: includeInactive ? {'skip_schedule_filter': '1'} : null,
     );
     final data = _asMap(response.data);
     if (data['success'] != true) {
@@ -807,6 +831,32 @@ class ApiClient {
     }
   }
 
+  Future<void> restartPiClient(String piId) async {
+    final response = await _dio.post(
+      '/api/pi-restart-client',
+      data: {'pi_id': piId},
+    );
+    final data = _asMap(response.data);
+    if (data['success'] != true) {
+      throw Exception(
+          (data['message'] ?? data['error'] ?? 'Failed to restart client')
+              .toString());
+    }
+  }
+
+  Future<void> closePiScreen(String piId) async {
+    final response = await _dio.post(
+      '/api/pi-close-screen',
+      data: {'pi_id': piId},
+    );
+    final data = _asMap(response.data);
+    if (data['success'] != true) {
+      throw Exception(
+          (data['message'] ?? data['error'] ?? 'Failed to close display')
+              .toString());
+    }
+  }
+
   Future<void> deletePiDevice(String piId) async {
     final response = await _dio.post(
       '/api/pi-delete',
@@ -832,6 +882,27 @@ class ApiClient {
               .toString());
     }
     return data;
+  }
+
+  Future<List<Map<String, dynamic>>> searchGoogleAddresses(String query) async {
+    final cleanQuery = query.trim();
+    if (cleanQuery.length < 3) {
+      return const [];
+    }
+    final response = await _dio.get(
+      '/api/google_address_search',
+      queryParameters: {'q': cleanQuery},
+    );
+    final data = _asMap(response.data);
+    if (data['success'] != true) {
+      throw Exception(
+          (data['error'] ?? 'Unable to search Google addresses').toString());
+    }
+    final results = data['results'];
+    if (results is! List) {
+      return const [];
+    }
+    return results.map((item) => _asMap(item)).toList();
   }
 
   Future<void> updatePiLocation({

@@ -11,6 +11,7 @@ import 'package:geocoding/geocoding.dart' as geocoding;
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
+import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 
 import '../account_page.dart';
 import '../../models/app_models.dart';
@@ -646,6 +647,11 @@ class _StoresTabState extends State<StoresTab> {
     }
 
     final candidates = <String>[];
+    String? videoUrl;
+    String? youtubeVideoId;
+    String? livePosTitle;
+    String? livePosBody;
+    int? syncStartEpoch;
     void addCandidate(String raw) {
       final resolved = _toAbsoluteUrlForPreview(raw);
       if (resolved.isNotEmpty && !candidates.contains(resolved)) {
@@ -653,11 +659,44 @@ class _StoresTabState extends State<StoresTab> {
       }
     }
 
+    void addVideoUrl(String raw) {
+      final resolved = _toAbsoluteUrlForPreview(raw);
+      if (resolved.isNotEmpty && videoUrl == null) {
+        videoUrl = resolved;
+      }
+    }
+
     void addItemCandidates(Map<String, dynamic> item) {
       final file = (item['file'] ?? '').toString().trim();
+      final mediaType = (item['media_type'] ?? '').toString().toLowerCase();
+      final isLivePos =
+          mediaType == 'live_pos' || file.toLowerCase().startsWith('livepos:');
+      if (isLivePos && livePosTitle == null) {
+        final activeItem = item['live_pos_active_item'];
+        final activeMap = activeItem is Map ? activeItem : const {};
+        livePosTitle = (item['live_pos_title'] ??
+                activeMap['title'] ??
+                item['displayName'] ??
+                'Live POS')
+            .toString()
+            .trim();
+        livePosBody = (item['live_pos_body'] ?? activeMap['body'] ?? '')
+            .toString()
+            .trim();
+        return;
+      }
+      final syncRef = item['sync_ref'];
+      final isSyncSlice = syncRef is Map &&
+          (syncRef['group'] ?? '').toString().trim().isNotEmpty;
+      if (syncStartEpoch == null && syncRef is Map) {
+        syncStartEpoch = int.tryParse(
+          (syncRef['start_epoch'] ?? '').toString(),
+        );
+      }
       if (file.startsWith('youtube:')) {
         final id = file.substring('youtube:'.length).trim();
         if (id.length == 11) {
+          youtubeVideoId ??= id;
           addCandidate('https://img.youtube.com/vi/$id/hqdefault.jpg');
         }
       }
@@ -674,6 +713,13 @@ class _StoresTabState extends State<StoresTab> {
             lower.contains('.mkv') ||
             lower.contains('.m3u8');
         if (isVideo) {
+          // The preview route produces a low-bitrate H.264 baseline clip,
+          // which is reliable across Android devices and emulator codecs.
+          addVideoUrl(
+            isSyncSlice
+                ? '/syncpreview/320/$encoded'
+                : '/vpreview/320/$encoded',
+          );
           addCandidate('/vthumb/320/$encoded');
           addCandidate('/vthumb/160/$encoded');
         } else {
@@ -684,6 +730,14 @@ class _StoresTabState extends State<StoresTab> {
       }
 
       if (file.startsWith('http://') || file.startsWith('https://')) {
+        final lower = file.toLowerCase();
+        if (lower.contains('.mp4') ||
+            lower.contains('.mov') ||
+            lower.contains('.webm') ||
+            lower.contains('.mkv') ||
+            lower.contains('.m3u8')) {
+          addVideoUrl(file);
+        }
         addCandidate(file);
       }
 
@@ -707,18 +761,30 @@ class _StoresTabState extends State<StoresTab> {
       }
     }
 
-    if (candidates.isEmpty) {
+    if (candidates.isEmpty && livePosTitle == null) {
       return const _ScreenCardPreviewData(urls: []);
     }
 
     Map<String, String> headers = const {};
-    try {
-      headers = await widget.apiClient.getAuthHeadersForUrl(candidates.first);
-    } catch (_) {
-      headers = const {};
+    final headerUrl =
+        videoUrl ?? (candidates.isNotEmpty ? candidates.first : '');
+    if (headerUrl.isNotEmpty) {
+      try {
+        headers = await widget.apiClient.getAuthHeadersForUrl(headerUrl);
+      } catch (_) {
+        headers = const {};
+      }
     }
 
-    return _ScreenCardPreviewData(urls: candidates, headers: headers);
+    return _ScreenCardPreviewData(
+      urls: candidates,
+      videoUrl: videoUrl,
+      youtubeVideoId: youtubeVideoId,
+      livePosTitle: livePosTitle,
+      livePosBody: livePosBody,
+      syncStartEpoch: syncStartEpoch,
+      headers: headers,
+    );
   }
 
   Future<_ScreenCardPreviewData> _getScreenCardPreviewData({
@@ -868,181 +934,136 @@ class _StoresTabState extends State<StoresTab> {
   }) {
     final future = _storeMapMarkersFuture;
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  height: 34,
-                  width: 34,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE0F2FE),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.map_outlined, size: 18),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Store Map',
-                    style: theme.textTheme.titleMedium,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Showing store pins from saved coordinates or resolved addresses.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 260,
-              child: future == null
-                  ? const Center(child: CircularProgressIndicator())
-                  : FutureBuilder<List<_StoreMapMarkerData>>(
-                      future: future,
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return const Center(
-                              child: CircularProgressIndicator());
-                        }
-                        final markers =
-                            snapshot.data ?? const <_StoreMapMarkerData>[];
-                        if (markers.isEmpty) {
-                          return Container(
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: scheme.surfaceContainerLow,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: scheme.outlineVariant),
-                            ),
-                            padding: const EdgeInsets.all(20),
-                            child: Text(
-                              'No store locations found yet. Add an address or coordinates to your stores/screens and pins will appear here.',
-                              textAlign: TextAlign.center,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                              ),
-                            ),
-                          );
-                        }
+      clipBehavior: Clip.antiAlias,
+      child: SizedBox(
+        height: 340,
+        width: double.infinity,
+        child: future == null
+            ? const Center(child: CircularProgressIndicator())
+            : FutureBuilder<List<_StoreMapMarkerData>>(
+                future: future,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  final markers =
+                      snapshot.data ?? const <_StoreMapMarkerData>[];
+                  if (markers.isEmpty) {
+                    return Container(
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: scheme.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: scheme.outlineVariant),
+                      ),
+                      padding: const EdgeInsets.all(20),
+                      child: Text(
+                        'No store locations found yet. Add an address or coordinates to your stores/screens and pins will appear here.',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    );
+                  }
 
-                        final points =
-                            markers.map((marker) => marker.point).toList();
-                        final selectedMarker = markers.where(
-                          (marker) => marker.store.id == widget.selectedStoreId,
-                        );
-                        final initialCenter = selectedMarker.isNotEmpty
-                            ? selectedMarker.first.point
-                            : points.first;
+                  final points = markers.map((marker) => marker.point).toList();
+                  final selectedMarker = markers.where(
+                    (marker) => marker.store.id == widget.selectedStoreId,
+                  );
+                  final initialCenter = selectedMarker.isNotEmpty
+                      ? selectedMarker.first.point
+                      : points.first;
 
-                        return ClipRRect(
-                          borderRadius: BorderRadius.circular(14),
-                          child: FlutterMap(
-                            options: MapOptions(
-                              initialCenter: initialCenter,
-                              initialZoom: markers.length == 1 ? 13 : 5.2,
-                              initialCameraFit: markers.length > 1
-                                  ? CameraFit.bounds(
-                                      bounds: LatLngBounds.fromPoints(points),
-                                      padding: const EdgeInsets.all(32),
-                                    )
-                                  : null,
-                            ),
-                            children: [
-                              TileLayer(
-                                urlTemplate:
-                                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                                userAgentPackageName:
-                                    'com.everydayadvertise.everyday_mobile',
-                              ),
-                              MarkerLayer(
-                                markers: markers
-                                    .map(
-                                      (marker) => Marker(
-                                        point: marker.point,
-                                        width: 120,
-                                        height: 82,
-                                        child: GestureDetector(
-                                          onTap: () =>
-                                              _onSelectStore(marker.store.id),
-                                          child: Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                  horizontal: 8,
-                                                  vertical: 4,
+                  return ClipRRect(
+                    child: FlutterMap(
+                      options: MapOptions(
+                        initialCenter: initialCenter,
+                        initialZoom: markers.length == 1 ? 13 : 5.2,
+                        initialCameraFit: markers.length > 1
+                            ? CameraFit.bounds(
+                                bounds: LatLngBounds.fromPoints(points),
+                                padding: const EdgeInsets.all(32),
+                              )
+                            : null,
+                      ),
+                      children: [
+                        TileLayer(
+                          urlTemplate:
+                              'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          userAgentPackageName:
+                              'com.everydayadvertise.everyday_mobile',
+                        ),
+                        MarkerLayer(
+                          markers: markers
+                              .map(
+                                (marker) => Marker(
+                                  point: marker.point,
+                                  width: 120,
+                                  height: 82,
+                                  child: GestureDetector(
+                                    onTap: () =>
+                                        _onSelectStore(marker.store.id),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: marker.store.id ==
+                                                    widget.selectedStoreId
+                                                ? scheme.primary
+                                                : Colors.white,
+                                            borderRadius:
+                                                BorderRadius.circular(999),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withValues(
+                                                  alpha: 0.08,
                                                 ),
-                                                decoration: BoxDecoration(
-                                                  color: marker.store.id ==
-                                                          widget.selectedStoreId
-                                                      ? scheme.primary
-                                                      : Colors.white,
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          999),
-                                                  boxShadow: [
-                                                    BoxShadow(
-                                                      color: Colors.black
-                                                          .withValues(
-                                                        alpha: 0.08,
-                                                      ),
-                                                      blurRadius: 8,
-                                                      offset:
-                                                          const Offset(0, 2),
-                                                    ),
-                                                  ],
-                                                ),
-                                                child: Text(
-                                                  marker.store.name,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: theme
-                                                      .textTheme.labelSmall
-                                                      ?.copyWith(
-                                                    color: marker.store.id ==
-                                                            widget
-                                                                .selectedStoreId
-                                                        ? scheme.onPrimary
-                                                        : scheme.onSurface,
-                                                    fontWeight: FontWeight.w700,
-                                                  ),
-                                                ),
-                                              ),
-                                              const SizedBox(height: 4),
-                                              Icon(
-                                                Icons.location_on,
-                                                size: 34,
-                                                color: marker.store.id ==
-                                                        widget.selectedStoreId
-                                                    ? scheme.primary
-                                                    : const Color(0xFFDC2626),
+                                                blurRadius: 8,
+                                                offset: const Offset(0, 2),
                                               ),
                                             ],
                                           ),
+                                          child: Text(
+                                            marker.store.name,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: theme.textTheme.labelSmall
+                                                ?.copyWith(
+                                              color: marker.store.id ==
+                                                      widget.selectedStoreId
+                                                  ? scheme.onPrimary
+                                                  : scheme.onSurface,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
                                         ),
-                                      ),
-                                    )
-                                    .toList(),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
+                                        const SizedBox(height: 4),
+                                        Icon(
+                                          Icons.location_on,
+                                          size: 34,
+                                          color: marker.store.id ==
+                                                  widget.selectedStoreId
+                                              ? scheme.primary
+                                              : const Color(0xFFDC2626),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ],
                     ),
-            ),
-          ],
-        ),
+                  );
+                },
+              ),
       ),
     );
   }
@@ -1466,6 +1487,36 @@ class _StoresTabState extends State<StoresTab> {
                                         child: Icon(Icons.image_not_supported),
                                       );
                                     }
+                                    if (data.livePosTitle != null) {
+                                      return _LivePosCardPreview(
+                                        title: data.livePosTitle!,
+                                        body: data.livePosBody ?? '',
+                                      );
+                                    }
+                                    if (data.videoUrl != null) {
+                                      return ClipRRect(
+                                        borderRadius: BorderRadius.circular(7),
+                                        child: _VideoPreview(
+                                          key: ValueKey(
+                                              'screen-card-${data.videoUrl}'),
+                                          url: data.videoUrl!,
+                                          headers: data.headers,
+                                          compact: true,
+                                          syncStartEpoch: data.syncStartEpoch,
+                                        ),
+                                      );
+                                    }
+                                    if (data.youtubeVideoId != null) {
+                                      return ClipRRect(
+                                        borderRadius: BorderRadius.circular(7),
+                                        child: _YouTubeCardPreview(
+                                          key: ValueKey(
+                                            'screen-card-youtube-${data.youtubeVideoId}',
+                                          ),
+                                          videoId: data.youtubeVideoId!,
+                                        ),
+                                      );
+                                    }
                                     return ClipRRect(
                                       borderRadius: BorderRadius.circular(7),
                                       child: _ScreenCardPreviewImage(
@@ -1550,10 +1601,20 @@ class _ScreenCardPreviewImageState extends State<_ScreenCardPreviewImage> {
 class _ScreenCardPreviewData {
   const _ScreenCardPreviewData({
     required this.urls,
+    this.videoUrl,
+    this.youtubeVideoId,
+    this.livePosTitle,
+    this.livePosBody,
+    this.syncStartEpoch,
     this.headers = const {},
   });
 
   final List<String> urls;
+  final String? videoUrl;
+  final String? youtubeVideoId;
+  final String? livePosTitle;
+  final String? livePosBody;
+  final int? syncStartEpoch;
   final Map<String, String> headers;
 }
 
@@ -6033,63 +6094,65 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Replace media',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Replace media',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
                   ),
                 ),
-              ),
-              ListTile(
-                leading: const Icon(Icons.folder_open),
-                title: const Text('Choose from device'),
-                subtitle: const Text('Pick an image or video from this phone'),
-                onTap: () => Navigator.of(sheetContext).pop('device'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.add_to_drive),
-                title: const Text('Google Drive'),
-                subtitle:
-                    const Text('If Recent opens, use the menu to choose Drive'),
-                onTap: () => Navigator.of(sheetContext).pop('drive'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.collections),
-                title: const Text('Server library'),
-                subtitle: const Text('Use media already uploaded here'),
-                onTap: () => Navigator.of(sheetContext).pop('library'),
-              ),
-              const Divider(height: 8),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Apps',
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                ListTile(
+                  leading: const Icon(Icons.folder_open),
+                  title: const Text('Choose from device'),
+                  subtitle:
+                      const Text('Pick an image or video from this phone'),
+                  onTap: () => Navigator.of(sheetContext).pop('device'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.add_to_drive),
+                  title: const Text('Google Drive'),
+                  subtitle: const Text(
+                      'If Recent opens, use the menu to choose Drive'),
+                  onTap: () => Navigator.of(sheetContext).pop('drive'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.collections),
+                  title: const Text('Server library'),
+                  subtitle: const Text('Use media already uploaded here'),
+                  onTap: () => Navigator.of(sheetContext).pop('library'),
+                ),
+                const Divider(height: 8),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Apps',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
                   ),
                 ),
-              ),
-              ListTile(
-                leading: const Icon(Icons.smart_display_rounded),
-                title: const Text('YouTube'),
-                subtitle: const Text('Replace with a YouTube URL or video ID'),
-                onTap: () => Navigator.of(sheetContext).pop('youtube'),
-              ),
-              ListTile(
-                enabled: false,
-                leading: const Icon(Icons.apps_rounded),
-                title: const Text('Other apps'),
-                subtitle: const Text('More app sources coming soon'),
-              ),
-              const SizedBox(height: 8),
+                ListTile(
+                  leading: const Icon(Icons.smart_display_rounded),
+                  title: const Text('YouTube'),
+                  subtitle:
+                      const Text('Replace with a YouTube URL or video ID'),
+                  onTap: () => Navigator.of(sheetContext).pop('youtube'),
+                ),
+                ListTile(
+                  enabled: false,
+                  leading: const Icon(Icons.apps_rounded),
+                  title: const Text('Other apps'),
+                  subtitle: const Text('More app sources coming soon'),
+                ),
+                const SizedBox(height: 8),
               ],
             ),
           ),
@@ -8064,833 +8127,139 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet>
       child: NotificationListener<ScrollNotification>(
         onNotification: _onHeaderScroll,
         child: Column(
-      children: [
-        SizeTransition(
-          axisAlignment: -1,
-          sizeFactor: _headerAnim,
-          child: Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 8, 10),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border(
-              bottom: BorderSide(color: scheme.outlineVariant),
-            ),
-          ),
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              SizedBox(
-                width: MediaQuery.of(context).size.width - 120,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizeTransition(
+              axisAlignment: -1,
+              sizeFactor: _headerAnim,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(16, 12, 8, 10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border(
+                    bottom: BorderSide(color: scheme.outlineVariant),
+                  ),
+                ),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Text(
-                      widget.screenName,
-                      style: theme.textTheme.titleLarge,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${widget.storeId} • ${widget.screenId}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
+                    SizedBox(
+                      width: MediaQuery.of(context).size.width - 120,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.screenName,
+                            style: theme.textTheme.titleLarge,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${widget.storeId} • ${widget.screenId}',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          onPressed: _loading ? null : _loadPlaylist,
+                          icon: const Icon(Icons.refresh),
+                        ),
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    onPressed: _loading ? null : _loadPlaylist,
-                    icon: const Icon(Icons.refresh),
-                  ),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        ),
-        Expanded(
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(10),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+            ),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : ListView(
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(10),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                _buildInfoBadge(
-                                  icon: isOnline
-                                      ? Icons.wifi_tethering
-                                      : Icons.wifi_tethering_off,
-                                  label: isOnline ? 'Online' : 'Offline',
-                                  background: isOnline
-                                      ? const Color(0xFFDCFCE7)
-                                      : const Color(0xFFFEE2E2),
-                                  foreground: isOnline
-                                      ? const Color(0xFF166534)
-                                      : const Color(0xFF991B1B),
-                                ),
-                                if (_screenProtected) ...[
-                                  const SizedBox(width: 8),
-                                  _buildInfoBadge(
-                                    icon: Icons.lock_outline,
-                                    label: 'Protected',
-                                    background: scheme.surfaceContainerHigh,
-                                  ),
-                                ],
-                                const Spacer(),
-                                _buildInfoBadge(
-                                  icon: Icons.screen_rotation_alt_outlined,
-                                  label: '$_screenRotation°',
-                                  background: scheme.surfaceContainerHigh,
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              addressLabel,
-                              style: theme.textTheme.labelMedium?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              _screenAddress.trim().isEmpty
-                                  ? 'No saved screen or store address'
-                                  : _screenAddress,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: _screenAddress.trim().isEmpty
-                                    ? scheme.onSurfaceVariant
-                                    : scheme.onSurface,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    playlistModeLabel,
-                                    style: theme.textTheme.titleSmall,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: scheme.surfaceContainerLow,
-                                borderRadius: BorderRadius.circular(12),
-                                border:
-                                    Border.all(color: scheme.outlineVariant),
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 48,
-                                    height: 48,
-                                    clipBehavior: Clip.antiAlias,
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(10),
-                                      color: scheme.surfaceContainerHigh,
+                                Row(
+                                  children: [
+                                    _buildInfoBadge(
+                                      icon: isOnline
+                                          ? Icons.wifi_tethering
+                                          : Icons.wifi_tethering_off,
+                                      label: isOnline ? 'Online' : 'Offline',
+                                      background: isOnline
+                                          ? const Color(0xFFDCFCE7)
+                                          : const Color(0xFFFEE2E2),
+                                      foreground: isOnline
+                                          ? const Color(0xFF166534)
+                                          : const Color(0xFF991B1B),
                                     ),
-                                    child: _buildCompactMediaThumb(
-                                      item,
-                                      iconSize: 22,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          currentItemLabel,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: theme.textTheme.titleSmall,
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          currentRunning
-                                              ? 'Running now'
-                                              : 'Ready in playlist',
-                                          style: theme.textTheme.bodySmall
-                                              ?.copyWith(
-                                            color: scheme.onSurfaceVariant,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  if (currentDuration != null)
-                                    Text(
-                                      '$currentDuration s',
-                                      style:
-                                          theme.textTheme.labelMedium?.copyWith(
-                                        color: scheme.onSurfaceVariant,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                            if (_playlist.length > 1) ...[
-                              const SizedBox(height: 10),
-                              Text(
-                                'All Playlist Items',
-                                style: theme.textTheme.labelMedium?.copyWith(
-                                  color: scheme.onSurfaceVariant,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              ..._playlist.map((playlistItem) {
-                                final playlistItemId =
-                                    (playlistItem['id'] ?? '').toString();
-                                final isSelected = (_selectedItemId == null &&
-                                        identical(playlistItem, item)) ||
-                                    _selectedItemId == playlistItemId;
-                                final playlistDuration = int.tryParse(
-                                      '${playlistItem['duration'] ?? 10}',
-                                    ) ??
-                                    10;
-                                final playlistRunning =
-                                    _looksRunning(playlistItem);
-                                return Padding(
-                                  padding: const EdgeInsets.only(bottom: 6),
-                                  child: InkWell(
-                                    borderRadius: BorderRadius.circular(12),
-                                    onTap: () {
-                                      setState(() {
-                                        _selectedItemId = playlistItemId;
-                                      });
-                                      _loadItemFieldsFromCurrent();
-                                      _refreshPreviewHeaders();
-                                    },
-                                    child: Container(
-                                      padding: const EdgeInsets.all(10),
-                                      decoration: BoxDecoration(
-                                        color: isSelected
-                                            ? scheme.primaryContainer
-                                            : scheme.surface,
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(
-                                          color: isSelected
-                                              ? scheme.primary
-                                              : scheme.outlineVariant,
-                                        ),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Container(
-                                            width: 42,
-                                            height: 42,
-                                            clipBehavior: Clip.antiAlias,
-                                            decoration: BoxDecoration(
-                                              borderRadius:
-                                                  BorderRadius.circular(10),
-                                              color:
-                                                  scheme.surfaceContainerHigh,
-                                            ),
-                                            child: _buildCompactMediaThumb(
-                                              playlistItem,
-                                              iconSize: 20,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 10),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  _itemLabel(playlistItem),
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: theme
-                                                      .textTheme.titleSmall,
-                                                ),
-                                                const SizedBox(height: 2),
-                                                Text(
-                                                  playlistRunning
-                                                      ? 'Running now'
-                                                      : 'Scheduled item',
-                                                  style: theme
-                                                      .textTheme.bodySmall
-                                                      ?.copyWith(
-                                                    color:
-                                                        scheme.onSurfaceVariant,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          Text(
-                                            '$playlistDuration s',
-                                            style: theme.textTheme.labelMedium
-                                                ?.copyWith(
-                                              color: scheme.onSurfaceVariant,
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              }),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Text('Current Media',
-                                    style: theme.textTheme.titleMedium),
-                                const Spacer(),
-                                SizedBox(
-                                  width: 36,
-                                  height: 36,
-                                  child: IconButton.outlined(
-                                    tooltip: 'Replace media',
-                                    onPressed:
-                                        _saving ? null : _openQuickReplaceMedia,
-                                    icon: const Icon(Icons.swap_horiz_rounded,
-                                        size: 18),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                SizedBox(
-                                  width: 36,
-                                  height: 36,
-                                  child: IconButton.outlined(
-                                    tooltip: 'Delete current item',
-                                    onPressed: _saving || item == null
-                                        ? null
-                                        : _deleteCurrentPlaylistItem,
-                                    icon: const Icon(Icons.delete_outline,
-                                        size: 18),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if (_playlist.length > 1) ...[
-                              const SizedBox(height: 8),
-                              InkWell(
-                                borderRadius: BorderRadius.circular(10),
-                                onTap: _pickPlaylistItemVisual,
-                                child: InputDecorator(
-                                  decoration: const InputDecoration(
-                                    labelText: 'Playlist Item',
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          _itemLabel(_currentItem ?? const {}),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
+                                    if (_screenProtected) ...[
                                       const SizedBox(width: 8),
-                                      const Icon(Icons.arrow_drop_down),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                            const SizedBox(height: 8),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: AspectRatio(
-                                aspectRatio: 16 / 9,
-                                child: ColoredBox(
-                                  color: const Color(0xFFF1F5F9),
-                                  child: Transform.rotate(
-                                    angle: rotationAngle,
-                                    child: hasImage
-                                        ? Image.network(
-                                            itemUrl,
-                                            headers: _previewHeaders,
-                                            fit: BoxFit.cover,
-                                            errorBuilder: (_, __, ___) =>
-                                                const Center(
-                                              child: Icon(Icons.broken_image,
-                                                  size: 36),
-                                            ),
-                                          )
-                                        : hasVideo
-                                            ? (isYouTube &&
-                                                    youTubeId.length == 11
-                                                ? _YouTubePreview(
-                                                    key: ValueKey(
-                                                        'yt-$youTubeId'),
-                                                    videoId: youTubeId,
-                                                  )
-                                                : itemUrl.isNotEmpty
-                                                    ? _VideoPreview(
-                                                        key: ValueKey(itemUrl),
-                                                        url: itemUrl,
-                                                        headers:
-                                                            _previewHeaders,
-                                                      )
-                                                    : const Center(
-                                                        child: Column(
-                                                          mainAxisSize:
-                                                              MainAxisSize.min,
-                                                          children: [
-                                                            Icon(Icons.movie,
-                                                                size: 40),
-                                                            SizedBox(height: 8),
-                                                            Text(
-                                                                'Video selected'),
-                                                          ],
-                                                        ),
-                                                      ))
-                                            : const Center(
-                                                child: Column(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    Icon(Icons.perm_media,
-                                                        size: 36),
-                                                    SizedBox(height: 8),
-                                                    Text(
-                                                        'No media assigned yet'),
-                                                  ],
-                                                ),
-                                              ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            if (item == null)
-                              Text(
-                                'Upload or assign media to start syncing this screen.',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: scheme.onSurfaceVariant,
-                                ),
-                              )
-                            else
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: [
-                                  _buildInfoBadge(
-                                    icon: hasVideo
-                                        ? Icons.movie_outlined
-                                        : hasImage
-                                            ? Icons.image_outlined
-                                            : Icons.perm_media_outlined,
-                                    label:
-                                        'Type ${mediaType.isEmpty ? 'unknown' : mediaType}',
-                                  ),
-                                  _buildInfoBadge(
-                                    icon: Icons.sync,
-                                    label: 'Website sync 5s',
-                                    background: scheme.primaryContainer,
-                                    foreground: scheme.onPrimaryContainer,
-                                  ),
-                                ],
-                              ),
-                            const SizedBox(height: 8),
-                            SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: Row(
-                                children: [
-                                  _buildQuickActionButton(
-                                    tooltip: 'Schedule',
-                                    icon: Icons.schedule,
-                                    background: const Color(0xFF2563EB),
-                                    onPressed: (_saving || _quickActionBusy)
-                                        ? null
-                                        : _openCreatePlaylistSetup,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  _buildQuickActionButton(
-                                    tooltip: 'Auto',
-                                    icon: Icons.content_cut,
-                                    background: const Color(0xFF16A34A),
-                                    onPressed: (_saving || _quickActionBusy)
-                                        ? null
-                                        : _quickAutoSlice,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  _buildQuickActionButton(
-                                    tooltip: 'YouTube',
-                                    icon: Icons.play_arrow,
-                                    background: const Color(0xFFDC2626),
-                                    onPressed: (_saving || _quickActionBusy)
-                                        ? null
-                                        : _quickAddYouTube,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  _buildQuickActionButton(
-                                    tooltip: 'Rotate',
-                                    icon: Icons.rotate_left,
-                                    background: const Color(0xFF6366F1),
-                                    onPressed: (_saving || _quickActionBusy)
-                                        ? null
-                                        : _quickRotate,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  _buildQuickActionButton(
-                                    tooltip: _screenMuted
-                                        ? 'Unmute Screen'
-                                        : 'Mute Screen',
-                                    icon: _screenMuted
-                                        ? Icons.volume_off
-                                        : Icons.volume_up,
-                                    background: _screenMuted
-                                        ? const Color(0xFF6B7280)
-                                        : const Color(0xFF059669),
-                                    onPressed: (_saving || _quickActionBusy)
-                                        ? null
-                                        : _quickToggleMute,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  _buildQuickActionButton(
-                                    tooltip: 'TV',
-                                    icon: Icons.open_in_browser,
-                                    background: const Color(0xFF0EA5E9),
-                                    onPressed: (_saving || _quickActionBusy)
-                                        ? null
-                                        : _openDisplayPlayer,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            if (_quickActionBusy) ...[
-                              const SizedBox(height: 6),
-                              LinearProgressIndicator(
-                                minHeight: 2,
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
-                    if (_message != null) ...[
-                      const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: scheme.surfaceContainer,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: scheme.outlineVariant),
-                        ),
-                        child: Text(_message!),
-                      ),
-                    ],
-                    const SizedBox(height: 10),
-                    _buildPanelInfoCard(),
-                    const SizedBox(height: 10),
-                    Card(
-                      elevation: 0,
-                      color: scheme.surface,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              padding: EdgeInsets.zero,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Playback',
-                                      style: theme.textTheme.titleSmall),
-                                  const SizedBox(height: 12),
-                                  Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      _buildPillToggle(
-                                        label: 'Enabled',
-                                        value: _itemEnabled,
-                                        onChanged: _saving
-                                            ? null
-                                            : (value) {
-                                                setState(() {
-                                                  _itemEnabled = value;
-                                                });
-                                                _queueAutoSave();
-                                              },
-                                      ),
-                                      const SizedBox(width: 18),
-                                      _buildPillToggle(
-                                        label: 'Repeat',
-                                        value: _itemRepeat,
-                                        onChanged: _saving
-                                            ? null
-                                            : (value) {
-                                                setState(() {
-                                                  _itemRepeat = value;
-                                                });
-                                                _queueAutoSave();
-                                              },
-                                      ),
-                                      const Spacer(),
-                                      SizedBox(
-                                        width: 128,
-                                        child: _buildPillDurationField(),
+                                      _buildInfoBadge(
+                                        icon: Icons.lock_outline,
+                                        label: 'Protected',
+                                        background: scheme.surfaceContainerHigh,
                                       ),
                                     ],
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    'Effect',
-                                    style:
-                                        theme.textTheme.labelMedium?.copyWith(
-                                      fontWeight: FontWeight.w700,
-                                      color: scheme.onSurfaceVariant,
+                                    const Spacer(),
+                                    _buildInfoBadge(
+                                      icon: Icons.screen_rotation_alt_outlined,
+                                      label: '$_screenRotation°',
+                                      background: scheme.surfaceContainerHigh,
                                     ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Row(
-                                    children: List.generate(11, (i) {
-                                      final selected = _itemEffectId == i;
-                                      final isLast = i == 10;
-                                      return Expanded(
-                                        child: Padding(
-                                          padding: EdgeInsets.only(
-                                              right: isLast ? 0 : 4),
-                                          child: GestureDetector(
-                                            onTap: _saving
-                                                ? null
-                                                : () {
-                                                    setState(() {
-                                                      _itemEffectId = i;
-                                                    });
-                                                    _queueAutoSave();
-                                                  },
-                                            child: Container(
-                                              height: 34,
-                                              alignment: Alignment.center,
-                                              decoration: BoxDecoration(
-                                                color: selected
-                                                    ? scheme.primary
-                                                    : scheme
-                                                        .surfaceContainerHighest,
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
-                                              ),
-                                              child: Text(
-                                                i == 0 ? '·' : '$i',
-                                                style: theme
-                                                    .textTheme.labelSmall
-                                                    ?.copyWith(
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: selected
-                                                      ? scheme.onPrimary
-                                                      : scheme.onSurfaceVariant,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      );
-                                    }),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            Divider(color: scheme.outlineVariant),
-                            const SizedBox(height: 12),
-                            Container(
-                              padding: EdgeInsets.zero,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Days',
-                                      style: theme.textTheme.titleSmall),
-                                  const SizedBox(height: 6),
-                                  Row(
-                                    children: _weekDays.map((day) {
-                                      final selected = _itemDays.contains(day);
-                                      final isLast = day == _weekDays.last;
-                                      return Expanded(
-                                        child: Padding(
-                                          padding: EdgeInsets.only(
-                                              right: isLast ? 0 : 4),
-                                          child: GestureDetector(
-                                            onTap: _saving
-                                                ? null
-                                                : () {
-                                                    setState(() {
-                                                      if (selected) {
-                                                        _itemDays.remove(day);
-                                                      } else {
-                                                        _itemDays.add(day);
-                                                      }
-                                                    });
-                                                    _queueAutoSave();
-                                                  },
-                                            child: Container(
-                                              height: 36,
-                                              alignment: Alignment.center,
-                                              decoration: BoxDecoration(
-                                                color: selected
-                                                    ? scheme.primary
-                                                    : scheme
-                                                        .surfaceContainerHighest,
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
-                                              ),
-                                              child: Text(
-                                                day.toUpperCase(),
-                                                style: theme
-                                                    .textTheme.labelSmall
-                                                    ?.copyWith(
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: selected
-                                                      ? scheme.onPrimary
-                                                      : scheme.onSurfaceVariant,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      );
-                                    }).toList(),
-                                  ),
-                                  const SizedBox(height: 14),
-                                  Text('Start / End',
-                                      style: theme.textTheme.titleSmall),
-                                  const SizedBox(height: 6),
-                                  _buildDateTimeField(
-                                    controller: _startController,
-                                    label: 'Start',
-                                    onPickDate: () =>
-                                        _pickDateFor(_startController),
-                                    onPickTime: () =>
-                                        _pickTimeFor(_startController),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  _buildDateTimeField(
-                                    controller: _endController,
-                                    label: 'End',
-                                    onPickDate: () =>
-                                        _pickDateFor(_endController),
-                                    onPickTime: () =>
-                                        _pickTimeFor(_endController),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: FilledButton.icon(
-                                style: FilledButton.styleFrom(
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 12),
+                                  ],
                                 ),
-                                onPressed: _saving ? null : _saveItemSettings,
-                                icon: const Icon(Icons.schedule),
-                                label: Text(_saving
-                                    ? 'Saving...'
-                                    : 'Save Playback Settings'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Schedule Windows',
-                                style: theme.textTheme.titleMedium),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Add a new image, video, or YouTube item to this screen, or add extra active windows to the selected media.',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            SizedBox(
-                              width: double.infinity,
-                              child: FilledButton.icon(
-                                onPressed:
-                                    _saving ? null : _openCreatePlaylistSetup,
-                                icon: const Icon(Icons.add),
-                                label: const Text('Add Scheduled Media'),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton.icon(
-                                onPressed: _saving ? null : _addScheduleWindow,
-                                icon: const Icon(Icons.event_repeat),
-                                label: const Text(
-                                  'Add Extra Window to Current Media',
+                                const SizedBox(height: 10),
+                                Text(
+                                  addressLabel,
+                                  style: theme.textTheme.labelMedium?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            if (_scheduleWindows().isEmpty)
-                              Text(
-                                'No schedule windows yet.',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: scheme.onSurfaceVariant,
+                                const SizedBox(height: 2),
+                                Text(
+                                  _screenAddress.trim().isEmpty
+                                      ? 'No saved screen or store address'
+                                      : _screenAddress,
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: _screenAddress.trim().isEmpty
+                                        ? scheme.onSurfaceVariant
+                                        : scheme.onSurface,
+                                  ),
                                 ),
-                              )
-                            else
-                              ..._scheduleWindows()
-                                  .asMap()
-                                  .entries
-                                  .map((entry) {
-                                final idx = entry.key;
-                                final window = entry.value;
-                                final days = _normalizeDays(window['days']);
-                                return Container(
-                                  margin: const EdgeInsets.only(bottom: 8),
+                                const SizedBox(height: 10),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        playlistModeLabel,
+                                        style: theme.textTheme.titleSmall,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Container(
                                   padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(
                                     color: scheme.surfaceContainerLow,
@@ -8898,142 +8267,867 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet>
                                     border: Border.all(
                                         color: scheme.outlineVariant),
                                   ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 48,
+                                        height: 48,
+                                        clipBehavior: Clip.antiAlias,
+                                        decoration: BoxDecoration(
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                          color: scheme.surfaceContainerHigh,
+                                        ),
+                                        child: _buildCompactMediaThumb(
+                                          item,
+                                          iconSize: 22,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              currentItemLabel,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: theme.textTheme.titleSmall,
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              currentRunning
+                                                  ? 'Running now'
+                                                  : 'Ready in playlist',
+                                              style: theme.textTheme.bodySmall
+                                                  ?.copyWith(
+                                                color: scheme.onSurfaceVariant,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      if (currentDuration != null)
+                                        Text(
+                                          '$currentDuration s',
+                                          style: theme.textTheme.labelMedium
+                                              ?.copyWith(
+                                            color: scheme.onSurfaceVariant,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                if (_playlist.length > 1) ...[
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    'All Playlist Items',
+                                    style:
+                                        theme.textTheme.labelMedium?.copyWith(
+                                      color: scheme.onSurfaceVariant,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  ..._playlist.map((playlistItem) {
+                                    final playlistItemId =
+                                        (playlistItem['id'] ?? '').toString();
+                                    final isSelected = (_selectedItemId ==
+                                                null &&
+                                            identical(playlistItem, item)) ||
+                                        _selectedItemId == playlistItemId;
+                                    final playlistDuration = int.tryParse(
+                                          '${playlistItem['duration'] ?? 10}',
+                                        ) ??
+                                        10;
+                                    final playlistRunning =
+                                        _looksRunning(playlistItem);
+                                    return Padding(
+                                      padding: const EdgeInsets.only(bottom: 6),
+                                      child: InkWell(
+                                        borderRadius: BorderRadius.circular(12),
+                                        onTap: () {
+                                          setState(() {
+                                            _selectedItemId = playlistItemId;
+                                          });
+                                          _loadItemFieldsFromCurrent();
+                                          _refreshPreviewHeaders();
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.all(10),
+                                          decoration: BoxDecoration(
+                                            color: isSelected
+                                                ? scheme.primaryContainer
+                                                : scheme.surface,
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                            border: Border.all(
+                                              color: isSelected
+                                                  ? scheme.primary
+                                                  : scheme.outlineVariant,
+                                            ),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Container(
+                                                width: 42,
+                                                height: 42,
+                                                clipBehavior: Clip.antiAlias,
+                                                decoration: BoxDecoration(
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
+                                                  color: scheme
+                                                      .surfaceContainerHigh,
+                                                ),
+                                                child: _buildCompactMediaThumb(
+                                                  playlistItem,
+                                                  iconSize: 20,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 10),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      _itemLabel(playlistItem),
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style: theme
+                                                          .textTheme.titleSmall,
+                                                    ),
+                                                    const SizedBox(height: 2),
+                                                    Text(
+                                                      playlistRunning
+                                                          ? 'Running now'
+                                                          : 'Scheduled item',
+                                                      style: theme
+                                                          .textTheme.bodySmall
+                                                          ?.copyWith(
+                                                        color: scheme
+                                                            .onSurfaceVariant,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              Text(
+                                                '$playlistDuration s',
+                                                style: theme
+                                                    .textTheme.labelMedium
+                                                    ?.copyWith(
+                                                  color:
+                                                      scheme.onSurfaceVariant,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text('Current Media',
+                                        style: theme.textTheme.titleMedium),
+                                    const Spacer(),
+                                    SizedBox(
+                                      width: 36,
+                                      height: 36,
+                                      child: IconButton.outlined(
+                                        tooltip: 'Replace media',
+                                        onPressed: _saving
+                                            ? null
+                                            : _openQuickReplaceMedia,
+                                        icon: const Icon(
+                                            Icons.swap_horiz_rounded,
+                                            size: 18),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    SizedBox(
+                                      width: 36,
+                                      height: 36,
+                                      child: IconButton.outlined(
+                                        tooltip: 'Delete current item',
+                                        onPressed: _saving || item == null
+                                            ? null
+                                            : _deleteCurrentPlaylistItem,
+                                        icon: const Icon(Icons.delete_outline,
+                                            size: 18),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                if (_playlist.length > 1) ...[
+                                  const SizedBox(height: 8),
+                                  InkWell(
+                                    borderRadius: BorderRadius.circular(10),
+                                    onTap: _pickPlaylistItemVisual,
+                                    child: InputDecorator(
+                                      decoration: const InputDecoration(
+                                        labelText: 'Playlist Item',
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              _itemLabel(
+                                                  _currentItem ?? const {}),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          const Icon(Icons.arrow_drop_down),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                                const SizedBox(height: 8),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: AspectRatio(
+                                    aspectRatio: 16 / 9,
+                                    child: ColoredBox(
+                                      color: const Color(0xFFF1F5F9),
+                                      child: Transform.rotate(
+                                        angle: rotationAngle,
+                                        child: hasImage
+                                            ? Image.network(
+                                                itemUrl,
+                                                headers: _previewHeaders,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (_, __, ___) =>
+                                                    const Center(
+                                                  child: Icon(
+                                                      Icons.broken_image,
+                                                      size: 36),
+                                                ),
+                                              )
+                                            : hasVideo
+                                                ? (isYouTube &&
+                                                        youTubeId.length == 11
+                                                    ? _YouTubePreview(
+                                                        key: ValueKey(
+                                                            'yt-$youTubeId'),
+                                                        videoId: youTubeId,
+                                                      )
+                                                    : itemUrl.isNotEmpty
+                                                        ? _VideoPreview(
+                                                            key: ValueKey(
+                                                                itemUrl),
+                                                            url: itemUrl,
+                                                            headers:
+                                                                _previewHeaders,
+                                                          )
+                                                        : const Center(
+                                                            child: Column(
+                                                              mainAxisSize:
+                                                                  MainAxisSize
+                                                                      .min,
+                                                              children: [
+                                                                Icon(
+                                                                    Icons.movie,
+                                                                    size: 40),
+                                                                SizedBox(
+                                                                    height: 8),
+                                                                Text(
+                                                                    'Video selected'),
+                                                              ],
+                                                            ),
+                                                          ))
+                                                : const Center(
+                                                    child: Column(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        Icon(Icons.perm_media,
+                                                            size: 36),
+                                                        SizedBox(height: 8),
+                                                        Text(
+                                                            'No media assigned yet'),
+                                                      ],
+                                                    ),
+                                                  ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                if (item == null)
+                                  Text(
+                                    'Upload or assign media to start syncing this screen.',
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: scheme.onSurfaceVariant,
+                                    ),
+                                  )
+                                else
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: [
+                                      _buildInfoBadge(
+                                        icon: hasVideo
+                                            ? Icons.movie_outlined
+                                            : hasImage
+                                                ? Icons.image_outlined
+                                                : Icons.perm_media_outlined,
+                                        label:
+                                            'Type ${mediaType.isEmpty ? 'unknown' : mediaType}',
+                                      ),
+                                      _buildInfoBadge(
+                                        icon: Icons.sync,
+                                        label: 'Website sync 5s',
+                                        background: scheme.primaryContainer,
+                                        foreground: scheme.onPrimaryContainer,
+                                      ),
+                                    ],
+                                  ),
+                                const SizedBox(height: 8),
+                                SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: Row(
+                                    children: [
+                                      _buildQuickActionButton(
+                                        tooltip: 'Schedule',
+                                        icon: Icons.schedule,
+                                        background: const Color(0xFF2563EB),
+                                        onPressed: (_saving || _quickActionBusy)
+                                            ? null
+                                            : _openCreatePlaylistSetup,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      _buildQuickActionButton(
+                                        tooltip: 'Auto',
+                                        icon: Icons.content_cut,
+                                        background: const Color(0xFF16A34A),
+                                        onPressed: (_saving || _quickActionBusy)
+                                            ? null
+                                            : _quickAutoSlice,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      _buildQuickActionButton(
+                                        tooltip: 'YouTube',
+                                        icon: Icons.play_arrow,
+                                        background: const Color(0xFFDC2626),
+                                        onPressed: (_saving || _quickActionBusy)
+                                            ? null
+                                            : _quickAddYouTube,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      _buildQuickActionButton(
+                                        tooltip: 'Rotate',
+                                        icon: Icons.rotate_left,
+                                        background: const Color(0xFF6366F1),
+                                        onPressed: (_saving || _quickActionBusy)
+                                            ? null
+                                            : _quickRotate,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      _buildQuickActionButton(
+                                        tooltip: _screenMuted
+                                            ? 'Unmute Screen'
+                                            : 'Mute Screen',
+                                        icon: _screenMuted
+                                            ? Icons.volume_off
+                                            : Icons.volume_up,
+                                        background: _screenMuted
+                                            ? const Color(0xFF6B7280)
+                                            : const Color(0xFF059669),
+                                        onPressed: (_saving || _quickActionBusy)
+                                            ? null
+                                            : _quickToggleMute,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      _buildQuickActionButton(
+                                        tooltip: 'TV',
+                                        icon: Icons.open_in_browser,
+                                        background: const Color(0xFF0EA5E9),
+                                        onPressed: (_saving || _quickActionBusy)
+                                            ? null
+                                            : _openDisplayPlayer,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (_quickActionBusy) ...[
+                                  const SizedBox(height: 6),
+                                  LinearProgressIndicator(
+                                    minHeight: 2,
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                        if (_message != null) ...[
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: scheme.surfaceContainer,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: scheme.outlineVariant),
+                            ),
+                            child: Text(_message!),
+                          ),
+                        ],
+                        const SizedBox(height: 10),
+                        _buildPanelInfoCard(),
+                        const SizedBox(height: 10),
+                        Card(
+                          elevation: 0,
+                          color: scheme.surface,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(14),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  padding: EdgeInsets.zero,
                                   child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
+                                      Text('Playback',
+                                          style: theme.textTheme.titleSmall),
+                                      const SizedBox(height: 12),
                                       Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
-                                          Text(
-                                            'Window ${idx + 1}',
-                                            style: theme.textTheme.titleSmall,
+                                          _buildPillToggle(
+                                            label: 'Enabled',
+                                            value: _itemEnabled,
+                                            onChanged: _saving
+                                                ? null
+                                                : (value) {
+                                                    setState(() {
+                                                      _itemEnabled = value;
+                                                    });
+                                                    _queueAutoSave();
+                                                  },
+                                          ),
+                                          const SizedBox(width: 18),
+                                          _buildPillToggle(
+                                            label: 'Repeat',
+                                            value: _itemRepeat,
+                                            onChanged: _saving
+                                                ? null
+                                                : (value) {
+                                                    setState(() {
+                                                      _itemRepeat = value;
+                                                    });
+                                                    _queueAutoSave();
+                                                  },
                                           ),
                                           const Spacer(),
-                                          if ((window['enabled'] ?? true) ==
-                                              true)
-                                            const Icon(Icons.check_circle,
-                                                size: 16,
-                                                color: Color(0xFF16A34A))
-                                          else
-                                            const Icon(Icons.pause_circle,
-                                                size: 16,
-                                                color: Color(0xFF6B7280)),
+                                          SizedBox(
+                                            width: 128,
+                                            child: _buildPillDurationField(),
+                                          ),
                                         ],
                                       ),
-                                      const SizedBox(height: 4),
+                                      const SizedBox(height: 12),
                                       Text(
-                                        'Start: ${_formatDisplayDateTime(window['start']).isEmpty ? '-' : _formatDisplayDateTime(window['start'])}\nEnd: ${_formatDisplayDateTime(window['end']).isEmpty ? '-' : _formatDisplayDateTime(window['end'])}',
-                                        style: theme.textTheme.bodySmall,
-                                      ),
-                                      if (days.isNotEmpty) ...[
-                                        const SizedBox(height: 6),
-                                        Wrap(
-                                          spacing: 6,
-                                          runSpacing: 6,
-                                          children: days
-                                              .map((d) => Chip(
-                                                    label:
-                                                        Text(d.toUpperCase()),
-                                                  ))
-                                              .toList(),
+                                        'Effect',
+                                        style: theme.textTheme.labelMedium
+                                            ?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                          color: scheme.onSurfaceVariant,
                                         ),
-                                      ],
+                                      ),
                                       const SizedBox(height: 6),
-                                      Wrap(
-                                        spacing: 8,
-                                        runSpacing: 8,
-                                        children: [
-                                          OutlinedButton.icon(
-                                            onPressed: _saving
-                                                ? null
-                                                : () => _editScheduleWindow(
-                                                      idx,
-                                                      window,
+                                      Row(
+                                        children: List.generate(11, (i) {
+                                          final selected = _itemEffectId == i;
+                                          final isLast = i == 10;
+                                          return Expanded(
+                                            child: Padding(
+                                              padding: EdgeInsets.only(
+                                                  right: isLast ? 0 : 4),
+                                              child: GestureDetector(
+                                                onTap: _saving
+                                                    ? null
+                                                    : () {
+                                                        setState(() {
+                                                          _itemEffectId = i;
+                                                        });
+                                                        _queueAutoSave();
+                                                      },
+                                                child: Container(
+                                                  height: 34,
+                                                  alignment: Alignment.center,
+                                                  decoration: BoxDecoration(
+                                                    color: selected
+                                                        ? scheme.primary
+                                                        : scheme
+                                                            .surfaceContainerHighest,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8),
+                                                  ),
+                                                  child: Text(
+                                                    i == 0 ? '·' : '$i',
+                                                    style: theme
+                                                        .textTheme.labelSmall
+                                                        ?.copyWith(
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      color: selected
+                                                          ? scheme.onPrimary
+                                                          : scheme
+                                                              .onSurfaceVariant,
                                                     ),
-                                            icon: const Icon(Icons.edit),
-                                            label: const Text('Edit'),
-                                          ),
-                                          OutlinedButton.icon(
-                                            onPressed: _saving
-                                                ? null
-                                                : () =>
-                                                    _deleteScheduleWindow(idx),
-                                            icon: const Icon(Icons.delete),
-                                            label: const Text('Delete'),
-                                          ),
-                                        ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          );
+                                        }),
                                       ),
                                     ],
                                   ),
-                                );
-                              }),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Replace Media',
-                                style: theme.textTheme.titleMedium),
-                            const SizedBox(height: 10),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    _pickedFile == null
-                                        ? 'No file selected'
-                                        : _pickedFile!.uri.pathSegments.last,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 12),
+                                Divider(color: scheme.outlineVariant),
+                                const SizedBox(height: 12),
+                                Container(
+                                  padding: EdgeInsets.zero,
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Days',
+                                          style: theme.textTheme.titleSmall),
+                                      const SizedBox(height: 6),
+                                      Row(
+                                        children: _weekDays.map((day) {
+                                          final selected =
+                                              _itemDays.contains(day);
+                                          final isLast = day == _weekDays.last;
+                                          return Expanded(
+                                            child: Padding(
+                                              padding: EdgeInsets.only(
+                                                  right: isLast ? 0 : 4),
+                                              child: GestureDetector(
+                                                onTap: _saving
+                                                    ? null
+                                                    : () {
+                                                        setState(() {
+                                                          if (selected) {
+                                                            _itemDays
+                                                                .remove(day);
+                                                          } else {
+                                                            _itemDays.add(day);
+                                                          }
+                                                        });
+                                                        _queueAutoSave();
+                                                      },
+                                                child: Container(
+                                                  height: 36,
+                                                  alignment: Alignment.center,
+                                                  decoration: BoxDecoration(
+                                                    color: selected
+                                                        ? scheme.primary
+                                                        : scheme
+                                                            .surfaceContainerHighest,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8),
+                                                  ),
+                                                  child: Text(
+                                                    day.toUpperCase(),
+                                                    style: theme
+                                                        .textTheme.labelSmall
+                                                        ?.copyWith(
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      color: selected
+                                                          ? scheme.onPrimary
+                                                          : scheme
+                                                              .onSurfaceVariant,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          );
+                                        }).toList(),
+                                      ),
+                                      const SizedBox(height: 14),
+                                      Text('Start / End',
+                                          style: theme.textTheme.titleSmall),
+                                      const SizedBox(height: 6),
+                                      _buildDateTimeField(
+                                        controller: _startController,
+                                        label: 'Start',
+                                        onPickDate: () =>
+                                            _pickDateFor(_startController),
+                                        onPickTime: () =>
+                                            _pickTimeFor(_startController),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      _buildDateTimeField(
+                                        controller: _endController,
+                                        label: 'End',
+                                        onPickDate: () =>
+                                            _pickDateFor(_endController),
+                                        onPickTime: () =>
+                                            _pickTimeFor(_endController),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                                const SizedBox(width: 8),
-                                OutlinedButton.icon(
-                                  onPressed: _saving ? null : _pickFile,
-                                  icon: const Icon(Icons.folder_open),
-                                  label: const Text('Choose'),
+                                const SizedBox(height: 12),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: FilledButton.icon(
+                                    style: FilledButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 12),
+                                    ),
+                                    onPressed:
+                                        _saving ? null : _saveItemSettings,
+                                    icon: const Icon(Icons.schedule),
+                                    label: Text(_saving
+                                        ? 'Saving...'
+                                        : 'Save Playback Settings'),
+                                  ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 8),
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton.icon(
-                                onPressed: _saving ? null : _replaceFromLibrary,
-                                icon: const Icon(Icons.collections),
-                                label:
-                                    const Text('Choose Existing from Library'),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            SizedBox(
-                              width: double.infinity,
-                              child: FilledButton.icon(
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: const Color(0xFF16A34A),
-                                  foregroundColor: Colors.white,
-                                ),
-                                onPressed: _saving ? null : _replaceMedia,
-                                icon: const Icon(Icons.cloud_upload),
-                                label: Text(_saving
-                                    ? 'Updating...'
-                                    : 'Replace Image/Video'),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: 10),
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(14),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Schedule Windows',
+                                    style: theme.textTheme.titleMedium),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Add a new image, video, or YouTube item to this screen, or add extra active windows to the selected media.',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: FilledButton.icon(
+                                    onPressed: _saving
+                                        ? null
+                                        : _openCreatePlaylistSetup,
+                                    icon: const Icon(Icons.add),
+                                    label: const Text('Add Scheduled Media'),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: OutlinedButton.icon(
+                                    onPressed:
+                                        _saving ? null : _addScheduleWindow,
+                                    icon: const Icon(Icons.event_repeat),
+                                    label: const Text(
+                                      'Add Extra Window to Current Media',
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                if (_scheduleWindows().isEmpty)
+                                  Text(
+                                    'No schedule windows yet.',
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: scheme.onSurfaceVariant,
+                                    ),
+                                  )
+                                else
+                                  ..._scheduleWindows()
+                                      .asMap()
+                                      .entries
+                                      .map((entry) {
+                                    final idx = entry.key;
+                                    final window = entry.value;
+                                    final days = _normalizeDays(window['days']);
+                                    return Container(
+                                      margin: const EdgeInsets.only(bottom: 8),
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: scheme.surfaceContainerLow,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                            color: scheme.outlineVariant),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Text(
+                                                'Window ${idx + 1}',
+                                                style:
+                                                    theme.textTheme.titleSmall,
+                                              ),
+                                              const Spacer(),
+                                              if ((window['enabled'] ?? true) ==
+                                                  true)
+                                                const Icon(Icons.check_circle,
+                                                    size: 16,
+                                                    color: Color(0xFF16A34A))
+                                              else
+                                                const Icon(Icons.pause_circle,
+                                                    size: 16,
+                                                    color: Color(0xFF6B7280)),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Start: ${_formatDisplayDateTime(window['start']).isEmpty ? '-' : _formatDisplayDateTime(window['start'])}\nEnd: ${_formatDisplayDateTime(window['end']).isEmpty ? '-' : _formatDisplayDateTime(window['end'])}',
+                                            style: theme.textTheme.bodySmall,
+                                          ),
+                                          if (days.isNotEmpty) ...[
+                                            const SizedBox(height: 6),
+                                            Wrap(
+                                              spacing: 6,
+                                              runSpacing: 6,
+                                              children: days
+                                                  .map((d) => Chip(
+                                                        label: Text(
+                                                            d.toUpperCase()),
+                                                      ))
+                                                  .toList(),
+                                            ),
+                                          ],
+                                          const SizedBox(height: 6),
+                                          Wrap(
+                                            spacing: 8,
+                                            runSpacing: 8,
+                                            children: [
+                                              OutlinedButton.icon(
+                                                onPressed: _saving
+                                                    ? null
+                                                    : () => _editScheduleWindow(
+                                                          idx,
+                                                          window,
+                                                        ),
+                                                icon: const Icon(Icons.edit),
+                                                label: const Text('Edit'),
+                                              ),
+                                              OutlinedButton.icon(
+                                                onPressed: _saving
+                                                    ? null
+                                                    : () =>
+                                                        _deleteScheduleWindow(
+                                                            idx),
+                                                icon: const Icon(Icons.delete),
+                                                label: const Text('Delete'),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(14),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Replace Media',
+                                    style: theme.textTheme.titleMedium),
+                                const SizedBox(height: 10),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        _pickedFile == null
+                                            ? 'No file selected'
+                                            : _pickedFile!
+                                                .uri.pathSegments.last,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    OutlinedButton.icon(
+                                      onPressed: _saving ? null : _pickFile,
+                                      icon: const Icon(Icons.folder_open),
+                                      label: const Text('Choose'),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: OutlinedButton.icon(
+                                    onPressed:
+                                        _saving ? null : _replaceFromLibrary,
+                                    icon: const Icon(Icons.collections),
+                                    label: const Text(
+                                        'Choose Existing from Library'),
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: FilledButton.icon(
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: const Color(0xFF16A34A),
+                                      foregroundColor: Colors.white,
+                                    ),
+                                    onPressed: _saving ? null : _replaceMedia,
+                                    icon: const Icon(Icons.cloud_upload),
+                                    label: Text(_saving
+                                        ? 'Updating...'
+                                        : 'Replace Image/Video'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+            ),
+          ],
         ),
-      ],
-      ),
       ),
     );
   }
@@ -9045,11 +9139,13 @@ class _VideoPreview extends StatefulWidget {
     required this.url,
     required this.headers,
     this.compact = false,
+    this.syncStartEpoch,
   });
 
   final String url;
   final Map<String, String> headers;
   final bool compact;
+  final int? syncStartEpoch;
 
   @override
   State<_VideoPreview> createState() => _VideoPreviewState();
@@ -9407,10 +9503,21 @@ class _VideoPreviewState extends State<_VideoPreview> {
       final controller = VideoPlayerController.networkUrl(
         Uri.parse(widget.url),
         httpHeaders: widget.headers,
+        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
       );
       await controller.initialize();
       await controller.setLooping(true);
       await controller.setVolume(0);
+      final syncStart = widget.syncStartEpoch;
+      final duration = controller.value.duration;
+      if (syncStart != null && duration > Duration.zero) {
+        final elapsedMs = DateTime.now().millisecondsSinceEpoch -
+            (syncStart * Duration.millisecondsPerSecond);
+        final offsetMs =
+            ((elapsedMs % duration.inMilliseconds) + duration.inMilliseconds) %
+                duration.inMilliseconds;
+        await controller.seekTo(Duration(milliseconds: offsetMs));
+      }
       await controller.play();
       if (!mounted || token != _initToken) {
         await controller.dispose();
@@ -9499,6 +9606,122 @@ class _VideoPreviewState extends State<_VideoPreview> {
       );
     }
     return const Center(child: CircularProgressIndicator());
+  }
+}
+
+class _LivePosCardPreview extends StatelessWidget {
+  const _LivePosCardPreview({
+    required this.title,
+    required this.body,
+  });
+
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF0F172A), Color(0xFF1D4ED8)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.radio_button_checked,
+                  color: Color(0xFF86EFAC), size: 12),
+              SizedBox(width: 4),
+              Text(
+                'LIVE POS',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const Spacer(),
+          Text(
+            title.isEmpty ? 'Live POS Orders' : title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          if (body.isNotEmpty) ...[
+            const SizedBox(height: 3),
+            Text(
+              body,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: const Color(0xFFDBEAFE),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _YouTubeCardPreview extends StatefulWidget {
+  const _YouTubeCardPreview({
+    super.key,
+    required this.videoId,
+  });
+
+  final String videoId;
+
+  @override
+  State<_YouTubeCardPreview> createState() => _YouTubeCardPreviewState();
+}
+
+class _YouTubeCardPreviewState extends State<_YouTubeCardPreview> {
+  late final YoutubePlayerController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = YoutubePlayerController.fromVideoId(
+      videoId: widget.videoId,
+      autoPlay: true,
+      params: const YoutubePlayerParams(
+        mute: true,
+        loop: true,
+        showControls: false,
+        showFullscreenButton: false,
+        pointerEvents: PointerEvents.none,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    unawaited(_controller.close());
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: Colors.black,
+      child: YoutubePlayer(
+        controller: _controller,
+        aspectRatio: 16 / 9,
+      ),
+    );
   }
 }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../account_page.dart';
+import '../store_groups_page.dart';
 import '../../models/app_models.dart';
 import '../../services/api_client.dart';
 
@@ -195,6 +196,35 @@ class _ProfileTabState extends State<ProfileTab> {
                   },
                   icon: const Icon(Icons.account_balance_wallet_outlined),
                   label: const Text('Open Account Center'),
+                ),
+                const SizedBox(height: 10),
+                Card(
+                  child: ListTile(
+                    leading: Container(
+                      height: 36,
+                      width: 36,
+                      decoration: BoxDecoration(
+                        color: scheme.secondaryContainer,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        Icons.groups_outlined,
+                        color: scheme.onSecondaryContainer,
+                      ),
+                    ),
+                    title: const Text('Store Groups'),
+                    subtitle: const Text('Create groups and select stores'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => StoreGroupsPage(
+                            apiClient: widget.apiClient,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
                 if (_message != null) ...[
                   const SizedBox(height: 10),

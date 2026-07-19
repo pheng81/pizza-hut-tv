@@ -44,6 +44,35 @@ class StoreItem {
   }
 }
 
+class StoreGroup {
+  StoreGroup({
+    required this.id,
+    required this.name,
+    this.storeIds = const [],
+  });
+
+  final String id;
+  final String name;
+  final List<String> storeIds;
+
+  factory StoreGroup.fromJson(Map<String, dynamic> json) {
+    final rawIds = json['store_ids'];
+    return StoreGroup(
+      id: (json['id'] ?? '').toString(),
+      name: (json['name'] ?? '').toString(),
+      storeIds: rawIds is List
+          ? rawIds.map((item) => item.toString()).toList()
+          : const [],
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'store_ids': storeIds,
+      };
+}
+
 class ScreenItem {
   ScreenItem({
     required this.id,

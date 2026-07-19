@@ -4320,7 +4320,16 @@ def api_auth_apple_native():
             return jsonify({'success': False, 'error': 'identity_token is required'}), 400
 
         apple_client_id = (os.environ.get('APPLE_CLIENT_ID') or '').strip()
-        if not apple_client_id:
+        native_client_ids = {apple_client_id} if apple_client_id else set()
+        native_client_ids.update(
+            value.strip()
+            for value in (os.environ.get('APPLE_NATIVE_CLIENT_IDS') or '').split(',')
+            if value.strip()
+        )
+        ios_client_id = (os.environ.get('APPLE_IOS_CLIENT_ID') or '').strip()
+        if ios_client_id:
+            native_client_ids.add(ios_client_id)
+        if not native_client_ids:
             return jsonify({'success': False, 'error': 'Apple Sign-In is not configured'}), 500
 
         try:
@@ -4349,7 +4358,7 @@ def api_auth_apple_native():
 
         if issuer != 'https://appleid.apple.com':
             return jsonify({'success': False, 'error': 'Invalid Apple token issuer'}), 401
-        if audience != apple_client_id:
+        if audience not in native_client_ids:
             return jsonify({'success': False, 'error': 'Apple token audience mismatch'}), 401
         if not apple_sub:
             return jsonify({'success': False, 'error': 'Apple token missing subject'}), 401
@@ -8367,9 +8376,11 @@ os.makedirs(AVATAR_FOLDER, exist_ok=True)
 THUMB_FOLDER = os.path.join('static', 'thumbs')
 VTHUMB_FOLDER = os.path.join('static', 'vthumbs')
 VPREVIEW_FOLDER = os.path.join('static', 'vpreviews')
+SYNC_PREVIEW_FOLDER = os.path.join('static', 'syncpreviews')
 os.makedirs(THUMB_FOLDER, exist_ok=True)
 os.makedirs(VTHUMB_FOLDER, exist_ok=True)
 os.makedirs(VPREVIEW_FOLDER, exist_ok=True)
+os.makedirs(SYNC_PREVIEW_FOLDER, exist_ok=True)
 
 # Cache folders for video slicing
 SLICE_CACHE_FOLDER = os.path.join('static', 'cache', 'slices')
@@ -15388,6 +15399,62 @@ def vpreview(width: int, filename: str):
         logging.error('vpreview error: %s', e)
         return jsonify({'error': 'bad request'}), 400
 
+
+@app.route('/syncpreview/<int:width>/<path:filename>')
+def syncpreview(width: int, filename: str):
+    """Serve a complete H.264 copy of a synchronized video slice for mobile."""
+    try:
+        rel_path = str(filename).lstrip('/').replace('\\', '/')
+        src_path = _safe_video_path(rel_path)
+        if not os.path.exists(src_path):
+            return jsonify({'error': 'video not found'}), 404
+
+        name_no_ext = os.path.splitext(rel_path)[0].replace('/', '__')
+        cached_path = os.path.abspath(
+            os.path.join(SYNC_PREVIEW_FOLDER, f"{max(160, int(width))}_{name_no_ext}.mp4")
+        )
+        rebuild = not os.path.exists(cached_path)
+        if not rebuild:
+            try:
+                rebuild = os.path.getmtime(cached_path) < os.path.getmtime(src_path)
+            except Exception:
+                rebuild = True
+        if not rebuild and not _video_file_is_playable(cached_path):
+            rebuild = True
+
+        if rebuild:
+            ffmpeg = _ffmpeg_bin()
+            if not ffmpeg:
+                return jsonify({'error': 'ffmpeg not available'}), 404
+            os.makedirs(SYNC_PREVIEW_FOLDER, exist_ok=True)
+            target_width = max(160, int(width))
+            root, extension = os.path.splitext(cached_path)
+            temp_path = f"{root}.tmp.{os.getpid()}.{threading.get_ident()}{extension}"
+            cmd = [
+                ffmpeg, '-y', '-i', src_path, '-an',
+                '-vf', f'scale={target_width}:-2',
+                '-c:v', 'libx264', '-profile:v', 'baseline', '-preset', 'veryfast',
+                '-b:v', '900k', '-movflags', '+faststart', temp_path,
+            ]
+            try:
+                subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                if not _video_file_is_playable(temp_path):
+                    raise RuntimeError('Generated sync preview is not playable')
+                os.replace(temp_path, cached_path)
+            finally:
+                if os.path.exists(temp_path):
+                    try:
+                        os.remove(temp_path)
+                    except Exception:
+                        pass
+
+        response = send_file(cached_path, mimetype='video/mp4')
+        response.headers['Cache-Control'] = 'public, max-age=2592000'
+        return response
+    except Exception as e:
+        logging.error('syncpreview error: %s', e)
+        return jsonify({'error': 'sync preview failed'}), 500
+
 def parse_time_string(val, now):
     if not val:
         return None
@@ -15698,11 +15765,28 @@ def dashboard():
         except Exception:
             pass
         return resp
+
     except Exception as e:
         print(f"DEBUG: Error in dashboard route: {e}")
         import traceback
         traceback.print_exc()
         return f"Error: {e}", 500
+
+
+@app.route('/store-groups')
+@login_required
+def store_groups_page():
+    """Standalone Store Groups manager, independent of dashboard overlays."""
+    user_key = _safe_user_key()
+    config = load_store_config_for_user_safe_key(user_key) if user_key else load_store_config()
+    if not isinstance(config, dict):
+        config = {}
+    stores = config.get('stores') if isinstance(config.get('stores'), list) else []
+    groups = config.get('store_groups') if isinstance(config.get('store_groups'), list) else []
+    embedded = request.args.get('embedded') == '1'
+    response = make_response(render_template('store_groups.html', stores=stores, groups=groups, embedded=embedded))
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    return response
 
 @app.route('/menu-studio')
 @login_required
@@ -18303,6 +18387,20 @@ def save_store_groups():
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
+@app.route('/api/mobile/store-groups')
+@login_required
+def mobile_store_groups():
+    """Return the signed-in mobile user's saved store groups."""
+    try:
+        user_key = _safe_user_key()
+        config = load_store_config_for_user_safe_key(user_key)
+        groups = config.get('store_groups', []) if isinstance(config, dict) else []
+        return jsonify({'success': True, 'groups': groups if isinstance(groups, list) else []})
+    except Exception as e:
+        logging.exception('Failed to load mobile store groups')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/delete_screen', methods=['POST'])
 @login_required
 def delete_screen():
@@ -18715,10 +18813,16 @@ def google_address_search():
             if key in seen:
                 continue
             seen.add(key)
+            geometry = item.get('geometry') if isinstance(item.get('geometry'), dict) else {}
+            coordinates = geometry.get('location') if isinstance(geometry.get('location'), dict) else {}
+            latitude = coordinates.get('lat')
+            longitude = coordinates.get('lng')
             results.append({
                 'display_name': formatted_address,
                 'place_id': str(item.get('place_id') or '').strip(),
                 'source': 'google',
+                'latitude': latitude,
+                'longitude': longitude,
             })
             if len(results) >= 8:
                 break
@@ -24659,6 +24763,42 @@ def pi_close_screen():
     except Exception as e:
         logging.error(f'Close screen error: {e}')
         return jsonify({'success': False, 'message': f'Close screen failed: {e}'}), 500
+
+
+@app.route('/api/pi-restart-client', methods=['POST'])
+@login_required
+def pi_restart_client():
+    """Restart the EverydayAdvertise player process on an online Pi."""
+    try:
+        data = request.get_json() or {}
+        pi_id = str(data.get('pi_id') or '').strip()
+        if not pi_id:
+            return jsonify({'success': False, 'message': 'Pi ID required'}), 400
+
+        pi_info = _connected_pi_info(pi_id)
+        if not _current_user_can_access_pi(pi_id, pi_info=pi_info):
+            return jsonify({'success': False, 'message': 'Forbidden'}), 403
+
+        with pi_connection_lock:
+            runtime = connected_pis.get(pi_id)
+            if not runtime or not runtime.get('connected', True):
+                return jsonify({
+                    'success': False,
+                    'message': f'Pi {pi_id} is not currently connected',
+                }), 404
+            pi_sid = runtime['sid']
+
+        socketio.emit('restart_client', {
+            'pi_id': pi_id,
+            'timestamp': time.time(),
+        }, room=pi_sid)
+        return jsonify({
+            'success': True,
+            'message': f'Client restart command sent to Pi {pi_id}',
+        })
+    except Exception as e:
+        logging.error(f'Restart Pi client error: {e}')
+        return jsonify({'success': False, 'message': f'Client restart failed: {e}'}), 500
 
 @app.route('/api/pi-restart', methods=['POST'])
 @login_required

@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Store Groups | EverydayAdvertise</title>
+    <style>
+        :root { --ink:#172033; --muted:#64748b; --line:#dbe3ee; --blue:#1565d8; --soft:#f4f8fc; }
+        * { box-sizing:border-box; }
+        body { margin:0; min-height:100vh; background:linear-gradient(135deg,#eef5ff 0%,#f8fafc 46%,#edf7f3 100%); color:var(--ink); font:15px/1.45 Georgia, 'Times New Roman', serif; }
+        main { width:min(1060px, calc(100% - 32px)); margin:48px auto; }
+        .top { display:flex; justify-content:space-between; gap:20px; align-items:flex-start; margin-bottom:26px; }
+        h1 { margin:0; font-size:34px; letter-spacing:-.03em; }
+        p { margin:7px 0 0; color:var(--muted); }
+        .back, button { border:1px solid var(--line); border-radius:9px; background:#fff; color:var(--ink); padding:10px 14px; font:600 14px/1 system-ui, sans-serif; cursor:pointer; text-decoration:none; }
+        button.primary { background:var(--blue); color:#fff; border-color:var(--blue); }
+        button.danger { color:#b42318; border-color:#f0b9b5; }
+        .card { background:rgba(255,255,255,.94); border:1px solid var(--line); border-radius:16px; padding:24px; box-shadow:0 18px 44px rgba(21,43,77,.08); }
+        .create { display:flex; gap:12px; align-items:end; flex-wrap:wrap; }
+        label { display:grid; gap:7px; flex:1 1 320px; font:600 13px/1 system-ui, sans-serif; }
+        input { width:100%; border:1px solid #bfcddd; border-radius:8px; padding:11px 12px; font:15px system-ui,sans-serif; }
+        #status { min-height:22px; margin:16px 0; color:#176b44; font:600 13px system-ui,sans-serif; }
+        .group { margin-top:16px; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#fff; }
+        .group-head { display:flex; gap:16px; justify-content:space-between; align-items:center; padding:16px 18px; background:var(--soft); }
+        .group-name { font:700 18px/1.2 Georgia,serif; }
+        .count { margin-top:4px; color:var(--muted); font:13px system-ui,sans-serif; }
+        .group-tools { display:flex; gap:8px; align-items:center; padding:14px 18px; border-bottom:1px solid #e7edf4; background:#fff; flex-wrap:wrap; }
+        .group-search { flex:1 1 260px; min-width:0; padding:9px 11px; font-size:14px; }
+        .group-tools button { padding:9px 11px; font-size:12px; }
+        .stores { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:10px; padding:16px 18px; }
+        .store { display:flex; gap:9px; align-items:center; padding:10px; border:1px solid #e2e8f0; border-radius:8px; font:14px system-ui,sans-serif; }
+        .store input { width:17px; height:17px; }
+        .empty { text-align:center; padding:42px 20px; color:var(--muted); border:2px dashed var(--line); border-radius:12px; }
+        body.embedded { background:#fff; }
+        body.embedded main { width:100%; margin:0; padding:34px 42px; }
+        body.embedded .back { display:none; }
+        @media (max-width:600px) { main { width:min(100% - 20px, 1060px); margin:20px auto; } .top { flex-direction:column; } .card { padding:16px; } }
+    </style>
+</head>
+<body{% if embedded %} class="embedded"{% endif %}>
+    <main>
+        <div class="top">
+            <div><h1>Store Groups</h1><p>Organize stores for faster bulk operations.</p></div>
+            <a class="back" href="/dashboard">Back to Dashboard</a>
+        </div>
+        <section class="card">
+            <div class="create">
+                <label>New group name<input id="groupName" placeholder="e.g. Sydney Stores"></label>
+                <button class="primary" id="createGroup">Create Group</button>
+            </div>
+            <div id="status" role="status"></div>
+            <div id="groups"></div>
+        </section>
+    </main>
+    <script>
+        const stores = {{ stores | tojson }};
+        let groups = {{ groups | tojson }}.map(group => ({
+            id: String(group.id || `group_${Date.now()}`),
+            name: String(group.name || 'Untitled group'),
+            store_ids: Array.isArray(group.store_ids) ? group.store_ids.map(String) : []
+        }));
+        const groupRoot = document.getElementById('groups');
+        const status = document.getElementById('status');
+
+        function save() {
+            status.textContent = 'Saving...';
+            return fetch('/save_store_groups', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({groups}) })
+                .then(response => response.json())
+                .then(data => { if (!data.success) throw new Error(data.error || 'Save failed'); status.textContent = 'Saved'; })
+                .catch(error => { status.textContent = `Could not save: ${error.message}`; throw error; });
+        }
+        function render() {
+            groupRoot.replaceChildren();
+            if (!groups.length) { const empty=document.createElement('div'); empty.className='empty'; empty.textContent='No groups yet. Create one above to get started.'; groupRoot.append(empty); return; }
+            groups.forEach(group => {
+                const block=document.createElement('section'); block.className='group';
+                const head=document.createElement('div'); head.className='group-head';
+                const info=document.createElement('div');
+                const name=document.createElement('div'); name.className='group-name'; name.textContent=group.name;
+                const count=document.createElement('div'); count.className='count'; count.textContent=`${group.store_ids.length} store${group.store_ids.length === 1 ? '' : 's'} selected`;
+                info.append(name,count);
+                const remove=document.createElement('button'); remove.className='danger'; remove.textContent='Delete group';
+                remove.onclick=() => { if (!confirm(`Delete ${group.name}? Stores will not be deleted.`)) return; groups=groups.filter(item=>item.id!==group.id); save().then(render); };
+                head.append(info,remove);
+
+                const tools=document.createElement('div'); tools.className='group-tools';
+                const search=document.createElement('input'); search.className='group-search'; search.type='search'; search.placeholder='Search by store name or ID'; search.setAttribute('aria-label', `Search stores in ${group.name}`);
+                const selectVisible=document.createElement('button'); selectVisible.type='button'; selectVisible.textContent='Select visible';
+                const clearVisible=document.createElement('button'); clearVisible.type='button'; clearVisible.textContent='Clear visible';
+                tools.append(search,selectVisible,clearVisible);
+
+                const list=document.createElement('div'); list.className='stores';
+                const updateCount=()=>{ count.textContent=`${group.store_ids.length} store${group.store_ids.length === 1 ? '' : 's'} selected`; };
+                const updateSelection=(storeId, selected)=>{
+                    const id=String(storeId);
+                    group.store_ids=selected ? [...new Set([...group.store_ids,id])] : group.store_ids.filter(item=>item!==id);
+                    updateCount();
+                };
+                const filterStores=()=>{
+                    const query=search.value.trim().toLowerCase();
+                    list.querySelectorAll('.store').forEach(label=>{ label.hidden=!!query && !label.dataset.search.includes(query); });
+                };
+                stores.forEach(store => {
+                    const label=document.createElement('label'); label.className='store'; label.dataset.storeId=String(store.id); label.dataset.search=`${store.name || ''} ${store.id || ''}`.toLowerCase();
+                    const checkbox=document.createElement('input'); checkbox.type='checkbox'; checkbox.checked=group.store_ids.includes(String(store.id));
+                    checkbox.onchange=()=>{ updateSelection(store.id, checkbox.checked); save(); };
+                    const text=document.createElement('span'); text.textContent=`${store.name || store.id} (${store.id})`;
+                    label.append(checkbox,text); list.append(label);
+                });
+                search.oninput=filterStores;
+                const setVisible=(selected)=>{
+                    list.querySelectorAll('.store:not([hidden]) input').forEach(checkbox=>{
+                        if(checkbox.checked === selected) return;
+                        checkbox.checked=selected;
+                        updateSelection(checkbox.closest('.store').dataset.storeId, selected);
+                    });
+                    save();
+                };
+                selectVisible.onclick=()=>setVisible(true);
+                clearVisible.onclick=()=>setVisible(false);
+                block.append(head,tools,list); groupRoot.append(block);
+            });
+        }
+        document.getElementById('createGroup').onclick=()=>{ const input=document.getElementById('groupName'); const name=input.value.trim(); if(!name){ status.textContent='Enter a group name.'; input.focus(); return; } groups.push({id:`group_${Date.now()}`,name,store_ids:[]}); input.value=''; save().then(render); };
+        document.getElementById('groupName').addEventListener('keydown', event=>{ if(event.key==='Enter') document.getElementById('createGroup').click(); });
+        render();
+    </script>
+</body>
+</html>
