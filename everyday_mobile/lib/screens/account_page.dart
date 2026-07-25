@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -234,6 +235,27 @@ class _AccountPageState extends State<AccountPage> {
           _message = 'Billing portal opened.';
         });
       }
+    });
+  }
+
+  Future<void> _downloadBillingStatement() async {
+    await _runAction(() async {
+      final statement = await widget.apiClient.downloadBillingStatement();
+      final savedPath = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save billing statement',
+        fileName: 'everydayadvertise-billing-statement.csv',
+        type: FileType.custom,
+        allowedExtensions: const ['csv'],
+        bytes: statement,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _message = savedPath == null
+            ? 'Statement download cancelled.'
+            : 'Billing statement saved.';
+      });
     });
   }
 
@@ -492,7 +514,7 @@ class _AccountPageState extends State<AccountPage> {
     }
 
     final doubleConfirmed = await showDialog<bool>(
-      context: context,
+          context: context,
           builder: (context) => const _DeleteAllConfirmDialog(),
         ) ??
         false;
@@ -781,64 +803,81 @@ class _AccountPageState extends State<AccountPage> {
                   const SizedBox(height: 10),
                   Card(
                     child: Padding(
-                      padding: const EdgeInsets.all(14),
+                      padding: const EdgeInsets.all(16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Subscription Details',
-                              style: theme.textTheme.titleMedium),
+                          Text(
+                            'Subscription Details',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                           const SizedBox(height: 12),
                           _kvRow(context, 'Plan', '\$5 per screen / month'),
-                          const SizedBox(height: 8),
+                          const Divider(height: 20),
                           _kvRow(context, 'Current Period', currentPeriod),
-                          const SizedBox(height: 8),
+                          const Divider(height: 20),
                           _kvRow(context, 'Auto-renew', autoRenew),
                           const SizedBox(height: 14),
                           if (hasActive)
-                            FilledButton(
-                              onPressed:
-                                  _actionBusy ? null : _openBillingPortal,
-                              child: const Text('Manage Subscription'),
+                            SizedBox(
+                              width: double.infinity,
+                              child: FilledButton(
+                                onPressed:
+                                    _actionBusy ? null : _openBillingPortal,
+                                child: const Text('Manage Subscription'),
+                              ),
                             )
                           else
-                            FilledButton(
-                              onPressed: _actionBusy
-                                  ? null
-                                  : () {
-                                      if (!emailVerified) {
-                                        const msg =
-                                            'Please verify your email address before subscribing.';
-                                        setState(() {
-                                          _message = msg;
-                                        });
-                                        _showNotice(msg);
-                                        return;
-                                      }
-                                      if (phone.isEmpty || !phoneVerified) {
-                                        const msg =
-                                            'Please verify your phone number before subscribing.';
-                                        setState(() {
-                                          _message = msg;
-                                        });
-                                        _showNotice(msg);
-                                        return;
-                                      }
-                                      _startSubscriptionCheckout();
-                                    },
-                              child: const Text('Subscribe Now'),
+                            SizedBox(
+                              width: double.infinity,
+                              child: FilledButton(
+                                onPressed: _actionBusy
+                                    ? null
+                                    : () {
+                                        if (!emailVerified) {
+                                          const msg =
+                                              'Please verify your email address before subscribing.';
+                                          setState(() {
+                                            _message = msg;
+                                          });
+                                          _showNotice(msg);
+                                          return;
+                                        }
+                                        if (phone.isEmpty || !phoneVerified) {
+                                          const msg =
+                                              'Please verify your phone number before subscribing.';
+                                          setState(() {
+                                            _message = msg;
+                                          });
+                                          _showNotice(msg);
+                                          return;
+                                        }
+                                        _startSubscriptionCheckout();
+                                      },
+                                child: const Text('Subscribe Now'),
+                              ),
                             ),
                           const SizedBox(height: 8),
                           if (hasActive && !isCanceled)
-                            OutlinedButton(
-                              onPressed:
-                                  _actionBusy ? null : _cancelSubscription,
-                              child: const Text('Cancel Subscription'),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton(
+                                onPressed:
+                                    _actionBusy ? null : _cancelSubscription,
+                                child: const Text('Cancel Subscription'),
+                              ),
                             ),
                           if (hasActive && isCanceled)
-                            OutlinedButton(
-                              onPressed:
-                                  _actionBusy ? null : _reactivateSubscription,
-                              child: const Text('Reactivate Subscription'),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton(
+                                onPressed: _actionBusy
+                                    ? null
+                                    : _reactivateSubscription,
+                                child: const Text('Reactivate Subscription'),
+                              ),
                             ),
                         ],
                       ),
@@ -847,30 +886,35 @@ class _AccountPageState extends State<AccountPage> {
                   const SizedBox(height: 10),
                   Card(
                     child: Padding(
-                      padding: const EdgeInsets.all(14),
+                      padding: const EdgeInsets.all(16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Account Information',
-                              style: theme.textTheme.titleMedium),
+                          Text(
+                            'Account Information',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                           const SizedBox(height: 10),
                           _emailInfoRow(
                             context,
                             email: email,
                             emailVerified: emailVerified,
                           ),
-                          const SizedBox(height: 8),
+                          const Divider(height: 20),
                           _kvRow(context, 'Account Type',
                               isAdmin ? 'Administrator' : 'Standard User'),
-                          const SizedBox(height: 8),
+                          const Divider(height: 20),
                           _kvRow(context, 'Member Since', accountCreated),
-                          const SizedBox(height: 8),
+                          const Divider(height: 20),
                           _kvRow(context, 'Total Screens', '$screenCount'),
-                          const SizedBox(height: 8),
+                          const Divider(height: 20),
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(
+                              SizedBox(
+                                width: 118,
                                 child: Text(
                                   'Phone Number',
                                   style: TextStyle(
@@ -879,8 +923,7 @@ class _AccountPageState extends State<AccountPage> {
                                   ),
                                 ),
                               ),
-                              Flexible(
-                                flex: 2,
+                              Expanded(
                                 child: Wrap(
                                   alignment: WrapAlignment.end,
                                   spacing: 8,
@@ -1307,6 +1350,48 @@ class _AccountPageState extends State<AccountPage> {
                       ),
                     ),
                   ],
+                  const SizedBox(height: 10),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Billing & Statements',
+                              style: theme.textTheme.titleMedium),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Save a CSV statement for your records and review your payment history below.',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          FilledButton.icon(
+                            onPressed:
+                                _actionBusy ? null : _downloadBillingStatement,
+                            icon: const Icon(Icons.download_outlined),
+                            label: const Text('Download Statement'),
+                          ),
+                          if (hasActive) ...[
+                            const SizedBox(height: 8),
+                            OutlinedButton.icon(
+                              onPressed:
+                                  _actionBusy ? null : _openBillingPortal,
+                              icon: const Icon(Icons.credit_card_outlined),
+                              label: const Text('Payment & Billing Portal'),
+                            ),
+                          ],
+                          const SizedBox(height: 12),
+                          _kvRow(
+                            context,
+                            'Payment history',
+                            '${billingHistory.length} invoice${billingHistory.length == 1 ? '' : 's'} available',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                   if (billingHistory.isNotEmpty) ...[
                     const SizedBox(height: 10),
                     Card(
@@ -1315,7 +1400,7 @@ class _AccountPageState extends State<AccountPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Invoice History',
+                            Text('Payment History',
                                 style: theme.textTheme.titleMedium),
                             const SizedBox(height: 8),
                             ...billingHistory.map((inv) {
@@ -1382,6 +1467,15 @@ class _AccountPageState extends State<AccountPage> {
                       ),
                     ),
                   ],
+                  if (billingHistory.isEmpty) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      'No invoices are available yet. They will appear here when billing activity begins.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
                   if (_message != null) ...[
                     const SizedBox(height: 10),
                     Container(
@@ -1402,8 +1496,10 @@ class _AccountPageState extends State<AccountPage> {
   Widget _kvRow(BuildContext context, String key, String value) {
     final scheme = Theme.of(context).colorScheme;
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
+        SizedBox(
+          width: 118,
           child: Text(
             key,
             style: TextStyle(
@@ -1416,7 +1512,7 @@ class _AccountPageState extends State<AccountPage> {
           child: Text(
             value,
             textAlign: TextAlign.right,
-            style: const TextStyle(fontWeight: FontWeight.w600),
+            style: const TextStyle(fontWeight: FontWeight.w700),
           ),
         ),
       ],
@@ -1429,7 +1525,8 @@ class _AccountPageState extends State<AccountPage> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Expanded(
+        SizedBox(
+          width: 118,
           child: Text(
             'Email',
             style: TextStyle(
@@ -1438,8 +1535,7 @@ class _AccountPageState extends State<AccountPage> {
             ),
           ),
         ),
-        Flexible(
-          flex: 2,
+        Expanded(
           child: Wrap(
             alignment: WrapAlignment.end,
             crossAxisAlignment: WrapCrossAlignment.center,

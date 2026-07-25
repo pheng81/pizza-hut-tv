@@ -210,6 +210,7 @@ class PlaylistItem:
     duration: float = 10.0
     effect: Optional[str] = None  # None means no effect set, use default
     media_type: str = "video"
+    text: str = ""
     slice_aware: bool = False
     slice_url: Optional[str] = None
     sync_ref: Optional[Dict] = None
@@ -237,6 +238,7 @@ class PlaylistItem:
             duration=float(data.get('duration', 10.0)),
             effect=effect_value,  # Preserve server-provided effect (may be id or name)
             media_type=data.get('media_type', 'video'),
+            text=str(data.get('text') or ''),
             slice_aware=bool(data.get('slice_aware', False)),
             slice_url=data.get('slice_url'),
             sync_ref=data.get('sync_ref'),
@@ -2045,6 +2047,21 @@ class CompleteWebplayerClient:
             
     def draw_playing_screen(self):
         """Draw playing screen - let media player handle the display."""
+        scrolling_text = getattr(self, '_scrolling_text', None)
+        if scrolling_text:
+            self.screen.fill((8, 15, 28))
+            message = str(scrolling_text.get('text') or '')
+            try:
+                font = pygame.font.SysFont('arial', max(42, self.height // 10), bold=True)
+            except Exception:
+                font = pygame.font.Font(None, max(42, self.height // 10))
+            rendered = font.render(message, True, (255, 255, 255))
+            elapsed = max(0.0, time.time() - float(scrolling_text.get('started_at') or time.time()))
+            travel = self.width + rendered.get_width()
+            x = int(self.width - ((elapsed * 150) % max(1, travel)))
+            y = (self.height - rendered.get_height()) // 2
+            self.screen.blit(rendered, (x, y))
+            return
         if not self.playlist:
             # Show idle message like webplayer
             self.screen.fill(self.colors['black'])
@@ -2364,6 +2381,8 @@ class CompleteWebplayerClient:
         
     def get_media_url(self, item: PlaylistItem) -> str:
         """Get media URL for playlist item like webplayer."""
+        if str(getattr(item, 'media_type', '') or '').lower() == 'scrolling_text':
+            return ""
         def resolve_playlist_url(raw_url: str) -> str:
             raw_url = (raw_url or "").strip()
             if not raw_url:
@@ -3274,6 +3293,9 @@ class CompleteWebplayerClient:
         try:
             keys = []
             for item in playlist:
+                if str(getattr(item, 'media_type', '') or '').lower() == 'scrolling_text':
+                    keys.append(f"text:{item.id}:{getattr(item, 'text', '')}:{item.duration}")
+                    continue
                 if item.id:
                     keys.append(f"id:{item.id}")
                 elif item.url:
@@ -3320,6 +3342,32 @@ class CompleteWebplayerClient:
                 self.current_index = 0
                 
             current_item = self.playlist[self.current_index]
+            if str(getattr(current_item, 'media_type', '') or '').lower() == 'scrolling_text':
+                message = str(getattr(current_item, 'text', '') or '').strip()
+                if not message:
+                    logger.warning('Skipping empty scrolling text item %s', current_item.id)
+                    self.current_index = (self.current_index + 1) % len(self.playlist)
+                    return
+                duration = max(self.MIN_ITEM_DURATION, float(current_item.duration or 15.0))
+                self._scrolling_text = {'text': message, 'started_at': time.time()}
+                try:
+                    self._call_on_main_thread(self.media_player.stop)
+                except Exception as stop_error:
+                    logger.debug('Could not stop prior media for scrolling text: %s', stop_error)
+                self.current_panel_item = current_item
+                self.current_item_key = f"id:{current_item.id}" if current_item.id else f"text:{message}"
+                with self._timer_lock:
+                    if self._current_item_timer is not None:
+                        self._current_item_timer.cancel()
+                    self._current_item_timer = threading.Timer(duration, self.on_item_finished)
+                    self._current_item_timer.start()
+                self._last_item_duration = duration
+                self._last_play_start_time = time.time()
+                self._last_advance_time = self._last_play_start_time
+                logger.info('↔ Displaying scrolling text for %.0fs: %s', duration, message[:80])
+                return
+
+            self._scrolling_text = None
             media_url = self.get_media_url(current_item)
             
             # DEBUG: Log the raw item data to see what effect we got from server
@@ -3965,9 +4013,11 @@ class CompleteWebplayerClient:
                     except Exception:
                         panel_visible = False
 
+                    scrolling_text_active = bool(getattr(self, '_scrolling_text', None))
+
                     # Only flip the pygame surface when we're actively showing images.
                     # MPV owns the window during video playback and handles its own vsync.
-                    if not in_transition and (current_media_type == 'image' or panel_visible):
+                    if not in_transition and (current_media_type == 'image' or panel_visible or scrolling_text_active):
                         try:
                             pygame.display.flip()
                             display_flip_count += 1
@@ -3980,7 +4030,7 @@ class CompleteWebplayerClient:
                     # Run the loop fast for responsiveness, but don't fight MPV during transitions
                     if in_transition:
                         clock.tick(60)
-                    elif current_media_type == 'image':
+                    elif current_media_type == 'image' or scrolling_text_active:
                         clock.tick(120)
                     elif panel_visible:
                         clock.tick(30)

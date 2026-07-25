@@ -711,6 +711,24 @@ class ApiClient {
     }
   }
 
+  Future<Map<String, dynamic>> addScrollingTextToPlaylist({
+    required String storeId,
+    required String screenId,
+    required String text,
+    int duration = 15,
+  }) async {
+    final response = await _dio.post(
+      '/playlist/text/$storeId/$screenId',
+      data: {'text': text, 'duration': duration},
+    );
+    final data = _asMap(response.data);
+    if (data['success'] != true) {
+      throw Exception(
+          (data['error'] ?? 'Unable to add scrolling text').toString());
+    }
+    return data;
+  }
+
   Future<List<Map<String, dynamic>>> getPlaylist({
     required String storeId,
     required String screenId,
@@ -1453,6 +1471,17 @@ class ApiClient {
           (data['error'] ?? 'Failed to load account overview').toString());
     }
     return data;
+  }
+
+  Future<Uint8List> downloadBillingStatement() async {
+    final response = await _dio.get<List<int>>(
+      '/api/account/billing-statement.csv',
+      options: Options(responseType: ResponseType.bytes),
+    );
+    if (response.statusCode != 200 || response.data == null) {
+      throw Exception('Unable to download billing statement');
+    }
+    return Uint8List.fromList(response.data!);
   }
 
   Future<String> createBillingPortalSession() async {

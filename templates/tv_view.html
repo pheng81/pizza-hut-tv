@@ -32,6 +32,7 @@
 		/* Continuous rotation effect */
 		.enter-rotate { animation: spin 10s linear infinite; }
 		@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+		@keyframes scrolling-text-marquee { from { transform: translateX(100vw); } to { transform: translateX(-100%); } }
 		.anim { transition: transform var(--motion-dur) ease, opacity var(--motion-dur) ease; /* REMOVED will-change to prevent GPU issues */ }
 		#overlay { position:fixed; left:10px; bottom:10px; color:#9aa7ff; font:12px/1.4 system-ui,Segoe UI,Roboto,Ubuntu,Arial; opacity:.22; pointer-events:none; white-space:pre-line; }
 		#address-overlay {
@@ -897,10 +898,35 @@
 		function swapLayers(){ const t = front; front = back; back = t; }
 
 		async function showItem(item){
+			const type = (item && item.media_type ? String(item.media_type) : '').toLowerCase();
+			if(type === 'scrolling_text' || String((item && item.file) || '').toLowerCase().startsWith('text:')){
+				const message = String((item && item.text) || '').trim();
+				if(!message) return;
+				const duration = Math.max(5, Number((item && item.duration) || 15) || 15);
+				const marquee = document.createElement('div');
+				marquee.className = 'media';
+				marquee.style.cssText = 'display:flex;align-items:center;overflow:hidden;background:#071b1c;color:#ffffff;font:800 clamp(38px,6vw,112px)/1.15 Segoe UI,Arial,sans-serif;white-space:nowrap;';
+				const text = document.createElement('span');
+				text.textContent = message;
+				text.style.cssText = `display:inline-block;padding-left:100vw;animation:scrolling-text-marquee ${duration}s linear infinite;`;
+				marquee.appendChild(text);
+				clearNode(back);
+				back.appendChild(marquee);
+				back.classList.add('fade');
+				back.classList.remove('hidden');
+				requestAnimationFrame(() => {
+					back.classList.add('visible');
+					back.classList.remove('fade');
+					front.classList.add('fade');
+					front.classList.remove('visible');
+					setTimeout(() => { front.classList.add('hidden'); front.classList.remove('fade'); swapLayers(); }, 1100);
+				});
+				postClientEvent('play_ok', item, null);
+				return;
+			}
 			const url = mediaUrl(item);
 			if(!url){ return; }
 			
-			const type = (item && item.media_type ? String(item.media_type) : '').toLowerCase();
 			if (type === 'web') {
 				const iframe = document.createElement('iframe');
 				iframe.src = url;

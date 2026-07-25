@@ -1,5 +1,7 @@
 import os
 import re
+import csv
+import io
 import tempfile
 import urllib.request
 import urllib.parse
@@ -13223,6 +13225,64 @@ def api_account_overview():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/account/billing-statement.csv', methods=['GET'])
+@login_required
+def download_billing_statement():
+    """Download the current account's invoice history as a portable statement."""
+    user_id = _current_user_id()
+    if not user_id:
+        return jsonify({'success': False, 'error': 'auth required'}), 403
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        'Record type', 'Date', 'Description', 'Status', 'Amount',
+        'Currency', 'Invoice link'
+    ])
+
+    try:
+        db = get_db()
+        user_row = db.execute('SELECT username FROM users WHERE id = ?', (user_id,)).fetchone()
+        account_name = (user_row['username'] if user_row else '') or 'EverydayAdvertise account'
+        writer.writerow(['Account', '', account_name, '', '', '', ''])
+
+        if _stripe_enabled():
+            customer_id = _get_or_create_stripe_customer(user_id)
+            if customer_id:
+                invoices = stripe.Invoice.list(customer=customer_id, limit=100)
+                for invoice in invoices.data:
+                    created = getattr(invoice, 'created', None)
+                    date_label = ''
+                    if created:
+                        try:
+                            date_label = datetime.fromtimestamp(int(created)).strftime('%Y-%m-%d')
+                        except Exception:
+                            pass
+                    amount_paid = getattr(invoice, 'amount_paid', 0) or 0
+                    currency = (getattr(invoice, 'currency', '') or 'aud').upper()
+                    writer.writerow([
+                        'Invoice',
+                        date_label,
+                        getattr(invoice, 'description', None) or 'EverydayAdvertise subscription',
+                        getattr(invoice, 'status', None) or 'unknown',
+                        f'{amount_paid / 100:.2f}',
+                        currency,
+                        getattr(invoice, 'hosted_invoice_url', None) or getattr(invoice, 'invoice_pdf', None) or '',
+                    ])
+    except Exception as statement_error:
+        logging.warning('Failed to build billing statement for user %s: %s', user_id, statement_error)
+        return jsonify({'success': False, 'error': 'Unable to generate billing statement'}), 500
+
+    safe_date = datetime.now().strftime('%Y-%m-%d')
+    response = make_response(output.getvalue())
+    response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+    response.headers['Content-Disposition'] = (
+        f'attachment; filename="everydayadvertise-billing-statement-{safe_date}.csv"'
+    )
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
 @app.route('/api/account/email/resend-verification', methods=['POST'])
 @app.route('/api/account/resend-verification', methods=['POST'])
 @app.route('/api/account/resend_verification', methods=['POST'])
@@ -19256,6 +19316,18 @@ def get_playlist(store_id, screen_id):
 
             media_kind = str(it.get('media_type') or '').strip().lower()
             file_value = str(it.get('file') or '').strip()
+            if media_kind == 'scrolling_text' or file_value.lower().startswith('text:'):
+                text_value = re.sub(r'\s+', ' ', str(it.get('text') or '')).strip()
+                if not text_value:
+                    # Ignore malformed legacy text records instead of serving a broken media URL.
+                    continue
+                it['media_type'] = 'scrolling_text'
+                it['file'] = file_value or f"text:{it.get('id') or 'message'}"
+                it['text'] = text_value[:500]
+                it['url'] = ''
+                it['displayName'] = f"Scrolling text: {text_value[:48]}"
+                out.append(it)
+                continue
             if media_kind == 'live_pos' or file_value.lower().startswith('livepos:'):
                 it['media_type'] = 'live_pos'
                 it['file'] = file_value or f"livepos:{it.get('id') or 'screen'}"
@@ -20797,6 +20869,67 @@ def r2_status():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # ---- Assign existing media to a screen (no file upload) ----
+@app.route('/playlist/text/<store_id>/<screen_id>', methods=['POST'])
+@login_required
+def add_scrolling_text_to_playlist(store_id, screen_id):
+    """Create a scrolling-text item that participates in the normal playlist schedule."""
+    payload = request.get_json(silent=True) or {}
+    message = re.sub(r'\s+', ' ', str(payload.get('text') or '')).strip()
+    if not message:
+        return jsonify({'success': False, 'error': 'Enter the message to display'}), 400
+    if len(message) > 500:
+        return jsonify({'success': False, 'error': 'Text messages are limited to 500 characters'}), 400
+
+    try:
+        duration = int(payload.get('duration') or 15)
+    except (TypeError, ValueError):
+        duration = 15
+    duration = max(5, min(duration, 3600))
+
+    ukey = _safe_user_key()
+    config = ensure_playlists_structure(
+        load_store_config_for_user_safe_key(ukey) if ukey else load_store_config()
+    )
+    if store_id in config.get('screens', {}) and screen_id not in config['screens'][store_id]:
+        prefixed_screen_id = f'{store_id}_{screen_id}'
+        if prefixed_screen_id in config['screens'][store_id]:
+            screen_id = prefixed_screen_id
+
+    screen = (config.get('screens', {}).get(store_id, {}) or {}).get(screen_id)
+    if not isinstance(screen, dict):
+        return jsonify({'success': False, 'error': 'Screen not found'}), 404
+    if screen.get('protected'):
+        return jsonify({'success': False, 'error': 'This screen is protected'}), 403
+
+    item_id = str(uuid.uuid4())
+    item = {
+        'id': item_id,
+        'file': f'text:{item_id}',
+        'text': message,
+        'enabled': True,
+        'start': payload.get('start') if 'start' in payload else None,
+        'end': payload.get('end') if 'end' in payload else None,
+        'schedule': payload.get('schedule') if isinstance(payload.get('schedule'), list) else [],
+        'duration': duration,
+        'repeat': bool(payload.get('repeat', True)),
+        'link_next': False,
+        'media_type': 'scrolling_text',
+    }
+    if isinstance(payload.get('days'), list):
+        item['days'] = [str(day).lower()[:3] for day in payload.get('days') if day]
+    if 'effect' in payload and str(payload.get('effect') or '').strip():
+        item['effect'] = str(payload.get('effect')).strip()
+    screen.setdefault('playlist', []).append(item)
+    screen['file'] = item['file']
+
+    if ukey:
+        save_store_config_for_user_safe_key(ukey, config)
+    else:
+        save_store_config(config)
+
+    return jsonify({'success': True, 'item': item, 'item_id': item_id})
+
+
 @app.route('/assign_to_screen', methods=['POST'])
 @login_required
 def assign_to_screen():
@@ -21293,6 +21426,16 @@ def update_playlist_item(store_id, screen_id, item_id):
                     item['file'] = new_file
                     item['media_type'] = classify_media(new_file)
                     updated = True
+            if 'text' in payload:
+                if str(item.get('media_type') or '').lower() != 'scrolling_text':
+                    return jsonify({'success': False, 'error': 'Text can only be updated on a scrolling text item'}), 400
+                text_value = re.sub(r'\s+', ' ', str(payload.get('text') or '')).strip()
+                if not text_value:
+                    return jsonify({'success': False, 'error': 'Enter the message to display'}), 400
+                if len(text_value) > 500:
+                    return jsonify({'success': False, 'error': 'Text messages are limited to 500 characters'}), 400
+                item['text'] = text_value
+                updated = True
             # Basic fields
             for k in ['enabled','start','end','duration','repeat','link_next']:
                 if k in payload:

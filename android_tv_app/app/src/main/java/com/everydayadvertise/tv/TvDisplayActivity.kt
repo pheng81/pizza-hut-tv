@@ -45,6 +45,8 @@ import java.util.Locale
 import com.everydayadvertise.tv.api.HeartbeatReq
 import org.json.JSONObject
 import android.graphics.drawable.GradientDrawable
+import android.animation.ObjectAnimator
+import android.view.animation.LinearInterpolator
 
 data class PanelAppearanceConfig(
     val backgroundColor: String = "#201206",
@@ -83,6 +85,7 @@ class TvDisplayActivity : AppCompatActivity() {
     var manualPrev: (() -> Unit)? = null
     private var heartbeatJob: Job? = null
     private var hbIndicator: TextView? = null
+    var scrollingTextAnimator: ObjectAnimator? = null
     // Periodic per-item OK ping so dashboard lights stay green while item is displayed
     private var itemOkPingJob: Job? = null
     // Track current rotation and orientation to detect dashboard changes
@@ -1136,6 +1139,12 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
         return mediaType == "live_pos" || file.startsWith("livepos:")
     }
 
+    fun isScrollingTextItem(item: com.everydayadvertise.tv.api.PlaylistItem?): Boolean {
+        val mediaType = item?.mediaType?.lowercase(Locale.US) ?: ""
+        val file = item?.file?.lowercase(Locale.US) ?: ""
+        return mediaType == "scrolling_text" || file.startsWith("text:")
+    }
+
     fun loadAnimatedOrStatic(file: String, itemId: String?, preferredUrl: String?, effect: String?, onDone: (Boolean) -> Unit) {
         // Build a list of candidate URLs; try preferred (absolute or relative), then static/uploads, then uploads
         val candidates = mutableListOf<String>()
@@ -1475,6 +1484,71 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
         renderPanelOverlay(next)
         // Record the moment we switched to a new item for watchdog purposes
         try { lastAdvanceAtMs = android.os.SystemClock.elapsedRealtime() } catch (_: Exception) {}
+        scrollingTextAnimator?.cancel()
+        scrollingTextAnimator = null
+        binding.message.apply {
+            text = ""
+            translationX = 0f
+            visibility = View.VISIBLE
+            textSize = 14f
+            gravity = Gravity.START
+            setTypeface(Typeface.DEFAULT, Typeface.NORMAL)
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP or Gravity.START
+            ).apply { setMargins(16, 16, 16, 16) }
+        }
+        if (isScrollingTextItem(next)) {
+            val message = next.scrollingText?.trim().orEmpty()
+            if (message.isEmpty()) {
+                showAndSchedule()
+                return
+            }
+            cancelScheduled()
+            try { exoPlayer?.stop(); exoPlayer?.clearMediaItems() } catch (_: Exception) {}
+            try { youTubeWebView?.let { it.visibility = View.GONE; it.loadUrl("about:blank") } } catch (_: Exception) {}
+            try { legacyVideoView?.stopPlayback(); legacyVideoView?.visibility = View.GONE } catch (_: Exception) {}
+            playerView.visibility = View.GONE
+            imageView.visibility = View.GONE
+            secondaryImageView?.visibility = View.GONE
+            renderPanelOverlay(null)
+            val durationMs = (next.duration ?: 15).coerceAtLeast(5) * 1000L
+            currentItemDurationMs = durationMs
+            binding.message.apply {
+                text = message
+                visibility = View.VISIBLE
+                setTextColor(Color.WHITE)
+                setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 48f)
+                setTypeface(Typeface.DEFAULT, Typeface.BOLD)
+                gravity = Gravity.CENTER_VERTICAL
+                maxLines = 1
+                ellipsize = null
+                layoutParams = FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    Gravity.CENTER_VERTICAL or Gravity.START
+                )
+            }
+            binding.message.post {
+                val screenWidth = binding.root.width.toFloat().coerceAtLeast(1f)
+                val textWidth = binding.message.paint.measureText(message).coerceAtLeast(screenWidth)
+                scrollingTextAnimator = ObjectAnimator.ofFloat(
+                    binding.message,
+                    View.TRANSLATION_X,
+                    screenWidth,
+                    -textWidth
+                ).apply {
+                    duration = durationMs.coerceAtLeast(6000L)
+                    interpolator = LinearInterpolator()
+                    repeatCount = ObjectAnimator.INFINITE
+                    start()
+                }
+            }
+            scheduledRotation = Runnable { showAndSchedule() }
+            imageView.postDelayed(scheduledRotation!!, durationMs)
+            return
+        }
         if (isLivePosItem(next)) {
             cancelScheduled()
             cancelItemOkPing()

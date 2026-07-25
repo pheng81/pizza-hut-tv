@@ -171,6 +171,10 @@
             }, true);
         </script>
         <style>
+    @keyframes rp-scrolling-text-preview {
+        from { transform: translateX(100%); }
+        to { transform: translateX(-100%); }
+    }
     .enable-switch.on::after, .enable-switch.off::after { content: ''; position: absolute; top: 1px; left: 1px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: all .25s; }
     .enable-switch.on::after { transform: translateX(24px); }
     .enable-switch.off::after { transform: translateX(0); }
@@ -9852,7 +9856,10 @@ allowfullscreen></iframe></div>`;
                                     inWindow = dayAllowed(item.days) && intervalActiveRow(item.start, item.end);
                                 }
                                 const effectiveOn = item.enabled && inWindow;
-                                const summaryTitle = escapeHtml(formatPlaylistSummaryLabel(item.displayName || item.file || item.url || ''));
+                                const summarySource = String(item.media_type || '').toLowerCase() === 'scrolling_text'
+                                    ? `Scrolling text: ${String(item.text || '')}`
+                                    : (item.displayName || item.file || item.url || '');
+                                const summaryTitle = escapeHtml(formatPlaylistSummaryLabel(summarySource));
                                 const summaryRange = escapeHtml(formatPlaylistSummaryRange(startVal, endVal));
                                 const summaryDuration = `${parseInt(String(item.duration || 5), 10) || 5}s`;
                                 const summaryThemeStyle = getScheduleSummaryThemeStyle(item, idx);
@@ -10081,6 +10088,10 @@ allowfullscreen></iframe></div>`;
                     <span class="screen-action-menu__icon">▶️</span>
                     <span>YouTube</span>
                 </button>
+                <button type="button" class="screen-action-menu__button" data-action="scrolling-text">
+                    <span class="screen-action-menu__icon">↔</span>
+                    <span>Scrolling Text</span>
+                </button>
             `;
             menu.addEventListener('click', (event) => {
                 const actionBtn = event.target.closest('[data-action]');
@@ -10093,6 +10104,8 @@ allowfullscreen></iframe></div>`;
                     openReplaceModal(screenId,'SINGLE');
                 } else if(action === 'youtube'){
                     openYouTubeScheduleEditor(screenId, 'SINGLE');
+                } else if(action === 'scrolling-text'){
+                    openScrollingTextModal(screenId);
                 }
             });
             document.body.appendChild(menu);
@@ -10149,6 +10162,7 @@ allowfullscreen></iframe></div>`;
                 showPopupMenu([
                     { icon: '📅', label: 'Schedule', action: () => openReplaceModal(screenId,'SINGLE') },
                     { icon: '▶️', label: 'YouTube', action: () => openYouTubeScheduleEditor(screenId, 'SINGLE') },
+                    { icon: '↔', label: 'Scrolling Text', action: () => openScrollingTextModal(screenId) },
                     { icon: '❌', label: 'Cancel', action: null }
                 ]);
                 return false;
@@ -10578,6 +10592,9 @@ allowfullscreen></iframe></div>`;
         
         // Check for YouTube format - handle both raw format and CDN-prefixed format
         const fileStr = String(file);
+        if(fileStr.toLowerCase().startsWith('text:')){
+            return '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0f172a,#0f766e);color:#ecfeff;font-size:17px;font-weight:800;letter-spacing:.08em;">TEXT</div>';
+        }
         if(fileStr.toLowerCase().startsWith('livepos:')){
             return '<div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:linear-gradient(135deg,#0f172a,#1d4ed8);color:#e0f2fe;font-size:10px;font-weight:800;text-align:center;"><span>LIVE POS</span><span style="font-size:16px;">ORDERS</span></div>';
         }
@@ -15100,6 +15117,18 @@ allowfullscreen></iframe></div>`;
                                                                     <div class="rp-item__meta">Schedule order receipts full screen</div>
                                                                 </div>
                                                             </button>
+                                                            <button type="button" class="rp-item" onclick="openRpScrollingTextComposer()">
+                                                                <div class="rp-item__img" style="display:flex; align-items:center; justify-content:center; height:120px; background:linear-gradient(135deg,#e6fffb 0%,#eff6ff 100%); border-radius:4px; margin-bottom:8px;">
+                                                                    <div style="width:96px; height:72px; border-radius:16px; background:#0f766e; color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; box-shadow:0 14px 30px rgba(15,118,110,.22);">
+                                                                        <div style="font-size:24px; font-weight:900; line-height:1;">Aa</div>
+                                                                        <div style="font-size:10px; font-weight:800; letter-spacing:.12em;">SCROLL</div>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="rp-item__body">
+                                                                    <div class="rp-item__title">Scrolling Text</div>
+                                                                    <div class="rp-item__meta">Type a message for the display</div>
+                                                                </div>
+                                                            </button>
                                                         </div>
                                                     </div>
                                                     <div id="rp-search-empty" class="rp-empty rp-search-empty" style="display:none;">No items match this search.</div>
@@ -16102,6 +16131,9 @@ allowfullscreen></iframe></div>`;
                 function isRpYouTubeMode(){
                     return rpComposerMode === 'youtube' || !!(rpSelectedMedia && (rpSelectedMedia.mediaType === 'youtube' || inferRpMediaType(rpSelectedMedia.name) === 'youtube'));
                 }
+                function isRpScrollingTextMode(){
+                    return rpComposerMode === 'scrolling_text' || !!(rpSelectedMedia && rpSelectedMedia.mediaType === 'scrolling_text');
+                }
                 function syncRpInlineYoutubeValue(value){
                     const sidebarInput = document.getElementById('rp-youtube-url');
                     if(sidebarInput) sidebarInput.value = String(value || '');
@@ -16890,6 +16922,27 @@ allowfullscreen></iframe></div>`;
                     if(!previewPanelZone.dataset.defaultHtml){
                         previewPanelZone.dataset.defaultHtml = previewPanelZone.innerHTML;
                     }
+                    if(isRpScrollingTextMode()){
+                        if(youtubePanel) youtubePanel.style.display = 'none';
+                        if(importPanel) importPanel.style.display = 'none';
+                        previewPanelZone.style.display = 'block';
+                        previewPanelZone.innerHTML = `
+                            <div class="rp-subtitle" style="margin:0 0 8px 0;">Scrolling Text</div>
+                            <div class="rp-help" style="margin-top:0;">Type the message that will move across the display. Use the schedule controls on the right to set its duration, days, time window, and transition.</div>
+                            <div style="margin-top:12px;">
+                                <label for="rp-scrolling-text-inline" class="rp-label" style="display:block; margin-bottom:6px;">Message</label>
+                                <textarea id="rp-scrolling-text-inline" class="rp-input" maxlength="500" rows="4" placeholder="e.g. Fresh deals available today" style="width:100%; resize:vertical;"></textarea>
+                            </div>
+                            <div style="display:flex; justify-content:flex-end; margin-top:12px;">
+                                <button type="button" class="btn primary" onclick="rpPreviewInlineScrollingText()">Preview text</button>
+                            </div>`;
+                        const input = document.getElementById('rp-scrolling-text-inline');
+                        if(input){
+                            input.value = String((rpSelectedMedia && rpSelectedMedia.text) || '');
+                            input.focus();
+                        }
+                        return;
+                    }
                     if(isRpYouTubeMode()){
                         if(youtubePanel) youtubePanel.style.display = 'none';
                         if(importPanel) importPanel.style.display = '';
@@ -16953,6 +17006,26 @@ allowfullscreen></iframe></div>`;
                     if(inlineInput) syncRpInlineYoutubeValue(inlineInput.value);
                     rpReplaceWithYouTube();
                 }
+                function rpPreviewInlineScrollingText(){
+                    const input = document.getElementById('rp-scrolling-text-inline');
+                    const message = String(input && input.value || '').replace(/\s+/g, ' ').trim();
+                    if(!message){
+                        alert('Enter the message to display');
+                        if(input) input.focus();
+                        return;
+                    }
+                    rpComposerMode = 'scrolling_text';
+                    rpSelectedMedia = {
+                        name: 'text:pending',
+                        text: message,
+                        mediaType: 'scrolling_text',
+                        displayName: 'Scrolling Text'
+                    };
+                    rpWallAssignments = null;
+                    renderRpSelection();
+                    focusRpPanel('preview');
+                    showMessage('Text preview ready. Review the schedule, then click ' + getRpApplyLabel().toLowerCase() + '.', '#0f766e');
+                }
                 function rpImportInlineUrl(){
                     const inlineInput = document.getElementById('rp-import-url-inline');
                     if(inlineInput) syncRpInlineImportValue(inlineInput.value);
@@ -16966,6 +17039,7 @@ allowfullscreen></iframe></div>`;
                     const type = media && (media.mediaType || inferRpMediaType(media.name));
                     if(type === 'live_pos') return 'Live POS';
                     if(type === 'youtube') return 'YouTube';
+                    if(type === 'scrolling_text') return 'Scrolling Text';
                     return type === 'video' ? 'Video' : 'Image';
                 }
                 function buildRpMediaThumbMarkup(media){
@@ -16979,6 +17053,9 @@ allowfullscreen></iframe></div>`;
                                 <div style="font-size:12px;font-weight:700;margin-top:6px;">Waiting for orders</div>
                             </div>
                         </div>`;
+                    }
+                    if(mediaType === 'scrolling_text'){
+                        return `<div style="width:100%;height:100%;display:flex;align-items:center;overflow:hidden;background:linear-gradient(135deg,#0f172a,#0f766e);color:#ecfeff;font-size:clamp(22px,3vw,42px);font-weight:800;line-height:1.25;"><span style="display:inline-block;white-space:nowrap;padding-left:100%;animation:rp-scrolling-text-preview 8s linear infinite;">${escapeHtml(String(media.text || 'Your scrolling message'))}</span></div>`;
                     }
                     if(mediaType === 'youtube'){
                         const videoId = String(media.name).replace(/^youtube:/i, '');
@@ -17199,6 +17276,15 @@ allowfullscreen></iframe></div>`;
                     renderRpSelection();
                     focusRpPanel('preview');
                 }
+                function openRpScrollingTextComposer(){
+                    rpComposerMode = 'scrolling_text';
+                    rpSelectedMedia = null;
+                    rpWallAssignments = null;
+                    switchRpTab('lib');
+                    renderRpSelection();
+                    const panel = document.getElementById('rp-preview-panel-zone');
+                    if(panel) panel.scrollIntoView({ behavior:'smooth', block:'nearest' });
+                }
                 async function applyRpWallSet(wallSet){
                     const baseScreenId = await resolveRpTargetScreen();
                     if(!baseScreenId) return false;
@@ -17344,6 +17430,38 @@ allowfullscreen></iframe></div>`;
                     showMessage('Live POS schedule added.', '#2563eb');
                     return true;
                 }
+                async function applyRpScrollingText(){
+                    if(!rpCtx) return false;
+                    if(rpCtx.itemId !== 'SINGLE'){
+                        alert('Scrolling text is added as its own schedule slot. Use Add Scheduled Media to create it.');
+                        return false;
+                    }
+                    const message = String(rpSelectedMedia && rpSelectedMedia.text || '').trim();
+                    if(!message){
+                        alert('Enter the message, then click Preview text.');
+                        return false;
+                    }
+                    const sid = await resolveRpTargetScreen();
+                    if(!sid) return false;
+                    const schedulePayload = buildRpPopupSchedulePayload(sid);
+                    if(!schedulePayload) return false;
+                    markAsChanged();
+                    const response = await fetch(`/playlist/text/${encodeURIComponent(currentStoreId)}/${encodeURIComponent(sid)}`, {
+                        method:'POST',
+                        headers:{'Content-Type':'application/json'},
+                        body: JSON.stringify(Object.assign({ text: message }, schedulePayload))
+                    });
+                    const result = await response.json();
+                    if(!response.ok || !result.success){
+                        throw new Error((result && result.error) || 'Failed to add scrolling text');
+                    }
+                    closeReplaceModal();
+                    markAsSaved();
+                    refreshPlaylist(sid);
+                    try { if(typeof loadScreensForStore === 'function' && currentStoreId) loadScreensForStore(currentStoreId); } catch {}
+                    showMessage('Scrolling text added to the schedule.', '#0f766e');
+                    return true;
+                }
                 function applyRpSelectedMedia(){
                     if(!rpSelectedMedia || !rpSelectedMedia.name){
                         alert('Select an image or video first');
@@ -17352,6 +17470,12 @@ allowfullscreen></iframe></div>`;
                     if(rpSelectedMedia.mediaType === 'live_pos'){
                         applyRpLivePos().catch((error) => {
                             alert('Add Live POS failed: ' + (error && error.message ? error.message : 'unknown'));
+                        });
+                        return;
+                    }
+                    if(rpSelectedMedia.mediaType === 'scrolling_text'){
+                        applyRpScrollingText().catch((error) => {
+                            alert('Add scrolling text failed: ' + (error && error.message ? error.message : 'unknown'));
                         });
                         return;
                     }
@@ -18106,6 +18230,70 @@ allowfullscreen></iframe></div>`;
                 document.getElementById('youtubeModal').style.display = 'none';
                 youtubeTargetScreen = null;
                 youtubeTargetItemId = null;
+            }
+
+            let scrollingTextTargetScreen = null;
+            let scrollingTextOpenedFromRp = false;
+            function openScrollingTextModal(screenId) {
+                scrollingTextTargetScreen = screenId;
+                const modal = document.getElementById('scrollingTextModal');
+                const textInput = document.getElementById('scrollingTextValue');
+                const durationInput = document.getElementById('scrollingTextDuration');
+                if (!modal || !textInput || !durationInput) return;
+                textInput.value = '';
+                durationInput.value = '15';
+                modal.style.display = 'flex';
+                textInput.focus();
+            }
+
+            function closeScrollingTextModal() {
+                const modal = document.getElementById('scrollingTextModal');
+                if (modal) modal.style.display = 'none';
+                scrollingTextTargetScreen = null;
+                scrollingTextOpenedFromRp = false;
+            }
+
+            async function addScrollingText() {
+                const text = String(document.getElementById('scrollingTextValue')?.value || '').trim();
+                const duration = Math.max(5, Math.min(3600, parseInt(document.getElementById('scrollingTextDuration')?.value, 10) || 15));
+                if (!scrollingTextTargetScreen) {
+                    alert('No screen selected');
+                    return;
+                }
+                if (!text) {
+                    alert('Enter the message to display');
+                    return;
+                }
+                try {
+                    const response = await fetch(`/playlist/text/${encodeURIComponent(currentStoreId)}/${encodeURIComponent(scrollingTextTargetScreen)}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text, duration })
+                    });
+                    const result = await response.json();
+                    if (!response.ok || !result.success) {
+                        alert(result.error || 'Failed to add scrolling text');
+                        return;
+                    }
+                    if(rpSelectedMedia.mediaType === 'scrolling_text'){
+                        applyRpScrollingText().catch((error) => {
+                            alert('Add scrolling text failed: ' + (error && error.message ? error.message : 'unknown'));
+                        });
+                        return;
+                    }
+                    const screenId = scrollingTextTargetScreen;
+                    const returnToScheduleEditor = scrollingTextOpenedFromRp;
+                    closeScrollingTextModal();
+                    if (returnToScheduleEditor && typeof closeReplaceModal === 'function') {
+                        closeReplaceModal();
+                    }
+                    showMessage('Scrolling text added to the schedule.', '#168a4b');
+                    await refreshPlaylist(screenId);
+                    loadScreensForStore(currentStoreId);
+                } catch (error) {
+                    console.error('Failed to add scrolling text:', error);
+                    alert('Failed to add scrolling text. Please try again.');
+                }
             }
             
             async function addYouTubeVideo() {
@@ -20474,6 +20662,30 @@ allowfullscreen></iframe></div>`;
                 <div style="margin-top:20px; display:flex; gap:10px; justify-content:flex-end;">
                     <button type="button" class="btn-secondary" onclick="closeYouTubeModal()">Cancel</button>
                     <button type="button" class="btn-primary" id="youtubeModalAction" onclick="addYouTubeVideo()" style="background:#FF0000;">Add to Schedule</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="scrollingTextModal" class="modal" style="display:none;">
+        <div class="modal-content" style="max-width:600px;">
+            <div class="modal-header">
+                <h3>↔ Add Scrolling Text</h3>
+                <button type="button" class="close" onclick="closeScrollingTextModal()">&times;</button>
+            </div>
+            <div style="padding:20px;">
+                <p style="margin-bottom:15px; color:#666;">Type a message to scroll across the display. It will be added as a normal schedule item.</p>
+                <div class="form-group">
+                    <label for="scrollingTextValue">Message</label>
+                    <textarea id="scrollingTextValue" maxlength="500" rows="4" placeholder="e.g. Fresh deals available today" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; font:inherit; resize:vertical;"></textarea>
+                </div>
+                <div class="form-group" style="margin-top:15px;">
+                    <label for="scrollingTextDuration">Duration (seconds)</label>
+                    <input type="number" id="scrollingTextDuration" value="15" min="5" max="3600" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; font-size:14px;">
+                </div>
+                <div style="margin-top:20px; display:flex; gap:10px; justify-content:flex-end;">
+                    <button type="button" class="btn-secondary" onclick="closeScrollingTextModal()">Cancel</button>
+                    <button type="button" class="btn-primary" onclick="addScrollingText()" style="background:#0f766e;">Add to Schedule</button>
                 </div>
             </div>
         </div>

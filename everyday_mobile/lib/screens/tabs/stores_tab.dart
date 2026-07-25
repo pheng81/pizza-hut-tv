@@ -4486,6 +4486,14 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet>
     final file = (item?['file'] ?? '').toString().trim();
     final isYouTube = file.startsWith('youtube:');
 
+    if (mediaType == 'scrolling_text') {
+      return _ScrollingTextPreview(
+        key: ValueKey('scrolling-text-${item?['id'] ?? item?['file'] ?? ''}'),
+        text: (item?['text'] ?? 'Your scrolling message').toString(),
+        fontSize: iconSize < 12 ? 12 : (iconSize > 18 ? 18 : iconSize),
+      );
+    }
+
     if (mediaType == 'image' && itemUrl.isNotEmpty) {
       return Image.network(
         itemUrl,
@@ -4729,6 +4737,14 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet>
   }
 
   String _itemLabel(Map<String, dynamic> item) {
+    final mediaType = (item['media_type'] ?? '').toString().toLowerCase();
+    if (mediaType == 'scrolling_text') {
+      final text = (item['text'] ?? '').toString().trim();
+      if (text.isNotEmpty) {
+        return 'Scrolling text: ${text.length > 44 ? '${text.substring(0, 41)}...' : text}';
+      }
+      return 'Scrolling text';
+    }
     final file = (item['file'] ?? '').toString();
     if (file.isEmpty) {
       return 'Untitled media';
@@ -5009,6 +5025,79 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet>
           _quickActionBusy = false;
         });
       }
+    }
+  }
+
+  Future<void> _quickAddScrollingText() async {
+    final textController = TextEditingController();
+    final durationController = TextEditingController(text: '15');
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Scrolling Text'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+                'This message will scroll across the display in the schedule.'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: textController,
+              maxLength: 500,
+              minLines: 2,
+              maxLines: 4,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: 'Message',
+                hintText: 'e.g. Fresh deals available today',
+              ),
+            ),
+            TextField(
+              controller: durationController,
+              keyboardType: TextInputType.number,
+              decoration:
+                  const InputDecoration(labelText: 'Duration (seconds)'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Add to Schedule'),
+          ),
+        ],
+      ),
+    );
+    final text = textController.text.trim();
+    final duration =
+        (int.tryParse(durationController.text.trim()) ?? 15).clamp(5, 3600);
+    textController.dispose();
+    durationController.dispose();
+    if (accepted != true) return;
+    if (text.isEmpty) {
+      _showSheetMessage('Enter the message to display.');
+      return;
+    }
+
+    setState(() => _quickActionBusy = true);
+    try {
+      await widget.apiClient.addScrollingTextToPlaylist(
+        storeId: widget.storeId,
+        screenId: widget.screenId,
+        text: text,
+        duration: duration,
+      );
+      _showSheetMessage('Scrolling text added to the schedule.');
+      await _loadPlaylist();
+    } catch (e) {
+      _showSheetMessage(e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _quickActionBusy = false);
     }
   }
 
@@ -8635,6 +8724,15 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet>
                                       ),
                                       const SizedBox(width: 6),
                                       _buildQuickActionButton(
+                                        tooltip: 'Scrolling Text',
+                                        icon: Icons.text_fields,
+                                        background: const Color(0xFF0F766E),
+                                        onPressed: (_saving || _quickActionBusy)
+                                            ? null
+                                            : _quickAddScrollingText,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      _buildQuickActionButton(
                                         tooltip: 'Rotate',
                                         icon: Icons.rotate_left,
                                         background: const Color(0xFF6366F1),
@@ -9127,6 +9225,67 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet>
                     ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ScrollingTextPreview extends StatefulWidget {
+  const _ScrollingTextPreview({
+    super.key,
+    required this.text,
+    required this.fontSize,
+  });
+
+  final String text;
+  final double fontSize;
+
+  @override
+  State<_ScrollingTextPreview> createState() => _ScrollingTextPreviewState();
+}
+
+class _ScrollingTextPreviewState extends State<_ScrollingTextPreview>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 7),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFF0F172A),
+      clipBehavior: Clip.hardEdge,
+      alignment: Alignment.centerLeft,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) => FractionalTranslation(
+          translation: Offset(1 - (_controller.value * 2), 0),
+          child: child,
+        ),
+        child: Text(
+          widget.text,
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.visible,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: widget.fontSize,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
     );

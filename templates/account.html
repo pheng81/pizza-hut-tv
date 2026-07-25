@@ -1544,13 +1544,31 @@
     </div>
     {% endif %}
 
-    <!-- Billing History / Invoice History -->
-    {% if billing_history %}
+    <!-- Billing, statements, and invoice history -->
     <div class="info-card">
       <h2 class="info-card-title">
         <span class="title-accent"></span>
-        Invoice History
+        Billing & Statements
       </h2>
+      <p style="color: #64748b; font-size: 14px; margin-bottom: 18px;">
+        Download a billing statement for your records, manage payment details, and view every available invoice.
+      </p>
+      <div class="action-grid" style="margin: 0 0 18px;">
+        <a href="{{ url_for('download_billing_statement') }}" class="btn btn-primary" download>
+          Download Statement (CSV)
+        </a>
+        {% if has_active %}
+        <form action="{{ url_for('billing_portal') }}" method="POST">
+          <button type="submit" class="btn btn-secondary" style="width: 100%;">Payment & Billing Portal</button>
+        </form>
+        {% endif %}
+      </div>
+      <div class="info-row" style="padding-top: 0;">
+        <span class="info-label">Statement contents</span>
+        <span class="info-value">{{ billing_history|length }} invoice{{ '' if billing_history|length == 1 else 's' }} available</span>
+      </div>
+      <h3 style="font-size: 15px; margin: 20px 0 6px;">Payment History</h3>
+      {% if billing_history %}
       <div class="billing-list">
         {% for invoice in billing_history[:10] %}
         <div class="billing-item" style="display: flex; justify-content: space-between; align-items: center; padding: 16px 0; border-bottom: 1px solid #e5e7eb;">
@@ -1584,8 +1602,12 @@
         </div>
         {% endfor %}
       </div>
+      {% else %}
+      <p style="color: #64748b; font-size: 14px; padding: 14px 0 2px;">
+        No invoices are available yet. Your statement will include invoices once billing activity begins.
+      </p>
+      {% endif %}
     </div>
-    {% endif %}
   </div>
 
 <script>
