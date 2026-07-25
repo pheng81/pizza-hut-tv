@@ -1,14 +1,14 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:geocoding/geocoding.dart' as geocoding;
-import 'package:latlong2/latlong.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
@@ -45,6 +45,8 @@ class _StoresTabState extends State<StoresTab> {
       {};
   Future<List<_StoreMapMarkerData>>? _storeMapMarkersFuture;
   final Map<String, LatLng?> _resolvedMapPoints = {};
+  _StoreMapMarkerData? _activeMapMarker;
+  final Map<String, BitmapDescriptor> _storeMarkerIcons = {};
 
   bool _isPhoneVerificationError(String? message) {
     final text = (message ?? '').toLowerCase();
@@ -69,6 +71,96 @@ class _StoresTabState extends State<StoresTab> {
   void initState() {
     super.initState();
     _loadStores();
+  }
+
+  Future<BitmapDescriptor> _storeMarkerIconForStatus(String status) async {
+    final normalized = status == 'online' ? 'online' : 'offline';
+    final cached = _storeMarkerIcons[normalized];
+    if (cached != null) {
+      return cached;
+    }
+
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    const size = Size(52, 52);
+    const rect = Rect.fromLTWH(2, 2, 48, 48);
+    const radius = Radius.circular(4);
+    const textStyle = TextStyle(
+      color: Colors.white,
+      fontSize: 22,
+      fontWeight: FontWeight.w800,
+      letterSpacing: -1,
+    );
+
+    final shadowPath = Path()
+      ..addRRect(
+        RRect.fromRectAndRadius(rect, radius),
+      );
+    canvas.drawShadow(shadowPath, const Color(0x380F172A), 8, false);
+
+    final gradient = normalized == 'online'
+        ? const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFFFF2D84),
+              Color(0xFF9D45FF),
+              Color(0xFF3C6CFF),
+            ],
+            stops: [0.0, 0.52, 1.0],
+          )
+        : const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFFA7A7AD),
+              Color(0xFF595960),
+              Color(0xFF2F2F34),
+            ],
+            stops: [0.0, 0.55, 1.0],
+          );
+
+    final paint = Paint()
+      ..shader = gradient.createShader(rect)
+      ..isAntiAlias = true;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, radius),
+      paint,
+    );
+
+    final strokePaint = Paint()
+      ..color = Colors.white.withValues(alpha: normalized == 'online' ? 0.18 : 0.14)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..isAntiAlias = true;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromLTWH(2.5, 2.5, 47, 47), const Radius.circular(3.5)),
+      strokePaint,
+    );
+
+    final textPainter = TextPainter(
+      text: const TextSpan(text: 'ea', style: textStyle),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    textPainter.paint(
+      canvas,
+      Offset(
+        (size.width - textPainter.width) / 2,
+        (size.height - textPainter.height) / 2 + 1,
+      ),
+    );
+
+    final image = await recorder.endRecording().toImage(
+          size.width.toInt(),
+          size.height.toInt(),
+        );
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    if (bytes == null) {
+      return BitmapDescriptor.defaultMarker;
+    }
+    final descriptor = BitmapDescriptor.bytes(bytes.buffer.asUint8List());
+    _storeMarkerIcons[normalized] = descriptor;
+    return descriptor;
   }
 
   Future<void> _loadStores() async {
@@ -652,6 +744,8 @@ class _StoresTabState extends State<StoresTab> {
     String? livePosTitle;
     String? livePosBody;
     int? syncStartEpoch;
+    bool showWallSyncBadge = false;
+    String? wallSyncGroup;
     void addCandidate(String raw) {
       final resolved = _toAbsoluteUrlForPreview(raw);
       if (resolved.isNotEmpty && !candidates.contains(resolved)) {
@@ -746,6 +840,64 @@ class _StoresTabState extends State<StoresTab> {
       addCandidate((item['slice_url'] ?? '').toString());
     }
 
+    bool hasDisplayableMediaForCard(Map<String, dynamic> item) {
+      final file = (item['file'] ?? '').toString().trim().toLowerCase();
+      final mediaType = (item['media_type'] ?? '').toString().toLowerCase();
+      if (mediaType == 'live_pos' || file.startsWith('livepos:')) {
+        return false;
+      }
+      if (file.startsWith('youtube:')) {
+        return true;
+      }
+      if (file.startsWith('http://') || file.startsWith('https://')) {
+        return true;
+      }
+      return file.isNotEmpty;
+    }
+
+    bool looksRunningForCard(Map<String, dynamic> item) {
+      final status = item['last_status'];
+      if (status is! Map) {
+        return false;
+      }
+      final lower =
+          status.values.map((value) => value.toString().toLowerCase()).join(' ');
+      return lower.contains('load_ok') ||
+          lower.contains('playing') ||
+          lower.contains('ok') ||
+          lower.contains('success');
+    }
+
+    Map<String, dynamic>? pickPrimaryPlaylistItem() {
+      for (final item in playlist) {
+        if (looksRunningForCard(item) && hasDisplayableMediaForCard(item)) {
+          return item;
+        }
+      }
+      for (final item in playlist) {
+        if ((item['enabled'] ?? true) == true &&
+            hasDisplayableMediaForCard(item)) {
+          return item;
+        }
+      }
+      for (final item in playlist) {
+        if (hasDisplayableMediaForCard(item)) {
+          return item;
+        }
+      }
+      return playlist.isEmpty ? null : playlist.first;
+    }
+
+    final primaryItem = pickPrimaryPlaylistItem();
+    final primarySyncRef = primaryItem?['sync_ref'];
+    if (primarySyncRef is Map) {
+      final group = (primarySyncRef['group'] ?? '').toString().trim();
+      if (group.isNotEmpty) {
+        showWallSyncBadge = true;
+        wallSyncGroup = group;
+      }
+    }
+
     // Prefer newest enabled media first, then fall back to any remaining
     // playlist items so one broken item does not blank the card preview.
     for (int i = playlist.length - 1; i >= 0; i--) {
@@ -783,6 +935,8 @@ class _StoresTabState extends State<StoresTab> {
       livePosTitle: livePosTitle,
       livePosBody: livePosBody,
       syncStartEpoch: syncStartEpoch,
+      showWallSyncBadge: showWallSyncBadge,
+      wallSyncGroup: wallSyncGroup,
       headers: headers,
     );
   }
@@ -840,7 +994,11 @@ class _StoresTabState extends State<StoresTab> {
         ),
       ),
     );
-    return markers.whereType<_StoreMapMarkerData>().toList();
+    final resolved = markers.whereType<_StoreMapMarkerData>().toList();
+    for (final marker in resolved) {
+      marker.icon = await _storeMarkerIconForStatus(marker.status);
+    }
+    return resolved;
   }
 
   Future<_StoreMapMarkerData?> _resolveStoreMapMarker({
@@ -851,9 +1009,41 @@ class _StoresTabState extends State<StoresTab> {
     final directPoint = _toLatLng(store.latitude, store.longitude);
     String detail = store.address.trim();
 
+    String previewStatus = 'offline';
+    void syncPreviewStatus(ScreenItem? previewScreen) {
+      if (previewScreen == null) {
+        return;
+      }
+      previewStatus =
+          (_screenStatus[previewScreen.id] ?? '').toLowerCase() == 'online'
+              ? 'online'
+              : 'offline';
+    }
+
     if (directPoint != null) {
+      List<ScreenItem> directScreens = const [];
+      if (store.id == selectedStoreId) {
+        directScreens = selectedStoreScreens;
+      } else {
+        try {
+          directScreens = await widget.apiClient.getScreens(store.id);
+        } catch (_) {
+          directScreens = const [];
+        }
+      }
+      final directPreview = directScreens.cast<ScreenItem?>().firstWhere(
+            (screen) => screen != null,
+            orElse: () => null,
+          );
+      syncPreviewStatus(directPreview);
       return _StoreMapMarkerData(
-          store: store, point: directPoint, detail: detail);
+        store: store,
+        point: directPoint,
+        detail: detail,
+        previewScreenId: directPreview?.id,
+        previewScreenName: directPreview?.name,
+        status: previewStatus,
+      );
     }
 
     List<ScreenItem> screensForStore = const [];
@@ -866,6 +1056,11 @@ class _StoresTabState extends State<StoresTab> {
         screensForStore = const [];
       }
     }
+    final previewScreen = screensForStore.cast<ScreenItem?>().firstWhere(
+          (screen) => screen != null,
+          orElse: () => null,
+        );
+    syncPreviewStatus(previewScreen);
 
     final screenWithAddress = screensForStore.cast<ScreenItem?>().firstWhere(
           (screen) => (screen?.address.trim().isNotEmpty ?? false),
@@ -875,7 +1070,14 @@ class _StoresTabState extends State<StoresTab> {
       detail = screenWithAddress.address.trim();
       final point = await _resolveMapPoint(detail);
       if (point != null) {
-        return _StoreMapMarkerData(store: store, point: point, detail: detail);
+        return _StoreMapMarkerData(
+          store: store,
+          point: point,
+          detail: detail,
+          previewScreenId: previewScreen?.id,
+          previewScreenName: previewScreen?.name,
+          status: previewStatus,
+        );
       }
     }
 
@@ -886,6 +1088,9 @@ class _StoresTabState extends State<StoresTab> {
           store: store,
           point: point,
           detail: store.address.trim(),
+          previewScreenId: previewScreen?.id,
+          previewScreenName: previewScreen?.name,
+          status: previewStatus,
         );
       }
     }
@@ -895,7 +1100,14 @@ class _StoresTabState extends State<StoresTab> {
     if (point == null) {
       return null;
     }
-    return _StoreMapMarkerData(store: store, point: point, detail: detail);
+    return _StoreMapMarkerData(
+      store: store,
+      point: point,
+      detail: detail,
+      previewScreenId: previewScreen?.id,
+      previewScreenName: previewScreen?.name,
+      status: previewStatus,
+    );
   }
 
   LatLng? _toLatLng(double? latitude, double? longitude) {
@@ -928,16 +1140,32 @@ class _StoresTabState extends State<StoresTab> {
     }
   }
 
+  LatLngBounds _boundsFromPoints(List<LatLng> points) {
+    var minLat = points.first.latitude;
+    var maxLat = points.first.latitude;
+    var minLng = points.first.longitude;
+    var maxLng = points.first.longitude;
+    for (final point in points.skip(1)) {
+      if (point.latitude < minLat) minLat = point.latitude;
+      if (point.latitude > maxLat) maxLat = point.latitude;
+      if (point.longitude < minLng) minLng = point.longitude;
+      if (point.longitude > maxLng) maxLng = point.longitude;
+    }
+    return LatLngBounds(
+      southwest: LatLng(minLat, minLng),
+      northeast: LatLng(maxLat, maxLng),
+    );
+  }
+
   Widget _buildStoreMapCard({
     required ThemeData theme,
     required ColorScheme scheme,
   }) {
     final future = _storeMapMarkersFuture;
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: SizedBox(
-        height: 340,
-        width: double.infinity,
+    return ClipRRect(
+      borderRadius: BorderRadius.zero,
+      child: AspectRatio(
+        aspectRatio: 1,
         child: future == null
             ? const Center(child: CircularProgressIndicator())
             : FutureBuilder<List<_StoreMapMarkerData>>(
@@ -951,11 +1179,7 @@ class _StoresTabState extends State<StoresTab> {
                   if (markers.isEmpty) {
                     return Container(
                       alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: scheme.surfaceContainerLow,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: scheme.outlineVariant),
-                      ),
+                      color: scheme.surfaceContainerLow,
                       padding: const EdgeInsets.all(20),
                       child: Text(
                         'No store locations found yet. Add an address or coordinates to your stores/screens and pins will appear here.',
@@ -974,93 +1198,112 @@ class _StoresTabState extends State<StoresTab> {
                   final initialCenter = selectedMarker.isNotEmpty
                       ? selectedMarker.first.point
                       : points.first;
+                  _StoreMapMarkerData? activeMarker;
+                  if (_activeMapMarker != null) {
+                    for (final marker in markers) {
+                      if (marker.store.id == _activeMapMarker!.store.id) {
+                        activeMarker = marker;
+                        break;
+                      }
+                    }
+                  }
 
-                  return ClipRRect(
-                    child: FlutterMap(
-                      options: MapOptions(
-                        initialCenter: initialCenter,
-                        initialZoom: markers.length == 1 ? 13 : 5.2,
-                        initialCameraFit: markers.length > 1
-                            ? CameraFit.bounds(
-                                bounds: LatLngBounds.fromPoints(points),
-                                padding: const EdgeInsets.all(32),
-                              )
-                            : null,
-                      ),
-                      children: [
-                        TileLayer(
-                          urlTemplate:
-                              'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                          userAgentPackageName:
-                              'com.everydayadvertise.everyday_mobile',
+                  return Stack(
+                    children: [
+                      GoogleMap(
+                        initialCameraPosition: CameraPosition(
+                          target: initialCenter,
+                          zoom: markers.length == 1 ? 13 : 10,
                         ),
-                        MarkerLayer(
-                          markers: markers
-                              .map(
-                                (marker) => Marker(
-                                  point: marker.point,
-                                  width: 120,
-                                  height: 82,
-                                  child: GestureDetector(
-                                    onTap: () =>
-                                        _onSelectStore(marker.store.id),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 4,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: marker.store.id ==
-                                                    widget.selectedStoreId
-                                                ? scheme.primary
-                                                : Colors.white,
-                                            borderRadius:
-                                                BorderRadius.circular(999),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withValues(
-                                                  alpha: 0.08,
-                                                ),
-                                                blurRadius: 8,
-                                                offset: const Offset(0, 2),
-                                              ),
-                                            ],
-                                          ),
-                                          child: Text(
-                                            marker.store.name,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: theme.textTheme.labelSmall
-                                                ?.copyWith(
-                                              color: marker.store.id ==
-                                                      widget.selectedStoreId
-                                                  ? scheme.onPrimary
-                                                  : scheme.onSurface,
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Icon(
-                                          Icons.location_on,
-                                          size: 34,
-                                          color: marker.store.id ==
-                                                  widget.selectedStoreId
-                                              ? scheme.primary
-                                              : const Color(0xFFDC2626),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
+                        mapType: MapType.hybrid,
+                        myLocationButtonEnabled: false,
+                        zoomControlsEnabled: false,
+                        compassEnabled: true,
+                        onMapCreated: (controller) {
+                          if (markers.length > 1) {
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              controller.animateCamera(
+                                CameraUpdate.newLatLngBounds(
+                                  _boundsFromPoints(points),
+                                  42,
                                 ),
-                              )
-                              .toList(),
+                              );
+                            });
+                          }
+                        },
+                        onTap: (_) {
+                          if (_activeMapMarker != null && mounted) {
+                            setState(() {
+                              _activeMapMarker = null;
+                            });
+                          }
+                        },
+                        markers: markers
+                            .map(
+                              (marker) => Marker(
+                                markerId: MarkerId(marker.store.id),
+                                position: marker.point,
+                                icon: marker.icon ?? BitmapDescriptor.defaultMarker,
+                                infoWindow: InfoWindow.noText,
+                                onTap: () {
+                                  _onSelectStore(marker.store.id);
+                                  if (!mounted) {
+                                    return;
+                                  }
+                                  setState(() {
+                                    _activeMapMarker = marker;
+                                  });
+                                },
+                              ),
+                            )
+                            .toSet(),
+                      ),
+                      if (activeMarker != null)
+                        Positioned(
+                          left: 12,
+                          right: 12,
+                          bottom: 12,
+                          child: Builder(
+                            builder: (context) {
+                              final marker = activeMarker!;
+                              return _StoreMapPreviewCard(
+                                marker: marker,
+                                theme: theme,
+                                scheme: scheme,
+                                previewFuture:
+                                    marker.previewScreenId == null
+                                        ? null
+                                        : _getScreenCardPreviewData(
+                                            storeId: marker.store.id,
+                                            screenId:
+                                                marker.previewScreenId!,
+                                          ),
+                                onOpen: () async {
+                                  await _onSelectStore(marker.store.id);
+                                  if (!mounted) {
+                                    return;
+                                  }
+                                  final previewId = marker.previewScreenId;
+                                  if (previewId != null) {
+                                    widget.onSelectionChanged(
+                                      marker.store.id,
+                                      previewId,
+                                    );
+                                  }
+                                },
+                                onClose: () {
+                                  if (!mounted) {
+                                    return;
+                                  }
+                                  setState(() {
+                                    _activeMapMarker = null;
+                                  });
+                                },
+                              );
+                            },
+                          ),
                         ),
-                      ],
-                    ),
+                    ],
                   );
                 },
               ),
@@ -1088,12 +1331,14 @@ class _StoresTabState extends State<StoresTab> {
         child: SizedBox(
           width: 42,
           height: 42,
-          child: OutlinedButton(
+          child: FilledButton.tonal(
             onPressed: onPressed,
-            style: OutlinedButton.styleFrom(
+            style: FilledButton.styleFrom(
               padding: EdgeInsets.zero,
               visualDensity: VisualDensity.compact,
-              side: BorderSide(color: scheme.outlineVariant),
+              elevation: 0,
+              backgroundColor: scheme.surfaceContainerHigh,
+              foregroundColor: iconColor ?? scheme.onSurfaceVariant,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -1104,10 +1349,36 @@ class _StoresTabState extends State<StoresTab> {
       );
     }
 
+    InputDecoration flatPickerDecoration(String label) {
+      return InputDecoration(
+        labelText: label,
+        filled: true,
+        fillColor: scheme.surfaceContainerHigh,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        disabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      );
+    }
+
     return RefreshIndicator(
       onRefresh: _loadStores,
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(0, 8, 0, 16),
         children: [
           if (_error != null)
             Material(
@@ -1144,50 +1415,20 @@ class _StoresTabState extends State<StoresTab> {
               ),
             ),
           if (_error != null) const SizedBox(height: 12),
-          Card(
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Card(
+            elevation: 0,
+            color: scheme.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide.none,
+            ),
             child: Padding(
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        height: 34,
-                        width: 34,
-                        decoration: BoxDecoration(
-                          color: scheme.primaryContainer,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Icon(
-                          Icons.storefront,
-                          color: scheme.onPrimaryContainer,
-                          size: 18,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Select Store',
-                          style: theme.textTheme.titleMedium,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: _loading ? null : _loadStores,
-                        icon: const Icon(Icons.refresh),
-                        tooltip: 'Refresh',
-                      ),
-                    ],
-                  ),
-                  Text(
-                    'Pick a store and screen before upload or commands.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -1205,7 +1446,7 @@ class _StoresTabState extends State<StoresTab> {
                                   ))
                               .toList(),
                           onChanged: _loading ? null : _onSelectStore,
-                          decoration: const InputDecoration(labelText: 'Store'),
+                          decoration: flatPickerDecoration(''),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -1250,8 +1491,7 @@ class _StoresTabState extends State<StoresTab> {
                                   widget.onSelectionChanged(
                                       widget.selectedStoreId, value);
                                 },
-                          decoration:
-                              const InputDecoration(labelText: 'Screen'),
+                          decoration: flatPickerDecoration(''),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -1268,6 +1508,7 @@ class _StoresTabState extends State<StoresTab> {
               ),
             ),
           ),
+          ),
           const SizedBox(height: 12),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -1275,6 +1516,7 @@ class _StoresTabState extends State<StoresTab> {
               children: [
                 Chip(
                   backgroundColor: const Color(0xFFDBEAFE),
+                  side: BorderSide.none,
                   visualDensity: VisualDensity.compact,
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   avatar: const Icon(Icons.storefront, size: 14),
@@ -1288,6 +1530,7 @@ class _StoresTabState extends State<StoresTab> {
                 const SizedBox(width: 6),
                 Chip(
                   backgroundColor: scheme.surfaceContainerHigh,
+                  side: BorderSide.none,
                   visualDensity: VisualDensity.compact,
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   avatar: const Icon(Icons.tv, size: 14),
@@ -1301,6 +1544,7 @@ class _StoresTabState extends State<StoresTab> {
                 const SizedBox(width: 6),
                 Chip(
                   backgroundColor: scheme.surfaceContainerHigh,
+                  side: BorderSide.none,
                   visualDensity: VisualDensity.compact,
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   avatar: const Icon(Icons.wifi_tethering, size: 14),
@@ -1315,6 +1559,7 @@ class _StoresTabState extends State<StoresTab> {
                   const SizedBox(width: 6),
                   Chip(
                     backgroundColor: const Color(0xFFEDE9FE),
+                    side: BorderSide.none,
                     visualDensity: VisualDensity.compact,
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     avatar: const Icon(Icons.tag, size: 14),
@@ -1330,7 +1575,10 @@ class _StoresTabState extends State<StoresTab> {
             ),
           ),
           const SizedBox(height: 12),
-          _buildStoreMapCard(theme: theme, scheme: scheme),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 0),
+            child: _buildStoreMapCard(theme: theme, scheme: scheme),
+          ),
           const SizedBox(height: 12),
           if (_loading)
             const Padding(
@@ -1354,8 +1602,11 @@ class _StoresTabState extends State<StoresTab> {
               return Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: Card(
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.zero,
+                  ),
                   child: InkWell(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.zero,
                     onTap: () {
                       widget.onSelectionChanged(
                           widget.selectedStoreId, screen.id);
@@ -1382,6 +1633,26 @@ class _StoresTabState extends State<StoresTab> {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
+                              ),
+                              FutureBuilder<_ScreenCardPreviewData>(
+                                future: _getScreenCardPreviewData(
+                                  storeId: storeIdForPreview,
+                                  screenId: screen.id,
+                                ),
+                                builder: (context, snapshot) {
+                                  final data = snapshot.data ??
+                                      const _ScreenCardPreviewData(urls: []);
+                                  if (!data.showWallSyncBadge) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  return Padding(
+                                    padding: const EdgeInsets.only(right: 8),
+                                    child: _WallSyncIndicator(
+                                      active: true,
+                                      color: scheme.primary,
+                                    ),
+                                  );
+                                },
                               ),
                               _buildStatusBadge(screen.id),
                               PopupMenuButton<String>(
@@ -1437,8 +1708,7 @@ class _StoresTabState extends State<StoresTab> {
                                             horizontal: 8, vertical: 4),
                                         decoration: BoxDecoration(
                                           color: scheme.primaryContainer,
-                                          borderRadius:
-                                              BorderRadius.circular(999),
+                                          borderRadius: BorderRadius.zero,
                                         ),
                                         child: Text(
                                           'Active',
@@ -1458,7 +1728,7 @@ class _StoresTabState extends State<StoresTab> {
                                 width: 120,
                                 height: 120,
                                 decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(8),
+                                  borderRadius: BorderRadius.zero,
                                   border: Border.all(
                                     color: scheme.outlineVariant,
                                   ),
@@ -1494,35 +1764,26 @@ class _StoresTabState extends State<StoresTab> {
                                       );
                                     }
                                     if (data.videoUrl != null) {
-                                      return ClipRRect(
-                                        borderRadius: BorderRadius.circular(7),
-                                        child: _VideoPreview(
-                                          key: ValueKey(
-                                              'screen-card-${data.videoUrl}'),
-                                          url: data.videoUrl!,
-                                          headers: data.headers,
-                                          compact: true,
-                                          syncStartEpoch: data.syncStartEpoch,
-                                        ),
+                                      return _VideoPreview(
+                                        key: ValueKey(
+                                            'screen-card-${data.videoUrl}'),
+                                        url: data.videoUrl!,
+                                        headers: data.headers,
+                                        compact: true,
+                                        syncStartEpoch: data.syncStartEpoch,
                                       );
                                     }
                                     if (data.youtubeVideoId != null) {
-                                      return ClipRRect(
-                                        borderRadius: BorderRadius.circular(7),
-                                        child: _YouTubeCardPreview(
-                                          key: ValueKey(
-                                            'screen-card-youtube-${data.youtubeVideoId}',
-                                          ),
-                                          videoId: data.youtubeVideoId!,
+                                      return _YouTubeCardPreview(
+                                        key: ValueKey(
+                                          'screen-card-youtube-${data.youtubeVideoId}',
                                         ),
+                                        videoId: data.youtubeVideoId!,
                                       );
                                     }
-                                    return ClipRRect(
-                                      borderRadius: BorderRadius.circular(7),
-                                      child: _ScreenCardPreviewImage(
-                                        urls: urls,
-                                        headers: data.headers,
-                                      ),
+                                    return _ScreenCardPreviewImage(
+                                      urls: urls,
+                                      headers: data.headers,
                                     );
                                   },
                                 ),
@@ -1598,6 +1859,166 @@ class _ScreenCardPreviewImageState extends State<_ScreenCardPreviewImage> {
   }
 }
 
+class _StoreMapPreviewCard extends StatelessWidget {
+  const _StoreMapPreviewCard({
+    required this.marker,
+    required this.theme,
+    required this.scheme,
+    required this.onOpen,
+    required this.onClose,
+    this.previewFuture,
+  });
+
+  final _StoreMapMarkerData marker;
+  final ThemeData theme;
+  final ColorScheme scheme;
+  final Future<_ScreenCardPreviewData>? previewFuture;
+  final Future<void> Function() onOpen;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.16),
+              blurRadius: 18,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 96,
+              height: 96,
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: previewFuture == null
+                  ? Icon(
+                      Icons.image_outlined,
+                      color: scheme.onSurfaceVariant,
+                    )
+                  : FutureBuilder<_ScreenCardPreviewData>(
+                      future: previewFuture,
+                      builder: (context, snapshot) {
+                        final data = snapshot.data ??
+                            const _ScreenCardPreviewData(urls: []);
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                            child: SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          );
+                        }
+                        if (data.livePosTitle != null) {
+                          return _LivePosCardPreview(
+                            title: data.livePosTitle!,
+                            body: data.livePosBody ?? '',
+                          );
+                        }
+                        if (data.videoUrl != null) {
+                          return _VideoPreview(
+                            url: data.videoUrl!,
+                            headers: data.headers,
+                            compact: true,
+                            syncStartEpoch: data.syncStartEpoch,
+                          );
+                        }
+                        if (data.youtubeVideoId != null) {
+                          return _YouTubePreview(videoId: data.youtubeVideoId!);
+                        }
+                        if (data.urls.isEmpty) {
+                          return Icon(
+                            Icons.image_not_supported_outlined,
+                            color: scheme.onSurfaceVariant,
+                          );
+                        }
+                        return _ScreenCardPreviewImage(
+                          urls: data.urls,
+                          headers: data.headers,
+                        );
+                      },
+                    ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          marker.store.name,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: onClose,
+                        icon: const Icon(Icons.close),
+                        iconSize: 18,
+                        visualDensity: VisualDensity.compact,
+                        tooltip: 'Close preview',
+                      ),
+                    ],
+                  ),
+                  if (marker.previewScreenName != null) ...[
+                    Text(
+                      marker.previewScreenName!,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                  ],
+                  Text(
+                    marker.detail.trim().isEmpty
+                        ? 'Tap to open this store'
+                        : marker.detail,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 10),
+                  FilledButton.tonal(
+                    onPressed: onOpen,
+                    style: FilledButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      minimumSize: const Size(0, 38),
+                    ),
+                    child: const Text('Open store'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _ScreenCardPreviewData {
   const _ScreenCardPreviewData({
     required this.urls,
@@ -1606,6 +2027,8 @@ class _ScreenCardPreviewData {
     this.livePosTitle,
     this.livePosBody,
     this.syncStartEpoch,
+    this.showWallSyncBadge = false,
+    this.wallSyncGroup,
     this.headers = const {},
   });
 
@@ -1615,19 +2038,100 @@ class _ScreenCardPreviewData {
   final String? livePosTitle;
   final String? livePosBody;
   final int? syncStartEpoch;
+  final bool showWallSyncBadge;
+  final String? wallSyncGroup;
   final Map<String, String> headers;
 }
 
+class _WallSyncIndicator extends StatefulWidget {
+  const _WallSyncIndicator({
+    required this.active,
+    required this.color,
+  });
+
+  final bool active;
+  final Color color;
+
+  @override
+  State<_WallSyncIndicator> createState() => _WallSyncIndicatorState();
+}
+
+class _WallSyncIndicatorState extends State<_WallSyncIndicator>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    );
+    if (widget.active) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _WallSyncIndicator oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !_controller.isAnimating) {
+      _controller.repeat();
+    } else if (!widget.active && _controller.isAnimating) {
+      _controller.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.active) {
+      return const SizedBox.shrink();
+    }
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final t = Curves.easeInOut.transform(_controller.value);
+        return Transform.translate(
+          offset: Offset(0, -1.5 + (t * 3)),
+          child: Opacity(
+            opacity: 0.75 + ((1 - (t - 0.5).abs() * 2) * 0.25),
+            child: child,
+          ),
+        );
+      },
+      child: Icon(
+        Icons.link,
+        size: 18,
+        color: widget.color,
+      ),
+    );
+  }
+}
+
 class _StoreMapMarkerData {
-  const _StoreMapMarkerData({
+  _StoreMapMarkerData({
     required this.store,
     required this.point,
     this.detail = '',
+    this.previewScreenId,
+    this.previewScreenName,
+    this.status = 'offline',
+    this.icon,
   });
 
   final StoreItem store;
   final LatLng point;
   final String detail;
+  final String? previewScreenId;
+  final String? previewScreenName;
+  final String status;
+  BitmapDescriptor? icon;
 }
 
 class ScreenMediaEditorSheet extends StatelessWidget {
@@ -4962,10 +5466,8 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet>
     final rawUrl = urlController.text;
     final parsedDuration = int.tryParse(durationController.text.trim()) ?? 30;
     final duration = parsedDuration.clamp(5, 3600);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      urlController.dispose();
-      durationController.dispose();
-    });
+    urlController.dispose();
+    durationController.dispose();
 
     if (accepted != true) {
       return;
@@ -5029,56 +5531,18 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet>
   }
 
   Future<void> _quickAddScrollingText() async {
-    final textController = TextEditingController();
-    final durationController = TextEditingController(text: '15');
-    final accepted = await showDialog<bool>(
+    final submitted = await showModalBottomSheet<Map<String, String>>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add Scrolling Text'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-                'This message will scroll across the display in the schedule.'),
-            const SizedBox(height: 12),
-            TextField(
-              controller: textController,
-              maxLength: 500,
-              minLines: 2,
-              maxLines: 4,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                labelText: 'Message',
-                hintText: 'e.g. Fresh deals available today',
-              ),
-            ),
-            TextField(
-              controller: durationController,
-              keyboardType: TextInputType.number,
-              decoration:
-                  const InputDecoration(labelText: 'Duration (seconds)'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Add to Schedule'),
-          ),
-        ],
-      ),
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => const _ScrollingTextInputDialog(),
     );
-    final text = textController.text.trim();
+    if (submitted == null) return;
+
+    final text = (submitted['text'] ?? '').trim();
     final duration =
-        (int.tryParse(durationController.text.trim()) ?? 15).clamp(5, 3600);
-    textController.dispose();
-    durationController.dispose();
-    if (accepted != true) return;
+        (int.tryParse((submitted['duration'] ?? '').trim()) ?? 15)
+            .clamp(5, 3600);
     if (text.isEmpty) {
       _showSheetMessage('Enter the message to display.');
       return;
@@ -10010,6 +10474,106 @@ class _YouTubeInputDialogState extends State<_YouTubeInputDialog> {
           child: const Text('Use YouTube'),
         ),
       ],
+    );
+  }
+}
+
+class _ScrollingTextInputDialog extends StatefulWidget {
+  const _ScrollingTextInputDialog();
+
+  @override
+  State<_ScrollingTextInputDialog> createState() =>
+      _ScrollingTextInputDialogState();
+}
+
+class _ScrollingTextInputDialogState extends State<_ScrollingTextInputDialog> {
+  late final TextEditingController _textController;
+  late final TextEditingController _durationController;
+
+  Future<void> _closeDialog([Map<String, String>? result]) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    if (!mounted) {
+      return;
+    }
+    Navigator.of(context).pop(result);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _textController = TextEditingController();
+    _durationController = TextEditingController(text: '15');
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    _durationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(16, 8, 16, bottomInset + 16),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Add Scrolling Text',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'This message will scroll across the display in the schedule.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _textController,
+                maxLength: 500,
+                minLines: 2,
+                maxLines: 4,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                  labelText: 'Message',
+                  hintText: 'e.g. Fresh deals available today',
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _durationController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Duration (seconds)',
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  TextButton(
+                    onPressed: () => _closeDialog(),
+                    child: const Text('Cancel'),
+                  ),
+                  const Spacer(),
+                  FilledButton(
+                    onPressed: () => _closeDialog(<String, String>{
+                      'text': _textController.text.trim(),
+                      'duration': _durationController.text.trim(),
+                    }),
+                    child: const Text('Add to Schedule'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

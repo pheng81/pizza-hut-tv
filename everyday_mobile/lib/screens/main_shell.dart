@@ -140,32 +140,100 @@ class _MainShellState extends State<MainShell>
             bottomNavigationBar: SizeTransition(
               axisAlignment: 1,
               sizeFactor: _chrome,
-              child: NavigationBar(
-                height: 72,
-                backgroundColor: Colors.white,
-                indicatorColor: scheme.primaryContainer,
-                selectedIndex: _index,
-                onDestinationSelected: (value) {
-                  setState(() {
-                    _index = value;
-                  });
-                  _revealChrome();
-                },
-                destinations: const [
-                  NavigationDestination(
-                      icon: Icon(Icons.storefront), label: 'Stores'),
-                  NavigationDestination(
-                      icon: Icon(Icons.devices), label: 'Devices'),
-                  NavigationDestination(
-                      icon: Icon(Icons.tv), label: 'Commands'),
-                  NavigationDestination(
-                      icon: Icon(Icons.person), label: 'Profile'),
-                ],
+              child: Container(
+                color: Colors.white,
+                padding: EdgeInsets.only(
+                  left: 8,
+                  right: 8,
+                  top: 4,
+                  bottom: MediaQuery.of(context).padding.bottom > 0 ? 8 : 6,
+                ),
+                child: Row(
+                  children: [
+                    _NavIconButton(
+                      icon: Icons.storefront,
+                      selected: _index == 0,
+                      colorScheme: scheme,
+                      onTap: () {
+                        setState(() {
+                          _index = 0;
+                        });
+                        _revealChrome();
+                      },
+                    ),
+                    _NavIconButton(
+                      icon: Icons.devices,
+                      selected: _index == 1,
+                      colorScheme: scheme,
+                      onTap: () {
+                        setState(() {
+                          _index = 1;
+                        });
+                        _revealChrome();
+                      },
+                    ),
+                    _NavIconButton(
+                      icon: Icons.tv,
+                      selected: _index == 2,
+                      colorScheme: scheme,
+                      onTap: () {
+                        setState(() {
+                          _index = 2;
+                        });
+                        _revealChrome();
+                      },
+                    ),
+                    _NavIconButton(
+                      icon: Icons.person,
+                      selected: _index == 3,
+                      colorScheme: scheme,
+                      onTap: () {
+                        setState(() {
+                          _index = 3;
+                        });
+                        _revealChrome();
+                      },
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         );
       },
+    );
+  }
+}
+
+class _NavIconButton extends StatelessWidget {
+  const _NavIconButton({
+    required this.icon,
+    required this.selected,
+    required this.colorScheme,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final bool selected;
+  final ColorScheme colorScheme;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Icon(
+            icon,
+            size: 24,
+            color: selected
+                ? colorScheme.primary
+                : colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -220,27 +288,47 @@ class _StoreHeader extends StatelessWidget {
               right: 20,
               bottom: 12,
             ),
-            child: Align(
-              alignment: Alignment.bottomLeft,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                        ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                      Text(
+                        subtitle,
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                              color: Colors.white.withAlpha(220),
+                            ),
+                      ),
+                    ],
                   ),
-                  Text(
-                    subtitle,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: Colors.white.withAlpha(220),
-                        ),
+                ),
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withAlpha(32),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white.withAlpha(46),
+                    ),
                   ),
-                ],
-              ),
+                  child: const Icon(
+                    Icons.person_rounded,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
+              ],
             ),
           ),
         ],

@@ -141,71 +141,162 @@ class _ProfileTabState extends State<ProfileTab> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
+    InputDecoration flatInput(String label) {
+      return InputDecoration(
+        hintText: label,
+        filled: true,
+        fillColor: scheme.surfaceContainerHigh,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      );
+    }
+
+    Widget flatSection({
+      required Widget child,
+      EdgeInsets padding = const EdgeInsets.all(18),
+    }) {
+      return Container(
+        padding: padding,
+        decoration: BoxDecoration(
+          color: scheme.surface,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: child,
+      );
+    }
+
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 2, 16, 16),
       child: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               children: [
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+                flatSection(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Account',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      if (_profile != null) ...[
+                        Text(
+                          _profile!.username,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Link code: ${_profile!.linkCode ?? '-'}',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                flatSection(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(18),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => AccountPage(
+                              apiClient: widget.apiClient,
+                              initialUsername: _profile?.username,
+                            ),
+                          ),
+                        );
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 2,
+                          vertical: 4,
+                        ),
+                        child: Row(
                           children: [
                             Container(
-                              height: 34,
-                              width: 34,
+                              height: 42,
+                              width: 42,
                               decoration: BoxDecoration(
                                 color: scheme.primaryContainer,
-                                borderRadius: BorderRadius.circular(10),
+                                borderRadius: BorderRadius.circular(14),
                               ),
                               child: Icon(
-                                Icons.person,
+                                Icons.account_balance_wallet_outlined,
                                 color: scheme.onPrimaryContainer,
-                                size: 18,
                               ),
                             ),
-                            const SizedBox(width: 10),
-                            Text('Account', style: theme.textTheme.titleMedium),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Open Account Center',
+                                    style:
+                                        theme.textTheme.titleSmall?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Billing, subscription, and account details',
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: scheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Icon(
+                              Icons.chevron_right,
+                              color: scheme.onSurfaceVariant,
+                            ),
                           ],
                         ),
-                        const SizedBox(height: 8),
-                        if (_profile != null) ...[
-                          Text('Username: ${_profile!.username}'),
-                          const SizedBox(height: 4),
-                          Text('Link code: ${_profile!.linkCode ?? '-'}'),
-                        ],
-                      ],
+                      ),
                     ),
                   ),
                 ),
                 const SizedBox(height: 10),
-                FilledButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => AccountPage(
-                          apiClient: widget.apiClient,
-                          initialUsername: _profile?.username,
-                        ),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.account_balance_wallet_outlined),
-                  label: const Text('Open Account Center'),
-                ),
-                const SizedBox(height: 10),
-                Card(
+                flatSection(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
                   child: ListTile(
+                    contentPadding: EdgeInsets.zero,
                     leading: Container(
-                      height: 36,
-                      width: 36,
+                      height: 42,
+                      width: 42,
                       decoration: BoxDecoration(
                         color: scheme.secondaryContainer,
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(14),
                       ),
                       child: Icon(
                         Icons.groups_outlined,
@@ -231,90 +322,116 @@ class _ProfileTabState extends State<ProfileTab> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: scheme.surfaceContainer,
-                      borderRadius: BorderRadius.circular(12),
+                      color: scheme.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(18),
                     ),
                     child: Text(_message!),
                   ),
                 ],
                 const SizedBox(height: 10),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Update Name', style: theme.textTheme.titleMedium),
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: _nameController,
-                          decoration:
-                              const InputDecoration(labelText: 'Full name'),
+                flatSection(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Update Name',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
                         ),
-                        const SizedBox(height: 10),
-                        FilledButton(
-                          style: FilledButton.styleFrom(
-                            backgroundColor: const Color(0xFF2563EB),
-                            foregroundColor: Colors.white,
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _nameController,
+                        decoration: flatInput('Full name'),
+                      ),
+                      const SizedBox(height: 12),
+                      FilledButton(
+                        style: FilledButton.styleFrom(
+                          elevation: 0,
+                          backgroundColor: const Color(0xFF2563EB),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
                           ),
-                          onPressed: _updateName,
-                          child: const Text('Save Name'),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 16,
+                          ),
                         ),
-                      ],
-                    ),
+                        onPressed: _updateName,
+                        child: const Text('Save Name'),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 10),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Change Password',
-                            style: theme.textTheme.titleMedium),
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: _currentPasswordController,
-                          obscureText: true,
-                          decoration: const InputDecoration(
-                              labelText: 'Current password'),
+                flatSection(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Change Password',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
                         ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _newPasswordController,
-                          obscureText: true,
-                          decoration:
-                              const InputDecoration(labelText: 'New password'),
-                        ),
-                        const SizedBox(height: 10),
-                        FilledButton(
-                          style: FilledButton.styleFrom(
-                            backgroundColor: const Color(0xFF16A34A),
-                            foregroundColor: Colors.white,
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _currentPasswordController,
+                        obscureText: true,
+                        decoration: flatInput('Current password'),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _newPasswordController,
+                        obscureText: true,
+                        decoration: flatInput('New password'),
+                      ),
+                      const SizedBox(height: 12),
+                      FilledButton(
+                        style: FilledButton.styleFrom(
+                          elevation: 0,
+                          backgroundColor: const Color(0xFF16A34A),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
                           ),
-                          onPressed: _changePassword,
-                          child: const Text('Update Password'),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 16,
+                          ),
                         ),
-                      ],
-                    ),
+                        onPressed: _changePassword,
+                        child: const Text('Update Password'),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 10),
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
+                FilledButton.tonalIcon(
+                  style: FilledButton.styleFrom(
+                    elevation: 0,
+                    backgroundColor: const Color(0xFFF3EEFF),
                     foregroundColor: const Color(0xFF7C3AED),
-                    side: const BorderSide(color: Color(0xFF7C3AED)),
+                    minimumSize: const Size.fromHeight(52),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
                   ),
                   onPressed: _regenerateCode,
                   icon: const Icon(Icons.pin_outlined),
                   label: const Text('Regenerate Link Code'),
                 ),
                 const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
+                FilledButton.tonalIcon(
+                  style: FilledButton.styleFrom(
+                    elevation: 0,
+                    backgroundColor: const Color(0xFFFFECEB),
                     foregroundColor: scheme.error,
-                    side: BorderSide(color: scheme.error),
+                    minimumSize: const Size.fromHeight(52),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
                   ),
                   onPressed: () async {
                     await widget.onLogout();

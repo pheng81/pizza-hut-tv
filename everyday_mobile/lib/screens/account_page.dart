@@ -696,6 +696,37 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
 
+  ({String label, String value}) _upcomingBillingSummary(
+    List<Map<String, dynamic>> screenSubs,
+    String fallbackNextBilling,
+    bool isTrial,
+  ) {
+    if (isTrial) {
+      return (label: 'Upcoming Billing', value: 'Trial');
+    }
+
+    final dates = screenSubs
+        .map((sub) => (sub['next_billing'] ?? '').toString().trim())
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+
+    if (dates.isEmpty) {
+      final fallback = fallbackNextBilling.trim();
+      return (
+        label: 'Upcoming Billing',
+        value: fallback.isEmpty || fallback == 'N/A' ? 'N/A' : fallback,
+      );
+    }
+
+    if (dates.length == 1) {
+      return (label: 'Upcoming Billing', value: dates.first);
+    }
+
+    return (label: 'Upcoming Billing', value: '${dates.length} billing dates');
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -731,6 +762,11 @@ class _AccountPageState extends State<AccountPage> {
         .whereType<Map>()
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
+    final upcomingBilling = _upcomingBillingSummary(
+      screenSubs,
+      nextBilling,
+      isTrial,
+    );
 
     final currentPeriod = subscriptionInfo.isNotEmpty &&
             subscriptionInfo['current_period_end'] != null
@@ -785,8 +821,8 @@ class _AccountPageState extends State<AccountPage> {
                       ),
                       _statBox(
                         context,
-                        label: 'Next Billing Date',
-                        value: nextBilling,
+                        label: upcomingBilling.label,
+                        value: upcomingBilling.value,
                       ),
                       _statBox(
                         context,

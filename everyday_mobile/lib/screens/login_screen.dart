@@ -29,6 +29,14 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
+  static const List<List<Color>> _bgGradientPalettes = [
+    [Color(0xFF0B1533), Color(0xFF312E81), Color(0xFF7C2D12)],
+    [Color(0xFF0F172A), Color(0xFF1D4ED8), Color(0xFF115E59)],
+    [Color(0xFF1E1B4B), Color(0xFF4C1D95), Color(0xFF9A3412)],
+    [Color(0xFF082F49), Color(0xFF164E63), Color(0xFF4C1D95)],
+    [Color(0xFF111827), Color(0xFF7F1D1D), Color(0xFF1E3A8A)],
+  ];
+
   final _formKey = GlobalKey<FormState>();
   final _fullNameController = TextEditingController();
   final _usernameController = TextEditingController();
@@ -49,6 +57,7 @@ class _LoginScreenState extends State<LoginScreen>
   bool _obscureConfirmPassword = true;
   String? _error;
   late final AnimationController _bgController;
+  late final List<Color> _selectedBackgroundPalette;
   final AppLinks _appLinks = AppLinks();
   StreamSubscription<Uri>? _linkSub;
 
@@ -73,6 +82,9 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void initState() {
     super.initState();
+    final paletteIndex =
+        DateTime.now().microsecondsSinceEpoch % _bgGradientPalettes.length;
+    _selectedBackgroundPalette = _bgGradientPalettes[paletteIndex];
     _bgController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 12),
@@ -629,7 +641,7 @@ class _LoginScreenState extends State<LoginScreen>
                         icon: Icons.tv,
                         width: 236,
                         height: 94,
-                        colors: const [Color(0x664DD0E1), Color(0x663B82F6)],
+                        colors: const [Color(0x66FFFFFF), Color(0x6693C5FD)],
                       ),
                       const SizedBox(width: 14),
                       bannerCard(
@@ -637,7 +649,7 @@ class _LoginScreenState extends State<LoginScreen>
                         icon: Icons.movie_creation_outlined,
                         width: 212,
                         height: 94,
-                        colors: const [Color(0x665F7CFA), Color(0x664338CA)],
+                        colors: const [Color(0x66F9A8D4), Color(0x66C4B5FD)],
                       ),
                       const SizedBox(width: 14),
                       bannerCard(
@@ -645,7 +657,7 @@ class _LoginScreenState extends State<LoginScreen>
                         icon: Icons.slideshow,
                         width: 216,
                         height: 94,
-                        colors: const [Color(0x6667E8F9), Color(0x662563EB)],
+                        colors: const [Color(0x66BFDBFE), Color(0x66A5B4FC)],
                       ),
                     ],
                   ),
@@ -660,7 +672,7 @@ class _LoginScreenState extends State<LoginScreen>
                         icon: Icons.campaign,
                         width: 220,
                         height: 86,
-                        colors: const [Color(0x66EC4899), Color(0x667C3AED)],
+                        colors: const [Color(0x66FBCFE8), Color(0x66C4B5FD)],
                       ),
                       const SizedBox(width: 12),
                       bannerCard(
@@ -668,7 +680,7 @@ class _LoginScreenState extends State<LoginScreen>
                         icon: Icons.local_offer_outlined,
                         width: 208,
                         height: 86,
-                        colors: const [Color(0x66F59E0B), Color(0x66EA580C)],
+                        colors: const [Color(0x66FDE68A), Color(0x66FDBA74)],
                       ),
                       const SizedBox(width: 12),
                       bannerCard(
@@ -676,7 +688,7 @@ class _LoginScreenState extends State<LoginScreen>
                         icon: Icons.cast_connected,
                         width: 204,
                         height: 86,
-                        colors: const [Color(0x6622C55E), Color(0x66059669)],
+                        colors: const [Color(0x6686EFAC), Color(0x6699F6E4)],
                       ),
                     ],
                   ),
@@ -691,7 +703,7 @@ class _LoginScreenState extends State<LoginScreen>
                         icon: Icons.update,
                         width: 248,
                         height: 80,
-                        colors: const [Color(0x663B82F6), Color(0x661D4ED8)],
+                        colors: const [Color(0x66BFDBFE), Color(0x66A5B4FC)],
                       ),
                       const SizedBox(width: 12),
                       bannerCard(
@@ -699,7 +711,7 @@ class _LoginScreenState extends State<LoginScreen>
                         icon: Icons.grid_view_rounded,
                         width: 228,
                         height: 80,
-                        colors: const [Color(0x668B5CF6), Color(0x664C1D95)],
+                        colors: const [Color(0x66DDD6FE), Color(0x66F9A8D4)],
                       ),
                       const SizedBox(width: 12),
                       bannerCard(
@@ -707,7 +719,7 @@ class _LoginScreenState extends State<LoginScreen>
                         icon: Icons.phone_android,
                         width: 232,
                         height: 80,
-                        colors: const [Color(0x660EA5E9), Color(0x660369A1)],
+                        colors: const [Color(0x66BAE6FD), Color(0x6699F6E4)],
                       ),
                     ],
                   ),
@@ -816,14 +828,11 @@ class _LoginScreenState extends State<LoginScreen>
       body: Stack(
         children: [
           Container(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [
-                  Color(0xFF111A33),
-                  Color(0xFF1C2A4A),
-                ],
+                colors: _selectedBackgroundPalette,
               ),
             ),
           ),
@@ -834,7 +843,7 @@ class _LoginScreenState extends State<LoginScreen>
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Color(0x22000000), Color(0x77000000)],
+                colors: [Color(0x12000000), Color(0x33000000)],
               ),
             ),
           ),
@@ -854,14 +863,20 @@ class _LoginScreenState extends State<LoginScreen>
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             const SizedBox(height: 10),
-                            Card(
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
-                                side: BorderSide(color: scheme.outlineVariant),
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.96),
+                                borderRadius: BorderRadius.circular(28),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Color(0x22000000),
+                                    blurRadius: 24,
+                                    offset: Offset(0, 10),
+                                  ),
+                                ],
                               ),
                               child: Padding(
-                                padding: const EdgeInsets.all(18),
+                                padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
                                 child: Form(
                                   key: _formKey,
                                   child: Column(
@@ -870,13 +885,16 @@ class _LoginScreenState extends State<LoginScreen>
                                     children: [
                                       Text(
                                         _isSignupMode
-                                            ? 'Sign Up for Free'
+                                            ? 'Create your account'
                                             : 'Sign in',
                                         style: Theme.of(context)
                                             .textTheme
-                                            .headlineSmall,
+                                            .headlineSmall
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w700,
+                                            ),
                                       ),
-                                      const SizedBox(height: 4),
+                                      const SizedBox(height: 6),
                                       if (_isSignupMode)
                                         RichText(
                                           text: TextSpan(
@@ -890,7 +908,7 @@ class _LoginScreenState extends State<LoginScreen>
                                             children: [
                                               const TextSpan(
                                                 text:
-                                                    'By clicking Continue, you agree to our ',
+                                                    'By continuing, you agree to our ',
                                               ),
                                               WidgetSpan(
                                                 alignment:
@@ -906,7 +924,7 @@ class _LoginScreenState extends State<LoginScreen>
                                                   ),
                                                 ),
                                               ),
-                                              const TextSpan(text: ' and our '),
+                                              const TextSpan(text: ' and '),
                                               WidgetSpan(
                                                 alignment:
                                                     PlaceholderAlignment.middle,
@@ -923,7 +941,7 @@ class _LoginScreenState extends State<LoginScreen>
                                               ),
                                               const TextSpan(
                                                 text:
-                                                    '. You\'ll receive a verification email to confirm your account.',
+                                                    '. We’ll send a verification email after signup.',
                                               ),
                                             ],
                                           ),
@@ -933,18 +951,18 @@ class _LoginScreenState extends State<LoginScreen>
                                           'Use your dashboard account credentials.',
                                           style: Theme.of(context)
                                               .textTheme
-                                              .bodySmall
+                                              .bodyMedium
                                               ?.copyWith(
                                                 color: scheme.onSurfaceVariant,
                                               ),
                                         ),
-                                      const SizedBox(height: 12),
+                                      const SizedBox(height: 16),
                                       if (_isSignupMode) ...[
                                         TextFormField(
                                           controller: _fullNameController,
                                           textInputAction: TextInputAction.next,
                                           decoration: const InputDecoration(
-                                            labelText: 'Full Name',
+                                            hintText: 'Full name',
                                             prefixIcon:
                                                 Icon(Icons.badge_outlined),
                                           ),
@@ -957,9 +975,9 @@ class _LoginScreenState extends State<LoginScreen>
                                             TextInputType.emailAddress,
                                         textInputAction: TextInputAction.next,
                                         decoration: InputDecoration(
-                                          labelText: _isSignupMode
-                                              ? 'Email Address'
-                                              : 'Username',
+                                          hintText: _isSignupMode
+                                              ? 'Email address'
+                                              : 'Username or email',
                                           prefixIcon:
                                               const Icon(Icons.person_outline),
                                         ),
@@ -992,7 +1010,7 @@ class _LoginScreenState extends State<LoginScreen>
                                           }
                                         },
                                         decoration: InputDecoration(
-                                          labelText: 'Password',
+                                          hintText: 'Password',
                                           prefixIcon:
                                               const Icon(Icons.lock_outline),
                                           suffixIcon: IconButton(
@@ -1036,7 +1054,7 @@ class _LoginScreenState extends State<LoginScreen>
                                             }
                                           },
                                           decoration: InputDecoration(
-                                            labelText: 'Confirm Password',
+                                            hintText: 'Confirm password',
                                             prefixIcon:
                                                 const Icon(Icons.lock_reset),
                                             suffixIcon: IconButton(
@@ -1081,7 +1099,7 @@ class _LoginScreenState extends State<LoginScreen>
                                           decoration: BoxDecoration(
                                             color: scheme.errorContainer,
                                             borderRadius:
-                                                BorderRadius.circular(10),
+                                                BorderRadius.circular(14),
                                           ),
                                           child: Text(
                                             _error!,
@@ -1099,12 +1117,19 @@ class _LoginScreenState extends State<LoginScreen>
                                                   : (_isSignupMode
                                                       ? _signup
                                                       : _login),
+                                          style: FilledButton.styleFrom(
+                                            minimumSize: const Size.fromHeight(54),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(18),
+                                            ),
+                                          ),
                                           child: Text(_loading
                                               ? (_isSignupMode
                                                   ? 'Creating account...'
                                                   : 'Signing in...')
                                               : (_isSignupMode
-                                                  ? 'Create Account'
+                                                  ? 'Create account'
                                                   : 'Sign in')),
                                         ),
                                       ),
@@ -1121,6 +1146,14 @@ class _LoginScreenState extends State<LoginScreen>
                                                       _socialLoading)
                                                   ? null
                                                   : _startGoogleLoginNativeFirst,
+                                              style: OutlinedButton.styleFrom(
+                                                minimumSize:
+                                                    const Size.fromHeight(54),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(18),
+                                                ),
+                                              ),
                                               icon: _buildSocialButtonLogo(
                                                 'assets/images/google.png',
                                               ),
@@ -1141,6 +1174,14 @@ class _LoginScreenState extends State<LoginScreen>
                                                       ? null
                                                       : () => _startSocialLogin(
                                                           'microsoft'),
+                                              style: OutlinedButton.styleFrom(
+                                                minimumSize:
+                                                    const Size.fromHeight(54),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(18),
+                                                ),
+                                              ),
                                               child: const Text(
                                                   'Continue with Microsoft'),
                                             ),
@@ -1156,6 +1197,14 @@ class _LoginScreenState extends State<LoginScreen>
                                                       _socialLoading)
                                                   ? null
                                                   : _startAppleLoginNativeFirst,
+                                              style: OutlinedButton.styleFrom(
+                                                minimumSize:
+                                                    const Size.fromHeight(54),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(18),
+                                                ),
+                                              ),
                                               icon: _buildSocialButtonLogo(
                                                 'assets/images/apple.png',
                                               ),

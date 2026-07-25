@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:geocoding/geocoding.dart' as geocoding;
-import 'package:latlong2/latlong.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../services/api_client.dart';
 
@@ -250,6 +249,23 @@ class _CommandsTabState extends State<CommandsTab> {
     }
   }
 
+  LatLngBounds _boundsFromPoints(List<LatLng> points) {
+    var minLat = points.first.latitude;
+    var maxLat = points.first.latitude;
+    var minLng = points.first.longitude;
+    var maxLng = points.first.longitude;
+    for (final point in points.skip(1)) {
+      if (point.latitude < minLat) minLat = point.latitude;
+      if (point.latitude > maxLat) maxLat = point.latitude;
+      if (point.longitude < minLng) minLng = point.longitude;
+      if (point.longitude > maxLng) maxLng = point.longitude;
+    }
+    return LatLngBounds(
+      southwest: LatLng(minLat, minLng),
+      northeast: LatLng(maxLat, maxLng),
+    );
+  }
+
   Widget _buildMapSection({
     required ThemeData theme,
     required ColorScheme scheme,
@@ -344,81 +360,46 @@ class _CommandsTabState extends State<CommandsTab> {
               height: 280,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(14),
-                child: FlutterMap(
-                  options: MapOptions(
-                    initialCenter: points.first,
-                    initialZoom: pins.length == 1 ? 13 : 5.2,
-                    initialCameraFit: pins.length > 1
-                        ? CameraFit.bounds(
-                            bounds: LatLngBounds.fromPoints(points),
-                            padding: const EdgeInsets.all(32),
-                          )
-                        : null,
+                child: GoogleMap(
+                  initialCameraPosition: CameraPosition(
+                    target: points.first,
+                    zoom: pins.length == 1 ? 13 : 10,
                   ),
-                  children: [
-                    TileLayer(
-                      urlTemplate:
-                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName:
-                          'com.everydayadvertise.everyday_mobile',
-                    ),
-                    MarkerLayer(
-                      markers: pins
-                          .map(
-                            (pin) => Marker(
-                              point: pin.point,
-                              width: 132,
-                              height: 88,
-                              child: GestureDetector(
-                                onTap: () => _openScreenActions(pin),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.circular(999),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.black.withValues(
-                                              alpha: 0.08,
-                                            ),
-                                            blurRadius: 8,
-                                            offset: const Offset(0, 2),
-                                          ),
-                                        ],
-                                      ),
-                                      child: Text(
-                                        pin.screenName,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style:
-                                            theme.textTheme.labelSmall?.copyWith(
-                                          color: scheme.onSurface,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Icon(
-                                      Icons.location_on,
-                                      size: 34,
-                                      color: pin.status.toLowerCase() == 'online'
-                                          ? const Color(0xFF16A34A)
-                                          : const Color(0xFFDC2626),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          )
-                          .toList(),
-                    ),
-                  ],
+                  mapType: MapType.hybrid,
+                  myLocationButtonEnabled: false,
+                  zoomControlsEnabled: false,
+                  compassEnabled: true,
+                  onMapCreated: (controller) {
+                    if (pins.length > 1) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        controller.animateCamera(
+                          CameraUpdate.newLatLngBounds(
+                            _boundsFromPoints(points),
+                            42,
+                          ),
+                        );
+                      });
+                    }
+                  },
+                  markers: pins
+                      .map(
+                        (pin) => Marker(
+                          markerId: MarkerId(pin.deviceId),
+                          position: pin.point,
+                          infoWindow: InfoWindow(
+                            title: pin.screenName,
+                            snippet: pin.storeName,
+                            onTap: () => _openScreenActions(pin),
+                          ),
+                          icon: BitmapDescriptor.defaultMarkerWithHue(
+                            pin.status.toLowerCase() == 'online'
+                                ? BitmapDescriptor.hueGreen
+                                : BitmapDescriptor.hueRed,
+                          ),
+                          onTap: () => _openScreenActions(pin),
+                        ),
+                      )
+                      .toSet(),
                 ),
               ),
             ),
