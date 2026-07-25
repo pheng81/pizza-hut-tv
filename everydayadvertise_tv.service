@@ -5,6 +5,8 @@ After=network.target
 [Service]
 Environment="GOOGLE_CLIENT_SECRET=REDACTED"
 Environment="GOOGLE_CLIENT_ID=REDACTED"
+Environment="GOOGLE_ANDROID_CLIENT_ID=REDACTED"
+Environment="GOOGLE_IOS_CLIENT_ID=REDACTED"
 User=ubuntu
 Group=ubuntu
 WorkingDirectory=/var/www/everydayadvertise_tv

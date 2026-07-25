@@ -4049,6 +4049,8 @@ def api_auth_providers():
             'apple': bool(apple_enabled),
         },
         'google_client_id': os.environ.get('GOOGLE_CLIENT_ID') or '',
+        'google_android_client_id': os.environ.get('GOOGLE_ANDROID_CLIENT_ID') or '',
+        'google_ios_client_id': os.environ.get('GOOGLE_IOS_CLIENT_ID') or '',
     })
 
 

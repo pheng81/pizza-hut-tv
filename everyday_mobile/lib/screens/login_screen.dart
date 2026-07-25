@@ -42,7 +42,9 @@ class _LoginScreenState extends State<LoginScreen>
   bool _googleEnabled = false;
   bool _microsoftEnabled = false;
   bool _appleEnabled = false;
-  String _googleClientId = '';
+  String _googleServerClientId = '';
+  String _googleAndroidClientId = '';
+  String _googleIosClientId = '';
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   String? _error;
@@ -59,7 +61,7 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   bool get _shouldShowGoogleSignIn {
-    if (_googleEnabled || _googleClientId.trim().isNotEmpty) {
+    if (_googleEnabled || _googleServerClientId.trim().isNotEmpty) {
       return true;
     }
     final platform = defaultTargetPlatform;
@@ -104,7 +106,11 @@ class _LoginScreenState extends State<LoginScreen>
         _googleEnabled = providers['google'] == true;
         _microsoftEnabled = providers['microsoft'] == true;
         _appleEnabled = providers['apple'] == true;
-        _googleClientId = (providers['google_client_id'] ?? '').toString();
+        _googleServerClientId = (providers['google_client_id'] ?? '').toString();
+        _googleAndroidClientId =
+            (providers['google_android_client_id'] ?? '').toString();
+        _googleIosClientId =
+            (providers['google_ios_client_id'] ?? '').toString();
         _checkingProviders = false;
       });
     } catch (_) {
@@ -265,9 +271,15 @@ class _LoginScreenState extends State<LoginScreen>
     });
 
     try {
-      final serverClientId = _googleClientId.trim();
+      final serverClientId = _googleServerClientId.trim();
+      final nativeClientId = switch (defaultTargetPlatform) {
+        TargetPlatform.android => _googleAndroidClientId.trim(),
+        TargetPlatform.iOS || TargetPlatform.macOS => _googleIosClientId.trim(),
+        _ => '',
+      };
       final signIn = GoogleSignIn(
         scopes: const ['email', 'profile'],
+        clientId: nativeClientId.isEmpty ? null : nativeClientId,
         serverClientId: serverClientId.isEmpty ? null : serverClientId,
       );
 
@@ -294,7 +306,7 @@ class _LoginScreenState extends State<LoginScreen>
         setState(() {
           _socialLoading = false;
           _error =
-              'Native Google token not returned. Please check Google Play Services/account on this device.';
+              'Native Google token not returned. Please check Google Play Services and the Google OAuth app configuration for this device.';
         });
         return;
       }

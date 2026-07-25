@@ -29,12 +29,12 @@
 			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.googleusercontent.apps.377021475150-445muqdo2cl7s62993hj9k6rat4krrfr</string>
+				<string>com.googleusercontent.apps.929679124405-so0qeol1lbaqn78gkqesl2cjuvnrch64</string>
 			</array>
 		</dict>
 	</array>
 	<key>GIDClientID</key>
-	<string>377021475150-445muqdo2cl7s62993hj9k6rat4krrfr.apps.googleusercontent.com</string>
+	<string>REDACTED</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

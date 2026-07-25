@@ -289,6 +289,8 @@ class ApiClient {
         'microsoft': false,
         'apple': false,
         'google_client_id': '',
+        'google_android_client_id': '',
+        'google_ios_client_id': '',
       };
     }
     final providers = _asMap(data['providers']);
@@ -297,6 +299,9 @@ class ApiClient {
       'microsoft': providers['microsoft'] == true,
       'apple': providers['apple'] == true,
       'google_client_id': (data['google_client_id'] ?? '').toString(),
+      'google_android_client_id':
+          (data['google_android_client_id'] ?? '').toString(),
+      'google_ios_client_id': (data['google_ios_client_id'] ?? '').toString(),
     };
   }
 
