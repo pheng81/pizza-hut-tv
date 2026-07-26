@@ -272,6 +272,11 @@ def init_db():
                 db.execute('ALTER TABLE users ADD COLUMN avatar TEXT')
             except Exception:
                 pass
+        if 'oauth_avatar_url' not in cols:
+            try:
+                db.execute('ALTER TABLE users ADD COLUMN oauth_avatar_url TEXT')
+            except Exception:
+                pass
         if 'stripe_customer_id' not in cols:
             try:
                 db.execute('ALTER TABLE users ADD COLUMN stripe_customer_id TEXT')
@@ -2943,6 +2948,52 @@ def _upsert_oauth_user(email: str, full_name: str | None, method: str = 'google'
         'is_admin': is_admin,
     }
 
+def _update_user_oauth_avatar(username: str, oauth_avatar_url: str | None) -> None:
+    """Persist social-login avatar URL as a fallback avatar."""
+    uname = (username or '').strip().lower()
+    if not uname:
+        return
+    avatar = (oauth_avatar_url or '').strip()
+    try:
+        db = get_db()
+        db.execute(
+            'UPDATE users SET oauth_avatar_url = ? WHERE username = ?',
+            (avatar or None, uname),
+        )
+        db.commit()
+    except Exception as e:
+        logging.warning('Failed to update oauth avatar for %s: %s', uname, e)
+
+def _resolved_profile_avatar_url(username: str, uploaded_avatar_rel: str | None, oauth_avatar_url: str | None) -> str | None:
+    """Resolve final profile avatar URL with uploaded avatar taking priority."""
+    uname = (username or '').strip().lower()
+    avatar_rel = (uploaded_avatar_rel or '').strip()
+    social_url = (oauth_avatar_url or '').strip()
+
+    if avatar_rel:
+        try:
+            avatar_rel = avatar_rel.replace('\\', '/')
+            avatar_full_path = os.path.join('static', avatar_rel) if not avatar_rel.startswith('static') else avatar_rel
+            if os.path.exists(avatar_full_path):
+                avatar_url = url_for('static', filename=avatar_rel)
+                try:
+                    ts = int(os.path.getmtime(avatar_full_path))
+                    avatar_url = f"{avatar_url}?t={ts}"
+                except Exception:
+                    pass
+                return avatar_url
+            logging.warning('Avatar file not found for %s: %s', uname, avatar_full_path)
+            try:
+                db = get_db()
+                db.execute('UPDATE users SET avatar = NULL WHERE username = ?', (uname,))
+                db.commit()
+            except Exception:
+                pass
+        except Exception as e:
+            logging.warning('Error building uploaded avatar URL for %s: %s', uname, e)
+
+    return social_url or None
+
 def _upsert_apple_oauth_user(apple_sub: str, email: str, full_name: str | None) -> dict:
     """Create/update Apple OAuth user and support repeat sign-ins without email."""
     db = get_db()
@@ -4271,6 +4322,7 @@ def api_auth_google_native():
         email = (claims.get('email') or '').strip().lower()
         email_verified = str(claims.get('email_verified') or '').lower() in ('true', '1')
         full_name = (claims.get('name') or '').strip()
+        oauth_avatar_url = (claims.get('picture') or '').strip()
 
         allowed_aud = {
             (os.environ.get('GOOGLE_CLIENT_ID') or '').strip(),
@@ -4291,6 +4343,7 @@ def api_auth_google_native():
             return jsonify({'success': False, 'error': 'Email domain not allowed'}), 403
 
         user = _upsert_oauth_user(email=email, full_name=full_name, method='google')
+        _update_user_oauth_avatar(email, oauth_avatar_url)
         session['user'] = user
         session.permanent = True
 
@@ -6213,6 +6266,7 @@ def auth_google_callback():
             return _google_drive_popup_response(True, 'Google Drive connected')
         
         email = userinfo.get('email')
+        oauth_avatar_url = str(userinfo.get('picture') or '').strip()
         logging.info(f'✓ Google userinfo received: email={email}, name={userinfo.get("name")}')
         
         if not email:
@@ -6231,6 +6285,10 @@ def auth_google_callback():
         session.permanent = True  # Make session persist across browser restarts
         logging.info(f'✓ Google OAuth: Session set successfully for {email}, permanent={session.permanent}')
         logging.info(f'✓ Session keys after auth: {list(session.keys())}')
+        try:
+            _update_user_oauth_avatar((email or '').strip().lower(), oauth_avatar_url)
+        except Exception:
+            pass
         
         # Upsert a local user record so we can store a pairing code
         try:
@@ -12800,44 +12858,10 @@ def stores_by_code(code):
 @app.route('/profile', methods=['GET'])
 @login_required
 def profile():
-    uname = _get_current_username_from_session()
-    code = None
-    full_name = None
-    phone_number = None
-    subscription_status = None
-    screen_count = None
-    try:
-        if uname:
-            code = _ensure_user_link_code(uname)
-            db = get_db()
-            row = db.execute('SELECT full_name, phone FROM users WHERE username = ?', (uname,)).fetchone()
-            if row:
-                full_name = row['full_name'] if 'full_name' in row.keys() else None
-                phone_number = row['phone'] if 'phone' in row.keys() else None
-            # Get subscription info
-            user_id = _current_user_id()
-            if user_id:
-                sub_row = db.execute('SELECT status FROM subscriptions WHERE user_id = ? ORDER BY id DESC LIMIT 1', (user_id,)).fetchone()
-                if sub_row:
-                    subscription_status = sub_row['status']
-                # Count screens
-                screen_count = _count_user_screens()
-    except Exception as e:
-        logging.warning(f'Profile page error: {e}')
-    # Basic cache control to avoid exposing stale codes
-    resp = make_response(render_template('profile.html', 
-                                        username=uname, 
-                                        full_name=full_name, 
-                                        phone_number=phone_number,
-                                        subscription_status=subscription_status,
-                                        screen_count=screen_count,
-                                        link_code=code, 
-                                        build_stamp=BUILD_STAMP))
-    try:
-        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-    except Exception:
-        pass
-    return resp
+    embedded = (request.args.get('embedded') or '').strip()
+    if embedded == '1':
+        return redirect(url_for('account', embedded=1))
+    return redirect(url_for('account'))
 
 @app.route('/account', methods=['GET'])
 @login_required
@@ -12853,6 +12877,8 @@ def account():
     account_created = None
     phone_number = None
     phone_verified = False
+    avatar_url = None
+    link_code = ''
     
     # Subscription info
     subscription_info = None
@@ -12867,7 +12893,7 @@ def account():
         
         # Get user details (removed created_at - column doesn't exist)
         user_row = db.execute(
-            'SELECT full_name, phone_number, phone_verified, role, email_verified FROM users WHERE username = ?',
+            'SELECT full_name, phone_number, phone_verified, role, email_verified, avatar, oauth_avatar_url FROM users WHERE username = ?',
             (uname,)
         ).fetchone()
         if user_row:
@@ -12875,6 +12901,13 @@ def account():
             user_info['email_verified'] = bool(user_row['email_verified'])
             phone_number = user_row['phone_number']
             phone_verified = bool(user_row['phone_verified'])
+            avatar_url = _resolved_profile_avatar_url(
+                uname,
+                user_row['avatar'] if 'avatar' in user_row.keys() else None,
+                user_row['oauth_avatar_url'] if 'oauth_avatar_url' in user_row.keys() else None,
+            )
+        if uname:
+            link_code = _ensure_user_link_code(uname) or ''
         
         # Get subscription details
         if user_id:
@@ -12983,6 +13016,8 @@ def account():
                          account_created=account_created,
                          phone_number=phone_number,
                          phone_verified=phone_verified,
+                         avatar_url=avatar_url,
+                         link_code=link_code,
                          subscription_info=subscription_info,
                          has_active=has_active,
                          is_canceled=is_canceled,
@@ -13470,34 +13505,11 @@ def api_me():
         if not uname:
             return jsonify({'success': False, 'error': 'auth required'}), 403
         db = get_db()
-        row = db.execute('SELECT username, full_name, avatar FROM users WHERE username = ?', (uname,)).fetchone()
+        row = db.execute('SELECT username, full_name, avatar, oauth_avatar_url FROM users WHERE username = ?', (uname,)).fetchone()
         full_name = (row['full_name'] if row and 'full_name' in row.keys() else None)
         avatar_rel = (row['avatar'] if row and 'avatar' in row.keys() else None)
-        avatar_url = None
-        
-        # Build avatar URL with validation
-        if avatar_rel:
-            try:
-                # Normalize path separators
-                avatar_rel = avatar_rel.replace('\\', '/')
-                # Check if file actually exists
-                avatar_full_path = os.path.join('static', avatar_rel) if not avatar_rel.startswith('static') else avatar_rel
-                if os.path.exists(avatar_full_path):
-                    avatar_url = url_for('static', filename=avatar_rel)
-                    # Add cache-buster
-                    try:
-                        ts = int(os.path.getmtime(avatar_full_path))
-                        avatar_url = f"{avatar_url}?t={ts}"
-                    except Exception:
-                        pass
-                else:
-                    logging.warning(f'Avatar file not found for {uname}: {avatar_full_path}')
-                    # Clear invalid avatar from database
-                    db.execute('UPDATE users SET avatar = NULL WHERE username = ?', (uname,))
-                    db.commit()
-            except Exception as e:
-                logging.warning(f'Error building avatar URL for {uname}: {e}')
-                avatar_url = None
+        oauth_avatar_url = (row['oauth_avatar_url'] if row and 'oauth_avatar_url' in row.keys() else None)
+        avatar_url = _resolved_profile_avatar_url(uname, avatar_rel, oauth_avatar_url)
         
         code = _ensure_user_link_code(uname)
         return jsonify({'success': True, 'username': uname, 'full_name': full_name, 'avatar_url': avatar_url, 'link_code': code})
@@ -20876,17 +20888,34 @@ def r2_status():
 def add_scrolling_text_to_playlist(store_id, screen_id):
     """Create a scrolling-text item that participates in the normal playlist schedule."""
     payload = request.get_json(silent=True) or {}
-    message = re.sub(r'\s+', ' ', str(payload.get('text') or '')).strip()
+    message = re.sub(r'[ \t]+', ' ', str(payload.get('text') or '').replace('\r\n', '\n')).strip()
     if not message:
         return jsonify({'success': False, 'error': 'Enter the message to display'}), 400
-    if len(message) > 500:
-        return jsonify({'success': False, 'error': 'Text messages are limited to 500 characters'}), 400
+    if len(message) > 2000:
+        return jsonify({'success': False, 'error': 'Text messages are limited to 2000 characters'}), 400
 
     try:
         duration = int(payload.get('duration') or 15)
     except (TypeError, ValueError):
         duration = 15
     duration = max(5, min(duration, 3600))
+
+    def clean_hex(value, fallback):
+        candidate = str(value or '').strip()
+        return candidate if re.fullmatch(r'#[0-9a-fA-F]{6}', candidate) else fallback
+
+    try:
+        font_size = max(16, min(int(payload.get('font_size') or 56), 180))
+    except (TypeError, ValueError):
+        font_size = 56
+    try:
+        scroll_speed = max(3, min(int(payload.get('scroll_speed') or duration), 120))
+    except (TypeError, ValueError):
+        scroll_speed = duration
+    image_url = str(payload.get('image_url') or '').strip()[:1000]
+    icon = str(payload.get('icon') or '').strip()[:16]
+    text_color = clean_hex(payload.get('text_color'), '#FFFFFF')
+    background_color = clean_hex(payload.get('background_color'), '#071B1C')
 
     ukey = _safe_user_key()
     config = ensure_playlists_structure(
@@ -20913,6 +20942,13 @@ def add_scrolling_text_to_playlist(store_id, screen_id):
         'end': payload.get('end') if 'end' in payload else None,
         'schedule': payload.get('schedule') if isinstance(payload.get('schedule'), list) else [],
         'duration': duration,
+        'font_size': font_size,
+        'text_color': text_color,
+        'background_color': background_color,
+        'image_url': image_url,
+        'icon': icon,
+        'scroll_speed': scroll_speed,
+        'loop': bool(payload.get('loop', True)),
         'repeat': bool(payload.get('repeat', True)),
         'link_next': False,
         'media_type': 'scrolling_text',
@@ -21431,13 +21467,31 @@ def update_playlist_item(store_id, screen_id, item_id):
             if 'text' in payload:
                 if str(item.get('media_type') or '').lower() != 'scrolling_text':
                     return jsonify({'success': False, 'error': 'Text can only be updated on a scrolling text item'}), 400
-                text_value = re.sub(r'\s+', ' ', str(payload.get('text') or '')).strip()
+                text_value = re.sub(r'[ \t]+', ' ', str(payload.get('text') or '').replace('\r\n', '\n')).strip()
                 if not text_value:
                     return jsonify({'success': False, 'error': 'Enter the message to display'}), 400
                 if len(text_value) > 500:
                     return jsonify({'success': False, 'error': 'Text messages are limited to 500 characters'}), 400
                 item['text'] = text_value
                 updated = True
+            if str(item.get('media_type') or '').lower() == 'scrolling_text':
+                if any(key in payload for key in ('font_size', 'scroll_speed', 'text_color', 'background_color', 'image_url', 'icon', 'loop')):
+                    try:
+                        item['font_size'] = max(16, min(180, int(payload.get('font_size') or item.get('font_size') or 56)))
+                    except (TypeError, ValueError):
+                        pass
+                    try:
+                        item['scroll_speed'] = max(3, min(120, int(payload.get('scroll_speed') or item.get('scroll_speed') or item.get('duration') or 15)))
+                    except (TypeError, ValueError):
+                        pass
+                    for key, fallback in (('text_color', '#FFFFFF'), ('background_color', '#071B1C')):
+                        value = str(payload.get(key) or item.get(key) or fallback).strip()
+                        if re.fullmatch(r'#[0-9a-fA-F]{6}', value):
+                            item[key] = value
+                    item['image_url'] = str(payload.get('image_url') or '').strip()[:1000]
+                    item['icon'] = str(payload.get('icon') or '').strip()[:16]
+                    item['loop'] = bool(payload.get('loop', True))
+                    updated = True
             # Basic fields
             for k in ['enabled','start','end','duration','repeat','link_next']:
                 if k in payload:

@@ -1778,7 +1778,7 @@
                 </div>
                 <div class="sep"></div>
                 <a class="item" href="#" onclick="openLibraryManager(); return false;">Manage Library</a>
-                <a class="item" href="{{ url_for('profile') }}">Profile</a>
+                <a class="item" href="{{ url_for('account') }}">Account</a>
                 <a class="item" href="{{ url_for('logout') }}">Log out</a>
             </div>
             
@@ -1838,9 +1838,9 @@
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path></svg>
                 <span>Delete Store</span>
             </button>
-            <button class="action-item" onclick="toggleProfilePanel(true)" title="Profile">
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c1.5-3.5 5-6 8-6s6.5 2.5 8 6"></path></svg>
-                <span>Profile</span>
+            <button class="action-item" onclick="return openSidebarWorkspace(event, 'Account', '{{ url_for('account') }}?embedded=1')" title="Account">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                <span>Account</span>
             </button>
             <button class="action-item" onclick="openRemotePiManager()" title="Remote Pi Manager">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2H10a2 2 0 0 0-2 2v16"/></svg>
@@ -2479,9 +2479,34 @@
             if(j && j.success){
                 const h = document.getElementById('headerAvatar');
                 if(h){ h.src = j.avatar_url || h.src; }
+                const img = document.getElementById('avatarImg');
+                if(img && j.avatar_url){ img.src = j.avatar_url; }
             }
         }catch(e){ /* ignore */ }
     }
+
+    window.addEventListener('storage', function(ev){
+        try{
+            if(ev.key !== 'ea_avatar_url' || !ev.newValue) return;
+            const payload = JSON.parse(ev.newValue);
+            const nextUrl = (payload && payload.url) ? String(payload.url) : '';
+            if(!nextUrl) return;
+            const h = document.getElementById('headerAvatar');
+            if(h){ h.src = nextUrl; }
+            const img = document.getElementById('avatarImg');
+            if(img){ img.src = nextUrl; }
+        }catch(e){}
+    });
+
+    window.addEventListener('focus', function(){
+        loadHeaderAvatar();
+    });
+
+    document.addEventListener('visibilitychange', function(){
+        if(document.visibilityState === 'visible'){
+            loadHeaderAvatar();
+        }
+    });
     function toggleProfilePanel(force){
         let panel = document.getElementById('profilePanel');
         if(!panel){

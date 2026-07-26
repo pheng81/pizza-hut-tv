@@ -30,11 +30,11 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
   static const List<List<Color>> _bgGradientPalettes = [
-    [Color(0xFF0B1533), Color(0xFF312E81), Color(0xFF7C2D12)],
-    [Color(0xFF0F172A), Color(0xFF1D4ED8), Color(0xFF115E59)],
-    [Color(0xFF1E1B4B), Color(0xFF4C1D95), Color(0xFF9A3412)],
-    [Color(0xFF082F49), Color(0xFF164E63), Color(0xFF4C1D95)],
-    [Color(0xFF111827), Color(0xFF7F1D1D), Color(0xFF1E3A8A)],
+    [Color(0xFF2563EB), Color(0xFF7C3AED), Color(0xFFEC4899)],
+    [Color(0xFF0EA5E9), Color(0xFF6366F1), Color(0xFFD946EF)],
+    [Color(0xFF3B82F6), Color(0xFF8B5CF6), Color(0xFFF43F5E)],
+    [Color(0xFF06B6D4), Color(0xFF4F46E5), Color(0xFFEC4899)],
+    [Color(0xFF38BDF8), Color(0xFF7C3AED), Color(0xFFF97316)],
   ];
 
   final _formKey = GlobalKey<FormState>();
@@ -57,7 +57,7 @@ class _LoginScreenState extends State<LoginScreen>
   bool _obscureConfirmPassword = true;
   String? _error;
   late final AnimationController _bgController;
-  late final List<Color> _selectedBackgroundPalette;
+  late final int _backgroundSeedIndex;
   final AppLinks _appLinks = AppLinks();
   StreamSubscription<Uri>? _linkSub;
 
@@ -82,12 +82,11 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void initState() {
     super.initState();
-    final paletteIndex =
+    _backgroundSeedIndex =
         DateTime.now().microsecondsSinceEpoch % _bgGradientPalettes.length;
-    _selectedBackgroundPalette = _bgGradientPalettes[paletteIndex];
     _bgController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 12),
+      duration: const Duration(seconds: 18),
     )..repeat();
 
     if (widget.enableSocialAuthBootstrap) {
@@ -365,6 +364,20 @@ class _LoginScreenState extends State<LoginScreen>
         _error = rawError;
       });
     }
+  }
+
+  List<Color> _animatedBackgroundPalette(double t) {
+    final paletteCount = _bgGradientPalettes.length;
+    final scaled = t * paletteCount;
+    final fromIndex = (_backgroundSeedIndex + scaled.floor()) % paletteCount;
+    final toIndex = (fromIndex + 1) % paletteCount;
+    final blend = Curves.easeInOut.transform(scaled - scaled.floorToDouble());
+    final from = _bgGradientPalettes[fromIndex];
+    final to = _bgGradientPalettes[toIndex];
+    return List<Color>.generate(
+      from.length,
+      (index) => Color.lerp(from[index], to[index], blend) ?? from[index],
+    );
   }
 
   Future<void> _startAppleLoginNativeFirst() async {
@@ -827,12 +840,28 @@ class _LoginScreenState extends State<LoginScreen>
     return Scaffold(
       body: Stack(
         children: [
+          AnimatedBuilder(
+            animation: _bgController,
+            builder: (context, _) {
+              final animatedPalette =
+                  _animatedBackgroundPalette(_bgController.value);
+              return Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: animatedPalette,
+                  ),
+                ),
+              );
+            },
+          ),
           Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: _selectedBackgroundPalette,
+            decoration: const BoxDecoration(
+              gradient: RadialGradient(
+                center: Alignment(-0.65, -0.7),
+                radius: 1.1,
+                colors: [Color(0x55FFFFFF), Color(0x00FFFFFF)],
               ),
             ),
           ),
@@ -843,7 +872,7 @@ class _LoginScreenState extends State<LoginScreen>
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Color(0x12000000), Color(0x33000000)],
+                colors: [Color(0x08000000), Color(0x22000000)],
               ),
             ),
           ),
@@ -865,7 +894,7 @@ class _LoginScreenState extends State<LoginScreen>
                             const SizedBox(height: 10),
                             Container(
                               decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.96),
+                                color: Colors.white.withValues(alpha: 0.95),
                                 borderRadius: BorderRadius.circular(28),
                                 boxShadow: const [
                                   BoxShadow(

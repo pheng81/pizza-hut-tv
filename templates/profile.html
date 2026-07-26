@@ -9,6 +9,14 @@
 		.card{max-width:560px;margin:20px auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.06)}
 		.hdr{padding:16px 20px;border-bottom:1px solid #f0f0f5;font-weight:600}
 		.body{padding:18px 20px}
+		.avatar-wrap{display:flex;align-items:center;gap:16px;padding-bottom:14px;margin-bottom:10px;border-bottom:1px solid #f0f0f5}
+		.avatar-pick{width:88px;height:88px;border-radius:50%;overflow:hidden;background:#f2f2f7;border:1px solid #e5e5ea;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;flex:0 0 auto}
+		.avatar-pick img{width:100%;height:100%;object-fit:cover;display:block}
+		.avatar-pick .overlay{position:absolute;inset:0;background:rgba(0,0,0,.28);color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .18s ease}
+		.avatar-pick:hover .overlay{opacity:1}
+		.avatar-meta{min-width:0}
+		.avatar-title{font-weight:600;margin-bottom:4px}
+		.avatar-sub{font-size:12px;color:#666}
 		.row{display:flex;align-items:center;justify-content:space-between;margin:12px 0}
 		.label{color:#555}
 		.code{font-size:28px;font-weight:700;letter-spacing:4px}
@@ -20,6 +28,22 @@
 		a{color:#0366d6;text-decoration:none}
 	</style>
 	<script>
+		function syncAvatarAcrossWebShells(nextUrl){
+			if(!nextUrl) return;
+			try{
+				const img = document.getElementById('avatarImg');
+				if(img) img.src = nextUrl;
+			}catch(e){}
+			try{
+				if(window.parent && window.parent !== window){
+					const parentHeader = window.parent.document.getElementById('headerAvatar');
+					if(parentHeader) parentHeader.src = nextUrl;
+				}
+			}catch(e){}
+			try{
+				localStorage.setItem('ea_avatar_url', JSON.stringify({ url: nextUrl, ts: Date.now() }));
+			}catch(e){}
+		}
 		async function regen(){
 			const btn = document.getElementById('regenBtn');
 			btn.disabled = true;
@@ -34,6 +58,31 @@
 			}catch(e){ alert('Network error'); }
 			finally{ btn.disabled = false; }
 		}
+
+		async function uploadAvatar(input){
+			const file = input && input.files && input.files[0];
+			if(!file) return;
+			const msg = document.getElementById('avatarMsg');
+			msg.textContent = 'Uploading...';
+			try{
+				const fd = new FormData();
+				fd.append('avatar', file);
+				const r = await fetch('/api/profile/avatar', { method:'POST', body: fd });
+				const j = await r.json();
+				if(j && j.success){
+					const img = document.getElementById('avatarImg');
+					if(img && j.avatar_url){ img.src = j.avatar_url; }
+					if(j && j.avatar_url){ syncAvatarAcrossWebShells(j.avatar_url); }
+					msg.textContent = 'Profile photo updated';
+				}else{
+					msg.textContent = (j && j.error) || 'Avatar upload failed';
+				}
+			}catch(e){
+				msg.textContent = 'Network error';
+			}finally{
+				input.value = '';
+			}
+		}
 	</script>
 	<meta http-equiv="Cache-Control" content="no-store" />
 	<meta http-equiv="Pragma" content="no-cache" />
@@ -43,6 +92,18 @@
 	<div class="card">
 		<div class="hdr">Profile</div>
 		<div class="body">
+			<div class="avatar-wrap">
+				<label for="avatarFile" class="avatar-pick" title="Change profile photo">
+					<img id="avatarImg" src="{{ avatar_url or '' }}" alt="Profile image" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'88\' height=\'88\'><rect width=\'100%\' height=\'100%\' rx=\'44\' ry=\'44\' fill=\'%23f2f2f7\'/><path d=\'M44 23a13 13 0 1 1 0 26a13 13 0 0 1 0-26Zm0 31c13.8 0 25 7.2 25 16v4H19v-4c0-8.8 11.2-16 25-16Z\' fill=\'%23949aa5\'/></svg>'" />
+					<div class="overlay">Change</div>
+				</label>
+				<input id="avatarFile" type="file" accept="image/*" style="display:none" onchange="uploadAvatar(this)" />
+				<div class="avatar-meta">
+					<div class="avatar-title">Profile photo</div>
+					<div class="avatar-sub">Use your Google photo, upload your own, or fall back to the default avatar.</div>
+					<div id="avatarMsg" class="note"></div>
+				</div>
+			</div>
 			<div class="row"><div class="label">Full name</div><div>{{ full_name or '-' }}</div></div>
 			<div class="row"><div class="label">Username / Email</div><div>{{ username or '-' }}</div></div>
 			<div class="row"><div class="label">Phone number</div><div>{{ phone_number or 'Not set' }}</div></div>

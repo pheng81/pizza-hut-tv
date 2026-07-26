@@ -35,7 +35,8 @@ class StoresTab extends StatefulWidget {
   State<StoresTab> createState() => _StoresTabState();
 }
 
-class _StoresTabState extends State<StoresTab> {
+class _StoresTabState extends State<StoresTab>
+    with SingleTickerProviderStateMixin {
   bool _loading = true;
   String? _error;
   List<StoreItem> _stores = const [];
@@ -47,6 +48,7 @@ class _StoresTabState extends State<StoresTab> {
   final Map<String, LatLng?> _resolvedMapPoints = {};
   _StoreMapMarkerData? _activeMapMarker;
   final Map<String, BitmapDescriptor> _storeMarkerIcons = {};
+  late final AnimationController _panelGradientController;
 
   bool _isPhoneVerificationError(String? message) {
     final text = (message ?? '').toLowerCase();
@@ -70,7 +72,17 @@ class _StoresTabState extends State<StoresTab> {
   @override
   void initState() {
     super.initState();
+    _panelGradientController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 10),
+    )..repeat(reverse: true);
     _loadStores();
+  }
+
+  @override
+  void dispose() {
+    _panelGradientController.dispose();
+    super.dispose();
   }
 
   Future<BitmapDescriptor> _storeMarkerIconForStatus(String status) async {
@@ -82,14 +94,14 @@ class _StoresTabState extends State<StoresTab> {
 
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
-    const size = Size(52, 52);
-    const rect = Rect.fromLTWH(2, 2, 48, 48);
-    const radius = Radius.circular(4);
+    const size = Size(42, 42);
+    const rect = Rect.fromLTWH(3, 3, 36, 36);
+    const radius = Radius.circular(9);
     const textStyle = TextStyle(
       color: Colors.white,
-      fontSize: 22,
+      fontSize: 18,
       fontWeight: FontWeight.w800,
-      letterSpacing: -1,
+      letterSpacing: -0.8,
     );
 
     final shadowPath = Path()
@@ -129,12 +141,16 @@ class _StoresTabState extends State<StoresTab> {
     );
 
     final strokePaint = Paint()
-      ..color = Colors.white.withValues(alpha: normalized == 'online' ? 0.18 : 0.14)
+      ..color =
+          Colors.white.withValues(alpha: normalized == 'online' ? 0.24 : 0.16)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1
+      ..strokeWidth = 1.1
       ..isAntiAlias = true;
     canvas.drawRRect(
-      RRect.fromRectAndRadius(Rect.fromLTWH(2.5, 2.5, 47, 47), const Radius.circular(3.5)),
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(3.5, 3.5, 35, 35),
+        const Radius.circular(8),
+      ),
       strokePaint,
     );
 
@@ -146,7 +162,7 @@ class _StoresTabState extends State<StoresTab> {
       canvas,
       Offset(
         (size.width - textPainter.width) / 2,
-        (size.height - textPainter.height) / 2 + 1,
+        (size.height - textPainter.height) / 2 + 0.5,
       ),
     );
 
@@ -744,8 +760,6 @@ class _StoresTabState extends State<StoresTab> {
     String? livePosTitle;
     String? livePosBody;
     int? syncStartEpoch;
-    bool showWallSyncBadge = false;
-    String? wallSyncGroup;
     void addCandidate(String raw) {
       final resolved = _toAbsoluteUrlForPreview(raw);
       if (resolved.isNotEmpty && !candidates.contains(resolved)) {
@@ -840,64 +854,6 @@ class _StoresTabState extends State<StoresTab> {
       addCandidate((item['slice_url'] ?? '').toString());
     }
 
-    bool hasDisplayableMediaForCard(Map<String, dynamic> item) {
-      final file = (item['file'] ?? '').toString().trim().toLowerCase();
-      final mediaType = (item['media_type'] ?? '').toString().toLowerCase();
-      if (mediaType == 'live_pos' || file.startsWith('livepos:')) {
-        return false;
-      }
-      if (file.startsWith('youtube:')) {
-        return true;
-      }
-      if (file.startsWith('http://') || file.startsWith('https://')) {
-        return true;
-      }
-      return file.isNotEmpty;
-    }
-
-    bool looksRunningForCard(Map<String, dynamic> item) {
-      final status = item['last_status'];
-      if (status is! Map) {
-        return false;
-      }
-      final lower =
-          status.values.map((value) => value.toString().toLowerCase()).join(' ');
-      return lower.contains('load_ok') ||
-          lower.contains('playing') ||
-          lower.contains('ok') ||
-          lower.contains('success');
-    }
-
-    Map<String, dynamic>? pickPrimaryPlaylistItem() {
-      for (final item in playlist) {
-        if (looksRunningForCard(item) && hasDisplayableMediaForCard(item)) {
-          return item;
-        }
-      }
-      for (final item in playlist) {
-        if ((item['enabled'] ?? true) == true &&
-            hasDisplayableMediaForCard(item)) {
-          return item;
-        }
-      }
-      for (final item in playlist) {
-        if (hasDisplayableMediaForCard(item)) {
-          return item;
-        }
-      }
-      return playlist.isEmpty ? null : playlist.first;
-    }
-
-    final primaryItem = pickPrimaryPlaylistItem();
-    final primarySyncRef = primaryItem?['sync_ref'];
-    if (primarySyncRef is Map) {
-      final group = (primarySyncRef['group'] ?? '').toString().trim();
-      if (group.isNotEmpty) {
-        showWallSyncBadge = true;
-        wallSyncGroup = group;
-      }
-    }
-
     // Prefer newest enabled media first, then fall back to any remaining
     // playlist items so one broken item does not blank the card preview.
     for (int i = playlist.length - 1; i >= 0; i--) {
@@ -935,8 +891,6 @@ class _StoresTabState extends State<StoresTab> {
       livePosTitle: livePosTitle,
       livePosBody: livePosBody,
       syncStartEpoch: syncStartEpoch,
-      showWallSyncBadge: showWallSyncBadge,
-      wallSyncGroup: wallSyncGroup,
       headers: headers,
     );
   }
@@ -1244,6 +1198,10 @@ class _StoresTabState extends State<StoresTab> {
                                 markerId: MarkerId(marker.store.id),
                                 position: marker.point,
                                 icon: marker.icon ?? BitmapDescriptor.defaultMarker,
+                                zIndexInt:
+                                    marker.store.id == _activeMapMarker?.store.id
+                                        ? 1000
+                                        : (marker.status == 'online' ? 100 : 0),
                                 infoWindow: InfoWindow.noText,
                                 onTap: () {
                                   _onSelectStore(marker.store.id);
@@ -1337,7 +1295,7 @@ class _StoresTabState extends State<StoresTab> {
               padding: EdgeInsets.zero,
               visualDensity: VisualDensity.compact,
               elevation: 0,
-              backgroundColor: scheme.surfaceContainerHigh,
+              backgroundColor: const Color(0xFFF8FAFC),
               foregroundColor: iconColor ?? scheme.onSurfaceVariant,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -1353,32 +1311,69 @@ class _StoresTabState extends State<StoresTab> {
       return InputDecoration(
         labelText: label,
         filled: true,
-        fillColor: scheme.surfaceContainerHigh,
+        fillColor: Colors.white,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: scheme.outlineVariant),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: scheme.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(
+            color: scheme.primary.withValues(alpha: 0.2),
+          ),
         ),
         disabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: scheme.outlineVariant),
         ),
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       );
     }
+
+    Widget statsPill({
+      required IconData icon,
+      required String text,
+      Color? background,
+    }) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: background ?? const Color(0xFFF4F5FB),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: scheme.primary),
+            const SizedBox(width: 6),
+            Text(
+              text,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final validSelectedStoreId = _stores.any((store) => store.id == widget.selectedStoreId)
+        ? widget.selectedStoreId
+        : null;
+    final validSelectedScreenId = _screens.any((screen) => screen.id == widget.selectedScreenId)
+        ? widget.selectedScreenId
+        : null;
 
     return RefreshIndicator(
       onRefresh: _loadStores,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(0, 8, 0, 16),
+        padding: const EdgeInsets.fromLTRB(0, 0, 0, 16),
         children: [
           if (_error != null)
             Material(
@@ -1416,163 +1411,132 @@ class _StoresTabState extends State<StoresTab> {
             ),
           if (_error != null) const SizedBox(height: 12),
           Padding(
+            padding: EdgeInsets.zero,
+            child: AnimatedBuilder(
+              animation: _panelGradientController,
+              builder: (context, _) {
+                return Container(
+                  color: Colors.transparent,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                value: validSelectedStoreId,
+                                isExpanded: true,
+                                items: _stores
+                                    .map((store) => DropdownMenuItem(
+                                          value: store.id,
+                                          child: Text(
+                                            '${store.id} - ${store.name}',
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ))
+                                    .toList(),
+                                onChanged: _loading ? null : _onSelectStore,
+                                decoration: flatPickerDecoration(''),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            compactPickerAction(
+                              onPressed: _loading ? null : _addStore,
+                              icon: Icons.add_business,
+                              tooltip: 'Add store',
+                            ),
+                            const SizedBox(width: 6),
+                            compactPickerAction(
+                              onPressed: _loading || widget.selectedStoreId == null
+                                  ? null
+                                  : _deleteSelectedStore,
+                              icon: Icons.delete_outline,
+                              tooltip: 'Delete store',
+                              iconColor: widget.selectedStoreId == null || _loading
+                                  ? null
+                                  : scheme.error,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                value: validSelectedScreenId,
+                                isExpanded: true,
+                                items: _screens
+                                    .map((screen) => DropdownMenuItem(
+                                          value: screen.id,
+                                          child: Text(
+                                            '${screen.id} - ${screen.name}',
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ))
+                                    .toList(),
+                                onChanged: _loading
+                                    ? null
+                                    : (value) {
+                                        widget.onSelectionChanged(
+                                            widget.selectedStoreId, value);
+                                      },
+                                decoration: flatPickerDecoration(''),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            compactPickerAction(
+                              onPressed: _loading || widget.selectedStoreId == null
+                                  ? null
+                                  : _addScreen,
+                              icon: Icons.add_to_photos_outlined,
+                              tooltip: 'Add screen',
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 8),
+          Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Card(
-            elevation: 0,
-            color: scheme.surface,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-              side: BorderSide.none,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          value: widget.selectedStoreId,
-                          isExpanded: true,
-                          items: _stores
-                              .map((store) => DropdownMenuItem(
-                                    value: store.id,
-                                    child: Text(
-                                      '${store.id} - ${store.name}',
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ))
-                              .toList(),
-                          onChanged: _loading ? null : _onSelectStore,
-                          decoration: flatPickerDecoration(''),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      compactPickerAction(
-                        onPressed: _loading ? null : _addStore,
-                        icon: Icons.add_business,
-                        tooltip: 'Add store',
-                      ),
-                      const SizedBox(width: 6),
-                      compactPickerAction(
-                        onPressed: _loading || widget.selectedStoreId == null
-                            ? null
-                            : _deleteSelectedStore,
-                        icon: Icons.delete_outline,
-                        tooltip: 'Delete store',
-                        iconColor: widget.selectedStoreId == null || _loading
-                            ? null
-                            : scheme.error,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          value: widget.selectedScreenId,
-                          isExpanded: true,
-                          items: _screens
-                              .map((screen) => DropdownMenuItem(
-                                    value: screen.id,
-                                    child: Text(
-                                      '${screen.id} - ${screen.name}',
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ))
-                              .toList(),
-                          onChanged: _loading
-                              ? null
-                              : (value) {
-                                  widget.onSelectionChanged(
-                                      widget.selectedStoreId, value);
-                                },
-                          decoration: flatPickerDecoration(''),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      compactPickerAction(
-                        onPressed: _loading || widget.selectedStoreId == null
-                            ? null
-                            : _addScreen,
-                        icon: Icons.add_to_photos_outlined,
-                        tooltip: 'Add screen',
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          ),
-          const SizedBox(height: 12),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
               children: [
-                Chip(
-                  backgroundColor: const Color(0xFFDBEAFE),
-                  side: BorderSide.none,
-                  visualDensity: VisualDensity.compact,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  avatar: const Icon(Icons.storefront, size: 14),
-                  label: Text(
-                    'Stores: ${_stores.length}',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                  labelPadding: const EdgeInsets.symmetric(horizontal: 4),
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                statsPill(
+                  icon: Icons.storefront_outlined,
+                  text: 'Stores ${_stores.length}',
+                  background: const Color(0xFFEAF1FF),
                 ),
                 const SizedBox(width: 6),
-                Chip(
-                  backgroundColor: scheme.surfaceContainerHigh,
-                  side: BorderSide.none,
-                  visualDensity: VisualDensity.compact,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  avatar: const Icon(Icons.tv, size: 14),
-                  label: Text(
-                    'Screens: ${_screens.length}',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                  labelPadding: const EdgeInsets.symmetric(horizontal: 4),
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                statsPill(
+                  icon: Icons.tv_outlined,
+                  text: 'Screens ${_screens.length}',
                 ),
                 const SizedBox(width: 6),
-                Chip(
-                  backgroundColor: scheme.surfaceContainerHigh,
-                  side: BorderSide.none,
-                  visualDensity: VisualDensity.compact,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  avatar: const Icon(Icons.wifi_tethering, size: 14),
-                  label: Text(
-                    'Online: $onlineCount',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                  labelPadding: const EdgeInsets.symmetric(horizontal: 4),
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                statsPill(
+                  icon: Icons.wifi_tethering_outlined,
+                  text: 'Online $onlineCount',
                 ),
                 if (widget.selectedStoreId != null) ...[
                   const SizedBox(width: 6),
-                  Chip(
-                    backgroundColor: const Color(0xFFEDE9FE),
-                    side: BorderSide.none,
-                    visualDensity: VisualDensity.compact,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    avatar: const Icon(Icons.tag, size: 14),
-                    label: Text(
-                      'Store ${widget.selectedStoreId}',
-                      style: theme.textTheme.bodySmall,
-                    ),
-                    labelPadding: const EdgeInsets.symmetric(horizontal: 4),
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                  statsPill(
+                    icon: Icons.tag_outlined,
+                    text: 'Store ${widget.selectedStoreId}',
+                    background: const Color(0xFFF1EEFF),
                   ),
                 ],
               ],
             ),
+          ),
           ),
           const SizedBox(height: 12),
           Padding(
@@ -1633,26 +1597,6 @@ class _StoresTabState extends State<StoresTab> {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                              ),
-                              FutureBuilder<_ScreenCardPreviewData>(
-                                future: _getScreenCardPreviewData(
-                                  storeId: storeIdForPreview,
-                                  screenId: screen.id,
-                                ),
-                                builder: (context, snapshot) {
-                                  final data = snapshot.data ??
-                                      const _ScreenCardPreviewData(urls: []);
-                                  if (!data.showWallSyncBadge) {
-                                    return const SizedBox.shrink();
-                                  }
-                                  return Padding(
-                                    padding: const EdgeInsets.only(right: 8),
-                                    child: _WallSyncIndicator(
-                                      active: true,
-                                      color: scheme.primary,
-                                    ),
-                                  );
-                                },
                               ),
                               _buildStatusBadge(screen.id),
                               PopupMenuButton<String>(
@@ -1725,8 +1669,8 @@ class _StoresTabState extends State<StoresTab> {
                               ),
                               const SizedBox(width: 10),
                               Container(
-                                width: 120,
-                                height: 120,
+                                width: 196,
+                                height: 132,
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.zero,
                                   border: Border.all(
@@ -1832,29 +1776,34 @@ class _ScreenCardPreviewImageState extends State<_ScreenCardPreviewImage> {
     }
 
     final url = widget.urls[_index];
-    return Image.network(
-      url,
-      headers: url.contains('img.youtube.com') || widget.headers.isEmpty
-          ? null
-          : widget.headers,
-      fit: BoxFit.cover,
-      cacheWidth: 320,
-      cacheHeight: 320,
-      filterQuality: FilterQuality.medium,
-      gaplessPlayback: true,
-      errorBuilder: (_, __, ___) {
-        if (_index < widget.urls.length - 1) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              setState(() {
-                _index += 1;
+    return ClipRect(
+      child: Transform.scale(
+        scale: 1.18,
+        child: Image.network(
+          url,
+          headers: url.contains('img.youtube.com') || widget.headers.isEmpty
+              ? null
+              : widget.headers,
+          fit: BoxFit.cover,
+          cacheWidth: 320,
+          cacheHeight: 320,
+          filterQuality: FilterQuality.medium,
+          gaplessPlayback: true,
+          errorBuilder: (_, __, ___) {
+            if (_index < widget.urls.length - 1) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  setState(() {
+                    _index += 1;
+                  });
+                }
               });
+              return const Center(child: Icon(Icons.image_not_supported));
             }
-          });
-          return const Center(child: Icon(Icons.image_not_supported));
-        }
-        return const Center(child: Icon(Icons.broken_image_outlined));
-      },
+            return const Center(child: Icon(Icons.broken_image_outlined));
+          },
+        ),
+      ),
     );
   }
 }
@@ -2027,8 +1976,6 @@ class _ScreenCardPreviewData {
     this.livePosTitle,
     this.livePosBody,
     this.syncStartEpoch,
-    this.showWallSyncBadge = false,
-    this.wallSyncGroup,
     this.headers = const {},
   });
 
@@ -2038,80 +1985,7 @@ class _ScreenCardPreviewData {
   final String? livePosTitle;
   final String? livePosBody;
   final int? syncStartEpoch;
-  final bool showWallSyncBadge;
-  final String? wallSyncGroup;
   final Map<String, String> headers;
-}
-
-class _WallSyncIndicator extends StatefulWidget {
-  const _WallSyncIndicator({
-    required this.active,
-    required this.color,
-  });
-
-  final bool active;
-  final Color color;
-
-  @override
-  State<_WallSyncIndicator> createState() => _WallSyncIndicatorState();
-}
-
-class _WallSyncIndicatorState extends State<_WallSyncIndicator>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    );
-    if (widget.active) {
-      _controller.repeat();
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant _WallSyncIndicator oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.active && !_controller.isAnimating) {
-      _controller.repeat();
-    } else if (!widget.active && _controller.isAnimating) {
-      _controller.stop();
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!widget.active) {
-      return const SizedBox.shrink();
-    }
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        final t = Curves.easeInOut.transform(_controller.value);
-        return Transform.translate(
-          offset: Offset(0, -1.5 + (t * 3)),
-          child: Opacity(
-            opacity: 0.75 + ((1 - (t - 0.5).abs() * 2) * 0.25),
-            child: child,
-          ),
-        );
-      },
-      child: Icon(
-        Icons.link,
-        size: 18,
-        color: widget.color,
-      ),
-    );
-  }
 }
 
 class _StoreMapMarkerData {
@@ -2122,7 +1996,6 @@ class _StoreMapMarkerData {
     this.previewScreenId,
     this.previewScreenName,
     this.status = 'offline',
-    this.icon,
   });
 
   final StoreItem store;
@@ -5543,6 +5416,8 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet>
     final duration =
         (int.tryParse((submitted['duration'] ?? '').trim()) ?? 15)
             .clamp(5, 3600);
+    final fontSize = (int.tryParse((submitted['font_size'] ?? '').trim()) ?? 56).clamp(16, 180);
+    final scrollSpeed = (int.tryParse((submitted['scroll_speed'] ?? '').trim()) ?? duration).clamp(3, 120);
     if (text.isEmpty) {
       _showSheetMessage('Enter the message to display.');
       return;
@@ -5555,6 +5430,13 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet>
         screenId: widget.screenId,
         text: text,
         duration: duration,
+        fontSize: fontSize,
+        scrollSpeed: scrollSpeed,
+        textColor: submitted['text_color'] ?? '#FFFFFF',
+        backgroundColor: submitted['background_color'] ?? '#071B1C',
+        imageUrl: submitted['image_url'] ?? '',
+        icon: submitted['icon'] ?? '',
+        loop: submitted['loop'] != 'false',
       );
       _showSheetMessage('Scrolling text added to the schedule.');
       await _loadPlaylist();
@@ -10489,10 +10371,15 @@ class _ScrollingTextInputDialog extends StatefulWidget {
 class _ScrollingTextInputDialogState extends State<_ScrollingTextInputDialog> {
   late final TextEditingController _textController;
   late final TextEditingController _durationController;
+  late final TextEditingController _fontSizeController;
+  late final TextEditingController _speedController;
+  late final TextEditingController _textColorController;
+  late final TextEditingController _backgroundColorController;
+  late final TextEditingController _iconController;
+  late final TextEditingController _imageUrlController;
 
-  Future<void> _closeDialog([Map<String, String>? result]) async {
-    FocusManager.instance.primaryFocus?.unfocus();
-    await Future<void>.delayed(const Duration(milliseconds: 10));
+  void _closeDialog([Map<String, String>? result]) {
+    FocusScope.of(context).unfocus();
     if (!mounted) {
       return;
     }
@@ -10504,12 +10391,24 @@ class _ScrollingTextInputDialogState extends State<_ScrollingTextInputDialog> {
     super.initState();
     _textController = TextEditingController();
     _durationController = TextEditingController(text: '15');
+    _fontSizeController = TextEditingController(text: '56');
+    _speedController = TextEditingController(text: '15');
+    _textColorController = TextEditingController(text: '#FFFFFF');
+    _backgroundColorController = TextEditingController(text: '#071B1C');
+    _iconController = TextEditingController();
+    _imageUrlController = TextEditingController();
   }
 
   @override
   void dispose() {
     _textController.dispose();
     _durationController.dispose();
+    _fontSizeController.dispose();
+    _speedController.dispose();
+    _textColorController.dispose();
+    _backgroundColorController.dispose();
+    _iconController.dispose();
+    _imageUrlController.dispose();
     super.dispose();
   }
 
@@ -10536,7 +10435,7 @@ class _ScrollingTextInputDialogState extends State<_ScrollingTextInputDialog> {
               const SizedBox(height: 16),
               TextField(
                 controller: _textController,
-                maxLength: 500,
+                maxLength: 2000,
                 minLines: 2,
                 maxLines: 4,
                 textCapitalization: TextCapitalization.sentences,
@@ -10553,6 +10452,20 @@ class _ScrollingTextInputDialogState extends State<_ScrollingTextInputDialog> {
                   labelText: 'Duration (seconds)',
                 ),
               ),
+              const SizedBox(height: 8),
+              Row(children: [
+                Expanded(child: TextField(controller: _fontSizeController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Text size'))),
+                const SizedBox(width: 8),
+                Expanded(child: TextField(controller: _speedController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Scroll speed'))),
+              ]),
+              const SizedBox(height: 8),
+              TextField(controller: _textColorController, decoration: const InputDecoration(labelText: 'Text color (#RRGGBB)')),
+              const SizedBox(height: 8),
+              TextField(controller: _backgroundColorController, decoration: const InputDecoration(labelText: 'Background color (#RRGGBB)')),
+              const SizedBox(height: 8),
+              TextField(controller: _iconController, decoration: const InputDecoration(labelText: 'Icon / emoji')),
+              const SizedBox(height: 8),
+              TextField(controller: _imageUrlController, decoration: const InputDecoration(labelText: 'Image URL')),
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -10565,6 +10478,13 @@ class _ScrollingTextInputDialogState extends State<_ScrollingTextInputDialog> {
                     onPressed: () => _closeDialog(<String, String>{
                       'text': _textController.text.trim(),
                       'duration': _durationController.text.trim(),
+                      'font_size': _fontSizeController.text.trim(),
+                      'scroll_speed': _speedController.text.trim(),
+                      'text_color': _textColorController.text.trim(),
+                      'background_color': _backgroundColorController.text.trim(),
+                      'icon': _iconController.text.trim(),
+                      'image_url': _imageUrlController.text.trim(),
+                      'loop': 'true',
                     }),
                     child: const Text('Add to Schedule'),
                   ),

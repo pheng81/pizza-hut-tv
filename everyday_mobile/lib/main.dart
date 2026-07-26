@@ -164,42 +164,6 @@ class _EverydayMobileAppState extends State<EverydayMobileApp> {
         ),
       ),
       debugShowCheckedModeBanner: false,
-      builder: (context, child) {
-        if (child == null) {
-          return const SizedBox.shrink();
-        }
-        return Stack(
-          children: [
-            child,
-            if (_introVisible)
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: AnimatedOpacity(
-                    opacity: _introFadingOut ? 0 : 1,
-                    duration: const Duration(milliseconds: 600),
-                    curve: Curves.easeOut,
-                    child: ColoredBox(
-                      color: const Color(0xFF0B0B0F),
-                      child: Center(
-                        child: AnimatedScale(
-                          scale: _introLogoEntered ? 1.0 : 0.9,
-                          duration: const Duration(milliseconds: 1000),
-                          curve: Curves.easeOut,
-                          child: AnimatedOpacity(
-                            opacity: _introLogoEntered ? 1 : 0,
-                            duration: const Duration(milliseconds: 1000),
-                            curve: Curves.easeOut,
-                            child: const _IntroWordmark(),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        );
-      },
       home: !_bootstrapped
           ? const Scaffold(body: SizedBox.expand())
           : (_authenticated

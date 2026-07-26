@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
@@ -18,7 +19,16 @@ class ApiClient {
   static const String _lastLoginUsernameKey = 'last_login_username';
   static const String _defaultBaseUrl = 'https://everydayadvertise.com';
 
-  late final Dio _dio;
+  Dio _dio = Dio(
+    BaseOptions(
+      baseUrl: _defaultBaseUrl,
+      connectTimeout: const Duration(seconds: 20),
+      receiveTimeout: const Duration(seconds: 30),
+      followRedirects: true,
+      validateStatus: (status) => status != null && status < 500,
+    ),
+  );
+  bool _interceptorsConfigured = false;
   final CookieJar _cookieJar = CookieJar();
 
   String _baseUrl = _defaultBaseUrl;
@@ -60,27 +70,22 @@ class ApiClient {
       await prefs.setString(_baseUrlKey, _baseUrl);
     }
 
-    _dio = Dio(
-      BaseOptions(
-        baseUrl: _baseUrl,
-        connectTimeout: const Duration(seconds: 20),
-        receiveTimeout: const Duration(seconds: 30),
-        followRedirects: true,
-        validateStatus: (status) => status != null && status < 500,
-      ),
-    );
-    _dio.interceptors.add(CookieManager(_cookieJar));
-    _dio.interceptors.add(
-      InterceptorsWrapper(
-        onRequest: (options, handler) {
-          final token = _mobileAuthToken;
-          if (token != null && token.isNotEmpty) {
-            options.headers['X-Mobile-Auth'] = token;
-          }
-          handler.next(options);
-        },
-      ),
-    );
+    _dio.options.baseUrl = _baseUrl;
+    if (!_interceptorsConfigured) {
+      _dio.interceptors.add(CookieManager(_cookieJar));
+      _dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            final token = _mobileAuthToken;
+            if (token != null && token.isNotEmpty) {
+              options.headers['X-Mobile-Auth'] = token;
+            }
+            handler.next(options);
+          },
+        ),
+      );
+      _interceptorsConfigured = true;
+    }
   }
 
   Future<void> setMobileAuthToken(String token) async {
@@ -721,10 +726,27 @@ class ApiClient {
     required String screenId,
     required String text,
     int duration = 15,
+    int fontSize = 56,
+    String textColor = '#FFFFFF',
+    String backgroundColor = '#071B1C',
+    String imageUrl = '',
+    String icon = '',
+    int scrollSpeed = 15,
+    bool loop = true,
   }) async {
     final response = await _dio.post(
       '/playlist/text/$storeId/$screenId',
-      data: {'text': text, 'duration': duration},
+      data: {
+        'text': text,
+        'duration': duration,
+        'font_size': fontSize,
+        'text_color': textColor,
+        'background_color': backgroundColor,
+        'image_url': imageUrl,
+        'icon': icon,
+        'scroll_speed': scrollSpeed,
+        'loop': loop,
+      },
     );
     final data = _asMap(response.data);
     if (data['success'] != true) {
@@ -1466,6 +1488,25 @@ class ApiClient {
     if (data['success'] != true) {
       throw Exception((data['error'] ?? 'Name update failed').toString());
     }
+  }
+
+  Future<String> uploadProfileAvatar(String filePath) async {
+    final filename = filePath.split(Platform.pathSeparator).last.trim();
+    final response = await _dio.post(
+      '/api/profile/avatar',
+      data: FormData.fromMap({
+        'avatar': await MultipartFile.fromFile(
+          filePath,
+          filename: filename.isEmpty ? 'avatar.png' : filename,
+        ),
+      }),
+      options: Options(contentType: 'multipart/form-data'),
+    );
+    final data = _asMap(response.data);
+    if (data['success'] != true) {
+      throw Exception((data['error'] ?? 'Avatar upload failed').toString());
+    }
+    return (data['avatar_url'] ?? '').toString();
   }
 
   Future<Map<String, dynamic>> getAccountOverview() async {

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 import '../services/api_client.dart';
 import 'tabs/commands_tab.dart';
@@ -28,8 +27,7 @@ class _MainShellState extends State<MainShell>
   int _index = 0;
   String? _selectedStoreId;
   String? _selectedScreenId;
-
-  // Drives the header + bottom bar: 1.0 = fully shown, 0.0 = collapsed.
+  String? _profileAvatarUrl;
   late final AnimationController _chrome;
 
   @override
@@ -40,6 +38,7 @@ class _MainShellState extends State<MainShell>
       duration: const Duration(milliseconds: 220),
       value: 1,
     );
+    _loadProfileAvatar();
   }
 
   @override
@@ -48,34 +47,66 @@ class _MainShellState extends State<MainShell>
     super.dispose();
   }
 
-  bool _onScroll(ScrollNotification notification) {
+  bool _handleContentScroll(ScrollNotification notification) {
     if (notification.metrics.axis != Axis.vertical) {
       return false;
     }
-    // Always show the chrome when the list is at (or near) the top.
     if (notification.metrics.pixels <=
         notification.metrics.minScrollExtent + 4) {
       _chrome.forward();
       return false;
     }
     if (notification is UserScrollNotification) {
-      switch (notification.direction) {
-        case ScrollDirection.reverse:
-          _chrome.reverse(); // scrolling down -> hide chrome
-          break;
-        case ScrollDirection.forward:
-          _chrome.forward(); // scrolling up -> reveal chrome
-          break;
-        case ScrollDirection.idle:
-          break;
+      if (notification.direction == ScrollDirection.reverse) {
+        _chrome.reverse();
+      } else if (notification.direction == ScrollDirection.forward) {
+        _chrome.forward();
       }
     }
     return false;
   }
 
-  void _revealChrome() {
-    if (_chrome.status != AnimationStatus.completed) {
-      _chrome.forward();
+  Future<void> _loadProfileAvatar() async {
+    try {
+      final profile = await widget.apiClient.getMe();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        final nextUrl = (profile.avatarUrl ?? '').trim();
+        _profileAvatarUrl = nextUrl.isEmpty ? null : nextUrl;
+      });
+    } catch (_) {
+      // keep default icon
+    }
+  }
+
+  Widget _buildCurrentTab() {
+    switch (_index) {
+      case 0:
+        return StoresTab(
+          apiClient: widget.apiClient,
+          selectedStoreId: _selectedStoreId,
+          selectedScreenId: _selectedScreenId,
+          onSelectionChanged: (storeId, screenId) {
+            setState(() {
+              _selectedStoreId = storeId;
+              _selectedScreenId = screenId;
+            });
+          },
+        );
+      case 1:
+        return DeviceManagerTab(apiClient: widget.apiClient);
+      case 2:
+        return CommandsTab(apiClient: widget.apiClient);
+      case 3:
+        return ProfileTab(
+          apiClient: widget.apiClient,
+          onLogout: widget.onLogout,
+          onProfileChanged: _loadProfileAvatar,
+        );
+      default:
+        return const SizedBox.shrink();
     }
   }
 
@@ -88,119 +119,90 @@ class _MainShellState extends State<MainShell>
       'TV Commands',
       'Profile'
     ];
-    final tabs = [
-      StoresTab(
-        apiClient: widget.apiClient,
-        selectedStoreId: _selectedStoreId,
-        selectedScreenId: _selectedScreenId,
-        onSelectionChanged: (storeId, screenId) {
-          setState(() {
-            _selectedStoreId = storeId;
-            _selectedScreenId = screenId;
-          });
-        },
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
+        systemNavigationBarColor: Colors.white,
+        systemNavigationBarIconBrightness: Brightness.dark,
       ),
-      DeviceManagerTab(apiClient: widget.apiClient),
-      CommandsTab(apiClient: widget.apiClient),
-      ProfileTab(
-        apiClient: widget.apiClient,
-        onLogout: widget.onLogout,
-      ),
-    ];
-
-    return AnimatedBuilder(
-      animation: _chrome,
-      builder: (context, _) {
-        // Light status-bar icons while the dark header shows, dark icons once
-        // it has collapsed over the light content beneath.
-        final headerShown = _chrome.value > 0.5;
-        return AnnotatedRegion<SystemUiOverlayStyle>(
-          value: headerShown
-              ? SystemUiOverlayStyle.light
-              : SystemUiOverlayStyle.dark,
-          child: Scaffold(
-            body: Column(
-              children: [
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: Stack(
+          children: [
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 360,
+              child: const ColoredBox(color: Colors.white),
+            ),
+            SafeArea(
+              bottom: false,
+              child: Column(
+                children: [
                 SizeTransition(
                   axisAlignment: -1,
                   sizeFactor: _chrome,
-                  child: _StoreHeader(
+                  child: _SimpleHeader(
                     title: titles[_index],
                     subtitle: 'Everyday Advertise',
                   ),
                 ),
                 Expanded(
                   child: NotificationListener<ScrollNotification>(
-                    onNotification: _onScroll,
-                    child: tabs[_index],
+                    onNotification: _handleContentScroll,
+                    child: _buildCurrentTab(),
                   ),
                 ),
-              ],
-            ),
-            bottomNavigationBar: SizeTransition(
-              axisAlignment: 1,
-              sizeFactor: _chrome,
-              child: Container(
-                color: Colors.white,
-                padding: EdgeInsets.only(
-                  left: 8,
-                  right: 8,
-                  top: 4,
-                  bottom: MediaQuery.of(context).padding.bottom > 0 ? 8 : 6,
+                SafeArea(
+                  top: false,
+                  child: Container(
+                    width: double.infinity,
+                    color: Colors.white,
+                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
+                    child: Row(
+                      children: [
+                      _NavIconButton(
+                        icon: Icons.storefront,
+                        selected: _index == 0,
+                        colorScheme: scheme,
+                        onTap: () => setState(() => _index = 0),
+                      ),
+                      _NavIconButton(
+                        icon: Icons.devices,
+                        selected: _index == 1,
+                        colorScheme: scheme,
+                        onTap: () => setState(() => _index = 1),
+                      ),
+                      _NavIconButton(
+                        icon: Icons.tv,
+                        selected: _index == 2,
+                        colorScheme: scheme,
+                        onTap: () => setState(() => _index = 2),
+                      ),
+                        _NavIconButton(
+                          icon: Icons.person,
+                          selected: _index == 3,
+                          colorScheme: scheme,
+                          avatarUrl: _profileAvatarUrl,
+                          apiClient: widget.apiClient,
+                          onTap: () {
+                            setState(() => _index = 3);
+                            _loadProfileAvatar();
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                child: Row(
-                  children: [
-                    _NavIconButton(
-                      icon: Icons.storefront,
-                      selected: _index == 0,
-                      colorScheme: scheme,
-                      onTap: () {
-                        setState(() {
-                          _index = 0;
-                        });
-                        _revealChrome();
-                      },
-                    ),
-                    _NavIconButton(
-                      icon: Icons.devices,
-                      selected: _index == 1,
-                      colorScheme: scheme,
-                      onTap: () {
-                        setState(() {
-                          _index = 1;
-                        });
-                        _revealChrome();
-                      },
-                    ),
-                    _NavIconButton(
-                      icon: Icons.tv,
-                      selected: _index == 2,
-                      colorScheme: scheme,
-                      onTap: () {
-                        setState(() {
-                          _index = 2;
-                        });
-                        _revealChrome();
-                      },
-                    ),
-                    _NavIconButton(
-                      icon: Icons.person,
-                      selected: _index == 3,
-                      colorScheme: scheme,
-                      onTap: () {
-                        setState(() {
-                          _index = 3;
-                        });
-                        _revealChrome();
-                      },
-                    ),
-                  ],
-                ),
+                ],
               ),
             ),
-          ),
-        );
-      },
+          ],
+        ),
+      ),
     );
   }
 }
@@ -211,125 +213,102 @@ class _NavIconButton extends StatelessWidget {
     required this.selected,
     required this.colorScheme,
     required this.onTap,
+    this.avatarUrl,
+    this.apiClient,
   });
 
   final IconData icon;
   final bool selected;
   final ColorScheme colorScheme;
   final VoidCallback onTap;
+  final String? avatarUrl;
+  final ApiClient? apiClient;
 
   @override
   Widget build(BuildContext context) {
+    final hasAvatar = (avatarUrl ?? '').trim().isNotEmpty;
+    ImageProvider? avatarProvider;
+    if (hasAvatar) {
+      final raw = avatarUrl!.trim();
+      if (raw.startsWith('http://') || raw.startsWith('https://')) {
+        avatarProvider = NetworkImage(raw);
+      } else if (apiClient != null) {
+        final normalizedBase = apiClient!.baseUrl.replaceAll(RegExp(r'/$'), '');
+        final normalizedPath = raw.startsWith('/') ? raw : '/$raw';
+        avatarProvider = NetworkImage('$normalizedBase$normalizedPath');
+      }
+    }
     return Expanded(
       child: InkWell(
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Icon(
-            icon,
-            size: 24,
-            color: selected
-                ? colorScheme.primary
-                : colorScheme.onSurfaceVariant,
-          ),
+          child: hasAvatar
+              ? Center(
+                  child: Container(
+                    width: 26,
+                    height: 26,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: selected
+                          ? colorScheme.primaryContainer
+                          : colorScheme.surfaceContainerHighest,
+                      border: Border.all(
+                        color: selected
+                            ? colorScheme.primary
+                            : colorScheme.outlineVariant,
+                        width: selected ? 1.8 : 1,
+                      ),
+                      image: avatarProvider == null
+                          ? null
+                          : DecorationImage(
+                              image: avatarProvider,
+                              fit: BoxFit.cover,
+                            ),
+                    ),
+                  ),
+                )
+              : Icon(
+                  icon,
+                  size: 24,
+                  color: selected
+                      ? colorScheme.primary
+                      : colorScheme.onSurfaceVariant,
+                ),
         ),
       ),
     );
   }
 }
 
-class _StoreHeader extends StatelessWidget {
-  const _StoreHeader({required this.title, required this.subtitle});
+class _SimpleHeader extends StatelessWidget {
+  const _SimpleHeader({required this.title, required this.subtitle});
 
   final String title;
   final String subtitle;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final topInset = MediaQuery.of(context).padding.top;
-    return SizedBox(
-      height: topInset + 96,
-      child: Stack(
-        fit: StackFit.expand,
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      decoration: const BoxDecoration(color: Colors.transparent),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  scheme.primary,
-                  Color.alphaBlend(Colors.black.withAlpha(70), scheme.primary),
-                ],
-              ),
-            ),
-          ),
-          Positioned.fill(
-            child: SvgPicture.asset(
-              'assets/images/store_header.svg',
-              fit: BoxFit.cover,
-              alignment: Alignment.bottomCenter,
-            ),
-          ),
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0x1A000000), Color(0x5C000000)],
-              ),
-            ),
-          ),
-          Padding(
-            padding: EdgeInsets.only(
-              top: topInset,
-              left: 20,
-              right: 20,
-              bottom: 12,
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                            ),
-                      ),
-                      Text(
-                        subtitle,
-                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                              color: Colors.white.withAlpha(220),
-                            ),
-                      ),
-                    ],
-                  ),
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: const Color(0xFF1F2937),
+                  fontWeight: FontWeight.w700,
                 ),
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withAlpha(32),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: Colors.white.withAlpha(46),
-                    ),
-                  ),
-                  child: const Icon(
-                    Icons.person_rounded,
-                    color: Colors.white,
-                    size: 22,
-                  ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: const Color(0xFF6B7280),
                 ),
-              ],
-            ),
           ),
         ],
       ),

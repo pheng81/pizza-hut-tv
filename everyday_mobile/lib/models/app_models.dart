@@ -3,17 +3,20 @@ class UserProfile {
     required this.username,
     this.fullName,
     this.linkCode,
+    this.avatarUrl,
   });
 
   final String username;
   final String? fullName;
   final String? linkCode;
+  final String? avatarUrl;
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
     return UserProfile(
       username: (json['username'] ?? '').toString(),
       fullName: json['full_name']?.toString(),
       linkCode: json['link_code']?.toString(),
+      avatarUrl: json['avatar_url']?.toString(),
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../account_page.dart';
 import '../store_groups_page.dart';
@@ -10,10 +11,12 @@ class ProfileTab extends StatefulWidget {
     super.key,
     required this.apiClient,
     required this.onLogout,
+    this.onProfileChanged,
   });
 
   final ApiClient apiClient;
   final Future<void> Function() onLogout;
+  final VoidCallback? onProfileChanged;
 
   @override
   State<ProfileTab> createState() => _ProfileTabState();
@@ -23,15 +26,57 @@ class _ProfileTabState extends State<ProfileTab> {
   final _nameController = TextEditingController();
   final _currentPasswordController = TextEditingController();
   final _newPasswordController = TextEditingController();
+  final ImagePicker _imagePicker = ImagePicker();
 
   UserProfile? _profile;
   bool _loading = true;
+  bool _uploadingAvatar = false;
   String? _message;
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  Future<void> _pickAndUploadAvatar() async {
+    try {
+      final picked = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageQuality: 90,
+      );
+      if (picked == null || !mounted) {
+        return;
+      }
+      setState(() {
+        _uploadingAvatar = true;
+        _message = null;
+      });
+      await widget.apiClient.uploadProfileAvatar(picked.path);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _message = 'Profile photo updated';
+      });
+      await _load();
+      widget.onProfileChanged?.call();
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _message = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _uploadingAvatar = false;
+        });
+      }
+    }
   }
 
   @override
@@ -56,6 +101,7 @@ class _ProfileTabState extends State<ProfileTab> {
         _profile = profile;
         _nameController.text = profile.fullName ?? '';
       });
+      widget.onProfileChanged?.call();
     } catch (e) {
       if (!mounted) {
         return;
@@ -177,6 +223,20 @@ class _ProfileTabState extends State<ProfileTab> {
       );
     }
 
+    ImageProvider? profileImageProvider() {
+      final url = (_profile?.avatarUrl ?? '').trim();
+      if (url.isEmpty) {
+        return null;
+      }
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        return NetworkImage(url);
+      }
+      final normalizedBase =
+          widget.apiClient.baseUrl.replaceAll(RegExp(r'/$'), '');
+      final normalizedPath = url.startsWith('/') ? url : '/$url';
+      return NetworkImage('$normalizedBase$normalizedPath');
+    }
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 2, 16, 16),
       child: _loading
@@ -187,28 +247,127 @@ class _ProfileTabState extends State<ProfileTab> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      Row(
+                        children: [
+                          GestureDetector(
+                            onTap: _uploadingAvatar ? null : _pickAndUploadAvatar,
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Container(
+                                  width: 76,
+                                  height: 76,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: const Color(0xFFEDEFFD),
+                                    image: profileImageProvider() == null
+                                        ? null
+                                        : DecorationImage(
+                                            image: profileImageProvider()!,
+                                            fit: BoxFit.cover,
+                                          ),
+                                  ),
+                                  child: profileImageProvider() != null
+                                      ? null
+                                      : Icon(
+                                          Icons.person_rounded,
+                                          size: 34,
+                                          color: scheme.primary,
+                                        ),
+                                ),
+                                if (_uploadingAvatar)
+                                  Container(
+                                    width: 76,
+                                    height: 76,
+                                    decoration: const BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Color(0x66000000),
+                                    ),
+                                    child: const Padding(
+                                      padding: EdgeInsets.all(22),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.4,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Account',
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  _profile?.username ?? '',
+                                  style: theme.textTheme.bodyLarge?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Link code: ${_profile?.linkCode ?? '-'}',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Tap photo to change',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: scheme.primary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                flatSection(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        'Account',
+                        'Update Name',
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
                       ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _nameController,
+                        decoration: flatInput('Full name'),
+                      ),
                       const SizedBox(height: 12),
-                      if (_profile != null) ...[
-                        Text(
-                          _profile!.username,
-                          style: theme.textTheme.bodyLarge?.copyWith(
-                            fontWeight: FontWeight.w600,
+                      FilledButton(
+                        style: FilledButton.styleFrom(
+                          elevation: 0,
+                          backgroundColor: const Color(0xFF2563EB),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 16,
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Link code: ${_profile!.linkCode ?? '-'}',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
+                        onPressed: _updateName,
+                        child: const Text('Save Name'),
+                      ),
                     ],
                   ),
                 ),
@@ -328,42 +487,6 @@ class _ProfileTabState extends State<ProfileTab> {
                     child: Text(_message!),
                   ),
                 ],
-                const SizedBox(height: 10),
-                flatSection(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Update Name',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: _nameController,
-                        decoration: flatInput('Full name'),
-                      ),
-                      const SizedBox(height: 12),
-                      FilledButton(
-                        style: FilledButton.styleFrom(
-                          elevation: 0,
-                          backgroundColor: const Color(0xFF2563EB),
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 16,
-                          ),
-                        ),
-                        onPressed: _updateName,
-                        child: const Text('Save Name'),
-                      ),
-                    ],
-                  ),
-                ),
                 const SizedBox(height: 10),
                 flatSection(
                   child: Column(

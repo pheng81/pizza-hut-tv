@@ -92,6 +92,113 @@
       color: #64748b;
       font-size: 14px;
     }
+    .profile-hero {
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 12px;
+      padding: 24px 28px;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+    .profile-hero__avatar {
+      width: 92px;
+      height: 92px;
+      border-radius: 50%;
+      overflow: hidden;
+      position: relative;
+      flex: 0 0 auto;
+      background: #f2f2f7;
+      border: 1px solid #e5e7eb;
+      cursor: pointer;
+    }
+    .profile-hero__avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .profile-hero__avatar-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(15, 23, 42, 0.30);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      opacity: 0;
+      transition: opacity 0.18s ease;
+    }
+    .profile-hero__avatar:hover .profile-hero__avatar-overlay {
+      opacity: 1;
+    }
+    .profile-hero__meta {
+      min-width: 0;
+      flex: 1;
+    }
+    .profile-hero__eyebrow {
+      color: #64748b;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      margin-bottom: 6px;
+    }
+    .profile-hero__name {
+      font-size: 26px;
+      font-weight: 700;
+      color: #1e293b;
+      line-height: 1.15;
+      margin-bottom: 6px;
+    }
+    .profile-hero__email {
+      color: #64748b;
+      font-size: 14px;
+      margin-bottom: 10px;
+      word-break: break-word;
+    }
+    .profile-hero__hint {
+      color: #2563eb;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .profile-hero__message {
+      margin-top: 8px;
+      color: #64748b;
+      font-size: 13px;
+    }
+    .profile-link-card {
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 12px;
+      padding: 20px 24px;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .profile-link-card__label {
+      color: #64748b;
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+    .profile-link-card__code {
+      font-size: 34px;
+      line-height: 1;
+      font-weight: 800;
+      letter-spacing: 6px;
+      color: #1e293b;
+    }
+    .profile-link-card__note {
+      margin-top: 8px;
+      color: #64748b;
+      font-size: 13px;
+    }
     
     /* TikTok-style Cards Grid */
     .stats-grid {
@@ -1219,6 +1326,32 @@
       <p class="page-subtitle">Manage your subscription and billing information</p>
     </div>
 
+    <div class="profile-hero">
+      <label for="accountAvatarFile" class="profile-hero__avatar" title="Change profile photo">
+        <img id="accountAvatarImg" src="{{ avatar_url or '' }}" alt="Profile image" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'92\' height=\'92\'><rect width=\'100%\' height=\'100%\' rx=\'46\' ry=\'46\' fill=\'%23f2f2f7\'/><path d=\'M46 24a14 14 0 1 1 0 28a14 14 0 0 1 0-28Zm0 34c14.5 0 26 7.4 26 16.5V78H20v-3.5C20 65.4 31.5 58 46 58Z\' fill=\'%23949aa5\'/></svg>'">
+        <div class="profile-hero__avatar-overlay">Change</div>
+      </label>
+      <input id="accountAvatarFile" type="file" accept="image/*" style="display:none">
+      <div class="profile-hero__meta">
+        <div class="profile-hero__eyebrow">Profile</div>
+        <div class="profile-hero__name">{{ user_info.full_name or user_info.email }}</div>
+        <div class="profile-hero__email">{{ user_info.email }}</div>
+        <div class="profile-hero__hint">Use your Google photo, upload your own, or fall back to the default avatar.</div>
+        <div id="accountAvatarMessage" class="profile-hero__message"></div>
+      </div>
+    </div>
+
+    <div class="profile-link-card">
+      <div>
+        <div class="profile-link-card__label">Android TV pairing code</div>
+        <div id="accountLinkCode" class="profile-link-card__code">{{ link_code or '----' }}</div>
+        <div class="profile-link-card__note">Use this 4-digit code on your Android TV to list your stores and screens.</div>
+      </div>
+      <div>
+        <button type="button" class="btn btn-secondary" id="accountRegenBtn">Regenerate</button>
+      </div>
+    </div>
+
     <!-- Trial Banner (if applicable) -->
     {% if is_trial and trial_days_left is not none %}
     <div class="trial-banner">
@@ -1612,6 +1745,84 @@
 
 <script>
   let iti; // International telephone input instance
+
+  function syncAvatarAcrossWebShells(nextUrl) {
+    if (!nextUrl) return;
+    try {
+      const img = document.getElementById('accountAvatarImg');
+      if (img) img.src = nextUrl;
+    } catch (e) {}
+
+    try {
+      if (window.parent && window.parent !== window) {
+        const parentHeader = window.parent.document.getElementById('headerAvatar');
+        if (parentHeader) parentHeader.src = nextUrl;
+      }
+    } catch (e) {}
+
+    try {
+      if (window.top && window.top !== window) {
+        const topHeader = window.top.document.getElementById('headerAvatar');
+        if (topHeader) topHeader.src = nextUrl;
+      }
+    } catch (e) {}
+
+    try {
+      localStorage.setItem('ea_avatar_url', JSON.stringify({
+        url: nextUrl,
+        ts: Date.now(),
+      }));
+    } catch (e) {}
+  }
+
+  const accountAvatarFileInput = document.getElementById('accountAvatarFile');
+  if (accountAvatarFileInput) {
+    accountAvatarFileInput.addEventListener('change', async () => {
+      const file = accountAvatarFileInput.files && accountAvatarFileInput.files[0];
+      if (!file) return;
+      const msg = document.getElementById('accountAvatarMessage');
+      const img = document.getElementById('accountAvatarImg');
+      if (msg) msg.textContent = 'Uploading...';
+      try {
+        const fd = new FormData();
+        fd.append('avatar', file);
+        const r = await fetch('/api/profile/avatar', { method: 'POST', body: fd });
+        const j = await r.json();
+        if (j && j.success) {
+          if (img && j.avatar_url) img.src = j.avatar_url;
+          if (j.avatar_url) syncAvatarAcrossWebShells(j.avatar_url);
+          if (msg) msg.textContent = 'Profile photo updated';
+        } else {
+          if (msg) msg.textContent = (j && j.error) || 'Avatar upload failed';
+        }
+      } catch (e) {
+        if (msg) msg.textContent = 'Network error';
+      } finally {
+        accountAvatarFileInput.value = '';
+      }
+    });
+  }
+
+  const accountRegenBtn = document.getElementById('accountRegenBtn');
+  if (accountRegenBtn) {
+    accountRegenBtn.addEventListener('click', async () => {
+      accountRegenBtn.disabled = true;
+      try {
+        const response = await fetch('/profile/regenerate_code', { method: 'POST' });
+        const result = await response.json();
+        if (result && result.success) {
+          const codeEl = document.getElementById('accountLinkCode');
+          if (codeEl) codeEl.textContent = result.link_code || '----';
+        } else {
+          alert((result && result.error) || 'Failed to regenerate pairing code');
+        }
+      } catch (error) {
+        alert('Network error');
+      } finally {
+        accountRegenBtn.disabled = false;
+      }
+    });
+  }
 
   async function resendEmailVerification() {
     const btn = document.getElementById('resendEmailVerificationBtn');

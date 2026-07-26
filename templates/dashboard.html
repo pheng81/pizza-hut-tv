@@ -4746,7 +4746,7 @@
                 <div class="sep"></div>
                 <a class="item" href="#" onclick="openLibraryManager(); return false;">Manage Library</a>
                 <a class="item" href="{{ url_for('menu_studio') }}">Menu Studio</a>
-                <a class="item" href="{{ url_for('profile') }}">Profile</a>
+                <a class="item" href="{{ url_for('account') }}">Account</a>
                 <a class="item" href="{{ url_for('privacy_policy') }}" target="_blank" rel="noreferrer">Privacy Policy</a>
                 <a class="item" href="{{ url_for('terms_of_service') }}" target="_blank" rel="noreferrer">Terms of Service</a>
                 <a class="item" href="{{ url_for('logout') }}">Log out</a>
@@ -4830,10 +4830,6 @@
             <button class="action-item danger" id="drawer-delete-store-btn" onclick="deleteCurrentStore()" title="Delete selected store">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path></svg>
                 <span>Delete Store</span>
-            </button>
-            <button class="action-item" onclick="return openSidebarWorkspace(event, 'Profile', '{{ url_for('profile') }}')" title="Profile">
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c1.5-3.5 5-6 8-6s6.5 2.5 8 6"></path></svg>
-                <span>Profile</span>
             </button>
             <button class="action-item" onclick="return openSidebarWorkspace(event, 'Account', '{{ url_for('account') }}?embedded=1')" title="Account">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
@@ -5940,9 +5936,34 @@
             if(j && j.success){
                 const h = document.getElementById('headerAvatar');
                 if(h){ h.src = j.avatar_url || h.src; }
+                const img = document.getElementById('avatarImg');
+                if(img && j.avatar_url){ img.src = j.avatar_url; }
             }
         }catch(e){ /* ignore */ }
     }
+
+    window.addEventListener('storage', function(ev){
+        try{
+            if(ev.key !== 'ea_avatar_url' || !ev.newValue) return;
+            const payload = JSON.parse(ev.newValue);
+            const nextUrl = (payload && payload.url) ? String(payload.url) : '';
+            if(!nextUrl) return;
+            const h = document.getElementById('headerAvatar');
+            if(h){ h.src = nextUrl; }
+            const img = document.getElementById('avatarImg');
+            if(img){ img.src = nextUrl; }
+        }catch(e){}
+    });
+
+    window.addEventListener('focus', function(){
+        loadHeaderAvatar();
+    });
+
+    document.addEventListener('visibilitychange', function(){
+        if(document.visibilityState === 'visible'){
+            loadHeaderAvatar();
+        }
+    });
     function toggleProfilePanel(force){
         let panel = document.getElementById('profilePanel');
         if(!panel){
@@ -18242,6 +18263,13 @@ allowfullscreen></iframe></div>`;
                 if (!modal || !textInput || !durationInput) return;
                 textInput.value = '';
                 durationInput.value = '15';
+                document.getElementById('scrollingTextFontSize').value = '56';
+                document.getElementById('scrollingTextSpeed').value = '15';
+                document.getElementById('scrollingTextColor').value = '#ffffff';
+                document.getElementById('scrollingTextBackground').value = '#071b1c';
+                document.getElementById('scrollingTextIcon').value = '';
+                document.getElementById('scrollingTextImage').value = '';
+                document.getElementById('scrollingTextLoop').checked = true;
                 modal.style.display = 'flex';
                 textInput.focus();
             }
@@ -18256,6 +18284,13 @@ allowfullscreen></iframe></div>`;
             async function addScrollingText() {
                 const text = String(document.getElementById('scrollingTextValue')?.value || '').trim();
                 const duration = Math.max(5, Math.min(3600, parseInt(document.getElementById('scrollingTextDuration')?.value, 10) || 15));
+                const font_size = Math.max(16, Math.min(180, parseInt(document.getElementById('scrollingTextFontSize')?.value, 10) || 56));
+                const scroll_speed = Math.max(3, Math.min(120, parseInt(document.getElementById('scrollingTextSpeed')?.value, 10) || duration));
+                const text_color = document.getElementById('scrollingTextColor')?.value || '#ffffff';
+                const background_color = document.getElementById('scrollingTextBackground')?.value || '#071b1c';
+                const icon = String(document.getElementById('scrollingTextIcon')?.value || '').trim();
+                const image_url = String(document.getElementById('scrollingTextImage')?.value || '').trim();
+                const loop = !!document.getElementById('scrollingTextLoop')?.checked;
                 if (!scrollingTextTargetScreen) {
                     alert('No screen selected');
                     return;
@@ -18268,7 +18303,7 @@ allowfullscreen></iframe></div>`;
                     const response = await fetch(`/playlist/text/${encodeURIComponent(currentStoreId)}/${encodeURIComponent(scrollingTextTargetScreen)}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ text, duration })
+                        body: JSON.stringify({ text, duration, font_size, scroll_speed, text_color, background_color, icon, image_url, loop })
                     });
                     const result = await response.json();
                     if (!response.ok || !result.success) {
@@ -20677,12 +20712,21 @@ allowfullscreen></iframe></div>`;
                 <p style="margin-bottom:15px; color:#666;">Type a message to scroll across the display. It will be added as a normal schedule item.</p>
                 <div class="form-group">
                     <label for="scrollingTextValue">Message</label>
-                    <textarea id="scrollingTextValue" maxlength="500" rows="4" placeholder="e.g. Fresh deals available today" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; font:inherit; resize:vertical;"></textarea>
+                    <textarea id="scrollingTextValue" maxlength="2000" rows="6" placeholder="e.g. Fresh deals available today" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; font:inherit; resize:vertical;"></textarea>
                 </div>
                 <div class="form-group" style="margin-top:15px;">
                     <label for="scrollingTextDuration">Duration (seconds)</label>
                     <input type="number" id="scrollingTextDuration" value="15" min="5" max="3600" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; font-size:14px;">
                 </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:15px;">
+                    <label>Text size (px)<input type="number" id="scrollingTextFontSize" value="56" min="16" max="180" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;"></label>
+                    <label>Scroll speed (seconds)<input type="number" id="scrollingTextSpeed" value="15" min="3" max="120" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;"></label>
+                    <label>Text color<input type="color" id="scrollingTextColor" value="#ffffff" style="width:100%;height:40px;"></label>
+                    <label>Background color<input type="color" id="scrollingTextBackground" value="#071b1c" style="width:100%;height:40px;"></label>
+                    <label>Icon / emoji<input type="text" id="scrollingTextIcon" maxlength="16" placeholder="★" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;"></label>
+                    <label>Image URL<input type="url" id="scrollingTextImage" placeholder="https://..." style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;"></label>
+                </div>
+                <label style="display:flex;align-items:center;gap:8px;margin-top:14px;"><input type="checkbox" id="scrollingTextLoop" checked> Loop the scrolling animation</label>
                 <div style="margin-top:20px; display:flex; gap:10px; justify-content:flex-end;">
                     <button type="button" class="btn-secondary" onclick="closeScrollingTextModal()">Cancel</button>
                     <button type="button" class="btn-primary" onclick="addScrollingText()" style="background:#0f766e;">Add to Schedule</button>
