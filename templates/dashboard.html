@@ -16960,8 +16960,11 @@ allowfullscreen></iframe></div>`;
                                 <label class="rp-label">Text color<input id="rp-scrolling-text-color" class="rp-input" type="color" value="#ffffff" style="width:100%; height:40px; margin-top:5px; padding:3px;"></label>
                                 <label class="rp-label">Background color<input id="rp-scrolling-text-background" class="rp-input" type="color" value="#071b1c" style="width:100%; height:40px; margin-top:5px; padding:3px;"></label>
                                 <label class="rp-label">Icon / emoji<input id="rp-scrolling-text-icon" class="rp-input" type="text" maxlength="16" placeholder="★" style="width:100%; margin-top:5px;"></label>
-                                <label class="rp-label">Image URL<input id="rp-scrolling-text-image" class="rp-input" type="url" placeholder="https://..." style="width:100%; margin-top:5px;"></label>
+                                <label class="rp-label">Image file<input id="rp-scrolling-text-image-file" class="rp-file-input" type="file" accept="image/*" style="width:100%; margin-top:5px;"><small id="rp-scrolling-text-image-status" class="rp-help" style="display:block; margin-top:4px;">Choose an image from your device.</small></label>
+                                <label class="rp-label">Image width (px)<input id="rp-scrolling-text-image-width" class="rp-input" type="number" min="24" max="1200" value="180" style="width:100%; margin-top:5px;"></label>
+                                <label class="rp-label">Image height (px)<input id="rp-scrolling-text-image-height" class="rp-input" type="number" min="24" max="1200" value="100" style="width:100%; margin-top:5px;"></label>
                             </div>
+                            <input id="rp-scrolling-text-image-url" type="hidden" value="">
                             <label class="rp-label" style="display:flex; align-items:center; gap:8px; margin-top:12px;"><input id="rp-scrolling-text-loop" type="checkbox" checked> Loop the scrolling animation</label>
                             <div style="display:flex; justify-content:flex-end; margin-top:12px;">
                                 <button type="button" class="btn primary" onclick="rpPreviewInlineScrollingText()">Preview text</button>
@@ -16977,15 +16980,24 @@ allowfullscreen></iframe></div>`;
                         const color = document.getElementById('rp-scrolling-text-color');
                         const background = document.getElementById('rp-scrolling-text-background');
                         const icon = document.getElementById('rp-scrolling-text-icon');
-                        const image = document.getElementById('rp-scrolling-text-image');
+                        const imageFile = document.getElementById('rp-scrolling-text-image-file');
+                        const imageUrl = document.getElementById('rp-scrolling-text-image-url');
+                        const imageStatus = document.getElementById('rp-scrolling-text-image-status');
+                        const imageWidth = document.getElementById('rp-scrolling-text-image-width');
+                        const imageHeight = document.getElementById('rp-scrolling-text-image-height');
                         const loop = document.getElementById('rp-scrolling-text-loop');
                         if(size) size.value = String(media.font_size || media.fontSize || 56);
                         if(speed) speed.value = String(media.scroll_speed || media.scrollSpeed || 15);
                         if(color) color.value = /^#[0-9a-f]{6}$/i.test(String(media.text_color || media.textColor || '')) ? String(media.text_color || media.textColor) : '#ffffff';
                         if(background) background.value = /^#[0-9a-f]{6}$/i.test(String(media.background_color || media.backgroundColor || '')) ? String(media.background_color || media.backgroundColor) : '#071b1c';
                         if(icon) icon.value = String(media.icon || '');
-                        if(image) image.value = String(media.image_url || media.imageUrl || '');
+                        if(imageUrl) imageUrl.value = String(media.image_url || media.imageUrl || '');
+                        if(imageFile) imageFile.value = '';
+                        if(imageStatus) imageStatus.textContent = imageUrl && imageUrl.value ? 'Image already uploaded. Choose a new file to replace it.' : 'Choose an image from your device.';
+                        if(imageWidth) imageWidth.value = String(media.image_width || media.imageWidth || 180);
+                        if(imageHeight) imageHeight.value = String(media.image_height || media.imageHeight || 100);
                         if(loop) loop.checked = media.loop !== false;
+                        if(imageFile) imageFile.addEventListener('change', () => { if(imageUrl) imageUrl.value = ''; if(imageStatus) imageStatus.textContent = imageFile.files && imageFile.files[0] ? `${imageFile.files[0].name} selected. Click Preview text to upload it.` : 'Choose an image from your device.'; });
                         return;
                     }
                     if(isRpYouTubeMode()){
@@ -17051,7 +17063,25 @@ allowfullscreen></iframe></div>`;
                     if(inlineInput) syncRpInlineYoutubeValue(inlineInput.value);
                     rpReplaceWithYouTube();
                 }
-                function rpPreviewInlineScrollingText(){
+                async function rpUploadInlineScrollingImage(){
+                    const fileInput = document.getElementById('rp-scrolling-text-image-file');
+                    const hiddenUrl = document.getElementById('rp-scrolling-text-image-url');
+                    const status = document.getElementById('rp-scrolling-text-image-status');
+                    const file = fileInput && fileInput.files && fileInput.files[0];
+                    if(!file) return String(hiddenUrl && hiddenUrl.value || '');
+                    if(!file.type || !file.type.startsWith('image/')) throw new Error('Choose an image file.');
+                    if(status) status.textContent = 'Uploading image…';
+                    const form = new FormData();
+                    form.append('file', file);
+                    const response = await fetch('/upload_media', { method:'POST', body:form });
+                    const result = await response.json();
+                    if(!response.ok || !result || result.success === false || !result.filename) throw new Error((result && result.error) || 'Image upload failed');
+                    const url = result.url || mediaUrl(result.filename);
+                    if(hiddenUrl) hiddenUrl.value = url;
+                    if(status) status.textContent = `${file.name} uploaded.`;
+                    return url;
+                }
+                async function rpPreviewInlineScrollingText(){
                     const input = document.getElementById('rp-scrolling-text-inline');
                     const message = String(input && input.value || '').replace(/[ \t]+/g, ' ').trim();
                     if(!message){
@@ -17062,6 +17092,8 @@ allowfullscreen></iframe></div>`;
                     rpComposerMode = 'scrolling_text';
                     const readNumber = (id, fallback, min, max) => Math.max(min, Math.min(max, parseInt(document.getElementById(id)?.value, 10) || fallback));
                     const readColor = (id, fallback) => /^#[0-9a-f]{6}$/i.test(String(document.getElementById(id)?.value || '')) ? document.getElementById(id).value : fallback;
+                    let uploadedImageUrl = '';
+                    try { uploadedImageUrl = await rpUploadInlineScrollingImage(); } catch(error) { alert(error && error.message ? error.message : 'Image upload failed'); return; }
                     rpSelectedMedia = {
                         name: 'text:pending',
                         text: message,
@@ -17072,7 +17104,9 @@ allowfullscreen></iframe></div>`;
                         text_color: readColor('rp-scrolling-text-color', '#ffffff'),
                         background_color: readColor('rp-scrolling-text-background', '#071b1c'),
                         icon: String(document.getElementById('rp-scrolling-text-icon')?.value || '').trim(),
-                        image_url: String(document.getElementById('rp-scrolling-text-image')?.value || '').trim(),
+                        image_url: uploadedImageUrl,
+                        image_width: readNumber('rp-scrolling-text-image-width', 180, 24, 1200),
+                        image_height: readNumber('rp-scrolling-text-image-height', 100, 24, 1200),
                         loop: !!document.getElementById('rp-scrolling-text-loop')?.checked
                     };
                     rpWallAssignments = null;
@@ -17116,7 +17150,9 @@ allowfullscreen></iframe></div>`;
                         const iterations = media.loop === false ? '1' : 'infinite';
                         const icon = escapeHtml(String(media.icon || ''));
                         const imageUrl = String(media.image_url || media.imageUrl || '').trim();
-                        const image = /^https?:\/\//i.test(imageUrl) ? `<img src="${escapeHtml(imageUrl)}" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:8px;flex:0 0 auto;">` : '';
+                        const imageWidth = Math.max(24, Math.min(1200, Number(media.image_width || media.imageWidth || 180)));
+                        const imageHeight = Math.max(24, Math.min(1200, Number(media.image_height || media.imageHeight || 100)));
+                        const image = /^https?:\/\//i.test(imageUrl) ? `<img src="${escapeHtml(imageUrl)}" alt="" style="width:${imageWidth}px;height:${imageHeight}px;object-fit:contain;border-radius:8px;flex:0 0 auto;">` : '';
                         const iconMarkup = icon ? `<span style="font-size:0.9em;line-height:1;">${icon}</span>` : '';
                         return `<div style="width:100%;height:100%;display:flex;align-items:center;overflow:hidden;background:${backgroundColor};color:${textColor};font-size:clamp(22px,3vw,${Math.max(42, Math.min(100, fontSize))}px);font-weight:800;line-height:1.25;"><span style="display:inline-flex;align-items:center;gap:14px;white-space:pre-wrap;padding-left:100%;animation:rp-scrolling-text-preview ${speed}s linear ${iterations};">${image}${iconMarkup}${escapeHtml(String(media.text || 'Your scrolling message'))}</span></div>`;
                     }
@@ -17515,6 +17551,8 @@ allowfullscreen></iframe></div>`;
                         background_color: String(rpSelectedMedia.background_color || rpSelectedMedia.backgroundColor || '#071b1c'),
                         icon: String(rpSelectedMedia.icon || ''),
                         image_url: String(rpSelectedMedia.image_url || rpSelectedMedia.imageUrl || ''),
+                        image_width: Math.max(24, Math.min(1200, Number(rpSelectedMedia.image_width || rpSelectedMedia.imageWidth || 180))),
+                        image_height: Math.max(24, Math.min(1200, Number(rpSelectedMedia.image_height || rpSelectedMedia.imageHeight || 100))),
                         loop: rpSelectedMedia.loop !== false
                     };
                     markAsChanged();
@@ -18319,7 +18357,11 @@ allowfullscreen></iframe></div>`;
                 document.getElementById('scrollingTextColor').value = '#ffffff';
                 document.getElementById('scrollingTextBackground').value = '#071b1c';
                 document.getElementById('scrollingTextIcon').value = '';
-                document.getElementById('scrollingTextImage').value = '';
+                document.getElementById('scrollingTextImageFile').value = '';
+                document.getElementById('scrollingTextImageUrl').value = '';
+                document.getElementById('scrollingTextImageStatus').textContent = 'Choose an image from your device.';
+                document.getElementById('scrollingTextImageWidth').value = '180';
+                document.getElementById('scrollingTextImageHeight').value = '100';
                 document.getElementById('scrollingTextLoop').checked = true;
                 modal.style.display = 'flex';
                 textInput.focus();
@@ -18340,7 +18382,10 @@ allowfullscreen></iframe></div>`;
                 const text_color = document.getElementById('scrollingTextColor')?.value || '#ffffff';
                 const background_color = document.getElementById('scrollingTextBackground')?.value || '#071b1c';
                 const icon = String(document.getElementById('scrollingTextIcon')?.value || '').trim();
-                const image_url = String(document.getElementById('scrollingTextImage')?.value || '').trim();
+                let image_url = String(document.getElementById('scrollingTextImageUrl')?.value || '').trim();
+                const imageFile = document.getElementById('scrollingTextImageFile')?.files?.[0];
+                const image_width = Math.max(24, Math.min(1200, parseInt(document.getElementById('scrollingTextImageWidth')?.value, 10) || 180));
+                const image_height = Math.max(24, Math.min(1200, parseInt(document.getElementById('scrollingTextImageHeight')?.value, 10) || 100));
                 const loop = !!document.getElementById('scrollingTextLoop')?.checked;
                 if (!scrollingTextTargetScreen) {
                     alert('No screen selected');
@@ -18351,17 +18396,29 @@ allowfullscreen></iframe></div>`;
                     return;
                 }
                 try {
+                    if(imageFile){
+                        if(!imageFile.type || !imageFile.type.startsWith('image/')) throw new Error('Choose an image file.');
+                        const status = document.getElementById('scrollingTextImageStatus');
+                        if(status) status.textContent = 'Uploading image…';
+                        const form = new FormData(); form.append('file', imageFile);
+                        const uploadResponse = await fetch('/upload_media', { method:'POST', body:form });
+                        const uploadResult = await uploadResponse.json();
+                        if(!uploadResponse.ok || !uploadResult || uploadResult.success === false || !uploadResult.filename) throw new Error((uploadResult && uploadResult.error) || 'Image upload failed');
+                        image_url = uploadResult.url || mediaUrl(uploadResult.filename);
+                        document.getElementById('scrollingTextImageUrl').value = image_url;
+                        if(status) status.textContent = `${imageFile.name} uploaded.`;
+                    }
                     const response = await fetch(`/playlist/text/${encodeURIComponent(currentStoreId)}/${encodeURIComponent(scrollingTextTargetScreen)}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ text, duration, font_size, scroll_speed, text_color, background_color, icon, image_url, loop })
+                        body: JSON.stringify({ text, duration, font_size, scroll_speed, text_color, background_color, icon, image_url, image_width, image_height, loop })
                     });
                     const result = await response.json();
                     if (!response.ok || !result.success) {
                         alert(result.error || 'Failed to add scrolling text');
                         return;
                     }
-                    if(rpSelectedMedia.mediaType === 'scrolling_text'){
+                    if(rpSelectedMedia && rpSelectedMedia.mediaType === 'scrolling_text'){
                         applyRpScrollingText().catch((error) => {
                             alert('Add scrolling text failed: ' + (error && error.message ? error.message : 'unknown'));
                         });
@@ -20775,8 +20832,11 @@ allowfullscreen></iframe></div>`;
                     <label>Text color<input type="color" id="scrollingTextColor" value="#ffffff" style="width:100%;height:40px;"></label>
                     <label>Background color<input type="color" id="scrollingTextBackground" value="#071b1c" style="width:100%;height:40px;"></label>
                     <label>Icon / emoji<input type="text" id="scrollingTextIcon" maxlength="16" placeholder="★" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;"></label>
-                    <label>Image URL<input type="url" id="scrollingTextImage" placeholder="https://..." style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;"></label>
+                    <label>Image file<input type="file" id="scrollingTextImageFile" accept="image/*" style="width:100%;padding:8px;"><small id="scrollingTextImageStatus" style="display:block;color:#666;margin-top:4px;">Choose an image from your device.</small></label>
+                    <label>Image width (px)<input type="number" id="scrollingTextImageWidth" value="180" min="24" max="1200" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;"></label>
+                    <label>Image height (px)<input type="number" id="scrollingTextImageHeight" value="100" min="24" max="1200" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;"></label>
                 </div>
+                <input type="hidden" id="scrollingTextImageUrl" value="">
                 <label style="display:flex;align-items:center;gap:8px;margin-top:14px;"><input type="checkbox" id="scrollingTextLoop" checked> Loop the scrolling animation</label>
                 <div style="margin-top:20px; display:flex; gap:10px; justify-content:flex-end;">
                     <button type="button" class="btn-secondary" onclick="closeScrollingTextModal()">Cancel</button>

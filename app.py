@@ -20913,6 +20913,14 @@ def add_scrolling_text_to_playlist(store_id, screen_id):
     except (TypeError, ValueError):
         scroll_speed = duration
     image_url = str(payload.get('image_url') or '').strip()[:1000]
+    try:
+        image_width = max(24, min(int(payload.get('image_width') or 180), 1200))
+    except (TypeError, ValueError):
+        image_width = 180
+    try:
+        image_height = max(24, min(int(payload.get('image_height') or 100), 1200))
+    except (TypeError, ValueError):
+        image_height = 100
     icon = str(payload.get('icon') or '').strip()[:16]
     text_color = clean_hex(payload.get('text_color'), '#FFFFFF')
     background_color = clean_hex(payload.get('background_color'), '#071B1C')
@@ -20946,6 +20954,8 @@ def add_scrolling_text_to_playlist(store_id, screen_id):
         'text_color': text_color,
         'background_color': background_color,
         'image_url': image_url,
+        'image_width': image_width,
+        'image_height': image_height,
         'icon': icon,
         'scroll_speed': scroll_speed,
         'loop': bool(payload.get('loop', True)),
@@ -21470,12 +21480,12 @@ def update_playlist_item(store_id, screen_id, item_id):
                 text_value = re.sub(r'[ \t]+', ' ', str(payload.get('text') or '').replace('\r\n', '\n')).strip()
                 if not text_value:
                     return jsonify({'success': False, 'error': 'Enter the message to display'}), 400
-                if len(text_value) > 500:
-                    return jsonify({'success': False, 'error': 'Text messages are limited to 500 characters'}), 400
+                if len(text_value) > 2000:
+                    return jsonify({'success': False, 'error': 'Text messages are limited to 2000 characters'}), 400
                 item['text'] = text_value
                 updated = True
             if str(item.get('media_type') or '').lower() == 'scrolling_text':
-                if any(key in payload for key in ('font_size', 'scroll_speed', 'text_color', 'background_color', 'image_url', 'icon', 'loop')):
+                if any(key in payload for key in ('font_size', 'scroll_speed', 'text_color', 'background_color', 'image_url', 'image_width', 'image_height', 'icon', 'loop')):
                     try:
                         item['font_size'] = max(16, min(180, int(payload.get('font_size') or item.get('font_size') or 56)))
                     except (TypeError, ValueError):
@@ -21489,6 +21499,14 @@ def update_playlist_item(store_id, screen_id, item_id):
                         if re.fullmatch(r'#[0-9a-fA-F]{6}', value):
                             item[key] = value
                     item['image_url'] = str(payload.get('image_url') or '').strip()[:1000]
+                    try:
+                        item['image_width'] = max(24, min(1200, int(payload.get('image_width') or item.get('image_width') or 180)))
+                    except (TypeError, ValueError):
+                        pass
+                    try:
+                        item['image_height'] = max(24, min(1200, int(payload.get('image_height') or item.get('image_height') or 100)))
+                    except (TypeError, ValueError):
+                        pass
                     item['icon'] = str(payload.get('icon') or '').strip()[:16]
                     item['loop'] = bool(payload.get('loop', True))
                     updated = True

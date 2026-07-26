@@ -911,7 +911,7 @@
 				const marquee = document.createElement('div');
 				marquee.className = 'media';
 				marquee.style.cssText = `display:flex;align-items:center;gap:24px;overflow:hidden;background:${backgroundColor};color:${textColor};font:800 ${fontSize}px/1.15 Segoe UI,Arial,sans-serif;white-space:pre-wrap;`;
-				if(item && item.image_url){ const image = document.createElement('img'); image.src = String(item.image_url); image.style.cssText = 'max-height:70%;max-width:18%;object-fit:contain;'; marquee.appendChild(image); }
+				if(item && item.image_url){ const image = document.createElement('img'); image.src = String(item.image_url); const iw = Math.max(24, Math.min(1200, Number(item.image_width) || 180)); const ih = Math.max(24, Math.min(1200, Number(item.image_height) || 100)); image.style.cssText = `width:${iw}px;height:${ih}px;max-width:40vw;max-height:90%;object-fit:contain;`; marquee.appendChild(image); }
 				if(item && item.icon){ const icon = document.createElement('span'); icon.textContent = String(item.icon); icon.style.cssText = 'flex:0 0 auto;'; marquee.appendChild(icon); }
 				const text = document.createElement('span');
 				text.textContent = message;
