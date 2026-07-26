@@ -16949,19 +16949,43 @@ allowfullscreen></iframe></div>`;
                         previewPanelZone.style.display = 'block';
                         previewPanelZone.innerHTML = `
                             <div class="rp-subtitle" style="margin:0 0 8px 0;">Scrolling Text</div>
-                            <div class="rp-help" style="margin-top:0;">Type the message that will move across the display. Use the schedule controls on the right to set its duration, days, time window, and transition.</div>
+                            <div class="rp-help" style="margin-top:0;">Type the message and tune how it looks and moves. It supports multiple lines, images, icons, colors, speed, and looping.</div>
                             <div style="margin-top:12px;">
                                 <label for="rp-scrolling-text-inline" class="rp-label" style="display:block; margin-bottom:6px;">Message</label>
-                                <textarea id="rp-scrolling-text-inline" class="rp-input" maxlength="500" rows="4" placeholder="e.g. Fresh deals available today" style="width:100%; resize:vertical;"></textarea>
+                                <textarea id="rp-scrolling-text-inline" class="rp-input" maxlength="2000" rows="6" placeholder="e.g. Fresh deals available today\nNew line here" style="width:100%; resize:vertical; white-space:pre-wrap;"></textarea>
                             </div>
+                            <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:12px;">
+                                <label class="rp-label">Text size (px)<input id="rp-scrolling-text-size" class="rp-input" type="number" min="16" max="180" value="56" style="width:100%; margin-top:5px;"></label>
+                                <label class="rp-label">Scroll speed (seconds)<input id="rp-scrolling-text-speed" class="rp-input" type="number" min="3" max="120" value="15" style="width:100%; margin-top:5px;"></label>
+                                <label class="rp-label">Text color<input id="rp-scrolling-text-color" class="rp-input" type="color" value="#ffffff" style="width:100%; height:40px; margin-top:5px; padding:3px;"></label>
+                                <label class="rp-label">Background color<input id="rp-scrolling-text-background" class="rp-input" type="color" value="#071b1c" style="width:100%; height:40px; margin-top:5px; padding:3px;"></label>
+                                <label class="rp-label">Icon / emoji<input id="rp-scrolling-text-icon" class="rp-input" type="text" maxlength="16" placeholder="★" style="width:100%; margin-top:5px;"></label>
+                                <label class="rp-label">Image URL<input id="rp-scrolling-text-image" class="rp-input" type="url" placeholder="https://..." style="width:100%; margin-top:5px;"></label>
+                            </div>
+                            <label class="rp-label" style="display:flex; align-items:center; gap:8px; margin-top:12px;"><input id="rp-scrolling-text-loop" type="checkbox" checked> Loop the scrolling animation</label>
                             <div style="display:flex; justify-content:flex-end; margin-top:12px;">
                                 <button type="button" class="btn primary" onclick="rpPreviewInlineScrollingText()">Preview text</button>
                             </div>`;
                         const input = document.getElementById('rp-scrolling-text-inline');
+                        const media = rpSelectedMedia || {};
                         if(input){
-                            input.value = String((rpSelectedMedia && rpSelectedMedia.text) || '');
+                            input.value = String(media.text || '');
                             input.focus();
                         }
+                        const size = document.getElementById('rp-scrolling-text-size');
+                        const speed = document.getElementById('rp-scrolling-text-speed');
+                        const color = document.getElementById('rp-scrolling-text-color');
+                        const background = document.getElementById('rp-scrolling-text-background');
+                        const icon = document.getElementById('rp-scrolling-text-icon');
+                        const image = document.getElementById('rp-scrolling-text-image');
+                        const loop = document.getElementById('rp-scrolling-text-loop');
+                        if(size) size.value = String(media.font_size || media.fontSize || 56);
+                        if(speed) speed.value = String(media.scroll_speed || media.scrollSpeed || 15);
+                        if(color) color.value = /^#[0-9a-f]{6}$/i.test(String(media.text_color || media.textColor || '')) ? String(media.text_color || media.textColor) : '#ffffff';
+                        if(background) background.value = /^#[0-9a-f]{6}$/i.test(String(media.background_color || media.backgroundColor || '')) ? String(media.background_color || media.backgroundColor) : '#071b1c';
+                        if(icon) icon.value = String(media.icon || '');
+                        if(image) image.value = String(media.image_url || media.imageUrl || '');
+                        if(loop) loop.checked = media.loop !== false;
                         return;
                     }
                     if(isRpYouTubeMode()){
@@ -17029,18 +17053,27 @@ allowfullscreen></iframe></div>`;
                 }
                 function rpPreviewInlineScrollingText(){
                     const input = document.getElementById('rp-scrolling-text-inline');
-                    const message = String(input && input.value || '').replace(/\s+/g, ' ').trim();
+                    const message = String(input && input.value || '').replace(/[ \t]+/g, ' ').trim();
                     if(!message){
                         alert('Enter the message to display');
                         if(input) input.focus();
                         return;
                     }
                     rpComposerMode = 'scrolling_text';
+                    const readNumber = (id, fallback, min, max) => Math.max(min, Math.min(max, parseInt(document.getElementById(id)?.value, 10) || fallback));
+                    const readColor = (id, fallback) => /^#[0-9a-f]{6}$/i.test(String(document.getElementById(id)?.value || '')) ? document.getElementById(id).value : fallback;
                     rpSelectedMedia = {
                         name: 'text:pending',
                         text: message,
                         mediaType: 'scrolling_text',
-                        displayName: 'Scrolling Text'
+                        displayName: 'Scrolling Text',
+                        font_size: readNumber('rp-scrolling-text-size', 56, 16, 180),
+                        scroll_speed: readNumber('rp-scrolling-text-speed', 15, 3, 120),
+                        text_color: readColor('rp-scrolling-text-color', '#ffffff'),
+                        background_color: readColor('rp-scrolling-text-background', '#071b1c'),
+                        icon: String(document.getElementById('rp-scrolling-text-icon')?.value || '').trim(),
+                        image_url: String(document.getElementById('rp-scrolling-text-image')?.value || '').trim(),
+                        loop: !!document.getElementById('rp-scrolling-text-loop')?.checked
                     };
                     rpWallAssignments = null;
                     renderRpSelection();
@@ -17076,7 +17109,16 @@ allowfullscreen></iframe></div>`;
                         </div>`;
                     }
                     if(mediaType === 'scrolling_text'){
-                        return `<div style="width:100%;height:100%;display:flex;align-items:center;overflow:hidden;background:linear-gradient(135deg,#0f172a,#0f766e);color:#ecfeff;font-size:clamp(22px,3vw,42px);font-weight:800;line-height:1.25;"><span style="display:inline-block;white-space:nowrap;padding-left:100%;animation:rp-scrolling-text-preview 8s linear infinite;">${escapeHtml(String(media.text || 'Your scrolling message'))}</span></div>`;
+                        const textColor = /^#[0-9a-f]{6}$/i.test(String(media.text_color || media.textColor || '')) ? String(media.text_color || media.textColor) : '#ecfeff';
+                        const backgroundColor = /^#[0-9a-f]{6}$/i.test(String(media.background_color || media.backgroundColor || '')) ? String(media.background_color || media.backgroundColor) : '#0f172a';
+                        const fontSize = Math.max(16, Math.min(180, Number(media.font_size || media.fontSize || 56)));
+                        const speed = Math.max(3, Math.min(120, Number(media.scroll_speed || media.scrollSpeed || 15)));
+                        const iterations = media.loop === false ? '1' : 'infinite';
+                        const icon = escapeHtml(String(media.icon || ''));
+                        const imageUrl = String(media.image_url || media.imageUrl || '').trim();
+                        const image = /^https?:\/\//i.test(imageUrl) ? `<img src="${escapeHtml(imageUrl)}" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:8px;flex:0 0 auto;">` : '';
+                        const iconMarkup = icon ? `<span style="font-size:0.9em;line-height:1;">${icon}</span>` : '';
+                        return `<div style="width:100%;height:100%;display:flex;align-items:center;overflow:hidden;background:${backgroundColor};color:${textColor};font-size:clamp(22px,3vw,${Math.max(42, Math.min(100, fontSize))}px);font-weight:800;line-height:1.25;"><span style="display:inline-flex;align-items:center;gap:14px;white-space:pre-wrap;padding-left:100%;animation:rp-scrolling-text-preview ${speed}s linear ${iterations};">${image}${iconMarkup}${escapeHtml(String(media.text || 'Your scrolling message'))}</span></div>`;
                     }
                     if(mediaType === 'youtube'){
                         const videoId = String(media.name).replace(/^youtube:/i, '');
@@ -17466,11 +17508,20 @@ allowfullscreen></iframe></div>`;
                     if(!sid) return false;
                     const schedulePayload = buildRpPopupSchedulePayload(sid);
                     if(!schedulePayload) return false;
+                    const textOptions = {
+                        font_size: Math.max(16, Math.min(180, Number(rpSelectedMedia.font_size || rpSelectedMedia.fontSize || 56))),
+                        scroll_speed: Math.max(3, Math.min(120, Number(rpSelectedMedia.scroll_speed || rpSelectedMedia.scrollSpeed || 15))),
+                        text_color: String(rpSelectedMedia.text_color || rpSelectedMedia.textColor || '#ffffff'),
+                        background_color: String(rpSelectedMedia.background_color || rpSelectedMedia.backgroundColor || '#071b1c'),
+                        icon: String(rpSelectedMedia.icon || ''),
+                        image_url: String(rpSelectedMedia.image_url || rpSelectedMedia.imageUrl || ''),
+                        loop: rpSelectedMedia.loop !== false
+                    };
                     markAsChanged();
                     const response = await fetch(`/playlist/text/${encodeURIComponent(currentStoreId)}/${encodeURIComponent(sid)}`, {
                         method:'POST',
                         headers:{'Content-Type':'application/json'},
-                        body: JSON.stringify(Object.assign({ text: message }, schedulePayload))
+                        body: JSON.stringify(Object.assign({ text: message }, textOptions, schedulePayload))
                     });
                     const result = await response.json();
                     if(!response.ok || !result.success){
