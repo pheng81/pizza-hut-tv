@@ -16957,6 +16957,7 @@ allowfullscreen></iframe></div>`;
                             <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:12px;">
                                 <label class="rp-label">Text size (px)<input id="rp-scrolling-text-size" class="rp-input" type="number" min="16" max="180" value="56" style="width:100%; margin-top:5px;"></label>
                                 <label class="rp-label">Scroll speed (seconds)<input id="rp-scrolling-text-speed" class="rp-input" type="number" min="3" max="120" value="15" style="width:100%; margin-top:5px;"></label>
+                                <label class="rp-label">Font<select id="rp-scrolling-text-font" class="rp-input" style="width:100%; margin-top:5px;"><option value="Segoe UI">Segoe UI</option><option value="Arial">Arial</option><option value="Verdana">Verdana</option><option value="Tahoma">Tahoma</option><option value="Georgia">Georgia</option><option value="Trebuchet MS">Trebuchet MS</option><option value="Courier New">Courier New</option><option value="Impact">Impact</option></select></label>
                                 <label class="rp-label">Text color<input id="rp-scrolling-text-color" class="rp-input" type="color" value="#ffffff" style="width:100%; height:40px; margin-top:5px; padding:3px;"></label>
                                 <label class="rp-label">Background color<input id="rp-scrolling-text-background" class="rp-input" type="color" value="#071b1c" style="width:100%; height:40px; margin-top:5px; padding:3px;"></label>
                                 <label class="rp-label">Icon / emoji<input id="rp-scrolling-text-icon" class="rp-input" type="text" maxlength="16" placeholder="★" style="width:100%; margin-top:5px;"></label>
@@ -16977,6 +16978,7 @@ allowfullscreen></iframe></div>`;
                         }
                         const size = document.getElementById('rp-scrolling-text-size');
                         const speed = document.getElementById('rp-scrolling-text-speed');
+                        const font = document.getElementById('rp-scrolling-text-font');
                         const color = document.getElementById('rp-scrolling-text-color');
                         const background = document.getElementById('rp-scrolling-text-background');
                         const icon = document.getElementById('rp-scrolling-text-icon');
@@ -16988,6 +16990,7 @@ allowfullscreen></iframe></div>`;
                         const loop = document.getElementById('rp-scrolling-text-loop');
                         if(size) size.value = String(media.font_size || media.fontSize || 56);
                         if(speed) speed.value = String(media.scroll_speed || media.scrollSpeed || 15);
+                        if(font) font.value = String(media.font_family || media.fontFamily || 'Segoe UI');
                         if(color) color.value = /^#[0-9a-f]{6}$/i.test(String(media.text_color || media.textColor || '')) ? String(media.text_color || media.textColor) : '#ffffff';
                         if(background) background.value = /^#[0-9a-f]{6}$/i.test(String(media.background_color || media.backgroundColor || '')) ? String(media.background_color || media.backgroundColor) : '#071b1c';
                         if(icon) icon.value = String(media.icon || '');
@@ -17107,6 +17110,7 @@ allowfullscreen></iframe></div>`;
                         image_url: uploadedImageUrl,
                         image_width: readNumber('rp-scrolling-text-image-width', 180, 24, 1200),
                         image_height: readNumber('rp-scrolling-text-image-height', 100, 24, 1200),
+                        font_family: String(document.getElementById('rp-scrolling-text-font')?.value || 'Segoe UI'),
                         loop: !!document.getElementById('rp-scrolling-text-loop')?.checked
                     };
                     rpWallAssignments = null;
@@ -17152,9 +17156,10 @@ allowfullscreen></iframe></div>`;
                         const imageUrl = String(media.image_url || media.imageUrl || '').trim();
                         const imageWidth = Math.max(24, Math.min(1200, Number(media.image_width || media.imageWidth || 180)));
                         const imageHeight = Math.max(24, Math.min(1200, Number(media.image_height || media.imageHeight || 100)));
+                        const fontFamily = escapeHtml(String(media.font_family || media.fontFamily || 'Segoe UI').replace(/[^a-zA-Z0-9 ,_-]/g, ''));
                         const image = /^https?:\/\//i.test(imageUrl) ? `<img src="${escapeHtml(imageUrl)}" alt="" style="width:${imageWidth}px;height:${imageHeight}px;object-fit:contain;border-radius:8px;flex:0 0 auto;">` : '';
                         const iconMarkup = icon ? `<span style="font-size:0.9em;line-height:1;">${icon}</span>` : '';
-                        return `<div style="width:100%;height:100%;display:flex;align-items:center;overflow:hidden;background:${backgroundColor};color:${textColor};font-size:clamp(22px,3vw,${Math.max(42, Math.min(100, fontSize))}px);font-weight:800;line-height:1.25;"><span style="display:inline-flex;align-items:center;gap:14px;white-space:pre-wrap;padding-left:100%;animation:rp-scrolling-text-preview ${speed}s linear ${iterations};">${image}${iconMarkup}${escapeHtml(String(media.text || 'Your scrolling message'))}</span></div>`;
+                        return `<div style="width:100%;height:100%;display:flex;align-items:center;overflow:hidden;background:${backgroundColor};color:${textColor};font-family:${fontFamily},sans-serif;font-size:clamp(22px,3vw,${Math.max(42, Math.min(100, fontSize))}px);font-weight:800;line-height:1.25;"><span style="display:inline-flex;align-items:center;gap:14px;white-space:pre-wrap;padding-left:100%;animation:rp-scrolling-text-preview ${speed}s linear ${iterations};">${image}${iconMarkup}${escapeHtml(String(media.text || 'Your scrolling message'))}</span></div>`;
                     }
                     if(mediaType === 'youtube'){
                         const videoId = String(media.name).replace(/^youtube:/i, '');
@@ -17553,6 +17558,7 @@ allowfullscreen></iframe></div>`;
                         image_url: String(rpSelectedMedia.image_url || rpSelectedMedia.imageUrl || ''),
                         image_width: Math.max(24, Math.min(1200, Number(rpSelectedMedia.image_width || rpSelectedMedia.imageWidth || 180))),
                         image_height: Math.max(24, Math.min(1200, Number(rpSelectedMedia.image_height || rpSelectedMedia.imageHeight || 100))),
+                        font_family: String(rpSelectedMedia.font_family || rpSelectedMedia.fontFamily || 'Segoe UI'),
                         loop: rpSelectedMedia.loop !== false
                     };
                     markAsChanged();
@@ -18354,6 +18360,7 @@ allowfullscreen></iframe></div>`;
                 durationInput.value = '15';
                 document.getElementById('scrollingTextFontSize').value = '56';
                 document.getElementById('scrollingTextSpeed').value = '15';
+                document.getElementById('scrollingTextFont').value = 'Segoe UI';
                 document.getElementById('scrollingTextColor').value = '#ffffff';
                 document.getElementById('scrollingTextBackground').value = '#071b1c';
                 document.getElementById('scrollingTextIcon').value = '';
@@ -18379,6 +18386,7 @@ allowfullscreen></iframe></div>`;
                 const duration = Math.max(5, Math.min(3600, parseInt(document.getElementById('scrollingTextDuration')?.value, 10) || 15));
                 const font_size = Math.max(16, Math.min(180, parseInt(document.getElementById('scrollingTextFontSize')?.value, 10) || 56));
                 const scroll_speed = Math.max(3, Math.min(120, parseInt(document.getElementById('scrollingTextSpeed')?.value, 10) || duration));
+                const font_family = String(document.getElementById('scrollingTextFont')?.value || 'Segoe UI');
                 const text_color = document.getElementById('scrollingTextColor')?.value || '#ffffff';
                 const background_color = document.getElementById('scrollingTextBackground')?.value || '#071b1c';
                 const icon = String(document.getElementById('scrollingTextIcon')?.value || '').trim();
@@ -18411,7 +18419,7 @@ allowfullscreen></iframe></div>`;
                     const response = await fetch(`/playlist/text/${encodeURIComponent(currentStoreId)}/${encodeURIComponent(scrollingTextTargetScreen)}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ text, duration, font_size, scroll_speed, text_color, background_color, icon, image_url, image_width, image_height, loop })
+                        body: JSON.stringify({ text, duration, font_size, scroll_speed, font_family, text_color, background_color, icon, image_url, image_width, image_height, loop })
                     });
                     const result = await response.json();
                     if (!response.ok || !result.success) {
@@ -20829,6 +20837,7 @@ allowfullscreen></iframe></div>`;
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:15px;">
                     <label>Text size (px)<input type="number" id="scrollingTextFontSize" value="56" min="16" max="180" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;"></label>
                     <label>Scroll speed (seconds)<input type="number" id="scrollingTextSpeed" value="15" min="3" max="120" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;"></label>
+                    <label>Font<select id="scrollingTextFont" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;"><option>Segoe UI</option><option>Arial</option><option>Verdana</option><option>Tahoma</option><option>Georgia</option><option>Trebuchet MS</option><option>Courier New</option><option>Impact</option></select></label>
                     <label>Text color<input type="color" id="scrollingTextColor" value="#ffffff" style="width:100%;height:40px;"></label>
                     <label>Background color<input type="color" id="scrollingTextBackground" value="#071b1c" style="width:100%;height:40px;"></label>
                     <label>Icon / emoji<input type="text" id="scrollingTextIcon" maxlength="16" placeholder="★" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;"></label>

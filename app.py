@@ -20912,6 +20912,10 @@ def add_scrolling_text_to_playlist(store_id, screen_id):
         scroll_speed = max(3, min(int(payload.get('scroll_speed') or duration), 120))
     except (TypeError, ValueError):
         scroll_speed = duration
+    allowed_fonts = {'Segoe UI', 'Arial', 'Verdana', 'Tahoma', 'Georgia', 'Trebuchet MS', 'Courier New', 'Impact'}
+    font_family = str(payload.get('font_family') or 'Segoe UI').strip()
+    if font_family not in allowed_fonts:
+        font_family = 'Segoe UI'
     image_url = str(payload.get('image_url') or '').strip()[:1000]
     try:
         image_width = max(24, min(int(payload.get('image_width') or 180), 1200))
@@ -20958,6 +20962,7 @@ def add_scrolling_text_to_playlist(store_id, screen_id):
         'image_height': image_height,
         'icon': icon,
         'scroll_speed': scroll_speed,
+        'font_family': font_family,
         'loop': bool(payload.get('loop', True)),
         'repeat': bool(payload.get('repeat', True)),
         'link_next': False,
@@ -21485,7 +21490,7 @@ def update_playlist_item(store_id, screen_id, item_id):
                 item['text'] = text_value
                 updated = True
             if str(item.get('media_type') or '').lower() == 'scrolling_text':
-                if any(key in payload for key in ('font_size', 'scroll_speed', 'text_color', 'background_color', 'image_url', 'image_width', 'image_height', 'icon', 'loop')):
+                if any(key in payload for key in ('font_size', 'scroll_speed', 'font_family', 'text_color', 'background_color', 'image_url', 'image_width', 'image_height', 'icon', 'loop')):
                     try:
                         item['font_size'] = max(16, min(180, int(payload.get('font_size') or item.get('font_size') or 56)))
                     except (TypeError, ValueError):
@@ -21494,6 +21499,9 @@ def update_playlist_item(store_id, screen_id, item_id):
                         item['scroll_speed'] = max(3, min(120, int(payload.get('scroll_speed') or item.get('scroll_speed') or item.get('duration') or 15)))
                     except (TypeError, ValueError):
                         pass
+                    allowed_fonts = {'Segoe UI', 'Arial', 'Verdana', 'Tahoma', 'Georgia', 'Trebuchet MS', 'Courier New', 'Impact'}
+                    next_font = str(payload.get('font_family') or item.get('font_family') or 'Segoe UI').strip()
+                    item['font_family'] = next_font if next_font in allowed_fonts else 'Segoe UI'
                     for key, fallback in (('text_color', '#FFFFFF'), ('background_color', '#071B1C')):
                         value = str(payload.get(key) or item.get(key) or fallback).strip()
                         if re.fullmatch(r'#[0-9a-fA-F]{6}', value):
