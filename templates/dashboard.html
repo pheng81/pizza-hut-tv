@@ -16888,8 +16888,28 @@ allowfullscreen></iframe></div>`;
                         alert('No screen selected');
                         return;
                     }
-                    openAutoSliceModal(targetScreenId);
+                    try {
+                        if(typeof openAutoSliceModal !== 'function'){
+                            throw new Error('Wall Video Studio is unavailable');
+                        }
+                        closeReplaceModal();
+                        openAutoSliceModal(targetScreenId);
+                        const wallModal = document.getElementById('auto-slice-modal');
+                        if(!wallModal){
+                            throw new Error('Wall Video Studio did not open');
+                        }
+                        wallModal.style.display = 'flex';
+                        wallModal.style.visibility = 'visible';
+                        wallModal.style.opacity = '1';
+                        wallModal.style.pointerEvents = 'auto';
+                        wallModal.style.zIndex = '21050';
+                        document.body.style.overflow = 'hidden';
+                    } catch (error) {
+                        console.error('Failed to open Wall Video Studio:', error);
+                        alert(`Wall Video could not open: ${error && error.message ? error.message : 'Unknown error'}`);
+                    }
                 }
+                window.openRpWallVideo = openRpWallVideo;
                 function resetRpScheduleEditor(){
                     rpReplaceScheduleLoaded = false;
                     setRpScheduleDirty(false);
@@ -20289,6 +20309,7 @@ allowfullscreen></iframe></div>`;
             function closeAutoSliceModal() {
                 const modal = document.getElementById('auto-slice-modal');
                 if (modal) modal.style.display = 'none';
+                document.body.style.overflow = '';
             }
 
             function handleAutoSliceFileSelect(input) {
