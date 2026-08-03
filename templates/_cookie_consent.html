@@ -24,8 +24,8 @@
 </script>
 <script>
 (function(){
-  var SAFE_IDS = new Set(['cookieConsent', 'cookieAcceptBtn', 'logoIntro', 'aiChatButton', 'aiChatWindow']);
-  var SAFE_CLASS_SNIPPETS = ['ai-chat-', 'message-avatar', 'typing-indicator'];
+  var SAFE_IDS = new Set(['cookieConsent', 'cookieAcceptBtn', 'logoIntro', 'aiChatButton', 'aiChatWindow', 'auto-slice-modal', 'rp-overlay']);
+  var SAFE_CLASS_SNIPPETS = ['ai-chat-', 'message-avatar', 'typing-indicator', 'auto-slice-modal-', 'timepicker-overlay', 'picker-dialog'];
 
   function isSafeElement(el){
     if (!el || !(el instanceof HTMLElement)) return true;

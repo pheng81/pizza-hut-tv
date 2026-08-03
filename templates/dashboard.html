@@ -16892,12 +16892,15 @@ allowfullscreen></iframe></div>`;
                         if(typeof openAutoSliceModal !== 'function'){
                             throw new Error('Wall Video Studio is unavailable');
                         }
-                        closeReplaceModal();
                         openAutoSliceModal(targetScreenId);
                         const wallModal = document.getElementById('auto-slice-modal');
                         if(!wallModal){
                             throw new Error('Wall Video Studio did not open');
                         }
+                        wallModal.removeAttribute('data-overlay-neutralized');
+                        wallModal.style.removeProperty('visibility');
+                        wallModal.style.removeProperty('opacity');
+                        wallModal.style.removeProperty('pointer-events');
                         wallModal.style.display = 'flex';
                         wallModal.style.visibility = 'visible';
                         wallModal.style.opacity = '1';
@@ -20309,7 +20312,8 @@ allowfullscreen></iframe></div>`;
             function closeAutoSliceModal() {
                 const modal = document.getElementById('auto-slice-modal');
                 if (modal) modal.style.display = 'none';
-                document.body.style.overflow = '';
+                const libraryOverlay = document.getElementById('rp-overlay');
+                document.body.style.overflow = libraryOverlay && getComputedStyle(libraryOverlay).display !== 'none' ? 'hidden' : '';
             }
 
             function handleAutoSliceFileSelect(input) {
