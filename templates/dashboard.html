@@ -5715,10 +5715,24 @@
     body.dashboard-schedule-mode .rp-footer-actions .btn:disabled {
         opacity: .48;
     }
+    body.dashboard-schedule-mode .rp-overlay--library .rp-shell {
+        grid-template-columns: clamp(340px, 22vw, 380px) minmax(0, 1fr);
+    }
+    body.dashboard-schedule-mode .rp-overlay--library .rp-panel--library {
+        min-width: 0;
+    }
+    body.dashboard-schedule-mode .rp-overlay--library .rp-folder-card__name,
+    body.dashboard-schedule-mode .rp-overlay--library .rp-item__title {
+        overflow-wrap: anywhere;
+        word-break: normal;
+    }
 
     @media (max-width: 1180px) {
         body.dashboard-schedule-mode .rp-shell {
             grid-template-columns: 280px minmax(0, 1fr);
+        }
+        body.dashboard-schedule-mode .rp-overlay--library .rp-shell {
+            grid-template-columns: 320px minmax(0, 1fr);
         }
         body.dashboard-schedule-mode .rp-schedule-editor {
             grid-template-columns: 1fr;
