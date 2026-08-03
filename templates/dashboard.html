@@ -5103,11 +5103,12 @@
     }
     body.dashboard-schedule-mode .rp-library-toolbar__actions {
         display: grid;
-        grid-template-columns: 1fr auto auto;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) 42px;
         width: 100%;
         gap: 8px;
     }
     body.dashboard-schedule-mode .rp-library-toolbar__actions > :first-child {
+        grid-column: 1 / -1;
         min-height: 42px;
         border-radius: 9px !important;
         background: #1768e9;
@@ -5122,6 +5123,9 @@
         vertical-align: -2px;
     }
     body.dashboard-schedule-mode .rp-library-toolbar__actions > :nth-child(2) {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         min-height: 42px;
         padding: 0 12px;
         border: 1px solid #dbe3ee;
@@ -5129,7 +5133,14 @@
         background: #fff;
     }
     body.dashboard-schedule-mode .rp-wall-video-btn {
-        display: none;
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        min-height: 42px;
+        padding: 0 10px;
+        border-radius: 9px !important;
+        white-space: nowrap;
     }
     body.dashboard-schedule-mode .rp-search-toggle,
     body.dashboard-schedule-mode .rp-search-trigger {
@@ -6328,6 +6339,7 @@
     function openUserProfile(){ toggleProfilePanel(true); }
     function openLibraryManager(){
         ensureReplaceModal();
+        document.body.classList.add('dashboard-schedule-mode');
         rpCtx = { screenId: 'SINGLE', itemId: 'SINGLE' }; // neutral context
         rpPrefix = '';
         presentRpOverlay('library');
