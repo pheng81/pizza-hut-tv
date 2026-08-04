@@ -3476,6 +3476,31 @@
         /* Playlist Responsive Layout */
     .playlist-section { overflow:visible; }
         .playlist-section .playlist-items { width:100%; box-sizing:border-box; }
+
+    /* Info Panel Schedule */
+    .panel-zone-section{ padding:18px; border-radius:18px; border:1px solid #eef1f6; background:#fff; box-shadow:0 1px 2px rgba(15,23,42,.04); }
+    .ip-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:16px; }
+    .ip-title{ font-size:19px; font-weight:800; color:#0f172a; letter-spacing:-.01em; }
+
+    .ip-controls{ display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+    .ip-switch-cell{ width:64px; height:48px; flex:0 0 auto; display:inline-flex; align-items:center; justify-content:center; border-radius:14px; border:1px solid #e5e7eb; background:#fff; cursor:pointer; transition:.15s background; }
+    .ip-switch-cell:hover{ background:#f8fafc; }
+    .ip-switch-cell:disabled{ opacity:.55; cursor:not-allowed; }
+    .ip-switch{ position:relative; width:42px; height:24px; border-radius:999px; background:#cbd2d9; transition:.2s background; flex:0 0 auto; }
+    .ip-switch-cell.on .ip-switch{ background:#1fa971; }
+    .ip-switch-knob{ position:absolute; top:2px; left:2px; width:20px; height:20px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(15,23,42,.25); transition:.2s transform; }
+    .ip-switch-cell.on .ip-switch-knob{ transform:translateX(18px); }
+
+    .ip-icon-btn{ width:48px; height:48px; flex:0 0 auto; display:inline-flex; align-items:center; justify-content:center; border-radius:14px; border:1px solid #e5e7eb; background:#fff; color:#0f172a; cursor:pointer; transition:.15s background; }
+    .ip-icon-btn:hover{ background:#f8fafc; }
+    .ip-icon-btn.ip-icon-info{ background:#eef4ff; border-color:#dbe6ff; color:#2563eb; cursor:default; }
+
+    .ip-stats-row{ display:flex; align-items:stretch; background:#f2f6fd; border:1px solid #dee7f8; border-radius:14px; padding:16px 4px; }
+    .ip-stat{ flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; padding:0 8px; text-align:center; border-right:1px solid rgba(148,163,184,.35); min-width:0; }
+    .ip-stat:last-child{ border-right:none; }
+    .ip-stat-icon{ width:36px; height:36px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; }
+    .ip-stat-label{ font-size:12px; color:#64748b; font-weight:600; }
+    .ip-stat-value{ font-size:14.5px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
     .playlist-row { display:flex; flex-direction:column; position:relative; background:#fff; border:1px solid #dcdfe3; border-radius:6px; padding:6px 8px; gap:4px; }
     .playlist-row .pl-top { display:grid; grid-template-columns:60px 1fr 1fr auto; align-items:center; gap:8px; }
     .playlist-row .pl-top .pl-thumb { width:60px; height:40px; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:4px; background:#f3f4f5; }
@@ -5505,130 +5530,45 @@
         text-transform: none;
     }
     body.dashboard-schedule-mode .rp-schedule-effect .rp-transition-picker {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(74px, 1fr));
-        gap: 10px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
     }
     body.dashboard-schedule-mode .rp-transition-card.effect-btn {
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 10px;
-        width: 100%;
-        min-width: 0;
-        height: 88px;
-        padding: 10px 6px;
+        gap: 5px;
+        flex: 1 1 0;
+        min-width: 50px;
+        height: 56px;
+        padding: 6px 2px;
         border: 1px solid #d9e1ec;
         border-radius: 8px !important;
         background: #fff;
         color: #475569;
-        font-size: 11px;
+        font-size: 9px;
         font-weight: 600;
+        line-height: 1.1;
+        text-align: center;
     }
     body.dashboard-schedule-mode .rp-transition-card.effect-btn.active {
         border-color: #1768e9;
         background: #f5f8ff;
         color: #175cd3;
-        box-shadow: 0 0 0 1px #1768e9, 0 5px 14px rgba(23,104,233,.1);
+        box-shadow: 0 0 0 1px #1768e9, 0 4px 10px rgba(23,104,233,.1);
     }
     body.dashboard-schedule-mode .rp-transition-icon {
-        position: relative;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 32px;
-        height: 32px;
+        width: 18px;
+        height: 18px;
         color: #3d5270;
-        font-size: 18px;
     }
-    body.dashboard-schedule-mode .rp-transition-icon--none {
-        width: 29px;
-        height: 29px;
-        border: 2px solid currentColor;
-        border-radius: 50% !important;
-    }
-    body.dashboard-schedule-mode .rp-transition-icon--none::after {
-        content: '';
-        position: absolute;
-        width: 2px;
-        height: 34px;
-        background: currentColor;
-        transform: rotate(45deg);
-    }
-    body.dashboard-schedule-mode .rp-transition-icon--fade i {
-        position: absolute;
-        width: 22px;
-        height: 24px;
-        border-radius: 3px !important;
-        background: #a9bee7;
-    }
-    body.dashboard-schedule-mode .rp-transition-icon--fade i:first-child { transform: translateX(-6px); opacity: .65; }
-    body.dashboard-schedule-mode .rp-transition-icon--fade i:last-child { transform: translateX(6px); }
-    body.dashboard-schedule-mode .rp-transition-icon--slide::before {
-        content: '→';
-        position: absolute;
-        left: -2px;
-        font-size: 20px;
-    }
-    body.dashboard-schedule-mode .rp-transition-icon--slide::after {
-        content: '';
-        position: absolute;
-        right: 0;
-        width: 14px;
-        height: 26px;
-        border-radius: 2px !important;
-        background: #a9bee7;
-    }
-    body.dashboard-schedule-mode .rp-transition-icon--zoom {
-        line-height: 1;
-        letter-spacing: 1px;
-    }
-    body.dashboard-schedule-mode .rp-transition-more {
-        position: relative;
-        grid-column: 1 / -1;
-        justify-self: end;
-        height: 0;
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity .15s ease;
-    }
-    body.dashboard-schedule-mode .rp-schedule-effect:hover .rp-transition-more,
-    body.dashboard-schedule-mode .rp-transition-more[open],
-    body.dashboard-schedule-mode .rp-transition-more:focus-within {
-        height: auto;
-        opacity: 1;
-        pointer-events: auto;
-    }
-    body.dashboard-schedule-mode .rp-transition-more summary {
-        color: #1768e9;
-        font-size: 11px;
-        font-weight: 700;
-        cursor: pointer;
-        list-style: none;
-    }
-    body.dashboard-schedule-mode .rp-transition-more summary::-webkit-details-marker { display: none; }
-    body.dashboard-schedule-mode .rp-transition-more summary::after { content: '  +'; }
-    body.dashboard-schedule-mode .rp-transition-more[open] summary::after { content: '  −'; }
-    body.dashboard-schedule-mode .rp-transition-more__menu {
-        display: flex;
-        justify-content: flex-end;
-        gap: 6px;
-        flex-wrap: wrap;
-        margin-top: 8px;
-    }
-    body.dashboard-schedule-mode .rp-transition-more__option.effect-btn {
-        min-width: auto;
-        height: 30px;
-        padding: 0 10px;
-        border-radius: 7px !important;
-        background: #fff;
-        font-size: 10px;
-    }
-    body.dashboard-schedule-mode .rp-transition-more__option.effect-btn.active {
-        border-color: #1768e9;
-        background: #1768e9;
-        color: #fff;
+    body.dashboard-schedule-mode .rp-transition-card.effect-btn.active .rp-transition-icon {
+        color: #175cd3;
     }
     body.dashboard-schedule-mode .rp-schedule-editor > .rp-schedule-hint {
         margin-top: 14px;
@@ -9258,6 +9198,20 @@
             };
         }
         
+    // Inline icon set for the Info Panel Schedule card (no external icon library)
+    const IP_ICON_MONITOR ='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>';
+    const IP_ICON_GEAR = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>';
+    const IP_ICON_CLOCK = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>';
+    const IP_ICON_CALENDAR = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>';
+    const IP_ICON_LIST = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/><path d="M9 6h11M9 12h11M9 18h11"/></svg>';
+
+    function buildIpStatTile(icon, color, label, value){
+        return `<div class="ip-stat"><span class="ip-stat-icon" style="background:${color}1f; color:${color};">${icon}</span><span class="ip-stat-label">${escapeHtml(label)}</span><span class="ip-stat-value" style="color:${color};" title="${escapeHtml(String(value))}">${escapeHtml(String(value))}</span></div>`;
+    }
+    function buildIpStatsGrid(tiles){
+        return `<div class="ip-stats-row">${tiles.map(t => buildIpStatTile(t.icon, t.color, t.label, t.value)).join('')}</div>`;
+    }
+
     function createScreenCard(screenId, screenData, storeId) {
             console.log('Creating card for:', screenId, 'with data:', screenData, 'for store:', storeId);
             const card = document.createElement('div');
@@ -9406,28 +9360,29 @@ allowfullscreen></iframe></div>`;
                     ${!isMasterStore(storeId)?'<div style=\"font-size:10px;color:#777;margin-top:6px;\">Local changes here do NOT propagate. Master Apply-To-All uploads can still replace files (unless protected).</div>':''}
                 </div>
 
-                <div class="playlist-section panel-zone-section" id="panel-zone-${screenId}" style="margin-top:12px; padding:12px; border-radius:14px; border:1px solid #d8e4fb; background:linear-gradient(180deg,#f8fbff 0%,#f3f8ff 100%);">
-                    <div style="font-size:13px; font-weight:600; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
-                        <span>Info Panel Schedule</span>
-                        <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
-                            <button type="button" id="panel-auto-toggle-${screenId}" class="pl-switch off" onclick="togglePanelAuto('${screenId}')" aria-pressed="false" ${isWallFollower ? 'disabled' : ''} title="Turn automatic info panel on or off"><span>Auto Off</span></button>
-                            <div id="panel-auto-options-${screenId}" style="display:none; gap:6px; align-items:center; flex-wrap:wrap;">
-                                <select id="panel-layout-${screenId}" onchange="updatePanelLayout('${screenId}', this.value)" style="height:28px; border:1px solid #dcdfe3; background:#fff; color:#1d1d1f; font-size:11px; padding:0 8px;" ${isWallFollower ? 'disabled' : ''}>
-                                    <option value="off">Off</option>
-                                    <option value="split-right-25">Right</option>
-                                    <option value="split-left-25">Left</option>
-                                    <option value="split-bottom-25">Bottom</option>
-                                    <option value="full-screen">Full screen 100%</option>
-                                </select>
-                                <input id="panel-overlay-percent-${screenId}" type="number" min="10" max="60" step="1" value="25" onchange="updatePanelOverlayPercent('${screenId}', this.value)" style="height:28px; width:58px; border:1px solid #dcdfe3; background:#fff; color:#1d1d1f; font-size:11px; padding:0 6px;" ${isWallFollower ? 'disabled' : ''} title="Overlay size percent">
-                                <span id="panel-overlay-percent-label-${screenId}" style="font-size:11px; color:#64748b;">%</span>
-                            </div>
-                            <span id="panel-pos-display-summary-${screenId}" style="display:none; height:28px; align-items:center; padding:0 10px; border:1px solid #bfdbfe; border-radius:999px; background:#eff6ff; color:#1d4ed8; font-size:11px; font-weight:700;"></span>
-                            <button type="button" class="btn" id="panel-pos-display-edit-${screenId}" onclick="openPanelPosWizard('${screenId}')" style="display:none; height:28px; padding:0 10px; font-size:11px;">Display settings</button>
-                            <button type="button" class="btn" id="panel-toggle-${screenId}" onclick="togglePanelSectionCollapsed('${screenId}')" title="Expand info panel section" aria-label="Expand info panel section" style="width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; padding:0; border-radius:999px;">v</button>
-                        </div>
+                <div class="playlist-section panel-zone-section" id="panel-zone-${screenId}" style="margin-top:12px;">
+                    <div class="ip-head" onclick="togglePanelSectionCollapsed('${screenId}')" title="Click to view full schedule" style="cursor:pointer;">
+                        <span class="ip-title">Ticket Display Panel</span>
                     </div>
-                    <div id="panel-summary-${screenId}" style="display:block; font-size:11px; color:#556070; background:#f8fafc; border:1px solid #e5e7eb; border-radius:10px; padding:8px 10px; margin-bottom:8px;">Loading info panel summary...</div>
+                    <div class="ip-controls">
+                        <button type="button" id="panel-auto-toggle-${screenId}" class="ip-switch-cell off" onclick="togglePanelAuto('${screenId}')" aria-pressed="false" ${isWallFollower ? 'disabled' : ''} title="Turn automatic info panel on or off">
+                            <span class="ip-switch"><span class="ip-switch-knob"></span></span>
+                        </button>
+                        <div id="panel-auto-options-${screenId}" style="display:none; gap:6px; align-items:center; flex-wrap:wrap;">
+                            <select id="panel-layout-${screenId}" onchange="updatePanelLayout('${screenId}', this.value)" style="height:28px; border:1px solid #dcdfe3; background:#fff; color:#1d1d1f; font-size:11px; padding:0 8px;" ${isWallFollower ? 'disabled' : ''}>
+                                <option value="off">Off</option>
+                                <option value="split-right-25">Right</option>
+                                <option value="split-left-25">Left</option>
+                                <option value="split-bottom-25">Bottom</option>
+                                <option value="full-screen">Full screen 100%</option>
+                            </select>
+                            <input id="panel-overlay-percent-${screenId}" type="number" min="10" max="60" step="1" value="25" onchange="updatePanelOverlayPercent('${screenId}', this.value)" style="height:28px; width:58px; border:1px solid #dcdfe3; background:#fff; color:#1d1d1f; font-size:11px; padding:0 6px;" ${isWallFollower ? 'disabled' : ''} title="Overlay size percent">
+                            <span id="panel-overlay-percent-label-${screenId}" style="font-size:11px; color:#64748b;">%</span>
+                        </div>
+                        <span id="panel-pos-display-summary-${screenId}" class="ip-icon-btn ip-icon-info" style="display:none;" title="Position">${IP_ICON_MONITOR}</span>
+                        <button type="button" class="ip-icon-btn" id="panel-pos-display-edit-${screenId}" onclick="openPanelPosWizard('${screenId}')" style="display:none;" title="Display settings">${IP_ICON_GEAR}</button>
+                    </div>
+                    <div id="panel-summary-${screenId}" onclick="togglePanelSectionCollapsed('${screenId}')" title="Click to view full schedule" style="display:block; margin-bottom:8px; cursor:pointer;">Loading info panel summary...</div>
                     <div id="panel-body-${screenId}" style="display:none;">
                         <div class="panel-pos-feed" id="panel-pos-feed-${screenId}" style="display:flex; flex-direction:column; gap:8px; margin-bottom:10px;"></div>
                         <div class="panel-items" id="panel-items-${screenId}" style="display:flex; flex-direction:column; gap:6px; padding:4px 0;">
@@ -13342,7 +13297,6 @@ allowfullscreen></iframe></div>`;
         }
 
         function renderPanelScheduleSection(screenId, panelZone, screenBinding){
-            const panelSection = document.getElementById(`panel-zone-${screenId}`);
             const sourceSelect = document.getElementById(`panel-source-${screenId}`);
             const sourceMode = String((panelZone && panelZone.source_mode) || 'manual');
             const hasLivePosSchedule = !!(panelZone && panelZone.__has_live_pos_schedule);
@@ -13353,9 +13307,11 @@ allowfullscreen></iframe></div>`;
                 autoToggle.classList.toggle('on', autoEnabled);
                 autoToggle.classList.toggle('off', !autoEnabled);
                 autoToggle.setAttribute('aria-pressed', autoEnabled ? 'true' : 'false');
-                autoToggle.innerHTML = `<span>Auto ${autoEnabled ? 'On' : 'Off'}</span>`;
+                autoToggle.title = `Auto ${autoEnabled ? 'On' : 'Off'} · click to turn ${autoEnabled ? 'off' : 'on'}`;
             }
-            if(autoOptions) autoOptions.style.display = autoEnabled ? 'flex' : 'none';
+            // Hidden permanently: layout/percent are already editable via the "Display settings" wizard (posDisplayEdit below),
+            // so this raw dropdown+percent row would just duplicate that control.
+            if(autoOptions) autoOptions.style.display = 'none';
             if(sourceSelect){
                 sourceSelect.value = sourceMode;
             }
@@ -13419,11 +13375,12 @@ allowfullscreen></iframe></div>`;
                             : selectedLayout === 'split-bottom-25'
                                 ? `Overlay bottom ${overlayPercent}%`
                                 : 'Connection only';
-                posDisplaySummary.textContent = displaySummary;
+                posDisplaySummary.title = `${displaySummary} · Position`;
+                posDisplaySummary.setAttribute('aria-label', `${displaySummary} · Position`);
                 posDisplaySummary.style.display = posModeUsesWizard ? 'inline-flex' : 'none';
             }
             if(posDisplayEdit){
-                posDisplayEdit.style.display = posModeUsesWizard ? 'inline-flex' : 'none';
+                posDisplayEdit.style.display = posModeUsesWizard ? 'flex' : 'none';
             }
             const addBtn = document.querySelector(`#panel-zone-${screenId} .add-slot-btn`);
             if(addBtn){
@@ -13432,29 +13389,12 @@ allowfullscreen></iframe></div>`;
                 addBtn.title = sourceMode === 'pos_webhook' ? 'Switch back to Manual cards to add text cards here' : 'Add a scheduled text card';
             }
             const sectionCollapsed = isPanelSectionCollapsed(screenId);
-            const toggleBtn = document.getElementById(`panel-toggle-${screenId}`);
-            if(toggleBtn){
-                toggleBtn.textContent = sectionCollapsed ? 'v' : '^';
-                toggleBtn.title = sectionCollapsed ? 'Expand info panel section' : 'Collapse info panel section';
-                toggleBtn.setAttribute('aria-label', toggleBtn.title);
-            }
             const summary = document.getElementById(`panel-summary-${screenId}`);
             const bodyWrap = document.getElementById(`panel-body-${screenId}`);
             const layoutMode = String((panelZone && panelZone.layout_mode) || 'off');
             const panelState = normalizePanelPosFeed(panelZone);
             const liveQueue = Array.isArray(panelState.liveQueue) ? panelState.liveQueue : [];
             const manualCards = (panelZone && Array.isArray(panelZone.playlist)) ? panelZone.playlist : [];
-            if(panelSection){
-                if(sourceMode === 'pos_webhook'){
-                    panelSection.style.background = 'linear-gradient(180deg,#f8fbff 0%,#f3f8ff 100%)';
-                    panelSection.style.border = '1px solid #d8e4fb';
-                } else {
-                    panelSection.style.background = 'linear-gradient(180deg,#fcfcfd 0%,#f8fafc 100%)';
-                    panelSection.style.border = '1px solid #e5e7eb';
-                }
-                panelSection.style.borderRadius = '14px';
-                panelSection.style.padding = '12px';
-            }
             const overlayPercentLabel = `${overlayPercent}%`;
             const layoutLabel = layoutMode === 'off'
                 ? (sourceMode === 'pos_webhook' ? 'No overlay' : 'Off')
@@ -13467,12 +13407,22 @@ allowfullscreen></iframe></div>`;
                             : layoutMode === 'full-screen'
                                 ? (sourceMode === 'pos_webhook' ? 'Full-screen fallback' : 'Full screen 100%')
                                 : layoutMode;
-            const summaryText = sourceMode === 'pos_webhook'
-                ? `${panelState.lastEventResult === 'accepted' || (panelState.eventCount > 0 && liveQueue.length > 0) ? 'Connected' : 'Waiting'} | ${panelState.eventCount} event${panelState.eventCount === 1 ? '' : 's'} | ${liveQueue.length}/${panelState.maxItems} queued | ${layoutLabel}`
-                : `${manualCards.length} info card${manualCards.length === 1 ? '' : 's'} | ${layoutLabel}`;
             if(summary){
-                summary.style.display = sectionCollapsed ? '' : 'none';
-                summary.textContent = summaryText;
+                summary.style.display = sectionCollapsed ? 'block' : 'none';
+                if(sourceMode === 'pos_webhook'){
+                    const statusValue = (panelState.lastEventResult === 'accepted' || (panelState.eventCount > 0 && liveQueue.length > 0)) ? 'Connected' : 'Waiting';
+                    summary.innerHTML = buildIpStatsGrid([
+                        { icon: IP_ICON_CLOCK, color:'#2563eb', label:'Status', value: statusValue },
+                        { icon: IP_ICON_CALENDAR, color:'#16a34a', label:'Events', value: panelState.eventCount },
+                        { icon: IP_ICON_LIST, color:'#7c3aed', label:'Queued', value: `${liveQueue.length}/${panelState.maxItems}` },
+                        { icon: IP_ICON_MONITOR, color:'#2563eb', label:'Position', value: layoutLabel }
+                    ]);
+                } else {
+                    summary.innerHTML = buildIpStatsGrid([
+                        { icon: IP_ICON_CALENDAR, color:'#16a34a', label:'Cards', value: manualCards.length },
+                        { icon: IP_ICON_MONITOR, color:'#2563eb', label:'Position', value: layoutLabel }
+                    ]);
+                }
             }
             if(bodyWrap){
                 bodyWrap.style.display = sectionCollapsed ? 'none' : '';
@@ -16638,24 +16588,19 @@ allowfullscreen></iframe></div>`;
                                                     <div class="rp-schedule-row rp-schedule-effect">
                                                         <span class="rp-subtitle">Transition</span>
                                                         <div class="effect-row rp-transition-picker" id="rp-effect-picker">
-                                                            <button type="button" class="effect-btn rp-transition-card active" title="No transition" data-effect="" onclick="setRpScheduleEffect('', this)"><span class="rp-transition-icon rp-transition-icon--none" aria-hidden="true"></span><span>None</span></button>
-                                                            <button type="button" class="effect-btn rp-transition-card" title="Fade" data-effect="fade" onclick="setRpScheduleEffect('fade', this)"><span class="rp-transition-icon rp-transition-icon--fade" aria-hidden="true"><i></i><i></i></span><span>Fade</span></button>
-                                                            <button type="button" class="effect-btn rp-transition-card" title="Slide left" data-effect="slide-l" onclick="setRpScheduleEffect('slide-l', this)"><span class="rp-transition-icon rp-transition-icon--slide" aria-hidden="true"></span><span>Slide</span></button>
-                                                            <button type="button" class="effect-btn rp-transition-card" title="Zoom in" data-effect="zoom-in" onclick="setRpScheduleEffect('zoom-in', this)"><span class="rp-transition-icon rp-transition-icon--zoom" aria-hidden="true">↗ ↙</span><span>Zoom</span></button>
-                                                            <details class="rp-transition-more">
-                                                                <summary>More transitions</summary>
-                                                                <div class="rp-transition-more__menu">
-                                                                    ${[
-                                                                        ['Cut','cut'],
-                                                                        ['Dissolve','dissolve'],
-                                                                        ['Slide right','slide-r'],
-                                                                        ['Slide up','slide-up'],
-                                                                        ['Slide down','slide-down'],
-                                                                        ['Zoom out','zoom-out'],
-                                                                        ['Wipe','wipe-lr']
-                                                                    ].map(([label,val])=>`<button type="button" class="effect-btn rp-transition-more__option" title="${label}" data-effect="${val}" onclick="setRpScheduleEffect('${val}', this)">${label}</button>`).join('')}
-                                                                </div>
-                                                            </details>
+                                                            ${[
+                                                                ['', 'None', 'No transition', '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="5.5" y1="18.5" x2="18.5" y2="5.5"/></svg>'],
+                                                                ['cut', 'Cut', 'Cut', '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.6"/><circle cx="6" cy="18" r="2.6"/><line x1="20" y1="4" x2="8.2" y2="15.8"/><line x1="14.5" y1="14.5" x2="20" y2="20"/><line x1="8.2" y1="8.2" x2="12" y2="12"/></svg>'],
+                                                                ['fade', 'Fade', 'Fade', '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="11" height="12" rx="2" opacity=".45"/><rect x="10" y="6" width="11" height="12" rx="2"/></svg>'],
+                                                                ['dissolve', 'Dissolve', 'Dissolve', '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" stroke="none"><circle cx="6" cy="6" r="1.6"/><circle cx="12" cy="6" r="1.6" opacity=".65"/><circle cx="18" cy="6" r="1.6" opacity=".3"/><circle cx="6" cy="12" r="1.6" opacity=".65"/><circle cx="12" cy="12" r="1.6" opacity=".3"/><circle cx="18" cy="12" r="1.6" opacity=".15"/><circle cx="6" cy="18" r="1.6" opacity=".3"/><circle cx="12" cy="18" r="1.6" opacity=".15"/></svg>'],
+                                                                ['slide-l', 'Slide', 'Slide left', '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="20" y1="12" x2="6" y2="12"/><polyline points="12 6 6 12 12 18"/></svg>'],
+                                                                ['slide-r', 'Slide right', 'Slide right', '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="12" x2="18" y2="12"/><polyline points="12 6 18 12 12 18"/></svg>'],
+                                                                ['slide-up', 'Slide up', 'Slide up', '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="6"/><polyline points="6 12 12 6 18 12"/></svg>'],
+                                                                ['slide-down', 'Slide down', 'Slide down', '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="18"/><polyline points="6 12 12 18 18 12"/></svg>'],
+                                                                ['zoom-in', 'Zoom', 'Zoom in', '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>'],
+                                                                ['zoom-out', 'Zoom out', 'Zoom out', '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 3 9 9 3 9"/><polyline points="15 21 15 15 21 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>'],
+                                                                ['wipe-lr', 'Wipe', 'Wipe', '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="4" x2="21" y2="20"/></svg>']
+                                                            ].map(([val, label, title, icon]) => `<button type="button" class="effect-btn rp-transition-card${val === '' ? ' active' : ''}" title="${title}" data-effect="${val}" onclick="setRpScheduleEffect('${val}', this)"><span class="rp-transition-icon" aria-hidden="true">${icon}</span><span>${label}</span></button>`).join('')}
                                                         </div>
                                                     </div>
                                                     <div class="rp-schedule-hint" id="rp-schedule-summary-box">Schedule will use the current duration and any repeat/date settings you choose here.</div>

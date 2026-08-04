@@ -4104,6 +4104,30 @@ def api_auth_providers():
         'google_ios_client_id': os.environ.get('GOOGLE_IOS_CLIENT_ID') or '',
     })
 
+def _build_first_master_store_config(store_address: str = '') -> dict:
+    """Return the canonical first-store setup for a new user."""
+    master_id = '1000'
+    store_entry = {'id': master_id, 'name': 'My First Store'}
+    if store_address:
+        store_entry['address'] = store_address
+    return {
+        'stores': [store_entry],
+        'master_store_id': master_id,
+        'screens': {
+            master_id: {
+                f'{master_id}_screen1': {
+                    'file': None,
+                    'vertical': False,
+                    'horizontal': True,
+                    'rotation': 0,
+                    'protected': False,
+                    'playlist': [],
+                    'fresh': True,
+                }
+            }
+        },
+    }
+
 
 def _create_local_signup_account(username: str, password: str, full_name: str = '') -> dict:
     db = get_db()
@@ -4134,13 +4158,7 @@ def _create_local_signup_account(username: str, password: str, full_name: str = 
         safe_key = username.lower().replace('@', '_at_')
         safe_key = ''.join(c for c in safe_key if (c.isalnum() or c in '._-'))
         user_config_path = os.path.join(BASE_DIR, f'store_config__{safe_key}.json')
-        default_store_id = '1000'
-        default_store_name = 'My First Store'
-        config = {
-            'stores': [{'id': default_store_id, 'name': default_store_name}],
-            'master_store_id': default_store_id,
-            'screens': {default_store_id: {}},
-        }
+        config = _build_first_master_store_config()
         with open(user_config_path, 'w') as f:
             json.dump(config, f, indent=2)
     except Exception as store_err:
@@ -8364,6 +8382,25 @@ def _safe_user_key() -> Optional[str]:
         # Accept multiple common identity keys: email, name, username, login
         raw = (u.get('email') or u.get('name') or u.get('username') or u.get('login') or '').strip().lower()
         if not raw:
+            uid = u.get('id')
+            try:
+                if uid is not None and str(uid).strip():
+                    db = get_db()
+                    row = db.execute('SELECT username FROM users WHERE id = ?', (int(uid),)).fetchone()
+                    raw = (row['username'] or '').strip().lower() if row and row['username'] else ''
+                    if raw:
+                        try:
+                            user_dict = dict(u)
+                            if not user_dict.get('name'):
+                                user_dict['name'] = raw
+                            if not user_dict.get('email'):
+                                user_dict['email'] = raw
+                            session['user'] = user_dict
+                        except Exception:
+                            pass
+            except Exception:
+                raw = ''
+        if not raw:
             return None
         # replace '@' to keep email uniqueness without special char
         raw = raw.replace('@', '_at_')
@@ -12557,23 +12594,17 @@ def _config_path_for_user_safe_key(safe_key: str) -> str:
 
 def load_store_config_for_user_safe_key(safe_key: str):
     """Load another user's config by safe key (used for code-based listing).
-    SECURITY: Each user starts with EMPTY config - NO cross-user data inheritance.
+    SECURITY: Each user gets their own isolated config file.
+    The default isolated config is the canonical master-store setup.
     """
     path = _config_path_for_user_safe_key(safe_key)
     lock_path = path + '.lock'
     
     if not os.path.exists(path):
-        # SECURITY FIX: Each user starts with EMPTY config
-        # DO NOT seed from global config - that contains OTHER users' stores/screens!
-        logging.info(f'🔒 Creating new empty config for user: {safe_key}')
-        cfg = get_default_config(user_scoped=True)
-        
-        # Ensure empty stores and screens
-        cfg['stores'] = []
-        cfg['screens'] = {}
-        cfg['master_store_id'] = None
-        
-        logging.info(f'✓ New user {safe_key} starts with empty config (no cross-user data)')
+        # Create a user-isolated default config; never inherit from the global legacy file.
+        logging.info(f'🔒 Creating default master-store config for user: {safe_key}')
+        cfg = _build_first_master_store_config()
+        logging.info(f'✓ New user {safe_key} starts with default master store {cfg.get("master_store_id")}')
         # Save to user-scoped file with locking
         save_store_config_for_user_safe_key(safe_key, cfg)
         return cfg
@@ -12612,6 +12643,14 @@ def load_store_config_for_user_safe_key(safe_key: str):
         except Exception:
             cfg = get_default_config(user_scoped=True)
     
+    # Auto-heal any older empty user configs into the default master-store setup.
+    stores = cfg.get('stores') if isinstance(cfg.get('stores'), list) else []
+    screens = cfg.get('screens') if isinstance(cfg.get('screens'), dict) else {}
+    if not stores and not screens:
+        cfg = _build_first_master_store_config()
+        save_store_config_for_user_safe_key(safe_key, cfg)
+        return cfg
+
     # backfill master_store_id
     if 'master_store_id' not in cfg and cfg.get('stores'):
         cfg['master_store_id'] = cfg['stores'][0]['id']
@@ -18538,6 +18577,19 @@ def delete_screen():
         
         print(f"DEBUG DELETE_SCREEN: Found screen {actual_id} in store {store_id}")
         print(f"DEBUG DELETE_SCREEN: Screen data: {store_screens[actual_id]}")
+
+        # The first screen in the master store is the control screen for all
+        # other stores and must always remain available.
+        master_store_id = str(config.get('master_store_id') or '')
+        is_master_screen = (
+            str(store_id) == master_store_id
+            and str(actual_id) in {'screen1', f'{store_id}_screen1'}
+        )
+        if is_master_screen:
+            return jsonify({
+                'success': False,
+                'error': 'Master Screen 1 cannot be deleted. It controls Apply to ALL stores.'
+            }), 409
         
         # Delete associated file if exists
         screen_data = config['screens'][store_id][actual_id]
@@ -18655,15 +18707,37 @@ def delete_screen():
 def add_store():
     """Add a new store starting with no screens"""
     try:
-        data = request.get_json()
-        store_id = data.get('store_id')
-        store_name = data.get('store_name')
+        data = request.get_json() or {}
+        store_id = str(data.get('store_id') or '').strip()
+        store_name = str(data.get('store_name') or '').strip()
         store_address = str(data.get('address') or '').strip()
         
         if not store_id or not store_name:
             return jsonify({'error': 'Store ID and Store Name are required'}), 400
-            
-        config = load_store_config()
+
+        ukey = _safe_user_key()
+        config = load_store_config_for_user_safe_key(ukey) if ukey else load_store_config()
+
+        if not isinstance(config.get('stores'), list):
+            config['stores'] = []
+        if not isinstance(config.get('screens'), dict):
+            config['screens'] = {}
+
+        if not config['stores']:
+            config = _build_first_master_store_config(store_address=store_address)
+            store_id = '1000'
+            store_name = 'My First Store'
+            if ukey:
+                save_store_config_for_user_safe_key(ukey, config)
+            else:
+                save_store_config(config)
+            return jsonify({
+                'success': True,
+                'store_id': store_id,
+                'store_name': store_name,
+                'address': store_address,
+                'message': f'Store {store_id} - {store_name} created as your master store'
+            })
         
         # Check if store already exists
         for store in config['stores']:
@@ -18681,8 +18755,11 @@ def add_store():
             config['screens'] = {}
         if store_id not in config['screens']:
             config['screens'][store_id] = {}
-        
-        save_store_config(config)
+
+        if ukey:
+            save_store_config_for_user_safe_key(ukey, config)
+        else:
+            save_store_config(config)
         
         return jsonify({
             'success': True,
@@ -18709,11 +18786,27 @@ def add_stores_bulk():
         if not isinstance(stores_in, list) or not stores_in:
             return jsonify({'error': 'stores list required'}), 400
 
-        config = load_store_config()
-        # Build a fast lookup of existing ids
-        existing_ids = {str(s.get('id')) for s in (config.get('stores') or []) if s and s.get('id')}
+        ukey = _safe_user_key()
+        config = load_store_config_for_user_safe_key(ukey) if ukey else load_store_config()
+        if not isinstance(config.get('stores'), list):
+            config['stores'] = []
+        if not isinstance(config.get('screens'), dict):
+            config['screens'] = {}
 
         added = []
+        if not config['stores']:
+            first_address = ''
+            if stores_in and isinstance(stores_in[0], dict):
+                first_address = str((stores_in[0].get('address') or '')).strip()
+            config = _build_first_master_store_config(store_address=first_address)
+            added.append({
+                'id': '1000',
+                'name': 'My First Store',
+                'address': first_address,
+            })
+
+        # Build a fast lookup of existing ids
+        existing_ids = {str(s.get('id')) for s in (config.get('stores') or []) if s and s.get('id')}
         skipped = []
         seen_new = set()
         for entry in stores_in:
@@ -18744,7 +18837,10 @@ def add_stores_bulk():
             added.append({'id': sid, 'name': sname, 'address': saddr})
 
         if added:
-            save_store_config(config)
+            if ukey:
+                save_store_config_for_user_safe_key(ukey, config)
+            else:
+                save_store_config(config)
 
         msg = f"Added {len(added)} store(s)"
         if skipped:

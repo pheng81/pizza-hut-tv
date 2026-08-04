@@ -117,7 +117,8 @@ class _LoginScreenState extends State<LoginScreen>
         _googleEnabled = providers['google'] == true;
         _microsoftEnabled = providers['microsoft'] == true;
         _appleEnabled = providers['apple'] == true;
-        _googleServerClientId = (providers['google_client_id'] ?? '').toString();
+        _googleServerClientId =
+            (providers['google_client_id'] ?? '').toString();
         _googleAndroidClientId =
             (providers['google_android_client_id'] ?? '').toString();
         _googleIosClientId =
@@ -311,14 +312,10 @@ class _LoginScreenState extends State<LoginScreen>
       final idToken = (auth.idToken ?? '').trim();
       final serverAuthCode = (account.serverAuthCode ?? '').trim();
       if (idToken.isEmpty && serverAuthCode.isEmpty) {
-        if (!mounted) {
-          return;
-        }
-        setState(() {
-          _socialLoading = false;
-          _error =
-              'Native Google token not returned. Please check Google Play Services and the Google OAuth app configuration for this device.';
-        });
+        // Some emulators can open Google sign-in but cannot issue a native
+        // token until a Google account and matching OAuth client are present.
+        // Keep the user moving with the browser OAuth flow instead.
+        await _startSocialLogin('google');
         return;
       }
 
@@ -905,7 +902,8 @@ class _LoginScreenState extends State<LoginScreen>
                                 ],
                               ),
                               child: Padding(
-                                padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
+                                padding:
+                                    const EdgeInsets.fromLTRB(18, 20, 18, 18),
                                 child: Form(
                                   key: _formKey,
                                   child: Column(
@@ -1147,7 +1145,8 @@ class _LoginScreenState extends State<LoginScreen>
                                                       ? _signup
                                                       : _login),
                                           style: FilledButton.styleFrom(
-                                            minimumSize: const Size.fromHeight(54),
+                                            minimumSize:
+                                                const Size.fromHeight(54),
                                             shape: RoundedRectangleBorder(
                                               borderRadius:
                                                   BorderRadius.circular(18),

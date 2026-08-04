@@ -492,6 +492,24 @@ class ApiClient {
     }
   }
 
+  Future<void> updateStoreAddress({
+    required String storeId,
+    required String address,
+  }) async {
+    final response = await _dio.post(
+      '/update_store_address',
+      data: {
+        'store_id': storeId.trim(),
+        'address': address.trim(),
+      },
+    );
+    final data = _asMap(response.data);
+    if (data['success'] != true) {
+      throw Exception(
+          (data['error'] ?? 'Unable to save store address').toString());
+    }
+  }
+
   /// Address autocomplete suggestions for a partial query.
   ///
   /// Uses the same server-side Google lookup as the web dashboard

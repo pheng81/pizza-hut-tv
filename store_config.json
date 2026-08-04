@@ -7,6 +7,11 @@
     {
       "id": "1713",
       "name": "Store 1713"
+    },
+    {
+      "id": "5555",
+      "name": "Should Be Ignored",
+      "address": "Test Addr"
     }
   ],
   "screens": {
@@ -186,7 +191,8 @@
           "live_queue": []
         }
       }
-    }
+    },
+    "5555": {}
   },
   "panel_pos_shared_feeds": {
     "stores": {
@@ -231,5 +237,6 @@
       "max_items": 5,
       "store_selector_path": "store.id"
     }
-  }
+  },
+  "master_store_id": "1712"
 }
