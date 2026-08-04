@@ -43,6 +43,7 @@ import java.util.Calendar
 import java.text.SimpleDateFormat
 import java.util.Locale
 import com.everydayadvertise.tv.api.HeartbeatReq
+import org.json.JSONArray
 import org.json.JSONObject
 import android.graphics.drawable.GradientDrawable
 import android.animation.ObjectAnimator
@@ -53,7 +54,14 @@ data class PanelAppearanceConfig(
     val backgroundOpacity: Float = 0.72f,
     val contentAlign: String = "center",
     val bodyRows: Int = 4,
-    val shadowEnabled: Boolean = false
+    val shadowEnabled: Boolean = false,
+    val posDisplayStyle: String = "single_card", // "single_card" | "order_board"
+    val boardTextColor: String = "#17172a",
+    val boardReadyColor: String = "#32d296",
+    val boardPreparingTitle: String = "Being prepared",
+    val boardReadyTitle: String = "Ready for pickup",
+    val boardPreparingStatuses: List<String> = listOf("preparing", "being_prepared", "accepted"),
+    val boardReadyStatuses: List<String> = listOf("ready", "serving")
 )
 
 data class PanelActiveItemConfig(
@@ -61,12 +69,21 @@ data class PanelActiveItemConfig(
     val body: String = ""
 )
 
+data class PanelQueueItemConfig(
+    val orderNumber: String = "",
+    val externalId: String = "",
+    val customerName: String = "",
+    val status: String = ""
+)
+
 data class PanelZoneConfig(
     val enabled: Boolean = false,
     val layoutMode: String = "off",
     val overlayPercent: Int = 25,
+    val overlayStyle: String = "push", // "push" | "float"
     val appearance: PanelAppearanceConfig = PanelAppearanceConfig(),
-    val activeItem: PanelActiveItemConfig? = null
+    val activeItem: PanelActiveItemConfig? = null,
+    val liveQueue: List<PanelQueueItemConfig> = emptyList()
 )
 
 class TvDisplayActivity : AppCompatActivity() {
@@ -109,6 +126,13 @@ class TvDisplayActivity : AppCompatActivity() {
     var panelTitle: TextView? = null
     var panelBody: TextView? = null
     var panelMeta: TextView? = null
+    // Order-board (two-column ticket) views, shown instead of panelContent when
+    // appearance.posDisplayStyle == "order_board".
+    var panelBoard: LinearLayout? = null
+    var panelBoardPreparingHeading: TextView? = null
+    var panelBoardPreparingList: LinearLayout? = null
+    var panelBoardReadyHeading: TextView? = null
+    var panelBoardReadyList: LinearLayout? = null
     var panelZoneState: PanelZoneConfig = PanelZoneConfig()
 
     // Helper to pre-rotate and scale bitmap to fill screen (like Pi client)
@@ -372,7 +396,40 @@ class TvDisplayActivity : AppCompatActivity() {
         content.addView(meta, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
             topMargin = dp(10)
         })
+
+        // Order-board: two columns ("Being prepared" / "Ready for pickup"), each a heading
+        // plus a vertical list of ticket chips that gets rebuilt on every render.
+        fun buildBoardColumn(): Triple<LinearLayout, TextView, LinearLayout> {
+            val column = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+            }
+            val heading = TextView(this).apply {
+                textSize = 20f * panelScale
+                typeface = Typeface.DEFAULT_BOLD
+            }
+            val list = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+            }
+            column.addView(heading, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+            column.addView(list, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = dp(14)
+            })
+            return Triple(column, heading, list)
+        }
+        val (preparingColumn, preparingHeading, preparingList) = buildBoardColumn()
+        val (readyColumn, readyHeading, readyList) = buildBoardColumn()
+        val board = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            visibility = View.GONE
+            layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
+        }
+        board.addView(preparingColumn, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        board.addView(readyColumn, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+            marginStart = dp(20)
+        })
+
         container.addView(content)
+        container.addView(board)
         root.addView(container, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         panelContainer = container
         panelContent = content
@@ -381,6 +438,11 @@ class TvDisplayActivity : AppCompatActivity() {
         panelTitle = title
         panelBody = body
         panelMeta = meta
+        panelBoard = board
+        panelBoardPreparingHeading = preparingHeading
+        panelBoardPreparingList = preparingList
+        panelBoardReadyHeading = readyHeading
+        panelBoardReadyList = readyList
     }
 
     fun bringUiOverlaysToFront() {
@@ -396,32 +458,129 @@ class TvDisplayActivity : AppCompatActivity() {
         ensurePanelOverlayViews()
         val state = panelZoneState
         val activeItem = state.activeItem
+        val isBoard = state.appearance.posDisplayStyle == "order_board"
         val currentMediaType = currentItem?.mediaType?.lowercase(Locale.US) ?: ""
         val currentFile = currentItem?.file?.lowercase(Locale.US) ?: ""
         val currentIsLivePos = currentMediaType == "live_pos" || currentFile.startsWith("livepos:")
-        if (!state.enabled || activeItem == null || state.layoutMode == "off" || currentItem?.syncRef != null || (state.layoutMode == "full-screen" && currentItem != null && !currentIsLivePos)) {
+        if (!state.enabled || (activeItem == null && !isBoard) || state.layoutMode == "off" || currentItem?.syncRef != null || (state.layoutMode == "full-screen" && currentItem != null && !currentIsLivePos)) {
             hidePanelOverlay()
             return false
         }
         val container = panelContainer ?: return false
-        val bodyView = panelBody ?: return false
-        val titleView = panelTitle ?: return false
-        val metaView = panelMeta ?: return false
 
         applyPanelLayout(state.layoutMode, state.overlayPercent)
         applyPanelAppearance(state.appearance, state.layoutMode)
 
-        titleView.text = formatPanelDisplayText(if (activeItem.title.isNotBlank()) activeItem.title else "Info", 18)
-        bodyView.text = formatPanelDisplayText(activeItem.body, 14)
-        bodyView.maxLines = state.appearance.bodyRows
-        metaView.text = ""
+        if (isBoard) {
+            val content = panelContent ?: return false
+            val board = panelBoard ?: return false
+            content.visibility = View.GONE
+            board.visibility = View.VISIBLE
+            populatePanelOrderBoard(state)
+        } else {
+            val content = panelContent ?: return false
+            val board = panelBoard
+            board?.visibility = View.GONE
+            content.visibility = View.VISIBLE
+            val bodyView = panelBody ?: return false
+            val titleView = panelTitle ?: return false
+            val metaView = panelMeta ?: return false
+            titleView.text = formatPanelDisplayText(if ((activeItem?.title ?: "").isNotBlank()) activeItem!!.title else "Info", 18)
+            bodyView.text = formatPanelDisplayText(activeItem?.body ?: "", 14)
+            bodyView.maxLines = state.appearance.bodyRows
+            metaView.text = ""
+        }
         container.visibility = View.VISIBLE
         bringUiOverlaysToFront()
         return true
     }
 
+    private fun panelTicketChip(ticket: String, backgroundColor: Int?, textColor: Int, textSizeSp: Float): TextView {
+        return TextView(this).apply {
+            text = ticket
+            textSize = textSizeSp
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(textColor)
+            setPadding(dp(12), dp(6), dp(12), dp(6))
+            if (backgroundColor != null) {
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = dp(8).toFloat()
+                    setColor(backgroundColor)
+                }
+            }
+        }
+    }
+
+    private fun populatePanelOrderBoard(state: PanelZoneConfig) {
+        val preparingHeading = panelBoardPreparingHeading ?: return
+        val preparingList = panelBoardPreparingList ?: return
+        val readyHeading = panelBoardReadyHeading ?: return
+        val readyList = panelBoardReadyList ?: return
+        val appearance = state.appearance
+
+        val readyStatuses = appearance.boardReadyStatuses.toSet()
+        val preparing = mutableListOf<String>()
+        val ready = mutableListOf<String>()
+        for (item in state.liveQueue) {
+            val ticket = panelOrderNumber(item)
+            if (ticket.isEmpty()) continue
+            val status = item.status.trim().lowercase(Locale.US).replace(Regex("\\s+"), "_")
+            if (readyStatuses.contains(status)) {
+                ready.add(ticket)
+            } else {
+                preparing.add(ticket)
+            }
+        }
+        ready.reverse()
+
+        val textColor = parseColorSafe(appearance.boardTextColor, Color.parseColor("#17172a"))
+        val readyColor = parseColorSafe(appearance.boardReadyColor, Color.parseColor("#32d296"))
+        val mutedColor = withAlpha(textColor, 150)
+        val panelScale = (resources.displayMetrics.widthPixels / 1920f).coerceIn(1.0f, 1.45f)
+
+        preparingHeading.text = appearance.boardPreparingTitle
+        preparingHeading.setTextColor(textColor)
+        readyHeading.text = appearance.boardReadyTitle
+        readyHeading.setTextColor(textColor)
+
+        preparingList.removeAllViews()
+        if (preparing.isEmpty()) {
+            preparingList.addView(TextView(this).apply {
+                text = "No orders preparing"
+                textSize = 13f * panelScale
+                setTextColor(mutedColor)
+            })
+        } else {
+            for (ticket in preparing) {
+                preparingList.addView(
+                    panelTicketChip(ticket, null, textColor, 17f * panelScale),
+                    LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(6) }
+                )
+            }
+        }
+
+        readyList.removeAllViews()
+        if (ready.isEmpty()) {
+            readyList.addView(TextView(this).apply {
+                text = "Waiting for ready orders"
+                textSize = 13f * panelScale
+                setTextColor(mutedColor)
+            })
+        } else {
+            ready.forEachIndexed { index, ticket ->
+                val isTop = index == 0
+                readyList.addView(
+                    panelTicketChip(ticket, if (isTop) readyColor else null, if (isTop) Color.WHITE else readyColor, (if (isTop) 19f else 15f) * panelScale),
+                    LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(6) }
+                )
+            }
+        }
+    }
+
     fun hidePanelOverlay() {
         panelContainer?.visibility = View.GONE
+        panelBoard?.visibility = View.GONE
         applyMediaInsets("off", 25)
     }
 
@@ -438,10 +597,11 @@ class TvDisplayActivity : AppCompatActivity() {
             else -> FrameLayout.LayoutParams(panelWidth, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.END or Gravity.TOP)
         }
         container.layoutParams = params
-        applyMediaInsets(layoutMode, overlayPercent)
+        applyMediaInsets(layoutMode, overlayPercent, panelZoneState.overlayStyle)
     }
 
-    fun applyMediaInsets(layoutMode: String, overlayPercent: Int = panelZoneState.overlayPercent) {
+    fun applyMediaInsets(layoutMode: String, overlayPercent: Int = panelZoneState.overlayPercent, overlayStyle: String = panelZoneState.overlayStyle) {
+        val pushMedia = overlayStyle != "float"
         val metrics = resources.displayMetrics
         val ratio = overlayPercent.coerceIn(10, 60) / 100f
         val panelWidth = (metrics.widthPixels * ratio).toInt()
@@ -452,10 +612,12 @@ class TvDisplayActivity : AppCompatActivity() {
                     FrameLayout.LayoutParams.MATCH_PARENT,
                     FrameLayout.LayoutParams.MATCH_PARENT
                 )
-                when (layoutMode) {
-                    "split-left-25" -> params.leftMargin = panelWidth
-                    "split-bottom-25" -> params.bottomMargin = panelHeight
-                    "split-right-25" -> params.rightMargin = panelWidth
+                if (pushMedia) {
+                    when (layoutMode) {
+                        "split-left-25" -> params.leftMargin = panelWidth
+                        "split-bottom-25" -> params.bottomMargin = panelHeight
+                        "split-right-25" -> params.rightMargin = panelWidth
+                    }
                 }
                 view.layoutParams = params
             }
@@ -604,17 +766,41 @@ class TvDisplayActivity : AppCompatActivity() {
         }
     }
 
+    private fun panelStatusList(raw: Any?, fallback: List<String>): List<String> {
+        val out = mutableListOf<String>()
+        val items: List<String> = when (raw) {
+            is JSONArray -> (0 until raw.length()).mapNotNull { raw.optString(it, null) }
+            is String -> raw.split(",")
+            else -> emptyList()
+        }
+        for (item in items) {
+            val text = item.trim().lowercase(Locale.US).replace(Regex("\\s+"), "_")
+            if (text.isNotEmpty() && !out.contains(text)) out.add(text)
+        }
+        return if (out.isEmpty()) fallback else out
+    }
+
     fun parsePanelZoneConfig(panelObj: JSONObject?): PanelZoneConfig {
         if (panelObj == null) return PanelZoneConfig()
         val enabled = panelObj.optBoolean("enabled", false)
         val layoutMode = panelObj.optString("layout_mode", "off")
         val appearanceObj = panelObj.optJSONObject("appearance")
+        val posDisplayStyle = (appearanceObj?.optString("pos_display_style", "single_card") ?: "single_card").let {
+            if (it == "order_board") it else "single_card"
+        }
         val appearance = PanelAppearanceConfig(
             backgroundColor = appearanceObj?.optString("background_color", "#201206") ?: "#201206",
             backgroundOpacity = normalizePanelOpacity(appearanceObj?.opt("background_opacity")),
             contentAlign = appearanceObj?.optString("content_align", "center") ?: "center",
             bodyRows = (appearanceObj?.optInt("body_rows", 4) ?: 4).coerceIn(1, 6),
-            shadowEnabled = normalizePanelBool(appearanceObj?.opt("shadow_enabled"), false)
+            shadowEnabled = normalizePanelBool(appearanceObj?.opt("shadow_enabled"), false),
+            posDisplayStyle = posDisplayStyle,
+            boardTextColor = appearanceObj?.optString("board_text_color", "#17172a") ?: "#17172a",
+            boardReadyColor = appearanceObj?.optString("board_ready_color", "#32d296") ?: "#32d296",
+            boardPreparingTitle = appearanceObj?.optString("board_preparing_title", "Being prepared") ?: "Being prepared",
+            boardReadyTitle = appearanceObj?.optString("board_ready_title", "Ready for pickup") ?: "Ready for pickup",
+            boardPreparingStatuses = panelStatusList(appearanceObj?.opt("board_preparing_statuses"), listOf("preparing", "being_prepared", "accepted")),
+            boardReadyStatuses = panelStatusList(appearanceObj?.opt("board_ready_statuses"), listOf("ready", "serving"))
         )
         val activeObj = panelObj.optJSONObject("active_item")
         val activeItem = if (activeObj != null) {
@@ -625,13 +811,47 @@ class TvDisplayActivity : AppCompatActivity() {
         } else {
             null
         }
+        val overlayStyleRaw = panelObj.optString("overlay_style", "push")
+        val overlayStyle = if (overlayStyleRaw == "float") "float" else "push"
+        val queueArray = panelObj.optJSONArray("live_queue")
+        val liveQueue = if (queueArray != null) {
+            (0 until queueArray.length()).mapNotNull { index ->
+                val item = queueArray.optJSONObject(index) ?: return@mapNotNull null
+                PanelQueueItemConfig(
+                    orderNumber = item.optString("order_number", item.optString("orderNumber", "")),
+                    externalId = item.optString("external_id", ""),
+                    customerName = item.optString("customer_name", item.optString("customerName", "")),
+                    status = item.optString("status", "")
+                )
+            }
+        } else {
+            emptyList()
+        }
         return PanelZoneConfig(
             enabled = enabled && layoutMode != "off",
             layoutMode = layoutMode,
             overlayPercent = (panelObj.optInt("overlay_percent", 25)).coerceIn(10, 60),
+            overlayStyle = overlayStyle,
             appearance = appearance,
-            activeItem = activeItem
+            activeItem = activeItem,
+            liveQueue = liveQueue
         )
+    }
+
+    private fun isUglyPanelTicketId(value: String): Boolean {
+        val text = value.trim()
+        if (text.isEmpty()) return true
+        if (text.matches(Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"))) return true
+        if (text.length > 24 && text.matches(Regex("^[0-9a-fA-F-]+$"))) return true
+        return false
+    }
+
+    private fun panelOrderNumber(item: PanelQueueItemConfig): String {
+        if (item.orderNumber.isNotBlank()) return item.orderNumber.trim()
+        val external = item.externalId.trim()
+        if (external.isNotEmpty() && external.length <= 18 && !isUglyPanelTicketId(external)) return external
+        val customer = item.customerName.trim()
+        return if (customer.isNotEmpty() && customer.length <= 24) customer else ""
     }
 
     // Quick reveal: show a black overlay and fade it out rapidly to hide visual pops between items.

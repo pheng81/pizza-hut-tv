@@ -2653,6 +2653,11 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet>
     'full-screen': 'Full screen 100%',
   };
 
+  static const Map<String, String> _panelOverlayStyleLabels = {
+    'push': 'Push media',
+    'float': 'Float over media',
+  };
+
   static const Map<String, String> _panelSourceLabels = {
     'manual': 'Manual cards',
     'pos_webhook': 'Live POS',
@@ -2753,6 +2758,7 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet>
     return {
       'enabled': zone['enabled'] == true,
       'layout_mode': (zone['layout_mode'] ?? 'off').toString().trim(),
+      'overlay_style': (zone['overlay_style'] ?? 'push').toString().trim(),
       'source_mode': (zone['source_mode'] ?? 'manual').toString().trim(),
       'feed_scope': (zone['feed_scope'] ?? 'screen').toString().trim(),
       'playlist': zone['playlist'] is List
@@ -2935,6 +2941,7 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet>
   Future<void> _updatePanelZone({
     String? layoutMode,
     String? sourceMode,
+    String? overlayStyle,
   }) async {
     setState(() {
       _saving = true;
@@ -2946,6 +2953,7 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet>
         screenId: widget.screenId,
         layoutMode: layoutMode,
         sourceMode: sourceMode,
+        overlayStyle: overlayStyle,
       );
       if (!mounted) {
         return;
@@ -2962,6 +2970,10 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet>
           _message = layoutMode == 'off'
               ? 'Info panel turned off.'
               : 'Info panel layout updated.';
+        } else if (overlayStyle != null) {
+          _message = overlayStyle == 'float'
+              ? 'Overlay now floats over media.'
+              : 'Overlay now pushes media aside.';
         }
       });
     } catch (e) {
@@ -4905,6 +4917,7 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet>
     final panelZone = _normalizedPanelZone(_screenPanelZone);
     final sourceMode = (panelZone['source_mode'] ?? 'manual').toString();
     final layoutMode = (panelZone['layout_mode'] ?? 'off').toString();
+    final overlayStyle = (panelZone['overlay_style'] ?? 'push').toString();
     final enabled = panelZone['enabled'] == true;
     final items = _activePanelItems(panelZone);
     final posFeed = _asMap(panelZone['pos_feed']);
@@ -5030,6 +5043,18 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet>
                       }
                     },
                   ),
+                  if (layoutMode.startsWith('split-'))
+                    _buildPanelMenuButton(
+                      icon: Icons.layers_outlined,
+                      value: overlayStyle,
+                      options: _panelOverlayStyleLabels,
+                      enabled: !_saving,
+                      onSelected: (next) {
+                        if (next != overlayStyle) {
+                          _updatePanelZone(overlayStyle: next);
+                        }
+                      },
+                    ),
                   if (sourceMode != 'pos_webhook')
                     FilledButton.tonalIcon(
                       onPressed: _saving ? null : _openPanelCardEditor,

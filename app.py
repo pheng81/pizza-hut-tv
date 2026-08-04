@@ -7899,11 +7899,6 @@ def client_event():
         'item_id': item_id,
         'error': (str(error)[:500] if error else None)
     }
-    # Append to bounded events list
-    events = scr.setdefault('events', [])
-    events.append(ev)
-    if len(events) > 100:
-        del events[:-100]
     # Update last_item_status map using item_id when available, else by file key
     key = None
     if item_id:
@@ -9137,6 +9132,7 @@ def _panel_zone_defaults() -> dict:
         'enabled': False,
         'layout_mode': 'off',
         'overlay_percent': 25,
+        'overlay_style': 'push',
         'playlist': [],
         'rotation_meta': {'last_index': 0, 'last_ts': 0},
         'source_mode': 'manual',
@@ -9286,6 +9282,8 @@ def _normalize_panel_zone_state(panel_zone: Optional[dict]) -> dict:
         panel_zone['overlay_percent'] = max(10, min(60, int(panel_zone.get('overlay_percent') or defaults['overlay_percent'])))
     except Exception:
         panel_zone['overlay_percent'] = defaults['overlay_percent']
+    overlay_style = str(panel_zone.get('overlay_style') or defaults['overlay_style']).strip().lower()
+    panel_zone['overlay_style'] = overlay_style if overlay_style in {'push', 'float'} else defaults['overlay_style']
     panel_zone.setdefault('playlist', [])
     panel_zone.setdefault('rotation_meta', {'last_index': 0, 'last_ts': 0})
     source_mode = str(panel_zone.get('source_mode') or 'manual').strip().lower()
@@ -19892,6 +19890,7 @@ def get_playlist(store_id, screen_id):
         'enabled': False,
         'layout_mode': 'off',
         'overlay_percent': 25,
+        'overlay_style': 'push',
         'playlist': [],
         'active_item': None,
         'source_mode': 'manual',
@@ -19946,6 +19945,7 @@ def get_playlist(store_id, screen_id):
                 'enabled': panel_enabled,
                 'layout_mode': panel_layout_mode if panel_enabled else 'off',
                 'overlay_percent': max(10, min(60, int(panel_zone.get('overlay_percent') or 25))),
+                'overlay_style': str(panel_zone.get('overlay_style') or 'push').strip().lower() if str(panel_zone.get('overlay_style') or 'push').strip().lower() in {'push', 'float'} else 'push',
                 'playlist': panel_out,
                 'active_item': panel_active_item,
                 'source_mode': panel_source_mode,
@@ -22196,6 +22196,11 @@ def update_panel_zone(store_id, screen_id):
             panel_zone['overlay_percent'] = max(10, min(60, int(payload.get('overlay_percent') or 25)))
         except Exception:
             return jsonify({'success': False, 'error': 'invalid overlay percent'}), 400
+    if 'overlay_style' in payload:
+        overlay_style = str(payload.get('overlay_style') or 'push').strip().lower()
+        if overlay_style not in {'push', 'float'}:
+            return jsonify({'success': False, 'error': 'invalid overlay style'}), 400
+        panel_zone['overlay_style'] = overlay_style
     if 'source_mode' in payload:
         source_mode = str(payload.get('source_mode') or 'manual').strip().lower()
         if source_mode not in {'manual', 'pos_webhook'}:

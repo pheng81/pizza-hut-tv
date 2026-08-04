@@ -5,6 +5,7 @@ Full webplayer functionality with media playback and synchronization
 """
 
 import pygame
+import re
 import requests
 import json
 import time
@@ -20,7 +21,7 @@ import socketio
 import subprocess
 from datetime import datetime
 from typing import Dict, List, Any, Optional
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from urllib.parse import urljoin, urlparse
 import hashlib
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -254,6 +255,13 @@ class PanelAppearance:
     background_color: str = "#201206"
     content_align: str = "center"
     body_rows: int = 4
+    pos_display_style: str = "single_card"  # "single_card" | "order_board"
+    board_text_color: str = "#17172a"
+    board_ready_color: str = "#32d296"
+    board_preparing_title: str = "Being prepared"
+    board_ready_title: str = "Ready for pickup"
+    board_preparing_statuses: List[str] = field(default_factory=lambda: ["preparing", "being_prepared", "accepted"])
+    board_ready_statuses: List[str] = field(default_factory=lambda: ["ready", "serving"])
 
 
 @dataclass
@@ -266,8 +274,11 @@ class PanelActiveItem:
 class PanelZoneState:
     enabled: bool = False
     layout_mode: str = "off"
+    overlay_percent: int = 25
+    overlay_style: str = "push"  # "push" | "float" (Pi's media layer is always float-style; kept for parity/logging)
     appearance: PanelAppearance = None
     active_item: Optional[PanelActiveItem] = None
+    live_queue: List[Dict[str, Any]] = field(default_factory=list)
 
     def __post_init__(self):
         if self.appearance is None:
@@ -2204,6 +2215,19 @@ class CompleteWebplayerClient:
             body_rows = max(1, min(6, int(appearance_raw.get('body_rows') or 4)))
         except Exception:
             body_rows = 4
+        pos_display_style = str(appearance_raw.get('pos_display_style') or 'single_card').strip().lower()
+        if pos_display_style not in {'single_card', 'order_board'}:
+            pos_display_style = 'single_card'
+
+        def _status_list(value, fallback):
+            raw_list = value if isinstance(value, list) else str(value or '').split(',')
+            out = []
+            for item in raw_list:
+                text = str(item or '').strip().lower().replace(' ', '_')
+                if text and text not in out:
+                    out.append(text)
+            return out or list(fallback)
+
         active_raw = raw.get('active_item') if isinstance(raw.get('active_item'), dict) else None
         active_item = None
         if active_raw:
@@ -2212,22 +2236,62 @@ class CompleteWebplayerClient:
                 body=str(active_raw.get('body') or active_raw.get('text') or ''),
             )
         layout_mode = str(raw.get('layout_mode') or 'off').strip().lower()
+        try:
+            overlay_percent = max(10, min(60, int(raw.get('overlay_percent') or 25)))
+        except Exception:
+            overlay_percent = 25
+        overlay_style = str(raw.get('overlay_style') or 'push').strip().lower()
+        if overlay_style not in {'push', 'float'}:
+            overlay_style = 'push'
+        live_queue = raw.get('live_queue') if isinstance(raw.get('live_queue'), list) else []
+        live_queue = [dict(item) for item in live_queue if isinstance(item, dict)]
         return PanelZoneState(
             enabled=bool(raw.get('enabled')) and layout_mode != 'off',
             layout_mode=layout_mode,
+            overlay_percent=overlay_percent,
+            overlay_style=overlay_style,
             appearance=PanelAppearance(
                 background_color=self._normalize_panel_hex_color(appearance_raw.get('background_color'), '#201206'),
                 content_align=content_align,
                 body_rows=body_rows,
+                pos_display_style=pos_display_style,
+                board_text_color=self._normalize_panel_hex_color(appearance_raw.get('board_text_color'), '#17172a'),
+                board_ready_color=self._normalize_panel_hex_color(appearance_raw.get('board_ready_color'), '#32d296'),
+                board_preparing_title=str(appearance_raw.get('board_preparing_title') or 'Being prepared'),
+                board_ready_title=str(appearance_raw.get('board_ready_title') or 'Ready for pickup'),
+                board_preparing_statuses=_status_list(appearance_raw.get('board_preparing_statuses'), ['preparing', 'being_prepared', 'accepted']),
+                board_ready_statuses=_status_list(appearance_raw.get('board_ready_statuses'), ['ready', 'serving']),
             ),
             active_item=active_item,
+            live_queue=live_queue,
         )
+
+    def _panel_order_number(self, item: Dict[str, Any]) -> str:
+        direct = str((item or {}).get('order_number') or (item or {}).get('orderNumber') or '').strip()
+        if direct:
+            return direct
+        external = str((item or {}).get('external_id') or '').strip()
+        if external and len(external) <= 18 and not self._is_ugly_panel_ticket_id(external):
+            return external
+        customer = str((item or {}).get('customer_name') or (item or {}).get('customerName') or '').strip()
+        return customer if customer and len(customer) <= 24 else ''
+
+    def _is_ugly_panel_ticket_id(self, value: str) -> bool:
+        text = str(value or '').strip()
+        if not text:
+            return True
+        if re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', text, re.IGNORECASE):
+            return True
+        if len(text) > 24 and re.match(r'^[0-9a-f-]+$', text, re.IGNORECASE):
+            return True
+        return False
 
     def _should_draw_panel_zone(self) -> bool:
         zone = getattr(self, 'panel_zone_state', None)
         active_item = getattr(zone, 'active_item', None)
         current_item = getattr(self, 'current_panel_item', None)
-        if not zone or not zone.enabled or zone.layout_mode == 'off' or active_item is None:
+        is_board = bool(zone and zone.appearance and zone.appearance.pos_display_style == 'order_board')
+        if not zone or not zone.enabled or zone.layout_mode == 'off' or (active_item is None and not is_board):
             return False
         try:
             sync_ref = getattr(current_item, 'sync_ref', None) if current_item is not None else None
@@ -2305,12 +2369,13 @@ class CompleteWebplayerClient:
         chip_border = (15, 23, 42, 30) if is_light else (255, 233, 196, 46)
         border_color = (15, 23, 42, 36) if is_light else (255, 214, 153, 72)
 
+        overlay_ratio = max(10, min(60, int(zone.overlay_percent or 25))) / 100.0
         if zone.layout_mode == 'split-left-25':
-            panel_rect = pygame.Rect(0, 0, int(self.width * 0.25), self.height)
+            panel_rect = pygame.Rect(0, 0, int(self.width * overlay_ratio), self.height)
         elif zone.layout_mode == 'split-bottom-25':
-            panel_rect = pygame.Rect(0, self.height - int(self.height * 0.25), self.width, int(self.height * 0.25))
+            panel_rect = pygame.Rect(0, self.height - int(self.height * overlay_ratio), self.width, int(self.height * overlay_ratio))
         else:
-            panel_rect = pygame.Rect(self.width - int(self.width * 0.25), 0, int(self.width * 0.25), self.height)
+            panel_rect = pygame.Rect(self.width - int(self.width * overlay_ratio), 0, int(self.width * overlay_ratio), self.height)
 
         panel_surface = pygame.Surface((panel_rect.width, panel_rect.height), pygame.SRCALPHA)
         for row in range(panel_rect.height):
@@ -2320,6 +2385,11 @@ class CompleteWebplayerClient:
             bb = int(base_rgb[2] + ((dark_rgb[2] - base_rgb[2]) * blend))
             pygame.draw.line(panel_surface, (rr, gg, bb, 244), (0, row), (panel_rect.width, row))
         pygame.draw.rect(panel_surface, border_color, panel_surface.get_rect(), width=1)
+
+        if appearance.pos_display_style == 'order_board':
+            self._draw_panel_order_board(panel_surface, panel_rect, zone, appearance)
+            self.screen.blit(panel_surface, panel_rect.topleft)
+            return
 
         padding_x = max(24, int(panel_rect.width * 0.08))
         padding_y = max(24, int(panel_rect.height * 0.08))
@@ -2378,7 +2448,70 @@ class CompleteWebplayerClient:
             body_y += body_line_height
 
         self.screen.blit(panel_surface, panel_rect.topleft)
-        
+
+    def _draw_panel_order_board(self, panel_surface, panel_rect, zone, appearance):
+        """Two-column 'Being prepared / Ready for pickup' ticket board, mirroring the web player's order board."""
+        ready_statuses = set(appearance.board_ready_statuses or [])
+        preparing_statuses = set(appearance.board_preparing_statuses or [])
+        preparing, ready = [], []
+        for item in (zone.live_queue or []):
+            ticket = self._panel_order_number(item)
+            if not ticket:
+                continue
+            status = str((item or {}).get('status') or '').strip().lower().replace(' ', '_')
+            if status in ready_statuses:
+                ready.append(ticket)
+            elif status in preparing_statuses or not status:
+                preparing.append(ticket)
+            else:
+                preparing.append(ticket)
+        ready = list(reversed(ready))
+
+        text_rgb = self._hex_to_rgb(appearance.board_text_color, (23, 23, 42))
+        ready_rgb = self._hex_to_rgb(appearance.board_ready_color, (50, 210, 150))
+        is_dark_text = sum(text_rgb) < 380
+        muted_rgb = self._mix_rgb(text_rgb, (255, 255, 255) if is_dark_text else (0, 0, 0), 0.5)
+        chip_bg_rgba = (255, 255, 255, 46) if is_dark_text else (0, 0, 0, 40)
+
+        margin = max(20, int(panel_rect.width * 0.06))
+        col_gap = max(14, int(panel_rect.width * 0.05))
+        col_width = max(60, (panel_rect.width - (margin * 2) - col_gap) // 2)
+        heading_font = self._get_panel_font(min(24, max(14, int(panel_rect.width * 0.045))), bold=True)
+        ticket_font = self._get_panel_font(min(20, max(12, int(panel_rect.width * 0.038))), bold=True)
+        empty_font = self._get_panel_font(min(14, max(10, int(panel_rect.width * 0.028))))
+        chip_gap = max(6, int(panel_rect.width * 0.018))
+
+        columns = [
+            (margin, appearance.board_preparing_title, preparing, False),
+            (margin + col_width + col_gap, appearance.board_ready_title, ready, True),
+        ]
+        for col_x, heading_text, tickets, is_ready_col in columns:
+            self._blit_panel_text(panel_surface, heading_font, heading_text, text_rgb, (col_x, margin))
+            y = margin + heading_font.get_linesize() + 14
+            if not tickets:
+                empty_text = "Waiting for ready orders" if is_ready_col else "No orders preparing"
+                empty_surface = empty_font.render(empty_text, True, muted_rgb)
+                panel_surface.blit(empty_surface, (col_x, y))
+                continue
+            chip_h = ticket_font.get_linesize() + 16
+            for index, ticket in enumerate(tickets):
+                if y + chip_h > panel_rect.height - margin:
+                    break
+                is_top_ready = is_ready_col and index == 0
+                chip_w = min(col_width, max(64, ticket_font.size(ticket)[0] + 28))
+                chip_surface = pygame.Surface((chip_w, chip_h), pygame.SRCALPHA)
+                if is_top_ready:
+                    pygame.draw.rect(chip_surface, (*ready_rgb, 255), chip_surface.get_rect(), border_radius=10)
+                    text_color = (255, 255, 255)
+                else:
+                    pygame.draw.rect(chip_surface, chip_bg_rgba, chip_surface.get_rect(), border_radius=10)
+                    text_color = ready_rgb if is_ready_col else text_rgb
+                ticket_surface = ticket_font.render(ticket, True, text_color)
+                ticket_rect = ticket_surface.get_rect(center=(chip_w // 2, chip_h // 2))
+                chip_surface.blit(ticket_surface, ticket_rect)
+                panel_surface.blit(chip_surface, (col_x, y))
+                y += chip_h + chip_gap
+
     def get_media_url(self, item: PlaylistItem) -> str:
         """Get media URL for playlist item like webplayer."""
         if str(getattr(item, 'media_type', '') or '').lower() == 'scrolling_text':

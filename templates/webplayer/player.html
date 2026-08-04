@@ -1732,20 +1732,21 @@
 			const overlayHeight = `${overlayPercent}vh`;
 			panelZone.style.width = '';
 			panelZone.style.height = '';
+			const pushMedia = String(zone.overlay_style || 'push').toLowerCase() !== 'float';
 			if(layout === 'split-left-25'){
 				panelZone.classList.add('layout-left');
 				panelZone.style.width = overlayWidth;
-				stage.style.left = overlayWidth;
+				if(pushMedia) stage.style.left = overlayWidth;
 			} else if(layout === 'split-bottom-25'){
 				panelZone.classList.add('layout-bottom');
 				panelZone.style.height = overlayHeight;
-				stage.style.bottom = overlayHeight;
+				if(pushMedia) stage.style.bottom = overlayHeight;
 			} else if(layout === 'full-screen'){
 				panelZone.classList.add('layout-full');
 			} else {
 				panelZone.classList.add('layout-right');
 				panelZone.style.width = overlayWidth;
-				stage.style.right = overlayWidth;
+				if(pushMedia) stage.style.right = overlayWidth;
 			}
 			const appearance = applyPanelZoneAppearance(zone, layout);
 			if(appearance.posDisplayStyle === 'order_board' && (livePosItem || String(zone.source_mode || '').toLowerCase() === 'pos_webhook')){

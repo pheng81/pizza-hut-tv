@@ -1080,6 +1080,7 @@ class ApiClient {
     required String screenId,
     String? layoutMode,
     String? sourceMode,
+    String? overlayStyle,
     bool? enabled,
   }) async {
     final payload = <String, dynamic>{};
@@ -1088,6 +1089,9 @@ class ApiClient {
     }
     if (sourceMode != null) {
       payload['source_mode'] = sourceMode.trim();
+    }
+    if (overlayStyle != null) {
+      payload['overlay_style'] = overlayStyle.trim();
     }
     if (enabled != null) {
       payload['enabled'] = enabled;
