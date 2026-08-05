@@ -1034,12 +1034,11 @@
     .rp-overlay { position:fixed; inset:0; background:rgba(15, 23, 42, 0.42); backdrop-filter:blur(8px); display:none; align-items:center; justify-content:center; z-index:1000; padding:12px; }
     .rp-modal { background:#ffffff; position:relative; width:min(1420px, calc(100vw - 24px)); max-width:min(1420px, calc(100vw - 24px)); height:min(860px, calc(100vh - 24px)); max-height:calc(100vh - 24px); min-width:min(980px, calc(100vw - 24px)); min-height:min(640px, calc(100vh - 24px)); overflow:hidden; display:flex; flex-direction:column; border:1px solid #dbe3ee; box-shadow:0 24px 70px rgba(15, 23, 42, 0.18); }
     .rp-modal, .rp-modal * { border-radius:0 !important; }
-    .picker-dialog-bg,
-    .picker-dialog {
-        z-index: 2147483002 !important;
-    }
+    .picker-dialog-bg { display:none !important; pointer-events:none !important; }
+    .picker-dialog { z-index:2147483647 !important; opacity:1 !important; visibility:visible !important; }
     .rp-header { padding:14px 24px; background:#ffffff; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between; gap:18px; }
-    .rp-header__title { flex:1; min-width:0; }
+    .rp-header__title { display:flex; align-items:center; gap:14px; flex:1; min-width:0; }
+    .rp-back { display:none; width:40px; height:40px; flex:0 0 auto; align-items:center; justify-content:center; border:1px solid #d9e1ec; border-radius:10px !important; background:#fff; color:#172033; font-size:24px; cursor:pointer; }
     .rp-header__toolbar { display:flex; align-items:center; justify-content:flex-end; gap:22px; flex-wrap:wrap; flex:0 1 auto; max-width:58%; }
     .rp-header__stack { display:flex; align-items:center; gap:22px; flex-wrap:wrap; justify-content:flex-end; }
     .rp-header__actions { display:flex; align-items:center; gap:18px; flex-wrap:wrap; justify-content:flex-end; }
@@ -1810,6 +1809,7 @@
     .rp-schedule-control__icon { position:absolute; left:12px; top:50%; width:16px; height:16px; transform:translateY(-50%); color:#64748b; pointer-events:none; }
     .rp-schedule-control__icon path,
     .rp-schedule-control__icon circle { stroke:currentColor; stroke-width:1.8; fill:none; stroke-linecap:round; stroke-linejoin:round; }
+    .rp-schedule-control__youtube-icon { position:absolute; left:34px; top:50%; width:16px; height:16px; transform:translateY(-50%); color:#ff0000; pointer-events:none; }
     .rp-schedule-inline input[type="date"],
     .rp-schedule-inline .tp-input,
     .rp-duration-input { width:100%; min-width:0; height:46px; padding:0 14px 0 40px; border:1px solid #dbe3ee; background:#fff; color:#0f172a; font-size:13px; }
@@ -1890,6 +1890,57 @@
     .rp-search-empty { padding:2px 2px 0; }
     .rp-source-tools { display:grid; gap:14px; align-content:start; padding-top:16px; border-top:1px solid #e5e7eb; }
     .rp-source-tools__grid { display:grid; gap:10px; }
+    .rp-scrolling-composer { display:grid; grid-template-columns:minmax(0,1fr); gap:20px; align-items:start; }
+    .rp-scrolling-card { min-width:0; padding:18px; border:1px solid #dbe3ee; border-radius:16px !important; background:#fff; box-shadow:0 8px 24px rgba(15,23,42,.05); }
+    .rp-scrolling-card__header { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+    .rp-scrolling-card__icon { width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border:1px solid #8fb3ff; border-radius:8px !important; color:#3157d5; font-size:19px; font-weight:800; line-height:1; }
+    .rp-scrolling-card__title { margin:0; color:#0f172a; font-size:18px; font-weight:800; letter-spacing:-.02em; }
+    .rp-scrolling-card__copy { margin:0 0 16px; color:#64748b; font-size:13px; line-height:1.5; }
+    .rp-scrolling-field { display:flex; flex-direction:column; gap:7px; min-width:0; }
+    .rp-scrolling-field > span, .rp-scrolling-field > label { color:#334155; font-size:13px; font-weight:600; }
+    .rp-scrolling-field--wide { grid-column:1 / -1; }
+    .rp-scrolling-live-preview { display:grid; gap:7px; }
+    .rp-scrolling-live-preview > span { color:#334155; font-size:13px; font-weight:600; }
+    #rp-scrolling-text-live-preview { min-height:42px; display:flex; align-items:center; justify-content:center; overflow:hidden; padding:0 14px; border-radius:8px !important; background:#071b1c; color:#fff; font-size:20px; font-weight:800; line-height:1.2; text-align:center; white-space:pre-wrap; }
+    #rp-scrolling-text-live-preview-track { display:block; max-width:100%; overflow:hidden; text-overflow:ellipsis; }
+    .rp-scrolling-composer textarea,
+    .rp-scrolling-composer select,
+    .rp-scrolling-composer input[type="number"],
+    .rp-scrolling-composer input[type="text"] { width:100%; min-width:0; box-sizing:border-box; border:1px solid #dbe3ee; border-radius:9px !important; background:#fff; color:#0f172a; font:inherit; font-size:13px; }
+    .rp-scrolling-composer textarea { min-height:140px; padding:12px 14px; resize:vertical; line-height:1.45; }
+    .rp-scrolling-composer select,
+    .rp-scrolling-composer input[type="number"],
+    .rp-scrolling-composer input[type="text"] { height:42px; padding:0 12px; }
+    .rp-scrolling-composer textarea:focus,
+    .rp-scrolling-composer select:focus,
+    .rp-scrolling-composer input:focus { outline:none; border-color:#6f96ff; box-shadow:0 0 0 3px rgba(49,87,213,.12); }
+    .rp-scrolling-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px 18px; }
+    .rp-scrolling-stepper { display:grid; grid-template-columns:44px minmax(0,1fr) 44px auto; align-items:stretch; }
+    .rp-scrolling-stepper button { border:1px solid #dbe3ee; background:#fff; color:#0f172a; font-size:20px; cursor:pointer; }
+    .rp-scrolling-stepper button:first-child { border-radius:9px 0 0 9px !important; }
+    .rp-scrolling-stepper button:nth-child(3) { border-left:0; border-radius:0 !important; }
+    .rp-scrolling-stepper input { border-radius:0 !important; text-align:center; border-left:0 !important; border-right:0 !important; }
+    .rp-scrolling-stepper em { display:inline-flex; align-items:center; justify-content:center; min-width:42px; border:1px solid #dbe3ee; border-left:0; border-radius:0 9px 9px 0 !important; color:#475569; font-size:12px; font-style:normal; }
+    .rp-scrolling-speed { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:center; }
+    .rp-scrolling-speed input[type="range"] { width:100%; accent-color:#3157d5; }
+    .rp-scrolling-speed small { color:#64748b; font-size:11px; white-space:nowrap; }
+    .rp-scrolling-color { display:grid; grid-template-columns:110px minmax(0,1fr); gap:10px; align-items:center; padding:4px; border:1px solid #dbe3ee; border-radius:9px !important; }
+    .rp-scrolling-color input[type="color"] { width:100%; height:32px; padding:0; border:0; background:transparent; }
+    .rp-scrolling-color input[type="text"] { height:32px; border:0; padding:0 8px; }
+    .rp-scrolling-upload { display:grid; grid-template-columns:42px minmax(0,1fr) auto; gap:12px; align-items:center; min-height:92px; padding:14px; border:1.5px dashed #94a3b8; border-radius:10px !important; background:#fbfdff; }
+    .rp-scrolling-upload__icon { width:36px; height:36px; display:inline-flex; align-items:center; justify-content:center; border:1.5px solid #172033; border-radius:7px !important; color:#172033; font-size:22px; }
+    .rp-scrolling-upload strong { display:block; color:#334155; font-size:13px; font-weight:500; }
+    .rp-scrolling-upload small { display:block; margin-top:4px; color:#64748b; font-size:11px; line-height:1.4; }
+    .rp-scrolling-upload input[type="file"] { max-width:190px; color:#475569; font-size:11px; }
+    .rp-scrolling-upload > small { grid-column:2 / -1; }
+    .rp-scrolling-playback { display:grid; grid-template-columns:32px minmax(0,1fr) auto; gap:10px; align-items:center; padding:14px; border:1px solid #dbe3ee; border-radius:12px !important; background:#fff; }
+    .rp-scrolling-playback button { width:28px; height:28px; border:0; background:transparent; color:#0f172a; font-size:20px; cursor:pointer; }
+    .rp-scrolling-playback input[type="range"] { width:100%; accent-color:#3157d5; }
+    .rp-scrolling-playback span { color:#0f172a; font-size:13px; white-space:nowrap; }
+    body.rp-scrolling-text-mode .rp-shell { display:grid !important; grid-template-columns:minmax(0,1fr) !important; grid-template-rows:auto auto !important; grid-template-areas:'preview' 'schedule' !important; gap:16px; }
+    body.rp-scrolling-text-mode .rp-panel--library { display:none !important; }
+    body.rp-scrolling-text-mode .rp-panel--preview { grid-area:preview; border:0; padding:0; background:transparent; box-shadow:none; }
+    body.rp-scrolling-text-mode .rp-panel--schedule { grid-area:schedule; }
     .rp-overlay.dashboard-side-sheet .rp-resizer,
     .rp-overlay.dashboard-side-sheet .rp-resizer-left { display:none; }
     .rp-progress { width:100%; height:8px; background:#e2e8f0; overflow:hidden; }
@@ -3477,17 +3528,17 @@
 
     /* Info Panel Schedule */
     .panel-zone-section{ padding:18px; border-radius:18px; border:1px solid #eef1f6; background:#fff; box-shadow:0 1px 2px rgba(15,23,42,.04); }
-    .ip-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:16px; }
-    .ip-title{ font-size:19px; font-weight:800; color:#0f172a; letter-spacing:-.01em; }
+    .ip-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; }
+    .ip-title{ font-size:17px; font-weight:800; color:#0f172a; letter-spacing:-.01em; }
 
     .ip-controls{ display:flex; align-items:center; gap:10px; margin-bottom:12px; }
-    .ip-switch-cell{ width:64px; height:48px; flex:0 0 auto; display:inline-flex; align-items:center; justify-content:center; border-radius:14px; border:1px solid #e5e7eb; background:#fff; cursor:pointer; transition:.15s background; }
+    .ip-switch-cell{ width:54px; height:38px; padding:0; flex:0 0 auto; display:inline-flex; align-items:center; justify-content:center; border-radius:12px; border:1px solid #e5e7eb; background:#fff; cursor:pointer; transition:.15s background; }
     .ip-switch-cell:hover{ background:#f8fafc; }
     .ip-switch-cell:disabled{ opacity:.55; cursor:not-allowed; }
-    .ip-switch{ position:relative; width:42px; height:24px; border-radius:999px; background:#cbd2d9; transition:.2s background; flex:0 0 auto; }
+    .ip-switch{ position:relative; width:34px; height:20px; border-radius:999px; background:#cbd2d9; transition:.2s background; flex:0 0 auto; }
     .ip-switch-cell.on .ip-switch{ background:#1fa971; }
-    .ip-switch-knob{ position:absolute; top:2px; left:2px; width:20px; height:20px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(15,23,42,.25); transition:.2s transform; }
-    .ip-switch-cell.on .ip-switch-knob{ transform:translateX(18px); }
+    .ip-switch-knob{ position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(15,23,42,.25); transition:.2s transform; }
+    .ip-switch-cell.on .ip-switch-knob{ transform:translateX(14px); }
 
     .ip-icon-btn{ width:48px; height:48px; flex:0 0 auto; display:inline-flex; align-items:center; justify-content:center; border-radius:14px; border:1px solid #e5e7eb; background:#fff; color:#0f172a; cursor:pointer; transition:.15s background; }
     .ip-icon-btn:hover{ background:#f8fafc; }
@@ -5695,6 +5746,37 @@
         body.dashboard-schedule-mode .rp-panel--library {
             max-height: 520px;
         }
+    }
+    body.rp-scrolling-text-mode .rp-shell {
+        display:grid !important;
+        grid-template-columns:minmax(460px,.86fr) minmax(0,1.14fr) !important;
+        grid-template-rows:auto minmax(340px,auto) auto auto !important;
+        grid-template-areas:'header header' 'composer timeline' 'composer timeline-meta' 'composer schedule' !important;
+        gap:16px 22px;
+    }
+    body.rp-scrolling-text-mode .rp-back { display:inline-flex; }
+    body.rp-scrolling-text-mode .rp-panel--library { display:none !important; }
+    body.rp-scrolling-text-mode .rp-panel--preview { display:contents !important; }
+    body.rp-scrolling-text-mode .rp-preview-shell { display:contents; }
+    body.rp-scrolling-text-mode .rp-preview-stage-head { grid-area:header; padding:0 0 2px; }
+    body.rp-scrolling-text-mode .rp-preview-stage-head .rp-side-copy { display:none; }
+    body.rp-scrolling-text-mode .rp-preview-stage-head .rp-side-title { color:#111827; font-size:20px; font-weight:800; }
+    body.rp-scrolling-text-mode #rp-preview-panel-zone { grid-area:composer; display:block; align-self:start; min-width:0; }
+    body.rp-scrolling-text-mode #rp-preview-panel-zone .rp-scrolling-card { height:auto; }
+    body.rp-scrolling-text-mode .rp-preview-stage { grid-area:timeline; min-height:340px; align-self:start; }
+    body.rp-scrolling-text-mode .rp-preview-meta { grid-area:timeline-meta; position:relative; left:auto; right:auto; bottom:auto; margin:0; }
+    body.rp-scrolling-text-mode .rp-panel--schedule { grid-area:schedule; min-width:0; }
+    body.rp-scrolling-text-mode .rp-schedule-editor { min-width:0; }
+    body.rp-scrolling-text-mode .rp-schedule-editor .rp-side-copy { display:block; }
+    @media (max-width: 980px) {
+        body.rp-scrolling-text-mode .rp-shell { display:flex !important; flex-direction:column; gap:14px; }
+        body.rp-scrolling-text-mode .rp-panel--preview { display:block !important; }
+        body.rp-scrolling-text-mode .rp-preview-shell { display:flex; flex-direction:column; gap:14px; }
+        body.rp-scrolling-text-mode .rp-preview-stage-head,
+        body.rp-scrolling-text-mode #rp-preview-panel-zone,
+        body.rp-scrolling-text-mode .rp-preview-stage,
+        body.rp-scrolling-text-mode .rp-preview-meta,
+        body.rp-scrolling-text-mode .rp-panel--schedule { grid-area:auto; }
     }
     </style>
 </head>
@@ -9209,6 +9291,7 @@
             const previewClass = getPreviewClass(screenData);
             const rotation = screenData.rotation || 0;
             const canRotate = isMasterStore(storeId) || !!screenData.protected; // Only rotate if master or protected
+            const isMasterControlScreen = isMasterStore(storeId) && ['screen1', `${storeId}_screen1`].includes(String(screenId));
             const resolvedAddress = getResolvedScreenAddress(screenData, storeId);
             const syncBinding = getWallSyncBinding(storeId, screenId, screenData);
             const isWallFollower = !!syncBinding.isFollower;
@@ -9236,7 +9319,7 @@
             card.dataset.store = String(storeId);
             
             card.innerHTML = `
-                <button class="remove-screen-btn" onclick="removeScreen('${screenId}')" title="Remove this screen">
+                <button class="remove-screen-btn" onclick="${isMasterControlScreen ? "showMessage('Master Screen 1 cannot be deleted because it controls Apply to All stores.', '#e67e22')" : `removeScreen('${screenId}')`}" title="${isMasterControlScreen ? 'Master Screen 1 controls Apply to All stores and cannot be deleted' : 'Remove this screen'}" aria-label="${isMasterControlScreen ? 'Master Screen 1 cannot be deleted' : 'Remove this screen'}">
                     ✕
                 </button>
                 <div class="screen-title">
@@ -9353,11 +9436,11 @@ allowfullscreen></iframe></div>`;
                 <div class="playlist-section panel-zone-section" id="panel-zone-${screenId}" style="margin-top:12px;">
                     <div class="ip-head" onclick="togglePanelSectionCollapsed('${screenId}')" title="Click to view full schedule" style="cursor:pointer;">
                         <span class="ip-title">Ticket Display Panel</span>
-                    </div>
-                    <div class="ip-controls">
-                        <button type="button" id="panel-auto-toggle-${screenId}" class="ip-switch-cell off" onclick="togglePanelAuto('${screenId}')" aria-pressed="false" ${isWallFollower ? 'disabled' : ''} title="Turn automatic info panel on or off">
+                        <button type="button" id="panel-auto-toggle-${screenId}" class="ip-switch-cell off" onclick="event.stopPropagation(); togglePanelAuto('${screenId}')" aria-pressed="false" ${isWallFollower ? 'disabled' : ''} title="Turn automatic info panel on or off">
                             <span class="ip-switch"><span class="ip-switch-knob"></span></span>
                         </button>
+                    </div>
+                    <div class="ip-controls">
                         <div id="panel-auto-options-${screenId}" style="display:none; gap:6px; align-items:center; flex-wrap:wrap;">
                             <select id="panel-layout-${screenId}" onchange="updatePanelLayout('${screenId}', this.value)" style="height:28px; border:1px solid #dcdfe3; background:#fff; color:#1d1d1f; font-size:11px; padding:0 8px;" ${isWallFollower ? 'disabled' : ''}>
                                 <option value="off">Off</option>
@@ -10778,16 +10861,15 @@ allowfullscreen></iframe></div>`;
                         screen_id: screenId
                     })
                 })
-                .then(response => {
+                .then(async response => {
                     console.log('Response received:', response);
                     console.log('Response status:', response.status);
                     console.log('Response ok:', response.ok);
-                    
+                    const data = await response.json().catch(() => ({}));
                     if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
+                        throw new Error(data.error || `HTTP error! status: ${response.status}`);
                     }
-                    
-                    return response.json();
+                    return data;
                 })
                 .then(data => {
                     console.log('Response data:', data);
@@ -10817,7 +10899,7 @@ allowfullscreen></iframe></div>`;
                 })
                 .catch(error => {
                     console.error('Fetch error:', error);
-                    showMessage('❌ Fetch error: ' + error.message, '#e74c3c');
+                    showMessage('❌ ' + error.message, '#e74c3c');
                 });
             } catch (e) {
                 console.error('Try-catch error:', e);
@@ -13380,8 +13462,13 @@ allowfullscreen></iframe></div>`;
                                 ? (sourceMode === 'pos_webhook' ? 'Full-screen fallback' : 'Full screen 100%')
                                 : layoutMode;
             if(summary){
-                summary.style.display = 'block';
-                if(sourceMode === 'pos_webhook'){
+                if(!autoEnabled){
+                    summary.style.display = 'none';
+                    summary.innerHTML = '';
+                } else {
+                    summary.style.display = 'block';
+                }
+                if(autoEnabled && sourceMode === 'pos_webhook'){
                     const statusValue = (panelState.lastEventResult === 'accepted' || (panelState.eventCount > 0 && liveQueue.length > 0)) ? 'Connected' : 'Waiting';
                     summary.innerHTML = buildIpStatsGrid([
                         { icon: IP_ICON_CLOCK, color:'#2563eb', label:'Status', value: statusValue },
@@ -13389,7 +13476,7 @@ allowfullscreen></iframe></div>`;
                         { icon: IP_ICON_LIST, color:'#7c3aed', label:'Queued', value: `${liveQueue.length}/${panelState.maxItems}` },
                         { icon: IP_ICON_MONITOR, color:'#2563eb', label:'Position', value: layoutLabel }
                     ]);
-                } else {
+                } else if(autoEnabled) {
                     summary.innerHTML = buildIpStatsGrid([
                         { icon: IP_ICON_CALENDAR, color:'#16a34a', label:'Cards', value: manualCards.length },
                         { icon: IP_ICON_MONITOR, color:'#2563eb', label:'Position', value: layoutLabel }
@@ -15963,6 +16050,47 @@ allowfullscreen></iframe></div>`;
                     st.timer = setTimeout(() => runPreview(screenId), dur * 1000);
                     return;
                 }
+
+                const scrollingTextMediaType = String((item && item.media_type) || '').toLowerCase();
+                if(scrollingTextMediaType === 'scrolling_text' || livePosFile.startsWith('text:')){
+                    const textColor = /^#[0-9a-f]{6}$/i.test(String(item.text_color || item.textColor || ''))
+                        ? String(item.text_color || item.textColor)
+                        : '#ecfeff';
+                    const backgroundColor = /^#[0-9a-f]{6}$/i.test(String(item.background_color || item.backgroundColor || ''))
+                        ? String(item.background_color || item.backgroundColor)
+                        : '#0f172a';
+                    const fontSize = Math.max(16, Math.min(180, Number(item.font_size || item.fontSize || 56)));
+                    const fontFamily = escapeHtml(String(item.font_family || item.fontFamily || 'Segoe UI').replace(/[^a-zA-Z0-9 ,_-]/g, ''));
+                    const icon = escapeHtml(String(item.icon || ''));
+                    const message = escapeHtml(String(item.text || 'Scrolling text'));
+                    const imageUrl = String(item.image_url || item.imageUrl || '').trim();
+                    const safeImageUrl = /^(https?:\/\/|\/(?!\/))/i.test(imageUrl) ? imageUrl : '';
+                    const imageWidth = Math.max(24, Math.min(1200, Number(item.image_width || item.imageWidth || 180)));
+                    const imageHeight = Math.max(24, Math.min(1200, Number(item.image_height || item.imageHeight || 100)));
+                    const scrollSpeed = Math.max(3, Math.min(120, Number(item.scroll_speed || item.scrollSpeed || item.duration || 15)));
+                    const scrollIterations = item.loop === false ? '1' : 'infinite';
+                    const iconMarkup = icon ? `<span style="font-size:1.1em;line-height:1;">${icon}</span>` : '';
+                    const imageMarkup = safeImageUrl ? `<img src="${escapeHtml(safeImageUrl)}" alt="" style="width:${imageWidth}px;height:${imageHeight}px;max-width:45%;max-height:55%;object-fit:contain;border-radius:8px;">` : '';
+                    const wrap = document.createElement('div');
+                    wrap.className = 'preview-item fading-in';
+                    wrap.innerHTML = `
+                        <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;background:${backgroundColor};color:${textColor};font-family:${fontFamily},sans-serif;font-size:clamp(14px,3vw,${Math.max(22, Math.min(48, fontSize))}px);font-weight:800;line-height:1.15;text-align:center;padding:8px;box-sizing:border-box;">
+                            <span style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;width:max-content;max-height:100%;white-space:nowrap;animation:rp-scrolling-text-preview ${scrollSpeed}s linear ${scrollIterations};animation-delay:-${scrollSpeed * 0.5}s;"><span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;">${iconMarkup}${message}</span>${imageMarkup}</span>
+                        </div>`;
+                    const existing = Array.from(preview.querySelectorAll('.preview-item'));
+                    preview.appendChild(wrap);
+                    requestAnimationFrame(() => {
+                        wrap.classList.remove('fading-in');
+                        existing.forEach(el => { try { el.style.opacity = '0'; setTimeout(() => el.remove(), 220); } catch (_) {} });
+                    });
+                    let dur = parseInt(item.duration, 10);
+                    if (isNaN(dur) || dur < 1) dur = 10;
+                    if (dur > 30) dur = 30;
+                    st.nextAt = Date.now() + dur * 1000;
+                    st.index++;
+                    st.timer = setTimeout(() => runPreview(screenId), dur * 1000);
+                    return;
+                }
                 
                 // Check for YouTube format first - handle both direct and CDN-prefixed URLs
                 const fileStr = String(item.file || '');
@@ -16313,6 +16441,7 @@ allowfullscreen></iframe></div>`;
                 let rpDriveConfigured = false;
                 let rpDrivePickerConfigured = false;
                 let rpDriveConnected = false;
+                let rpDriveNeedsReconnect = false;
                 let rpDriveAccountEmail = '';
                 let rpDriveStatusChecked = false;
                 let rpDriveFolderTrail = [{ id:'root', name:'My Drive' }];
@@ -16338,6 +16467,7 @@ allowfullscreen></iframe></div>`;
                             <div class="rp-modal">
                                 <div class="rp-header">
                                     <div class="rp-header__title">
+                                        <button type="button" class="rp-back" onclick="closeReplaceModal()" aria-label="Back to screen schedule">←</button>
                                         <div class="rp-title" id="rp-modal-title">SCHEDULE</div>
                                     </div>
                                     <div class="rp-header__toolbar">
@@ -16735,9 +16865,16 @@ allowfullscreen></iframe></div>`;
                         wallSet: null,
                         text: item.text || '',
                         displayName: item.displayName || name,
+                        font_size: item.font_size || item.fontSize || 56,
+                        scroll_speed: item.scroll_speed || item.scrollSpeed || 15,
+                        text_color: item.text_color || item.textColor || '#ffffff',
+                        background_color: item.background_color || item.backgroundColor || '#071b1c',
+                        icon: item.icon || '',
                         image_url: item.image_url || '',
                         image_width: item.image_width || 180,
-                        image_height: item.image_height || 100
+                        image_height: item.image_height || 100,
+                        font_family: item.font_family || item.fontFamily || 'Segoe UI',
+                        loop: item.loop !== false
                     };
                     rpWallAssignments = null;
                     rpWallDragName = '';
@@ -17087,11 +17224,14 @@ allowfullscreen></iframe></div>`;
                      renderRpBreadcrumb(); refreshLibrary();
                      renderRpSelection();
                 }
-                function closeReplaceModal(){ const ov=document.getElementById('rp-overlay'); if(ov){ ov.style.display='none'; ov.style.visibility=''; ov.style.opacity=''; ov.style.pointerEvents=''; ov.style.zIndex=''; ov.setAttribute('aria-hidden', 'true'); ov.classList.remove('dashboard-side-sheet'); ov.classList.remove('rp-overlay--library'); const modal = ov.querySelector('.rp-modal'); if(modal){ modal.style.display=''; modal.style.visibility=''; modal.style.opacity=''; } } document.body.classList.remove('dashboard-schedule-mode'); try { document.body.style.overflow = ''; } catch {} toggleRpSearch(false); rpCtx=null; rpComposerMode=''; resetRpUploadUI(); resetRpScheduleEditor(); clearRpSelection(); }
+                function closeReplaceModal(){ const ov=document.getElementById('rp-overlay'); if(ov){ ov.style.display='none'; ov.style.visibility=''; ov.style.opacity=''; ov.style.pointerEvents=''; ov.style.zIndex=''; ov.setAttribute('aria-hidden', 'true'); ov.classList.remove('dashboard-side-sheet'); ov.classList.remove('rp-overlay--library'); const modal = ov.querySelector('.rp-modal'); if(modal){ modal.style.display=''; modal.style.visibility=''; modal.style.opacity=''; } } document.body.classList.remove('dashboard-schedule-mode', 'rp-scrolling-text-mode'); try { document.body.style.overflow = ''; } catch {} toggleRpSearch(false); rpCtx=null; rpComposerMode=''; resetRpUploadUI(); resetRpScheduleEditor(); clearRpSelection(); }
                 function switchRpTab(which){ const lib=document.getElementById('rp-view-lib'); const up=document.getElementById('rp-view-upload'); const t1=document.getElementById('rp-tab-lib'); const t2=document.getElementById('rp-tab-upload'); const isLib=which==='lib'; if(lib) lib.style.display=isLib?'block':'none'; if(up) up.style.display=isLib?'none':'block'; if(t1) t1.classList.toggle('active',isLib); if(t2) t2.classList.toggle('active',!isLib); const foldersGroup = document.getElementById('rp-group-folders'); const imagesGroup = document.getElementById('rp-group-images'); const videosGroup = document.getElementById('rp-group-videos'); const appsGroup = document.getElementById('rp-group-apps'); if(which==='upload'){ if(foldersGroup) foldersGroup.style.display = 'block'; if(imagesGroup) imagesGroup.style.display = 'block'; if(videosGroup) videosGroup.style.display = 'block'; if(appsGroup) appsGroup.style.display = 'none'; rpAppMode = false; rpComposerMode = ''; } else if(which === 'lib'){ if(!rpAppMode){ if(appsGroup) appsGroup.style.display = 'none'; } } }
                 function getRpApplyLabel(){
                     if(rpCtx && rpCtx.itemId === 'SINGLE' && rpSelectedMedia && Array.isArray(rpSelectedMedia.wallSet) && rpSelectedMedia.wallSet.length > 1){
                         return isRpCreatingNewScreen() ? 'Add to new screens' : 'Add to screens';
+                    }
+                    if(rpCtx && rpCtx.itemId !== 'SINGLE' && isRpScrollingTextMode()){
+                        return 'Update schedule';
                     }
                     return rpCtx && rpCtx.itemId === 'SINGLE'
                         ? (isRpCreatingNewScreen() ? 'Create & save schedule' : 'Save schedule')
@@ -17606,11 +17746,13 @@ allowfullscreen></iframe></div>`;
                             rpDriveConfigured = !!payload.configured;
                             rpDrivePickerConfigured = !!payload.picker_configured;
                             rpDriveConnected = !!payload.connected;
+                            rpDriveNeedsReconnect = !!payload.needs_reconnect;
                             rpDriveAccountEmail = String(payload.email || '').trim();
                             rpDriveStatusChecked = true;
                             if(!rpDriveConnected){
                                 rpDriveImportingFileId = '';
                                 rpDrivePickerAccessToken = '';
+                                rpDriveItems = [];
                             }
                             return rpDriveConnected;
                         }
@@ -17619,6 +17761,7 @@ allowfullscreen></iframe></div>`;
                         rpDriveConfigured = false;
                         rpDrivePickerConfigured = false;
                         rpDriveConnected = false;
+                        rpDriveNeedsReconnect = false;
                         rpDriveAccountEmail = '';
                         rpDriveStatusChecked = true;
                         rpDriveError = error && error.message ? error.message : 'Failed to check Google Drive status';
@@ -17917,6 +18060,66 @@ allowfullscreen></iframe></div>`;
                         <div class="rp-drive-crumbs">${crumbs}</div>
                         ${files.length ? `<div class="rp-drive-grid">${cards}</div>` : '<div class="rp-drive-empty">No images or videos found in this folder.</div>'}`;
                 }
+                function renderRpDriveLibrary(){
+                    if(!isRpDriveMode()) return;
+                    const foldersGroup = document.getElementById('rp-group-folders');
+                    const imagesGroup = document.getElementById('rp-group-images');
+                    const videosGroup = document.getElementById('rp-group-videos');
+                    const appsGroup = document.getElementById('rp-group-apps');
+                    const foldersGrid = document.getElementById('rp-grid-folders');
+                    const imagesGrid = document.getElementById('rp-grid-images');
+                    const videosGrid = document.getElementById('rp-grid-videos');
+                    if(!foldersGrid || !imagesGrid || !videosGrid) return;
+                    if(foldersGroup) foldersGroup.style.display = 'block';
+                    if(imagesGroup) imagesGroup.style.display = 'block';
+                    if(videosGroup) videosGroup.style.display = 'block';
+                    if(appsGroup) appsGroup.style.display = 'none';
+
+                    const supportedItems = getRpDriveVisibleItems().map(({ item }) => item);
+                    const folders = supportedItems.filter((item) => inferRpDriveKind(item) === 'folder');
+                    const images = supportedItems.filter((item) => inferRpDriveKind(item) === 'image');
+                    const videos = supportedItems.filter((item) => inferRpDriveKind(item) === 'video');
+                    const renderFolder = (item) => {
+                        const card = document.createElement('button');
+                        card.type = 'button';
+                        card.className = 'rp-item rp-item--folder';
+                        card.title = String(item.name || 'Drive folder');
+                        card.dataset.search = card.title;
+                        card.innerHTML = `<div class="rp-folder-card"><span class="rp-folder-card__icon">📁</span><span class="rp-folder-card__body"><span class="rp-folder-card__name">${escapeHtml(card.title)}</span><span class="rp-folder-card__meta">Google Drive folder</span></span></div>`;
+                        card.addEventListener('click', () => rpDriveLoadFolder(String(item.id || ''), card.title, true).catch(() => {}));
+                        return card;
+                    };
+                    const renderMedia = (item, mediaType) => {
+                        const id = String(item.id || '').trim();
+                        const name = String(item.name || `Drive ${mediaType}`).trim();
+                        const mimeType = String(item.mimeType || '').trim();
+                        const card = document.createElement('button');
+                        card.type = 'button';
+                        card.className = 'rp-item';
+                        card.title = name;
+                        card.dataset.search = name;
+                        card.dataset.mediaType = mediaType;
+                        card.innerHTML = `<div class="rp-item__media"><img loading="lazy" src="/api/google-drive/thumb/${encodeURIComponent(id)}" alt="${escapeHtml(mediaType)}" onerror="this.remove()"></div><div class="rp-item__body"><div class="rp-item__title">${escapeHtml(name)}</div><div class="rp-item__meta"><span>${mediaType === 'video' ? 'Video' : 'Image'}</span><span>Google Drive</span></div></div>`;
+                        card.addEventListener('click', () => {
+                            rpDrivePendingPreviewDocs = [{ id, name, mimeType }];
+                            rpDriveError = '';
+                            rpDriveLastStatusMessage = '';
+                            renderRpContextPanels();
+                        });
+                        return card;
+                    };
+
+                    foldersGrid.innerHTML = '';
+                    imagesGrid.innerHTML = '';
+                    videosGrid.innerHTML = '';
+                    folders.forEach((item) => foldersGrid.appendChild(renderFolder(item)));
+                    images.forEach((item) => imagesGrid.appendChild(renderMedia(item, 'image')));
+                    videos.forEach((item) => videosGrid.appendChild(renderMedia(item, 'video')));
+                    if(!folders.length) foldersGrid.innerHTML = '<div class="rp-empty">No Drive folders here</div>';
+                    if(!images.length) imagesGrid.innerHTML = '<div class="rp-empty">No Drive images here</div>';
+                    if(!videos.length) videosGrid.innerHTML = '<div class="rp-empty">No Drive videos here</div>';
+                    applyRpViewFilters();
+                }
                 function bindRpDriveBrowserEvents(){
                     document.querySelectorAll('[data-rp-drive-crumb]').forEach((button) => {
                         button.addEventListener('click', () => {
@@ -17972,6 +18175,8 @@ allowfullscreen></iframe></div>`;
                         rpDriveError = error && error.message ? error.message : 'Google Drive browser failed';
                     }finally{
                         rpDriveLoading = false;
+                        renderRpBreadcrumb();
+                        renderRpDriveLibrary();
                         renderRpContextPanels();
                     }
                 }
@@ -17988,17 +18193,19 @@ allowfullscreen></iframe></div>`;
                         ? rpDriveError
                         : (!configured
                             ? 'Google Drive import is not configured on this server yet.'
+                            : (rpDriveNeedsReconnect
+                            ? 'Reconnect Google Drive once to restore file selection access.'
                             : (connected
                                 ? `Connected to Google Drive${rpDriveAccountEmail ? ` as ${rpDriveAccountEmail}` : ''}`
-                                : 'Connect Google Drive to browse images and videos.'));
+                                : 'Connect Google Drive to browse images and videos.')));
                     const statusLabel = rpDriveError
                         ? rpDriveError
-                        : (connected ? (rpDriveAccountEmail || 'Connected') : 'Not connected');
+                        : (rpDriveNeedsReconnect ? 'Reconnect required' : (connected ? (rpDriveAccountEmail || 'Connected') : 'Not connected'));
                     let browserMarkup = '';
                     if(!configured){
                         browserMarkup = `<div class="rp-drive-empty">Google Drive import is not configured on this server yet. Add <code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_CLIENT_SECRET</code> to enable Google sign-in.</div>`;
                     } else if(!connected){
-                        browserMarkup = `<div class="rp-drive-empty">Sign in with Google to browse Drive and choose only the image or video files you want this app to use.</div>`;
+                        browserMarkup = `<div class="rp-drive-empty">${rpDriveNeedsReconnect ? 'Reconnect Google Drive once to restore file selection access.' : 'Sign in with Google to browse Drive images and videos.'}</div>`;
                     } else if(!pickerConfigured && !rpDriveItems.length){
                         browserMarkup = `<div class="rp-drive-empty">Google Drive is connected. Click Browse files to choose images or videos from your Drive.</div>`;
                     } else if(rpDriveLoading){
@@ -18023,7 +18230,7 @@ allowfullscreen></iframe></div>`;
                                 </div>
                                 <div class="rp-drive-inline__actions" aria-label="Google Drive controls">
                                     ${configured && connected ? `<button type="button" id="rp-drive-choose-files-btn" class="btn primary rp-drive-toolbar-btn" ${isBusy ? 'disabled' : ''} title="Browse files from Google Drive">${rpDriveImportingFileId ? 'Importing...' : (rpDriveLoading ? 'Loading...' : 'Browse files')}</button>` : ''}
-                                    ${configured ? `<button type="button" class="btn rp-drive-toolbar-btn ${connected ? '' : 'primary'}" onclick="connectRpGoogleDrive()" ${isBusy ? 'disabled' : ''} title="${connected ? 'Reconnect Google Drive' : 'Connect Google Drive'}">${connected ? 'Reconnect' : 'Connect'}</button>` : ''}
+                                    ${configured ? `<button type="button" class="btn rp-drive-toolbar-btn ${connected ? '' : 'primary'}" onclick="connectRpGoogleDrive()" ${isBusy ? 'disabled' : ''} title="${connected || rpDriveNeedsReconnect ? 'Reconnect Google Drive' : 'Connect Google Drive'}">${connected || rpDriveNeedsReconnect ? 'Reconnect' : 'Connect'}</button>` : ''}
                                     ${connected ? `<button type="button" class="btn rp-drive-toolbar-btn rp-drive-toolbar-btn--icon" onclick="disconnectRpGoogleDrive()" ${isBusy ? 'disabled' : ''} title="Disconnect Google Drive">X</button>` : ''}
                                 </div>
                             </div>
@@ -18048,7 +18255,7 @@ allowfullscreen></iframe></div>`;
                     if(chooseFilesBtn){
                         chooseFilesBtn.addEventListener('click', (event) => {
                             event.preventDefault();
-                            rpDriveLoadFolder(getRpDriveCurrentFolder().id || 'root', getRpDriveCurrentFolder().name || 'My Drive', false).catch(() => {});
+                            rpDriveOpenPicker().catch(() => {});
                         });
                     }
                     const previewImportBtn = document.getElementById('rp-drive-preview-import-btn');
@@ -18099,9 +18306,11 @@ allowfullscreen></iframe></div>`;
                     rpDriveImportingFileId = '';
                     rpDriveError = '';
                     rpDriveConnected = false;
+                    rpDriveNeedsReconnect = false;
                     rpDriveAccountEmail = '';
                     rpDrivePickerAccessToken = '';
                     rpDrivePendingPreviewDocs = [];
+                    rpDriveItems = [];
                     rpDriveStatusChecked = true;
                     try {
                         await fetch('/api/google-drive/disconnect', { method:'POST' });
@@ -18109,7 +18318,13 @@ allowfullscreen></iframe></div>`;
                     renderRpContextPanels();
                 }
                 async function ensureRpDriveReady(){
-                    await syncRpDriveStatus(false);
+                    const connected = await syncRpDriveStatus(false);
+                    if(connected && !rpDriveItems.length && !rpDriveLoading){
+                        rpDriveFolderTrail = [{ id:'root', name:'My Drive' }];
+                        await rpDriveLoadFolder('root', 'My Drive', false);
+                    } else if(connected) {
+                        renderRpDriveLibrary();
+                    }
                     renderRpContextPanels();
                 }
                 async function rpDriveImportPickedDocs(docs){
@@ -18172,8 +18387,16 @@ allowfullscreen></iframe></div>`;
                     const selectedDocs = Array.isArray(docs) ? docs.filter((doc) => getRpDriveDocId(doc)) : [];
                     if(!selectedDocs.length) return;
                     rpDrivePendingPreviewDocs = selectedDocs;
+                    rpDriveItems = selectedDocs.map((doc) => ({
+                        id: getRpDriveDocId(doc),
+                        name: getRpDriveDocName(doc),
+                        mimeType: getRpDriveDocMimeType(doc),
+                        thumbnailLink: String((doc && (doc.thumbnailLink || doc.iconUrl)) || ''),
+                        hasThumbnail: true,
+                    }));
                     rpDriveLastStatusMessage = '';
                     rpDriveError = '';
+                    renderRpDriveLibrary();
                     renderRpContextPanels();
                 }
                 async function rpDriveOpenPicker(){
@@ -18204,17 +18427,7 @@ allowfullscreen></iframe></div>`;
                         if(!pickerApi){
                             throw new Error('Google Picker failed to load');
                         }
-                        let pickerAccessToken = '';
-                        setRpDrivePickerStatus('Authorizing Google account for previews...');
-                        try{
-                            await loadRpDrivePickerGis();
-                            pickerAccessToken = await requestRpDrivePickerAccessToken(false);
-                        }catch(tokenError){
-                            pickerAccessToken = '';
-                        }
-                        if(!pickerAccessToken){
-                            pickerAccessToken = String(configPayload.oauthToken || '').trim();
-                        }
+                        const pickerAccessToken = String(configPayload.oauthToken || '').trim();
                         if(!pickerAccessToken){
                             throw new Error('Google authorization did not return an access token');
                         }
@@ -18223,8 +18436,8 @@ allowfullscreen></iframe></div>`;
                             if(!view) return view;
                             if(typeof view.setIncludeFolders === 'function') view.setIncludeFolders(true);
                             if(typeof view.setSelectFolderEnabled === 'function') view.setSelectFolderEnabled(false);
-                            if(pickerApi.DocsViewMode && pickerApi.DocsViewMode.LIST && typeof view.setMode === 'function'){
-                                view.setMode(pickerApi.DocsViewMode.LIST);
+                            if(pickerApi.DocsViewMode && pickerApi.DocsViewMode.GRID && typeof view.setMode === 'function'){
+                                view.setMode(pickerApi.DocsViewMode.GRID);
                             }
                             return view;
                         };
@@ -18232,7 +18445,6 @@ allowfullscreen></iframe></div>`;
                         const videoView = configurePickerView(new pickerApi.DocsView(pickerApi.ViewId.DOCS_VIDEOS || pickerApi.ViewId.DOCS));
                         const pickerBuilder = new pickerApi.PickerBuilder()
                             .setTitle('Select files to preview')
-                            .setDeveloperKey(configPayload.developerKey)
                             .setAppId(String(configPayload.appId || ''))
                             .setOAuthToken(pickerAccessToken || configPayload.oauthToken)
                             .setCallback((data) => { rpDriveHandlePickerResponse(data).catch(() => {}); })
@@ -18269,33 +18481,38 @@ allowfullscreen></iframe></div>`;
                 function renderRpContextPanels(){
                     const previewPanelZone = document.getElementById('rp-preview-panel-zone');
                     if(!previewPanelZone) return;
+                    const scrollingTextMode = isRpScrollingTextMode();
+                    document.body.classList.toggle('rp-scrolling-text-mode', scrollingTextMode);
+                    const previewStage = document.querySelector('.rp-preview-stage');
+                    const previewMeta = document.querySelector('.rp-preview-meta');
+                    if(previewStage) previewStage.style.display = '';
+                    if(previewMeta) previewMeta.style.display = '';
                     if(!previewPanelZone.dataset.defaultHtml){
                         previewPanelZone.dataset.defaultHtml = previewPanelZone.innerHTML;
                     }
                     if(isRpScrollingTextMode()){
                         previewPanelZone.style.display = 'block';
                         previewPanelZone.innerHTML = `
-                            <div class="rp-subtitle" style="margin:0 0 8px 0;">Scrolling Text</div>
-                            <div class="rp-help" style="margin-top:0;">Type the message and tune how it looks and moves. It supports multiple lines, images, icons, colors, speed, and looping.</div>
-                            <div style="margin-top:12px;">
-                                <label for="rp-scrolling-text-inline" class="rp-label" style="display:block; margin-bottom:6px;">Message</label>
-                                <textarea id="rp-scrolling-text-inline" class="rp-input" maxlength="2000" rows="6" placeholder="e.g. Fresh deals available today\nNew line here" style="width:100%; resize:vertical; white-space:pre-wrap;"></textarea>
-                            </div>
-                            <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:12px;">
-                                <label class="rp-label">Text size (px)<input id="rp-scrolling-text-size" class="rp-input" type="number" min="16" max="180" value="56" style="width:100%; margin-top:5px;"></label>
-                                <label class="rp-label">Scroll speed (seconds)<input id="rp-scrolling-text-speed" class="rp-input" type="number" min="3" max="120" value="15" style="width:100%; margin-top:5px;"></label>
-                                <label class="rp-label">Font<select id="rp-scrolling-text-font" class="rp-input" style="width:100%; margin-top:5px;"><option value="Segoe UI">Segoe UI</option><option value="Arial">Arial</option><option value="Verdana">Verdana</option><option value="Tahoma">Tahoma</option><option value="Georgia">Georgia</option><option value="Trebuchet MS">Trebuchet MS</option><option value="Courier New">Courier New</option><option value="Impact">Impact</option></select></label>
-                                <label class="rp-label">Text color<input id="rp-scrolling-text-color" class="rp-input" type="color" value="#ffffff" style="width:100%; height:40px; margin-top:5px; padding:3px;"></label>
-                                <label class="rp-label">Background color<input id="rp-scrolling-text-background" class="rp-input" type="color" value="#071b1c" style="width:100%; height:40px; margin-top:5px; padding:3px;"></label>
-                                <label class="rp-label">Icon / emoji<input id="rp-scrolling-text-icon" class="rp-input" type="text" maxlength="16" placeholder="★" style="width:100%; margin-top:5px;"></label>
-                                <label class="rp-label">Image file<input id="rp-scrolling-text-image-file" class="rp-file-input" type="file" accept="image/*" style="width:100%; margin-top:5px;"><small id="rp-scrolling-text-image-status" class="rp-help" style="display:block; margin-top:4px;">Choose an image from your device.</small></label>
-                                <label class="rp-label">Image width (px)<input id="rp-scrolling-text-image-width" class="rp-input" type="number" min="24" max="1200" value="180" style="width:100%; margin-top:5px;"></label>
-                                <label class="rp-label">Image height (px)<input id="rp-scrolling-text-image-height" class="rp-input" type="number" min="24" max="1200" value="100" style="width:100%; margin-top:5px;"></label>
-                            </div>
-                            <input id="rp-scrolling-text-image-url" type="hidden" value="">
-                            <label class="rp-label" style="display:flex; align-items:center; gap:8px; margin-top:12px;"><input id="rp-scrolling-text-loop" type="checkbox" checked> Loop the scrolling animation</label>
-                            <div style="display:flex; justify-content:flex-end; margin-top:12px;">
-                                <button type="button" class="btn primary" onclick="rpPreviewInlineScrollingText()">Preview text</button>
+                            <div class="rp-scrolling-composer">
+                                <section class="rp-scrolling-card">
+                                    <div class="rp-scrolling-card__header"><span class="rp-scrolling-card__icon">T</span><h2 class="rp-scrolling-card__title">Scrolling text</h2></div>
+                                    <p class="rp-scrolling-card__copy">Type the message and tune how it looks and moves. It supports multiple lines, images, icons, colors, speed, and looping.</p>
+                                    <div class="rp-scrolling-grid">
+                                        <label class="rp-scrolling-field rp-scrolling-field--wide"><span>Message</span><textarea id="rp-scrolling-text-inline" maxlength="2000" rows="6" placeholder="e.g. Fresh deals available today\nNew line here" oninput="updateRpScrollingTextComposerPreview()"></textarea></label>
+                                        <div class="rp-scrolling-live-preview rp-scrolling-field--wide"><span>Live preview</span><div id="rp-scrolling-text-live-preview"><span id="rp-scrolling-text-live-preview-track">Fresh deals available today&nbsp; ★</span></div></div>
+                                        <label class="rp-scrolling-field"><span>Text size (px)</span><div class="rp-scrolling-stepper"><button type="button" onclick="adjustRpScrollingTextNumber('rp-scrolling-text-size', -1, 16, 180)">−</button><input id="rp-scrolling-text-size" type="number" min="16" max="180" value="56" oninput="updateRpScrollingTextComposerPreview()"><button type="button" onclick="adjustRpScrollingTextNumber('rp-scrolling-text-size', 1, 16, 180)">+</button><em>px</em></div></label>
+                                        <label class="rp-scrolling-field"><span>Scroll speed (seconds)</span><div class="rp-scrolling-speed"><input id="rp-scrolling-text-speed" type="number" min="3" max="120" value="15" oninput="syncRpScrollingTextSpeed(this.value)"><span>s</span></div><div class="rp-scrolling-speed"><input id="rp-scrolling-text-speed-range" type="range" min="1" max="60" value="15" oninput="syncRpScrollingTextSpeed(this.value)"><small>1&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;60</small></div></label>
+                                        <label class="rp-scrolling-field"><span>Font</span><select id="rp-scrolling-text-font" onchange="updateRpScrollingTextComposerPreview()"><option value="Segoe UI">Segoe UI</option><option value="Arial">Arial</option><option value="Verdana">Verdana</option><option value="Tahoma">Tahoma</option><option value="Georgia">Georgia</option><option value="Trebuchet MS">Trebuchet MS</option><option value="Courier New">Courier New</option><option value="Impact">Impact</option></select></label>
+                                        <label class="rp-scrolling-field"><span>Text color</span><div class="rp-scrolling-color"><input id="rp-scrolling-text-color" type="color" value="#ffffff" oninput="syncRpScrollingTextColor('rp-scrolling-text-color','rp-scrolling-text-color-hex')"><input id="rp-scrolling-text-color-hex" type="text" value="#FFFFFF" maxlength="7" oninput="syncRpScrollingTextColor('rp-scrolling-text-color-hex','rp-scrolling-text-color')"></div></label>
+                                        <label class="rp-scrolling-field"><span>Background color</span><div class="rp-scrolling-color"><input id="rp-scrolling-text-background" type="color" value="#071b1c" oninput="syncRpScrollingTextColor('rp-scrolling-text-background','rp-scrolling-text-background-hex')"><input id="rp-scrolling-text-background-hex" type="text" value="#071B1C" maxlength="7" oninput="syncRpScrollingTextColor('rp-scrolling-text-background-hex','rp-scrolling-text-background')"></div></label>
+                                        <label class="rp-scrolling-field"><span>Icon / emoji</span><input id="rp-scrolling-text-icon" type="text" maxlength="16" placeholder="★" oninput="updateRpScrollingTextComposerPreview()"></label>
+                                        <div class="rp-scrolling-field rp-scrolling-field--wide"><span>Image file (optional)</span><label class="rp-scrolling-upload"><span class="rp-scrolling-upload__icon">⇧</span><span><strong>Choose an image from your device.</strong><small>PNG, JPG, GIF up to 10MB.</small></span><input id="rp-scrolling-text-image-file" type="file" accept="image/*"><small id="rp-scrolling-text-image-status">Choose an image from your device.</small></label></div>
+                                        <label class="rp-scrolling-field"><span>Image width (px)</span><div class="rp-scrolling-stepper"><button type="button" onclick="adjustRpScrollingTextNumber('rp-scrolling-text-image-width', -1, 24, 1200)">−</button><input id="rp-scrolling-text-image-width" type="number" min="24" max="1200" value="180" oninput="updateRpScrollingTextComposerPreview()"><button type="button" onclick="adjustRpScrollingTextNumber('rp-scrolling-text-image-width', 1, 24, 1200)">+</button><em>px</em></div></label>
+                                        <label class="rp-scrolling-field"><span>Image height (px)</span><div class="rp-scrolling-stepper"><button type="button" onclick="adjustRpScrollingTextNumber('rp-scrolling-text-image-height', -1, 24, 1200)">−</button><input id="rp-scrolling-text-image-height" type="number" min="24" max="1200" value="100" oninput="updateRpScrollingTextComposerPreview()"><button type="button" onclick="adjustRpScrollingTextNumber('rp-scrolling-text-image-height', 1, 24, 1200)">+</button><em>px</em></div></label>
+                                    </div>
+                                    <input id="rp-scrolling-text-image-url" type="hidden" value="">
+                                    <input id="rp-scrolling-text-loop" type="checkbox" checked hidden>
+                                </section>
                             </div>`;
                         const input = document.getElementById('rp-scrolling-text-inline');
                         const media = rpSelectedMedia || {};
@@ -18317,9 +18534,15 @@ allowfullscreen></iframe></div>`;
                         const loop = document.getElementById('rp-scrolling-text-loop');
                         if(size) size.value = String(media.font_size || media.fontSize || 56);
                         if(speed) speed.value = String(media.scroll_speed || media.scrollSpeed || 15);
+                        const speedRange = document.getElementById('rp-scrolling-text-speed-range');
+                        if(speedRange) speedRange.value = String(Math.max(1, Math.min(60, Number(speed && speed.value || 15))));
                         if(font) font.value = String(media.font_family || media.fontFamily || 'Segoe UI');
                         if(color) color.value = /^#[0-9a-f]{6}$/i.test(String(media.text_color || media.textColor || '')) ? String(media.text_color || media.textColor) : '#ffffff';
                         if(background) background.value = /^#[0-9a-f]{6}$/i.test(String(media.background_color || media.backgroundColor || '')) ? String(media.background_color || media.backgroundColor) : '#071b1c';
+                        const colorHex = document.getElementById('rp-scrolling-text-color-hex');
+                        const backgroundHex = document.getElementById('rp-scrolling-text-background-hex');
+                        if(colorHex) colorHex.value = String(color && color.value || '#ffffff').toUpperCase();
+                        if(backgroundHex) backgroundHex.value = String(background && background.value || '#071b1c').toUpperCase();
                         if(icon) icon.value = String(media.icon || '');
                         if(imageUrl) imageUrl.value = String(media.image_url || media.imageUrl || '');
                         if(imageFile) imageFile.value = '';
@@ -18327,7 +18550,23 @@ allowfullscreen></iframe></div>`;
                         if(imageWidth) imageWidth.value = String(media.image_width || media.imageWidth || 180);
                         if(imageHeight) imageHeight.value = String(media.image_height || media.imageHeight || 100);
                         if(loop) loop.checked = media.loop !== false;
-                        if(imageFile) imageFile.addEventListener('change', () => { if(imageUrl) imageUrl.value = ''; if(imageStatus) imageStatus.textContent = imageFile.files && imageFile.files[0] ? `${imageFile.files[0].name} selected. Click Preview text to upload it.` : 'Choose an image from your device.'; });
+                        if(imageFile) imageFile.addEventListener('change', () => {
+                            if(imageUrl) imageUrl.value = '';
+                            const file = imageFile.files && imageFile.files[0];
+                            imageFile.dataset.previewUrl = '';
+                            if(imageStatus) imageStatus.textContent = file ? `${file.name} selected. Click Save schedule to upload it.` : 'Choose an image from your device.';
+                            if(!file){
+                                updateRpScrollingTextComposerPreview();
+                                return;
+                            }
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                                imageFile.dataset.previewUrl = String(reader.result || '');
+                                updateRpScrollingTextComposerPreview();
+                            };
+                            reader.readAsDataURL(file);
+                        });
+                        updateRpScrollingTextComposerPreview();
                         return;
                     }
                     if(isRpYouTubeMode()){
@@ -18337,7 +18576,8 @@ allowfullscreen></iframe></div>`;
                             <div class="rp-help" style="margin-top:0;">Enter a public YouTube video URL. The video will play in full screen.</div>
                             <div class="rp-schedule-control" style="margin-top:12px;">
                                 <svg class="rp-schedule-control__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 17H7a5 5 0 0 1 0-10h2" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 7h2a5 5 0 0 1 0 10h-2" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/><line x1="8" y1="12" x2="16" y2="12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-                                <input id="rp-youtube-url-inline" class="rp-input" type="url" placeholder="https://www.youtube.com/watch?v=..." style="padding-left:38px;">
+                                <svg class="rp-schedule-control__youtube-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="4" fill="currentColor"/><path d="m10 9 5 3-5 3z" fill="#fff"/></svg>
+                                <input id="rp-youtube-url-inline" class="rp-input" type="url" placeholder="https://www.youtube.com/watch?v=..." style="padding-left:58px;">
                             </div>
                             <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; margin-top:14px; flex-wrap:wrap;">
                                 <div style="display:flex; align-items:center; gap:10px;">
@@ -18431,22 +18671,122 @@ allowfullscreen></iframe></div>`;
                     if(!response.ok || !result || result.success === false || !result.filename) throw new Error((result && result.error) || 'Image upload failed');
                     const url = result.url || mediaUrl(result.filename);
                     if(hiddenUrl) hiddenUrl.value = url;
+                    if(fileInput){
+                        fileInput.value = '';
+                        fileInput.dataset.previewUrl = '';
+                    }
                     if(status) status.textContent = `${file.name} uploaded.`;
                     return url;
                 }
+                function adjustRpScrollingTextNumber(id, delta, min, max){
+                    const input = document.getElementById(id);
+                    if(!input) return;
+                    const current = parseInt(input.value, 10) || min;
+                    input.value = String(Math.max(min, Math.min(max, current + delta)));
+                    updateRpScrollingTextComposerPreview();
+                }
+                function syncRpScrollingTextSpeed(value){
+                    const speed = document.getElementById('rp-scrolling-text-speed');
+                    const range = document.getElementById('rp-scrolling-text-speed-range');
+                    const next = Math.max(3, Math.min(120, parseInt(value, 10) || 15));
+                    if(speed) speed.value = String(next);
+                    if(range) range.value = String(Math.max(1, Math.min(60, next)));
+                    updateRpScrollingTextComposerPreview();
+                }
+                function syncRpScrollingTextColor(sourceId, targetId){
+                    const source = document.getElementById(sourceId);
+                    const target = document.getElementById(targetId);
+                    if(!source || !target) return;
+                    const value = String(source.value || '').trim();
+                    if(/^#[0-9a-f]{6}$/i.test(value)){
+                        if(source.type === 'color') target.value = value.toUpperCase();
+                        else target.value = value.toLowerCase();
+                        if(target.type === 'color') target.value = value;
+                        updateRpScrollingTextComposerPreview();
+                    }
+                }
+                function updateRpScrollingTextComposerPreview(){
+                    const text = String(document.getElementById('rp-scrolling-text-inline')?.value || '').trim() || 'Fresh deals available today';
+                    const icon = String(document.getElementById('rp-scrolling-text-icon')?.value || '').trim();
+                    const color = String(document.getElementById('rp-scrolling-text-color')?.value || '#ffffff');
+                    const background = String(document.getElementById('rp-scrolling-text-background')?.value || '#071b1c');
+                    const font = String(document.getElementById('rp-scrolling-text-font')?.value || 'Segoe UI').replace(/[^a-zA-Z0-9 ,_-]/g, '');
+                    const size = Math.max(16, Math.min(180, parseInt(document.getElementById('rp-scrolling-text-size')?.value, 10) || 56));
+                    const speed = Math.max(3, Math.min(120, parseInt(document.getElementById('rp-scrolling-text-speed')?.value, 10) || 15));
+                    const imageInput = document.getElementById('rp-scrolling-text-image-file');
+                    const imageUrl = String(document.getElementById('rp-scrolling-text-image-url')?.value || imageInput?.dataset.previewUrl || '').trim();
+                    const imageWidth = Math.max(24, Math.min(1200, Number(document.getElementById('rp-scrolling-text-image-width')?.value || 180)));
+                    const imageHeight = Math.max(24, Math.min(1200, Number(document.getElementById('rp-scrolling-text-image-height')?.value || 100)));
+                    rpSelectedMedia = Object.assign({}, rpSelectedMedia || {}, {
+                        name: String(rpSelectedMedia && rpSelectedMedia.name || 'text:pending'),
+                        mediaType: 'scrolling_text',
+                        text,
+                        font_size: size,
+                        scroll_speed: speed,
+                        text_color: color,
+                        background_color: background,
+                        icon,
+                        image_url: imageUrl,
+                        image_width: imageWidth,
+                        image_height: imageHeight,
+                        font_family: font,
+                        loop: document.getElementById('rp-scrolling-text-loop')?.checked !== false
+                    });
+                    const applyButton = document.getElementById('rp-apply-selection');
+                    if(applyButton){
+                        applyButton.disabled = false;
+                        applyButton.textContent = getRpApplyLabel();
+                    }
+                    const livePreview = document.getElementById('rp-scrolling-text-live-preview');
+                    const liveTrack = document.getElementById('rp-scrolling-text-live-preview-track');
+                    if(livePreview && liveTrack){
+                        livePreview.style.background = background;
+                        livePreview.style.color = color;
+                        livePreview.style.fontFamily = `${font}, sans-serif`;
+                        livePreview.style.fontSize = `clamp(16px,2vw,${Math.max(18, Math.min(32, size))}px)`;
+                        liveTrack.style.display = 'inline-flex';
+                        liveTrack.style.flexDirection = 'column';
+                        liveTrack.style.alignItems = 'center';
+                        liveTrack.style.gap = '6px';
+                        liveTrack.style.maxWidth = 'none';
+                        liveTrack.style.overflow = 'visible';
+                        liveTrack.style.whiteSpace = 'nowrap';
+                        liveTrack.style.paddingLeft = '100%';
+                        liveTrack.style.animation = `rp-scrolling-text-preview ${speed}s linear infinite`;
+                        liveTrack.style.animationDelay = `-${speed * 0.5}s`;
+                        liveTrack.textContent = '';
+                        const messageLine = document.createElement('span');
+                        messageLine.textContent = `${icon ? `${icon} ` : ''}${text}`;
+                        liveTrack.appendChild(messageLine);
+                        if(imageUrl){
+                            const image = document.createElement('img');
+                            image.src = imageUrl;
+                            image.alt = '';
+                            image.style.cssText = `width:${imageWidth}px;height:${imageHeight}px;max-width:45vw;max-height:45%;object-fit:contain;border-radius:8px;`;
+                            liveTrack.appendChild(image);
+                        }
+                    }
+                    const timelinePreview = document.getElementById('rp-preview-media');
+                    const timelineEmpty = document.getElementById('rp-preview-empty');
+                    if(timelinePreview && typeof buildRpPreviewMarkup === 'function'){
+                        timelinePreview.innerHTML = buildRpPreviewMarkup(rpSelectedMedia);
+                        timelinePreview.style.display = 'flex';
+                        if(timelineEmpty) timelineEmpty.style.display = 'none';
+                    }
+                }
                 async function rpPreviewInlineScrollingText(){
                     const input = document.getElementById('rp-scrolling-text-inline');
-                    const message = String(input && input.value || '').replace(/[ \t]+/g, ' ').trim();
+                    const message = String(input && input.value || '').replace(/\r\n/g, '\n').trim();
                     if(!message){
                         alert('Enter the message to display');
                         if(input) input.focus();
-                        return;
+                        return false;
                     }
                     rpComposerMode = 'scrolling_text';
                     const readNumber = (id, fallback, min, max) => Math.max(min, Math.min(max, parseInt(document.getElementById(id)?.value, 10) || fallback));
                     const readColor = (id, fallback) => /^#[0-9a-f]{6}$/i.test(String(document.getElementById(id)?.value || '')) ? document.getElementById(id).value : fallback;
                     let uploadedImageUrl = '';
-                    try { uploadedImageUrl = await rpUploadInlineScrollingImage(); } catch(error) { alert(error && error.message ? error.message : 'Image upload failed'); return; }
+                    try { uploadedImageUrl = await rpUploadInlineScrollingImage(); } catch(error) { alert(error && error.message ? error.message : 'Image upload failed'); return false; }
                     rpSelectedMedia = {
                         name: 'text:pending',
                         text: message,
@@ -18467,6 +18807,7 @@ allowfullscreen></iframe></div>`;
                     renderRpSelection();
                     focusRpPanel('preview');
                     showMessage('Text preview ready. Review the schedule, then click ' + getRpApplyLabel().toLowerCase() + '.', '#0f766e');
+                    return true;
                 }
                 function rpImportInlineUrl(){
                     const inlineInput = document.getElementById('rp-import-url-inline');
@@ -18507,9 +18848,10 @@ allowfullscreen></iframe></div>`;
                         const imageWidth = Math.max(24, Math.min(1200, Number(media.image_width || media.imageWidth || 180)));
                         const imageHeight = Math.max(24, Math.min(1200, Number(media.image_height || media.imageHeight || 100)));
                         const fontFamily = escapeHtml(String(media.font_family || media.fontFamily || 'Segoe UI').replace(/[^a-zA-Z0-9 ,_-]/g, ''));
-                        const image = /^https?:\/\//i.test(imageUrl) ? `<img src="${escapeHtml(imageUrl)}" alt="" style="width:${imageWidth}px;height:${imageHeight}px;object-fit:contain;border-radius:8px;flex:0 0 auto;">` : '';
+                        const safeImageUrl = /^(https?:\/\/|\/(?!\/)|data:image\/|blob:)/i.test(imageUrl) ? imageUrl : '';
+                        const image = safeImageUrl ? `<img src="${escapeHtml(safeImageUrl)}" alt="" style="width:${imageWidth}px;height:${imageHeight}px;max-width:45vw;max-height:55%;object-fit:contain;border-radius:8px;flex:0 0 auto;">` : '';
                         const iconMarkup = icon ? `<span style="font-size:0.9em;line-height:1;">${icon}</span>` : '';
-                        return `<div style="width:100%;height:100%;display:flex;align-items:center;overflow:hidden;background:${backgroundColor};color:${textColor};font-family:${fontFamily},sans-serif;font-size:clamp(22px,3vw,${Math.max(42, Math.min(100, fontSize))}px);font-weight:800;line-height:1.25;"><span style="display:inline-flex;align-items:center;gap:14px;white-space:pre-wrap;padding-left:100%;animation:rp-scrolling-text-preview ${speed}s linear ${iterations};">${image}${iconMarkup}${escapeHtml(String(media.text || 'Your scrolling message'))}</span></div>`;
+                        return `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;background:${backgroundColor};color:${textColor};font-family:${fontFamily},sans-serif;font-size:clamp(10px,1.4vw,${Math.max(14, Math.min(26, fontSize))}px);font-weight:800;line-height:1.15;text-align:center;padding:8px;box-sizing:border-box;overflow-wrap:anywhere;"><span style="display:inline-flex;flex-direction:column;align-items:center;gap:6px;max-width:100%;white-space:nowrap;padding-left:100%;animation:rp-scrolling-text-preview ${speed}s linear ${iterations};animation-delay:-${speed * 0.5}s;"><span style="display:inline-flex;align-items:center;gap:6px;">${iconMarkup}${escapeHtml(String(media.text || 'Your scrolling message'))}</span>${image}</span></div>`;
                     }
                     if(mediaType === 'youtube'){
                         const videoId = String(media.name).replace(/^youtube:/i, '');
@@ -18692,7 +19034,9 @@ allowfullscreen></iframe></div>`;
                              ? `This sliced wall set will be assigned across ${getRpTargetWallScreens(wallSet.length).join(', ')}. Drag the slices if you want a different screen order. ${scheduleMeta.repeatText}. ${scheduleMeta.timeText}. Effect: ${scheduleMeta.effectText}. Click ${getRpApplyLabel().toLowerCase()} to create or update those screens.`
                              : ((rpCtx && rpCtx.itemId === 'SINGLE')
                                  ? `Media is ready. ${scheduleMeta.repeatText}. ${scheduleMeta.timeText}. Effect: ${scheduleMeta.effectText}. Click ${getRpApplyLabel().toLowerCase()} when you're done.`
-                                 : `Current media is loaded. Choose another image or video, then click ${getRpApplyLabel().toLowerCase()} to replace it.`);
+                                 : (isRpScrollingTextMode()
+                                     ? `Current scrolling text is loaded. Adjust the message, image, or timing, then click ${getRpApplyLabel().toLowerCase()}. ${scheduleMeta.repeatText}. ${scheduleMeta.timeText}.`
+                                     : `Current media is loaded. Choose another image or video, then click ${getRpApplyLabel().toLowerCase()} to replace it.`));
                     }
                     const selectedNames = new Set(wallSet ? wallSet.map((item) => item.name) : (hasSelection ? [rpSelectedMedia.name] : []));
                     Array.from(document.querySelectorAll('#rp-grid-images .rp-item, #rp-grid-videos .rp-item')).forEach((card) => {
@@ -18737,7 +19081,24 @@ allowfullscreen></iframe></div>`;
                 }
                 function openRpScrollingTextComposer(){
                     rpComposerMode = 'scrolling_text';
-                    rpSelectedMedia = null;
+                    const editingExistingText = !!(rpCtx && rpCtx.itemId !== 'SINGLE' && rpSelectedMedia && rpSelectedMedia.mediaType === 'scrolling_text');
+                    if(!editingExistingText){
+                        rpSelectedMedia = {
+                            name: 'text:pending',
+                            mediaType: 'scrolling_text',
+                            text: '',
+                            font_size: 56,
+                            scroll_speed: 15,
+                            text_color: '#ffffff',
+                            background_color: '#071b1c',
+                            icon: '',
+                            image_url: '',
+                            image_width: 180,
+                            image_height: 100,
+                            font_family: 'Segoe UI',
+                            loop: true
+                        };
+                    }
                     rpWallAssignments = null;
                     switchRpTab('lib');
                     renderRpSelection();
@@ -18891,10 +19252,6 @@ allowfullscreen></iframe></div>`;
                 }
                 async function applyRpScrollingText(){
                     if(!rpCtx) return false;
-                    if(rpCtx.itemId !== 'SINGLE'){
-                        alert('Scrolling text is added as its own schedule slot. Use Add Scheduled Media to create it.');
-                        return false;
-                    }
                     const message = String(rpSelectedMedia && rpSelectedMedia.text || '').trim();
                     if(!message){
                         alert('Enter the message, then click Preview text.');
@@ -18904,33 +19261,40 @@ allowfullscreen></iframe></div>`;
                     if(!sid) return false;
                     const schedulePayload = buildRpPopupSchedulePayload(sid);
                     if(!schedulePayload) return false;
+                    const imageUrl = await rpUploadInlineScrollingImage();
+                    rpSelectedMedia.image_url = imageUrl;
                     const textOptions = {
                         font_size: Math.max(16, Math.min(180, Number(rpSelectedMedia.font_size || rpSelectedMedia.fontSize || 56))),
                         scroll_speed: Math.max(3, Math.min(120, Number(rpSelectedMedia.scroll_speed || rpSelectedMedia.scrollSpeed || 15))),
                         text_color: String(rpSelectedMedia.text_color || rpSelectedMedia.textColor || '#ffffff'),
                         background_color: String(rpSelectedMedia.background_color || rpSelectedMedia.backgroundColor || '#071b1c'),
                         icon: String(rpSelectedMedia.icon || ''),
-                        image_url: String(rpSelectedMedia.image_url || rpSelectedMedia.imageUrl || ''),
+                        image_url: imageUrl,
                         image_width: Math.max(24, Math.min(1200, Number(rpSelectedMedia.image_width || rpSelectedMedia.imageWidth || 180))),
                         image_height: Math.max(24, Math.min(1200, Number(rpSelectedMedia.image_height || rpSelectedMedia.imageHeight || 100))),
                         font_family: String(rpSelectedMedia.font_family || rpSelectedMedia.fontFamily || 'Segoe UI'),
                         loop: rpSelectedMedia.loop !== false
                     };
+                    const updatingExisting = rpCtx.itemId !== 'SINGLE';
+                    const requestUrl = updatingExisting
+                        ? `/playlist/item/${encodeURIComponent(currentStoreId)}/${encodeURIComponent(sid)}/${encodeURIComponent(rpCtx.itemId)}`
+                        : `/playlist/text/${encodeURIComponent(currentStoreId)}/${encodeURIComponent(sid)}`;
+                    const requestBody = Object.assign({ text: message }, textOptions, schedulePayload);
                     markAsChanged();
-                    const response = await fetch(`/playlist/text/${encodeURIComponent(currentStoreId)}/${encodeURIComponent(sid)}`, {
-                        method:'POST',
+                    const response = await fetch(requestUrl, {
+                        method: updatingExisting ? 'PATCH' : 'POST',
                         headers:{'Content-Type':'application/json'},
-                        body: JSON.stringify(Object.assign({ text: message }, textOptions, schedulePayload))
+                        body: JSON.stringify(requestBody)
                     });
                     const result = await response.json();
                     if(!response.ok || !result.success){
-                        throw new Error((result && result.error) || 'Failed to add scrolling text');
+                        throw new Error((result && result.error) || (updatingExisting ? 'Failed to update scrolling text' : 'Failed to add scrolling text'));
                     }
                     closeReplaceModal();
                     markAsSaved();
                     refreshPlaylist(sid);
                     try { if(typeof loadScreensForStore === 'function' && currentStoreId) loadScreensForStore(currentStoreId); } catch {}
-                    showMessage('Scrolling text added to the schedule.', '#0f766e');
+                    showMessage(updatingExisting ? 'Scrolling text schedule updated.' : 'Scrolling text added to the schedule.', '#0f766e');
                     return true;
                 }
                 function applyRpSelectedMedia(){
@@ -18979,6 +19343,8 @@ allowfullscreen></iframe></div>`;
                         return;
                     }
                     if(which === 'drive'){
+                        renderRpBreadcrumb();
+                        renderRpDriveLibrary();
                         ensureRpDriveReady().catch(() => {});
                         return;
                     }
@@ -19038,6 +19404,29 @@ allowfullscreen></iframe></div>`;
                     }
                     const crumb = document.getElementById('rp-breadcrumb');
                     if(!crumb) return;
+
+                    const folderActions = bar.querySelector('.rp-folder-actions');
+                    if(isRpDriveMode()){
+                        if(folderActions) folderActions.style.display = 'none';
+                        const driveTrail = Array.isArray(rpDriveFolderTrail) && rpDriveFolderTrail.length
+                            ? rpDriveFolderTrail
+                            : [{ id:'root', name:'My Drive' }];
+                        crumb.innerHTML = driveTrail.map((item, index) => {
+                            const button = `<button type="button" class="rp-breadcrumb__item${index === driveTrail.length - 1 ? ' is-current' : ''}" data-drive-index="${index}">${escapeHtml(item.name || 'Drive')}</button>`;
+                            return index === 0 ? button : `<span class="rp-breadcrumb__sep">/</span>${button}`;
+                        }).join('');
+                        Array.from(crumb.querySelectorAll('[data-drive-index]')).forEach((button) => {
+                            button.addEventListener('click', () => {
+                                const index = parseInt(button.dataset.driveIndex || '0', 10) || 0;
+                                if(index === driveTrail.length - 1) return;
+                                const folder = driveTrail[index];
+                                rpDriveFolderTrail = driveTrail.slice(0, index + 1);
+                                rpDriveLoadFolder(folder.id || 'root', folder.name || 'My Drive', false).catch(() => {});
+                            });
+                        });
+                        return;
+                    }
+                    if(folderActions) folderActions.style.display = '';
 
                     const parts = String(rpPrefix || '').split('/').filter(Boolean);
                     const items = [{ label: 'Library', prefix: '' }];
@@ -19700,27 +20089,11 @@ allowfullscreen></iframe></div>`;
             let scrollingTextTargetScreen = null;
             let scrollingTextOpenedFromRp = false;
             function openScrollingTextModal(screenId) {
-                scrollingTextTargetScreen = screenId;
-                const modal = document.getElementById('scrollingTextModal');
-                const textInput = document.getElementById('scrollingTextValue');
-                const durationInput = document.getElementById('scrollingTextDuration');
-                if (!modal || !textInput || !durationInput) return;
-                textInput.value = '';
-                durationInput.value = '15';
-                document.getElementById('scrollingTextFontSize').value = '56';
-                document.getElementById('scrollingTextSpeed').value = '15';
-                document.getElementById('scrollingTextFont').value = 'Segoe UI';
-                document.getElementById('scrollingTextColor').value = '#ffffff';
-                document.getElementById('scrollingTextBackground').value = '#071b1c';
-                document.getElementById('scrollingTextIcon').value = '';
-                document.getElementById('scrollingTextImageFile').value = '';
-                document.getElementById('scrollingTextImageUrl').value = '';
-                document.getElementById('scrollingTextImageStatus').textContent = 'Choose an image from your device.';
-                document.getElementById('scrollingTextImageWidth').value = '180';
-                document.getElementById('scrollingTextImageHeight').value = '100';
-                document.getElementById('scrollingTextLoop').checked = true;
-                modal.style.display = 'flex';
-                textInput.focus();
+                openReplaceModal(screenId, 'SINGLE');
+                window.setTimeout(() => {
+                    openRpScrollingTextComposer();
+                    document.getElementById('rp-scrolling-text-inline')?.focus();
+                }, 0);
             }
 
             function closeScrollingTextModal() {

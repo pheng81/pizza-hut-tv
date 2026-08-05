@@ -215,8 +215,8 @@ class _StoresTabState extends State<StoresTab>
       ..isAntiAlias = true;
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-         Rect.fromLTWH(2.5, 2.5, 29, 29),
-         const Radius.circular(6),
+        Rect.fromLTWH(2.5, 2.5, 29, 29),
+        const Radius.circular(6),
       ),
       strokePaint,
     );
@@ -996,6 +996,7 @@ class _StoresTabState extends State<StoresTab>
     String? youtubeVideoId;
     String? livePosTitle;
     String? livePosBody;
+    Map<String, dynamic>? scrollingTextItem;
     int? syncStartEpoch;
     void addCandidate(String raw) {
       final resolved = _toAbsoluteUrlForPreview(raw);
@@ -1014,6 +1015,18 @@ class _StoresTabState extends State<StoresTab>
     void addItemCandidates(Map<String, dynamic> item) {
       final file = (item['file'] ?? '').toString().trim();
       final mediaType = (item['media_type'] ?? '').toString().toLowerCase();
+      final isScrollingText = mediaType == 'scrolling_text' ||
+          file.toLowerCase().startsWith('text:');
+      if (isScrollingText) {
+        if (scrollingTextItem == null &&
+            candidates.isEmpty &&
+            videoUrl == null &&
+            youtubeVideoId == null &&
+            livePosTitle == null) {
+          scrollingTextItem = item;
+        }
+        return;
+      }
       final isLivePos =
           mediaType == 'live_pos' || file.toLowerCase().startsWith('livepos:');
       if (isLivePos && livePosTitle == null) {
@@ -1106,13 +1119,18 @@ class _StoresTabState extends State<StoresTab>
       }
     }
 
-    if (candidates.isEmpty && livePosTitle == null) {
+    if (candidates.isEmpty && livePosTitle == null && scrollingTextItem == null) {
       return const _ScreenCardPreviewData(urls: []);
     }
 
     Map<String, String> headers = const {};
     final headerUrl =
-        videoUrl ?? (candidates.isNotEmpty ? candidates.first : '');
+        videoUrl ??
+        (scrollingTextItem == null
+            ? (candidates.isNotEmpty ? candidates.first : '')
+            : _toAbsoluteUrlForPreview(
+                (scrollingTextItem!['image_url'] ?? '').toString(),
+              ));
     if (headerUrl.isNotEmpty) {
       try {
         headers = await widget.apiClient.getAuthHeadersForUrl(headerUrl);
@@ -1127,6 +1145,26 @@ class _StoresTabState extends State<StoresTab>
       youtubeVideoId: youtubeVideoId,
       livePosTitle: livePosTitle,
       livePosBody: livePosBody,
+      scrollingText: scrollingTextItem?['text']?.toString(),
+      scrollingImageUrl: scrollingTextItem == null
+          ? null
+          : _toAbsoluteUrlForPreview(
+              (scrollingTextItem!['image_url'] ?? '').toString(),
+            ),
+      scrollingIcon: scrollingTextItem?['icon']?.toString(),
+      scrollingTextColor: scrollingTextItem?['text_color']?.toString(),
+      scrollingBackgroundColor:
+          scrollingTextItem?['background_color']?.toString(),
+      scrollingSpeed: double.tryParse(
+        (scrollingTextItem?['scroll_speed'] ??
+                scrollingTextItem?['duration'] ??
+                15)
+            .toString(),
+      ),
+      scrollingFontSize: double.tryParse(
+        (scrollingTextItem?['font_size'] ?? 56).toString(),
+      ),
+      scrollingLoop: scrollingTextItem?['loop'] != false,
       syncStartEpoch: syncStartEpoch,
       headers: headers,
     );
@@ -1206,9 +1244,8 @@ class _StoresTabState extends State<StoresTab>
       return const [];
     }
 
-    List<ScreenItem> screens = store.id == selectedStoreId
-        ? selectedStoreScreens
-        : const [];
+    List<ScreenItem> screens =
+        store.id == selectedStoreId ? selectedStoreScreens : const [];
     if (screens.isEmpty) {
       try {
         screens = await widget.apiClient.getScreens(store.id);
@@ -1228,8 +1265,8 @@ class _StoresTabState extends State<StoresTab>
         (() {
           final screen = screens[index];
           final angle = (2 * math.pi * index) / screens.length;
-          final status =
-              (_screenStatusesByStore[store.id]?[screen.id] ?? '').toLowerCase();
+          final status = (_screenStatusesByStore[store.id]?[screen.id] ?? '')
+              .toLowerCase();
           return _StoreMapMarkerData(
             store: base.store,
             point: LatLng(
@@ -1255,8 +1292,7 @@ class _StoresTabState extends State<StoresTab>
 
     // Status is scoped by store. Previously this used the selected store's
     // status map for every pin, so all non-selected stores fell back offline.
-    Map<String, String> storeScreenStatus =
-        _screenStatusesByStore[store.id] ??
+    Map<String, String> storeScreenStatus = _screenStatusesByStore[store.id] ??
         (store.id == selectedStoreId ? _screenStatus : const {});
     if (storeScreenStatus.isEmpty && store.id != selectedStoreId) {
       try {
@@ -2339,7 +2375,7 @@ class _StoreMapPreviewCard extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: Container(
-               padding: const EdgeInsets.all(8),
+        padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
@@ -2354,12 +2390,12 @@ class _StoreMapPreviewCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-             Container(
-               width: 64,
-               height: 64,
+            Container(
+              width: 64,
+              height: 64,
               decoration: BoxDecoration(
                 color: scheme.surfaceContainerHigh,
-                 borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(12),
               ),
               clipBehavior: Clip.antiAlias,
               child: previewFuture == null
@@ -2388,6 +2424,26 @@ class _StoreMapPreviewCard extends StatelessWidget {
                             body: data.livePosBody ?? '',
                           );
                         }
+                        if (data.scrollingText != null) {
+                          return _ScrollingTextPreview(
+                            text: data.scrollingText!,
+                            fontSize: (data.scrollingFontSize ?? 14).clamp(10, 16),
+                            scrollSpeedSeconds: data.scrollingSpeed ?? 15,
+                            loop: data.scrollingLoop,
+                            textColor: _previewColor(
+                              data.scrollingTextColor,
+                              Colors.white,
+                            ),
+                            backgroundColor: _previewColor(
+                              data.scrollingBackgroundColor,
+                              const Color(0xFF071B1C),
+                            ),
+                            icon: data.scrollingIcon ?? '',
+                            imageUrl: data.scrollingImageUrl ?? '',
+                            headers: data.headers,
+                            compact: true,
+                          );
+                        }
                         if (data.videoUrl != null) {
                           return _VideoPreview(
                             url: data.videoUrl!,
@@ -2412,7 +2468,7 @@ class _StoreMapPreviewCard extends StatelessWidget {
                       },
                     ),
             ),
-             const SizedBox(width: 8),
+            const SizedBox(width: 8),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2484,6 +2540,14 @@ class _ScreenCardPreviewData {
     this.youtubeVideoId,
     this.livePosTitle,
     this.livePosBody,
+    this.scrollingText,
+    this.scrollingImageUrl,
+    this.scrollingIcon,
+    this.scrollingTextColor,
+    this.scrollingBackgroundColor,
+    this.scrollingSpeed,
+    this.scrollingFontSize,
+    this.scrollingLoop = true,
     this.syncStartEpoch,
     this.headers = const {},
   });
@@ -2493,6 +2557,14 @@ class _ScreenCardPreviewData {
   final String? youtubeVideoId;
   final String? livePosTitle;
   final String? livePosBody;
+  final String? scrollingText;
+  final String? scrollingImageUrl;
+  final String? scrollingIcon;
+  final String? scrollingTextColor;
+  final String? scrollingBackgroundColor;
+  final double? scrollingSpeed;
+  final double? scrollingFontSize;
+  final bool scrollingLoop;
   final int? syncStartEpoch;
   final Map<String, String> headers;
 }
@@ -2586,6 +2658,177 @@ class _ScreenMediaEditorSheet extends StatefulWidget {
       _ScreenMediaEditorSheetState();
 }
 
+class _EffectOption {
+  const _EffectOption(this.id, this.label, this.icon);
+
+  final int id;
+  final String label;
+  final IconData icon;
+}
+
+class _AnimatedEffectIcon extends StatefulWidget {
+  const _AnimatedEffectIcon({
+    required this.effectId,
+    required this.icon,
+    required this.selected,
+    required this.color,
+  });
+
+  final int effectId;
+  final IconData icon;
+  final bool selected;
+  final Color color;
+
+  @override
+  State<_AnimatedEffectIcon> createState() => _AnimatedEffectIconState();
+}
+
+class _AnimatedEffectIconState extends State<_AnimatedEffectIcon>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 650),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.selected) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _controller.forward(from: 0);
+        }
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _AnimatedEffectIcon oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selected && !oldWidget.selected) {
+      _controller.forward(from: 0);
+    } else if (!widget.selected && oldWidget.selected) {
+      _controller.stop();
+      _controller.value = 1;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final progress = widget.selected ? _controller.value : 1.0;
+        if (widget.effectId == 1) {
+          return CustomPaint(
+            size: const Size.square(22),
+            painter: _ScissorsIconPainter(
+              color: widget.color,
+              progress: progress,
+            ),
+          );
+        }
+
+        final eased = Curves.easeOutCubic.transform(progress);
+        var scale = 1.0;
+        var opacity = 1.0;
+        var offset = Offset.zero;
+        switch (widget.effectId) {
+          case 2:
+            opacity = 0.35 + (eased * 0.65);
+            break;
+          case 3:
+            scale = 0.72 + (eased * 0.28);
+            opacity = 0.3 + (eased * 0.7);
+            break;
+          case 4:
+            offset = Offset(-7 * (1 - eased), 0);
+            break;
+          case 5:
+            offset = Offset(7 * (1 - eased), 0);
+            break;
+          case 6:
+            offset = Offset(0, -7 * (1 - eased));
+            break;
+          case 7:
+            offset = Offset(0, 7 * (1 - eased));
+            break;
+          case 8:
+            scale = 0.65 + (eased * 0.35);
+            break;
+          case 9:
+            scale = 1.35 - (eased * 0.35);
+            break;
+          case 10:
+            offset = Offset(9 * (1 - eased), 0);
+            opacity = 0.35 + (eased * 0.65);
+            break;
+        }
+
+        return Transform.translate(
+          offset: offset,
+          child: Transform.scale(
+            scale: scale,
+            child: Opacity(
+              opacity: opacity,
+              child: Icon(widget.icon, size: 20, color: widget.color),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ScissorsIconPainter extends CustomPainter {
+  const _ScissorsIconPainter({
+    required this.color,
+    required this.progress,
+  });
+
+  final Color color;
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+    final center = Offset(size.width / 2, size.height / 2);
+    final opening = math.sin(progress * math.pi) * 0.48;
+    final bladeLength = size.width * 0.55;
+    final bladeRise = size.height * (0.2 + opening * 0.22);
+
+    canvas.drawLine(
+      center,
+      center + Offset(bladeLength, -bladeRise),
+      paint,
+    );
+    canvas.drawLine(
+      center,
+      center + Offset(bladeLength, bladeRise),
+      paint,
+    );
+    canvas.drawCircle(center + const Offset(-6, -5), 3.2, paint);
+    canvas.drawCircle(center + const Offset(-6, 5), 3.2, paint);
+    canvas.drawLine(center + const Offset(-3, -3), center, paint);
+    canvas.drawLine(center + const Offset(-3, 3), center, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ScissorsIconPainter oldDelegate) {
+    return oldDelegate.color != color || oldDelegate.progress != progress;
+  }
+}
+
 class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet>
     with SingleTickerProviderStateMixin {
   static const List<String> _weekDays = [
@@ -2613,6 +2856,19 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet>
   static final Map<String, int> _effectIdByName = {
     for (final entry in _effectById.entries) entry.value: entry.key,
   };
+  static const List<_EffectOption> _effectOptions = [
+    _EffectOption(0, 'None', Icons.block),
+    _EffectOption(1, 'Cut', Icons.content_cut),
+    _EffectOption(2, 'Fade', Icons.view_column_outlined),
+    _EffectOption(3, 'Dissolve', Icons.grain),
+    _EffectOption(4, 'Slide', Icons.arrow_back),
+    _EffectOption(5, 'Slide right', Icons.arrow_forward),
+    _EffectOption(6, 'Slide up', Icons.arrow_upward),
+    _EffectOption(7, 'Slide down', Icons.arrow_downward),
+    _EffectOption(8, 'Zoom', Icons.zoom_in),
+    _EffectOption(9, 'Zoom out', Icons.zoom_out),
+    _EffectOption(10, 'Wipe', Icons.layers_clear_outlined),
+  ];
 
   final _startController = TextEditingController();
   final _endController = TextEditingController();
@@ -5402,6 +5658,19 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet>
         key: ValueKey('scrolling-text-${item?['id'] ?? item?['file'] ?? ''}'),
         text: (item?['text'] ?? 'Your scrolling message').toString(),
         fontSize: iconSize < 12 ? 12 : (iconSize > 18 ? 18 : iconSize),
+        scrollSpeedSeconds: double.tryParse(
+              (item?['scroll_speed'] ?? item?['duration'] ?? 15).toString(),
+            ) ??
+            15,
+        loop: item?['loop'] != false,
+        textColor: _previewColor(item?['text_color'], Colors.white),
+        backgroundColor: _previewColor(
+          item?['background_color'],
+          const Color(0xFF071B1C),
+        ),
+        icon: (item?['icon'] ?? '').toString(),
+        imageUrl: _toAbsoluteUrl((item?['image_url'] ?? '').toString()),
+        headers: _previewHeaders,
       );
     }
 
@@ -8291,53 +8560,13 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet>
                                           ),
                                         ),
                                         const SizedBox(height: 6),
-                                        Row(
-                                          children: List.generate(11, (i) {
-                                            final selected = effectId == i;
-                                            final isLast = i == 10;
-                                            return Expanded(
-                                              child: Padding(
-                                                padding: EdgeInsets.only(
-                                                    right: isLast ? 0 : 4),
-                                                child: GestureDetector(
-                                                  onTap: creating
-                                                      ? null
-                                                      : () => setModalState(() {
-                                                            effectId = i;
-                                                          }),
-                                                  child: Container(
-                                                    height: 34,
-                                                    alignment: Alignment.center,
-                                                    decoration: BoxDecoration(
-                                                      color: selected
-                                                          ? theme.colorScheme
-                                                              .primary
-                                                          : theme.colorScheme
-                                                              .surfaceContainerHighest,
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              8),
-                                                    ),
-                                                    child: Text(
-                                                      i == 0 ? '·' : '$i',
-                                                      style: theme
-                                                          .textTheme.labelSmall
-                                                          ?.copyWith(
-                                                        fontSize: 11,
-                                                        fontWeight:
-                                                            FontWeight.w700,
-                                                        color: selected
-                                                            ? theme.colorScheme
-                                                                .onPrimary
-                                                            : theme.colorScheme
-                                                                .onSurfaceVariant,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            );
-                                          }),
+                                        _buildEffectPicker(
+                                          selectedId: effectId,
+                                          onSelected: creating
+                                              ? null
+                                              : (id) => setModalState(() {
+                                                    effectId = id;
+                                                  }),
                                         ),
                                       ],
                                     ),
@@ -8908,6 +9137,85 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet>
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildEffectPicker({
+    required int selectedId,
+    required ValueChanged<int>? onSelected,
+  }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tileWidth = ((constraints.maxWidth - 30) / 6).clamp(46.0, 120.0);
+        return Wrap(
+          spacing: 6,
+          runSpacing: 8,
+          children: _effectOptions.map((option) {
+            final selected = selectedId == option.id;
+            return SizedBox(
+              width: tileWidth,
+              height: 70,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap:
+                      onSelected == null ? null : () => onSelected(option.id),
+                  borderRadius: BorderRadius.circular(11),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 140),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? scheme.primary.withValues(alpha: 0.07)
+                          : scheme.surface,
+                      borderRadius: BorderRadius.circular(11),
+                      border: Border.all(
+                        color:
+                            selected ? scheme.primary : scheme.outlineVariant,
+                        width: selected ? 2 : 1,
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _AnimatedEffectIcon(
+                          effectId: option.id,
+                          icon: option.icon,
+                          selected: selected,
+                          color: selected
+                              ? scheme.primary
+                              : scheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          option.label,
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            fontSize: 10.5,
+                            height: 1.1,
+                            fontWeight:
+                                selected ? FontWeight.w700 : FontWeight.w600,
+                            color: selected
+                                ? scheme.primary
+                                : scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        );
+      },
     );
   }
 
@@ -9588,8 +9896,8 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet>
                                       ),
                                       const SizedBox(width: 6),
                                       _buildQuickActionButton(
-                                        tooltip: 'Auto',
-                                        icon: Icons.content_cut,
+                                        tooltip: 'Wall video',
+                                        icon: Icons.video_library_outlined,
                                         background: const Color(0xFF16A34A),
                                         onPressed: (_saving || _quickActionBusy)
                                             ? null
@@ -9741,54 +10049,16 @@ class _ScreenMediaEditorSheetState extends State<_ScreenMediaEditorSheet>
                                         ),
                                       ),
                                       const SizedBox(height: 6),
-                                      Row(
-                                        children: List.generate(11, (i) {
-                                          final selected = _itemEffectId == i;
-                                          final isLast = i == 10;
-                                          return Expanded(
-                                            child: Padding(
-                                              padding: EdgeInsets.only(
-                                                  right: isLast ? 0 : 4),
-                                              child: GestureDetector(
-                                                onTap: _saving
-                                                    ? null
-                                                    : () {
-                                                        setState(() {
-                                                          _itemEffectId = i;
-                                                        });
-                                                        _queueAutoSave();
-                                                      },
-                                                child: Container(
-                                                  height: 34,
-                                                  alignment: Alignment.center,
-                                                  decoration: BoxDecoration(
-                                                    color: selected
-                                                        ? scheme.primary
-                                                        : scheme
-                                                            .surfaceContainerHighest,
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            8),
-                                                  ),
-                                                  child: Text(
-                                                    i == 0 ? '·' : '$i',
-                                                    style: theme
-                                                        .textTheme.labelSmall
-                                                        ?.copyWith(
-                                                      fontSize: 11,
-                                                      fontWeight:
-                                                          FontWeight.w700,
-                                                      color: selected
-                                                          ? scheme.onPrimary
-                                                          : scheme
-                                                              .onSurfaceVariant,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          );
-                                        }),
+                                      _buildEffectPicker(
+                                        selectedId: _itemEffectId,
+                                        onSelected: _saving
+                                            ? null
+                                            : (id) {
+                                                setState(() {
+                                                  _itemEffectId = id;
+                                                });
+                                                _queueAutoSave();
+                                              },
                                       ),
                                     ],
                                   ),
@@ -10118,10 +10388,26 @@ class _ScrollingTextPreview extends StatefulWidget {
     super.key,
     required this.text,
     required this.fontSize,
+    required this.scrollSpeedSeconds,
+    required this.loop,
+    required this.textColor,
+    required this.backgroundColor,
+    this.icon = '',
+    this.imageUrl = '',
+    this.headers = const {},
+    this.compact = false,
   });
 
   final String text;
   final double fontSize;
+  final double scrollSpeedSeconds;
+  final bool loop;
+  final Color textColor;
+  final Color backgroundColor;
+  final String icon;
+  final String imageUrl;
+  final Map<String, String> headers;
+  final bool compact;
 
   @override
   State<_ScrollingTextPreview> createState() => _ScrollingTextPreviewState();
@@ -10134,10 +10420,34 @@ class _ScrollingTextPreviewState extends State<_ScrollingTextPreview>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 7),
-    )..repeat();
+    _controller = AnimationController(vsync: this);
+    _startAnimation();
+  }
+
+  Duration get _duration => Duration(
+        milliseconds:
+            (widget.scrollSpeedSeconds.clamp(3, 120) * 1000).round(),
+      );
+
+  void _startAnimation() {
+    _controller.duration = _duration;
+    if (widget.loop) {
+      _controller.repeat();
+    } else {
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _ScrollingTextPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.scrollSpeedSeconds != widget.scrollSpeedSeconds ||
+        oldWidget.loop != widget.loop ||
+        oldWidget.text != widget.text ||
+        oldWidget.imageUrl != widget.imageUrl) {
+      _controller.stop();
+      _startAnimation();
+    }
   }
 
   @override
@@ -10149,7 +10459,7 @@ class _ScrollingTextPreviewState extends State<_ScrollingTextPreview>
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFF0F172A),
+      color: widget.backgroundColor,
       clipBehavior: Clip.hardEdge,
       alignment: Alignment.centerLeft,
       child: AnimatedBuilder(
@@ -10158,20 +10468,59 @@ class _ScrollingTextPreviewState extends State<_ScrollingTextPreview>
           translation: Offset(1 - (_controller.value * 2), 0),
           child: child,
         ),
-        child: Text(
-          widget.text,
-          maxLines: 1,
-          softWrap: false,
-          overflow: TextOverflow.visible,
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: widget.fontSize,
-            fontWeight: FontWeight.w700,
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (widget.icon.trim().isNotEmpty) ...[
+                  Text(
+                    widget.icon.trim(),
+                    style: TextStyle(fontSize: widget.fontSize),
+                  ),
+                  SizedBox(width: widget.compact ? 3 : 8),
+                ],
+                Text(
+                  widget.text,
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.visible,
+                  style: TextStyle(
+                    color: widget.textColor,
+                    fontSize: widget.fontSize,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            if (widget.imageUrl.trim().isNotEmpty) ...[
+              SizedBox(height: widget.compact ? 3 : 8),
+              SizedBox(
+                width: widget.compact ? 34 : 120,
+                height: widget.compact ? 22 : 72,
+                child: Image.network(
+                  widget.imageUrl,
+                  headers: widget.headers.isEmpty ? null : widget.headers,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
   }
+}
+
+Color _previewColor(dynamic raw, Color fallback) {
+  final value = (raw ?? '').toString().trim().replaceFirst('#', '');
+  if (!RegExp(r'^[0-9a-fA-F]{6}$').hasMatch(value)) {
+    return fallback;
+  }
+  final parsed = int.tryParse(value, radix: 16);
+  return parsed == null ? fallback : Color(0xFF000000 | parsed);
 }
 
 class _VideoPreview extends StatefulWidget {

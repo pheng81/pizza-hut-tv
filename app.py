@@ -4929,12 +4929,15 @@ def google_drive_status():
             ((os.environ.get('GOOGLE_CLOUD_PROJECT_NUMBER') or os.environ.get('GOOGLE_PROJECT_NUMBER') or '').strip())
         )
         info = _google_drive_session()
-        connected = bool(_google_drive_access_token())
+        has_token = bool(_google_drive_access_token())
+        granted_scopes = set(str(info.get('scope') or '').split())
+        connected = has_token and 'https://www.googleapis.com/auth/drive.file' in granted_scopes
         return jsonify({
             'success': True,
             'configured': configured,
             'picker_configured': picker_configured,
             'connected': connected,
+            'needs_reconnect': has_token and not connected,
             'email': str(info.get('email') or '').strip(),
         })
     except Exception as e:
@@ -6279,6 +6282,7 @@ def auth_google_callback():
                 'access_token': access_token,
                 'expires_at': int(token.get('expires_at') or (time.time() + 3300)),
                 'email': email,
+                'scope': str(token.get('scope') or ''),
             }
             session.permanent = True
             return _google_drive_popup_response(True, 'Google Drive connected')
@@ -14210,6 +14214,7 @@ def _handle_google_drive_manual_callback():
             'access_token': access_token,
             'expires_at': int(time.time() + max(60, expires_in - 30)),
             'email': email,
+            'scope': scope_text,
         }
         session.permanent = True
         session.modified = True
