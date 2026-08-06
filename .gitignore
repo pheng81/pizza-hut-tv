@@ -210,3 +210,7 @@ client_secret*.json
 
 # Local secret keys
 all_files/Data_sever_key/*.pem
+
+# Apple Sign in with Apple private keys - never commit these
+*.p8
+AuthKey_*.p8

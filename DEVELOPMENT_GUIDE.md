@@ -116,6 +116,73 @@ All configuration is in `.env.*` files:
 - Repeat Apple sign-ins may not return email from Apple; backend now stores and matches `apple_sub` so returning users can still log in
 - First Apple sign-in still requires email so the account can be created
 
+#### Apple Developer Values
+
+| Value | Setting |
+| --- | --- |
+| Team ID | `U6SKM3QX29` |
+| Key ID | `S8BN744L7P` |
+| Web Service ID / Client ID | `com.everydayadvertise.web` |
+| iOS Bundle ID | `com.everydayadvertise.everydayMobile` |
+
+The Team ID is set as `DEVELOPMENT_TEAM` in `everyday_mobile/ios/Runner.xcodeproj/project.pbxproj`
+for the Debug, Release and Profile configurations.
+
+Apple website configuration in the developer portal:
+
+- Domains: `everydayadvertise.com`, `api.everydayadvertise.com`
+- Return URLs: `https://everydayadvertise.com/auth/apple/callback`, `https://api.everydayadvertise.com/auth/apple/callback`
+
+The return URLs match the `/auth/apple/callback` route in `app.py`.
+
+#### Generating APPLE_CLIENT_SECRET
+
+`APPLE_CLIENT_SECRET` is an ES256 JWT signed with the `.p8` private key
+(`AuthKey_S8BN744L7P.p8`). Apple caps its lifetime at 6 months, so it has to be
+regenerated before it expires.
+
+**Never commit the `.p8` file or the generated JWT.** Keep the key outside the repo
+(for example `C:\Secrets\AuthKey_S8BN744L7P.p8` on Windows) - `*.p8` is gitignored as
+a backstop. Write the generation script outside the repo too:
+
+```bash
+pip install PyJWT cryptography
+```
+
+```python
+import time
+import jwt
+from cryptography.hazmat.primitives import serialization
+
+team_id = "U6SKM3QX29"
+key_id = "S8BN744L7P"
+client_id = "com.everydayadvertise.web"
+key_path = r"C:\Secrets\AuthKey_S8BN744L7P.p8"
+
+with open(key_path, "rb") as file:
+    private_key = serialization.load_pem_private_key(file.read(), password=None)
+
+now = int(time.time())
+
+token = jwt.encode(
+    {
+        "iss": team_id,
+        "iat": now,
+        "exp": now + 15552000,
+        "aud": "https://appleid.apple.com",
+        "sub": client_id,
+    },
+    private_key,
+    algorithm="ES256",
+    headers={"kid": key_id},
+)
+
+print(token)
+```
+
+Copy the printed JWT into `APPLE_CLIENT_SECRET`. The production server already has
+these credentials configured.
+
 ### Remote vs Local Server
 - Remote production server is the normal app target: `https://everydayadvertise.com`
 - Local backend is best for testing auth and backend fixes without touching production
