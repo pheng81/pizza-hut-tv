@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -331,62 +333,121 @@ class _SimpleHeader extends StatelessWidget {
             ),
           ),
           if ((linkCode ?? '').isNotEmpty)
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 480),
-              switchInCurve: Curves.easeOutBack,
-              switchOutCurve: Curves.easeIn,
-              transitionBuilder: (child, animation) {
-                return FadeTransition(
-                  opacity: animation,
-                  child: ScaleTransition(
-                    scale:
-                        Tween<double>(begin: 0.72, end: 1).animate(animation),
-                    child: child,
-                  ),
-                );
-              },
-              child: Container(
-                key: ValueKey('${selectedStoreId ?? ''}:$linkCode'),
-                padding: const EdgeInsets.only(left: 10),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    SvgPicture.asset(
-                      'assets/images/everyday_advertise_logo.svg',
-                      width: 42,
-                      height: 20,
-                      fit: BoxFit.contain,
-                    ),
-                    const SizedBox(width: 6),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        const Text(
-                          'STORE LINK CODE',
-                          style: TextStyle(
-                            color: Color(0xFF6B7280),
-                            fontSize: 8,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.7,
-                          ),
-                        ),
-                        Text(
-                          linkCode!,
-                          style: const TextStyle(
-                            color: Colors.black,
-                            fontSize: 28,
-                            fontWeight: FontWeight.w900,
-                            height: 0.95,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+            _AnimatedLinkCodeBadge(
+              linkCode: linkCode!,
+              selectedStoreId: selectedStoreId,
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AnimatedLinkCodeBadge extends StatefulWidget {
+  const _AnimatedLinkCodeBadge({
+    required this.linkCode,
+    required this.selectedStoreId,
+  });
+
+  final String linkCode;
+  final String? selectedStoreId;
+
+  @override
+  State<_AnimatedLinkCodeBadge> createState() => _AnimatedLinkCodeBadgeState();
+}
+
+class _AnimatedLinkCodeBadgeState extends State<_AnimatedLinkCodeBadge> {
+  Timer? _switchTimer;
+  bool _showCode = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _switchTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (mounted) {
+        setState(() => _showCode = !_showCode);
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _AnimatedLinkCodeBadge oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.linkCode != widget.linkCode ||
+        oldWidget.selectedStoreId != widget.selectedStoreId) {
+      setState(() => _showCode = true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _switchTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 148,
+      height: 40,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 650),
+        switchInCurve: Curves.easeOutBack,
+        switchOutCurve: Curves.easeIn,
+        transitionBuilder: (child, animation) {
+          return FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.72, end: 1).animate(animation),
+              child: child,
+            ),
+          );
+        },
+        child: _showCode ? _buildCode() : _buildLogo(),
+      ),
+    );
+  }
+
+  Widget _buildLogo() {
+    return Align(
+      key: const ValueKey('logo'),
+      alignment: Alignment.centerRight,
+      child: SvgPicture.asset(
+        'assets/images/everyday_advertise_logo.svg',
+        width: 138,
+        height: 30,
+        fit: BoxFit.contain,
+      ),
+    );
+  }
+
+  Widget _buildCode() {
+    return Align(
+      key: const ValueKey('link-code'),
+      alignment: Alignment.centerRight,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text(
+            'STORE LINK CODE',
+            style: TextStyle(
+              color: Color(0xFF6B7280),
+              fontSize: 8,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.7,
+            ),
+          ),
+          Text(
+            widget.linkCode,
+            style: const TextStyle(
+              color: Colors.black,
+              fontSize: 28,
+              fontWeight: FontWeight.w900,
+              height: 0.95,
+              letterSpacing: 1.2,
+            ),
+          ),
         ],
       ),
     );
