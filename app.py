@@ -17626,16 +17626,18 @@ def webplayer_play():
                 logging.info(f'🔒 Webplayer using user-scoped config for code {code} → {user_key}')
             else:
                 logging.warning(f'⚠ Invalid webplayer code: {code}')
-                config = load_store_config()
+                return jsonify({'success': False, 'error': 'invalid link code'}), 403
         else:
-            logging.info('⚠ Webplayer accessed without valid code - using global config')
-            config = load_store_config()
+            session_key = _safe_user_key()
+            if not session_key:
+                return jsonify({'success': False, 'error': 'valid link code required'}), 403
+            config = load_store_config_for_user_safe_key(session_key)
         screen_config = ensure_playlists_structure(config).get('screens', {}).get(store_id, {}).get(screen_id, {})
     except Exception as e:
         logging.error(f'❌ Webplayer config load error: {e}')
         screen_config = {}
     try:
-        active_file = pick_active_playlist_item(screen_config, load_store_config(), store_id, screen_id)
+        active_file = pick_active_playlist_item(screen_config, config, store_id, screen_id)
     except Exception:
         active_file = None
     address_details = _resolve_screen_address_details(config if isinstance(config, dict) else {}, store_id, screen_id, screen_config)
@@ -17646,7 +17648,7 @@ def webplayer_play():
         ua = ''
     legacy = (request.args.get('legacy') == '1') or (('Tizen' in ua) or ('TizenBrowser' in ua) or ('SMART-TV' in ua) or ('SmartTV' in ua) or ('Maple' in ua))
     template_name = 'webplayer/player_legacy.html' if legacy else 'webplayer/player.html'
-    return render_template(
+    response = make_response(render_template(
         template_name,
         store_id=store_id,
         screen_id=screen_id,
@@ -17656,7 +17658,11 @@ def webplayer_play():
         store_name=address_details.get('store_name', ''),
         display_address=address_details.get('effective_address', ''),
         display_address_source=address_details.get('source', ''),
-    )
+    ))
+    response.headers['Cache-Control'] = 'private, no-store, max-age=0, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Vary'] = 'Cookie'
+    return response
 
 @app.route('/delete_from_screen', methods=['POST'])
 @login_required
