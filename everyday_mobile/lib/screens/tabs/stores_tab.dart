@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -47,9 +48,16 @@ class _StoresTabState extends State<StoresTab>
   final Map<String, Future<_ScreenCardPreviewData>> _screenPreviewUrlFutures =
       {};
   Future<List<_StoreMapMarkerData>>? _storeMapMarkersFuture;
+  List<_StoreMapMarkerData> _storeMapMarkers = const [];
+  GoogleMapController? _mapController;
+  String? _mapCameraSignature;
+  int _mapMarkersRequest = 0;
   final Map<String, LatLng?> _resolvedMapPoints = {};
   _StoreMapMarkerData? _activeMapMarker;
   final Map<String, BitmapDescriptor> _storeMarkerIcons = {};
+  final Set<Factory<OneSequenceGestureRecognizer>> _mapGestureRecognizers = {
+    Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer()),
+  };
   late final AnimationController _panelGradientController;
   Timer? _statusRefreshTimer;
   bool _refreshingStatuses = false;
@@ -108,10 +116,12 @@ class _StoresTabState extends State<StoresTab>
       setState(() {
         _screenStatusesByStore = statusesByStore;
         _screenStatus = statusesByStore[storeId] ?? const {};
-        _storeMapMarkersFuture = _loadStoreMapMarkers(
-          stores: _stores,
-          selectedStoreId: storeId,
-          selectedStoreScreens: _screens,
+        _setStoreMapMarkersFuture(
+          _loadStoreMapMarkers(
+            stores: _stores,
+            selectedStoreId: storeId,
+            selectedStoreScreens: _screens,
+          ),
         );
       });
     } catch (_) {
@@ -278,10 +288,12 @@ class _StoresTabState extends State<StoresTab>
         _stores = stores;
         _screens = screens;
         _screenPreviewUrlFutures.clear();
-        _storeMapMarkersFuture = _loadStoreMapMarkers(
-          stores: stores,
-          selectedStoreId: storeId,
-          selectedStoreScreens: screens,
+        _setStoreMapMarkersFuture(
+          _loadStoreMapMarkers(
+            stores: stores,
+            selectedStoreId: storeId,
+            selectedStoreScreens: screens,
+          ),
         );
       });
       widget.onSelectionChanged(storeId, screenId);
@@ -331,10 +343,12 @@ class _StoresTabState extends State<StoresTab>
           storeId: status,
         };
         _screenPreviewUrlFutures.clear();
-        _storeMapMarkersFuture = _loadStoreMapMarkers(
-          stores: _stores,
-          selectedStoreId: storeId,
-          selectedStoreScreens: screens,
+        _setStoreMapMarkersFuture(
+          _loadStoreMapMarkers(
+            stores: _stores,
+            selectedStoreId: storeId,
+            selectedStoreScreens: screens,
+          ),
         );
       });
       widget.onSelectionChanged(storeId, screenId);
@@ -1119,13 +1133,14 @@ class _StoresTabState extends State<StoresTab>
       }
     }
 
-    if (candidates.isEmpty && livePosTitle == null && scrollingTextItem == null) {
+    if (candidates.isEmpty &&
+        livePosTitle == null &&
+        scrollingTextItem == null) {
       return const _ScreenCardPreviewData(urls: []);
     }
 
     Map<String, String> headers = const {};
-    final headerUrl =
-        videoUrl ??
+    final headerUrl = videoUrl ??
         (scrollingTextItem == null
             ? (candidates.isNotEmpty ? candidates.first : '')
             : _toAbsoluteUrlForPreview(
@@ -1207,6 +1222,21 @@ class _StoresTabState extends State<StoresTab>
         );
       },
     );
+  }
+
+  void _setStoreMapMarkersFuture(
+    Future<List<_StoreMapMarkerData>> future,
+  ) {
+    final request = ++_mapMarkersRequest;
+    _storeMapMarkersFuture = future;
+    future.then((markers) {
+      if (!mounted || request != _mapMarkersRequest) {
+        return;
+      }
+      setState(() {
+        _storeMapMarkers = markers;
+      });
+    });
   }
 
   Future<List<_StoreMapMarkerData>> _loadStoreMapMarkers({
@@ -1452,6 +1482,44 @@ class _StoresTabState extends State<StoresTab>
     );
   }
 
+  void _fitMapToMarkers({
+    required List<_StoreMapMarkerData> markers,
+    required String? selectedStoreId,
+  }) {
+    final controller = _mapController;
+    if (controller == null || markers.isEmpty) {
+      return;
+    }
+
+    final signature = [
+      selectedStoreId ?? '',
+      ...markers.map(
+        (marker) =>
+            '${marker.store.id}:${marker.point.latitude}:${marker.point.longitude}',
+      ),
+    ].join('|');
+    if (signature == _mapCameraSignature) {
+      return;
+    }
+    _mapCameraSignature = signature;
+
+    final points = markers.map((marker) => marker.point).toList();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || controller != _mapController) {
+        return;
+      }
+      if (points.length == 1) {
+        controller.animateCamera(
+          CameraUpdate.newLatLngZoom(points.first, 13),
+        );
+      } else {
+        controller.animateCamera(
+          CameraUpdate.newLatLngBounds(_boundsFromPoints(points), 42),
+        );
+      }
+    });
+  }
+
   Widget _buildStoreMapCard({
     required ThemeData theme,
     required ColorScheme scheme,
@@ -1465,16 +1533,18 @@ class _StoresTabState extends State<StoresTab>
             ? const Center(child: CircularProgressIndicator())
             : FutureBuilder<List<_StoreMapMarkerData>>(
                 future: future,
+                initialData: _storeMapMarkers.isEmpty ? null : _storeMapMarkers,
                 builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
+                  final markers = snapshot.data ?? _storeMapMarkers;
+                  if (snapshot.connectionState == ConnectionState.waiting &&
+                      markers.isEmpty) {
                     return const Center(child: CircularProgressIndicator());
                   }
-                  final markers =
-                      snapshot.data ?? const <_StoreMapMarkerData>[];
                   if (markers.isEmpty) {
                     return Stack(
                       children: [
-                        const GoogleMap(
+                        GoogleMap(
+                          key: const ValueKey('stores-map'),
                           initialCameraPosition: CameraPosition(
                             target: LatLng(20, 0),
                             zoom: 1.5,
@@ -1483,6 +1553,11 @@ class _StoresTabState extends State<StoresTab>
                           myLocationButtonEnabled: false,
                           zoomControlsEnabled: false,
                           compassEnabled: true,
+                          scrollGesturesEnabled: true,
+                          zoomGesturesEnabled: true,
+                          rotateGesturesEnabled: true,
+                          tiltGesturesEnabled: true,
+                          gestureRecognizers: _mapGestureRecognizers,
                         ),
                         Center(
                           child: Container(
@@ -1537,6 +1612,7 @@ class _StoresTabState extends State<StoresTab>
                   return Stack(
                     children: [
                       GoogleMap(
+                        key: const ValueKey('stores-map'),
                         initialCameraPosition: CameraPosition(
                           target: initialCenter,
                           zoom: markers.length == 1 ? 13 : 10,
@@ -1545,17 +1621,18 @@ class _StoresTabState extends State<StoresTab>
                         myLocationButtonEnabled: false,
                         zoomControlsEnabled: false,
                         compassEnabled: true,
+                        scrollGesturesEnabled: true,
+                        zoomGesturesEnabled: true,
+                        rotateGesturesEnabled: true,
+                        tiltGesturesEnabled: true,
+                        gestureRecognizers: _mapGestureRecognizers,
                         onMapCreated: (controller) {
-                          if (markers.length > 1) {
-                            WidgetsBinding.instance.addPostFrameCallback((_) {
-                              controller.animateCamera(
-                                CameraUpdate.newLatLngBounds(
-                                  _boundsFromPoints(points),
-                                  42,
-                                ),
-                              );
-                            });
-                          }
+                          _mapController = controller;
+                          _mapCameraSignature = null;
+                          _fitMapToMarkers(
+                            markers: markers,
+                            selectedStoreId: widget.selectedStoreId,
+                          );
                         },
                         onTap: (_) {
                           if (_activeMapMarker != null && mounted) {
@@ -1593,6 +1670,15 @@ class _StoresTabState extends State<StoresTab>
                               ),
                             )
                             .toSet(),
+                      ),
+                      Builder(
+                        builder: (_) {
+                          _fitMapToMarkers(
+                            markers: markers,
+                            selectedStoreId: widget.selectedStoreId,
+                          );
+                          return const SizedBox.shrink();
+                        },
                       ),
                       if (activeMarker != null)
                         Positioned(
@@ -2427,7 +2513,8 @@ class _StoreMapPreviewCard extends StatelessWidget {
                         if (data.scrollingText != null) {
                           return _ScrollingTextPreview(
                             text: data.scrollingText!,
-                            fontSize: (data.scrollingFontSize ?? 14).clamp(10, 16),
+                            fontSize:
+                                (data.scrollingFontSize ?? 14).clamp(10, 16),
                             scrollSpeedSeconds: data.scrollingSpeed ?? 15,
                             loop: data.scrollingLoop,
                             textColor: _previewColor(
@@ -10425,8 +10512,7 @@ class _ScrollingTextPreviewState extends State<_ScrollingTextPreview>
   }
 
   Duration get _duration => Duration(
-        milliseconds:
-            (widget.scrollSpeedSeconds.clamp(3, 120) * 1000).round(),
+        milliseconds: (widget.scrollSpeedSeconds.clamp(3, 120) * 1000).round(),
       );
 
   void _startAnimation() {
