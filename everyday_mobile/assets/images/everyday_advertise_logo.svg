@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 160" role="img" aria-label="EverydayAdvertise">
+  <defs>
+    <linearGradient id="eaGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ff2d84"/>
+      <stop offset="50%" stop-color="#b544ff"/>
+      <stop offset="100%" stop-color="#3c6cff"/>
+    </linearGradient>
+  </defs>
+  <text x="50%" y="64%" text-anchor="middle" fill="url(#eaGrad)" font-family="Arial, sans-serif" font-size="112" font-weight="800">EverydayAdvertise</text>
+</svg>

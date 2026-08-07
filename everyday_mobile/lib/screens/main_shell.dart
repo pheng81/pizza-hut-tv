@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../services/api_client.dart';
 import 'tabs/commands_tab.dart';
@@ -28,6 +29,7 @@ class _MainShellState extends State<MainShell>
   String? _selectedStoreId;
   String? _selectedScreenId;
   String? _profileAvatarUrl;
+  String? _profileLinkCode;
   late final AnimationController _chrome;
 
   @override
@@ -75,6 +77,8 @@ class _MainShellState extends State<MainShell>
       setState(() {
         final nextUrl = (profile.avatarUrl ?? '').trim();
         _profileAvatarUrl = nextUrl.isEmpty ? null : nextUrl;
+        final nextCode = (profile.linkCode ?? '').trim();
+        _profileLinkCode = nextCode.isEmpty ? null : nextCode;
       });
     } catch (_) {
       // keep default icon
@@ -142,61 +146,63 @@ class _MainShellState extends State<MainShell>
               bottom: false,
               child: Column(
                 children: [
-                SizeTransition(
-                  axisAlignment: -1,
-                  sizeFactor: _chrome,
-                  child: _SimpleHeader(
-                    title: titles[_index],
-                    subtitle: 'Everyday Advertise',
-                  ),
-                ),
-                Expanded(
-                  child: NotificationListener<ScrollNotification>(
-                    onNotification: _handleContentScroll,
-                    child: _buildCurrentTab(),
-                  ),
-                ),
-                SafeArea(
-                  top: false,
-                  child: Container(
-                    width: double.infinity,
-                    color: Colors.white,
-                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
-                    child: Row(
-                      children: [
-                      _NavIconButton(
-                        icon: Icons.storefront,
-                        selected: _index == 0,
-                        colorScheme: scheme,
-                        onTap: () => setState(() => _index = 0),
-                      ),
-                      _NavIconButton(
-                        icon: Icons.devices,
-                        selected: _index == 1,
-                        colorScheme: scheme,
-                        onTap: () => setState(() => _index = 1),
-                      ),
-                      _NavIconButton(
-                        icon: Icons.tv,
-                        selected: _index == 2,
-                        colorScheme: scheme,
-                        onTap: () => setState(() => _index = 2),
-                      ),
-                        _NavIconButton(
-                          icon: Icons.person,
-                          selected: _index == 3,
-                          colorScheme: scheme,
-                          avatarUrl: _profileAvatarUrl,
-                          apiClient: widget.apiClient,
-                          onTap: () {
-                            setState(() => _index = 3);
-                            _loadProfileAvatar();
-                          },
-                        ),
-                      ],
+                  SizeTransition(
+                    axisAlignment: -1,
+                    sizeFactor: _chrome,
+                    child: _SimpleHeader(
+                      title: titles[_index],
+                      subtitle: 'Everyday Advertise',
+                      linkCode: _profileLinkCode,
+                      selectedStoreId: _selectedStoreId,
                     ),
                   ),
-                ),
+                  Expanded(
+                    child: NotificationListener<ScrollNotification>(
+                      onNotification: _handleContentScroll,
+                      child: _buildCurrentTab(),
+                    ),
+                  ),
+                  SafeArea(
+                    top: false,
+                    child: Container(
+                      width: double.infinity,
+                      color: Colors.white,
+                      padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
+                      child: Row(
+                        children: [
+                          _NavIconButton(
+                            icon: Icons.storefront,
+                            selected: _index == 0,
+                            colorScheme: scheme,
+                            onTap: () => setState(() => _index = 0),
+                          ),
+                          _NavIconButton(
+                            icon: Icons.devices,
+                            selected: _index == 1,
+                            colorScheme: scheme,
+                            onTap: () => setState(() => _index = 1),
+                          ),
+                          _NavIconButton(
+                            icon: Icons.tv,
+                            selected: _index == 2,
+                            colorScheme: scheme,
+                            onTap: () => setState(() => _index = 2),
+                          ),
+                          _NavIconButton(
+                            icon: Icons.person,
+                            selected: _index == 3,
+                            colorScheme: scheme,
+                            avatarUrl: _profileAvatarUrl,
+                            apiClient: widget.apiClient,
+                            onTap: () {
+                              setState(() => _index = 3);
+                              _loadProfileAvatar();
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -282,10 +288,17 @@ class _NavIconButton extends StatelessWidget {
 }
 
 class _SimpleHeader extends StatelessWidget {
-  const _SimpleHeader({required this.title, required this.subtitle});
+  const _SimpleHeader({
+    required this.title,
+    required this.subtitle,
+    required this.linkCode,
+    required this.selectedStoreId,
+  });
 
   final String title;
   final String subtitle;
+  final String? linkCode;
+  final String? selectedStoreId;
 
   @override
   Widget build(BuildContext context) {
@@ -293,23 +306,87 @@ class _SimpleHeader extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       decoration: const BoxDecoration(color: Colors.transparent),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(
-            title,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: const Color(0xFF1F2937),
-                  fontWeight: FontWeight.w700,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: const Color(0xFF1F2937),
+                        fontWeight: FontWeight.w700,
+                      ),
                 ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            subtitle,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: const Color(0xFF6B7280),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: const Color(0xFF6B7280),
+                      ),
                 ),
+              ],
+            ),
           ),
+          if ((linkCode ?? '').isNotEmpty)
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 480),
+              switchInCurve: Curves.easeOutBack,
+              switchOutCurve: Curves.easeIn,
+              transitionBuilder: (child, animation) {
+                return FadeTransition(
+                  opacity: animation,
+                  child: ScaleTransition(
+                    scale:
+                        Tween<double>(begin: 0.72, end: 1).animate(animation),
+                    child: child,
+                  ),
+                );
+              },
+              child: Container(
+                key: ValueKey('${selectedStoreId ?? ''}:$linkCode'),
+                padding: const EdgeInsets.only(left: 10),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    SvgPicture.asset(
+                      'assets/images/everyday_advertise_logo.svg',
+                      width: 42,
+                      height: 20,
+                      fit: BoxFit.contain,
+                    ),
+                    const SizedBox(width: 6),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        const Text(
+                          'STORE LINK CODE',
+                          style: TextStyle(
+                            color: Color(0xFF6B7280),
+                            fontSize: 8,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.7,
+                          ),
+                        ),
+                        Text(
+                          linkCode!,
+                          style: const TextStyle(
+                            color: Colors.black,
+                            fontSize: 28,
+                            fontWeight: FontWeight.w900,
+                            height: 0.95,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
     );
