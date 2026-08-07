@@ -6,5 +6,5 @@
       <stop offset="100%" stop-color="#3c6cff"/>
     </linearGradient>
   </defs>
-  <text x="50%" y="64%" text-anchor="middle" fill="url(#eaGrad)" font-family="Arial, sans-serif" font-size="112" font-weight="800">EverydayAdvertise</text>
+  <text x="360" y="112" text-anchor="middle" textLength="690" lengthAdjust="spacingAndGlyphs" fill="url(#eaGrad)" font-family="Arial, sans-serif" font-size="100" font-weight="800">EverydayAdvertise</text>
 </svg>
