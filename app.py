@@ -6997,12 +6997,18 @@ def with_etag_json(fn):
             # Conditional GET handling
             inm = _parse_inm(request.headers.get('If-None-Match'))
             if et in inm:
-                return Response(status=304)
+                not_modified = Response(status=304)
+                not_modified.headers['Cache-Control'] = 'private, no-store, max-age=0, must-revalidate'
+                not_modified.headers['Pragma'] = 'no-cache'
+                not_modified.headers['Vary'] = 'Cookie, X-User-Code'
+                return not_modified
             try:
                 resp.set_etag(et, weak=False)
             except Exception:
                 resp.headers['ETag'] = f'"{et}"'
-            resp.headers.setdefault('Cache-Control', 'public, max-age=30')
+            resp.headers['Cache-Control'] = 'private, no-store, max-age=0, must-revalidate'
+            resp.headers['Pragma'] = 'no-cache'
+            resp.headers['Vary'] = 'Cookie, X-User-Code'
             # Preserve status/headers tuple parts if provided
             if rest:
                 return (resp, *rest)
