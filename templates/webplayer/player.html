@@ -2000,6 +2000,7 @@
 				// Server now handles schedule filtering (supports mm/dd/yyyy format)
 				// Server filtering is more accurate with full datetime support
 				// Client still does secondary check for safety
+				if(pairCode) qs.set('webplayer', '1');
 				const r = await fetch(`${ORIGIN}/playlist/${encodeURIComponent(storeId)}/${encodeURIComponent(screenId)}?`+qs.toString(), { cache:'no-store', headers: pairCode?{'X-User-Code': pairCode}:{}});
 				const j = await r.json();
 				if(j && j.success && Array.isArray(j.playlist)){

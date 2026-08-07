@@ -19259,17 +19259,23 @@ def get_playlist(store_id, screen_id):
     print(f"DEBUG: GET /playlist {store_id} {screen_id}")
     used_pair_code_auth = False
     
-    # SECURITY FIX: Always prefer logged-in session user over pair code header
-    # This prevents cross-user data leakage when authenticated user enters another user's pairing code
-    session_ukey = _safe_user_key()
-    
-    if session_ukey:
+    header_code = request.headers.get('X-User-Code') or request.args.get('user_code')
+    is_webplayer_request = request.args.get('webplayer') == '1'
+    session_ukey = None if is_webplayer_request else _safe_user_key()
+
+    if is_webplayer_request:
+        user_key = _resolve_user_key_by_code(header_code)
+        if not user_key:
+            return {'success': False, 'error': 'valid link code required'}, 403
+        ukey = user_key
+        used_pair_code_auth = True
+        print(f"DEBUG: Webplayer using pair code user key: {ukey}")
+    elif session_ukey:
         # User is logged in - ALWAYS use their session, IGNORE any pair code in header
         ukey = session_ukey
         print(f"DEBUG: Using session user key: {ukey}")
     else:
         # No logged-in session - try pair code from header
-        header_code = request.headers.get('X-User-Code') or request.args.get('user_code')
         user_key = _resolve_user_key_by_code(header_code)
         
         if user_key:

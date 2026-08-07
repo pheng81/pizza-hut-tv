@@ -130,7 +130,7 @@
     function nextIndex(){ if(!playlist.length) return 0; return (idx+1) % playlist.length; }
     function fetchPlaylist(){
       var url=ORIGIN + '/playlist/' + encodeURIComponent(storeId) + '/' + encodeURIComponent(screenId);
-      if(pairCode){ url += (url.indexOf('?')>=0?'&':'?') + 'user_code=' + encodeURIComponent(pairCode); }
+      if(pairCode){ url += (url.indexOf('?')>=0?'&':'?') + 'user_code=' + encodeURIComponent(pairCode) + '&webplayer=1'; }
       var xhr=new XMLHttpRequest(); xhr.open('GET', url, true);
       if(pairCode){ try{ xhr.setRequestHeader('X-User-Code', pairCode); }catch(e){} }
       xhr.onreadystatechange=function(){ if(xhr.readyState===4){ try{ var j=JSON.parse(xhr.responseText); if(j && j.success){ if(j.playlist){ playlist=j.playlist; if(idx>=playlist.length) idx=0; } if(j.orientation){ orientationMode=String(j.orientation||'default'); } if(typeof j.rotation==='number'){ displayRotation = (j.rotation||0); } applyOrientation(); } }catch(e){} lastFetchTs=Date.now(); } };
