@@ -224,6 +224,15 @@ def _table_exists(db: sqlite3.Connection, table_name: str) -> bool:
 def init_db():
     db = get_db()
     db.execute('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password_hash TEXT)')
+    db.execute('''CREATE TABLE IF NOT EXISTS screen_heartbeats (
+        user_key TEXT NOT NULL,
+        store_id TEXT NOT NULL,
+        screen_id TEXT NOT NULL,
+        device_id TEXT,
+        last_seen INTEGER NOT NULL,
+        ip TEXT,
+        PRIMARY KEY (user_key, store_id, screen_id)
+    )''')
     # Add columns/indexes best-effort
     try:
         cols = [r[1] for r in db.execute('PRAGMA table_info(users)').fetchall()]
@@ -7650,7 +7659,7 @@ def screen_heartbeat():
     Also accepts GET with query params for quick manual testing: ?store_id=...&screen_id=...
     """
     if request.method == 'GET':
-        data = {'store_id': request.args.get('store_id'), 'screen_id': request.args.get('screen_id')}
+        data = request.args.to_dict()
     else:
         try:
             data = request.get_json(force=True) or {}
@@ -7721,6 +7730,26 @@ def screen_heartbeat():
             'ip': client_ip,
             'user_key': user_key
         }
+
+    try:
+        db = get_db()
+        db.execute('''CREATE TABLE IF NOT EXISTS screen_heartbeats (
+            user_key TEXT NOT NULL,
+            store_id TEXT NOT NULL,
+            screen_id TEXT NOT NULL,
+            device_id TEXT,
+            last_seen INTEGER NOT NULL,
+            ip TEXT,
+            PRIMARY KEY (user_key, store_id, screen_id)
+        )''')
+        db.execute('''INSERT OR REPLACE INTO screen_heartbeats
+            (user_key, store_id, screen_id, device_id, last_seen, ip)
+            VALUES (?, ?, ?, ?, ?, ?)''',
+            (user_key, str(store_id), str(screen_id), str(device_id), current_timestamp, client_ip))
+        db.commit()
+        db.close()
+    except Exception:
+        logging.exception('Failed to persist screen heartbeat for %s/%s', store_id, screen_id)
     
     logging.info(f'[Android TV] Heartbeat from device {device_id}: {store_id}/{screen_id} @ {client_ip}')
     
@@ -7747,6 +7776,17 @@ def _get_live_screen_last_seen(user_key, store_id, screen_id):
                 seen = 0
             if seen > latest:
                 latest = seen
+
+    try:
+        db = get_db()
+        row = db.execute('''SELECT last_seen FROM screen_heartbeats
+            WHERE user_key = ? AND store_id = ? AND screen_id = ?''',
+            (str(user_key or ''), str(store_id), str(screen_id))).fetchone()
+        db.close()
+        if row:
+            latest = max(latest, int(row['last_seen'] or 0))
+    except Exception:
+        pass
 
     try:
         for pi_data in connected_pis.values():
