@@ -5,6 +5,8 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../models/app_models.dart';
 import '../../services/api_client.dart';
 
+enum _CommandsMode { tv, remote }
+
 class CommandsTab extends StatefulWidget {
   const CommandsTab({super.key, required this.apiClient});
 
@@ -26,6 +28,9 @@ class _CommandsTabState extends State<CommandsTab> {
   List<ScreenItem> _pairingScreens = const [];
   String? _selectedPairingScreenId;
   final Map<String, LatLng?> _resolvedMapPoints = {};
+  _CommandsMode _commandsMode = _CommandsMode.tv;
+  String _remoteConnection = 'Wi-Fi';
+  String? _selectedRemoteDeviceId;
 
   @override
   void initState() {
@@ -202,6 +207,51 @@ class _CommandsTabState extends State<CommandsTab> {
     try {
       await widget.apiClient
           .sendAndroidTvCommand(deviceId: deviceId, command: command);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _message = 'Sent $command to $deviceId';
+      });
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _message = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  Future<void> _sendRemoteCommand(String command) async {
+    final deviceId = _selectedRemoteDeviceId;
+    if (deviceId == null || deviceId.isEmpty) {
+      setState(() {
+        _message = 'Choose an online TV before using the remote.';
+      });
+      return;
+    }
+
+    Map<String, dynamic>? device;
+    for (final screen in _screens) {
+      if (screen['device_id']?.toString() == deviceId) {
+        device = screen;
+        break;
+      }
+    }
+    final status = (device?['status'] ?? 'offline').toString().toLowerCase();
+    if (status != 'online') {
+      setState(() {
+        _message = 'This TV is offline. Connect it before using the remote.';
+      });
+      return;
+    }
+
+    try {
+      await widget.apiClient.sendAndroidTvCommand(
+        deviceId: deviceId,
+        command: 'remote_$command',
+      );
       if (!mounted) {
         return;
       }
@@ -682,6 +732,327 @@ class _CommandsTabState extends State<CommandsTab> {
     );
   }
 
+  Widget _buildRemoteBody(ThemeData theme, ColorScheme scheme) {
+    final remoteDevices = _screens.where((screen) {
+      final deviceId = (screen['device_id'] ?? '').toString().trim();
+      return deviceId.isNotEmpty && deviceId != 'Not Assigned';
+    }).toList();
+    final selectedDeviceId = remoteDevices.any(
+      (screen) => screen['device_id']?.toString() == _selectedRemoteDeviceId,
+    )
+        ? _selectedRemoteDeviceId
+        : null;
+    final selectedDevice = selectedDeviceId == null
+        ? null
+        : remoteDevices.firstWhere(
+            (screen) => screen['device_id']?.toString() == selectedDeviceId,
+          );
+    final selectedOnline =
+        (selectedDevice?['status'] ?? '').toString().toLowerCase() == 'online';
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+      children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.settings_remote_rounded, color: scheme.primary),
+                    const SizedBox(width: 8),
+                    Text('Universal remote',
+                        style: theme.textTheme.titleMedium),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Connect to a compatible TV over Wi-Fi or Bluetooth. TV brand support is added through each brand’s remote protocol.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment<String>(
+                      value: 'Wi-Fi',
+                      icon: Icon(Icons.wifi_rounded),
+                      label: Text('Wi-Fi'),
+                    ),
+                    ButtonSegment<String>(
+                      value: 'Bluetooth',
+                      icon: Icon(Icons.bluetooth_rounded),
+                      label: Text('Bluetooth'),
+                    ),
+                  ],
+                  selected: {_remoteConnection},
+                  onSelectionChanged: (selection) {
+                    setState(() {
+                      _remoteConnection = selection.first;
+                      if (_remoteConnection == 'Bluetooth') {
+                        _message =
+                            'Bluetooth discovery will be enabled for supported TV brands in a later connection step.';
+                      }
+                    });
+                  },
+                ),
+                const SizedBox(height: 14),
+                if (_remoteConnection == 'Wi-Fi' && remoteDevices.isNotEmpty)
+                  DropdownButtonFormField<String>(
+                    value: selectedDeviceId,
+                    decoration: InputDecoration(
+                      labelText: 'Connected TV',
+                      prefixIcon: const Icon(Icons.tv_rounded),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    hint: const Text('Choose a TV'),
+                    items: remoteDevices.map((screen) {
+                      final deviceId = screen['device_id'].toString();
+                      final name =
+                          (screen['screen_name'] ?? deviceId).toString();
+                      final status = (screen['status'] ?? 'offline').toString();
+                      return DropdownMenuItem<String>(
+                        value: deviceId,
+                        child: Text('$name · $status'),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedRemoteDeviceId = value;
+                      });
+                    },
+                  )
+                else
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: scheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      _remoteConnection == 'Bluetooth'
+                          ? 'Bluetooth TV discovery is not configured yet. Use Wi-Fi with a connected screen for now.'
+                          : 'No TV devices found. Pair a TV first, then refresh this page.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: _loading ? null : _loadDevices,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Refresh TV list'),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        _buildRemoteControlSurface(
+          theme,
+          scheme,
+          enabled: selectedDeviceId != null && selectedOnline,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRemoteControlSurface(
+    ThemeData theme,
+    ColorScheme scheme, {
+    required bool enabled,
+  }) {
+    Widget action({
+      required IconData icon,
+      required String label,
+      required String command,
+      Color? color,
+    }) {
+      return OutlinedButton(
+        onPressed: enabled ? () => _sendRemoteCommand(command) : null,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: color,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 22),
+            const SizedBox(height: 4),
+            Text(label, style: const TextStyle(fontSize: 11)),
+          ],
+        ),
+      );
+    }
+
+    Widget direction({
+      required IconData icon,
+      required String command,
+    }) {
+      return IconButton.filledTonal(
+        onPressed: enabled ? () => _sendRemoteCommand(command) : null,
+        icon: Icon(icon),
+        tooltip: command,
+      );
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.gamepad_rounded, color: scheme.primary),
+                const SizedBox(width: 8),
+                Text('TV remote', style: theme.textTheme.titleMedium),
+                const Spacer(),
+                if (!enabled)
+                  Text(
+                    'Connect a TV first',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                action(
+                  icon: Icons.power_settings_new_rounded,
+                  label: 'Power',
+                  command: 'power',
+                  color: scheme.error,
+                ),
+                action(
+                  icon: Icons.input_rounded,
+                  label: 'Input',
+                  command: 'input',
+                ),
+                action(
+                  icon: Icons.volume_off_rounded,
+                  label: 'Mute',
+                  command: 'mute',
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Center(
+                child: direction(icon: Icons.keyboard_arrow_up, command: 'up')),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                direction(icon: Icons.keyboard_arrow_left, command: 'left'),
+                const SizedBox(width: 24),
+                FilledButton(
+                  onPressed:
+                      enabled ? () => _sendRemoteCommand('select') : null,
+                  style: FilledButton.styleFrom(
+                    shape: const CircleBorder(),
+                    padding: const EdgeInsets.all(20),
+                  ),
+                  child: const Text('OK'),
+                ),
+                const SizedBox(width: 24),
+                direction(icon: Icons.keyboard_arrow_right, command: 'right'),
+              ],
+            ),
+            Center(
+                child: direction(
+                    icon: Icons.keyboard_arrow_down, command: 'down')),
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                action(
+                  icon: Icons.home_rounded,
+                  label: 'Home',
+                  command: 'home',
+                ),
+                action(
+                  icon: Icons.arrow_back_rounded,
+                  label: 'Back',
+                  command: 'back',
+                ),
+                action(
+                  icon: Icons.menu_rounded,
+                  label: 'Menu',
+                  command: 'menu',
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.tonalIcon(
+                    onPressed: enabled
+                        ? () => _sendRemoteCommand('volume_down')
+                        : null,
+                    icon: const Icon(Icons.volume_down_rounded),
+                    label: const Text('Volume −'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton.tonalIcon(
+                    onPressed:
+                        enabled ? () => _sendRemoteCommand('volume_up') : null,
+                    icon: const Icon(Icons.volume_up_rounded),
+                    label: const Text('Volume +'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.tonalIcon(
+                    onPressed: enabled
+                        ? () => _sendRemoteCommand('channel_down')
+                        : null,
+                    icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                    label: const Text('Channel −'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton.tonalIcon(
+                    onPressed:
+                        enabled ? () => _sendRemoteCommand('channel_up') : null,
+                    icon: const Icon(Icons.keyboard_arrow_up_rounded),
+                    label: const Text('Channel +'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'Remote buttons send brand-specific commands through the connected TV bridge. Wi-Fi and Bluetooth support must be enabled by the TV device integration.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildCommandsBody(ThemeData theme, ColorScheme scheme) {
     return FutureBuilder<List<_CommandMapPin>>(
       future: _buildPins(),
@@ -835,6 +1206,32 @@ class _CommandsTabState extends State<CommandsTab> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
+    Widget modeButton({
+      required IconData icon,
+      required String tooltip,
+      required _CommandsMode mode,
+    }) {
+      final selected = _commandsMode == mode;
+      return IconButton(
+        tooltip: tooltip,
+        onPressed: () {
+          setState(() {
+            _commandsMode = mode;
+          });
+        },
+        style: IconButton.styleFrom(
+          backgroundColor:
+              selected ? scheme.primaryContainer : scheme.surfaceContainer,
+          foregroundColor:
+              selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        icon: Icon(icon),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -842,21 +1239,17 @@ class _CommandsTabState extends State<CommandsTab> {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
           child: Row(
             children: [
-              Container(
-                height: 34,
-                width: 34,
-                decoration: BoxDecoration(
-                  color: scheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  Icons.cast_connected,
-                  color: scheme.onPrimaryContainer,
-                  size: 18,
-                ),
+              modeButton(
+                icon: Icons.tv_rounded,
+                tooltip: 'TV commands',
+                mode: _CommandsMode.tv,
               ),
-              const SizedBox(width: 10),
-              Text('Commands', style: theme.textTheme.titleLarge),
+              const SizedBox(width: 8),
+              modeButton(
+                icon: Icons.settings_remote_rounded,
+                tooltip: 'Universal remote',
+                mode: _CommandsMode.remote,
+              ),
               const Spacer(),
               IconButton(
                 onPressed: _loading ? null : _loadDevices,
@@ -879,7 +1272,9 @@ class _CommandsTabState extends State<CommandsTab> {
           ),
         const SizedBox(height: 8),
         Expanded(
-          child: _buildCommandsBody(theme, scheme),
+          child: _commandsMode == _CommandsMode.tv
+              ? _buildCommandsBody(theme, scheme)
+              : _buildRemoteBody(theme, scheme),
         ),
       ],
     );
