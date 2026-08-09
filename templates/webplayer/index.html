@@ -151,11 +151,25 @@
   .pair-grid::before{ display:none; }
   #code.code-input{ background-image:none; border:0; outline:0; }
   #code.code-input:focus{ border:0; box-shadow:none; }
+  body{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    position:relative;
+    min-height:100vh;
+  }
+  .site-header{
+    position:absolute;
+    top:0;
+    left:0;
+    right:0;
+  }
   .panel{
     max-width:960px;
     width:min(92vw,960px);
     padding:34px 38px;
-    margin:clamp(4vh,8vh,10vh) auto;
+    margin:0 auto;
   }
   h1{
     font-size:clamp(30px,4vw,44px);
@@ -344,13 +358,11 @@
       <div class="pair-left">
         <!-- QR Section (left) -->
         <div id="qr-section">
-          <div class="pair-step"><span class="pair-step-number">1</span><span>Scan with your phone</span></div>
           <div id="qrcode" style="display:inline-block;padding:12px;background:#fff;border-radius:8px;"></div>
           <div style="font-size:12px;color:#999;margin-top:12px;">Code entered on phone will appear here automatically</div>
         </div>
       </div>
       <div class="pair-right">
-        <div class="pair-step"><span class="pair-step-number">2</span><span>Enter with your remote</span></div>
         <label for="code">4-digit code</label>
         <div class="code-entry">
           <div class="code-slots" aria-hidden="true">
