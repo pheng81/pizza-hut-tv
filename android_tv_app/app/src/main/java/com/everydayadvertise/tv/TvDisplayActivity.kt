@@ -2541,8 +2541,19 @@ function onYouTubeIframeAPIReady(){
                 panelZoneState = parsePanelZoneConfig(jsonObj.optJSONObject("panel_zone"))
                 
                 originalItems = original
+                val previousCurrentItem = currentItemFile?.let { file ->
+                    state.items.firstOrNull { it.file == file }
+                }
                 // Apply without resetting index if files are the same
                 applyNewList(original)
+                val updatedCurrentItem = previousCurrentItem?.id?.let { id ->
+                    state.items.firstOrNull { it.id == id }
+                }
+                if (previousCurrentItem != null && updatedCurrentItem != null && previousCurrentItem != updatedCurrentItem) {
+                    cancelScheduled()
+                    currentItemFile = null
+                    showNext?.invoke()
+                }
                 lifecycleScope.launch(Dispatchers.IO) {
                     try { ApiClient.service.postClientEvent(com.everydayadvertise.tv.api.ClientEventReq(storeId, screenId, "playlist_reload")) } catch (_: Exception) {}
                 }
