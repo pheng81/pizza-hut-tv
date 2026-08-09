@@ -1302,6 +1302,7 @@
 		const PLAYLIST_REFRESH_INTERVAL_MS = 10000; // Periodic playlist refresh while playing
 		let playlistRefreshTicker = null;
 		let playlistSignature = '';
+		let forceReloadCurrent = false;
 		let idleMessageVisible = false;
 		let idleMessageNode = null;
 		let consecutiveErrors = 0; // Track consecutive media load failures
@@ -1349,6 +1350,27 @@
 			}catch(err){
 				console.warn('Failed to compute playlist signature', err);
 				return `sig:${Date.now()}`;
+			}
+		}
+		function computeItemRenderSignature(item){
+			try{
+				if(!item) return '';
+				return JSON.stringify({
+					id: item.id || '',
+					file: item.file || '',
+					url: item.url || '',
+					media_type: item.media_type || '',
+					text: item.text || '',
+					duration: item.duration || 0,
+					effect: item.effect || '',
+					image_fit: item.image_fit || '',
+					image_scale: item.image_scale || '',
+					image_width: item.image_width || 0,
+					image_height: item.image_height || 0,
+					icon: item.icon || ''
+				});
+			}catch(err){
+				return `item:${Date.now()}`;
 			}
 		}
 
@@ -2013,6 +2035,8 @@
 
 		async function fetchPlaylist(forceAdvanceOnChange = false){
 			try{
+				const previousCurrentItem = currentItemKey ? playlist.find(item => keyFrom(item) === currentItemKey) : null;
+				const previousCurrentSignature = computeItemRenderSignature(previousCurrentItem);
 				const qs = new URLSearchParams({ refresh: String(Date.now()) });
 				if(pairCode) qs.set('user_code', pairCode);
 				// Server now handles schedule filtering (supports mm/dd/yyyy format)
@@ -2024,6 +2048,8 @@
 				if(j && j.success && Array.isArray(j.playlist)){
 					const newSignature = computePlaylistSignature(j.playlist, j.orientation, j.rotation);
 					const signatureChanged = Boolean(playlistSignature) && newSignature !== playlistSignature;
+					const nextCurrentItem = currentItemKey ? j.playlist.find(item => keyFrom(item) === currentItemKey) : null;
+					const currentItemChanged = Boolean(previousCurrentItem && nextCurrentItem && previousCurrentSignature !== computeItemRenderSignature(nextCurrentItem));
 					playlist = j.playlist;
 					panelZoneState = j.panel_zone || { enabled:false, layout_mode:'off', playlist:[], active_item:null };
 					playlistSignature = newSignature;
@@ -2041,6 +2067,12 @@
 							if(timer){ clearTimeout(timer); timer = null; }
 							setTimeout(()=>{ if(!timer) tick(); }, 0);
 						}
+					}
+					if(currentItemChanged){
+						forceReloadCurrent = true;
+						forceAdvanceNow = true;
+						if(timer){ clearTimeout(timer); timer = null; }
+						setTimeout(()=>{ if(!timer) tick(); }, 0);
 					}
 					if(signatureChanged && playlist.length && forceAdvanceOnChange){
 						forceAdvanceNow = true;
@@ -3243,7 +3275,9 @@
 				timer = setTimeout(tick, Math.max(1, Math.round(dur * 1000)));
 				return;
 			}
-			const singleItemLoop = activePlaylist.length === 1 && currentItemKey && currentItemKey === currentKey;
+			const reloadCurrent = forceReloadCurrent;
+			forceReloadCurrent = false;
+			const singleItemLoop = !reloadCurrent && activePlaylist.length === 1 && currentItemKey && currentItemKey === currentKey;
 
 			if(singleItemLoop){
 				const hosts = [front, back];
