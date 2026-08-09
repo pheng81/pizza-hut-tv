@@ -24268,6 +24268,7 @@ def handle_config_applied(data):
 
 # ===== WebPlayer Mobile-to-TV Code Sharing =====
 webplayer_sessions = {}  # Store active webplayer sessions (session_id -> sid)
+webplayer_tv_pair_codes = {}  # Short TV code -> active webplayer session
 webplayer_session_codes = {}  # Last pairing code sent per session_id (for HTTP poll fallback)
 webplayer_store_codes = {}   # Last store code sent per session_id (for HTTP poll fallback)
 webplayer_last_selection = {}  # Last selected screen per session_id (for HTTP poll fallback)
@@ -24277,9 +24278,64 @@ webplayer_last_selection = {}  # Last selected screen per session_id (for HTTP p
 def handle_join_session(data):
     """TV/Desktop joins a session to receive codes from mobile"""
     session_id = data.get('session_id')
+    tv_pair_code = re.sub(r'\D+', '', str(data.get('tv_pair_code') or ''))[:6]
     if session_id:
         webplayer_sessions[session_id] = request.sid
+        if len(tv_pair_code) == 6:
+            webplayer_tv_pair_codes[tv_pair_code] = {
+                'session_id': session_id,
+                'ts': time.time(),
+            }
         logging.info(f'📺 WebPlayer session joined: {session_id} (sid: {request.sid})')
+
+@app.route('/api/tv_pairing_push', methods=['POST'])
+@login_required
+def api_tv_pairing_push():
+    """Send a user's link and store codes to a TV pairing session.
+    Body: {"tv_pair_code": "123456", "link_code": "1234", "store_code": "1000"}
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        tv_pair_code = re.sub(r'\D+', '', str(data.get('tv_pair_code') or ''))
+        link_code = re.sub(r'\D+', '', str(data.get('link_code') or ''))
+        store_code = re.sub(r'\D+', '', str(data.get('store_code') or ''))
+        if len(tv_pair_code) != 6:
+            return jsonify({'success': False, 'error': 'Enter the 6-digit TV code shown on screen.'}), 400
+        if len(link_code) != 4 or len(store_code) < 1:
+            return jsonify({'success': False, 'error': 'Enter a valid link code and store code.'}), 400
+
+        current_user_key = _safe_user_key()
+        link_user_key = _resolve_user_key_by_code(link_code)
+        if not current_user_key or link_user_key != current_user_key:
+            return jsonify({'success': False, 'error': 'That link code does not belong to this account.'}), 403
+
+        pairing = webplayer_tv_pair_codes.get(tv_pair_code)
+        if not pairing or time.time() - pairing.get('ts', 0) > 600:
+            webplayer_tv_pair_codes.pop(tv_pair_code, None)
+            return jsonify({'success': False, 'error': 'TV code expired. Refresh the TV screen for a new code.'}), 404
+
+        session_id = pairing['session_id']
+        webplayer_session_codes[session_id] = {
+            'code': link_code,
+            'ts': time.time(),
+        }
+        webplayer_store_codes[session_id] = {
+            'store_code': store_code,
+            'ts': time.time(),
+        }
+        target_sid = webplayer_sessions.get(session_id)
+        if target_sid:
+            socketio.emit('code_entered', {
+                'session_id': session_id,
+                'code': link_code,
+            }, room=target_sid)
+            socketio.emit('store_code_entered', {
+                'session_id': session_id,
+                'store_code': store_code,
+            }, room=target_sid)
+        return jsonify({'success': True, 'connected': bool(target_sid)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @socketio.on('send_code')
 @socketio_error_handler
@@ -24431,6 +24487,9 @@ def handle_leave_session(data):
     session_id = data.get('session_id')
     if session_id and session_id in webplayer_sessions:
         del webplayer_sessions[session_id]
+        for code, pairing in list(webplayer_tv_pair_codes.items()):
+            if pairing.get('session_id') == session_id:
+                webplayer_tv_pair_codes.pop(code, None)
         logging.info(f'📺 WebPlayer session left: {session_id}')
 
 # ===== Android TV Remote Control Commands =====

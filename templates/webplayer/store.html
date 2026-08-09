@@ -149,6 +149,15 @@
         document.getElementById('qr-section').style.display = 'none';
         
         console.log('TV mode: Connecting with session:', sessionId);
+        var storeCodeHandled = false;
+        var storePollTimer = null;
+        function applyStoreCode(value){
+          if(storeCodeHandled || !value) return;
+          storeCodeHandled = true;
+          if(storePollTimer) clearInterval(storePollTimer);
+          document.getElementById('store').value = value;
+          setTimeout(function() { go(); }, 500);
+        }
         
         // Reconnect WebSocket with the SAME session ID
         var socket = io();
@@ -162,15 +171,17 @@
           
           if (data.store_code) {
             console.log('Setting store input to:', data.store_code);
-            document.getElementById('store').value = data.store_code;
-            // Auto-submit after receiving store code
-            console.log('Auto-submitting in 500ms...');
-            setTimeout(function() { 
-              console.log('Calling go() function');
-              go(); 
-            }, 500);
+            applyStoreCode(data.store_code);
           }
         });
+        storePollTimer = setInterval(function(){
+          try{
+            fetch('/api/store_session_poll/' + encodeURIComponent(sessionId), {cache:'no-store'})
+              .then(function(r){ return r.json(); })
+              .then(function(data){ if(data && data.store_code) applyStoreCode(data.store_code); })
+              .catch(function(){});
+          }catch(e){}
+        }, 1000);
       } else if (!targetSessionId && !isMobile) {
         // TV/Desktop mode WITHOUT session - show QR code (fallback)
         sessionId = 'store_' + Math.random().toString(36).substring(2, 15);

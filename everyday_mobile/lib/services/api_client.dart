@@ -1415,6 +1415,29 @@ class ApiClient {
     }
   }
 
+  Future<bool> sendTvPairingCodes({
+    required String tvPairCode,
+    required String linkCode,
+    required String storeCode,
+  }) async {
+    final response = await _dio.post(
+      '/api/tv_pairing_push',
+      data: {
+        'tv_pair_code': tvPairCode.trim(),
+        'link_code': linkCode.trim(),
+        'store_code': storeCode.trim(),
+      },
+    );
+    final data = _asMap(response.data);
+    if (response.statusCode == null ||
+        response.statusCode! >= 400 ||
+        data['success'] != true) {
+      throw Exception(
+          (data['error'] ?? 'Could not send codes to the TV.').toString());
+    }
+    return data['connected'] == true;
+  }
+
   Future<int> updateScreenRotation({
     required String storeId,
     required String screenId,

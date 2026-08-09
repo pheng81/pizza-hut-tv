@@ -352,6 +352,7 @@
   <div class="panel" id="step1">
     <h1>Connect this screen</h1>
     <p>Scan the QR code or enter the four-digit pairing code.</p>
+    <p class="tv-pair-code">TV code: <strong id="tv-pair-code-value"></strong></p>
     
     <!-- Two-column layout: QR on left, input + submit on right -->
     <div class="pair-grid">
@@ -478,6 +479,8 @@
     
     // Generate QR Code for mobile access with session ID
     var sessionId = 'tv_' + Math.random().toString(36).substring(2, 15);
+    var tvPairCode = String(Math.floor(100000 + Math.random() * 900000));
+    try{ document.getElementById('tv-pair-code-value').textContent = tvPairCode; }catch(e){}
     
     // Robust device detection: treat TVs (including Fire TV) as TV, not mobile
     var ua = (navigator.userAgent || '');
@@ -517,19 +520,35 @@
         
         // Connect WebSocket to receive code from mobile
         var socket = io();
-        socket.emit('join_session', { session_id: sessionId });
+        socket.emit('join_session', { session_id: sessionId, tv_pair_code: tvPairCode });
+        var codeHandled = false;
+        var pairPollTimer = null;
+        function applyTvCode(value){
+          if(codeHandled || !value) return;
+          codeHandled = true;
+          if(pairPollTimer) clearInterval(pairPollTimer);
+          document.getElementById('code').value = value;
+          syncCodeSlots();
+          setTimeout(function() { go(); }, 500);
+        }
         
         socket.on('code_entered', function(data) {
           if (data.session_id === sessionId && data.code) {
-            document.getElementById('code').value = data.code;
-            syncCodeSlots();
-            // Auto-submit after receiving code
-            setTimeout(function() { go(); }, 500);
+            applyTvCode(data.code);
           }
         });
+        pairPollTimer = setInterval(function(){
+          try{
+            fetch('/api/session_poll/' + encodeURIComponent(sessionId), {cache:'no-store'})
+              .then(function(r){ return r.json(); })
+              .then(function(data){ if(data && data.code) applyTvCode(data.code); })
+              .catch(function(){});
+          }catch(e){}
+        }, 1000);
       } else {
         // Mobile mode or has session ID - hide QR, show input prominently
         document.getElementById('qr-section').style.display = 'none';
+        try{ document.querySelector('.tv-pair-code').style.display = 'none'; }catch(e){}
         
         if (targetSessionId) {
           // This is mobile scanning QR - connect to send code to TV

@@ -17,12 +17,88 @@ class _CommandsTabState extends State<CommandsTab> {
   bool _loading = true;
   String? _message;
   List<Map<String, dynamic>> _screens = const [];
+  final TextEditingController _tvPairCodeController = TextEditingController();
+  final TextEditingController _linkCodeController = TextEditingController();
+  final TextEditingController _storeCodeController = TextEditingController();
+  bool _sendingTvCodes = false;
   final Map<String, LatLng?> _resolvedMapPoints = {};
 
   @override
   void initState() {
     super.initState();
     _loadDevices();
+    _loadLinkCode();
+  }
+
+  @override
+  void dispose() {
+    _tvPairCodeController.dispose();
+    _linkCodeController.dispose();
+    _storeCodeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadLinkCode() async {
+    try {
+      final profile = await widget.apiClient.getMe();
+      if (!mounted || _linkCodeController.text.trim().isNotEmpty) {
+        return;
+      }
+      _linkCodeController.text = (profile.linkCode ?? '').trim();
+    } catch (_) {
+      // The link code can still be entered manually.
+    }
+  }
+
+  Future<void> _sendTvPairingCodes() async {
+    final tvPairCode = _tvPairCodeController.text.trim();
+    final linkCode = _linkCodeController.text.trim();
+    final storeCode = _storeCodeController.text.trim();
+    if (!RegExp(r'^\d{6}$').hasMatch(tvPairCode)) {
+      setState(() {
+        _message = 'Enter the 6-digit TV code shown on the TV.';
+      });
+      return;
+    }
+    if (!RegExp(r'^\d{4}$').hasMatch(linkCode) || storeCode.isEmpty) {
+      setState(() {
+        _message = 'Enter your 4-digit link code and store code.';
+      });
+      return;
+    }
+
+    setState(() {
+      _sendingTvCodes = true;
+      _message = null;
+    });
+    try {
+      final connected = await widget.apiClient.sendTvPairingCodes(
+        tvPairCode: tvPairCode,
+        linkCode: linkCode,
+        storeCode: storeCode,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _message = connected
+            ? 'Link code and store code sent to the TV.'
+            : 'Codes queued. Keep the TV pairing screen open and try again if it does not update.';
+      });
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _message = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _sendingTvCodes = false;
+        });
+      }
+    }
   }
 
   Future<void> _loadDevices() async {
@@ -173,18 +249,17 @@ class _CommandsTabState extends State<CommandsTab> {
     return pins.whereType<_CommandMapPin>().toList();
   }
 
-  Future<_CommandMapPin?> _resolvePinForScreen(Map<String, dynamic> screen) async {
+  Future<_CommandMapPin?> _resolvePinForScreen(
+      Map<String, dynamic> screen) async {
     final deviceId = (screen['device_id'] ?? '').toString().trim();
     if (deviceId.isEmpty || deviceId == 'Not Assigned') {
       return null;
     }
 
-    final storeName = (screen['store_name'] ?? screen['store_id'] ?? '-')
-        .toString()
-        .trim();
-    final screenName = (screen['screen_name'] ?? screen['screen_id'] ?? '-')
-        .toString()
-        .trim();
+    final storeName =
+        (screen['store_name'] ?? screen['store_id'] ?? '-').toString().trim();
+    final screenName =
+        (screen['screen_name'] ?? screen['screen_id'] ?? '-').toString().trim();
     final status = (screen['status'] ?? 'offline').toString().trim();
     final locationLabel = (screen['location'] ?? '').toString().trim();
 
@@ -331,8 +406,8 @@ class _CommandsTabState extends State<CommandsTab> {
                   Chip(
                     backgroundColor: const Color(0xFFDBEAFE),
                     avatar: const Icon(Icons.place_outlined, size: 14),
-                    label:
-                        Text('Pins: ${pins.length}', style: theme.textTheme.bodySmall),
+                    label: Text('Pins: ${pins.length}',
+                        style: theme.textTheme.bodySmall),
                   ),
                   const SizedBox(width: 6),
                   Chip(
@@ -554,6 +629,8 @@ class _CommandsTabState extends State<CommandsTab> {
         return ListView(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           children: [
+            _buildTvPairingSection(theme, scheme),
+            const SizedBox(height: 12),
             _buildMapSection(theme: theme, scheme: scheme, pins: pins),
             const SizedBox(height: 12),
             Text('Screen Commands', style: theme.textTheme.titleMedium),
@@ -562,6 +639,86 @@ class _CommandsTabState extends State<CommandsTab> {
           ],
         );
       },
+    );
+  }
+
+  Widget _buildTvPairingSection(ThemeData theme, ColorScheme scheme) {
+    InputDecoration fieldDecoration(String label, String hint) {
+      return InputDecoration(
+        labelText: label,
+        hintText: hint,
+        filled: true,
+        fillColor: scheme.surfaceContainerLowest,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: scheme.outlineVariant),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: scheme.outlineVariant),
+        ),
+      );
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.link_rounded, color: scheme.primary),
+                const SizedBox(width: 8),
+                Text('Connect a TV', style: theme.textTheme.titleMedium),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Enter the unique TV code, then send your link code and store code to the pairing screen.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _tvPairCodeController,
+              keyboardType: TextInputType.number,
+              maxLength: 6,
+              decoration: fieldDecoration('TV code', '6-digit code on TV'),
+            ),
+            const SizedBox(height: 4),
+            TextField(
+              controller: _linkCodeController,
+              keyboardType: TextInputType.number,
+              maxLength: 4,
+              decoration: fieldDecoration('Your link code', '4-digit code'),
+            ),
+            const SizedBox(height: 4),
+            TextField(
+              controller: _storeCodeController,
+              keyboardType: TextInputType.number,
+              maxLength: 8,
+              decoration: fieldDecoration('Store code', 'For example 1000'),
+            ),
+            const SizedBox(height: 4),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _sendingTvCodes ? null : _sendTvPairingCodes,
+                icon: _sendingTvCodes
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.send_rounded),
+                label: Text(_sendingTvCodes ? 'Sending…' : 'Send to TV'),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
