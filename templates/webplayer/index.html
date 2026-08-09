@@ -108,6 +108,52 @@
   .pair-left, .pair-right{ display:flex; flex-direction:column; }
   .pair-right{ max-width:420px; }
   .pair-right .btn{ margin-top:12px; }
+  .site-header{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:24px 34px;
+    color:var(--text);
+    font-size:15px;
+    font-weight:800;
+    letter-spacing:.1px;
+  }
+  .brand-mark{
+    display:grid;
+    place-items:center;
+    width:34px;
+    height:34px;
+    border-radius:10px;
+    background:linear-gradient(135deg,#ff2d84,#3c6cff);
+    color:#fff;
+    font-size:13px;
+    font-weight:900;
+  }
+  .pair-step{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin:0 0 14px;
+    color:var(--text);
+    font-size:14px;
+    font-weight:800;
+  }
+  .pair-step-number{
+    display:grid;
+    place-items:center;
+    width:24px;
+    height:24px;
+    border-radius:8px;
+    background:#172235;
+    color:#75a7ff;
+    font-size:12px;
+  }
+  .pair-grid::before{ display:none; }
+  #code.code-input{ background-image:none; border:0; outline:0; }
+  #code.code-input:focus{ border:0; box-shadow:none; }
+  @media (max-width: 899px){
+    .site-header{ padding:18px 20px; }
+  }
   /* Segmented 4-digit styling for the existing single input */
   #code.code-input{ letter-spacing:0.35em; font-variant-numeric:tabular-nums; caret-color:var(--accent); }
   /* draw internal separators at 25/50/75% to hint four slots */
@@ -124,6 +170,7 @@
     /* Vertical divider centered in the column gap */
     .pair-grid::before{
       content:"";
+      display:none;
       position:absolute;
       top:8px; bottom:8px;
       /* Place at center of 28px gap: (width - gap) * 0.55 + gap/2 */
@@ -139,6 +186,10 @@
 </style>
 </head>
 <body>
+  <header class="site-header">
+    <span class="brand-mark">ea</span>
+    <span>Everyday Advertise</span>
+  </header>
   <!-- Loading spinner -->
   <div class="page-loader" id="pageLoader">
     <div class="spinner"></div>
@@ -212,20 +263,21 @@
     </svg>
   </div>
   <div class="panel" id="step1">
-    <h1>Enter your Android TV pairing code</h1>
-    <p>Type the 4-digit code from your TV app or profile page.</p>
+    <h1>Connect this screen</h1>
+    <p>Scan the QR code or enter the four-digit pairing code.</p>
     
     <!-- Two-column layout: QR on left, input + submit on right -->
     <div class="pair-grid">
       <div class="pair-left">
         <!-- QR Section (left) -->
         <div id="qr-section">
-          <div style="font-size:14px;color:#bbb;margin-bottom:12px;">📱 Scan with your phone to enter code</div>
+          <div class="pair-step"><span class="pair-step-number">1</span><span>Scan with your phone</span></div>
           <div id="qrcode" style="display:inline-block;padding:12px;background:#fff;border-radius:8px;"></div>
           <div style="font-size:12px;color:#999;margin-top:12px;">Code entered on phone will appear here automatically</div>
         </div>
       </div>
       <div class="pair-right">
+        <div class="pair-step"><span class="pair-step-number">2</span><span>Enter with your remote</span></div>
         <label for="code">4-digit code</label>
   <input id="code" class="code-input" maxlength="4" pattern="\d{4}" inputmode="numeric" placeholder="4-digit code (e.g. 1126)" />
         <button class="btn" id="go">Link Code</button>
