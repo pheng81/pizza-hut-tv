@@ -63,7 +63,7 @@
   p{margin:0 0 14px;color:var(--muted);font-size:clamp(13px, 1.8vw, 14px);text-align:center}
   .tv-pair-code{
     display:block;
-    margin:6px 0 0;
+    margin:0 0 18px;
     color:#9fc1ff;
     font-size:clamp(16px, 2vw, 20px);
     font-weight:800;
@@ -204,6 +204,7 @@
   }
   .pair-left,
   .pair-right{ min-width:0; }
+  .pair-left{ align-items:center; }
   .pair-right{ max-width:370px; }
   .code-entry{
     position:relative;
@@ -371,13 +372,13 @@
   <div class="panel" id="step1">
     <h1>Connect this screen</h1>
     <p>Scan the QR code or send the TV code from the mobile app.</p>
-    <p class="tv-pair-code" aria-live="polite">TV / Web Player code: <strong id="tv-pair-code-value">------</strong></p>
     
     <!-- Two-column layout: QR on left, input + submit on right -->
     <div class="pair-grid">
       <div class="pair-left">
         <!-- QR Section (left) -->
         <div id="qr-section">
+          <p class="tv-pair-code" aria-live="polite">TV / Web Player code: <strong id="tv-pair-code-value">------</strong></p>
           <div id="qrcode" style="display:inline-block;padding:12px;background:#fff;border-radius:8px;"></div>
           <div style="font-size:12px;color:#999;margin-top:12px;">Code entered on phone will appear here automatically</div>
         </div>
