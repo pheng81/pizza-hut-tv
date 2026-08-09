@@ -387,8 +387,9 @@ class _AnimatedLinkCodeBadgeState extends State<_AnimatedLinkCodeBadge> {
 
   @override
   Widget build(BuildContext context) {
+    final badgeWidth = MediaQuery.sizeOf(context).width < 420 ? 132.0 : 148.0;
     return SizedBox(
-      width: 148,
+      width: badgeWidth,
       height: 40,
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 650),
@@ -412,11 +413,17 @@ class _AnimatedLinkCodeBadgeState extends State<_AnimatedLinkCodeBadge> {
     return Align(
       key: const ValueKey('logo'),
       alignment: Alignment.centerRight,
-      child: SvgPicture.asset(
-        'assets/images/everyday_advertise_logo.svg',
-        width: 138,
-        height: 30,
-        fit: BoxFit.contain,
+      child: Padding(
+        padding: const EdgeInsets.only(right: 2),
+        child: SizedBox(
+          width: double.infinity,
+          height: 28,
+          child: SvgPicture.asset(
+            'assets/images/everyday_advertise_logo.svg',
+            fit: BoxFit.contain,
+            alignment: Alignment.centerRight,
+          ),
+        ),
       ),
     );
   }
