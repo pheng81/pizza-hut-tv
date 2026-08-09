@@ -92,7 +92,7 @@
 	<!-- Visual rotation indicator (always shows rotation state when debug=1) -->
 	<div id="rotation-indicator">0°</div>		<!-- Provide template vars as JSON so JS linter doesn't choke on Jinja syntax -->
 	<div id="address-overlay" {% if not display_address %}hidden{% endif %}><small>{% if display_address_source == 'store' %}Store Address{% else %}Screen Address{% endif %}</small><span>{{ display_address or '' }}</span></div>
-	<script id="tv-data" type="application/json">{"store_id": {{ store_id|tojson }}, "screen_id": {{ screen_id|tojson }}, "store_name": {{ (store_name or '')|tojson }}, "display_address": {{ (display_address or '')|tojson }}, "display_address_source": {{ (display_address_source or '')|tojson }}, "initial_file": {{ active_file|tojson }}, "media_base_url": {{ (media_base_url or '')|tojson }}}</script>
+	<script id="tv-data" type="application/json">{"store_id": {{ store_id|tojson }}, "screen_id": {{ screen_id|tojson }}, "pair_code": {{ (pair_code or '')|tojson }}, "store_name": {{ (store_name or '')|tojson }}, "display_address": {{ (display_address or '')|tojson }}, "display_address_source": {{ (display_address_source or '')|tojson }}, "initial_file": {{ active_file|tojson }}, "media_base_url": {{ (media_base_url or '')|tojson }}}</script>
 		<script>
 			const __tvCfg = JSON.parse(document.getElementById('tv-data')?.textContent || '{}');
 			// Query params helper
@@ -113,6 +113,7 @@
 			} catch {}
 			const storeId = __tvCfg.store_id;
 			const screenId = __tvCfg.screen_id;
+			const pairCode = __tvCfg.pair_code || '';
 			const initialFile = __tvCfg.initial_file;
 			const MEDIA_BASE_URL = (function(){ try{ let b = __tvCfg.media_base_url || ''; if(b && !/\/$/.test(b)) b += '/'; return b; }catch{return '';} })();
 			const addressOverlay = document.getElementById('address-overlay');
@@ -535,7 +536,12 @@
 
 		async function fetchPlaylist(){
 			try{
-				const r = await fetch(`${ORIGIN}/playlist/${storeId}/${screenId}`);
+				const query = new URLSearchParams({ refresh: String(Date.now()) });
+				if(pairCode) query.set('user_code', pairCode);
+				const r = await fetch(`${ORIGIN}/playlist/${storeId}/${screenId}?` + query.toString(), {
+					cache: 'no-store',
+					headers: pairCode ? {'X-User-Code': pairCode} : {}
+				});
 				const j = await r.json();
 				if(j && j.success && Array.isArray(j.playlist)){
 					const nextSignature = JSON.stringify({
@@ -1185,7 +1191,17 @@
 		// Enhanced command polling for all dashboard functions
 		async function pollCommands(){
 			try{
-				const r = await fetch(`${ORIGIN}/api/commands?store_id=${encodeURIComponent(storeId)}&screen_id=${encodeURIComponent(screenId)}&limit=10&pop=1`);
+				const query = new URLSearchParams({
+					store_id: storeId,
+					screen_id: screenId,
+					limit: '10',
+					pop: '1'
+				});
+				if(pairCode) query.set('user_code', pairCode);
+				const r = await fetch(`${ORIGIN}/api/commands?` + query.toString(), {
+					cache: 'no-store',
+					headers: pairCode ? {'X-User-Code': pairCode} : {}
+				});
 				const j = await r.json();
 				const commands = j && j.success ? (Array.isArray(j) ? j : (j.commands || [])) : [];
 				
@@ -1621,9 +1637,12 @@
 				const controller = new AbortController();
 				const timeoutId = setTimeout(() => controller.abort(), 5000);
 				
-				const response = await fetch(`${ORIGIN}/playlist/${storeId}/${screenId}`, {
+				const refreshQuery = new URLSearchParams({ refresh: String(Date.now()) });
+				if(pairCode) refreshQuery.set('user_code', pairCode);
+				const response = await fetch(`${ORIGIN}/playlist/${storeId}/${screenId}?` + refreshQuery.toString(), {
 					signal: controller.signal,
-					cache: 'no-cache' // Ensure fresh data
+					cache: 'no-store',
+					headers: pairCode ? {'X-User-Code': pairCode} : {}
 				});
 				clearTimeout(timeoutId);
 				

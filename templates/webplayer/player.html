@@ -2013,7 +2013,7 @@
 
 		async function fetchPlaylist(forceAdvanceOnChange = false){
 			try{
-				const qs = new URLSearchParams();
+				const qs = new URLSearchParams({ refresh: String(Date.now()) });
 				if(pairCode) qs.set('user_code', pairCode);
 				// Server now handles schedule filtering (supports mm/dd/yyyy format)
 				// Server filtering is more accurate with full datetime support

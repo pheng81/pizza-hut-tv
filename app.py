@@ -17546,8 +17546,23 @@ def tv_view(store_id, screen_id):
     client-side JS now fetches the playlist and cycles items using their
     'duration' (seconds) when any item has link_next=True.
     """
-    config = load_store_config()
+    code = (request.args.get('code') or request.args.get('user_code') or '').strip()
+    user_key = None
+    if code:
+        if len(code) != 4 or not code.isdigit():
+            return jsonify({'success': False, 'error': 'invalid link code'}), 403
+        user_key = _resolve_user_key_by_code(code)
+        if not user_key:
+            return jsonify({'success': False, 'error': 'invalid link code'}), 403
+    else:
+        user_key = _safe_user_key()
+        if not user_key:
+            return jsonify({'success': False, 'error': 'valid link code required'}), 403
+
+    config = load_store_config_for_user_safe_key(user_key)
     screen_config = ensure_playlists_structure(config)['screens'].get(store_id, {}).get(screen_id, {})
+    if not screen_config:
+        return jsonify({'success': False, 'error': 'screen not found'}), 404
     active_file = pick_active_playlist_item(screen_config, config, store_id, screen_id)
     address_details = _resolve_screen_address_details(config, store_id, screen_id, screen_config)
     return render_template(
@@ -17557,6 +17572,7 @@ def tv_view(store_id, screen_id):
         store_id=store_id,
         active_file=active_file,
         media_base_url=get_media_base_url(),
+        pair_code=code,
         store_name=address_details.get('store_name', ''),
         display_address=address_details.get('effective_address', ''),
         display_address_source=address_details.get('source', ''),
