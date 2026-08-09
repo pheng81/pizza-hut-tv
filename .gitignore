@@ -36,6 +36,9 @@ env/
 *.swp
 *.swo
 
+# Local browser profile/cache
+.edge-codex-wallvideo-2/
+
 # Logs
 *.log
 
