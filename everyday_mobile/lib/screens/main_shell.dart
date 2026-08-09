@@ -1,9 +1,6 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 import '../services/api_client.dart';
 import 'tabs/commands_tab.dart';
@@ -155,7 +152,6 @@ class _MainShellState extends State<MainShell>
                       title: titles[_index],
                       subtitle: 'Everyday Advertise',
                       linkCode: _profileLinkCode,
-                      selectedStoreId: _selectedStoreId,
                     ),
                   ),
                   Expanded(
@@ -294,13 +290,11 @@ class _SimpleHeader extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.linkCode,
-    required this.selectedStoreId,
   });
 
   final String title;
   final String subtitle;
   final String? linkCode;
-  final String? selectedStoreId;
 
   @override
   Widget build(BuildContext context) {
@@ -332,120 +326,45 @@ class _SimpleHeader extends StatelessWidget {
               ],
             ),
           ),
-          if ((linkCode ?? '').isNotEmpty)
-            _AnimatedLinkCodeBadge(
-              linkCode: linkCode!,
-              selectedStoreId: selectedStoreId,
-            ),
+          if ((linkCode ?? '').isNotEmpty) _StoreNumber(linkCode: linkCode!),
         ],
       ),
     );
   }
 }
 
-class _AnimatedLinkCodeBadge extends StatefulWidget {
-  const _AnimatedLinkCodeBadge({
-    required this.linkCode,
-    required this.selectedStoreId,
-  });
+class _StoreNumber extends StatelessWidget {
+  const _StoreNumber({required this.linkCode});
 
   final String linkCode;
-  final String? selectedStoreId;
-
-  @override
-  State<_AnimatedLinkCodeBadge> createState() => _AnimatedLinkCodeBadgeState();
-}
-
-class _AnimatedLinkCodeBadgeState extends State<_AnimatedLinkCodeBadge> {
-  Timer? _switchTimer;
-  bool _showCode = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _switchTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-      if (mounted) {
-        setState(() => _showCode = !_showCode);
-      }
-    });
-  }
-
-  @override
-  void didUpdateWidget(covariant _AnimatedLinkCodeBadge oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.linkCode != widget.linkCode ||
-        oldWidget.selectedStoreId != widget.selectedStoreId) {
-      setState(() => _showCode = true);
-    }
-  }
-
-  @override
-  void dispose() {
-    _switchTimer?.cancel();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 148,
-      height: 40,
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 650),
-        switchInCurve: Curves.easeOutBack,
-        switchOutCurve: Curves.easeIn,
-        transitionBuilder: (child, animation) {
-          return FadeTransition(
-            opacity: animation,
-            child: ScaleTransition(
-              scale: Tween<double>(begin: 0.72, end: 1).animate(animation),
-              child: child,
-            ),
-          );
-        },
-        child: _showCode ? _buildCode() : _buildLogo(),
-      ),
-    );
-  }
-
-  Widget _buildLogo() {
-    return Align(
-      key: const ValueKey('logo'),
-      alignment: Alignment.centerRight,
-      child: SvgPicture.asset(
-        'assets/images/everyday_advertise_logo.svg',
-        width: 138,
-        height: 30,
-        fit: BoxFit.contain,
-      ),
-    );
-  }
-
-  Widget _buildCode() {
-    return Align(
-      key: const ValueKey('link-code'),
-      alignment: Alignment.centerRight,
+      width: 104,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const Text(
-            'STORE LINK CODE',
+            'STORE NUMBER',
             style: TextStyle(
               color: Color(0xFF6B7280),
               fontSize: 8,
               fontWeight: FontWeight.w800,
-              letterSpacing: 0.7,
+              letterSpacing: 0.6,
             ),
           ),
           Text(
-            widget.linkCode,
+            linkCode,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: Colors.black,
-              fontSize: 28,
+              fontSize: 26,
               fontWeight: FontWeight.w900,
-              height: 0.95,
-              letterSpacing: 1.2,
+              height: 0.98,
+              letterSpacing: 1.1,
             ),
           ),
         ],

@@ -47,8 +47,8 @@ class _StoresTabState extends State<StoresTab>
   Map<String, Map<String, String>> _screenStatusesByStore = const {};
   final Map<String, Future<_ScreenCardPreviewData>> _screenPreviewUrlFutures =
       {};
-  Future<List<_StoreMapMarkerData>>? _storeMapMarkersFuture;
   List<_StoreMapMarkerData> _storeMapMarkers = const [];
+  bool _mapMarkersLoading = false;
   GoogleMapController? _mapController;
   String? _mapCameraSignature;
   int _mapMarkersRequest = 0;
@@ -1228,13 +1228,30 @@ class _StoresTabState extends State<StoresTab>
     Future<List<_StoreMapMarkerData>> future,
   ) {
     final request = ++_mapMarkersRequest;
-    _storeMapMarkersFuture = future;
+    _mapMarkersLoading = true;
     future.then((markers) {
       if (!mounted || request != _mapMarkersRequest) {
         return;
       }
       setState(() {
         _storeMapMarkers = markers;
+        _mapMarkersLoading = false;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || request != _mapMarkersRequest) {
+          return;
+        }
+        _fitMapToMarkers(
+          markers: markers,
+          selectedStoreId: widget.selectedStoreId,
+        );
+      });
+    }, onError: (_, __) {
+      if (!mounted || request != _mapMarkersRequest) {
+        return;
+      }
+      setState(() {
+        _mapMarkersLoading = false;
       });
     });
   }
@@ -1524,229 +1541,184 @@ class _StoresTabState extends State<StoresTab>
     required ThemeData theme,
     required ColorScheme scheme,
   }) {
-    final future = _storeMapMarkersFuture;
+    final markers = _storeMapMarkers;
+    final selectedMarker = markers.where(
+      (marker) => marker.store.id == widget.selectedStoreId,
+    );
+    final points = markers.map((marker) => marker.point).toList();
+    final initialCenter = selectedMarker.isNotEmpty
+        ? selectedMarker.first.point
+        : points.isNotEmpty
+            ? points.first
+            : const LatLng(20, 0);
+    _StoreMapMarkerData? activeMarker;
+    if (_activeMapMarker != null) {
+      for (final marker in markers) {
+        if (marker.store.id == _activeMapMarker!.store.id &&
+            marker.previewScreenId == _activeMapMarker!.previewScreenId) {
+          activeMarker = marker;
+          break;
+        }
+      }
+    }
+
     return ClipRRect(
       borderRadius: BorderRadius.zero,
       child: AspectRatio(
         aspectRatio: 1,
-        child: future == null
-            ? const Center(child: CircularProgressIndicator())
-            : FutureBuilder<List<_StoreMapMarkerData>>(
-                future: future,
-                initialData: _storeMapMarkers.isEmpty ? null : _storeMapMarkers,
-                builder: (context, snapshot) {
-                  final markers = snapshot.data ?? _storeMapMarkers;
-                  if (snapshot.connectionState == ConnectionState.waiting &&
-                      markers.isEmpty) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (markers.isEmpty) {
-                    return Stack(
-                      children: [
-                        GoogleMap(
-                          key: const ValueKey('stores-map'),
-                          initialCameraPosition: CameraPosition(
-                            target: LatLng(20, 0),
-                            zoom: 1.5,
-                          ),
-                          mapType: MapType.normal,
-                          myLocationButtonEnabled: false,
-                          zoomControlsEnabled: false,
-                          compassEnabled: true,
-                          scrollGesturesEnabled: true,
-                          zoomGesturesEnabled: true,
-                          rotateGesturesEnabled: true,
-                          tiltGesturesEnabled: true,
-                          gestureRecognizers: _mapGestureRecognizers,
+        child: Stack(
+          children: [
+            GoogleMap(
+              key: const ValueKey('stores-map'),
+              initialCameraPosition: CameraPosition(
+                target: initialCenter,
+                zoom: markers.length == 1 ? 13 : 10,
+              ),
+              mapType: MapType.hybrid,
+              myLocationButtonEnabled: false,
+              zoomControlsEnabled: false,
+              compassEnabled: true,
+              scrollGesturesEnabled: true,
+              zoomGesturesEnabled: true,
+              rotateGesturesEnabled: true,
+              tiltGesturesEnabled: true,
+              gestureRecognizers: _mapGestureRecognizers,
+              onMapCreated: (controller) {
+                _mapController = controller;
+                _mapCameraSignature = null;
+                _fitMapToMarkers(
+                  markers: markers,
+                  selectedStoreId: widget.selectedStoreId,
+                );
+              },
+              onTap: (_) {
+                if (_activeMapMarker != null && mounted) {
+                  setState(() {
+                    _activeMapMarker = null;
+                  });
+                }
+              },
+              markers: markers
+                  .map(
+                    (marker) => Marker(
+                      markerId: MarkerId(
+                        '${marker.store.id}:${marker.previewScreenId ?? 'store'}',
+                      ),
+                      position: marker.point,
+                      icon: marker.icon ?? BitmapDescriptor.defaultMarker,
+                      zIndexInt: marker.store.id == _activeMapMarker?.store.id
+                          ? 20000
+                          : (marker.status == 'online' ? 10000 : 0),
+                      infoWindow: InfoWindow.noText,
+                      onTap: () {
+                        if (!mounted) {
+                          return;
+                        }
+                        setState(() {
+                          _activeMapMarker = marker;
+                        });
+                        widget.onSelectionChanged(
+                          marker.store.id,
+                          marker.previewScreenId,
+                        );
+                      },
+                    ),
+                  )
+                  .toSet(),
+            ),
+            if (markers.isEmpty)
+              Center(
+                child: _mapMarkersLoading
+                    ? const CircularProgressIndicator()
+                    : Container(
+                        margin: const EdgeInsets.all(20),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 14,
                         ),
-                        Center(
-                          child: Container(
-                            margin: const EdgeInsets.all(20),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 18,
-                              vertical: 14,
+                        decoration: BoxDecoration(
+                          color: scheme.surface.withValues(alpha: 0.94),
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x22000000),
+                              blurRadius: 12,
+                              offset: Offset(0, 4),
                             ),
-                            decoration: BoxDecoration(
-                              color: scheme.surface.withValues(alpha: 0.94),
-                              borderRadius: BorderRadius.circular(14),
-                              boxShadow: const [
-                                BoxShadow(
-                                  color: Color(0x22000000),
-                                  blurRadius: 12,
-                                  offset: Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: Text(
-                              'No store locations found yet. Add an address or coordinates to your stores/screens and pins will appear here.',
-                              textAlign: TextAlign.center,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: scheme.onSurfaceVariant,
+                          ],
+                        ),
+                        child: Text(
+                          'No store locations found yet. Add an address or coordinates to your stores/screens and pins will appear here.',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+              ),
+            if (activeMarker != null)
+              Positioned(
+                left: 12,
+                right: 12,
+                bottom: 12,
+                child: Builder(
+                  builder: (context) {
+                    final marker = activeMarker!;
+                    return AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 220),
+                      switchInCurve: Curves.easeOutBack,
+                      switchOutCurve: Curves.easeIn,
+                      transitionBuilder: (child, animation) {
+                        return FadeTransition(
+                          opacity: animation,
+                          child: ScaleTransition(
+                            scale: Tween<double>(begin: 0.88, end: 1)
+                                .animate(animation),
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: _StoreMapPreviewCard(
+                        key: ValueKey(
+                          '${marker.store.id}:${marker.previewScreenId}',
+                        ),
+                        marker: marker,
+                        theme: theme,
+                        scheme: scheme,
+                        previewFuture: marker.previewScreenId == null
+                            ? null
+                            : _getScreenCardPreviewData(
+                                storeId: marker.store.id,
+                                screenId: marker.previewScreenId!,
                               ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  }
-
-                  final points = markers.map((marker) => marker.point).toList();
-                  final selectedMarker = markers.where(
-                    (marker) => marker.store.id == widget.selectedStoreId,
-                  );
-                  final initialCenter = selectedMarker.isNotEmpty
-                      ? selectedMarker.first.point
-                      : points.first;
-                  _StoreMapMarkerData? activeMarker;
-                  if (_activeMapMarker != null) {
-                    for (final marker in markers) {
-                      if (marker.store.id == _activeMapMarker!.store.id &&
-                          marker.previewScreenId ==
-                              _activeMapMarker!.previewScreenId) {
-                        activeMarker = marker;
-                        break;
-                      }
-                    }
-                  }
-
-                  return Stack(
-                    children: [
-                      GoogleMap(
-                        key: const ValueKey('stores-map'),
-                        initialCameraPosition: CameraPosition(
-                          target: initialCenter,
-                          zoom: markers.length == 1 ? 13 : 10,
-                        ),
-                        mapType: MapType.hybrid,
-                        myLocationButtonEnabled: false,
-                        zoomControlsEnabled: false,
-                        compassEnabled: true,
-                        scrollGesturesEnabled: true,
-                        zoomGesturesEnabled: true,
-                        rotateGesturesEnabled: true,
-                        tiltGesturesEnabled: true,
-                        gestureRecognizers: _mapGestureRecognizers,
-                        onMapCreated: (controller) {
-                          _mapController = controller;
-                          _mapCameraSignature = null;
-                          _fitMapToMarkers(
-                            markers: markers,
-                            selectedStoreId: widget.selectedStoreId,
-                          );
-                        },
-                        onTap: (_) {
-                          if (_activeMapMarker != null && mounted) {
-                            setState(() {
-                              _activeMapMarker = null;
-                            });
+                        onOpen: () async {
+                          await _onSelectStore(marker.store.id);
+                          if (!mounted) {
+                            return;
+                          }
+                          final previewId = marker.previewScreenId;
+                          if (previewId != null) {
+                            widget.onSelectionChanged(
+                              marker.store.id,
+                              previewId,
+                            );
                           }
                         },
-                        markers: markers
-                            .map(
-                              (marker) => Marker(
-                                markerId: MarkerId(
-                                  '${marker.store.id}:${marker.previewScreenId ?? 'store'}',
-                                ),
-                                position: marker.point,
-                                icon: marker.icon ??
-                                    BitmapDescriptor.defaultMarker,
-                                zIndexInt: marker.store.id ==
-                                        _activeMapMarker?.store.id
-                                    ? 20000
-                                    : (marker.status == 'online' ? 10000 : 0),
-                                infoWindow: InfoWindow.noText,
-                                onTap: () {
-                                  if (!mounted) {
-                                    return;
-                                  }
-                                  setState(() {
-                                    _activeMapMarker = marker;
-                                  });
-                                  widget.onSelectionChanged(
-                                    marker.store.id,
-                                    marker.previewScreenId,
-                                  );
-                                },
-                              ),
-                            )
-                            .toSet(),
-                      ),
-                      Builder(
-                        builder: (_) {
-                          _fitMapToMarkers(
-                            markers: markers,
-                            selectedStoreId: widget.selectedStoreId,
-                          );
-                          return const SizedBox.shrink();
+                        onClose: () {
+                          if (!mounted) {
+                            return;
+                          }
+                          setState(() {
+                            _activeMapMarker = null;
+                          });
                         },
                       ),
-                      if (activeMarker != null)
-                        Positioned(
-                          left: 12,
-                          right: 12,
-                          bottom: 12,
-                          child: Builder(
-                            builder: (context) {
-                              final marker = activeMarker!;
-                              return AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 220),
-                                switchInCurve: Curves.easeOutBack,
-                                switchOutCurve: Curves.easeIn,
-                                transitionBuilder: (child, animation) {
-                                  return FadeTransition(
-                                    opacity: animation,
-                                    child: ScaleTransition(
-                                      scale: Tween<double>(
-                                        begin: 0.88,
-                                        end: 1,
-                                      ).animate(animation),
-                                      child: child,
-                                    ),
-                                  );
-                                },
-                                child: _StoreMapPreviewCard(
-                                  key: ValueKey(
-                                    '${marker.store.id}:${marker.previewScreenId}',
-                                  ),
-                                  marker: marker,
-                                  theme: theme,
-                                  scheme: scheme,
-                                  previewFuture: marker.previewScreenId == null
-                                      ? null
-                                      : _getScreenCardPreviewData(
-                                          storeId: marker.store.id,
-                                          screenId: marker.previewScreenId!,
-                                        ),
-                                  onOpen: () async {
-                                    await _onSelectStore(marker.store.id);
-                                    if (!mounted) {
-                                      return;
-                                    }
-                                    final previewId = marker.previewScreenId;
-                                    if (previewId != null) {
-                                      widget.onSelectionChanged(
-                                        marker.store.id,
-                                        previewId,
-                                      );
-                                    }
-                                  },
-                                  onClose: () {
-                                    if (!mounted) {
-                                      return;
-                                    }
-                                    setState(() {
-                                      _activeMapMarker = null;
-                                    });
-                                  },
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                    ],
-                  );
-                },
+                    );
+                  },
+                ),
               ),
+          ],
+        ),
       ),
     );
   }
@@ -2193,8 +2165,39 @@ class _StoresTabState extends State<StoresTab>
                                       );
                                     }
                                     if (urls.isEmpty) {
-                                      return const Center(
-                                        child: Icon(Icons.image_not_supported),
+                                      return Material(
+                                        color: Colors.transparent,
+                                        child: InkWell(
+                                          onTap: () {
+                                            widget.onSelectionChanged(
+                                                widget.selectedStoreId,
+                                                screen.id);
+                                            _openScreenMediaEditor(screen);
+                                          },
+                                          child: Center(
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  Icons
+                                                      .add_photo_alternate_outlined,
+                                                  size: 30,
+                                                  color: scheme.primary,
+                                                ),
+                                                const SizedBox(height: 6),
+                                                Text(
+                                                  'Add media',
+                                                  style: theme
+                                                      .textTheme.bodyMedium
+                                                      ?.copyWith(
+                                                    color: scheme.primary,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
                                       );
                                     }
                                     if (data.livePosTitle != null) {
@@ -2364,9 +2367,9 @@ class _AnimatedAddScheduleButtonState extends State<_AnimatedAddScheduleButton>
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              icon: const Icon(Icons.add_to_photos_outlined),
+              icon: const Icon(Icons.add_photo_alternate_outlined),
               label: const Text(
-                'Add Schedule',
+                'Add media',
                 style: TextStyle(fontWeight: FontWeight.w800),
               ),
             ),

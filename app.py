@@ -224,6 +224,15 @@ def _table_exists(db: sqlite3.Connection, table_name: str) -> bool:
 def init_db():
     db = get_db()
     db.execute('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password_hash TEXT)')
+    db.execute('''CREATE TABLE IF NOT EXISTS screen_heartbeats (
+        user_key TEXT NOT NULL,
+        store_id TEXT NOT NULL,
+        screen_id TEXT NOT NULL,
+        device_id TEXT,
+        last_seen INTEGER NOT NULL,
+        ip TEXT,
+        PRIMARY KEY (user_key, store_id, screen_id)
+    )''')
     # Add columns/indexes best-effort
     try:
         cols = [r[1] for r in db.execute('PRAGMA table_info(users)').fetchall()]
@@ -7650,7 +7659,7 @@ def screen_heartbeat():
     Also accepts GET with query params for quick manual testing: ?store_id=...&screen_id=...
     """
     if request.method == 'GET':
-        data = {'store_id': request.args.get('store_id'), 'screen_id': request.args.get('screen_id')}
+        data = request.args.to_dict()
     else:
         try:
             data = request.get_json(force=True) or {}
@@ -7721,6 +7730,26 @@ def screen_heartbeat():
             'ip': client_ip,
             'user_key': user_key
         }
+
+    try:
+        db = get_db()
+        db.execute('''CREATE TABLE IF NOT EXISTS screen_heartbeats (
+            user_key TEXT NOT NULL,
+            store_id TEXT NOT NULL,
+            screen_id TEXT NOT NULL,
+            device_id TEXT,
+            last_seen INTEGER NOT NULL,
+            ip TEXT,
+            PRIMARY KEY (user_key, store_id, screen_id)
+        )''')
+        db.execute('''INSERT OR REPLACE INTO screen_heartbeats
+            (user_key, store_id, screen_id, device_id, last_seen, ip)
+            VALUES (?, ?, ?, ?, ?, ?)''',
+            (user_key, str(store_id), str(screen_id), str(device_id), current_timestamp, client_ip))
+        db.commit()
+        db.close()
+    except Exception:
+        logging.exception('Failed to persist screen heartbeat for %s/%s', store_id, screen_id)
     
     logging.info(f'[Android TV] Heartbeat from device {device_id}: {store_id}/{screen_id} @ {client_ip}')
     
@@ -7747,6 +7776,17 @@ def _get_live_screen_last_seen(user_key, store_id, screen_id):
                 seen = 0
             if seen > latest:
                 latest = seen
+
+    try:
+        db = get_db()
+        row = db.execute('''SELECT last_seen FROM screen_heartbeats
+            WHERE user_key = ? AND store_id = ? AND screen_id = ?''',
+            (str(user_key or ''), str(store_id), str(screen_id))).fetchone()
+        db.close()
+        if row:
+            latest = max(latest, int(row['last_seen'] or 0))
+    except Exception:
+        pass
 
     try:
         for pi_data in connected_pis.values():
@@ -17583,10 +17623,14 @@ def tv_view(store_id, screen_id):
 @app.route('/webplayer/')
 def webplayer_index():
     """Landing page to launch the browser-based TV player.
-    Step 1: Enter the 4-digit TV link (pairing) code.
+    Step 1: Display the TV/Web Player code and receive the 4-digit link code.
     """
     try:
-        return render_template('webplayer/index.html')
+        response = make_response(render_template('webplayer/index.html'))
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        return response
     except Exception as e:
         return make_response(f"Webplayer index unavailable: {e}", 500)
 
@@ -24268,6 +24312,7 @@ def handle_config_applied(data):
 
 # ===== WebPlayer Mobile-to-TV Code Sharing =====
 webplayer_sessions = {}  # Store active webplayer sessions (session_id -> sid)
+webplayer_tv_pair_codes = {}  # Short TV code -> active webplayer session
 webplayer_session_codes = {}  # Last pairing code sent per session_id (for HTTP poll fallback)
 webplayer_store_codes = {}   # Last store code sent per session_id (for HTTP poll fallback)
 webplayer_last_selection = {}  # Last selected screen per session_id (for HTTP poll fallback)
@@ -24277,9 +24322,109 @@ webplayer_last_selection = {}  # Last selected screen per session_id (for HTTP p
 def handle_join_session(data):
     """TV/Desktop joins a session to receive codes from mobile"""
     session_id = data.get('session_id')
+    tv_pair_code = re.sub(r'\D+', '', str(data.get('tv_pair_code') or ''))[:6]
     if session_id:
         webplayer_sessions[session_id] = request.sid
+        if len(tv_pair_code) == 6:
+            webplayer_tv_pair_codes[tv_pair_code] = {
+                'session_id': session_id,
+                'ts': time.time(),
+            }
         logging.info(f'📺 WebPlayer session joined: {session_id} (sid: {request.sid})')
+
+@app.route('/api/tv_pairing_push', methods=['POST'])
+@login_required
+def api_tv_pairing_push():
+    """Send a user's link and store codes to a TV pairing session.
+    Body: {"tv_pair_code": "123456", "link_code": "1234", "store_code": "1000"}
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        tv_pair_code = re.sub(r'\D+', '', str(data.get('tv_pair_code') or ''))
+        link_code = re.sub(r'\D+', '', str(data.get('link_code') or ''))
+        store_code = re.sub(r'\D+', '', str(data.get('store_code') or ''))
+        if len(tv_pair_code) != 6:
+            return jsonify({'success': False, 'error': 'Enter the 6-digit TV code shown on screen.'}), 400
+        if len(link_code) != 4 or len(store_code) < 1:
+            return jsonify({'success': False, 'error': 'Enter a valid link code and store code.'}), 400
+
+        current_user_key = _safe_user_key()
+        link_user_key = _resolve_user_key_by_code(link_code)
+        if not current_user_key or link_user_key != current_user_key:
+            return jsonify({'success': False, 'error': 'That link code does not belong to this account.'}), 403
+
+        pairing = webplayer_tv_pair_codes.get(tv_pair_code)
+        if not pairing or time.time() - pairing.get('ts', 0) > 600:
+            webplayer_tv_pair_codes.pop(tv_pair_code, None)
+            return jsonify({'success': False, 'error': 'TV code expired. Refresh the TV screen for a new code.'}), 404
+
+        session_id = pairing['session_id']
+        webplayer_session_codes[session_id] = {
+            'code': link_code,
+            'ts': time.time(),
+        }
+        webplayer_store_codes[session_id] = {
+            'store_code': store_code,
+            'ts': time.time(),
+        }
+        target_sid = webplayer_sessions.get(session_id)
+        if target_sid:
+            socketio.emit('code_entered', {
+                'session_id': session_id,
+                'code': link_code,
+            }, room=target_sid)
+            socketio.emit('store_code_entered', {
+                'session_id': session_id,
+                'store_code': store_code,
+            }, room=target_sid)
+        return jsonify({'success': True, 'connected': bool(target_sid)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/tv_pairing_select_screen', methods=['POST'])
+@login_required
+def api_tv_pairing_select_screen():
+    """Send a selected store screen from mobile to a paired TV session.
+    Body: {"tv_pair_code": "123456", "store_code": "1000", "screen_id": "1000_screen1"}
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        tv_pair_code = re.sub(r'\D+', '', str(data.get('tv_pair_code') or ''))
+        store_code = re.sub(r'\D+', '', str(data.get('store_code') or ''))
+        screen_id = str(data.get('screen_id') or '').strip()
+        if len(tv_pair_code) != 6 or not store_code or not screen_id:
+            return jsonify({'success': False, 'error': 'TV code, store code, and screen are required.'}), 400
+
+        user_key = _safe_user_key()
+        if not user_key:
+            return jsonify({'success': False, 'error': 'Sign in before selecting a screen.'}), 401
+        config = ensure_playlists_structure(load_store_config_for_user_safe_key(user_key))
+        store_screens = (config.get('screens') or {}).get(store_code) or {}
+        if screen_id not in store_screens:
+            return jsonify({'success': False, 'error': 'That screen does not belong to this account or store.'}), 403
+
+        pairing = webplayer_tv_pair_codes.get(tv_pair_code)
+        if not pairing or time.time() - pairing.get('ts', 0) > 600:
+            webplayer_tv_pair_codes.pop(tv_pair_code, None)
+            return jsonify({'success': False, 'error': 'TV code expired. Refresh the TV screen for a new code.'}), 404
+
+        session_id = pairing['session_id']
+        webplayer_last_selection[session_id] = {
+            'store_id': store_code,
+            'screen_id': screen_id,
+            'ts': time.time(),
+        }
+        target_sid = webplayer_sessions.get(session_id)
+        if target_sid:
+            socketio.emit('screen_selected', {
+                'session_id': session_id,
+                'screen_id': screen_id,
+                'store_id': store_code,
+            }, room=target_sid)
+        logging.info(f'📱 Screen {screen_id} selected from mobile for TV session {session_id}')
+        return jsonify({'success': True, 'connected': bool(target_sid)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @socketio.on('send_code')
 @socketio_error_handler
@@ -24431,6 +24576,9 @@ def handle_leave_session(data):
     session_id = data.get('session_id')
     if session_id and session_id in webplayer_sessions:
         del webplayer_sessions[session_id]
+        for code, pairing in list(webplayer_tv_pair_codes.items()):
+            if pairing.get('session_id') == session_id:
+                webplayer_tv_pair_codes.pop(code, None)
         logging.info(f'📺 WebPlayer session left: {session_id}')
 
 # ===== Android TV Remote Control Commands =====

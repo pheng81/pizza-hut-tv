@@ -1424,7 +1424,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                             if (drawable is AnimatedImageDrawable) drawable.start()
                         }, rotationDegrees = totalRotation.toFloat(), effect = effect)
 
-                        binding.message.text = file.take(50)
+                        binding.message.text = ""
                         // report success
                         try { ApiClient.service.postClientEvent(com.everydayadvertise.tv.api.ClientEventReq(storeId, screenId, "load_ok", file = file, itemId = itemId)) } catch (_: Exception) {}
                         // start periodic ok ping to keep dashboard green while displayed
@@ -1432,7 +1432,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                         onDone(true)
                     } catch (e: Exception) {
                         // Defensive: if setImageDrawable fails (e.g., still too large despite downsampling), report failure
-                        binding.message.text = "Draw failed: ${file.take(30)}"
+                        binding.message.text = "Media could not be displayed"
                         android.util.Log.e("TvDisplayActivity", "setImageDrawable failed for $file", e)
                         try { ApiClient.service.postClientEvent(com.everydayadvertise.tv.api.ClientEventReq(storeId, screenId, "load_fail", file = file, itemId = itemId, error = "setImageDrawable exception: ${e.message}")) } catch (_: Exception) {}
                         onDone(false)
@@ -1453,18 +1453,18 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                             // Pre-rotate bitmap to fill screen properly (like Pi client)
                             val rotatedBmp = if (totalRotation != 0) prepareRotatedBitmap(bmp, totalRotation) else bmp
                             crossfadeToImage(setupFront = { iv -> iv.setImageBitmap(rotatedBmp) }, rotationDegrees = 0f, effect = effect)
-                            binding.message.text = file.take(50)
+                            binding.message.text = ""
                             try { ApiClient.service.postClientEvent(com.everydayadvertise.tv.api.ClientEventReq(storeId, screenId, "load_ok", file = file, itemId = itemId)) } catch (_: Exception) {}
                             startItemOkPing(storeId, screenId, file, itemId)
                             onDone(true)
                         } catch (e: Exception) {
-                            binding.message.text = "Draw failed: ${file.take(30)}"
+                            binding.message.text = "Media could not be displayed"
                             android.util.Log.e("TvDisplayActivity", "setImageBitmap failed for $file", e)
                             try { ApiClient.service.postClientEvent(com.everydayadvertise.tv.api.ClientEventReq(storeId, screenId, "load_fail", file = file, itemId = itemId, error = "setImageBitmap exception: ${e.message}")) } catch (_: Exception) {}
                             onDone(false)
                         }
                     } else {
-                        binding.message.text = "Load failed: $file".take(60)
+                        binding.message.text = "Media could not be loaded"
                         try { android.util.Log.w("TvDisplayActivity", "Animated image load failed for $file; tried=${tried.joinToString()}") } catch (_: Exception) {}
                         lifecycleScope.launch(Dispatchers.IO) {
                             try { ApiClient.service.postClientEvent(com.everydayadvertise.tv.api.ClientEventReq(storeId, screenId, "load_fail", file = file, itemId = itemId, error = "anim first-frame decode failed; tried=${tried.joinToString()}")) } catch (_: Exception) {}
@@ -1488,18 +1488,18 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                         // Pre-rotate bitmap to fill screen properly (like Pi client)
                         val rotatedBmp = if (totalRotation != 0) prepareRotatedBitmap(bmp, totalRotation) else bmp
                         crossfadeToImage(setupFront = { iv -> iv.setImageBitmap(rotatedBmp) }, rotationDegrees = 0f, effect = effect)
-                        binding.message.text = file.take(50)
+                        binding.message.text = ""
                         try { ApiClient.service.postClientEvent(com.everydayadvertise.tv.api.ClientEventReq(storeId, screenId, "load_ok", file = file, itemId = itemId)) } catch (_: Exception) {}
                         startItemOkPing(storeId, screenId, file, itemId)
                         onDone(true)
                     } catch (e: Exception) {
-                        binding.message.text = "Draw failed: ${file.take(30)}"
+                        binding.message.text = "Media could not be displayed"
                         android.util.Log.e("TvDisplayActivity", "setImageBitmap failed for $file", e)
                         try { ApiClient.service.postClientEvent(com.everydayadvertise.tv.api.ClientEventReq(storeId, screenId, "load_fail", file = file, itemId = itemId, error = "setImageBitmap exception: ${e.message}")) } catch (_: Exception) {}
                         onDone(false)
                     }
                 } else {
-                    binding.message.text = ("Load failed: " + (file)).take(60)
+                    binding.message.text = "Media could not be loaded"
                     try { android.util.Log.w("TvDisplayActivity", "Image load failed for $file; tried=${tried.joinToString()}") } catch (_: Exception) {}
                     lifecycleScope.launch(Dispatchers.IO) {
                         try { ApiClient.service.postClientEvent(com.everydayadvertise.tv.api.ClientEventReq(storeId, screenId, "load_fail", file = file, itemId = itemId, error = "image fetch failed; tried=${tried.joinToString()}")) } catch (_: Exception) {}
@@ -1824,7 +1824,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                 cancelScheduled()
                 try { youTubeWebView?.let { it.visibility = android.view.View.GONE; it.loadUrl("about:blank") } } catch (_: Exception) {}
                 stopVideoPipelines()
-                binding.message.text = "YT ${videoId.take(11)}"
+                binding.message.text = ""
                 imageView.visibility = ImageView.VISIBLE
                 secondaryImageView?.visibility = ImageView.GONE
                 bringUiOverlaysToFront()
@@ -2001,7 +2001,7 @@ function onYouTubeIframeAPIReady(){
         }
         if (isVideo(file) || hasYoutubeProxyMp4) {
             if (hasYoutubeProxyMp4) {
-                binding.message.text = "YT-MP4 ${file.removePrefix("youtube:").take(11)}"
+                binding.message.text = ""
             }
             youTubeWebView?.let {
                 try {
@@ -2016,7 +2016,7 @@ function onYouTubeIframeAPIReady(){
             // Prefer /media (range streaming) for videos; fallback to static if needed
             val videoUrlPrimary = if (hasYoutubeProxyMp4) next.url!! else ApiClientImageHelper.buildVideoUrl(file)
             val videoUrlFallback = if (!next.url.isNullOrBlank() && next.url!!.startsWith("http", true)) next.url!! else ApiClientImageHelper.buildImageUrl(file)
-            binding.message.text = "VID ${file.take(18)}"
+            binding.message.text = ""
             // Legacy VideoView fallback (added lazily)
             fun ensureLegacy(): VideoView {
                 val existing = legacyVideoView
@@ -2033,7 +2033,7 @@ function onYouTubeIframeAPIReady(){
             }
             fun useLegacy() {
                 try {
-                    binding.message.text = "Legacy start ${file.take(16)}"
+                    binding.message.text = ""
                     val vv = ensureLegacy()
                     playerView.visibility = ImageView.GONE
                     vv.setVideoURI(Uri.parse(videoUrlFallback))
@@ -2044,7 +2044,7 @@ function onYouTubeIframeAPIReady(){
                         vv.start()
                         // Reveal once legacy video is actually playing
                         revealWithQuickFade()
-                        binding.message.text = "Legacy PLAY ${file.take(14)}"
+                        binding.message.text = ""
                         // Report success for legacy playback
                         lifecycleScope.launch(Dispatchers.IO) {
                             try { ApiClient.service.postClientEvent(com.everydayadvertise.tv.api.ClientEventReq(storeId, screenId, "load_ok", file = file, itemId = next.id)) } catch (_: Exception) {}
@@ -2062,7 +2062,7 @@ function onYouTubeIframeAPIReady(){
                         vv.postDelayed(scheduledRotation!!, durMs)
                     }
                     vv.setOnErrorListener { _, what, extra ->
-                        binding.message.text = "LegacyErr w=$what e=$extra"
+                            binding.message.text = "Media could not be played"
                         lifecycleScope.launch(Dispatchers.IO) {
                             try { ApiClient.service.postClientEvent(com.everydayadvertise.tv.api.ClientEventReq(storeId, screenId, "load_fail", file = file, itemId = next.id, error = "legacy error w=$what e=$extra")) } catch (_: Exception) {}
                         }
@@ -2078,12 +2078,12 @@ function onYouTubeIframeAPIReady(){
                             cancelScheduled()
                             try { vv.stopPlayback() } catch (_: Exception) {}
                             vv.visibility = ImageView.GONE
-                            binding.message.text = "Legacy timeout"
+                            binding.message.text = "Media could not be played"
                             showAndSchedule()
                         }
                     }, 6_000L)
                 } catch (e: Exception) {
-                    binding.message.text = ("LegacyFail ${e.message}").take(60)
+                    binding.message.text = "Media could not be played"
                     showAndSchedule()
                 }
             }
@@ -2111,7 +2111,7 @@ function onYouTubeIframeAPIReady(){
                                 com.google.android.exoplayer2.Player.STATE_ENDED -> "END"
                                 else -> stateCode.toString()
                             }
-                            binding.message.text = ("${f.take(12)} $label").take(60)
+                            binding.message.text = ""
                             if (stateCode == com.google.android.exoplayer2.Player.STATE_READY) {
                                 // Cancel stall watchdog once we are ready
                                 videoStallWatch?.let { playerView.removeCallbacks(it); imageView.removeCallbacks(it) }
@@ -2151,7 +2151,7 @@ function onYouTubeIframeAPIReady(){
                                     playerRef.clearMediaItems()
                                     playerRef.setMediaSource(buildMediaSource(if (!next.url.isNullOrBlank() && next.url!!.startsWith("http", true)) next.url!! else ApiClientImageHelper.buildImageUrl(f)))
                                     playerRef.prepare(); playerRef.playWhenReady = true
-                                    binding.message.text = ("StaticFB ${f.take(10)}").take(60)
+                                    binding.message.text = ""
                     // Don't report success yet; wait for READY state to confirm
                                     return
                                 } catch (_: Exception) { /* fall through */ }
@@ -2218,7 +2218,7 @@ function onYouTubeIframeAPIReady(){
                                 playerRef.clearMediaItems()
                                 playerRef.setMediaSource(buildMediaSource(if (!next.url.isNullOrBlank() && next.url!!.startsWith("http", true)) next.url!! else ApiClientImageHelper.buildImageUrl(file)))
                                 playerRef.prepare(); playerRef.playWhenReady = true
-                                binding.message.text = ("StaticFB ${file.take(10)}").take(60)
+                                binding.message.text = ""
                             } catch (_: Exception) {
                                 cancelScheduled(); playerView.postDelayed({ showAndSchedule() }, 300)
                             }
@@ -2271,7 +2271,7 @@ function onYouTubeIframeAPIReady(){
                     playerView.postDelayed(scheduledRotation!!, durMs)
                 }
             } catch (e: Exception) {
-                binding.message.text = ("ExoFail ${e.message}").take(60)
+                binding.message.text = "Media could not be played"
                 useLegacy()
             }
         } else {
@@ -2541,8 +2541,19 @@ function onYouTubeIframeAPIReady(){
                 panelZoneState = parsePanelZoneConfig(jsonObj.optJSONObject("panel_zone"))
                 
                 originalItems = original
+                val previousCurrentItem = currentItemFile?.let { file ->
+                    state.items.firstOrNull { it.file == file }
+                }
                 // Apply without resetting index if files are the same
                 applyNewList(original)
+                val updatedCurrentItem = previousCurrentItem?.id?.let { id ->
+                    state.items.firstOrNull { it.id == id }
+                }
+                if (previousCurrentItem != null && updatedCurrentItem != null && previousCurrentItem != updatedCurrentItem) {
+                    cancelScheduled()
+                    currentItemFile = null
+                    showNext?.invoke()
+                }
                 lifecycleScope.launch(Dispatchers.IO) {
                     try { ApiClient.service.postClientEvent(com.everydayadvertise.tv.api.ClientEventReq(storeId, screenId, "playlist_reload")) } catch (_: Exception) {}
                 }
@@ -2564,7 +2575,7 @@ function onYouTubeIframeAPIReady(){
                     e.message != null -> "Network error: ${e.message}"
                     else -> "Network error: ${e.javaClass.simpleName}"
                 }
-                binding.message.text = errorMsg.take(60)
+                binding.message.text = "Network error. Retrying…"
                 hidePanelOverlay()
             } finally {
                 imageView.postDelayed({ fetchPlaylist() }, refreshIntervalMs)
