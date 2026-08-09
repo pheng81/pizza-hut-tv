@@ -361,6 +361,7 @@
 		let front = layerA, back = layerB;
 
 		let playlist = [];
+		let playlistSignature = '';
 		let idx = 0;
 		let timer = null;
 		let lastFetchTs = 0;
@@ -537,6 +538,21 @@
 				const r = await fetch(`${ORIGIN}/playlist/${storeId}/${screenId}`);
 				const j = await r.json();
 				if(j && j.success && Array.isArray(j.playlist)){
+					const nextSignature = JSON.stringify({
+						playlist: j.playlist.map((item) => ({
+							id: item?.id || '',
+							file: item?.file || '',
+							text: item?.text || '',
+							duration: item?.duration || 0,
+							schedule: item?.schedule || [],
+							days: item?.days || [],
+							effect: item?.effect || ''
+						})),
+						orientation: j.orientation || '',
+						rotation: j.rotation || 0
+					});
+					const changed = Boolean(playlistSignature) && nextSignature !== playlistSignature;
+					playlistSignature = nextSignature;
 					playlist = j.playlist;
 					if(typeof j.orientation === 'string'){ orientationMode = j.orientation; }
 					if(typeof j.rotation === 'number'){ displayRotation = (j.rotation||0); }
@@ -545,6 +561,11 @@
 					if(idx >= playlist.length) idx = 0;
 					// Proactively probe status for unknown/stale items so the dashboard turns green fast
 					scheduleStatusProbes(playlist);
+					if(changed){
+						idx = 0;
+						if(timer){ clearTimeout(timer); timer = null; }
+						setTimeout(tick, 0);
+					}
 				}
 			}catch(e){ /* keep current on error */ }
 			lastFetchTs = Date.now();

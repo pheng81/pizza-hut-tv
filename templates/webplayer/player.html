@@ -1326,7 +1326,25 @@
 		}
 		function computePlaylistSignature(list, orientation, rotation){
 			try{
-				const keys = (Array.isArray(list) ? list : []).map(keyFrom).join('|');
+				const keys = (Array.isArray(list) ? list : []).map((item) => JSON.stringify({
+					id: item?.id || '',
+					file: item?.file || '',
+					media_type: item?.media_type || '',
+					text: item?.text || '',
+					enabled: item?.enabled !== false,
+					duration: item?.duration || 0,
+					repeat: item?.repeat !== false,
+					link_next: item?.link_next === true,
+					start: item?.start || '',
+					end: item?.end || '',
+					days: item?.days || [],
+					schedule: item?.schedule || [],
+					effect: item?.effect || '',
+					image_url: item?.image_url || '',
+					image_width: item?.image_width || 0,
+					image_height: item?.image_height || 0,
+					icon: item?.icon || ''
+				})).join('|');
 				return `${keys}::${orientation||''}::${rotation||0}`;
 			}catch(err){
 				console.warn('Failed to compute playlist signature', err);
@@ -3177,10 +3195,7 @@
 		async function tick(){
 			if(!playlist.length){ await fetchPlaylist(true); }
 			
-			// TEMPORARY: Disable schedule filtering until dashboard saves slot data properly
-			const activePlaylist = playlist; // Use full playlist without filtering
-			
-			console.log('🔍 PLAYLIST DEBUG: Using all', activePlaylist.length, 'items (schedule filtering disabled)');
+			const activePlaylist = playlist.filter(isItemActiveNow);
 			
 			if(!activePlaylist.length){
 				console.warn('⚠️ NO ITEMS - waiting...');

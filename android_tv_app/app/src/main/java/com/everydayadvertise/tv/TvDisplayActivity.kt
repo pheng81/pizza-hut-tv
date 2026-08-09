@@ -1620,7 +1620,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
                         cancelScheduled()
                         state.items = newFiltered; state.index = 0
                         showNext?.invoke(); return@Runnable
-                    } else if (newFiles != currentFiles) {
+                    } else if (newFiltered != state.items) {
                         // The active schedule set changed, but current item is still valid
                         // Update the list but DON'T interrupt - let current item finish its duration
                         state.items = newFiltered
@@ -1660,9 +1660,7 @@ private fun TvDisplayActivity.startPlaylistLoop(storeId: String, screenId: Strin
         // Re-filter on each step for near real-time schedule flips
         if (originalItems.isNotEmpty()) {
             val newFiltered = filterBySchedule(originalItems)
-            val currentFiles = state.items.mapNotNull { it.file }
-            val newFiles = newFiltered.mapNotNull { it.file }
-            if (newFiles != currentFiles) {
+            if (newFiltered != state.items) {
                 val currentIndexFile = state.items.getOrNull((state.index - 1).coerceAtLeast(0))?.file
                 state.items = newFiltered
                 state.index = if (currentIndexFile != null) {
@@ -2333,24 +2331,13 @@ function onYouTubeIframeAPIReady(){
     fun applyNewList(all: List<com.everydayadvertise.tv.api.PlaylistItem>?) {
         val filtered = filterBySchedule(all ?: emptyList())
         val prevItems = state.items
-        val prevFiles = prevItems.mapNotNull { it.file }
-        val newFiles = filtered.mapNotNull { it.file }
         // If first assignment or previously empty, initialize
         if (prevItems.isEmpty()) {
             state.items = if (filtered.isEmpty()) emptyList() else filtered
             state.index = 0
             return
         }
-        // If list content changed OR item IDs changed for same files, replace but preserve current position relative to current file.
-        var idsChangedForSameFiles = false
-        if (newFiles == prevFiles) {
-            // Build file->id maps to detect when a server recreated an item (new id but same file)
-            val prevMap = prevItems.associate { (it.file ?: "") to (it.id ?: "") }
-            val newMap = filtered.associate { (it.file ?: "") to (it.id ?: "") }
-            // If any file that exists in both maps has a different id, treat as a change
-            idsChangedForSameFiles = newFiles.any { f -> (prevMap[f] ?: "") != (newMap[f] ?: "") }
-        }
-        if (newFiles != prevFiles || idsChangedForSameFiles) {
+        if (filtered != prevItems) {
             val cur = currentItemFile
             state.items = filtered
             state.index = if (cur != null) {
