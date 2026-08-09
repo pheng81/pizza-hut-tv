@@ -17583,10 +17583,14 @@ def tv_view(store_id, screen_id):
 @app.route('/webplayer/')
 def webplayer_index():
     """Landing page to launch the browser-based TV player.
-    Step 1: Enter the 4-digit TV link (pairing) code.
+    Step 1: Display the TV/Web Player code and receive the 4-digit link code.
     """
     try:
-        return render_template('webplayer/index.html')
+        response = make_response(render_template('webplayer/index.html'))
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        return response
     except Exception as e:
         return make_response(f"Webplayer index unavailable: {e}", 500)
 
