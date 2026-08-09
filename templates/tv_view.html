@@ -390,9 +390,11 @@
 				
 				dbg(`event: ${ev} ${f ? `file=${f}` : ''} ${err ? `error=${err}` : ''}`);
 				
-				await fetch(`${ORIGIN}/api/client_event`, {
+				const query = new URLSearchParams();
+				if(pairCode) query.set('user_code', pairCode);
+				await fetch(`${ORIGIN}/api/client_event?${query.toString()}`, {
 					method: 'POST', 
-					headers: { 'Content-Type': 'application/json' },
+					headers: { 'Content-Type': 'application/json', ...(pairCode ? {'X-User-Code': pairCode} : {}) },
 					body: JSON.stringify(payload)
 				}).catch(e => {
 					dbg(`failed to report event: ${e.message}`);
@@ -405,7 +407,13 @@
 		// Heartbeat so server knows this screen is active
 		async function sendHeartbeat(){
 			try{
-				await fetch(`${ORIGIN}/api/screen_heartbeat`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ store_id: storeId, screen_id: screenId }) });
+				const query = new URLSearchParams();
+				if(pairCode) query.set('user_code', pairCode);
+				await fetch(`${ORIGIN}/api/screen_heartbeat?${query.toString()}`, {
+					method:'POST',
+					headers:{'Content-Type':'application/json', ...(pairCode ? {'X-User-Code': pairCode} : {})},
+					body: JSON.stringify({ store_id: storeId, screen_id: screenId })
+				});
 			}catch{}
 		}
 		// Kick immediately and every 30s
