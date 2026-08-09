@@ -1438,6 +1438,30 @@ class ApiClient {
     return data['connected'] == true;
   }
 
+  Future<bool> sendTvScreenSelection({
+    required String tvPairCode,
+    required String storeCode,
+    required String screenId,
+  }) async {
+    final response = await _dio.post(
+      '/api/tv_pairing_select_screen',
+      data: {
+        'tv_pair_code': tvPairCode.trim(),
+        'store_code': storeCode.trim(),
+        'screen_id': screenId.trim(),
+      },
+    );
+    final data = _asMap(response.data);
+    if (response.statusCode == null ||
+        response.statusCode! >= 400 ||
+        data['success'] != true) {
+      throw Exception(
+          (data['error'] ?? 'Could not select the screen on the TV.')
+              .toString());
+    }
+    return data['connected'] == true;
+  }
+
   Future<int> updateScreenRotation({
     required String storeId,
     required String screenId,

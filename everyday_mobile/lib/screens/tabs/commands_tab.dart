@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart' as geocoding;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
+import '../../models/app_models.dart';
 import '../../services/api_client.dart';
 
 class CommandsTab extends StatefulWidget {
@@ -21,6 +22,9 @@ class _CommandsTabState extends State<CommandsTab> {
   final TextEditingController _linkCodeController = TextEditingController();
   final TextEditingController _storeCodeController = TextEditingController();
   bool _sendingTvCodes = false;
+  bool _sendingTvScreen = false;
+  List<ScreenItem> _pairingScreens = const [];
+  String? _selectedPairingScreenId;
   final Map<String, LatLng?> _resolvedMapPoints = {};
 
   @override
@@ -77,13 +81,26 @@ class _CommandsTabState extends State<CommandsTab> {
         linkCode: linkCode,
         storeCode: storeCode,
       );
+      List<ScreenItem> pairingScreens = const [];
+      String? screenLoadError;
+      try {
+        pairingScreens = await widget.apiClient.getScreens(storeCode);
+      } catch (e) {
+        screenLoadError = e.toString().replaceFirst('Exception: ', '');
+      }
       if (!mounted) {
         return;
       }
       setState(() {
-        _message = connected
-            ? 'Link code and store code sent to the TV.'
-            : 'Codes queued. Keep the TV pairing screen open and try again if it does not update.';
+        _pairingScreens = pairingScreens;
+        _selectedPairingScreenId =
+            pairingScreens.length == 1 ? pairingScreens.first.id : null;
+        _message = screenLoadError ??
+            (connected
+                ? (pairingScreens.isEmpty
+                    ? 'Codes sent. No screens were found for this store.'
+                    : 'Codes sent. Choose a screen below.')
+                : 'Codes queued. Keep the TV pairing screen open and try again if it does not update.');
       });
     } catch (e) {
       if (!mounted) {
@@ -96,6 +113,54 @@ class _CommandsTabState extends State<CommandsTab> {
       if (mounted) {
         setState(() {
           _sendingTvCodes = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _sendTvScreenSelection() async {
+    final tvPairCode = _tvPairCodeController.text.trim();
+    final storeCode = _storeCodeController.text.trim();
+    final screenId = _selectedPairingScreenId;
+    if (!RegExp(r'^\d{6}$').hasMatch(tvPairCode) ||
+        storeCode.isEmpty ||
+        screenId == null ||
+        screenId.isEmpty) {
+      setState(() {
+        _message = 'Choose a screen before sending it to the TV.';
+      });
+      return;
+    }
+
+    setState(() {
+      _sendingTvScreen = true;
+      _message = null;
+    });
+    try {
+      final connected = await widget.apiClient.sendTvScreenSelection(
+        tvPairCode: tvPairCode,
+        storeCode: storeCode,
+        screenId: screenId,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _message = connected
+            ? 'Screen $screenId sent to the TV.'
+            : 'Screen selection queued. Keep the TV pairing flow open.';
+      });
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _message = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _sendingTvScreen = false;
         });
       }
     }
@@ -716,6 +781,49 @@ class _CommandsTabState extends State<CommandsTab> {
                 label: Text(_sendingTvCodes ? 'Sending…' : 'Send to TV'),
               ),
             ),
+            if (_pairingScreens.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Divider(color: scheme.outlineVariant),
+              const SizedBox(height: 8),
+              Text(
+                'Choose a screen for this TV',
+                style: theme.textTheme.titleSmall,
+              ),
+              const SizedBox(height: 4),
+              ..._pairingScreens.map(
+                (screen) => RadioListTile<String>(
+                  contentPadding: EdgeInsets.zero,
+                  value: screen.id,
+                  groupValue: _selectedPairingScreenId,
+                  onChanged: _sendingTvScreen
+                      ? null
+                      : (value) {
+                          setState(() {
+                            _selectedPairingScreenId = value;
+                          });
+                        },
+                  title: Text(screen.name),
+                  subtitle: Text(screen.id),
+                ),
+              ),
+              const SizedBox(height: 4),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _sendingTvScreen ? null : _sendTvScreenSelection,
+                  icon: _sendingTvScreen
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.tv_rounded),
+                  label: Text(
+                    _sendingTvScreen ? 'Sending…' : 'Send selected screen',
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

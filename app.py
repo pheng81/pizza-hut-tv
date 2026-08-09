@@ -24341,6 +24341,51 @@ def api_tv_pairing_push():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/tv_pairing_select_screen', methods=['POST'])
+@login_required
+def api_tv_pairing_select_screen():
+    """Send a selected store screen from mobile to a paired TV session.
+    Body: {"tv_pair_code": "123456", "store_code": "1000", "screen_id": "1000_screen1"}
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        tv_pair_code = re.sub(r'\D+', '', str(data.get('tv_pair_code') or ''))
+        store_code = re.sub(r'\D+', '', str(data.get('store_code') or ''))
+        screen_id = str(data.get('screen_id') or '').strip()
+        if len(tv_pair_code) != 6 or not store_code or not screen_id:
+            return jsonify({'success': False, 'error': 'TV code, store code, and screen are required.'}), 400
+
+        user_key = _safe_user_key()
+        if not user_key:
+            return jsonify({'success': False, 'error': 'Sign in before selecting a screen.'}), 401
+        config = ensure_playlists_structure(load_store_config_for_user_safe_key(user_key))
+        store_screens = (config.get('screens') or {}).get(store_code) or {}
+        if screen_id not in store_screens:
+            return jsonify({'success': False, 'error': 'That screen does not belong to this account or store.'}), 403
+
+        pairing = webplayer_tv_pair_codes.get(tv_pair_code)
+        if not pairing or time.time() - pairing.get('ts', 0) > 600:
+            webplayer_tv_pair_codes.pop(tv_pair_code, None)
+            return jsonify({'success': False, 'error': 'TV code expired. Refresh the TV screen for a new code.'}), 404
+
+        session_id = pairing['session_id']
+        webplayer_last_selection[session_id] = {
+            'store_id': store_code,
+            'screen_id': screen_id,
+            'ts': time.time(),
+        }
+        target_sid = webplayer_sessions.get(session_id)
+        if target_sid:
+            socketio.emit('screen_selected', {
+                'session_id': session_id,
+                'screen_id': screen_id,
+                'store_id': store_code,
+            }, room=target_sid)
+        logging.info(f'📱 Screen {screen_id} selected from mobile for TV session {session_id}')
+        return jsonify({'success': True, 'connected': bool(target_sid)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @socketio.on('send_code')
 @socketio_error_handler
 def handle_send_code(data):
