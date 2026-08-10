@@ -43,11 +43,15 @@ import java.util.Calendar
 import java.text.SimpleDateFormat
 import java.util.Locale
 import com.everydayadvertise.tv.api.HeartbeatReq
+import com.everydayadvertise.tv.api.DeviceIdHelper
+import io.socket.client.IO
+import io.socket.client.Socket
 import org.json.JSONArray
 import org.json.JSONObject
 import android.graphics.drawable.GradientDrawable
 import android.animation.ObjectAnimator
 import android.view.animation.LinearInterpolator
+import android.media.AudioManager
 
 data class PanelAppearanceConfig(
     val backgroundColor: String = "#201206",
@@ -102,6 +106,8 @@ class TvDisplayActivity : AppCompatActivity() {
     var manualPrev: (() -> Unit)? = null
     private var heartbeatJob: Job? = null
     private var hbIndicator: TextView? = null
+    private var remoteSocket: Socket? = null
+    var manualRefreshPlaylist: (() -> Unit)? = null
     var scrollingTextAnimator: ObjectAnimator? = null
     // Periodic per-item OK ping so dashboard lights stay green while item is displayed
     private var itemOkPingJob: Job? = null
@@ -134,6 +140,101 @@ class TvDisplayActivity : AppCompatActivity() {
     var panelBoardReadyHeading: TextView? = null
     var panelBoardReadyList: LinearLayout? = null
     var panelZoneState: PanelZoneConfig = PanelZoneConfig()
+
+    private fun connectRemoteSocket(storeId: String, screenId: String) {
+        val deviceId = DeviceIdHelper.get(applicationContext)
+        val options = IO.Options().apply {
+            forceNew = false
+            reconnection = true
+            reconnectionAttempts = Int.MAX_VALUE
+            reconnectionDelay = 2000
+            timeout = 10000
+            transports = arrayOf("polling", "websocket")
+        }
+        if (BuildConfig.PHTV_ALLOW_INSECURE_SSL) {
+            try {
+                val client = okhttp3.OkHttpClient.Builder()
+                    .sslSocketFactory(
+                        com.everydayadvertise.tv.api.TrustAllCerts.getUnsafeSSLSocketFactory(),
+                        com.everydayadvertise.tv.api.TrustAllCerts.getTrustManager()
+                    )
+                    .hostnameVerifier(com.everydayadvertise.tv.api.TrustAllCerts.getAllTrustingHostnameVerifier())
+                    .build()
+                options.callFactory = client
+                options.webSocketFactory = client
+            } catch (e: Exception) {
+                android.util.Log.w("TvDisplayActivity", "Remote socket SSL setup failed", e)
+            }
+        }
+
+        try {
+            remoteSocket?.off()
+            remoteSocket?.disconnect()
+            val socket = IO.socket(ApiClient.baseUrl.trimEnd('/'), options)
+            socket.on(Socket.EVENT_CONNECT) {
+                socket.emit(
+                    "android_tv_register",
+                    JSONObject()
+                        .put("device_id", deviceId)
+                        .put("store_id", storeId)
+                        .put("screen_id", screenId)
+                )
+                android.util.Log.d("TvDisplayActivity", "Remote socket connected: $deviceId")
+            }
+            socket.on("remote_command") { args ->
+                val payload = args.firstOrNull() as? JSONObject ?: return@on
+                val command = payload.optString("command").trim()
+                if (command.isNotEmpty()) {
+                    runOnUiThread { handleRemoteCommand(command) }
+                }
+            }
+            socket.on(Socket.EVENT_DISCONNECT) {
+                android.util.Log.w("TvDisplayActivity", "Remote socket disconnected")
+            }
+            socket.on(Socket.EVENT_CONNECT_ERROR) { args ->
+                android.util.Log.w(
+                    "TvDisplayActivity",
+                    "Remote socket connection error: ${args.firstOrNull()}"
+                )
+            }
+            socket.connect()
+            remoteSocket = socket
+        } catch (e: Exception) {
+            android.util.Log.e("TvDisplayActivity", "Remote socket setup failed", e)
+        }
+    }
+
+    private fun handleRemoteCommand(command: String) {
+        android.util.Log.d("TvDisplayActivity", "Remote command received: $command")
+        when (command) {
+            "refresh_screen", "reload_playlist", "remote_refresh_screen" ->
+                manualRefreshPlaylist?.invoke()
+            "restart_app" -> recreate()
+            "remote_volume_up" -> adjustVolume(AudioManager.ADJUST_RAISE)
+            "remote_volume_down" -> adjustVolume(AudioManager.ADJUST_LOWER)
+            "remote_mute" -> toggleMute()
+            "remote_channel_up", "remote_up" -> manualNext?.invoke()
+            "remote_channel_down", "remote_down" -> manualPrev?.invoke()
+            "remote_power" -> binding.message.text = "Power control is not available on this TV"
+            "remote_input" -> binding.message.text = "Input control is not available on this TV"
+            else -> android.util.Log.w("TvDisplayActivity", "Unsupported remote command: $command")
+        }
+    }
+
+    private fun adjustVolume(direction: Int) {
+        val audio = getSystemService(AUDIO_SERVICE) as? AudioManager ?: return
+        audio.adjustSuggestedStreamVolume(direction, AudioManager.USE_DEFAULT_STREAM_TYPE, 0)
+    }
+
+    private fun toggleMute() {
+        val audio = getSystemService(AUDIO_SERVICE) as? AudioManager ?: return
+        screenMuted = !screenMuted
+        audio.adjustStreamVolume(
+            AudioManager.STREAM_MUSIC,
+            if (screenMuted) AudioManager.ADJUST_MUTE else AudioManager.ADJUST_UNMUTE,
+            0
+        )
+    }
 
     // Helper to pre-rotate and scale bitmap to fill screen (like Pi client)
     fun prepareRotatedBitmap(original: Bitmap, degrees: Int): Bitmap {
@@ -281,9 +382,10 @@ class TvDisplayActivity : AppCompatActivity() {
             }
         })
 
-        // Kick off initial and periodic refresh & rotation
+    // Kick off initial and periodic refresh & rotation
     startPlaylistLoop(storeId, screenId, imageView, playerView)
     startHeartbeatLoop(storeId, screenId)
+    connectRemoteSocket(storeId, screenId)
     }
 
     private fun launchSetupAndReset() {
@@ -324,6 +426,9 @@ class TvDisplayActivity : AppCompatActivity() {
     override fun onDestroy() {
     try { heartbeatJob?.cancel() } catch (_: Exception) {}
     heartbeatJob = null
+        try { remoteSocket?.off(); remoteSocket?.disconnect() } catch (_: Exception) {}
+        remoteSocket = null
+        manualRefreshPlaylist = null
         try { itemOkPingJob?.cancel() } catch (_: Exception) {}
         itemOkPingJob = null
         try {
@@ -2583,6 +2688,7 @@ function onYouTubeIframeAPIReady(){
         }
     }
 
+    manualRefreshPlaylist = { fetchPlaylist() }
     fetchPlaylist()
 
     // (Release now handled in onDestroy)
