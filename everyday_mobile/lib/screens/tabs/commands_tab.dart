@@ -7,6 +7,101 @@ import '../../services/api_client.dart';
 
 enum _CommandsMode { tv, remote }
 
+class _RemoteProfile {
+  const _RemoteProfile({
+    required this.brand,
+    required this.transport,
+    required this.status,
+    required this.notes,
+    required this.ready,
+    required this.powerReady,
+  });
+
+  final String brand;
+  final String transport;
+  final String status;
+  final String notes;
+  final bool ready;
+  final bool powerReady;
+}
+
+const _remoteProfiles = [
+  _RemoteProfile(
+    brand: 'Android / Google TV',
+    transport: 'Wi-Fi bridge',
+    status: 'Ready',
+    notes: 'Uses the installed EverydayAdvertise TV app and server connection.',
+    ready: true,
+    powerReady: false,
+  ),
+  _RemoteProfile(
+    brand: 'Samsung',
+    transport: 'SmartThings / IR',
+    status: 'Setup required',
+    notes:
+        'Needs SmartThings authorization and the TV device ID, or an IR hub.',
+    ready: false,
+    powerReady: true,
+  ),
+  _RemoteProfile(
+    brand: 'LG',
+    transport: 'webOS / IR',
+    status: 'Setup required',
+    notes: 'Needs a paired webOS controller or an IR hub for power control.',
+    ready: false,
+    powerReady: true,
+  ),
+  _RemoteProfile(
+    brand: 'Sony',
+    transport: 'BRAVIA IP / IR',
+    status: 'Setup required',
+    notes:
+        'Needs IP control enabled with the TV address and authentication key.',
+    ready: false,
+    powerReady: true,
+  ),
+  _RemoteProfile(
+    brand: 'TCL',
+    transport: 'Roku / Google TV / IR',
+    status: 'Setup required',
+    notes: 'The TV operating system must be selected before connecting.',
+    ready: false,
+    powerReady: true,
+  ),
+  _RemoteProfile(
+    brand: 'Hisense',
+    transport: 'VIDAA / Google TV / IR',
+    status: 'Setup required',
+    notes: 'The TV operating system and model determine the control adapter.',
+    ready: false,
+    powerReady: true,
+  ),
+  _RemoteProfile(
+    brand: 'Vizio',
+    transport: 'SmartCast / IR',
+    status: 'Setup required',
+    notes: 'Needs SmartCast pairing or an IR hub.',
+    ready: false,
+    powerReady: true,
+  ),
+  _RemoteProfile(
+    brand: 'Panasonic',
+    transport: 'IP / HDMI-CEC / IR',
+    status: 'Setup required',
+    notes: 'Power control depends on the exact regional TV model.',
+    ready: false,
+    powerReady: true,
+  ),
+  _RemoteProfile(
+    brand: 'Philips',
+    transport: 'Android TV / IP / IR',
+    status: 'Setup required',
+    notes: 'Needs the TV operating system and exact model series.',
+    ready: false,
+    powerReady: true,
+  ),
+];
+
 class CommandsTab extends StatefulWidget {
   const CommandsTab({super.key, required this.apiClient});
 
@@ -30,6 +125,7 @@ class _CommandsTabState extends State<CommandsTab> {
   final Map<String, LatLng?> _resolvedMapPoints = {};
   _CommandsMode _commandsMode = _CommandsMode.tv;
   String _remoteConnection = 'Wi-Fi';
+  String _remoteBrand = 'Android / Google TV';
   String? _selectedRemoteDeviceId;
 
   @override
@@ -733,6 +829,9 @@ class _CommandsTabState extends State<CommandsTab> {
   }
 
   Widget _buildRemoteBody(ThemeData theme, ColorScheme scheme) {
+    final profile = _remoteProfiles.firstWhere(
+      (item) => item.brand == _remoteBrand,
+    );
     final remoteDevices = _screens.where((screen) {
       final deviceId = (screen['device_id'] ?? '').toString().trim();
       return deviceId.isNotEmpty && deviceId != 'Not Assigned';
@@ -749,6 +848,8 @@ class _CommandsTabState extends State<CommandsTab> {
           );
     final selectedOnline =
         (selectedDevice?['status'] ?? '').toString().toLowerCase() == 'online';
+    final remoteEnabled =
+        profile.ready && selectedDeviceId != null && selectedOnline;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
@@ -772,6 +873,86 @@ class _CommandsTabState extends State<CommandsTab> {
                   'Connect to a compatible TV over Wi-Fi or Bluetooth. TV brand support is added through each brand’s remote protocol.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: scheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                DropdownButtonFormField<String>(
+                  value: _remoteBrand,
+                  decoration: InputDecoration(
+                    labelText: 'TV brand / platform',
+                    prefixIcon: const Icon(Icons.tv_rounded),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  items: _remoteProfiles.map((item) {
+                    return DropdownMenuItem<String>(
+                      value: item.brand,
+                      child: Text(item.brand),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    if (value == null) {
+                      return;
+                    }
+                    setState(() {
+                      _remoteBrand = value;
+                      if (!_remoteProfiles
+                          .firstWhere((item) => item.brand == value)
+                          .ready) {
+                        _message =
+                            'This brand still needs its connection setup.';
+                      }
+                    });
+                  },
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: profile.ready
+                        ? scheme.primaryContainer
+                        : scheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            profile.ready
+                                ? Icons.check_circle_rounded
+                                : Icons.info_outline_rounded,
+                            size: 18,
+                            color: profile.ready
+                                ? scheme.onPrimaryContainer
+                                : scheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '${profile.status} · ${profile.transport}',
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                color: profile.ready
+                                    ? scheme.onPrimaryContainer
+                                    : scheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        profile.notes,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: profile.ready
+                              ? scheme.onPrimaryContainer
+                              : scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -858,7 +1039,8 @@ class _CommandsTabState extends State<CommandsTab> {
         _buildRemoteControlSurface(
           theme,
           scheme,
-          enabled: selectedDeviceId != null && selectedOnline,
+          enabled: remoteEnabled,
+          powerEnabled: remoteEnabled && profile.powerReady,
         ),
       ],
     );
@@ -868,15 +1050,18 @@ class _CommandsTabState extends State<CommandsTab> {
     ThemeData theme,
     ColorScheme scheme, {
     required bool enabled,
+    required bool powerEnabled,
   }) {
     Widget action({
       required IconData icon,
       required String label,
       required String command,
       Color? color,
+      bool? enabledOverride,
     }) {
+      final actionEnabled = enabledOverride ?? enabled;
       return OutlinedButton(
-        onPressed: enabled ? () => _sendRemoteCommand(command) : null,
+        onPressed: actionEnabled ? () => _sendRemoteCommand(command) : null,
         style: OutlinedButton.styleFrom(
           foregroundColor: color,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -936,6 +1121,7 @@ class _CommandsTabState extends State<CommandsTab> {
                   label: 'Power',
                   command: 'power',
                   color: scheme.error,
+                  enabledOverride: powerEnabled,
                 ),
                 action(
                   icon: Icons.input_rounded,
