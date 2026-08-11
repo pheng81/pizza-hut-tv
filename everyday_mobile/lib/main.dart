@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import 'screens/login_screen.dart';
@@ -104,7 +105,7 @@ class _EverydayMobileAppState extends State<EverydayMobileApp> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = ColorScheme.fromSeed(
-      seedColor: const Color(0xFF1D4ED8),
+      seedColor: CupertinoColors.activeBlue,
       brightness: Brightness.light,
     );
     return MaterialApp(
@@ -112,7 +113,7 @@ class _EverydayMobileAppState extends State<EverydayMobileApp> {
       theme: ThemeData(
         colorScheme: colorScheme,
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFF4F6FA),
+        scaffoldBackgroundColor: CupertinoColors.systemGroupedBackground,
         appBarTheme: AppBarTheme(
           backgroundColor: colorScheme.primary,
           foregroundColor: Colors.white,
@@ -124,8 +125,7 @@ class _EverydayMobileAppState extends State<EverydayMobileApp> {
           color: Colors.white,
           margin: EdgeInsets.zero,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: BorderSide(color: colorScheme.outlineVariant.withAlpha(140)),
+            borderRadius: BorderRadius.circular(16),
           ),
         ),
         filledButtonTheme: FilledButtonThemeData(
