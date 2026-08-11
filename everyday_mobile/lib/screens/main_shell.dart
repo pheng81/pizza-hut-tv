@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../services/api_client.dart';
 import 'tabs/commands_tab.dart';
@@ -102,8 +103,18 @@ class _MainShellState extends State<MainShell>
       case 1:
         return DeviceManagerTab(apiClient: widget.apiClient);
       case 2:
-        return CommandsTab(apiClient: widget.apiClient);
+        return CommandsTab(
+          key: const ValueKey('tv-commands'),
+          apiClient: widget.apiClient,
+          initialMode: CommandsMode.tv,
+        );
       case 3:
+        return CommandsTab(
+          key: const ValueKey('remote-control'),
+          apiClient: widget.apiClient,
+          initialMode: CommandsMode.remote,
+        );
+      case 4:
         return ProfileTab(
           apiClient: widget.apiClient,
           onLogout: widget.onLogout,
@@ -121,6 +132,7 @@ class _MainShellState extends State<MainShell>
       'Stores & Screens',
       'Device Manager',
       'TV Commands',
+      'Remote Control',
       'Profile'
     ];
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -167,7 +179,7 @@ class _MainShellState extends State<MainShell>
                       currentIndex: _index,
                       onTap: (index) {
                         setState(() => _index = index);
-                        if (index == 3) {
+                        if (index == 4) {
                           _loadProfileAvatar();
                         }
                       },
@@ -182,16 +194,19 @@ class _MainShellState extends State<MainShell>
                           icon: Icon(CupertinoIcons.building_2_fill),
                         ),
                         const BottomNavigationBarItem(
-                          icon: Icon(CupertinoIcons.device_laptop),
+                          icon: _DeviceTabIcon(),
                         ),
                         const BottomNavigationBarItem(
                           icon: Icon(CupertinoIcons.tv),
+                        ),
+                        const BottomNavigationBarItem(
+                          icon: Icon(CupertinoIcons.game_controller_solid),
                         ),
                         BottomNavigationBarItem(
                           icon: _ProfileTabIcon(
                             avatarUrl: _profileAvatarUrl,
                             apiClient: widget.apiClient,
-                            selected: _index == 3,
+                            selected: _index == 4,
                           ),
                         ),
                       ],
@@ -251,6 +266,20 @@ class _ProfileTabIcon extends StatelessWidget {
       child: avatarProvider == null
           ? const Icon(CupertinoIcons.person_fill, size: 16)
           : null,
+    );
+  }
+}
+
+class _DeviceTabIcon extends StatelessWidget {
+  const _DeviceTabIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return SvgPicture.asset(
+      'assets/images/everyday_box.svg',
+      width: 29,
+      height: 29,
+      fit: BoxFit.contain,
     );
   }
 }
