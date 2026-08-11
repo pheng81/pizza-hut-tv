@@ -109,12 +109,6 @@ class _MainShellState extends State<MainShell>
           initialMode: CommandsMode.tv,
         );
       case 3:
-        return CommandsTab(
-          key: const ValueKey('remote-control'),
-          apiClient: widget.apiClient,
-          initialMode: CommandsMode.remote,
-        );
-      case 4:
         return ProfileTab(
           apiClient: widget.apiClient,
           onLogout: widget.onLogout,
@@ -132,7 +126,6 @@ class _MainShellState extends State<MainShell>
       'Stores & Screens',
       'Device Manager',
       'TV Commands',
-      'Remote Control',
       'Profile'
     ];
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -179,7 +172,7 @@ class _MainShellState extends State<MainShell>
                       currentIndex: _index,
                       onTap: (index) {
                         setState(() => _index = index);
-                        if (index == 4) {
+                        if (index == 3) {
                           _loadProfileAvatar();
                         }
                       },
@@ -199,14 +192,11 @@ class _MainShellState extends State<MainShell>
                         const BottomNavigationBarItem(
                           icon: Icon(CupertinoIcons.tv),
                         ),
-                        const BottomNavigationBarItem(
-                          icon: Icon(CupertinoIcons.game_controller_solid),
-                        ),
                         BottomNavigationBarItem(
                           icon: _ProfileTabIcon(
                             avatarUrl: _profileAvatarUrl,
                             apiClient: widget.apiClient,
-                            selected: _index == 4,
+                            selected: _index == 3,
                           ),
                         ),
                       ],
