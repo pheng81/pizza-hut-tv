@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -162,43 +163,38 @@ class _MainShellState extends State<MainShell>
                   ),
                   SafeArea(
                     top: false,
-                    child: Container(
-                      width: double.infinity,
-                      color: Colors.white,
-                      padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
-                      child: Row(
-                        children: [
-                          _NavIconButton(
-                            icon: Icons.storefront,
-                            selected: _index == 0,
-                            colorScheme: scheme,
-                            onTap: () => setState(() => _index = 0),
-                          ),
-                          _NavIconButton(
-                            icon: Icons.devices,
-                            selected: _index == 1,
-                            colorScheme: scheme,
-                            onTap: () => setState(() => _index = 1),
-                          ),
-                          _NavIconButton(
-                            icon: Icons.tv,
-                            selected: _index == 2,
-                            colorScheme: scheme,
-                            onTap: () => setState(() => _index = 2),
-                          ),
-                          _NavIconButton(
-                            icon: Icons.person,
-                            selected: _index == 3,
-                            colorScheme: scheme,
+                    child: CupertinoTabBar(
+                      currentIndex: _index,
+                      onTap: (index) {
+                        setState(() => _index = index);
+                        if (index == 3) {
+                          _loadProfileAvatar();
+                        }
+                      },
+                      activeColor: scheme.primary,
+                      inactiveColor: const Color(0xFF6B7280),
+                      backgroundColor: Colors.white,
+                      border: const Border(
+                        top: BorderSide(color: Color(0xFFE5E5EA)),
+                      ),
+                      items: [
+                        const BottomNavigationBarItem(
+                          icon: Icon(CupertinoIcons.building_2_fill),
+                        ),
+                        const BottomNavigationBarItem(
+                          icon: Icon(CupertinoIcons.device_laptop),
+                        ),
+                        const BottomNavigationBarItem(
+                          icon: Icon(CupertinoIcons.tv),
+                        ),
+                        BottomNavigationBarItem(
+                          icon: _ProfileTabIcon(
                             avatarUrl: _profileAvatarUrl,
                             apiClient: widget.apiClient,
-                            onTap: () {
-                              setState(() => _index = 3);
-                              _loadProfileAvatar();
-                            },
+                            selected: _index == 3,
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -211,22 +207,16 @@ class _MainShellState extends State<MainShell>
   }
 }
 
-class _NavIconButton extends StatelessWidget {
-  const _NavIconButton({
-    required this.icon,
+class _ProfileTabIcon extends StatelessWidget {
+  const _ProfileTabIcon({
+    required this.avatarUrl,
+    required this.apiClient,
     required this.selected,
-    required this.colorScheme,
-    required this.onTap,
-    this.avatarUrl,
-    this.apiClient,
   });
 
-  final IconData icon;
-  final bool selected;
-  final ColorScheme colorScheme;
-  final VoidCallback onTap;
   final String? avatarUrl;
-  final ApiClient? apiClient;
+  final ApiClient apiClient;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
@@ -236,51 +226,31 @@ class _NavIconButton extends StatelessWidget {
       final raw = avatarUrl!.trim();
       if (raw.startsWith('http://') || raw.startsWith('https://')) {
         avatarProvider = NetworkImage(raw);
-      } else if (apiClient != null) {
-        final normalizedBase = apiClient!.baseUrl.replaceAll(RegExp(r'/$'), '');
+      } else {
+        final normalizedBase = apiClient.baseUrl.replaceAll(RegExp(r'/$'), '');
         final normalizedPath = raw.startsWith('/') ? raw : '/$raw';
         avatarProvider = NetworkImage('$normalizedBase$normalizedPath');
       }
     }
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: hasAvatar
-              ? Center(
-                  child: Container(
-                    width: 26,
-                    height: 26,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: selected
-                          ? colorScheme.primaryContainer
-                          : colorScheme.surfaceContainerHighest,
-                      border: Border.all(
-                        color: selected
-                            ? colorScheme.primary
-                            : colorScheme.outlineVariant,
-                        width: selected ? 1.8 : 1,
-                      ),
-                      image: avatarProvider == null
-                          ? null
-                          : DecorationImage(
-                              image: avatarProvider,
-                              fit: BoxFit.cover,
-                            ),
-                    ),
-                  ),
-                )
-              : Icon(
-                  icon,
-                  size: 24,
-                  color: selected
-                      ? colorScheme.primary
-                      : colorScheme.onSurfaceVariant,
-                ),
+    return Container(
+      width: 28,
+      height: 28,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: CupertinoColors.systemGrey5,
+        border: Border.all(
+          color: selected
+              ? CupertinoColors.activeBlue
+              : CupertinoColors.systemGrey4,
+          width: selected ? 1.8 : 1,
         ),
+        image: avatarProvider == null
+            ? null
+            : DecorationImage(image: avatarProvider, fit: BoxFit.cover),
       ),
+      child: avatarProvider == null
+          ? const Icon(CupertinoIcons.person_fill, size: 16)
+          : null,
     );
   }
 }

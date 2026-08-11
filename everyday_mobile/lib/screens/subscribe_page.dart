@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/api_client.dart';
+import '../services/mobile_billing_service.dart';
 
 class SubscribePage extends StatefulWidget {
   const SubscribePage({
@@ -32,15 +33,20 @@ class _SubscribePageState extends State<SubscribePage> {
       _error = null;
     });
     try {
-      final checkoutUrl = await widget.apiClient.createBillingCheckoutSession();
-      final ok = await launchUrl(
-        Uri.parse(checkoutUrl),
-        mode: LaunchMode.externalApplication,
-      );
-      if (!ok && mounted) {
-        setState(() {
-          _error = 'Unable to open checkout link.';
-        });
+      if (MobileBillingService.instance.usesNativeStore) {
+        await MobileBillingService.instance.purchase(
+          apiClient: widget.apiClient,
+        );
+      } else {
+        final checkoutUrl =
+            await widget.apiClient.createBillingCheckoutSession();
+        final ok = await launchUrl(
+          Uri.parse(checkoutUrl),
+          mode: LaunchMode.externalApplication,
+        );
+        if (!ok) {
+          throw StateError('Unable to open checkout link.');
+        }
       }
     } catch (e) {
       if (!mounted) {
@@ -81,7 +87,9 @@ class _SubscribePageState extends State<SubscribePage> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Secure checkout powered by Stripe keeps your menu boards online 24/7.',
+              MobileBillingService.instance.usesNativeStore
+                  ? 'Secure billing through ${MobileBillingService.instance.storeName} keeps your menu boards online 24/7.'
+                  : 'Secure checkout powered by Stripe keeps your menu boards online 24/7.',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: scheme.onSurfaceVariant,
               ),
@@ -126,7 +134,11 @@ class _SubscribePageState extends State<SubscribePage> {
             FilledButton(
               onPressed: _busy ? null : _startCheckout,
               child: Text(
-                _busy ? 'Opening checkout...' : 'Start Subscription Securely',
+                _busy
+                    ? 'Opening checkout...'
+                    : MobileBillingService.instance.usesNativeStore
+                        ? 'Subscribe with ${MobileBillingService.instance.storeName}'
+                        : 'Start Subscription Securely',
               ),
             ),
             TextButton(

@@ -161,6 +161,9 @@
         <div class="alert alert-success">
           <div class="status-pill">Active Subscription</div>
           <p style="margin:12px 0 0;">Your account is fully activated. {% if next_renewal %}Next renewal on <strong>{{ next_renewal }}</strong>.{% endif %}</p>
+          {% if billing_provider %}
+            <p style="margin:8px 0 0; color:#475569;">Billing provider: <strong>{{ billing_provider_label }}</strong></p>
+          {% endif %}
         </div>
         <div class="cta-row">
           <a href="{{ url_for('dashboard') }}">Go to dashboard →</a>

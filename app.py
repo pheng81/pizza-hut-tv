@@ -13,6 +13,7 @@ import sqlite3
 import uuid
 import base64
 import secrets
+import hashlib
 # Import fcntl only on Unix/Linux (not available on Windows)
 try:
     import fcntl  # For file locking to prevent race conditions
@@ -373,6 +374,10 @@ def init_db():
                 db.execute('ALTER TABLE subscriptions ADD COLUMN welcome_email_sent_at INTEGER')
             if 'welcome_email_subscription_id' not in sub_cols:
                 db.execute('ALTER TABLE subscriptions ADD COLUMN welcome_email_subscription_id TEXT')
+            if 'billing_provider' not in sub_cols:
+                db.execute('ALTER TABLE subscriptions ADD COLUMN billing_provider TEXT')
+            if 'billing_product_id' not in sub_cols:
+                db.execute('ALTER TABLE subscriptions ADD COLUMN billing_product_id TEXT')
         except Exception:
             pass
         db.execute('CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status)')
@@ -401,6 +406,28 @@ def init_db():
         db.execute('CREATE INDEX IF NOT EXISTS idx_screen_subs_user ON screen_subscriptions(user_id)')
         db.execute('CREATE INDEX IF NOT EXISTS idx_screen_subs_stripe ON screen_subscriptions(stripe_subscription_id)')
         db.execute('CREATE INDEX IF NOT EXISTS idx_screen_subs_status ON screen_subscriptions(status)')
+
+        db.execute(
+            'CREATE TABLE IF NOT EXISTS mobile_store_purchases ('
+            'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+            'user_id INTEGER NOT NULL, '
+            'provider TEXT NOT NULL, '
+            'product_id TEXT NOT NULL, '
+            'package_name TEXT, '
+            'purchase_token_hash TEXT NOT NULL, '
+            'purchase_id TEXT, '
+            'original_transaction_id TEXT, '
+            'status TEXT NOT NULL, '
+            'environment TEXT, '
+            'expires_at INTEGER, '
+            'created_at INTEGER NOT NULL, '
+            'updated_at INTEGER NOT NULL, '
+            'UNIQUE(provider, purchase_token_hash), '
+            'FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE'
+            ')'
+        )
+        db.execute('CREATE INDEX IF NOT EXISTS idx_mobile_purchases_user ON mobile_store_purchases(user_id)')
+        db.execute('CREATE INDEX IF NOT EXISTS idx_mobile_purchases_status ON mobile_store_purchases(status)')
         
         # Create cancellation_feedback table
         db.execute(
@@ -838,6 +865,12 @@ STRIPE_STANDARD_PRICE_ID = os.environ.get('STRIPE_PRICE_ID') or os.environ.get('
 STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
 STRIPE_PRICE_DISPLAY = os.environ.get('STRIPE_PRICE_DISPLAY') or '$5 per screen / month'
 STRIPE_TRIAL_DAYS = os.environ.get('STRIPE_TRIAL_DAYS')
+APPLE_IAP_SHARED_SECRET = os.environ.get('APPLE_IAP_SHARED_SECRET')
+APPLE_IAP_PRODUCT_ID = os.environ.get('APPLE_IAP_PRODUCT_ID') or 'screens_monthly'
+APPLE_IAP_BUNDLE_ID = os.environ.get('APPLE_IAP_BUNDLE_ID') or 'com.everydayadvertise.everydayMobile'
+GOOGLE_PLAY_SERVICE_ACCOUNT_JSON = os.environ.get('GOOGLE_PLAY_SERVICE_ACCOUNT_JSON')
+GOOGLE_PLAY_PACKAGE_NAME = os.environ.get('GOOGLE_PLAY_PACKAGE_NAME') or 'com.everydayadvertise.everyday_mobile'
+GOOGLE_PLAY_PRODUCT_ID = os.environ.get('GOOGLE_PLAY_PRODUCT_ID') or 'screens_monthly'
 
 
 def _default_trial_days() -> int:
@@ -2779,6 +2812,213 @@ def _stripe_enabled() -> bool:
         price_id = (STRIPE_STANDARD_PRICE_ID or '').strip()
     return bool(stripe and STRIPE_SECRET_KEY and price_id)
 
+
+def _apple_iap_enabled() -> bool:
+    return bool(
+        (APPLE_IAP_SHARED_SECRET or '').strip()
+        and (APPLE_IAP_PRODUCT_ID or '').strip()
+        and (APPLE_IAP_BUNDLE_ID or '').strip()
+    )
+
+
+def _google_play_enabled() -> bool:
+    return bool(
+        (GOOGLE_PLAY_SERVICE_ACCOUNT_JSON or '').strip()
+        and (GOOGLE_PLAY_PACKAGE_NAME or '').strip()
+        and (GOOGLE_PLAY_PRODUCT_ID or '').strip()
+    )
+
+
+def _billing_enabled() -> bool:
+    return _stripe_enabled() or _apple_iap_enabled() or _google_play_enabled()
+
+
+def _parse_rfc3339_timestamp(value) -> int | None:
+    text = str(value or '').strip()
+    if not text:
+        return None
+    try:
+        normalized = text.replace('Z', '+00:00')
+        parsed = datetime.fromisoformat(normalized)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return int(parsed.timestamp())
+    except Exception:
+        return None
+
+
+def _extract_apple_receipt_data(server_data: str, local_data: str) -> str:
+    for candidate in (server_data, local_data):
+        raw = str(candidate or '').strip()
+        if not raw:
+            continue
+        if not raw.startswith('{'):
+            return raw
+        try:
+            decoded = json.loads(raw)
+        except Exception:
+            continue
+        if isinstance(decoded, dict):
+            for key in ('receipt-data', 'receiptData', 'receipt'):
+                value = decoded.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+                if isinstance(value, dict):
+                    nested = value.get('receipt-data') or value.get('receiptData')
+                    if isinstance(nested, str) and nested.strip():
+                        return nested.strip()
+    return ''
+
+
+def _verify_apple_mobile_purchase(
+    product_id: str,
+    server_data: str,
+    local_data: str,
+) -> dict:
+    if not _apple_iap_enabled():
+        raise RuntimeError('Apple in-app purchase is not configured on the server.')
+    receipt_data = _extract_apple_receipt_data(server_data, local_data)
+    if not receipt_data:
+        raise ValueError('Apple receipt data was missing from the purchase.')
+    if product_id != APPLE_IAP_PRODUCT_ID:
+        raise ValueError('Unknown Apple subscription product.')
+
+    try:
+        import requests
+    except ImportError as exc:
+        raise RuntimeError('Server missing requests dependency.') from exc
+
+    body = {
+        'receipt-data': receipt_data,
+        'password': APPLE_IAP_SHARED_SECRET,
+        'exclude-old-transactions': False,
+    }
+    production_url = 'https://buy.itunes.apple.com/verifyReceipt'
+    sandbox_url = 'https://sandbox.itunes.apple.com/verifyReceipt'
+    response = requests.post(production_url, json=body, timeout=20)
+    payload = response.json() if response.content else {}
+    if payload.get('status') == 21007:
+        response = requests.post(sandbox_url, json=body, timeout=20)
+        payload = response.json() if response.content else {}
+    if response.status_code >= 400 or payload.get('status') != 0:
+        raise ValueError('Apple could not verify this subscription purchase.')
+
+    receipt = payload.get('receipt') or {}
+    bundle_id = str(receipt.get('bundle_id') or '').strip()
+    if bundle_id and bundle_id != APPLE_IAP_BUNDLE_ID:
+        raise ValueError('Apple purchase belongs to a different app.')
+
+    entries = []
+    entries.extend(payload.get('latest_receipt_info') or [])
+    entries.extend(receipt.get('in_app') or [])
+    matching = [
+        item for item in entries
+        if isinstance(item, dict) and item.get('product_id') == product_id
+    ]
+    if not matching:
+        raise ValueError('Apple subscription product was not found in the receipt.')
+
+    latest = max(
+        matching,
+        key=lambda item: int(item.get('expires_date_ms') or 0),
+    )
+    expires_at = int(int(latest.get('expires_date_ms') or 0) / 1000)
+    if expires_at <= int(time.time()):
+        raise ValueError('This Apple subscription has expired.')
+    status = 'trialing' if str(latest.get('is_trial_period')) == 'true' else 'active'
+    return {
+        'status': status,
+        'expires_at': expires_at,
+        'trial_end': expires_at if status == 'trialing' else None,
+        'purchase_id': latest.get('transaction_id'),
+        'original_transaction_id': latest.get('original_transaction_id'),
+        'environment': payload.get('environment') or 'Production',
+    }
+
+
+def _google_play_credentials():
+    try:
+        from google.oauth2 import service_account
+    except ImportError as exc:
+        raise RuntimeError('Server missing google-auth dependency.') from exc
+
+    raw = (GOOGLE_PLAY_SERVICE_ACCOUNT_JSON or '').strip()
+    if not raw:
+        raise RuntimeError('Google Play service account is not configured.')
+    if os.path.isfile(raw):
+        with open(raw, 'r', encoding='utf-8') as handle:
+            info = json.load(handle)
+    else:
+        try:
+            info = json.loads(raw)
+        except Exception as exc:
+            raise RuntimeError('Google Play service account configuration is invalid.') from exc
+    return service_account.Credentials.from_service_account_info(
+        info,
+        scopes=['https://www.googleapis.com/auth/androidpublisher'],
+    )
+
+
+def _verify_google_mobile_purchase(product_id: str, purchase_token: str) -> dict:
+    if not _google_play_enabled():
+        raise RuntimeError('Google Play Billing is not configured on the server.')
+    if product_id != GOOGLE_PLAY_PRODUCT_ID:
+        raise ValueError('Unknown Google Play subscription product.')
+    token = str(purchase_token or '').strip()
+    if not token:
+        raise ValueError('Google Play purchase token was missing.')
+
+    try:
+        import requests
+        from google.auth.transport.requests import Request as GoogleAuthRequest
+    except ImportError as exc:
+        raise RuntimeError('Server is missing Google Play verification dependencies.') from exc
+
+    credentials = _google_play_credentials()
+    credentials.refresh(GoogleAuthRequest())
+    package_name = urllib.parse.quote(GOOGLE_PLAY_PACKAGE_NAME, safe='')
+    encoded_token = urllib.parse.quote(token, safe='')
+    verify_url = (
+        'https://androidpublisher.googleapis.com/androidpublisher/v3/'
+        f'applications/{package_name}/purchases/subscriptionsv2/tokens/{encoded_token}'
+    )
+    response = requests.get(
+        verify_url,
+        headers={'Authorization': f'Bearer {credentials.token}'},
+        timeout=20,
+    )
+    if response.status_code >= 400:
+        raise ValueError('Google Play could not verify this subscription purchase.')
+    payload = response.json()
+    state = str(payload.get('subscriptionState') or '')
+    if state not in {
+        'SUBSCRIPTION_STATE_ACTIVE',
+        'SUBSCRIPTION_STATE_IN_GRACE_PERIOD',
+    }:
+        raise ValueError('This Google Play subscription is not active.')
+
+    line_item = next(
+        (
+            item for item in (payload.get('lineItems') or [])
+            if isinstance(item, dict) and item.get('productId') == product_id
+        ),
+        None,
+    )
+    if not line_item:
+        raise ValueError('Google Play subscription product was not found.')
+    expires_at = _parse_rfc3339_timestamp(line_item.get('expiryTime'))
+    if not expires_at or expires_at <= int(time.time()):
+        raise ValueError('This Google Play subscription has expired.')
+
+    return {
+        'status': 'active',
+        'expires_at': expires_at,
+        'trial_end': None,
+        'purchase_id': payload.get('latestOrderId'),
+        'original_transaction_id': payload.get('externalAccountIdentifiers', {}).get('obfuscatedExternalAccountId'),
+        'environment': 'Production',
+    }
+
 def _is_valid_identity_value(value) -> bool:
     try:
         text = str(value or '').strip().lower()
@@ -3174,8 +3414,8 @@ def _record_subscription_status(user_id: int, status: str, stripe_subscription_i
         db = get_db()
         now = int(time.time())
         db.execute(
-            'INSERT INTO subscriptions (user_id, stripe_subscription_id, stripe_price_id, plan_name, status, quantity, current_period_end, trial_end, cancel_at_period_end, updated_at) '
-            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) '
+            'INSERT INTO subscriptions (user_id, stripe_subscription_id, stripe_price_id, plan_name, status, quantity, current_period_end, trial_end, cancel_at_period_end, updated_at, billing_provider, billing_product_id) '
+            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) '
             'ON CONFLICT(user_id) DO UPDATE SET '
             'stripe_subscription_id=excluded.stripe_subscription_id,'
             'stripe_price_id=excluded.stripe_price_id,'
@@ -3185,9 +3425,12 @@ def _record_subscription_status(user_id: int, status: str, stripe_subscription_i
             'current_period_end=excluded.current_period_end,'
             'trial_end=excluded.trial_end,'
             'cancel_at_period_end=excluded.cancel_at_period_end,'
-            'updated_at=excluded.updated_at'
+            'updated_at=excluded.updated_at,'
+            'billing_provider=excluded.billing_provider,'
+            'billing_product_id=excluded.billing_product_id'
             , (user_id, stripe_subscription_id, price_id, plan_name, status,
-               quantity or 1, current_period_end, trial_end, 1 if cancel_at_period_end else 0, now)
+               quantity or 1, current_period_end, trial_end, 1 if cancel_at_period_end else 0,
+               now, 'stripe', price_id)
         )
         db.execute('UPDATE users SET subscription_status = ?, subscription_plan = ? WHERE id = ?',
                    (status, plan_name or price_id, user_id))
@@ -3305,9 +3548,9 @@ def _send_subscription_welcome_email_once(user_id: int, subscription_obj=None) -
 
 
 def _user_has_active_subscription(user_id: int|None = None) -> bool:
-    if not _stripe_enabled():
-        return True
     if session.get('user', {}).get('is_admin'):
+        return True
+    if not _billing_enabled():
         return True
     if user_id is None:
         user_id = _current_user_id()
@@ -3320,6 +3563,12 @@ def _user_has_active_subscription(user_id: int|None = None) -> bool:
             return False
         status = (row['status'] or '').lower()
         if status in ('active', 'trialing'):
+            try:
+                current_period_end = int(row['current_period_end'] or 0)
+                if current_period_end and current_period_end < int(time.time()):
+                    return False
+            except Exception:
+                pass
             return True
         if status == 'past_due':
             try:
@@ -5487,6 +5736,21 @@ def subscribe():
         'price_id': billing_policy['stripe_price_id'],
         'free_screens': billing_policy['free_screens'],
         'next_renewal': next_renewal,
+        'billing_provider': (
+            (subscription_row or {}).get('billing_provider')
+            or ('stripe' if (subscription_row or {}).get('stripe_subscription_id') else '')
+        ),
+        'billing_provider_label': {
+            'apple': 'Apple App Store',
+            'google': 'Google Play',
+            'stripe': 'Stripe',
+        }.get(
+            (
+                (subscription_row or {}).get('billing_provider')
+                or ('stripe' if (subscription_row or {}).get('stripe_subscription_id') else '')
+            ),
+            '',
+        ),
         'pending_add_screen': pending_add_screen and bool(pending_store_id),
         'pending_store_id': pending_store_id,
         'pending_screen_type': pending_screen_type,
@@ -5657,6 +5921,145 @@ def api_billing_checkout_session():
         return jsonify({
             'success': False,
             'error': 'Could not start checkout session',
+        }), 500
+
+
+def _record_mobile_subscription(
+    user_id: int,
+    provider: str,
+    product_id: str,
+    package_name: str,
+    purchase_token: str,
+    purchase_id: str | None,
+    original_transaction_id: str | None,
+    status: str,
+    environment: str | None,
+    expires_at: int | None,
+) -> None:
+    now = int(time.time())
+    token_hash = hashlib.sha256(purchase_token.encode('utf-8')).hexdigest()
+    db = get_db()
+    existing = db.execute(
+        'SELECT user_id FROM mobile_store_purchases '
+        'WHERE provider = ? AND purchase_token_hash = ?',
+        (provider, token_hash),
+    ).fetchone()
+    if existing and int(existing['user_id']) != int(user_id):
+        raise ValueError('This store purchase is already linked to another account.')
+
+    db.execute(
+        'INSERT INTO mobile_store_purchases '
+        '(user_id, provider, product_id, package_name, purchase_token_hash, purchase_id, '
+        'original_transaction_id, status, environment, expires_at, created_at, updated_at) '
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) '
+        'ON CONFLICT(provider, purchase_token_hash) DO UPDATE SET '
+        'user_id=excluded.user_id, product_id=excluded.product_id, '
+        'package_name=excluded.package_name, purchase_id=excluded.purchase_id, '
+        'original_transaction_id=excluded.original_transaction_id, '
+        'status=excluded.status, environment=excluded.environment, '
+        'expires_at=excluded.expires_at, updated_at=excluded.updated_at',
+        (
+            user_id,
+            provider,
+            product_id,
+            package_name,
+            token_hash,
+            purchase_id,
+            original_transaction_id,
+            status,
+            environment,
+            expires_at,
+            now,
+            now,
+        ),
+    )
+    db.execute(
+        'INSERT INTO subscriptions '
+        '(user_id, stripe_subscription_id, stripe_price_id, plan_name, status, quantity, '
+        'current_period_end, trial_end, cancel_at_period_end, created_at, updated_at, '
+        'billing_provider, billing_product_id) '
+        'VALUES (?, NULL, NULL, ?, ?, 1, ?, ?, 0, ?, ?, ?, ?) '
+        'ON CONFLICT(user_id) DO UPDATE SET '
+        'stripe_subscription_id=NULL, stripe_price_id=NULL, plan_name=excluded.plan_name, '
+        'status=excluded.status, quantity=1, current_period_end=excluded.current_period_end, '
+        'trial_end=excluded.trial_end, cancel_at_period_end=0, updated_at=excluded.updated_at, '
+        'billing_provider=excluded.billing_provider, billing_product_id=excluded.billing_product_id',
+        (
+            user_id,
+            f'{provider}:{product_id}',
+            status,
+            expires_at,
+            expires_at if status == 'trialing' else None,
+            now,
+            now,
+            provider,
+            product_id,
+        ),
+    )
+    db.execute(
+        'UPDATE users SET subscription_status = ?, subscription_plan = ? WHERE id = ?',
+        (status, f'{provider}:{product_id}', user_id),
+    )
+    db.commit()
+
+
+@app.route('/api/billing/mobile/verify', methods=['POST'])
+@login_required
+def api_billing_mobile_verify():
+    """Verify an App Store or Google Play subscription before granting access."""
+    payload = request.get_json(silent=True) or {}
+    provider = str(payload.get('provider') or '').strip().lower()
+    product_id = str(payload.get('product_id') or '').strip()
+    server_data = str(payload.get('server_verification_data') or '').strip()
+    local_data = str(payload.get('local_verification_data') or '').strip()
+    purchase_id = str(payload.get('purchase_id') or '').strip() or None
+    user_id = _current_user_id()
+    if not user_id:
+        return jsonify({'success': False, 'error': 'auth required'}), 403
+    if provider not in {'apple', 'google'}:
+        return jsonify({'success': False, 'error': 'Unsupported mobile billing provider'}), 400
+    if not product_id or (not server_data and not local_data):
+        return jsonify({'success': False, 'error': 'Incomplete mobile purchase data'}), 400
+
+    try:
+        if provider == 'apple':
+            verified = _verify_apple_mobile_purchase(
+                product_id,
+                server_data,
+                local_data,
+            )
+            purchase_token = _extract_apple_receipt_data(server_data, local_data)
+            package_name = APPLE_IAP_BUNDLE_ID
+        else:
+            purchase_token = server_data
+            verified = _verify_google_mobile_purchase(product_id, purchase_token)
+            package_name = GOOGLE_PLAY_PACKAGE_NAME
+
+        _record_mobile_subscription(
+            user_id=user_id,
+            provider=provider,
+            product_id=product_id,
+            package_name=package_name,
+            purchase_token=purchase_token,
+            purchase_id=str(verified.get('purchase_id') or purchase_id or '') or None,
+            original_transaction_id=verified.get('original_transaction_id'),
+            status=str(verified.get('status') or 'active'),
+            environment=verified.get('environment'),
+            expires_at=verified.get('expires_at'),
+        )
+        return jsonify({
+            'success': True,
+            'provider': provider,
+            'status': verified.get('status'),
+            'expires_at': verified.get('expires_at'),
+        })
+    except (ValueError, RuntimeError) as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except Exception:
+        logging.exception('Mobile billing verification failed for user %s', user_id)
+        return jsonify({
+            'success': False,
+            'error': 'Could not verify this mobile subscription purchase.',
         }), 500
 
 

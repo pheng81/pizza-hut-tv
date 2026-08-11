@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/cupertino.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -18,6 +19,7 @@ import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 import '../account_page.dart';
 import '../../models/app_models.dart';
 import '../../services/api_client.dart';
+import '../../services/mobile_billing_service.dart';
 
 class StoresTab extends StatefulWidget {
   const StoresTab({
@@ -35,6 +37,104 @@ class StoresTab extends StatefulWidget {
 
   @override
   State<StoresTab> createState() => _StoresTabState();
+}
+
+class _IosPickerOption {
+  const _IosPickerOption({required this.value, required this.label});
+
+  final String value;
+  final String label;
+}
+
+class _IosPickerField extends StatelessWidget {
+  const _IosPickerField({
+    required this.value,
+    required this.options,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final String? value;
+  final List<_IosPickerOption> options;
+  final bool enabled;
+  final ValueChanged<String?> onChanged;
+
+  Future<void> _openPicker(BuildContext context) async {
+    if (!enabled || options.isEmpty) {
+      return;
+    }
+    final selected = await showCupertinoModalPopup<String>(
+      context: context,
+      builder: (context) => CupertinoActionSheet(
+        actions: options
+            .map(
+              (option) => CupertinoActionSheetAction(
+                isDefaultAction: option.value == value,
+                onPressed: () => Navigator.of(context).pop(option.value),
+                child: Text(option.label),
+              ),
+            )
+            .toList(),
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+      ),
+    );
+    if (selected != null) {
+      onChanged(selected);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final option = options.cast<_IosPickerOption?>().firstWhere(
+          (item) => item?.value == value,
+          orElse: () => null,
+        );
+    final label = option?.label ?? 'Select';
+    final foreground =
+        enabled ? const Color(0xFF1C1C1E) : const Color(0xFF8E8E93);
+
+    return Semantics(
+      button: true,
+      label: label,
+      child: GestureDetector(
+        onTap: enabled ? () => _openPicker(context) : null,
+        child: Container(
+          height: 56,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFC7C7CC)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: foreground,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(
+                CupertinoIcons.chevron_down,
+                size: 16,
+                color: Color(0xFF6B7280),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _StoresTabState extends State<StoresTab>
@@ -594,6 +694,8 @@ class _StoresTabState extends State<StoresTab>
     final priceDisplay =
         (summary['price_display'] ?? r'$5 per screen / month').toString();
     final trialDays = int.tryParse('${summary['trial_days'] ?? 14}') ?? 14;
+    final nativeBilling = MobileBillingService.instance.usesNativeStore;
+    final billingStore = MobileBillingService.instance.storeName;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -604,6 +706,7 @@ class _StoresTabState extends State<StoresTab>
       barrierColor: Colors.black54,
       builder: (context) {
         var busy = false;
+        String? checkoutError;
         return StatefulBuilder(
           builder: (context, setModalState) {
             final theme = Theme.of(context);
@@ -615,25 +718,41 @@ class _StoresTabState extends State<StoresTab>
               }
               setModalState(() {
                 busy = true;
+                checkoutError = null;
               });
               try {
-                final checkoutUrl =
-                    await widget.apiClient.createBillingCheckoutSession();
-                final uri = Uri.parse(checkoutUrl);
-                final launched =
-                    await launchUrl(uri, mode: LaunchMode.externalApplication);
-                if (!launched && mounted) {
-                  setState(() {
-                    _error = 'Unable to open checkout link.';
-                  });
+                if (nativeBilling) {
+                  await MobileBillingService.instance.purchase(
+                    apiClient: widget.apiClient,
+                  );
+                } else {
+                  final checkoutUrl =
+                      await widget.apiClient.createBillingCheckoutSession();
+                  final uri = Uri.parse(checkoutUrl);
+                  var launched = await launchUrl(
+                    uri,
+                    mode: LaunchMode.platformDefault,
+                  );
+                  if (!launched) {
+                    launched = await launchUrl(
+                      uri,
+                      mode: LaunchMode.externalApplication,
+                    );
+                  }
+                  if (!launched) {
+                    throw StateError(
+                      'Unable to open Stripe checkout. Please try again.',
+                    );
+                  }
                 }
                 if (context.mounted) {
                   Navigator.of(context).pop();
                 }
               } catch (e) {
-                if (mounted) {
-                  setState(() {
-                    _error = e.toString().replaceFirst('Exception: ', '');
+                if (context.mounted) {
+                  setModalState(() {
+                    checkoutError =
+                        e.toString().replaceFirst('Exception: ', '');
                   });
                 }
               } finally {
@@ -688,7 +807,9 @@ class _StoresTabState extends State<StoresTab>
                                 ),
                               ),
                               Text(
-                                'Secure billing powered by Stripe',
+                                nativeBilling
+                                    ? 'Secure billing powered by $billingStore'
+                                    : 'Secure billing powered by Stripe',
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   color: scheme.onSurfaceVariant,
                                 ),
@@ -770,6 +891,23 @@ class _StoresTabState extends State<StoresTab>
                       text: 'Instant Pi and Android pairing',
                     ),
                     const SizedBox(height: 16),
+                    if (checkoutError != null) ...[
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: scheme.errorContainer,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          checkoutError!,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onErrorContainer,
+                          ),
+                        ),
+                      ),
+                    ],
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton(
@@ -781,7 +919,11 @@ class _StoresTabState extends State<StoresTab>
                           ),
                         ),
                         child: Text(
-                          busy ? 'Opening checkout...' : 'Continue to checkout',
+                          busy
+                              ? 'Opening checkout...'
+                              : nativeBilling
+                                  ? 'Continue with $billingStore'
+                                  : 'Continue to checkout',
                         ),
                       ),
                     ),
@@ -952,6 +1094,38 @@ class _StoresTabState extends State<StoresTab>
         ),
       ),
     );
+  }
+
+  Future<void> _showScreenActions(ScreenItem screen) async {
+    final action = await showCupertinoModalPopup<String>(
+      context: context,
+      builder: (context) => CupertinoActionSheet(
+        title: Text(screen.name),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop('rename'),
+            child: const Text('Rename screen'),
+          ),
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(context).pop('delete'),
+            child: const Text('Delete screen'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+      ),
+    );
+    if (!mounted) {
+      return;
+    }
+    if (action == 'rename') {
+      await _renameScreen(screen);
+    } else if (action == 'delete') {
+      await _deleteScreen(screen);
+    }
   }
 
   String _encodePathPreservingSlashes(String path) {
@@ -1740,52 +1914,18 @@ class _StoresTabState extends State<StoresTab>
     }) {
       return Tooltip(
         message: tooltip,
-        child: SizedBox(
-          width: 42,
-          height: 42,
-          child: FilledButton.tonal(
-            onPressed: onPressed,
-            style: FilledButton.styleFrom(
-              padding: EdgeInsets.zero,
-              visualDensity: VisualDensity.compact,
-              elevation: 0,
-              backgroundColor: const Color(0xFFF8FAFC),
-              foregroundColor: iconColor ?? scheme.onSurfaceVariant,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: Icon(icon, size: 18, color: iconColor),
+        child: CupertinoButton(
+          onPressed: onPressed,
+          padding: EdgeInsets.zero,
+          minSize: 42,
+          color: const Color(0xFFF2F2F7),
+          borderRadius: BorderRadius.circular(12),
+          child: Icon(
+            icon,
+            size: 19,
+            color: iconColor ?? scheme.onSurfaceVariant,
           ),
         ),
-      );
-    }
-
-    InputDecoration flatPickerDecoration(String label) {
-      return InputDecoration(
-        labelText: label,
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: scheme.outlineVariant),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: scheme.outlineVariant),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(
-            color: scheme.primary.withValues(alpha: 0.2),
-          ),
-        ),
-        disabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: scheme.outlineVariant),
-        ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       );
     }
 
@@ -1882,20 +2022,16 @@ class _StoresTabState extends State<StoresTab>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
-                              child: DropdownButtonFormField<String>(
+                              child: _IosPickerField(
                                 value: validSelectedStoreId,
-                                isExpanded: true,
-                                items: _stores
-                                    .map((store) => DropdownMenuItem(
+                                options: _stores
+                                    .map((store) => _IosPickerOption(
                                           value: store.id,
-                                          child: Text(
-                                            '${store.id} - ${store.name}',
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
+                                          label: '${store.id} - ${store.name}',
                                         ))
                                     .toList(),
-                                onChanged: _loading ? null : _onSelectStore,
-                                decoration: flatPickerDecoration(''),
+                                enabled: !_loading,
+                                onChanged: _onSelectStore,
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -1933,25 +2069,20 @@ class _StoresTabState extends State<StoresTab>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
-                              child: DropdownButtonFormField<String>(
+                              child: _IosPickerField(
                                 value: validSelectedScreenId,
-                                isExpanded: true,
-                                items: _screens
-                                    .map((screen) => DropdownMenuItem(
+                                options: _screens
+                                    .map((screen) => _IosPickerOption(
                                           value: screen.id,
-                                          child: Text(
-                                            '${screen.id} - ${screen.name}',
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
+                                          label:
+                                              '${screen.id} - ${screen.name}',
                                         ))
                                     .toList(),
-                                onChanged: _loading
-                                    ? null
-                                    : (value) {
-                                        widget.onSelectionChanged(
-                                            widget.selectedStoreId, value);
-                                      },
-                                decoration: flatPickerDecoration(''),
+                                enabled: !_loading,
+                                onChanged: (value) {
+                                  widget.onSelectionChanged(
+                                      widget.selectedStoreId, value);
+                                },
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -1980,24 +2111,24 @@ class _StoresTabState extends State<StoresTab>
               child: Row(
                 children: [
                   statsPill(
-                    icon: Icons.storefront_outlined,
+                    icon: CupertinoIcons.building_2_fill,
                     text: 'Stores ${_stores.length}',
                     background: const Color(0xFFEAF1FF),
                   ),
                   const SizedBox(width: 6),
                   statsPill(
-                    icon: Icons.tv_outlined,
+                    icon: CupertinoIcons.tv,
                     text: 'Screens ${_screens.length}',
                   ),
                   const SizedBox(width: 6),
                   statsPill(
-                    icon: Icons.wifi_tethering_outlined,
+                    icon: CupertinoIcons.wifi,
                     text: 'Online $onlineCount',
                   ),
                   if (widget.selectedStoreId != null) ...[
                     const SizedBox(width: 6),
                     statsPill(
-                      icon: Icons.tag_outlined,
+                      icon: CupertinoIcons.number,
                       text: 'Store ${widget.selectedStoreId}',
                       background: const Color(0xFFF1EEFF),
                     ),
@@ -2052,7 +2183,7 @@ class _StoresTabState extends State<StoresTab>
                           Row(
                             children: [
                               Icon(
-                                Icons.tv,
+                                CupertinoIcons.tv,
                                 color: selected
                                     ? scheme.primary
                                     : scheme.onSurfaceVariant,
@@ -2067,26 +2198,11 @@ class _StoresTabState extends State<StoresTab>
                                 ),
                               ),
                               _buildStatusBadge(screen.id),
-                              PopupMenuButton<String>(
-                                tooltip: 'Screen actions',
-                                onSelected: (value) {
-                                  if (value == 'rename') {
-                                    _renameScreen(screen);
-                                  }
-                                  if (value == 'delete') {
-                                    _deleteScreen(screen);
-                                  }
-                                },
-                                itemBuilder: (context) => const [
-                                  PopupMenuItem(
-                                    value: 'rename',
-                                    child: Text('Rename'),
-                                  ),
-                                  PopupMenuItem(
-                                    value: 'delete',
-                                    child: Text('Delete'),
-                                  ),
-                                ],
+                              CupertinoButton(
+                                padding: EdgeInsets.zero,
+                                minSize: 32,
+                                onPressed: () => _showScreenActions(screen),
+                                child: const Icon(CupertinoIcons.ellipsis),
                               ),
                             ],
                           ),

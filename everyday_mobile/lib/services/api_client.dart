@@ -628,6 +628,32 @@ class ApiClient {
     return checkoutUrl;
   }
 
+  Future<Map<String, dynamic>> verifyMobilePurchase({
+    required String provider,
+    required String productId,
+    required String serverVerificationData,
+    required String localVerificationData,
+    String? purchaseId,
+  }) async {
+    final response = await _dio.post(
+      '/api/billing/mobile/verify',
+      data: {
+        'provider': provider,
+        'product_id': productId,
+        'server_verification_data': serverVerificationData,
+        'local_verification_data': localVerificationData,
+        'purchase_id': purchaseId,
+      },
+    );
+    final data = _asMap(response.data);
+    if (data['success'] != true) {
+      throw Exception(
+        (data['error'] ?? 'Unable to verify mobile purchase').toString(),
+      );
+    }
+    return data;
+  }
+
   Future<String> addScreen({
     required String storeId,
     String screenType = 'screen',
