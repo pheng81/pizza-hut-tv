@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../services/api_client.dart';
 import 'tabs/commands_tab.dart';
@@ -162,39 +163,41 @@ class _MainShellState extends State<MainShell>
                   ),
                   SafeArea(
                     top: false,
-                    child: CupertinoTabBar(
-                      currentIndex: _index,
-                      onTap: (index) {
-                        setState(() => _index = index);
-                        if (index == 3) {
-                          _loadProfileAvatar();
-                        }
-                      },
-                      activeColor: scheme.primary,
-                      inactiveColor: const Color(0xFF6B7280),
-                      backgroundColor: Colors.white,
-                      border: const Border(
-                        top: BorderSide(color: Color(0xFFE5E5EA)),
-                      ),
-                      items: [
-                        const BottomNavigationBarItem(
-                          icon: Icon(CupertinoIcons.building_2_fill),
+                    child: ColoredBox(
+                      color: Colors.white,
+                      child: CupertinoTabBar(
+                        currentIndex: _index,
+                        onTap: (index) {
+                          setState(() => _index = index);
+                          if (index == 3) {
+                            _loadProfileAvatar();
+                          }
+                        },
+                        activeColor: scheme.primary,
+                        inactiveColor: const Color(0xFF6B7280),
+                        backgroundColor: Colors.white,
+                        border: const Border(
+                          top: BorderSide(color: Color(0xFFE5E5EA)),
                         ),
-                        BottomNavigationBarItem(
-                          icon: _RaspberryPiTabIcon(selected: _index == 1),
-                        ),
-                        BottomNavigationBarItem(
-                          icon: _RemoteTabIcon(selected: _index == 2),
-                          label: 'Remote',
-                        ),
-                        BottomNavigationBarItem(
-                          icon: _ProfileTabIcon(
-                            avatarUrl: _profileAvatarUrl,
-                            apiClient: widget.apiClient,
-                            selected: _index == 3,
+                        items: [
+                          const BottomNavigationBarItem(
+                            icon: Icon(CupertinoIcons.building_2_fill),
                           ),
-                        ),
-                      ],
+                          BottomNavigationBarItem(
+                            icon: _RaspberryPiTabIcon(selected: _index == 1),
+                          ),
+                          BottomNavigationBarItem(
+                            icon: _RemoteTabIcon(selected: _index == 2),
+                          ),
+                          BottomNavigationBarItem(
+                            icon: _ProfileTabIcon(
+                              avatarUrl: _profileAvatarUrl,
+                              apiClient: widget.apiClient,
+                              selected: _index == 3,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -223,10 +226,11 @@ class _RemoteTabIcon extends StatelessWidget {
       curve: Curves.elasticOut,
       builder: (context, scale, child) => Transform.scale(
         scale: scale,
-        child: Icon(
-          CupertinoIcons.game_controller_solid,
-          size: 22,
-          color: color,
+        child: SvgPicture.asset(
+          'assets/images/tv-remote-tab-v3.svg',
+          width: 24,
+          height: 24,
+          colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
         ),
       ),
     );

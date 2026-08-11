@@ -81,6 +81,8 @@ flutter:
     - assets/images/store_header.svg
     - assets/images/ea_marker.png
     - assets/images/everyday_advertise_logo.svg
+    - assets/images/ea-logo-intro.svg
+    - assets/images/tv-remote-tab-v3.svg
 
   # To add assets to your application, add an assets section, like this:
   # assets:
