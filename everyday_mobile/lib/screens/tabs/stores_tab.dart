@@ -63,21 +63,89 @@ class _IosPickerField extends StatelessWidget {
     if (!enabled || options.isEmpty) {
       return;
     }
-    final selected = await showCupertinoModalPopup<String>(
+    final selected = await showModalBottomSheet<String>(
       context: context,
-      builder: (context) => CupertinoActionSheet(
-        actions: options
-            .map(
-              (option) => CupertinoActionSheetAction(
-                isDefaultAction: option.value == value,
-                onPressed: () => Navigator.of(context).pop(option.value),
-                child: Text(option.label),
+      backgroundColor: Colors.white,
+      barrierColor: Colors.black54,
+      elevation: 8,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
+              child: Container(
+                width: 38,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD1D1D6),
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-            )
-            .toList(),
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+            ),
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.55,
+              ),
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: options.length,
+                separatorBuilder: (_, __) => const Divider(
+                  height: 1,
+                  indent: 20,
+                  endIndent: 20,
+                  color: Color(0xFFE5E5EA),
+                ),
+                itemBuilder: (context, index) {
+                  final option = options[index];
+                  final isSelected = option.value == value;
+                  return SizedBox(
+                    width: double.infinity,
+                    child: TextButton(
+                      onPressed: () => Navigator.of(context).pop(option.value),
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFF3F5F9C),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 18,
+                        ),
+                        shape: const RoundedRectangleBorder(),
+                      ),
+                      child: Text(
+                        option.label,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: isSelected
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const Divider(height: 1, color: Color(0xFFE5E5EA)),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF3F5F9C),
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  shape: const RoundedRectangleBorder(),
+                ),
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(fontSize: 20),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

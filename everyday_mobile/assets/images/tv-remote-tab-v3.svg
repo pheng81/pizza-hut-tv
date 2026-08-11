@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Minimal TV + remote glyph, designed specifically for a 24 px tab bar -->
+  <rect x="2.35" y="3.35" width="18.2" height="12.45" rx="2.65"/>
+  <path d="M9.15 18.25h4.15"/>
+  <rect x="14.15" y="11.55" width="5.25" height="9.2" rx="1.7" fill="#000" stroke="none"/>
+  <circle cx="16.78" cy="14.75" r="1.05" fill="none" stroke="#fff" stroke-width="1.2"/>
+  <circle cx="16.78" cy="18.05" r=".55" fill="#fff" stroke="none"/>
+</svg>
