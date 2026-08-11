@@ -5,7 +5,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../models/app_models.dart';
 import '../../services/api_client.dart';
 
-enum _CommandsMode { tv, remote }
+enum CommandsMode { tv, remote }
 
 class _RemoteProfile {
   const _RemoteProfile({
@@ -103,9 +103,14 @@ const _remoteProfiles = [
 ];
 
 class CommandsTab extends StatefulWidget {
-  const CommandsTab({super.key, required this.apiClient});
+  const CommandsTab({
+    super.key,
+    required this.apiClient,
+    this.initialMode = CommandsMode.tv,
+  });
 
   final ApiClient apiClient;
+  final CommandsMode initialMode;
 
   @override
   State<CommandsTab> createState() => _CommandsTabState();
@@ -123,7 +128,7 @@ class _CommandsTabState extends State<CommandsTab> {
   List<ScreenItem> _pairingScreens = const [];
   String? _selectedPairingScreenId;
   final Map<String, LatLng?> _resolvedMapPoints = {};
-  _CommandsMode _commandsMode = _CommandsMode.tv;
+  late CommandsMode _commandsMode;
   String _remoteConnection = 'Wi-Fi';
   String _remoteBrand = 'Android / Google TV';
   String? _selectedRemoteDeviceId;
@@ -131,6 +136,7 @@ class _CommandsTabState extends State<CommandsTab> {
   @override
   void initState() {
     super.initState();
+    _commandsMode = widget.initialMode;
     _loadDevices();
     _loadLinkCode();
   }
@@ -1395,7 +1401,7 @@ class _CommandsTabState extends State<CommandsTab> {
     Widget modeButton({
       required IconData icon,
       required String tooltip,
-      required _CommandsMode mode,
+      required CommandsMode mode,
     }) {
       final selected = _commandsMode == mode;
       return IconButton(
@@ -1428,13 +1434,13 @@ class _CommandsTabState extends State<CommandsTab> {
               modeButton(
                 icon: Icons.tv_rounded,
                 tooltip: 'TV commands',
-                mode: _CommandsMode.tv,
+                mode: CommandsMode.tv,
               ),
               const SizedBox(width: 8),
               modeButton(
                 icon: Icons.settings_remote_rounded,
                 tooltip: 'Universal remote',
-                mode: _CommandsMode.remote,
+                mode: CommandsMode.remote,
               ),
               const Spacer(),
               IconButton(
@@ -1458,7 +1464,7 @@ class _CommandsTabState extends State<CommandsTab> {
           ),
         const SizedBox(height: 8),
         Expanded(
-          child: _commandsMode == _CommandsMode.tv
+          child: _commandsMode == CommandsMode.tv
               ? _buildCommandsBody(theme, scheme)
               : _buildRemoteBody(theme, scheme),
         ),
