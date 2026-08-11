@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 import '../services/api_client.dart';
 import 'tabs/commands_tab.dart';
@@ -104,17 +103,11 @@ class _MainShellState extends State<MainShell>
         return DeviceManagerTab(apiClient: widget.apiClient);
       case 2:
         return CommandsTab(
-          key: const ValueKey('tv-commands'),
-          apiClient: widget.apiClient,
-          initialMode: CommandsMode.tv,
-        );
-      case 3:
-        return CommandsTab(
           key: const ValueKey('remote-control'),
           apiClient: widget.apiClient,
           initialMode: CommandsMode.remote,
         );
-      case 4:
+      case 3:
         return ProfileTab(
           apiClient: widget.apiClient,
           onLogout: widget.onLogout,
@@ -128,13 +121,7 @@ class _MainShellState extends State<MainShell>
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final titles = [
-      'Stores & Screens',
-      'Device Manager',
-      'TV Commands',
-      'Remote Control',
-      'Profile'
-    ];
+    final titles = ['Stores & Screens', 'Device Manager', 'Remote', 'Profile'];
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -179,7 +166,7 @@ class _MainShellState extends State<MainShell>
                       currentIndex: _index,
                       onTap: (index) {
                         setState(() => _index = index);
-                        if (index == 4) {
+                        if (index == 3) {
                           _loadProfileAvatar();
                         }
                       },
@@ -193,20 +180,18 @@ class _MainShellState extends State<MainShell>
                         const BottomNavigationBarItem(
                           icon: Icon(CupertinoIcons.building_2_fill),
                         ),
-                        const BottomNavigationBarItem(
-                          icon: _DeviceTabIcon(),
+                        BottomNavigationBarItem(
+                          icon: _RaspberryPiTabIcon(selected: _index == 1),
                         ),
-                        const BottomNavigationBarItem(
-                          icon: Icon(CupertinoIcons.tv),
-                        ),
-                        const BottomNavigationBarItem(
-                          icon: Icon(CupertinoIcons.game_controller_solid),
+                        BottomNavigationBarItem(
+                          icon: _RemoteTabIcon(selected: _index == 2),
+                          label: 'Remote',
                         ),
                         BottomNavigationBarItem(
                           icon: _ProfileTabIcon(
                             avatarUrl: _profileAvatarUrl,
                             apiClient: widget.apiClient,
-                            selected: _index == 4,
+                            selected: _index == 3,
                           ),
                         ),
                       ],
@@ -216,6 +201,32 @@ class _MainShellState extends State<MainShell>
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RemoteTabIcon extends StatelessWidget {
+  const _RemoteTabIcon({required this.selected});
+
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final color =
+        selected ? CupertinoColors.systemPurple : CupertinoColors.systemGrey;
+    return TweenAnimationBuilder<double>(
+      key: ValueKey(selected),
+      tween: Tween(begin: 1, end: selected ? 1.14 : 1),
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.elasticOut,
+      builder: (context, scale, child) => Transform.scale(
+        scale: scale,
+        child: Icon(
+          CupertinoIcons.game_controller_solid,
+          size: 22,
+          color: color,
         ),
       ),
     );
@@ -270,17 +281,147 @@ class _ProfileTabIcon extends StatelessWidget {
   }
 }
 
-class _DeviceTabIcon extends StatelessWidget {
-  const _DeviceTabIcon();
+class _RaspberryPiTabIcon extends StatefulWidget {
+  const _RaspberryPiTabIcon({required this.selected});
+
+  final bool selected;
+
+  @override
+  State<_RaspberryPiTabIcon> createState() => _RaspberryPiTabIconState();
+}
+
+class _RaspberryPiTabIconState extends State<_RaspberryPiTabIcon>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 420),
+    );
+    _scale = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 1, end: 1.13), weight: 38),
+      TweenSequenceItem(tween: Tween(begin: 1.13, end: 1), weight: 62),
+    ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+    if (widget.selected) {
+      _controller.forward();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _RaspberryPiTabIcon oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selected && !oldWidget.selected) {
+      _controller.forward(from: 0);
+    } else if (!widget.selected && oldWidget.selected) {
+      _controller.stop();
+      _controller.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return SvgPicture.asset(
-      'assets/images/everyday_box.svg',
-      width: 29,
-      height: 29,
-      fit: BoxFit.contain,
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) => Transform.translate(
+        offset: Offset(0, widget.selected ? -2 * _controller.value : 0),
+        child: Transform.scale(
+          scale: widget.selected ? _scale.value : 1,
+          child: CustomPaint(
+            size: const Size(32, 32),
+            painter: _RaspberryPiPainter(
+              selected: widget.selected,
+              activity: _controller.value,
+            ),
+          ),
+        ),
+      ),
     );
+  }
+}
+
+class _RaspberryPiPainter extends CustomPainter {
+  const _RaspberryPiPainter({required this.selected, required this.activity});
+
+  final bool selected;
+  final double activity;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    canvas.save();
+    canvas.translate(center.dx - 16, center.dy - 16);
+
+    final boardPaint = Paint()
+      ..color = selected ? const Color(0xFF409E57) : const Color(0xFF8E8E93);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        const Rect.fromLTWH(2.5, 7, 27, 19),
+        const Radius.circular(4),
+      ),
+      boardPaint,
+    );
+
+    final pinPaint = Paint()
+      ..color = selected ? const Color(0xFFFFD54F) : const Color(0xFFD8B94A);
+    for (var index = 0; index < 7; index++) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(8 + index * 2.5, 1, 1.5, 5),
+          const Radius.circular(0.5),
+        ),
+        pinPaint,
+      );
+    }
+
+    final processorPaint = Paint()..color = const Color(0xC7000000);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        const Rect.fromLTWH(8, 13, 9, 9),
+        const Radius.circular(2),
+      ),
+      processorPaint,
+    );
+
+    final portPaint = Paint()..color = const Color(0xFFB8B8B4);
+    for (var index = 0; index < 2; index++) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(23, 12 + index * 6, 5, 4),
+          const Radius.circular(1),
+        ),
+        portPaint,
+      );
+    }
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        const Rect.fromLTWH(13, 25, 8, 4),
+        const Radius.circular(1.3),
+      ),
+      portPaint,
+    );
+
+    final ledPaint = Paint()
+      ..color = const Color(0xFF34C759)
+      ..maskFilter = selected && activity > 0
+          ? const MaskFilter.blur(BlurStyle.normal, 2.5)
+          : null;
+    canvas.drawCircle(const Offset(23, 22), 1.75, ledPaint);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _RaspberryPiPainter oldDelegate) {
+    return oldDelegate.selected != selected || oldDelegate.activity != activity;
   }
 }
 
