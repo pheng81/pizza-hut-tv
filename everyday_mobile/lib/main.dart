@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import 'screens/login_screen.dart';
 import 'screens/main_shell.dart';
@@ -20,7 +21,7 @@ class EverydayMobileApp extends StatefulWidget {
 class _EverydayMobileAppState extends State<EverydayMobileApp> {
   late final ApiClient _apiClient;
   bool _authenticated = false;
-  bool _introVisible = false;
+  bool _introVisible = true;
   bool _introFadingOut = false;
   bool _introLogoEntered = false;
   bool _bootstrapped = false;
@@ -29,6 +30,7 @@ class _EverydayMobileAppState extends State<EverydayMobileApp> {
   void initState() {
     super.initState();
     _apiClient = ApiClient();
+    _startIntroSequence();
     _bootstrap();
   }
 
@@ -51,14 +53,14 @@ class _EverydayMobileAppState extends State<EverydayMobileApp> {
       });
     });
 
-    await Future.delayed(const Duration(milliseconds: 3500));
+    await Future.delayed(const Duration(milliseconds: 1600));
     if (!mounted) {
       return;
     }
     setState(() {
       _introFadingOut = true;
     });
-    await Future.delayed(const Duration(milliseconds: 700));
+    await Future.delayed(const Duration(milliseconds: 400));
     if (!mounted) {
       return;
     }
@@ -77,9 +79,6 @@ class _EverydayMobileAppState extends State<EverydayMobileApp> {
       _authenticated = ok;
       _bootstrapped = true;
     });
-    if (!ok) {
-      await _startIntroSequence();
-    }
   }
 
   Future<void> _onLoginSuccess() async {
@@ -164,50 +163,56 @@ class _EverydayMobileAppState extends State<EverydayMobileApp> {
         ),
       ),
       debugShowCheckedModeBanner: false,
-      home: !_bootstrapped
-          ? const Scaffold(body: SizedBox.expand())
+      home: !_bootstrapped || _introVisible
+          ? _IntroSplash(
+              fadingOut: _introFadingOut,
+              logoEntered: _introLogoEntered,
+            )
           : (_authenticated
               ? MainShell(
                   apiClient: _apiClient,
                   onLogout: _onLogout,
                 )
-              : (_introVisible
-                  ? const Scaffold(body: SizedBox.expand())
-                  : LoginScreen(
-                      apiClient: _apiClient,
-                      onLoginSuccess: _onLoginSuccess,
-                    ))),
+              : LoginScreen(
+                  apiClient: _apiClient,
+                  onLoginSuccess: _onLoginSuccess,
+                )),
     );
   }
 }
 
-class _IntroWordmark extends StatelessWidget {
-  const _IntroWordmark();
+class _IntroSplash extends StatelessWidget {
+  const _IntroSplash({
+    required this.fadingOut,
+    required this.logoEntered,
+  });
+
+  final bool fadingOut;
+  final bool logoEntered;
 
   @override
   Widget build(BuildContext context) {
-    final base = Theme.of(context).textTheme.displayMedium?.copyWith(
-      fontWeight: FontWeight.w900,
-      color: const Color(0xFFFF6A00),
-      height: 0.95,
-      letterSpacing: -1.0,
-      shadows: const [
-        Shadow(
-          color: Color(0x66000000),
-          blurRadius: 14,
-          offset: Offset(0, 2),
-        ),
-      ],
-    );
-
-    return FittedBox(
-      fit: BoxFit.scaleDown,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Text(
-          'Everyday\nAdvertise',
-          textAlign: TextAlign.center,
-          style: base,
+    return Scaffold(
+      backgroundColor: const Color(0xFF0B0F16),
+      body: SafeArea(
+        child: Center(
+          child: AnimatedOpacity(
+            opacity: fadingOut ? 0 : 1,
+            duration: const Duration(milliseconds: 350),
+            child: AnimatedScale(
+              scale: logoEntered ? 1 : 0.92,
+              duration: const Duration(milliseconds: 700),
+              curve: Curves.easeOutCubic,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 28),
+                child: SvgPicture.asset(
+                  'assets/images/ea-logo-intro.svg',
+                  width: MediaQuery.sizeOf(context).width * 0.84,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
