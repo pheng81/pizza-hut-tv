@@ -1,6 +1,7 @@
+import 'dart:math' as math;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 import 'screens/login_screen.dart';
 import 'screens/main_shell.dart';
@@ -181,7 +182,7 @@ class _EverydayMobileAppState extends State<EverydayMobileApp> {
   }
 }
 
-class _IntroSplash extends StatelessWidget {
+class _IntroSplash extends StatefulWidget {
   const _IntroSplash({
     required this.fadingOut,
     required this.logoEntered,
@@ -191,27 +192,86 @@ class _IntroSplash extends StatelessWidget {
   final bool logoEntered;
 
   @override
+  State<_IntroSplash> createState() => _IntroSplashState();
+}
+
+class _IntroSplashState extends State<_IntroSplash>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _gradient;
+
+  @override
+  void initState() {
+    super.initState();
+    _gradient = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2800),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _gradient.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final logoWidth = MediaQuery.sizeOf(context).width * 0.84;
     return Scaffold(
       backgroundColor: const Color(0xFF0B0F16),
       body: SafeArea(
         child: Center(
-          child: AnimatedOpacity(
-            opacity: fadingOut ? 0 : 1,
-            duration: const Duration(milliseconds: 350),
-            child: AnimatedScale(
-              scale: logoEntered ? 1 : 0.92,
-              duration: const Duration(milliseconds: 700),
-              curve: Curves.easeOutCubic,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 28),
-                child: SvgPicture.asset(
-                  'assets/images/ea-logo-intro.svg',
-                  width: MediaQuery.sizeOf(context).width * 0.84,
-                  fit: BoxFit.contain,
+          child: AnimatedBuilder(
+            animation: _gradient,
+            child: SizedBox(
+              width: logoWidth,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  'Everyday\nAdvertise',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 160,
+                    fontWeight: FontWeight.w800,
+                    height: 0.82,
+                    letterSpacing: -2,
+                    shadows: [
+                      Shadow(
+                        color: Color(0x66000000),
+                        blurRadius: 14,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
+            builder: (context, logo) {
+              final shift = math.sin(_gradient.value * math.pi * 2) * 0.35;
+              return AnimatedOpacity(
+                opacity: widget.fadingOut ? 0 : 1,
+                duration: const Duration(milliseconds: 350),
+                child: AnimatedScale(
+                  scale: widget.logoEntered ? 1 : 0.9,
+                  duration: const Duration(milliseconds: 700),
+                  curve: Curves.easeOutCubic,
+                  child: ShaderMask(
+                    blendMode: BlendMode.srcIn,
+                    shaderCallback: (bounds) => LinearGradient(
+                      begin: Alignment(-1.2 + shift, -0.15),
+                      end: Alignment(1.2 + shift, 0.15),
+                      colors: const [
+                        Color(0xFFFF2D84),
+                        Color(0xFFB544FF),
+                        Color(0xFF3C6CFF),
+                      ],
+                    ).createShader(bounds),
+                    child: logo,
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ),

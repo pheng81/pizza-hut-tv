@@ -167,6 +167,7 @@ class _MainShellState extends State<MainShell>
                       color: Colors.white,
                       child: CupertinoTabBar(
                         currentIndex: _index,
+                        iconSize: 30,
                         onTap: (index) {
                           setState(() => _index = index);
                           if (index == 3) {
@@ -181,7 +182,7 @@ class _MainShellState extends State<MainShell>
                         ),
                         items: [
                           const BottomNavigationBarItem(
-                            icon: Icon(CupertinoIcons.building_2_fill),
+                            icon: Icon(CupertinoIcons.building_2_fill, size: 30),
                           ),
                           BottomNavigationBarItem(
                             icon: _RaspberryPiTabIcon(selected: _index == 1),
@@ -228,8 +229,8 @@ class _RemoteTabIcon extends StatelessWidget {
         scale: scale,
         child: SvgPicture.asset(
           'assets/images/tv-remote-tab-v3.svg',
-          width: 24,
-          height: 24,
+          width: 30,
+          height: 30,
           colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
         ),
       ),
@@ -263,8 +264,8 @@ class _ProfileTabIcon extends StatelessWidget {
       }
     }
     return Container(
-      width: 28,
-      height: 28,
+      width: 30,
+      height: 30,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: CupertinoColors.systemGrey5,
@@ -279,7 +280,7 @@ class _ProfileTabIcon extends StatelessWidget {
             : DecorationImage(image: avatarProvider, fit: BoxFit.cover),
       ),
       child: avatarProvider == null
-          ? const Icon(CupertinoIcons.person_fill, size: 16)
+          ? const Icon(CupertinoIcons.person_fill, size: 18)
           : null,
     );
   }
@@ -339,7 +340,7 @@ class _RaspberryPiTabIconState extends State<_RaspberryPiTabIcon>
       builder: (context, _) => Transform.translate(
         offset: Offset(0, widget.selected ? -2 * _controller.value : 0),
         child: Transform.scale(
-          scale: widget.selected ? _scale.value : 1,
+          scale: (widget.selected ? _scale.value : 1) * 1.08,
           child: CustomPaint(
             size: const Size(32, 32),
             painter: _RaspberryPiPainter(
