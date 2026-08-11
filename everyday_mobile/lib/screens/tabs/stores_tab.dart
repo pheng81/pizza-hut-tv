@@ -18,6 +18,7 @@ import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 import '../account_page.dart';
 import '../../models/app_models.dart';
 import '../../services/api_client.dart';
+import '../../services/mobile_billing_service.dart';
 
 class StoresTab extends StatefulWidget {
   const StoresTab({
@@ -594,6 +595,8 @@ class _StoresTabState extends State<StoresTab>
     final priceDisplay =
         (summary['price_display'] ?? r'$5 per screen / month').toString();
     final trialDays = int.tryParse('${summary['trial_days'] ?? 14}') ?? 14;
+    final nativeBilling = MobileBillingService.instance.usesNativeStore;
+    final billingStore = MobileBillingService.instance.storeName;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -604,6 +607,7 @@ class _StoresTabState extends State<StoresTab>
       barrierColor: Colors.black54,
       builder: (context) {
         var busy = false;
+        String? checkoutError;
         return StatefulBuilder(
           builder: (context, setModalState) {
             final theme = Theme.of(context);
@@ -615,25 +619,41 @@ class _StoresTabState extends State<StoresTab>
               }
               setModalState(() {
                 busy = true;
+                checkoutError = null;
               });
               try {
-                final checkoutUrl =
-                    await widget.apiClient.createBillingCheckoutSession();
-                final uri = Uri.parse(checkoutUrl);
-                final launched =
-                    await launchUrl(uri, mode: LaunchMode.externalApplication);
-                if (!launched && mounted) {
-                  setState(() {
-                    _error = 'Unable to open checkout link.';
-                  });
+                if (nativeBilling) {
+                  await MobileBillingService.instance.purchase(
+                    apiClient: widget.apiClient,
+                  );
+                } else {
+                  final checkoutUrl =
+                      await widget.apiClient.createBillingCheckoutSession();
+                  final uri = Uri.parse(checkoutUrl);
+                  var launched = await launchUrl(
+                    uri,
+                    mode: LaunchMode.platformDefault,
+                  );
+                  if (!launched) {
+                    launched = await launchUrl(
+                      uri,
+                      mode: LaunchMode.externalApplication,
+                    );
+                  }
+                  if (!launched) {
+                    throw StateError(
+                      'Unable to open Stripe checkout. Please try again.',
+                    );
+                  }
                 }
                 if (context.mounted) {
                   Navigator.of(context).pop();
                 }
               } catch (e) {
-                if (mounted) {
-                  setState(() {
-                    _error = e.toString().replaceFirst('Exception: ', '');
+                if (context.mounted) {
+                  setModalState(() {
+                    checkoutError =
+                        e.toString().replaceFirst('Exception: ', '');
                   });
                 }
               } finally {
@@ -688,7 +708,9 @@ class _StoresTabState extends State<StoresTab>
                                 ),
                               ),
                               Text(
-                                'Secure billing powered by Stripe',
+                                nativeBilling
+                                    ? 'Secure billing powered by $billingStore'
+                                    : 'Secure billing powered by Stripe',
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   color: scheme.onSurfaceVariant,
                                 ),
@@ -770,6 +792,23 @@ class _StoresTabState extends State<StoresTab>
                       text: 'Instant Pi and Android pairing',
                     ),
                     const SizedBox(height: 16),
+                    if (checkoutError != null) ...[
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: scheme.errorContainer,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          checkoutError!,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onErrorContainer,
+                          ),
+                        ),
+                      ),
+                    ],
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton(
@@ -781,7 +820,11 @@ class _StoresTabState extends State<StoresTab>
                           ),
                         ),
                         child: Text(
-                          busy ? 'Opening checkout...' : 'Continue to checkout',
+                          busy
+                              ? 'Opening checkout...'
+                              : nativeBilling
+                                  ? 'Continue with $billingStore'
+                                  : 'Continue to checkout',
                         ),
                       ),
                     ),

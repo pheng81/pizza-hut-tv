@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../models/app_models.dart';
 import '../services/api_client.dart';
+import '../services/mobile_billing_service.dart';
 import 'login_screen.dart';
 
 class AccountPage extends StatefulWidget {
@@ -215,12 +216,19 @@ class _AccountPageState extends State<AccountPage> {
 
   Future<void> _startSubscriptionCheckout() async {
     await _runAction(() async {
-      final url = await widget.apiClient.createBillingCheckoutSession();
-      await _openExternal(url);
+      if (MobileBillingService.instance.usesNativeStore) {
+        await MobileBillingService.instance.purchase(
+          apiClient: widget.apiClient,
+        );
+      } else {
+        final url = await widget.apiClient.createBillingCheckoutSession();
+        await _openExternal(url);
+      }
       if (mounted) {
         setState(() {
-          _message =
-              'Checkout opened. Complete payment, then return and refresh.';
+          _message = MobileBillingService.instance.usesNativeStore
+              ? 'Purchase complete. Your screens are now active.'
+              : 'Checkout opened. Complete payment, then return and refresh.';
         });
       }
     });
