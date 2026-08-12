@@ -780,6 +780,46 @@ class _StoresTabState extends State<StoresTab>
             final theme = Theme.of(context);
             final scheme = theme.colorScheme;
 
+            Future<void> restorePurchases() async {
+              if (busy) {
+                return;
+              }
+              setModalState(() {
+                busy = true;
+                checkoutError = null;
+              });
+              try {
+                final restored = await MobileBillingService.instance.restore(
+                  apiClient: widget.apiClient,
+                );
+                if (!context.mounted) {
+                  return;
+                }
+                if (restored > 0) {
+                  Navigator.of(context).pop();
+                  return;
+                }
+                setModalState(() {
+                  checkoutError =
+                      'No previous subscription was found for this '
+                      '$billingStore account.';
+                });
+              } catch (e) {
+                if (context.mounted) {
+                  setModalState(() {
+                    checkoutError =
+                        e.toString().replaceFirst('Exception: ', '');
+                  });
+                }
+              } finally {
+                if (context.mounted) {
+                  setModalState(() {
+                    busy = false;
+                  });
+                }
+              }
+            }
+
             Future<void> startCheckout() async {
               if (busy) {
                 return;
@@ -995,6 +1035,13 @@ class _StoresTabState extends State<StoresTab>
                         ),
                       ),
                     ),
+                    if (nativeBilling)
+                      Center(
+                        child: TextButton(
+                          onPressed: busy ? null : restorePurchases,
+                          child: const Text('Restore purchases'),
+                        ),
+                      ),
                     const SizedBox(height: 4),
                     Center(
                       child: TextButton(
@@ -1003,6 +1050,40 @@ class _StoresTabState extends State<StoresTab>
                         child: const Text('Skip for now'),
                       ),
                     ),
+                    if (nativeBilling) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Payment is charged to your $billingStore account at '
+                        'confirmation of purchase. The subscription renews '
+                        'automatically each month unless cancelled at least 24 '
+                        'hours before the end of the current period. Manage or '
+                        'cancel it in your device account settings.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        children: [
+                          TextButton(
+                            onPressed: () => launchUrl(
+                              Uri.parse(
+                                  '${widget.apiClient.baseUrl}/terms'),
+                              mode: LaunchMode.externalApplication,
+                            ),
+                            child: const Text('Terms of Use'),
+                          ),
+                          TextButton(
+                            onPressed: () => launchUrl(
+                              Uri.parse(
+                                  '${widget.apiClient.baseUrl}/privacy'),
+                              mode: LaunchMode.externalApplication,
+                            ),
+                            child: const Text('Privacy Policy'),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
