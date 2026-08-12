@@ -4,6 +4,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../models/app_models.dart';
 import '../../services/api_client.dart';
+import '../../services/tv_discovery_service.dart';
 
 enum CommandsMode { tv, remote }
 
@@ -132,6 +133,9 @@ class _CommandsTabState extends State<CommandsTab> {
   String _remoteConnection = 'Wi-Fi';
   String _remoteBrand = 'Android / Google TV';
   String? _selectedRemoteDeviceId;
+  final TvDiscoveryService _tvDiscoveryService = TvDiscoveryService();
+  List<DiscoveredTv> _discoveredTvs = const [];
+  bool _discoveringTvs = false;
 
   @override
   void initState() {
@@ -300,6 +304,74 @@ class _CommandsTabState extends State<CommandsTab> {
         });
       }
     }
+  }
+
+  Future<void> _scanNearbyTvs() async {
+    if (_discoveringTvs) {
+      return;
+    }
+    setState(() {
+      _discoveringTvs = true;
+      _message = null;
+    });
+    try {
+      final devices = await _tvDiscoveryService.scan();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _discoveredTvs = devices;
+        _message = devices.isEmpty
+            ? 'No compatible TV services were found on this Wi-Fi network.'
+            : 'Found ${devices.length} nearby TV service${devices.length == 1 ? '' : 's'}.';
+      });
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _message =
+            'TV scan failed: ${e.toString().replaceFirst('Exception: ', '')}';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _discoveringTvs = false;
+        });
+      }
+    }
+  }
+
+  Map<String, dynamic>? _registeredScreenForTv(DiscoveredTv tv) {
+    for (final screen in _screens) {
+      final deviceId = (screen['device_id'] ?? '').toString().trim();
+      final ip = (screen['ip'] ?? '').toString().trim();
+      if (deviceId.isNotEmpty &&
+          deviceId != 'Not Assigned' &&
+          ip == tv.address.address) {
+        return screen;
+      }
+    }
+    return null;
+  }
+
+  void _useDiscoveredTv(DiscoveredTv tv) {
+    final registeredScreen = _registeredScreenForTv(tv);
+    final profile = _remoteProfiles.where((item) => item.brand == tv.brand);
+    setState(() {
+      if (profile.isNotEmpty) {
+        _remoteBrand = profile.first.brand;
+      }
+      if (registeredScreen == null) {
+        _selectedRemoteDeviceId = null;
+        _message =
+            '${tv.name} was found at ${tv.address.address}, but it is not registered as an EverydayAdvertise TV yet. Open the TV app and complete pairing first.';
+        return;
+      }
+      _selectedRemoteDeviceId = registeredScreen['device_id']?.toString();
+      _message =
+          '${tv.name} selected. The remote will use the registered TV connection.';
+    });
   }
 
   Future<void> _send(String deviceId, String command) async {
@@ -876,7 +948,7 @@ class _CommandsTabState extends State<CommandsTab> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Connect to a compatible TV over Wi-Fi or Bluetooth. TV brand support is added through each brand’s remote protocol.',
+                  'Scan this Wi-Fi network for compatible TVs. Registered EverydayAdvertise TVs can be controlled here; other brands may still require their pairing app or IR hardware.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: scheme.onSurfaceVariant,
                   ),
@@ -981,12 +1053,69 @@ class _CommandsTabState extends State<CommandsTab> {
                       _remoteConnection = selection.first;
                       if (_remoteConnection == 'Bluetooth') {
                         _message =
-                            'Bluetooth discovery will be enabled for supported TV brands in a later connection step.';
+                            'Bluetooth is available for supported TV accessories. Smart-TV discovery and commands use Wi-Fi.';
                       }
                     });
                   },
                 ),
                 const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Nearby TVs',
+                        style: theme.textTheme.titleSmall,
+                      ),
+                    ),
+                    FilledButton.tonalIcon(
+                      onPressed: _discoveringTvs ? null : _scanNearbyTvs,
+                      icon: _discoveringTvs
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.wifi_find_rounded),
+                      label: Text(_discoveringTvs ? 'Scanning' : 'Scan Wi-Fi'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (_discoveredTvs.isEmpty)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: scheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      'Tap Scan Wi-Fi to find TVs without entering an IP address. Your phone and TV must be on the same network.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  )
+                else
+                  ..._discoveredTvs.map((tv) {
+                    final registered = _registeredScreenForTv(tv) != null;
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 6),
+                      child: ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.tv_rounded),
+                        title: Text(tv.name),
+                        subtitle: Text(
+                          '${tv.brand} · ${tv.address.address}:${tv.port}',
+                        ),
+                        trailing: TextButton(
+                          onPressed: () => _useDiscoveredTv(tv),
+                          child: Text(registered ? 'Use' : 'Pair'),
+                        ),
+                      ),
+                    );
+                  }),
+                const SizedBox(height: 8),
                 if (_remoteConnection == 'Wi-Fi' && remoteDevices.isNotEmpty)
                   DropdownButtonFormField<String>(
                     value: selectedDeviceId,
