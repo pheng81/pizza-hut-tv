@@ -23,6 +23,50 @@ class SubscribePage extends StatefulWidget {
 class _SubscribePageState extends State<SubscribePage> {
   bool _busy = false;
   String? _error;
+  String? _notice;
+
+  Future<void> _restorePurchases() async {
+    if (_busy) {
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+      _notice = null;
+    });
+    try {
+      final restored = await MobileBillingService.instance.restore(
+        apiClient: widget.apiClient,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _notice = restored > 0
+            ? 'Subscription restored.'
+            : 'No previous subscription was found for this '
+                '${MobileBillingService.instance.storeName} account.';
+      });
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _openLink(String path) async {
+    final uri = Uri.parse('${widget.apiClient.baseUrl}$path');
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
 
   Future<void> _startCheckout() async {
     if (_busy) {
@@ -141,10 +185,53 @@ class _SubscribePageState extends State<SubscribePage> {
                         : 'Start Subscription Securely',
               ),
             ),
+            if (MobileBillingService.instance.usesNativeStore)
+              TextButton(
+                onPressed: _busy ? null : _restorePurchases,
+                child: const Text('Restore purchases'),
+              ),
             TextButton(
               onPressed: _busy ? null : () => Navigator.of(context).pop(),
               child: const Text('Skip for now'),
             ),
+            if (MobileBillingService.instance.usesNativeStore) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Payment is charged to your ${MobileBillingService.instance.storeName} '
+                'account at confirmation of purchase. The subscription renews '
+                'automatically each month unless it is cancelled at least 24 hours '
+                'before the end of the current period, and your account is charged '
+                'for renewal within 24 hours before the period ends. You can manage '
+                'or cancel your subscription in your device account settings.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                alignment: WrapAlignment.center,
+                children: [
+                  TextButton(
+                    onPressed: () => _openLink('/terms'),
+                    child: const Text('Terms of Use'),
+                  ),
+                  TextButton(
+                    onPressed: () => _openLink('/privacy'),
+                    child: const Text('Privacy Policy'),
+                  ),
+                ],
+              ),
+            ],
+            if (_notice != null)
+              Container(
+                margin: const EdgeInsets.only(top: 8),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  color: scheme.primaryContainer,
+                ),
+                child: Text(_notice!),
+              ),
             if (_error != null)
               Container(
                 margin: const EdgeInsets.only(top: 8),

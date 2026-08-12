@@ -30,6 +30,85 @@ class MobileBillingService {
     return 'Stripe';
   }
 
+  /// Re-verifies subscriptions the user already owns.
+  ///
+  /// The App Store requires a way to restore purchases on a new device or
+  /// after a reinstall. Returns the number of subscriptions the server
+  /// accepted, so the caller can tell the user when nothing was found.
+  Future<int> restore({required ApiClient apiClient}) async {
+    if (!usesNativeStore) {
+      throw StateError('Native mobile billing is unavailable on this device.');
+    }
+
+    final billing = InAppPurchase.instance;
+    if (!await billing.isAvailable()) {
+      throw StateError('$storeName billing is unavailable right now.');
+    }
+
+    var restored = 0;
+    final done = Completer<void>();
+    late final StreamSubscription<List<PurchaseDetails>> subscription;
+
+    Future<void> handleRestored(PurchaseDetails purchase) async {
+      if (purchase.status != PurchaseStatus.restored &&
+          purchase.status != PurchaseStatus.purchased) {
+        return;
+      }
+      if (purchase.productID != productId) {
+        return;
+      }
+      try {
+        await apiClient.verifyMobilePurchase(
+          provider:
+              defaultTargetPlatform == TargetPlatform.iOS ? 'apple' : 'google',
+          productId: purchase.productID,
+          serverVerificationData:
+              purchase.verificationData.serverVerificationData,
+          localVerificationData:
+              purchase.verificationData.localVerificationData,
+          purchaseId: purchase.purchaseID,
+        );
+        restored += 1;
+      } catch (_) {
+        // An expired or already-consumed receipt is not a restore failure.
+      }
+      if (purchase.pendingCompletePurchase) {
+        await billing.completePurchase(purchase);
+      }
+    }
+
+    subscription = billing.purchaseStream.listen(
+      (purchases) async {
+        for (final purchase in purchases) {
+          await handleRestored(purchase);
+        }
+        if (!done.isCompleted) {
+          done.complete();
+        }
+      },
+      onError: (Object error) {
+        if (!done.isCompleted) {
+          done.completeError(error);
+        }
+      },
+    );
+
+    try {
+      await billing.restorePurchases();
+      // restorePurchases() replays past purchases through purchaseStream, but
+      // emits nothing at all when there are none - so stop waiting rather than
+      // hang when the account has no subscription.
+      await done.future.timeout(
+        const Duration(seconds: 20),
+        onTimeout: () {},
+      );
+    } finally {
+      await subscription.cancel();
+    }
+
+    return restored;
+  }
+
   Future<void> purchase({required ApiClient apiClient}) async {
     if (!usesNativeStore) {
       throw StateError('Native mobile billing is unavailable on this device.');

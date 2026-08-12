@@ -58,6 +58,12 @@
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>We use your location to save the screen address and coordinates for dashboard maps.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Everyday Mobile uses the camera so you can photograph menu items and artwork to display on your screens.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Everyday Mobile needs access to your photos so you can choose images to display on your screens and set your profile picture.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Everyday Mobile scans your local Wi-Fi network to find compatible TVs and display devices.</string>
 	<key>NSBonjourServices</key>
