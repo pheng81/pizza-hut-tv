@@ -4207,6 +4207,7 @@ def login():
     resp = make_response(render_template(
         'login.html',
         google_enabled=google_enabled,
+        google_client_id=os.environ.get('GOOGLE_CLIENT_ID') or '',
         microsoft_enabled=microsoft_enabled,
         apple_enabled=apple_enabled,
         build_stamp=BUILD_STAMP,
@@ -4626,9 +4627,16 @@ def api_auth_google_native():
         mobile_token = _issue_mobile_auth_token(user)
         _cleanup_mobile_auth_tokens()
 
+        needs_subscription = False
+        try:
+            needs_subscription = not user.get('is_admin') and not _user_has_active_subscription(user.get('id'))
+        except Exception:
+            pass
+
         return jsonify({
             'success': True,
             'mobile_auth_token': mobile_token,
+            'needs_subscription': needs_subscription,
             'user': {
                 'id': user.get('id'),
                 'name': user.get('name'),
@@ -5512,6 +5520,7 @@ def signup():
     resp = make_response(render_template(
         'signup.html',
         google_enabled=google_enabled,
+        google_client_id=os.environ.get('GOOGLE_CLIENT_ID') or '',
         microsoft_enabled=microsoft_enabled,
         apple_enabled=apple_enabled,
         trial_days_display=trial_days_display,
