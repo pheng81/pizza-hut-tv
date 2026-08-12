@@ -1766,6 +1766,28 @@ class ApiClient {
     }
   }
 
+  /// Permanently deletes the signed-in account.
+  ///
+  /// Accounts created with a password confirm with [currentPassword]; accounts
+  /// created through Google or Apple have no password and confirm by retyping
+  /// their email as [confirmEmail].
+  Future<void> deleteAccount({
+    String? currentPassword,
+    String? confirmEmail,
+  }) async {
+    final response = await _dio.post(
+      '/api/profile/delete',
+      data: {
+        'current_password': currentPassword ?? '',
+        'confirm_email': confirmEmail ?? '',
+      },
+    );
+    final data = _asMap(response.data);
+    if (data['success'] != true) {
+      throw Exception((data['error'] ?? 'Account deletion failed').toString());
+    }
+  }
+
   Future<String> regenerateCode() async {
     final response = await _dio.post('/profile/regenerate_code');
     final data = _asMap(response.data);

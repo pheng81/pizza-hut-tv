@@ -387,6 +387,7 @@ class _ProfileTabState extends State<ProfileTab> {
                             builder: (_) => AccountPage(
                               apiClient: widget.apiClient,
                               initialUsername: _profile?.username,
+                              onLogout: widget.onLogout,
                             ),
                           ),
                         );

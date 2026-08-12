@@ -4,6 +4,7 @@ class UserProfile {
     this.fullName,
     this.linkCode,
     this.avatarUrl,
+    this.hasPassword = true,
   });
 
   final String username;
@@ -11,12 +12,17 @@ class UserProfile {
   final String? linkCode;
   final String? avatarUrl;
 
+  /// False for Google/Apple accounts, which are created without a password and
+  /// so confirm account deletion by retyping their email instead.
+  final bool hasPassword;
+
   factory UserProfile.fromJson(Map<String, dynamic> json) {
     return UserProfile(
       username: (json['username'] ?? '').toString(),
       fullName: json['full_name']?.toString(),
       linkCode: json['link_code']?.toString(),
       avatarUrl: json['avatar_url']?.toString(),
+      hasPassword: json['has_password'] != false,
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -14,10 +15,14 @@ class AccountPage extends StatefulWidget {
     super.key,
     required this.apiClient,
     this.initialUsername,
+    this.onLogout,
   });
 
   final ApiClient apiClient;
   final String? initialUsername;
+
+  /// Returns the app to a signed-out state after the account is deleted.
+  final Future<void> Function()? onLogout;
 
   @override
   State<AccountPage> createState() => _AccountPageState();
@@ -235,6 +240,25 @@ class _AccountPageState extends State<AccountPage> {
   }
 
   Future<void> _openBillingPortal() async {
+    // Subscriptions bought through the App Store or Play Store can only be
+    // managed by the store that billed them - the Stripe portal knows nothing
+    // about them.
+    if (MobileBillingService.instance.usesNativeStore) {
+      await _runAction(() async {
+        final url = defaultTargetPlatform == TargetPlatform.iOS
+            ? 'https://apps.apple.com/account/subscriptions'
+            : 'https://play.google.com/store/account/subscriptions';
+        await _openExternal(url);
+        if (mounted) {
+          setState(() {
+            _message =
+                '${MobileBillingService.instance.storeName} subscription settings opened.';
+          });
+        }
+      });
+      return;
+    }
+
     await _runAction(() async {
       final url = await widget.apiClient.createBillingPortalSession();
       await _openExternal(url);
@@ -544,6 +568,91 @@ class _AccountPageState extends State<AccountPage> {
         _showNotice(message);
       }
       await _load();
+    });
+  }
+
+  Future<void> _confirmDeleteAccount() async {
+    final hasPassword = _meProfile?.hasPassword ?? true;
+    final email = _resolvedAccountEmail();
+    final controller = TextEditingController();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete account'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'This permanently deletes your account, your screens and your '
+              'uploaded media. It cannot be undone.',
+            ),
+            const SizedBox(height: 12),
+            Text(
+              hasPassword
+                  ? 'Enter your password to confirm.'
+                  : 'Type $email to confirm.',
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: controller,
+              obscureText: hasPassword,
+              autocorrect: false,
+              enableSuggestions: false,
+              decoration: InputDecoration(
+                border: const OutlineInputBorder(),
+                hintText: hasPassword ? 'Password' : 'Email address',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete account'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      controller.dispose();
+      return;
+    }
+
+    final entered = controller.text.trim();
+    controller.dispose();
+    if (entered.isEmpty) {
+      return;
+    }
+
+    await _runAction(() async {
+      await widget.apiClient.deleteAccount(
+        currentPassword: hasPassword ? entered : null,
+        confirmEmail: hasPassword ? null : entered,
+      );
+      if (!mounted) {
+        return;
+      }
+      // The account is gone, so send the user back to a signed-out state.
+      await widget.apiClient.logout();
+      if (!mounted) {
+        return;
+      }
+      final onLogout = widget.onLogout;
+      if (onLogout != null) {
+        await onLogout();
+      } else {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
     });
   }
 
@@ -858,7 +967,16 @@ class _AccountPageState extends State<AccountPage> {
                             ),
                           ),
                           const SizedBox(height: 12),
-                          _kvRow(context, 'Plan', '\$5 per screen / month'),
+                          _kvRow(
+                            context,
+                            'Plan',
+                            (_account?['price_display'] as String?)
+                                    ?.trim()
+                                    .isNotEmpty ==
+                                true
+                                ? _account!['price_display'] as String
+                                : 'Billed per screen each month',
+                          ),
                           const Divider(height: 20),
                           _kvRow(context, 'Current Period', currentPeriod),
                           const Divider(height: 20),
@@ -1531,6 +1649,44 @@ class _AccountPageState extends State<AccountPage> {
                       child: Text(_message!),
                     ),
                   ],
+                  const SizedBox(height: 10),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Delete Account',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Permanently delete your account, screens and '
+                            'uploaded media. This cannot be undone.',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton(
+                              onPressed:
+                                  _actionBusy ? null : _confirmDeleteAccount,
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: scheme.error,
+                                side: BorderSide(color: scheme.error),
+                              ),
+                              child: const Text('Delete my account'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               ),
       ),

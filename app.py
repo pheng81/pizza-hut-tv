@@ -14004,14 +14004,18 @@ def api_me():
         if not uname:
             return jsonify({'success': False, 'error': 'auth required'}), 403
         db = get_db()
-        row = db.execute('SELECT username, full_name, avatar, oauth_avatar_url FROM users WHERE username = ?', (uname,)).fetchone()
+        row = db.execute('SELECT username, full_name, avatar, oauth_avatar_url, password_hash FROM users WHERE username = ?', (uname,)).fetchone()
         full_name = (row['full_name'] if row and 'full_name' in row.keys() else None)
         avatar_rel = (row['avatar'] if row and 'avatar' in row.keys() else None)
         oauth_avatar_url = (row['oauth_avatar_url'] if row and 'oauth_avatar_url' in row.keys() else None)
         avatar_url = _resolved_profile_avatar_url(uname, avatar_rel, oauth_avatar_url)
         
+        # Tells the client whether to ask for a password or an email
+        # confirmation when deleting the account.
+        has_password = bool(row['password_hash'] if row and 'password_hash' in row.keys() else None)
+
         code = _ensure_user_link_code(uname)
-        return jsonify({'success': True, 'username': uname, 'full_name': full_name, 'avatar_url': avatar_url, 'link_code': code})
+        return jsonify({'success': True, 'username': uname, 'full_name': full_name, 'avatar_url': avatar_url, 'link_code': code, 'has_password': has_password})
     except Exception as e:
         logging.error(f'Error in /api/me: {e}', exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -14059,12 +14063,22 @@ def api_profile_delete_account():
     try:
         data = request.get_json() or {}
         current = data.get('current_password') or ''
+        confirm_email = (data.get('confirm_email') or '').strip().lower()
         uname = _get_current_username_from_session()
         db = get_db()
         row = db.execute('SELECT id, password_hash FROM users WHERE username = ?', (uname,)).fetchone()
-        ph = row['password_hash'] if row else None
-        if not ph or not check_password_hash(ph, current):
-            return jsonify({'success': False, 'error': 'current password incorrect'}), 400
+        if not row:
+            return jsonify({'success': False, 'error': 'account not found'}), 404
+        ph = row['password_hash']
+        if ph:
+            if not check_password_hash(ph, current):
+                return jsonify({'success': False, 'error': 'current password incorrect'}), 400
+        else:
+            # Google/Apple accounts are created without a password, so confirm
+            # intent by retyping the email instead. Without this branch these
+            # users could never delete their account.
+            if confirm_email != (uname or '').strip().lower():
+                return jsonify({'success': False, 'error': 'confirm your email address to delete this account'}), 400
         _delete_user_account(int(row['id']))
         session.clear()
         return jsonify({'success': True})
