@@ -71,8 +71,14 @@ class _EverydayMobileAppState extends State<EverydayMobileApp> {
   }
 
   Future<void> _bootstrap() async {
-    await _apiClient.init();
-    final ok = await _apiClient.checkSession();
+    bool ok = false;
+    try {
+      await _apiClient.init().timeout(const Duration(seconds: 10));
+      ok = await _apiClient.checkSession().timeout(const Duration(seconds: 12));
+    } catch (_) {
+      // Allow the login screen to render when the API is unavailable or slow.
+      ok = false;
+    }
     if (!mounted) {
       return;
     }
