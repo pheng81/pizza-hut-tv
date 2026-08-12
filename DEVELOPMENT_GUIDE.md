@@ -183,6 +183,48 @@ print(token)
 Copy the printed JWT into `APPLE_CLIENT_SECRET`. The production server already has
 these credentials configured.
 
+### Google Sign-In
+- Native Google Sign-In is wired up for Web, Android, and iOS — all three call the same
+  backend endpoint, `/api/auth/google/native`, which verifies the `id_token` against
+  Google's `tokeninfo` endpoint and checks the `aud` claim against the allowed client IDs.
+- Web uses Google Identity Services (the `accounts.google.com/gsi/client` button embedded
+  in `templates/login.html` and `templates/signup.html`), not the old server-side redirect
+  flow. `/auth/google` (Authlib redirect) still exists as a `<noscript>`/fallback link.
+- Android and iOS use the `google_sign_in` Flutter package; the native ID token is posted
+  to the same `/api/auth/google/native` endpoint.
+- Backend env vars (all live in the `google-oauth.conf` systemd drop-in):
+  - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — Web OAuth client (used by both the GIS
+    button and the legacy Authlib redirect flow)
+  - `GOOGLE_ANDROID_CLIENT_ID` — Android OAuth client (no secret; Android clients are public)
+  - `GOOGLE_IOS_CLIENT_ID` — iOS OAuth client
+
+#### Google Cloud OAuth clients
+
+All client IDs live under the `everydayadvertise` GCP project (project number
+`929679124405`), Google Auth Platform → Clients:
+
+| Client | Type | Package / Bundle ID |
+| --- | --- | --- |
+| Everyday Mobile iOS | iOS | `com.everydayadvertise.everydayMobile` |
+| Everyday Mobile Android Debug | Android | `com.everydayadvertise.everyday_mobile` |
+| everydayadvertise | Web application | n/a |
+
+The Android client needs a **SHA-1 certificate fingerprint** matching whatever keystore
+signed the APK/AAB actually running on the device. Two fingerprints are registered on
+that one client (via **Advanced settings** on the client's edit page):
+
+- The **debug keystore** SHA-1 (for local `flutter run` builds during development)
+- The **Play App Signing key certificate** SHA-1 (for anything installed from Play,
+  including internal testing) — found in Play Console under **Protected with Play →
+  Play Store protection → Manage Play app signing → App signing key → Classical key →
+  SHA-1 certificate fingerprint**. This is *not* the same as the "Upload key certificate"
+  SHA-1 shown further down that same page — Play re-signs the app with its own key before
+  distributing it, so the upload key's fingerprint never appears on a real user's device.
+
+If you rotate/add a signing key, add its SHA-1 as an extra fingerprint on the same
+Android client rather than creating a new client — Google matches on package name + SHA-1
+pairs, and a client can hold more than one fingerprint.
+
 ### Remote vs Local Server
 - Remote production server is the normal app target: `https://everydayadvertise.com`
 - Local backend is best for testing auth and backend fixes without touching production
