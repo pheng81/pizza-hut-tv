@@ -53,6 +53,7 @@ dependencies:
   geolocator: ^13.0.2
   geocoding: ^3.0.0
   in_app_purchase: ^3.2.3
+  multicast_dns: ^0.3.2+7
 
 dev_dependencies:
   flutter_test:
