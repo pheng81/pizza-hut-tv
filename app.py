@@ -872,6 +872,107 @@ GOOGLE_PLAY_SERVICE_ACCOUNT_JSON = os.environ.get('GOOGLE_PLAY_SERVICE_ACCOUNT_J
 GOOGLE_PLAY_PACKAGE_NAME = os.environ.get('GOOGLE_PLAY_PACKAGE_NAME') or 'com.everydayadvertise.everyday_mobile'
 GOOGLE_PLAY_PRODUCT_ID = os.environ.get('GOOGLE_PLAY_PRODUCT_ID') or 'screens_monthly'
 
+# Screen tiers for the app stores.
+#
+# Apple and Google price a subscription per product, so per-screen pricing has
+# to be expressed as tiers instead of a quantity. Each entry is the product id
+# and the number of screens it covers. Adding a screen beyond the tier means
+# upgrading to the next one, which the stores prorate automatically.
+#
+# Override with MOBILE_IAP_TIERS as JSON to change tiers without a deploy, e.g.
+# MOBILE_IAP_TIERS=[{"product_id":"screens_1","screens":1}, ...]
+_DEFAULT_MOBILE_IAP_TIERS = [
+    {'product_id': 'screens_1', 'screens': 1},
+    {'product_id': 'screens_3', 'screens': 3},
+    {'product_id': 'screens_5', 'screens': 5},
+    {'product_id': 'screens_10', 'screens': 10},
+]
+
+
+def _mobile_iap_tiers() -> list[dict]:
+    """Tier ladder, smallest first. Falls back to the defaults if misconfigured."""
+    raw = (os.environ.get('MOBILE_IAP_TIERS') or '').strip()
+    tiers = _DEFAULT_MOBILE_IAP_TIERS
+    if raw:
+        try:
+            parsed = json.loads(raw)
+            cleaned = []
+            for entry in parsed or []:
+                product_id = str((entry or {}).get('product_id') or '').strip()
+                screens = int((entry or {}).get('screens') or 0)
+                if product_id and screens > 0:
+                    cleaned.append({'product_id': product_id, 'screens': screens})
+            if cleaned:
+                tiers = cleaned
+        except Exception as exc:
+            logging.warning('Invalid MOBILE_IAP_TIERS, using defaults: %s', exc)
+    return sorted(tiers, key=lambda t: t['screens'])
+
+
+def _mobile_tier_for_screens(screen_count: int) -> dict:
+    """Smallest tier covering screen_count; the largest tier if none is big enough."""
+    tiers = _mobile_iap_tiers()
+    wanted = max(1, int(screen_count or 0))
+    for tier in tiers:
+        if tier['screens'] >= wanted:
+            return tier
+    return tiers[-1]
+
+
+def _mobile_tier_screen_allowance(product_id: str) -> int:
+    """How many screens a purchased product covers. 0 means unknown/unlimited."""
+    target = (product_id or '').strip()
+    for tier in _mobile_iap_tiers():
+        if tier['product_id'] == target:
+            return int(tier['screens'])
+    return 0
+
+
+def _mobile_plan_allowance(user_id, wanted_screens: int) -> tuple[int, bool, str | None]:
+    """Screens the user's store plan covers, whether wanted_screens exceeds it,
+    and the product id they are currently on.
+
+    Returns (0, False, None) for Stripe or unsubscribed users, whose screen
+    count is billed by quantity rather than capped by a tier.
+    """
+    if not user_id:
+        return 0, False, None
+    try:
+        db = get_db()
+        row = db.execute(
+            'SELECT billing_provider, billing_product_id FROM subscriptions WHERE user_id = ?',
+            (user_id,),
+        ).fetchone()
+        if not row:
+            return 0, False, None
+        provider = (row['billing_provider'] or '')
+        if provider not in ('apple', 'google'):
+            return 0, False, None
+        product_id = row['billing_product_id'] or ''
+        allowance = _mobile_tier_screen_allowance(product_id)
+        if not allowance:
+            return 0, False, product_id or None
+        return allowance, int(wanted_screens or 0) > allowance, product_id or None
+    except Exception as exc:
+        logging.warning('Failed to read mobile plan allowance for %s: %s', user_id, exc)
+        return 0, False, None
+
+
+def _mobile_upgrade_target(current_product_id: str | None, wanted_screens: int) -> dict | None:
+    """The tier to upgrade to, or None when already on the largest tier."""
+    target = _mobile_tier_for_screens(wanted_screens)
+    if current_product_id and target['product_id'] == current_product_id:
+        return None
+    return target
+
+
+def _mobile_product_ids() -> set[str]:
+    ids = {tier['product_id'] for tier in _mobile_iap_tiers()}
+    for legacy in (APPLE_IAP_PRODUCT_ID, GOOGLE_PLAY_PRODUCT_ID):
+        if (legacy or '').strip():
+            ids.add(legacy.strip())
+    return ids
+
 
 def _default_trial_days() -> int:
     try:
@@ -2880,7 +2981,7 @@ def _verify_apple_mobile_purchase(
     receipt_data = _extract_apple_receipt_data(server_data, local_data)
     if not receipt_data:
         raise ValueError('Apple receipt data was missing from the purchase.')
-    if product_id != APPLE_IAP_PRODUCT_ID:
+    if product_id not in _mobile_product_ids():
         raise ValueError('Unknown Apple subscription product.')
 
     try:
@@ -2962,7 +3063,7 @@ def _google_play_credentials():
 def _verify_google_mobile_purchase(product_id: str, purchase_token: str) -> dict:
     if not _google_play_enabled():
         raise RuntimeError('Google Play Billing is not configured on the server.')
-    if product_id != GOOGLE_PLAY_PRODUCT_ID:
+    if product_id not in _mobile_product_ids():
         raise ValueError('Unknown Google Play subscription product.')
     token = str(purchase_token or '').strip()
     if not token:
@@ -5858,6 +5959,23 @@ def api_subscription_summary():
         free_screens = int(billing_policy.get('free_screens') or 0)
         requires_subscription = (not has_active) and (not is_bypass) and (screen_count >= free_screens)
 
+        # Which store tier this user needs, and whether the tier they already
+        # bought still covers the screens they have.
+        mobile_tier = _mobile_tier_for_screens(screen_count)
+        mobile_plan_product_id = None
+        mobile_plan_screens = 0
+        mobile_needs_upgrade = False
+        if subscription_row is not None:
+            keys = subscription_row.keys()
+            provider = (subscription_row['billing_provider'] if 'billing_provider' in keys else None) or ''
+            if provider in ('apple', 'google'):
+                mobile_plan_product_id = (
+                    subscription_row['billing_product_id'] if 'billing_product_id' in keys else None
+                )
+                mobile_plan_screens = _mobile_tier_screen_allowance(mobile_plan_product_id or '')
+                if mobile_plan_screens and screen_count > mobile_plan_screens:
+                    mobile_needs_upgrade = True
+
         return jsonify({
             'success': True,
             'stripe_enabled': _stripe_enabled(),
@@ -5870,14 +5988,19 @@ def api_subscription_summary():
             'next_renewal': next_renewal,
             'screen_count': screen_count,
             'subscription': dict(subscription_row) if subscription_row else None,
-            # Store product ids so the app does not hardcode them. Changing
-            # APPLE_IAP_PRODUCT_ID or GOOGLE_PLAY_PRODUCT_ID on the server points
-            # the app at a different store product without an app release.
-            # Note the price itself always comes from the store, not from here.
-            'apple_product_id': (APPLE_IAP_PRODUCT_ID or '').strip(),
-            'google_product_id': (GOOGLE_PLAY_PRODUCT_ID or '').strip(),
+            # Store product ids so the app does not hardcode them. The tier is
+            # picked from the user's screen count, because the stores price a
+            # product rather than a quantity. The price itself always comes from
+            # the store, never from here.
+            'apple_product_id': mobile_tier['product_id'],
+            'google_product_id': mobile_tier['product_id'],
             'apple_iap_enabled': _apple_iap_enabled(),
             'google_play_enabled': _google_play_enabled(),
+            'mobile_tier_screens': int(mobile_tier['screens']),
+            'mobile_plan_screens': mobile_plan_screens,
+            'mobile_plan_product_id': mobile_plan_product_id,
+            'mobile_needs_upgrade': mobile_needs_upgrade,
+            'mobile_tiers': _mobile_iap_tiers(),
         })
     except Exception as e:
         logging.error('api_subscription_summary failed: %s', e, exc_info=True)
@@ -18902,7 +19025,14 @@ def check_screen_limit():
         current_screen_count = _count_user_screens()
         has_subscription = _user_has_active_subscription()
         billing_policy = _get_user_billing_policy(_current_user_id())
-        
+
+        plan_screens, needs_upgrade, plan_product_id = _mobile_plan_allowance(
+            _current_user_id(), current_screen_count + 1
+        )
+        upgrade_tier = _mobile_upgrade_target(
+            plan_product_id, current_screen_count + 1
+        ) if needs_upgrade else None
+
         return jsonify({
             'success': True,
             'screen_count': current_screen_count,
@@ -18910,6 +19040,14 @@ def check_screen_limit():
             'is_admin': is_admin_user,
             'free_screens': int(billing_policy.get('free_screens') or 0),
             'price_display': billing_policy['price_display'],
+            # Store plans cover a fixed number of screens, so adding one past
+            # the tier needs an upgrade rather than another purchase.
+            'mobile_plan_screens': plan_screens,
+            'mobile_needs_upgrade': needs_upgrade,
+            'mobile_upgrade_product_id': (
+                upgrade_tier['product_id'] if upgrade_tier else None
+            ),
+            'mobile_plan_limit_reached': bool(needs_upgrade and upgrade_tier is None),
         })
     except Exception as e:
         logging.error(f'Error checking screen limit: {e}')
@@ -18960,6 +19098,41 @@ def add_screen():
                     'message': f'Please subscribe to add screens. Subscription is {billing_policy["price_display"]}.',
                     'requires_subscription': True,
                     'current_screens': current_screen_count
+                }), 403
+
+            # App Store and Play plans cover a fixed number of screens, so going
+            # past the tier is an upgrade rather than another purchase.
+            plan_screens, needs_upgrade, plan_product_id = _mobile_plan_allowance(
+                _current_user_id(), current_screen_count + 1
+            )
+            if needs_upgrade and not is_admin:
+                upgrade_tier = _mobile_upgrade_target(
+                    plan_product_id, current_screen_count + 1
+                )
+                if upgrade_tier is None:
+                    # Already on the largest tier, so there is nothing to upgrade
+                    # to. Do not tell them to buy the plan they already have.
+                    return jsonify({
+                        'error': 'Plan limit reached',
+                        'message': (
+                            f'Your plan covers {plan_screens} screens, the largest '
+                            'available in the app. Contact support to add more.'
+                        ),
+                        'requires_upgrade': False,
+                        'plan_limit_reached': True,
+                        'current_screens': current_screen_count,
+                        'plan_screens': plan_screens,
+                    }), 403
+                return jsonify({
+                    'error': 'Plan upgrade required',
+                    'message': (
+                        f'Your current plan covers {plan_screens} screens. '
+                        'Upgrade your subscription to add another screen.'
+                    ),
+                    'requires_upgrade': True,
+                    'current_screens': current_screen_count,
+                    'plan_screens': plan_screens,
+                    'upgrade_product_id': upgrade_tier['product_id'],
                 }), 403
         result = _create_screen_record_for_store(store_id, screen_type)
         logging.info(
