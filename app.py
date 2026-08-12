@@ -928,6 +928,56 @@ def _mobile_tier_screen_allowance(product_id: str) -> int:
     return 0
 
 
+def _retire_stripe_subscription_for_store_purchase(user_id: int) -> str | None:
+    """Stop an existing Stripe subscription when the user switches to a store.
+
+    The store has already taken payment by the time a purchase is verified, so
+    refusing it would leave the user charged with nothing to show. Instead we
+    cancel the Stripe side, otherwise both keep billing and the Stripe id is
+    about to be overwritten. Returns the cancelled id, or None.
+    """
+    try:
+        db = get_db()
+        row = db.execute(
+            'SELECT stripe_subscription_id, status, billing_provider '
+            'FROM subscriptions WHERE user_id = ?',
+            (user_id,),
+        ).fetchone()
+        if not row:
+            return None
+        keys = row.keys()
+        stripe_sub_id = (row['stripe_subscription_id'] or '').strip() if 'stripe_subscription_id' in keys else ''
+        if not stripe_sub_id:
+            return None
+        status = ((row['status'] if 'status' in keys else '') or '').lower()
+        if status not in ('active', 'trialing', 'past_due'):
+            return None
+
+        # Log before cancelling so the id survives even if the call fails and
+        # the row is later overwritten.
+        logging.warning(
+            'User %s bought a store subscription while Stripe subscription %s was %s; cancelling Stripe side.',
+            user_id, stripe_sub_id, status,
+        )
+        if not _stripe_enabled():
+            logging.error(
+                'Cannot cancel Stripe subscription %s for user %s: Stripe not configured. '
+                'Cancel it manually or the customer is billed twice.',
+                stripe_sub_id, user_id,
+            )
+            return None
+        stripe.Subscription.delete(stripe_sub_id)
+        logging.info('Cancelled Stripe subscription %s for user %s', stripe_sub_id, user_id)
+        return stripe_sub_id
+    except Exception as exc:
+        logging.error(
+            'Failed to cancel Stripe subscription for user %s after a store purchase: %s. '
+            'Customer may be billed by both until this is resolved.',
+            user_id, exc, exc_info=True,
+        )
+        return None
+
+
 def _mobile_plan_allowance(user_id, wanted_screens: int) -> tuple[int, bool, str | None]:
     """Screens the user's store plan covers, whether wanted_screens exceeds it,
     and the product id they are currently on.
@@ -3344,6 +3394,55 @@ def _resolved_profile_avatar_url(username: str, uploaded_avatar_rel: str | None,
 
     return social_url or None
 
+APPLE_PRIVATE_RELAY_DOMAIN = '@privaterelay.appleid.com'
+
+
+def _is_apple_private_relay_email(email: str | None) -> bool:
+    """True for Hide My Email addresses.
+
+    These are per-app aliases, so the same person signing in on the web with
+    their real address lands on a different account. Apple does not allow
+    refusing them, so the app offers linking instead.
+    """
+    return (email or '').strip().lower().endswith(APPLE_PRIVATE_RELAY_DOMAIN)
+
+
+def _link_apple_sub_to_user(user_id: int, apple_sub: str) -> None:
+    """Attach an Apple identity to an existing account.
+
+    Frees the subject from a Hide My Email account first, so a user who signed
+    up with Hide My Email can move their Apple sign-in onto their real account.
+    Refuses when the subject belongs to another real account.
+    """
+    subject = (apple_sub or '').strip()
+    if not subject:
+        raise ValueError('Missing Apple subject')
+
+    db = get_db()
+    holder = db.execute(
+        'SELECT id, username FROM users WHERE apple_sub = ?',
+        (subject,),
+    ).fetchone()
+
+    if holder and int(holder['id']) != int(user_id):
+        holder_username = (holder['username'] or '').strip().lower()
+        if not _is_apple_private_relay_email(holder_username):
+            raise ValueError(
+                'This Apple ID is already linked to another account. '
+                'Sign in with that account instead.'
+            )
+        # The other account only exists because of Hide My Email, so release the
+        # subject rather than blocking the user from their real account.
+        db.execute('UPDATE users SET apple_sub = NULL WHERE id = ?', (int(holder['id']),))
+        logging.info(
+            'Released Apple subject from private-relay account %s so it can link to user %s',
+            holder_username, user_id,
+        )
+
+    db.execute('UPDATE users SET apple_sub = ? WHERE id = ?', (subject, int(user_id)))
+    db.commit()
+
+
 def _upsert_apple_oauth_user(apple_sub: str, email: str, full_name: str | None) -> dict:
     """Create/update Apple OAuth user and support repeat sign-ins without email."""
     db = get_db()
@@ -4738,6 +4837,12 @@ def api_auth_google_native():
             'success': True,
             'mobile_auth_token': mobile_token,
             'needs_subscription': needs_subscription,
+            # Hide My Email gives this app its own alias, so this account is not
+            # the one the user has on the web. The app uses this to offer
+            # linking instead of leaving them on an empty duplicate account.
+            'is_private_relay_email': _is_apple_private_relay_email(
+                str(user.get('email') or '')
+            ),
             'user': {
                 'id': user.get('id'),
                 'name': user.get('name'),
@@ -4748,6 +4853,80 @@ def api_auth_google_native():
     except Exception as e:
         logging.error('Google native login failed: %s', e)
         return jsonify({'success': False, 'error': 'Google native login failed'}), 500
+
+def _verify_apple_identity_token(identity_token: str) -> tuple[dict | None, tuple | None]:
+    """Verify an Apple identity token. Returns (claims, error_response)."""
+    native_client_ids = {
+        value.strip()
+        for value in (os.environ.get('APPLE_NATIVE_CLIENT_IDS') or '').split(',')
+        if value.strip()
+    }
+    apple_client_id = (os.environ.get('APPLE_CLIENT_ID') or '').strip()
+    if apple_client_id:
+        native_client_ids.add(apple_client_id)
+    ios_client_id = (os.environ.get('APPLE_IOS_CLIENT_ID') or '').strip()
+    if ios_client_id:
+        native_client_ids.add(ios_client_id)
+    if not native_client_ids:
+        return None, (jsonify({'success': False, 'error': 'Apple Sign-In is not configured'}), 500)
+
+    try:
+        import requests as _rq
+    except Exception:
+        return None, (jsonify({'success': False, 'error': 'Server missing requests dependency'}), 500)
+
+    try:
+        jwks_resp = _rq.get('https://appleid.apple.com/auth/keys', timeout=12)
+        jwks_resp.raise_for_status()
+        key_set = JsonWebKey.import_key_set(jwks_resp.json() if jwks_resp.content else {})
+        claims = JsonWebToken(['RS256']).decode(identity_token, key_set)
+        claims.validate(leeway=15)
+    except JoseError as e:
+        logging.warning('Apple token verify failed: %s', e)
+        return None, (jsonify({'success': False, 'error': 'Invalid Apple identity token'}), 401)
+    except Exception as e:
+        logging.warning('Apple token fetch/verify failed: %s', e)
+        return None, (jsonify({'success': False, 'error': 'Apple token verification failed'}), 502)
+
+    if str(claims.get('iss') or '').strip() != 'https://appleid.apple.com':
+        return None, (jsonify({'success': False, 'error': 'Invalid Apple token issuer'}), 401)
+    if str(claims.get('aud') or '').strip() not in native_client_ids:
+        return None, (jsonify({'success': False, 'error': 'Apple token audience mismatch'}), 401)
+    if not str(claims.get('sub') or '').strip():
+        return None, (jsonify({'success': False, 'error': 'Apple token missing subject'}), 401)
+    return claims, None
+
+
+@app.route('/api/auth/apple/link', methods=['POST'])
+@login_required
+def api_auth_apple_link():
+    """Attach Apple sign-in to the account the user is already signed into.
+
+    Recovers the Hide My Email case: a user whose Apple sign-in created a second
+    account can sign into their real account and move Apple sign-in onto it.
+    """
+    try:
+        payload = request.get_json(silent=True) or {}
+        identity_token = (payload.get('identity_token') or '').strip()
+        if not identity_token:
+            return jsonify({'success': False, 'error': 'identity_token is required'}), 400
+
+        user_id = _current_user_id()
+        if not user_id:
+            return jsonify({'success': False, 'error': 'auth required'}), 403
+
+        claims, error = _verify_apple_identity_token(identity_token)
+        if error:
+            return error
+
+        _link_apple_sub_to_user(int(user_id), str(claims.get('sub') or '').strip())
+        return jsonify({'success': True})
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 409
+    except Exception:
+        logging.exception('Apple account linking failed')
+        return jsonify({'success': False, 'error': 'Could not link Apple sign-in.'}), 500
+
 
 @app.route('/api/auth/apple/native', methods=['POST'])
 def api_auth_apple_native():
@@ -5965,9 +6144,16 @@ def api_subscription_summary():
         mobile_plan_product_id = None
         mobile_plan_screens = 0
         mobile_needs_upgrade = False
+        has_web_subscription = False
         if subscription_row is not None:
             keys = subscription_row.keys()
             provider = (subscription_row['billing_provider'] if 'billing_provider' in keys else None) or ''
+            stripe_id = (
+                (subscription_row['stripe_subscription_id'] if 'stripe_subscription_id' in keys else None) or ''
+            ).strip()
+            sub_status = ((subscription_row['status'] if 'status' in keys else None) or '').lower()
+            if stripe_id and sub_status in ('active', 'trialing', 'past_due'):
+                has_web_subscription = True
             if provider in ('apple', 'google'):
                 mobile_plan_product_id = (
                     subscription_row['billing_product_id'] if 'billing_product_id' in keys else None
@@ -6001,6 +6187,9 @@ def api_subscription_summary():
             'mobile_plan_product_id': mobile_plan_product_id,
             'mobile_needs_upgrade': mobile_needs_upgrade,
             'mobile_tiers': _mobile_iap_tiers(),
+            # Warn the app before it offers a store purchase to someone Stripe
+            # is already billing, so we avoid charging them twice.
+            'has_web_subscription': has_web_subscription,
         })
     except Exception as e:
         logging.error('api_subscription_summary failed: %s', e, exc_info=True)
@@ -6175,6 +6364,10 @@ def api_billing_mobile_verify():
             verified = _verify_google_mobile_purchase(product_id, purchase_token)
             package_name = GOOGLE_PLAY_PACKAGE_NAME
 
+        # Recording the purchase clears stripe_subscription_id, so retire any
+        # live Stripe subscription first rather than losing track of it.
+        cancelled_stripe_id = _retire_stripe_subscription_for_store_purchase(user_id)
+
         _record_mobile_subscription(
             user_id=user_id,
             provider=provider,
@@ -6192,6 +6385,7 @@ def api_billing_mobile_verify():
             'provider': provider,
             'status': verified.get('status'),
             'expires_at': verified.get('expires_at'),
+            'cancelled_stripe_subscription': bool(cancelled_stripe_id),
         })
     except (ValueError, RuntimeError) as exc:
         return jsonify({'success': False, 'error': str(exc)}), 400
