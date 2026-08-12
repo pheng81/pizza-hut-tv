@@ -10,10 +10,44 @@ class MobileBillingService {
 
   static final MobileBillingService instance = MobileBillingService._();
 
+  /// Fallback product id, used only when the server does not supply one.
   static const productId = String.fromEnvironment(
     'IAP_PRODUCT_ID',
     defaultValue: 'screens_monthly',
   );
+
+  /// The product id the server wants this platform to buy.
+  ///
+  /// Comes from APPLE_IAP_PRODUCT_ID / GOOGLE_PLAY_PRODUCT_ID via
+  /// /api/subscription/summary, so the store product can be changed without
+  /// shipping a new build.
+  String productIdFrom(Map<String, dynamic>? summary) {
+    final key = defaultTargetPlatform == TargetPlatform.android
+        ? 'google_product_id'
+        : 'apple_product_id';
+    final fromServer = (summary?[key] ?? '').toString().trim();
+    return fromServer.isNotEmpty ? fromServer : productId;
+  }
+
+  /// Looks up the store listing so the paywall can show the price the store
+  /// will actually charge. Returns null when the product is unavailable.
+  Future<ProductDetails?> loadProduct({String? productId}) async {
+    if (!usesNativeStore) {
+      return null;
+    }
+    final billing = InAppPurchase.instance;
+    if (!await billing.isAvailable()) {
+      return null;
+    }
+    final id = (productId ?? '').trim().isNotEmpty
+        ? productId!.trim()
+        : MobileBillingService.productId;
+    final response = await billing.queryProductDetails({id});
+    if (response.error != null || response.productDetails.isEmpty) {
+      return null;
+    }
+    return response.productDetails.first;
+  }
 
   bool get usesNativeStore =>
       !kIsWeb &&
@@ -35,7 +69,7 @@ class MobileBillingService {
   /// The App Store requires a way to restore purchases on a new device or
   /// after a reinstall. Returns the number of subscriptions the server
   /// accepted, so the caller can tell the user when nothing was found.
-  Future<int> restore({required ApiClient apiClient}) async {
+  Future<int> restore({required ApiClient apiClient, String? productId}) async {
     if (!usesNativeStore) {
       throw StateError('Native mobile billing is unavailable on this device.');
     }
@@ -44,6 +78,10 @@ class MobileBillingService {
     if (!await billing.isAvailable()) {
       throw StateError('$storeName billing is unavailable right now.');
     }
+
+    final wantedId = (productId ?? '').trim().isNotEmpty
+        ? productId!.trim()
+        : MobileBillingService.productId;
 
     var restored = 0;
     final done = Completer<void>();
@@ -54,7 +92,7 @@ class MobileBillingService {
           purchase.status != PurchaseStatus.purchased) {
         return;
       }
-      if (purchase.productID != productId) {
+      if (purchase.productID != wantedId) {
         return;
       }
       try {
@@ -109,7 +147,7 @@ class MobileBillingService {
     return restored;
   }
 
-  Future<void> purchase({required ApiClient apiClient}) async {
+  Future<void> purchase({required ApiClient apiClient, String? productId}) async {
     if (!usesNativeStore) {
       throw StateError('Native mobile billing is unavailable on this device.');
     }
@@ -119,13 +157,17 @@ class MobileBillingService {
       throw StateError('$storeName billing is unavailable right now.');
     }
 
-    final response = await billing.queryProductDetails({productId});
+    final wantedId = (productId ?? '').trim().isNotEmpty
+        ? productId!.trim()
+        : MobileBillingService.productId;
+
+    final response = await billing.queryProductDetails({wantedId});
     if (response.error != null) {
       throw StateError(response.error!.message);
     }
     if (response.productDetails.isEmpty) {
       throw StateError(
-        'Subscription product "$productId" is not available yet. '
+        'Subscription product "$wantedId" is not available yet. '
         'Finish its setup in $storeName and try again.',
       );
     }

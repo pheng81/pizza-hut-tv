@@ -759,11 +759,26 @@ class _StoresTabState extends State<StoresTab>
     if (!mounted) {
       return;
     }
-    final priceDisplay =
+    var priceDisplay =
         (summary['price_display'] ?? r'$5 per screen / month').toString();
     final trialDays = int.tryParse('${summary['trial_days'] ?? 14}') ?? 14;
     final nativeBilling = MobileBillingService.instance.usesNativeStore;
     final billingStore = MobileBillingService.instance.storeName;
+    final storeProductId =
+        MobileBillingService.instance.productIdFrom(summary);
+
+    if (nativeBilling) {
+      // The store charges its own price, so show that rather than the server
+      // figure - App Review rejects a paywall whose price does not match.
+      final product = await MobileBillingService.instance
+          .loadProduct(productId: storeProductId);
+      if (product != null) {
+        priceDisplay = product.price;
+      }
+      if (!mounted) {
+        return;
+      }
+    }
 
     await showModalBottomSheet<void>(
       context: context,
@@ -791,6 +806,7 @@ class _StoresTabState extends State<StoresTab>
               try {
                 final restored = await MobileBillingService.instance.restore(
                   apiClient: widget.apiClient,
+                  productId: storeProductId,
                 );
                 if (!context.mounted) {
                   return;
@@ -832,6 +848,7 @@ class _StoresTabState extends State<StoresTab>
                 if (nativeBilling) {
                   await MobileBillingService.instance.purchase(
                     apiClient: widget.apiClient,
+                    productId: storeProductId,
                   );
                 } else {
                   final checkoutUrl =

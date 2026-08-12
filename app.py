@@ -5870,6 +5870,14 @@ def api_subscription_summary():
             'next_renewal': next_renewal,
             'screen_count': screen_count,
             'subscription': dict(subscription_row) if subscription_row else None,
+            # Store product ids so the app does not hardcode them. Changing
+            # APPLE_IAP_PRODUCT_ID or GOOGLE_PLAY_PRODUCT_ID on the server points
+            # the app at a different store product without an app release.
+            # Note the price itself always comes from the store, not from here.
+            'apple_product_id': (APPLE_IAP_PRODUCT_ID or '').strip(),
+            'google_product_id': (GOOGLE_PLAY_PRODUCT_ID or '').strip(),
+            'apple_iap_enabled': _apple_iap_enabled(),
+            'google_play_enabled': _google_play_enabled(),
         })
     except Exception as e:
         logging.error('api_subscription_summary failed: %s', e, exc_info=True)
