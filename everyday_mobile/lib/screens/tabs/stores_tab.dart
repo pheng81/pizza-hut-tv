@@ -791,6 +791,9 @@ class _StoresTabState extends State<StoresTab>
     final billingStore = MobileBillingService.instance.storeName;
     final storeProductId =
         MobileBillingService.instance.productIdFrom(summary);
+    // Buying here while a web subscription is live would bill them twice, so
+    // say so rather than offering the purchase.
+    final hasWebSubscription = summary['has_web_subscription'] == true;
 
     if (nativeBilling) {
       // The store charges its own price, so show that rather than the server
@@ -1058,25 +1061,43 @@ class _StoresTabState extends State<StoresTab>
                         ),
                       ),
                     ],
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: busy ? null : startCheckout,
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size.fromHeight(50),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
+                    if (nativeBilling && hasWebSubscription)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: scheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          busy
-                              ? 'Opening checkout...'
-                              : nativeBilling
-                                  ? 'Continue with $billingStore'
-                                  : 'Continue to checkout',
+                          'This account already has a subscription billed '
+                          'outside the app. Buying here would charge you twice, '
+                          'so it has been turned off.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      )
+                    else
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: busy ? null : startCheckout,
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size.fromHeight(50),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          child: Text(
+                            busy
+                                ? 'Opening checkout...'
+                                : nativeBilling
+                                    ? 'Continue with $billingStore'
+                                    : 'Continue to checkout',
+                          ),
                         ),
                       ),
-                    ),
                     if (nativeBilling)
                       Center(
                         child: TextButton(

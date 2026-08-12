@@ -679,6 +679,22 @@ class ApiClient {
     return (data['screen_id'] ?? '').toString();
   }
 
+  /// Moves Apple sign-in onto the account that is currently signed in.
+  ///
+  /// Recovers the Hide My Email case, where signing in with Apple created a
+  /// second account instead of reaching the user's existing one.
+  Future<void> linkAppleSignIn({required String identityToken}) async {
+    final response = await _dio.post(
+      '/api/auth/apple/link',
+      data: {'identity_token': identityToken},
+    );
+    final data = _asMap(response.data);
+    if (data['success'] != true) {
+      throw Exception(
+          (data['error'] ?? 'Could not link Apple sign-in.').toString());
+    }
+  }
+
   /// Screen count and plan headroom before adding another screen.
   ///
   /// Reports whether a store plan needs upgrading, and whether the account is

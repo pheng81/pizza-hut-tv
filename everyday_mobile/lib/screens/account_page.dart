@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/app_models.dart';
@@ -568,6 +569,28 @@ class _AccountPageState extends State<AccountPage> {
         _showNotice(message);
       }
       await _load();
+    });
+  }
+
+  Future<void> _linkAppleSignIn() async {
+    await _runAction(() async {
+      if (!await SignInWithApple.isAvailable()) {
+        throw StateError('Apple sign-in is not available on this device.');
+      }
+      final credential = await SignInWithApple.getAppleIDCredential(
+        scopes: const [AppleIDAuthorizationScopes.email],
+      );
+      final identityToken = (credential.identityToken ?? '').trim();
+      if (identityToken.isEmpty) {
+        throw StateError('Apple sign-in did not return an identity token.');
+      }
+      await widget.apiClient.linkAppleSignIn(identityToken: identityToken);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _message = 'Apple sign-in is now linked to this account.';
+      });
     });
   }
 
@@ -1647,6 +1670,44 @@ class _AccountPageState extends State<AccountPage> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(_message!),
+                    ),
+                  ],
+                  if (defaultTargetPlatform == TargetPlatform.iOS ||
+                      defaultTargetPlatform == TargetPlatform.macOS) ...[
+                    const SizedBox(height: 10),
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Apple Sign-In',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'If you used Hide My Email with Apple and ended up '
+                              'on a different account, link Apple sign-in here '
+                              'while signed in to the account you want to keep.',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton(
+                                onPressed:
+                                    _actionBusy ? null : _linkAppleSignIn,
+                                child: const Text('Link Apple sign-in'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                   const SizedBox(height: 10),
