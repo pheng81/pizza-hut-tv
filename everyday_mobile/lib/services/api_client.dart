@@ -667,9 +667,30 @@ class ApiClient {
     );
     final data = _asMap(response.data);
     if (data['success'] != true) {
-      throw Exception((data['error'] ?? 'Unable to add screen').toString());
+      // Prefer the explanatory message; 'error' is a short code like
+      // "Plan upgrade required" that reads poorly on its own.
+      final detail = (data['message'] ?? '').toString().trim();
+      throw Exception(
+        detail.isNotEmpty
+            ? detail
+            : (data['error'] ?? 'Unable to add screen').toString(),
+      );
     }
     return (data['screen_id'] ?? '').toString();
+  }
+
+  /// Screen count and plan headroom before adding another screen.
+  ///
+  /// Reports whether a store plan needs upgrading, and whether the account is
+  /// already on the largest plan the app can sell.
+  Future<Map<String, dynamic>> checkScreenLimit() async {
+    final response = await _dio.get('/check_screen_limit');
+    final data = _asMap(response.data);
+    if (data['success'] != true) {
+      throw Exception(
+          (data['error'] ?? 'Unable to check screen limit').toString());
+    }
+    return data;
   }
 
   Future<void> deleteScreen({

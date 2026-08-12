@@ -19048,6 +19048,11 @@ def check_screen_limit():
                 upgrade_tier['product_id'] if upgrade_tier else None
             ),
             'mobile_plan_limit_reached': bool(needs_upgrade and upgrade_tier is None),
+            'message': (
+                f'Your plan covers {plan_screens} screens, the largest available '
+                'in the app. Contact support to add more.'
+                if needs_upgrade and upgrade_tier is None else None
+            ),
         })
     except Exception as e:
         logging.error(f'Error checking screen limit: {e}')

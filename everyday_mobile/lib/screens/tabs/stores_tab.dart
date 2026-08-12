@@ -729,6 +729,31 @@ class _StoresTabState extends State<StoresTab>
 
   Future<bool> _checkSubscriptionBeforeAddScreen() async {
     try {
+      // Store plans cover a fixed number of screens. Ask the server whether one
+      // more fits before offering anything, so we never show a paywall to
+      // someone already on the largest plan the app can sell.
+      try {
+        final limit = await widget.apiClient.checkScreenLimit();
+        if (limit['mobile_plan_limit_reached'] == true) {
+          if (mounted) {
+            setState(() {
+              _error = (limit['message'] ??
+                      'Your plan covers ${limit['mobile_plan_screens']} screens, '
+                          'the largest available in the app. Contact support to '
+                          'add more.')
+                  .toString();
+            });
+          }
+          return false;
+        }
+        if (limit['mobile_needs_upgrade'] == true) {
+          await _openSubscriptionPromptFromServer();
+          return false;
+        }
+      } catch (_) {
+        // Fall through to the subscription check below.
+      }
+
       final summary = await widget.apiClient.getSubscriptionSummary();
       final requires = summary['requires_subscription'] == true;
       if (!requires) {
