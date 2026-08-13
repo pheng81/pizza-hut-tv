@@ -49,6 +49,23 @@ class MobileBillingService {
     return response.productDetails.first;
   }
 
+  /// Looks up several store listings at once, for a tier comparison screen.
+  /// Keyed by product id; missing/unavailable products are simply absent.
+  Future<Map<String, ProductDetails>> loadProducts(
+    List<String> productIds,
+  ) async {
+    final ids = productIds.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet();
+    if (!usesNativeStore || ids.isEmpty) {
+      return {};
+    }
+    final billing = InAppPurchase.instance;
+    if (!await billing.isAvailable()) {
+      return {};
+    }
+    final response = await billing.queryProductDetails(ids);
+    return {for (final p in response.productDetails) p.id: p};
+  }
+
   bool get usesNativeStore =>
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.iOS ||
@@ -69,7 +86,11 @@ class MobileBillingService {
   /// The App Store requires a way to restore purchases on a new device or
   /// after a reinstall. Returns the number of subscriptions the server
   /// accepted, so the caller can tell the user when nothing was found.
-  Future<int> restore({required ApiClient apiClient, String? productId}) async {
+  Future<int> restore({
+    required ApiClient apiClient,
+    String? productId,
+    List<String>? productIds,
+  }) async {
     if (!usesNativeStore) {
       throw StateError('Native mobile billing is unavailable on this device.');
     }
@@ -79,9 +100,17 @@ class MobileBillingService {
       throw StateError('$storeName billing is unavailable right now.');
     }
 
-    final wantedId = (productId ?? '').trim().isNotEmpty
-        ? productId!.trim()
-        : MobileBillingService.productId;
+    // A user could have bought any tier, not just the one currently
+    // recommended for their screen count, so match against all of them.
+    final wantedIds = (productIds ?? const [])
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toSet();
+    if (wantedIds.isEmpty) {
+      wantedIds.add((productId ?? '').trim().isNotEmpty
+          ? productId!.trim()
+          : MobileBillingService.productId);
+    }
 
     var restored = 0;
     final done = Completer<void>();
@@ -92,7 +121,7 @@ class MobileBillingService {
           purchase.status != PurchaseStatus.purchased) {
         return;
       }
-      if (purchase.productID != wantedId) {
+      if (!wantedIds.contains(purchase.productID)) {
         return;
       }
       try {

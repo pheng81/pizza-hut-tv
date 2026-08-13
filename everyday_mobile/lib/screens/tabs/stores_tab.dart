@@ -12,6 +12,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:geocoding/geocoding.dart' as geocoding;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
@@ -822,17 +823,14 @@ class _StoresTabState extends State<StoresTab>
     if (!mounted) {
       return;
     }
-    var priceDisplay =
+    final priceDisplay =
         (summary['price_display'] ?? r'$5 per screen / month').toString();
     final trialDays = int.tryParse('${summary['trial_days'] ?? 14}') ?? 14;
     final nativeBilling = MobileBillingService.instance.usesNativeStore;
     final billingStore = MobileBillingService.instance.storeName;
     final storeProductId =
         MobileBillingService.instance.productIdFrom(summary);
-    final tierScreens = int.tryParse('${summary['mobile_tier_screens'] ?? 0}');
-    final planName = (tierScreens != null && tierScreens > 0)
-        ? '$tierScreens Screen${tierScreens == 1 ? '' : 's'} Plan'
-        : null;
+    final screenCount = int.tryParse('${summary['screen_count'] ?? 0}') ?? 0;
     // The website's flexible per-screen Stripe billing is the only option
     // once an account already has more screens than the largest store tier
     // covers - the stores can't sell a purchase that wouldn't be enough.
@@ -843,18 +841,29 @@ class _StoresTabState extends State<StoresTab>
     // say so rather than offering the purchase.
     final hasWebSubscription = summary['has_web_subscription'] == true;
 
-    if (nativeBilling) {
-      // The store charges its own price, so show that rather than the server
-      // figure - App Review rejects a paywall whose price does not match.
-      final product = await MobileBillingService.instance
-          .loadProduct(productId: storeProductId);
-      if (product != null) {
-        priceDisplay = product.price;
-      }
+    // Every store tier, so users can compare plans instead of only seeing
+    // the one the server recommends for their current screen count.
+    final rawTiers = (summary['mobile_tiers'] as List?) ?? const [];
+    final tiers = rawTiers
+        .whereType<Map>()
+        .map((t) => {
+              'product_id': (t['product_id'] ?? '').toString(),
+              'screens': int.tryParse('${t['screens'] ?? 0}') ?? 0,
+            })
+        .where((t) => (t['product_id'] as String).isNotEmpty)
+        .toList();
+
+    Map<String, ProductDetails> products = {};
+    if (nativeBilling && tiers.isNotEmpty) {
+      products = await MobileBillingService.instance.loadProducts(
+        tiers.map((t) => t['product_id'] as String).toList(),
+      );
       if (!mounted) {
         return;
       }
     }
+
+    var selectedProductId = storeProductId;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -882,6 +891,9 @@ class _StoresTabState extends State<StoresTab>
               try {
                 final restored = await MobileBillingService.instance.restore(
                   apiClient: widget.apiClient,
+                  productIds: tiers.isNotEmpty
+                      ? tiers.map((t) => t['product_id'] as String).toList()
+                      : null,
                   productId: storeProductId,
                 );
                 if (!context.mounted) {
@@ -924,7 +936,7 @@ class _StoresTabState extends State<StoresTab>
                 if (nativeBilling) {
                   await MobileBillingService.instance.purchase(
                     apiClient: widget.apiClient,
-                    productId: storeProductId,
+                    productId: selectedProductId,
                   );
                 } else {
                   final checkoutUrl =
@@ -972,7 +984,7 @@ class _StoresTabState extends State<StoresTab>
                   top: Radius.circular(28),
                 ),
               ),
-              child: Padding(
+              child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 18),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -1021,70 +1033,186 @@ class _StoresTabState extends State<StoresTab>
                       ],
                     ),
                     const SizedBox(height: 16),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(18),
-                        gradient: LinearGradient(
-                          colors: [
-                            scheme.primaryContainer,
-                            scheme.primaryContainer.withAlpha(150),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+                    if (nativeBilling && tiers.isNotEmpty) ...[
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 9,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: scheme.primaryContainer,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            '$trialDays DAYS FREE ON ANY PLAN',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: scheme.primary,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
                         ),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (nativeBilling && planName != null) ...[
-                            Text(
-                              planName.toUpperCase(),
-                              style: theme.textTheme.labelMedium?.copyWith(
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.4,
-                                color: scheme.onPrimaryContainer
-                                    .withAlpha(210),
+                      const SizedBox(height: 8),
+                      ...tiers.map((tier) {
+                        final tierProductId = tier['product_id'] as String;
+                        final tierScreens = tier['screens'] as int;
+                        final product = products[tierProductId];
+                        final tierPrice = product?.price ?? '—';
+                        final selected = selectedProductId == tierProductId;
+                        final tooSmall = tierScreens < screenCount;
+                        final recommended = tierProductId == storeProductId;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(16),
+                            onTap: tooSmall
+                                ? null
+                                : () => setModalState(
+                                    () => selectedProductId = tierProductId),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.fromLTRB(
+                                  16, 12, 14, 12),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(16),
+                                color: selected
+                                    ? scheme.primaryContainer
+                                    : scheme.surfaceContainerHighest
+                                        .withAlpha(tooSmall ? 90 : 180),
+                                border: Border.all(
+                                  color: selected
+                                      ? scheme.primary
+                                      : Colors.transparent,
+                                  width: 2,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Text(
+                                              '$tierScreens Screen'
+                                              '${tierScreens == 1 ? '' : 's'}',
+                                              style: theme.textTheme.titleSmall
+                                                  ?.copyWith(
+                                                fontWeight: FontWeight.w800,
+                                                color: tooSmall
+                                                    ? scheme.onSurfaceVariant
+                                                    : null,
+                                              ),
+                                            ),
+                                            if (recommended && !tooSmall) ...[
+                                              const SizedBox(width: 8),
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: 7,
+                                                  vertical: 2,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: scheme.primary,
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                          8),
+                                                ),
+                                                child: Text(
+                                                  'RECOMMENDED',
+                                                  style: theme
+                                                      .textTheme.labelSmall
+                                                      ?.copyWith(
+                                                    color: scheme.onPrimary,
+                                                    fontWeight:
+                                                        FontWeight.w800,
+                                                    fontSize: 9,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                        if (tooSmall)
+                                          Text(
+                                            'Covers fewer screens than you '
+                                            'have now',
+                                            style: theme.textTheme.bodySmall
+                                                ?.copyWith(
+                                              color: scheme.onSurfaceVariant,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  Text(
+                                    tierPrice,
+                                    style:
+                                        theme.textTheme.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.w900,
+                                      color: tooSmall
+                                          ? scheme.onSurfaceVariant
+                                          : null,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            const SizedBox(height: 2),
-                          ],
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  priceDisplay,
-                                  style:
-                                      theme.textTheme.headlineMedium?.copyWith(
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: -0.8,
-                                  ),
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 9,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: scheme.surface.withAlpha(220),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Text(
-                                  '$trialDays DAYS FREE',
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    color: scheme.primary,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                              ),
-                            ],
                           ),
-                        ],
+                        );
+                      }),
+                    ] else
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(18),
+                          gradient: LinearGradient(
+                            colors: [
+                              scheme.primaryContainer,
+                              scheme.primaryContainer.withAlpha(150),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                priceDisplay,
+                                style:
+                                    theme.textTheme.headlineMedium?.copyWith(
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: -0.8,
+                                ),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 9,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: scheme.surface.withAlpha(220),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                '$trialDays DAYS FREE',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: scheme.primary,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
                     const SizedBox(height: 8),
                     Text(
                       'Cancel anytime. No long-term commitment.',
@@ -1200,13 +1328,26 @@ class _StoresTabState extends State<StoresTab>
                               borderRadius: BorderRadius.circular(14),
                             ),
                           ),
-                          child: Text(
-                            busy
-                                ? 'Opening checkout...'
-                                : nativeBilling
-                                    ? 'Continue with $billingStore'
-                                    : 'Continue to checkout',
-                          ),
+                          child: Builder(builder: (context) {
+                            if (busy) {
+                              return const Text('Opening checkout...');
+                            }
+                            if (!nativeBilling) {
+                              return const Text('Continue to checkout');
+                            }
+                            final selectedTier = tiers.firstWhere(
+                              (t) => t['product_id'] == selectedProductId,
+                              orElse: () => const {},
+                            );
+                            final selectedScreens =
+                                selectedTier['screens'] as int?;
+                            return Text(
+                              selectedScreens != null
+                                  ? 'Continue with $billingStore ($selectedScreens '
+                                      'screen${selectedScreens == 1 ? '' : 's'})'
+                                  : 'Continue with $billingStore',
+                            );
+                          }),
                         ),
                       ),
                     if (nativeBilling)
