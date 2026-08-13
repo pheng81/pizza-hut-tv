@@ -714,8 +714,13 @@ class _StoresTabState extends State<StoresTab>
           storeId, newScreenId.isEmpty ? null : newScreenId);
     } catch (e) {
       final message = e.toString().replaceFirst('Exception: ', '');
-      if (message.toLowerCase().contains('subscription required')) {
+      final lower = message.toLowerCase();
+      if (lower.contains('subscription required')) {
         await _openSubscriptionPromptFromServer();
+      } else if (lower.contains('sign up on the website')) {
+        if (mounted) {
+          await _showPlanLimitDialog(message: message);
+        }
       }
       if (!mounted) {
         return;
@@ -727,6 +732,38 @@ class _StoresTabState extends State<StoresTab>
     }
   }
 
+  Future<void> _showPlanLimitDialog({
+    required String message,
+    String? upgradeUrl,
+  }) async {
+    if (!mounted) {
+      return;
+    }
+    final url = (upgradeUrl ?? '').trim().isNotEmpty
+        ? upgradeUrl!.trim()
+        : 'https://everydayadvertise.com/subscribe';
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Largest plan reached'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Not now'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+            },
+            child: const Text('Sign up on website'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<bool> _checkSubscriptionBeforeAddScreen() async {
     try {
       // Store plans cover a fixed number of screens. Ask the server whether one
@@ -736,13 +773,14 @@ class _StoresTabState extends State<StoresTab>
         final limit = await widget.apiClient.checkScreenLimit();
         if (limit['mobile_plan_limit_reached'] == true) {
           if (mounted) {
-            setState(() {
-              _error = (limit['message'] ??
+            await _showPlanLimitDialog(
+              message: (limit['message'] ??
                       'Your plan covers ${limit['mobile_plan_screens']} screens, '
-                          'the largest available in the app. Contact support to '
-                          'add more.')
-                  .toString();
-            });
+                          'the most available in the app. Sign up on the '
+                          'website for more screens.')
+                  .toString(),
+              upgradeUrl: limit['upgrade_url']?.toString(),
+            );
           }
           return false;
         }
@@ -791,6 +829,16 @@ class _StoresTabState extends State<StoresTab>
     final billingStore = MobileBillingService.instance.storeName;
     final storeProductId =
         MobileBillingService.instance.productIdFrom(summary);
+    final tierScreens = int.tryParse('${summary['mobile_tier_screens'] ?? 0}');
+    final planName = (tierScreens != null && tierScreens > 0)
+        ? '$tierScreens Screen${tierScreens == 1 ? '' : 's'} Plan'
+        : null;
+    // The website's flexible per-screen Stripe billing is the only option
+    // once an account already has more screens than the largest store tier
+    // covers - the stores can't sell a purchase that wouldn't be enough.
+    final exceedsLargestTier =
+        nativeBilling && summary['mobile_plan_exceeds_largest_tier'] == true;
+    final upgradeUrl = (summary['mobile_plan_upgrade_url'] ?? '').toString();
     // Buying here while a web subscription is live would bill them twice, so
     // say so rather than offering the purchase.
     final hasWebSubscription = summary['has_web_subscription'] == true;
@@ -987,34 +1035,52 @@ class _StoresTabState extends State<StoresTab>
                           end: Alignment.bottomRight,
                         ),
                       ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Text(
-                              priceDisplay,
-                              style: theme.textTheme.headlineMedium?.copyWith(
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -0.8,
+                          if (nativeBilling && planName != null) ...[
+                            Text(
+                              planName.toUpperCase(),
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.4,
+                                color: scheme.onPrimaryContainer
+                                    .withAlpha(210),
                               ),
                             ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 9,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: scheme.surface.withAlpha(220),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Text(
-                              '$trialDays DAYS FREE',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: scheme.primary,
-                                fontWeight: FontWeight.w900,
+                            const SizedBox(height: 2),
+                          ],
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  priceDisplay,
+                                  style:
+                                      theme.textTheme.headlineMedium?.copyWith(
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: -0.8,
+                                  ),
+                                ),
                               ),
-                            ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 9,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: scheme.surface.withAlpha(220),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  '$trialDays DAYS FREE',
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: scheme.primary,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -1077,6 +1143,51 @@ class _StoresTabState extends State<StoresTab>
                             color: scheme.onSurfaceVariant,
                           ),
                         ),
+                      )
+                    else if (exceedsLargestTier)
+                      Column(
+                        children: [
+                          Container(
+                            width: double.infinity,
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: scheme.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              'This account already has more screens than the '
+                              '$billingStore plan covers. Sign up on the '
+                              'website for flexible per-screen billing.',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton(
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                                launchUrl(
+                                  Uri.parse(
+                                    upgradeUrl.isNotEmpty
+                                        ? upgradeUrl
+                                        : '${widget.apiClient.baseUrl}/subscribe',
+                                  ),
+                                  mode: LaunchMode.externalApplication,
+                                );
+                              },
+                              style: FilledButton.styleFrom(
+                                minimumSize: const Size.fromHeight(50),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              child: const Text('Sign up on website'),
+                            ),
+                          ),
+                        ],
                       )
                     else
                       SizedBox(

@@ -864,6 +864,10 @@ STRIPE_PUBLISHABLE_KEY = os.environ.get('STRIPE_PUBLISHABLE_KEY')
 STRIPE_STANDARD_PRICE_ID = os.environ.get('STRIPE_PRICE_ID') or os.environ.get('STRIPE_PRICE_STANDARD')
 STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
 STRIPE_PRICE_DISPLAY = os.environ.get('STRIPE_PRICE_DISPLAY') or '$5 per screen / month'
+# App Store / Play Store subscriptions top out at the largest tier (see
+# _DEFAULT_MOBILE_IAP_TIERS below); beyond that, only the website's flexible
+# per-screen Stripe billing can cover more screens.
+MOBILE_PLAN_UPGRADE_URL = os.environ.get('MOBILE_PLAN_UPGRADE_URL') or 'https://everydayadvertise.com/subscribe'
 STRIPE_TRIAL_DAYS = os.environ.get('STRIPE_TRIAL_DAYS')
 APPLE_IAP_SHARED_SECRET = os.environ.get('APPLE_IAP_SHARED_SECRET')
 APPLE_IAP_PRODUCT_ID = os.environ.get('APPLE_IAP_PRODUCT_ID') or 'screens_monthly'
@@ -6187,6 +6191,11 @@ def api_subscription_summary():
             'mobile_plan_product_id': mobile_plan_product_id,
             'mobile_needs_upgrade': mobile_needs_upgrade,
             'mobile_tiers': _mobile_iap_tiers(),
+            # True once even the largest store tier can't cover the screens
+            # this account already has; the app should point them at the
+            # website's flexible per-screen billing instead of a store purchase.
+            'mobile_plan_exceeds_largest_tier': screen_count > int(mobile_tier['screens']),
+            'mobile_plan_upgrade_url': MOBILE_PLAN_UPGRADE_URL,
             # Warn the app before it offers a store purchase to someone Stripe
             # is already billing, so we avoid charging them twice.
             'has_web_subscription': has_web_subscription,
@@ -19243,9 +19252,12 @@ def check_screen_limit():
             ),
             'mobile_plan_limit_reached': bool(needs_upgrade and upgrade_tier is None),
             'message': (
-                f'Your plan covers {plan_screens} screens, the largest available '
-                'in the app. Contact support to add more.'
+                f'Your plan covers {plan_screens} screens, the most available in '
+                'the app. Sign up on the website for more screens.'
                 if needs_upgrade and upgrade_tier is None else None
+            ),
+            'upgrade_url': (
+                MOBILE_PLAN_UPGRADE_URL if needs_upgrade and upgrade_tier is None else None
             ),
         })
     except Exception as e:
@@ -19314,13 +19326,15 @@ def add_screen():
                     return jsonify({
                         'error': 'Plan limit reached',
                         'message': (
-                            f'Your plan covers {plan_screens} screens, the largest '
-                            'available in the app. Contact support to add more.'
+                            f'Your plan covers {plan_screens} screens, the most '
+                            'available in the app. Sign up on the website for '
+                            'more screens.'
                         ),
                         'requires_upgrade': False,
                         'plan_limit_reached': True,
                         'current_screens': current_screen_count,
                         'plan_screens': plan_screens,
+                        'upgrade_url': MOBILE_PLAN_UPGRADE_URL,
                     }), 403
                 return jsonify({
                     'error': 'Plan upgrade required',
