@@ -18,120 +18,44 @@
   @keyframes spin{to{transform:rotate(360deg)}}
 </style>
 <style>
+  *, *::before, *::after{ box-sizing:border-box; }
   :root{
     --bg:#0b0f14;          /* deep slate */
-    --panel:#0f141a;       /* elevated surface */
+    --panel:#111827;       /* elevated surface */
     --border:#1b2632;      /* soft outline (slightly brighter for contrast) */
     --text:#e6eef7;        /* near-white with blue tint */
     --muted:#95a3b5;       /* cool-muted */
     --accent:#3b82f6;      /* blue accent */
     --accent-hover:#2563eb;/* darker hover */
-    --radius:12px;
-    --safe-margin:var(--tv-safe-margin, 0);
+    --radius:16px;
   }
   html,body{height:100%;margin:0}
+  html{ overflow-x:hidden; }
   body{
     font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Arial,sans-serif;
-    display:grid;grid-template-rows:1fr auto;min-height:100vh;
+    min-height:100vh;
+    width:100%;
+    max-width:100vw;
+    overflow-x:hidden;
     background:var(--bg);color:var(--text);
-    padding:calc(env(safe-area-inset-top,0px) + 0px) calc(env(safe-area-inset-right,0px) + 0px) calc(env(safe-area-inset-bottom,0px) + 0px) calc(env(safe-area-inset-left,0px) + 0px);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    position:relative;
+    padding:calc(env(safe-area-inset-top,0px) + 84px) calc(env(safe-area-inset-right,0px) + 16px) calc(env(safe-area-inset-bottom,0px) + 24px) calc(env(safe-area-inset-left,0px) + 16px);
   }
   /* Center intro exactly like home page - use grid with place-items */
   .intro{position:fixed;inset:0;display:grid;place-items:center;background:#0b0b0b;z-index:10;transition:opacity .6s ease-out}
   .intro[data-hidden="1"]{opacity:0;pointer-events:none}
-  /* Simple, safe intro animation for older TV browsers (Tizen): scale+fade in */
-  @keyframes tizenIntro { from { opacity:0; transform: scale(0.97); } to { opacity:1; transform: scale(1); } }
 
-  /* Flat, dark card with smaller TV-friendly sizing */
-  .panel{
-    background:transparent; /* flatten */
-    border:0;               /* remove outline */
-    border-radius:var(--radius);
-    padding:clamp(18px, 3.0vw, 24px);
-    max-width:min(520px, 88vw);
-    width:min(88vw, 520px);
-    margin:clamp(5vh, 10vh, 12vh) auto;
-    box-shadow:none; /* flat look */
-  }
-  h1{
-    margin:0 0 12px;
-    font-size:clamp(22px, 3.0vw, 28px);
-    font-weight:900;
-    text-align:center;
-    letter-spacing:0.2px;
-  }
-  p{margin:0 0 14px;color:var(--muted);font-size:clamp(13px, 1.8vw, 14px);text-align:center}
-  .tv-pair-code{
-    display:block;
-    margin:0 0 18px;
-    color:#9fc1ff;
-    font-size:clamp(16px, 2vw, 20px);
-    font-weight:800;
-  }
-  .tv-pair-code strong{
-    display:inline-block;
-    margin-left:8px;
-    padding:7px 14px;
-    border:1px solid rgba(99,156,255,.65);
-    border-radius:10px;
-    background:#142643;
-    color:#fff;
-    font-size:1.15em;
-    letter-spacing:.18em;
-    font-variant-numeric:tabular-nums;
-  }
-  label{display:block;font-size:clamp(12px, 1.6vw, 13px);color:#cfcfcf;margin:10px 0 8px}
-  input{
-    width:100%;
-    padding:clamp(12px, 2.2vw, 14px) clamp(14px, 2.4vw, 16px);
-    background:#000;
-    border:1px solid #232323;
-    border-radius:10px;
-    color:#fff;outline:none;text-align:center;letter-spacing:2px;font-weight:700;
-    font-size:clamp(16px, 2.4vw, 18px);box-sizing:border-box
-  }
-  input::placeholder{color:#7c7c7c}
-  input:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(59,130,246,.18)}
-  .btn{
-    margin-top:14px;width:100%;
-    padding:clamp(12px, 2.4vw, 14px) clamp(16px, 2.8vw, 18px);
-    border:none;border-radius:10px;background:var(--accent);color:#0a0f14;font-weight:800;cursor:pointer;
-    font-size:clamp(14px, 2.2vw, 16px);box-sizing:border-box;letter-spacing:.3px
-  }
-  .btn:hover{background:var(--accent-hover)}
-  .note{margin-top:12px;font-size:clamp(11px, 1.6vw, 12px);color:#9a9a9a;text-align:center}
-
-  /* QR container – flat, subdued, and scaled for TVs */
-  #qr-section{
-    text-align:center;margin:12px 0;padding:12px;
-    background:transparent; /* flatten nested layer */
-    border:0; border-radius:10px;
-  }
-  #qrcode{display:inline-block;padding:12px;background:#fff;border-radius:10px; position:relative}
-  #qrcode canvas, #qrcode img{ width:clamp(140px, 22vw, 186px); height:auto; image-rendering:crisp-edges; }
-  /* Centered logo overlay inside the QR code */
-  #qrcode .qr-logo{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:clamp(36px, 18%, 56px); height:clamp(36px, 18%, 56px); border-radius:12px; background:#ffffff; display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 2px #ffffff; }
-  #qrcode .qr-logo svg{ width:82%; height:82%; display:block }
-
-  /* Subtle focus ring for remote/keyboard */
-  :focus{ outline:none }
-  .panel :focus-visible{ outline:3px solid rgba(59,130,246,.35); outline-offset:3px; border-radius:10px; }
-
-  /* Reduce overall scale on very large displays (TVs) */
-  @media (min-width: 1600px) and (min-height: 900px){
-    .panel{ max-width:960px; }
-  }
-
-  /* Two-column responsive layout */
-  .pair-grid{ display:grid; grid-template-columns: 1fr; gap:18px; align-items:start; position:relative; }
-  .pair-left, .pair-right{ display:flex; flex-direction:column; }
-  .pair-right{ max-width:420px; }
-  .pair-right .btn{ margin-top:12px; }
   .site-header{
+    position:absolute;
+    top:0; left:0; right:0;
     display:flex;
     align-items:center;
     gap:10px;
-    padding:24px 34px;
+    padding:clamp(16px,3vw,24px) clamp(18px,4vw,34px);
     color:var(--text);
     font-size:15px;
     font-weight:800;
@@ -140,6 +64,7 @@
   .brand-mark{
     display:grid;
     place-items:center;
+    flex:none;
     width:34px;
     height:34px;
     border-radius:10px;
@@ -148,18 +73,83 @@
     font-size:13px;
     font-weight:900;
   }
+
+  /* Single card - both steps live inside this so they always share one
+     visual frame instead of floating independently on the background. */
+  .panel{
+    background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0));
+    border:1px solid var(--border);
+    border-radius:20px;
+    padding:clamp(22px,4vw,44px);
+    width:100%;
+    max-width:920px;
+    margin:0 auto;
+    /* body is a column flex container - without this, flex items default
+       to min-width:auto and refuse to shrink below their content's
+       intrinsic width, which is what was pushing this off-screen on
+       narrow phones despite width:100%. */
+    min-width:0;
+  }
+  /* Same min-width:auto trap applies at every nested flex/grid layer
+     between the panel and the QR/code content, so it has to be reset
+     all the way down or the outermost one still wins. */
+  .pair-grid > *, .pair-step-card, #qr-section, .code-entry{ min-width:0; }
+  h1{
+    margin:0 0 8px;
+    font-size:clamp(24px,4.2vw,40px);
+    font-weight:900;
+    text-align:center;
+    letter-spacing:-.4px;
+  }
+  p{margin:0;color:var(--muted);font-size:clamp(13px, 1.8vw, 15px);text-align:center}
+  .subtitle{ margin-bottom:clamp(24px,4vw,40px); }
+
+  label{display:block;font-size:13px;font-weight:700;color:var(--muted);margin:0 0 10px;text-align:center}
+
+  .btn{
+    margin-top:16px;width:100%;
+    padding:14px 18px;
+    border:none;border-radius:12px;background:var(--accent);color:#061225;font-weight:800;cursor:pointer;
+    font-size:16px;letter-spacing:.2px;
+    transition:background .15s ease;
+  }
+  .btn:hover{background:var(--accent-hover)}
+  .note{margin-top:12px;font-size:12px;color:#9a9a9a;text-align:center}
+
+  /* Two matched step columns */
+  .pair-grid{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:20px;
+    position:relative;
+    align-items:stretch;
+  }
+  .pair-step-card{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    min-width:0;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:clamp(18px,3vw,28px) clamp(16px,3vw,24px);
+  }
   .pair-step{
     display:flex;
     align-items:center;
     gap:10px;
-    margin:0 0 14px;
+    margin:0 0 18px;
     color:var(--text);
-    font-size:14px;
+    font-size:13px;
     font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.06em;
+    align-self:flex-start;
   }
   .pair-step-number{
     display:grid;
     place-items:center;
+    flex:none;
     width:24px;
     height:24px;
     border-radius:8px;
@@ -167,54 +157,54 @@
     color:#75a7ff;
     font-size:12px;
   }
-  .pair-grid::before{ display:none; }
-  #code.code-input{ background-image:none; border:0; outline:0; }
-  #code.code-input:focus{ border:0; box-shadow:none; }
-  body{
+
+  .tv-pair-code{
+    display:block;
+    margin:0 0 16px;
+    color:#9fc1ff;
+    font-size:clamp(13px, 2vw, 14px);
+    font-weight:800;
+    text-align:center;
+  }
+  .tv-pair-code strong{
+    display:inline-block;
+    margin-top:6px;
+    padding:8px 12px;
+    border:1px solid rgba(99,156,255,.65);
+    border-radius:10px;
+    background:#142643;
+    color:#fff;
+    font-size:1.3em;
+    letter-spacing:.14em;
+    font-variant-numeric:tabular-nums;
+    max-width:100%;
+  }
+
+  /* QR container – flat, subdued, and scaled for TVs */
+  #qr-section{
+    text-align:center;
     display:flex;
     flex-direction:column;
     align-items:center;
-    justify-content:center;
-    position:relative;
-    min-height:100vh;
+    width:100%;
   }
-  .site-header{
-    position:absolute;
-    top:0;
-    left:0;
-    right:0;
-  }
-  .panel{
-    max-width:960px;
-    width:min(92vw,960px);
-    padding:34px 38px;
-    margin:0 auto;
-  }
-  h1{
-    font-size:clamp(30px,4vw,44px);
-    letter-spacing:-.8px;
-    margin-bottom:10px;
-  }
-  .pair-grid{
-    max-width:820px;
-    margin:42px auto 0;
-    grid-template-columns:1fr 1fr;
-    gap:64px;
-    align-items:center;
-  }
-  .pair-left,
-  .pair-right{ min-width:0; }
-  .pair-left{ align-items:center; }
-  .pair-right{ max-width:370px; }
+  #qrcode{display:inline-block;padding:12px;background:#fff;border-radius:14px;position:relative;max-width:100%}
+  #qrcode canvas, #qrcode img{ width:clamp(140px, 20vw, 186px); height:auto; max-width:100%; image-rendering:crisp-edges; }
+  /* Centered logo overlay inside the QR code */
+  #qrcode .qr-logo{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:clamp(36px, 18%, 56px); height:clamp(36px, 18%, 56px); border-radius:12px; background:#ffffff; display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 2px #ffffff; }
+  #qrcode .qr-logo svg{ width:82%; height:82%; display:block }
+  #qr-section .note{ margin-top:14px; max-width:260px; }
+
   .code-entry{
     position:relative;
     width:100%;
-    height:72px;
+    max-width:320px;
+    height:64px;
   }
   .code-slots{
     display:grid;
     grid-template-columns:repeat(4,1fr);
-    gap:10px;
+    gap:clamp(6px,1.6vw,10px);
     width:100%;
     height:100%;
   }
@@ -222,17 +212,15 @@
     display:grid;
     place-items:center;
     min-width:0;
-    border-radius:14px;
+    border-radius:12px;
     background:#111c2c;
     color:#f8fbff;
-    font-size:34px;
+    font-size:clamp(20px,5vw,30px);
     font-weight:900;
     line-height:1;
     font-variant-numeric:tabular-nums;
   }
-  .code-entry:focus-within .code-slot{
-    background:#172842;
-  }
+  .code-entry:focus-within .code-slot{ background:#172842; }
   .code-entry > #code.code-input{
     position:absolute;
     inset:0;
@@ -243,52 +231,24 @@
     padding:0;
     opacity:0;
     cursor:text;
+    border:0;
   }
-  .pair-right .btn{
-    min-height:58px;
-    margin-top:16px;
-    border-radius:14px;
-    background:#3f80f2;
-    color:#07101d;
-    font-size:18px;
-  }
-  .pair-right .btn:hover{ background:#5b93f5; }
-  #qr-section{ margin:0; padding:0; }
-  #qrcode{ padding:14px !important; border-radius:14px !important; }
-  @media (max-width: 899px){
-    .site-header{ padding:18px 20px; }
-    .panel{ padding:28px 20px; }
-    .pair-grid{ grid-template-columns:1fr; gap:36px; margin-top:30px; }
-    .pair-right{ max-width:none; }
-  }
-  /* Segmented 4-digit styling for the existing single input */
-  #code.code-input{ letter-spacing:0.35em; font-variant-numeric:tabular-nums; caret-color:var(--accent); }
-  /* draw internal separators at 25/50/75% to hint four slots */
-  #code.code-input{
-    background-image:
-      linear-gradient(to right, transparent calc(25% - 0.5px), rgba(59,130,246,.22) calc(25% - 0.5px), rgba(59,130,246,.22) calc(25% + 0.5px), transparent calc(25% + 0.5px)),
-      linear-gradient(to right, transparent calc(50% - 0.5px), rgba(59,130,246,.22) calc(50% - 0.5px), rgba(59,130,246,.22) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
-      linear-gradient(to right, transparent calc(75% - 0.5px), rgba(59,130,246,.22) calc(75% - 0.5px), rgba(59,130,246,.22) calc(75% + 0.5px), transparent calc(75% + 0.5px));
-    background-repeat:no-repeat;
-    background-size:100% 100%;
-  }
-  @media (min-width: 900px){
-    .pair-grid{ grid-template-columns: 1.1fr 0.9fr; gap:28px; align-items:center; }
-    /* Vertical divider centered in the column gap */
-    .pair-grid::before{
-      content:"";
-      display:none;
-      position:absolute;
-      top:8px; bottom:8px;
-      /* Place at center of 28px gap: (width - gap) * 0.55 + gap/2 */
-      left: calc((100% - 28px) * 0.55 + 14px);
-      width:2px;
-      background: linear-gradient(to bottom, transparent 0%, #223041 10%, #223041 90%, transparent 100%);
-      opacity:0.95;
-      border-radius:2px;
-      pointer-events:none;
+  .pair-step-card .btn, .pair-step-card .note{ max-width:320px; }
+
+  /* Subtle focus ring for remote/keyboard */
+  :focus{ outline:none }
+  .panel :focus-visible{ outline:3px solid rgba(59,130,246,.35); outline-offset:3px; border-radius:10px; }
+
+  @media (min-width: 760px){
+    .pair-grid{
+      grid-template-columns:1fr 1fr;
+      gap:24px;
     }
-    .panel{ max-width:960px; }
+  }
+
+  /* Reduce overall scale on very large displays (TVs) */
+  @media (min-width: 1600px) and (min-height: 900px){
+    .panel{ max-width:1040px; }
   }
 </style>
 </head>
@@ -371,19 +331,21 @@
   </div>
   <div class="panel" id="step1">
     <h1>Connect this screen</h1>
-    <p>Scan the QR code or send the TV code from the mobile app.</p>
-    
-    <!-- Two-column layout: QR on left, input + submit on right -->
+    <p class="subtitle">Scan the QR code or send the TV code from the mobile app.</p>
+
+    <!-- Two matched step cards: QR/TV code, then the 4-digit entry -->
     <div class="pair-grid">
-      <div class="pair-left">
-        <!-- QR Section (left) -->
+      <div class="pair-left pair-step-card">
+        <div class="pair-step"><span class="pair-step-number">1</span> Scan or send code</div>
+        <!-- QR Section -->
         <div id="qr-section">
-          <p class="tv-pair-code" aria-live="polite">TV / Web Player code: <strong id="tv-pair-code-value">------</strong></p>
-          <div id="qrcode" style="display:inline-block;padding:12px;background:#fff;border-radius:8px;"></div>
-          <div style="font-size:12px;color:#999;margin-top:12px;">Code entered on phone will appear here automatically</div>
+          <p class="tv-pair-code" aria-live="polite">TV / Web Player code<br><strong id="tv-pair-code-value">------</strong></p>
+          <div id="qrcode"></div>
+          <div class="note">Code entered on phone will appear here automatically</div>
         </div>
       </div>
-      <div class="pair-right">
+      <div class="pair-right pair-step-card">
+        <div class="pair-step"><span class="pair-step-number">2</span> Enter code here</div>
         <label for="code">4-digit link code</label>
         <div class="code-entry">
           <div class="code-slots" aria-hidden="true">
