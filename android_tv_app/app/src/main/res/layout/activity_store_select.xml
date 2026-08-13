@@ -25,35 +25,67 @@
             android:paddingRight="8dp"
             android:layout_marginBottom="24dp" />
 
-        <!-- Side by side layout: QR code left, form right -->
+        <!-- Two matched step cards, top-aligned so their headers always
+             line up regardless of which column has more content. -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:gravity="center"
+            android:gravity="top"
             android:layout_marginBottom="24dp">
 
-            <!-- Left side: QR Code -->
+            <!-- Step 1: QR code -->
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:orientation="vertical"
-                android:gravity="center"
-                android:layout_marginEnd="24dp">
+                android:gravity="center_horizontal"
+                android:background="@drawable/pair_step_card_background"
+                android:padding="22dp"
+                android:layout_marginEnd="18dp">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_gravity="start"
+                    android:layout_marginBottom="16dp">
+
+                    <TextView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:text="1"
+                        android:textColor="#75a7ff"
+                        android:textSize="12sp"
+                        android:textStyle="bold"
+                        android:gravity="center"
+                        android:background="@drawable/pair_step_number_background" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="SCAN OR SEND CODE"
+                        android:textColor="#E6EDF3"
+                        android:textSize="13sp"
+                        android:textStyle="bold"
+                        android:letterSpacing="0.05"
+                        android:layout_marginStart="10dp" />
+                </LinearLayout>
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="📱 Scan to enter store code"
                     android:textColor="#9da7b3"
-                    android:textSize="14sp"
-                    android:layout_marginBottom="12dp" />
+                    android:textSize="11sp"
+                    android:layout_marginBottom="8dp" />
 
                 <ImageView
                     android:id="@+id/qrCodeStoreImageView"
-                    android:layout_width="220dp"
-                    android:layout_height="220dp"
+                    android:layout_width="200dp"
+                    android:layout_height="200dp"
                     android:scaleType="fitCenter"
                     android:contentDescription="QR code for store entry" />
 
@@ -62,27 +94,48 @@
                     android:layout_height="wrap_content"
                     android:text="Scan with your phone"
                     android:textColor="#6b7785"
-                    android:textSize="11sp"
-                    android:layout_marginTop="8dp" />
-
+                    android:textSize="10sp"
+                    android:layout_marginTop="10dp" />
             </LinearLayout>
 
-            <!-- Vertical divider -->
-            <View
-                android:layout_width="1dp"
-                android:layout_height="match_parent"
-                android:background="#30ffffff"
-                android:layout_marginEnd="24dp" />
-
-            <!-- Right side: Form -->
+            <!-- Step 2: store code form -->
             <LinearLayout
                 android:id="@+id/card"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_weight="1.2"
-                android:background="@drawable/card_background"
+                android:layout_weight="1.15"
+                android:background="@drawable/pair_step_card_background"
                 android:orientation="vertical"
-                android:padding="28dp">
+                android:padding="22dp">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_gravity="start"
+                    android:layout_marginBottom="16dp">
+
+                    <TextView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:text="2"
+                        android:textColor="#75a7ff"
+                        android:textSize="12sp"
+                        android:textStyle="bold"
+                        android:gravity="center"
+                        android:background="@drawable/pair_step_number_background" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="ENTER STORE CODE"
+                        android:textColor="#E6EDF3"
+                        android:textSize="13sp"
+                        android:textStyle="bold"
+                        android:letterSpacing="0.05"
+                        android:layout_marginStart="10dp" />
+                </LinearLayout>
 
                 <TextView
                     android:id="@+id/title"
@@ -90,7 +143,7 @@
                     android:layout_height="wrap_content"
                     android:text="Enter store code"
                     android:textColor="#e6edf3"
-                    android:textSize="24sp"
+                    android:textSize="22sp"
                     android:textStyle="bold"
                     android:letterSpacing="0.02"
                     android:layout_marginBottom="6dp" />
