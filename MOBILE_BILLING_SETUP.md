@@ -6,23 +6,67 @@ receipt to the server for verification.
 
 ## Product IDs
 
-Create one auto-renewing monthly subscription in both stores with the product
-ID `screens_monthly`. The Flutter client uses this ID by default. A different
-ID can be compiled with `--dart-define=IAP_PRODUCT_ID=...`, but the server
-environment variables must use the same value.
+The stores price a product, not a quantity, so per-screen billing is expressed
+as a tier ladder. All tiers live in one subscription group, and adding screens
+past a tier is an upgrade the store prorates, not a second purchase.
+
+| Product ID | Screens covered | Price |
+| --- | --- | --- |
+| `screens_1` | 1 | $1.99 |
+| `screens_3` | up to 3 | $4.99 |
+| `screens_5` | up to 5 | $7.99 |
+| `screens_10` | up to 10 | $14.99 |
+
+The server picks the tier from the user's screen count and returns it as
+`apple_product_id` / `google_product_id` from `/api/subscription/summary`, so
+the app never hardcodes a product. Change the ladder with `MOBILE_IAP_TIERS`
+as JSON, no app release required:
+
+```
+MOBILE_IAP_TIERS=[{"product_id":"screens_1","screens":1},{"product_id":"screens_3","screens":3}]
+```
+
+`_mobile_product_ids()` accepts any configured tier plus the legacy
+`screens_monthly`, so old purchases keep verifying.
+
+Ten screens is the ceiling in the app. Beyond that `add_screen` refuses with a
+plan-limit response rather than selling a bigger tier.
+
+**Prices and free trials are set in App Store Connect / Play Console, not in the
+admin.** The admin's `price_per_screen` and `trial_days` still drive Stripe on
+the web, but a store subscription charges whatever the store says. The paywall
+reads the real localized price from StoreKit for that reason.
 
 ## Apple App Store
 
 1. In App Store Connect, open the app whose bundle ID is
    `com.everydayadvertise.everydayMobile`.
-2. Create a subscription group and a monthly auto-renewable subscription named
-   `screens_monthly`.
-3. Add the 14-day introductory free trial to the subscription if required.
-4. Generate or copy the App-Specific Shared Secret from App Store Connect.
-5. Set `APPLE_IAP_SHARED_SECRET`, `APPLE_IAP_PRODUCT_ID`, and
-   `APPLE_IAP_BUNDLE_ID` in the production server environment.
-6. Test with a Sandbox Apple Account. A real App Store build is required for
-   production purchase testing; the simulator cannot complete a real charge.
+2. Create one subscription group and add all four tiers to it. Separate groups
+   would let a user hold several at once and be charged for each.
+3. Each tier needs a duration (1 month), a price, an **App Store Localization**
+   and a **review screenshot**. Without all four the product sits in
+   `MISSING_METADATA` and StoreKit will not return it — the app then shows
+   "Failed to get response from platform".
+4. Add a **2 Weeks Free Trial** introductory offer to each tier. Apple has no
+   "14 days" option; 2 weeks is the same length. A customer gets the trial once
+   per group, so upgrading tiers never grants another one.
+5. Generate or copy the App-Specific Shared Secret from App Store Connect.
+6. Set `APPLE_IAP_SHARED_SECRET` and `APPLE_IAP_BUNDLE_ID` in the production
+   server environment. `APPLE_IAP_PRODUCT_ID` is only the legacy fallback now;
+   the tier ladder supplies the real IDs.
+7. Test with a Sandbox Apple Account, or through TestFlight which uses the
+   sandbox automatically. The Paid Applications agreement must be **Active**
+   or no products load at all, whatever else is configured.
+
+### Apple status (verified against the App Store Connect API)
+
+- App record: **Everyday Advertise**, id `6800590059`, SKU
+  `everydayadvertise-mobile`.
+- Subscription group: **EverydayAdvertise Screens**, id `22306458`.
+- `screens_1` — created, price set, `en-US` localization set, but still
+  `MISSING_METADATA`: **no review screenshot** and **no free trial** yet.
+- `screens_3`, `screens_5`, `screens_10` — not created yet.
+- Build `1.1.0 (52)` uploaded to App Store Connect.
 
 The Sign in with Apple `.p8` key is not the receipt shared secret used by this
 verification endpoint. Keep those credentials separate.
