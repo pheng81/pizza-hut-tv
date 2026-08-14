@@ -912,7 +912,7 @@ class _StoresTabState extends State<StoresTab>
                 if (context.mounted) {
                   setModalState(() {
                     checkoutError =
-                        e.toString().replaceFirst('Exception: ', '');
+                        MobileBillingService.friendlyError(e);
                   });
                 }
               } finally {
@@ -965,7 +965,7 @@ class _StoresTabState extends State<StoresTab>
                 if (context.mounted) {
                   setModalState(() {
                     checkoutError =
-                        e.toString().replaceFirst('Exception: ', '');
+                        MobileBillingService.friendlyError(e);
                   });
                 }
               } finally {

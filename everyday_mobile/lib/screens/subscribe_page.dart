@@ -52,7 +52,7 @@ class _SubscribePageState extends State<SubscribePage> {
         return;
       }
       setState(() {
-        _error = e.toString().replaceFirst('Exception: ', '');
+        _error = MobileBillingService.friendlyError(e);
       });
     } finally {
       if (mounted) {
@@ -97,7 +97,7 @@ class _SubscribePageState extends State<SubscribePage> {
         return;
       }
       setState(() {
-        _error = e.toString().replaceFirst('Exception: ', '');
+        _error = MobileBillingService.friendlyError(e);
       });
     } finally {
       if (mounted) {

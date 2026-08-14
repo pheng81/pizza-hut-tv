@@ -66,6 +66,43 @@ class MobileBillingService {
     return {for (final p in response.productDetails) p.id: p};
   }
 
+  /// Turns a store failure into something a user can act on.
+  ///
+  /// StoreKit surfaces failures as PlatformException with a full stack trace
+  /// attached, which is unreadable if shown directly.
+  static String friendlyError(Object error) {
+    final raw = error.toString();
+    final lower = raw.toLowerCase();
+
+    if (lower.contains('not authorized to make purchases') ||
+        lower.contains("doesn't have permission to make in-app purchases")) {
+      return 'This Apple Account is not allowed to make purchases. '
+          'In testing, sign in with a Sandbox test account under '
+          'Settings > Developer > Sandbox Apple Account, then try again.';
+    }
+    if (lower.contains('cancel')) {
+      return 'Purchase was cancelled.';
+    }
+    if (lower.contains('is not available yet')) {
+      // Already a written explanation from purchase().
+      return raw.replaceFirst('Exception: ', '');
+    }
+    if (lower.contains('storekiterror') || lower.contains('platformexception')) {
+      return 'The App Store could not complete this purchase. '
+          'Check that you are signed in to the App Store and try again.';
+    }
+    if (lower.contains('billing is unavailable')) {
+      return raw.replaceFirst('Exception: ', '');
+    }
+
+    final cleaned = raw.replaceFirst('Exception: ', '').trim();
+    // Never dump a stack trace into the UI.
+    if (cleaned.length > 200) {
+      return 'Something went wrong with the purchase. Please try again.';
+    }
+    return cleaned;
+  }
+
   bool get usesNativeStore =>
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.iOS ||
