@@ -280,11 +280,13 @@ class MobileBillingService {
           purchase.status != PurchaseStatus.purchased) {
         return;
       }
+      // Do not filter by product id here. The server maps renamed and legacy
+      // products onto their current tier, so a purchase this screen was not
+      // asking about may still be valid - and dropping it locally means the
+      // server never gets the chance to accept it. Send everything and let the
+      // server decide; note the ones it refuses.
       if (!wantedIds.contains(purchase.productID)) {
-        // The account owns a product this screen was not asking about. Worth
-        // reporting, since otherwise it looks like nothing was found at all.
         skipped.add(purchase.productID);
-        return;
       }
       try {
         await apiClient.verifyMobilePurchase(
@@ -342,9 +344,10 @@ class MobileBillingService {
       throw StateError(lastError!);
     }
     if (restored == 0 && skipped.isNotEmpty) {
+      // Everything owned was offered to the server and none of it was accepted.
       throw StateError(
-        'This account owns ${skipped.join(', ')}, which this plan does not '
-        'cover. Contact support so it can be moved across.',
+        'This account owns ${skipped.join(', ')}, which the server did not '
+        'accept. Contact support so it can be moved across.',
       );
     }
 
