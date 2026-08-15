@@ -88,8 +88,12 @@ class MobileBillingService {
       return raw.replaceFirst('Exception: ', '');
     }
     if (lower.contains('storekiterror') || lower.contains('platformexception')) {
+      // Keep a short tail of the platform detail. Without it this message is
+      // untraceable, which cost real time diagnosing a stuck purchase queue.
+      final detail = raw.split('Stacktrace').first.replaceFirst('Exception: ', '').trim();
+      final hint = detail.length > 120 ? '${detail.substring(0, 120)}...' : detail;
       return 'The App Store could not complete this purchase. '
-          'Check that you are signed in to the App Store and try again.';
+          'Check that you are signed in to the App Store and try again.\n\n($hint)';
     }
     if (lower.contains('billing is unavailable')) {
       return raw.replaceFirst('Exception: ', '');
@@ -116,6 +120,82 @@ class MobileBillingService {
       return 'Google Play';
     }
     return 'Stripe';
+  }
+
+  /// Clears transactions the store is still holding as unfinished.
+  ///
+  /// The store replays unfinished transactions on every launch and refuses new
+  /// purchases while they are queued, so this drains them at startup: each is
+  /// verified if possible, then finished either way. Safe to call when there is
+  /// nothing queued - it simply times out.
+  Future<void> drainPendingTransactions({required ApiClient apiClient}) async {
+    if (!usesNativeStore) {
+      return;
+    }
+    final billing = InAppPurchase.instance;
+    if (!await billing.isAvailable()) {
+      return;
+    }
+
+    late final StreamSubscription<List<PurchaseDetails>> subscription;
+    final idle = Completer<void>();
+    Timer? quiet;
+
+    void markQuiet() {
+      quiet?.cancel();
+      // Stop once the stream has been silent briefly, since it never signals
+      // that a replay is finished.
+      quiet = Timer(const Duration(seconds: 3), () {
+        if (!idle.isCompleted) {
+          idle.complete();
+        }
+      });
+    }
+
+    subscription = billing.purchaseStream.listen(
+      (purchases) async {
+        for (final purchase in purchases) {
+          if (purchase.status == PurchaseStatus.purchased ||
+              purchase.status == PurchaseStatus.restored) {
+            try {
+              await apiClient.verifyMobilePurchase(
+                provider: defaultTargetPlatform == TargetPlatform.iOS
+                    ? 'apple'
+                    : 'google',
+                productId: purchase.productID,
+                serverVerificationData:
+                    purchase.verificationData.serverVerificationData,
+                localVerificationData:
+                    purchase.verificationData.localVerificationData,
+                purchaseId: purchase.purchaseID,
+              );
+            } catch (_) {
+              // Still finish it; a stuck queue is worse than an unverified
+              // purchase, and the receipt keeps it recoverable via restore.
+            }
+          }
+          if (purchase.pendingCompletePurchase) {
+            try {
+              await billing.completePurchase(purchase);
+            } catch (_) {}
+          }
+        }
+        markQuiet();
+      },
+      onError: (Object _) {
+        if (!idle.isCompleted) {
+          idle.complete();
+        }
+      },
+    );
+
+    markQuiet();
+    try {
+      await idle.future.timeout(const Duration(seconds: 12), onTimeout: () {});
+    } finally {
+      quiet?.cancel();
+      await subscription.cancel();
+    }
   }
 
   /// Re-verifies subscriptions the user already owns.
@@ -245,6 +325,10 @@ class MobileBillingService {
         ? productId!.trim()
         : MobileBillingService.productId;
 
+    // A transaction left unfinished by an earlier failure blocks new purchases,
+    // so clear the queue before asking for another one.
+    await drainPendingTransactions(apiClient: apiClient);
+
     final response = await billing.queryProductDetails({wantedId});
     if (response.error != null) {
       throw StateError(response.error!.message);
@@ -282,6 +366,7 @@ class MobileBillingService {
         return;
       }
 
+      Object? verifyError;
       try {
         await apiClient.verifyMobilePurchase(
           provider:
@@ -293,15 +378,27 @@ class MobileBillingService {
               purchase.verificationData.localVerificationData,
           purchaseId: purchase.purchaseID,
         );
-        if (purchase.pendingCompletePurchase) {
-          await billing.completePurchase(purchase);
-        }
-        if (!result.isCompleted) {
-          result.complete();
-        }
       } catch (error) {
-        if (!result.isCompleted) {
-          result.completeError(error);
+        verifyError = error;
+      }
+
+      // Finish the transaction even when the server rejected it. An unfinished
+      // transaction stays in the store queue forever, gets replayed on every
+      // launch, and blocks further purchases. Finishing does not remove it from
+      // the app receipt, so it can still be verified later with a restore.
+      if (purchase.pendingCompletePurchase) {
+        try {
+          await billing.completePurchase(purchase);
+        } catch (_) {
+          // Nothing useful to do; do not mask the original failure.
+        }
+      }
+
+      if (!result.isCompleted) {
+        if (verifyError != null) {
+          result.completeError(verifyError);
+        } else {
+          result.complete();
         }
       }
     }
