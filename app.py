@@ -3071,7 +3071,27 @@ def _verify_apple_mobile_purchase(
         if isinstance(item, dict) and item.get('product_id') == product_id
     ]
     if not matching:
-        raise ValueError('Apple subscription product was not found in the receipt.')
+        # Say what the receipt actually held. "Not found" on its own cannot
+        # distinguish an empty receipt (wrong Apple Account, or a fresh install
+        # that never refreshed) from a receipt holding a different tier.
+        found = sorted({
+            str(item.get('product_id'))
+            for item in entries
+            if isinstance(item, dict) and item.get('product_id')
+        })
+        logging.warning(
+            'Apple receipt did not contain %s. Receipt held: %s (environment=%s)',
+            product_id, found or 'no purchases', payload.get('environment'),
+        )
+        if not found:
+            raise ValueError(
+                'This Apple Account has no purchases in its receipt. Make sure you '
+                'are signed in to the account that bought the subscription.'
+            )
+        raise ValueError(
+            f'The receipt has {", ".join(found)}, not {product_id}. '
+            'Restore from the account that bought it, or contact support.'
+        )
 
     latest = max(
         matching,
