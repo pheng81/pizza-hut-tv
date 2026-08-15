@@ -103,6 +103,12 @@ class MobileBillingService {
     if (lower.contains('cancel')) {
       return 'Purchase was cancelled.';
     }
+    if (lower.contains('duplicate_product_object') ||
+        lower.contains('pending transaction for the same product')) {
+      return 'The App Store is still processing an earlier attempt at this '
+          'plan. Wait about a minute and try again. If it keeps happening, '
+          'close the app completely and reopen it.';
+    }
     if (lower.contains('is not available yet')) {
       // Already a written explanation from purchase().
       return raw.replaceFirst('Exception: ', '');
@@ -148,15 +154,20 @@ class MobileBillingService {
   /// purchases while they are queued, so this drains them at startup: each is
   /// verified if possible, then finished either way. Safe to call when there is
   /// nothing queued - it simply times out.
-  Future<void> drainPendingTransactions({required ApiClient apiClient}) async {
+  /// Returns the product ids still mid-flight, which cannot be finished and
+  /// which block a fresh purchase of the same product.
+  Future<Set<String>> drainPendingTransactions({
+    required ApiClient apiClient,
+  }) async {
     if (!usesNativeStore) {
-      return;
+      return {};
     }
     final billing = InAppPurchase.instance;
     if (!await billing.isAvailable()) {
-      return;
+      return {};
     }
 
+    final stillPending = <String>{};
     late final StreamSubscription<List<PurchaseDetails>> subscription;
     final idle = Completer<void>();
     Timer? quiet;
@@ -175,6 +186,14 @@ class MobileBillingService {
     subscription = billing.purchaseStream.listen(
       (purchases) async {
         for (final purchase in purchases) {
+          if (purchase.status == PurchaseStatus.pending) {
+            // Still mid-flight and cannot be finished. Record it so the caller
+            // can avoid starting a second purchase of the same product, which
+            // the store rejects as a duplicate.
+            stillPending.add(purchase.productID);
+            continue;
+          }
+          stillPending.remove(purchase.productID);
           if (purchase.status == PurchaseStatus.purchased ||
               purchase.status == PurchaseStatus.restored) {
             try {
@@ -216,6 +235,7 @@ class MobileBillingService {
       quiet?.cancel();
       await subscription.cancel();
     }
+    return stillPending;
   }
 
   /// Re-verifies subscriptions the user already owns.
@@ -347,7 +367,16 @@ class MobileBillingService {
 
     // A transaction left unfinished by an earlier failure blocks new purchases,
     // so clear the queue before asking for another one.
-    await drainPendingTransactions(apiClient: apiClient);
+    final stillPending = await drainPendingTransactions(apiClient: apiClient);
+    if (stillPending.contains(wantedId)) {
+      // Asking again would fail with a duplicate-product error that explains
+      // nothing, so say what is actually happening.
+      throw StateError(
+        'The App Store is still processing an earlier attempt at this plan. '
+        'Wait about a minute and try again. If it keeps happening, close the '
+        'app completely and reopen it.',
+      );
+    }
 
     final response = await billing.queryProductDetails({wantedId});
     if (response.error != null) {
