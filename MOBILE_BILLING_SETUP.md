@@ -4,18 +4,60 @@ The web app continues to use Stripe. Apps distributed through the Apple App
 Store or Google Play use their native subscription systems and send the store
 receipt to the server for verification.
 
+## Where the code lives, and what is current
+
+Four places hold this code and they drift apart, which is the single biggest
+source of confusion. Check this before debugging anything.
+
+| Place | How to check it | Notes |
+| --- | --- | --- |
+| GitHub `main` | `git ls-remote --heads origin main` | Source of truth. |
+| Mac clone `~/development/flutter` | `git status` / `git log -1` | `origin` is the project; `flutter-sdk` is the Flutter SDK repo. |
+| Windows clone | `git log -1` on that machine | Deploys from here. |
+| Production server | see below | **Deployed separately - lags behind GitHub.** |
+| iPhone | TestFlight build number | App code, not server code. |
+
+**A purchase failure is usually the server lagging, not a new bug.** The app
+sends whatever product id the server told it to use, and the server rejects any
+product id it does not know. After changing tiers or product ids, the server
+must be redeployed or every purchase fails as "Unknown Apple subscription
+product".
+
+To check what the server is running without SSH, probe a route that only exists
+in newer code - `404` means old, `302`/`401` means the route is there:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+  https://everydayadvertise.com/api/auth/apple/link
+```
+
+Deploy is `deploy_automated.ps1` from the Windows clone (`git pull` first). It
+uploads `app.py`, `config.py` and `.env.production`, restarts
+`everydayadvertise_tv`, health-checks and auto-rolls-back. It does **not**
+touch systemd drop-ins, so secrets stored there survive. `.env.production` is
+gitignored and lives only on the Windows machine - check it before deploying,
+because the deploy overwrites the server's copy with it.
+
 ## Product IDs
 
 The stores price a product, not a quantity, so per-screen billing is expressed
 as a tier ladder. All tiers live in one subscription group, and adding screens
 past a tier is an upgrade the store prorates, not a second purchase.
 
-| Product ID | Screens covered | Price |
-| --- | --- | --- |
-| `screens_1` | 1 | $1.99 |
-| `screens_3` | up to 3 | $4.99 |
-| `screens_5` | up to 5 | $7.99 |
-| `screens_10` | up to 10 | $14.99 |
+**Product IDs are case sensitive and cannot be renamed after creation.** These
+are the exact ids registered in App Store Connect. Note `Screen_1` is singular
+while the rest are plural - that is what exists, not a typo to "fix":
+
+| Product ID | Screens covered | USD price | Group level |
+| --- | --- | --- | --- |
+| `Screens_10` | up to 10 | $14.99 | 1 (highest) |
+| `Screens_5` | up to 5 | $7.99 | 2 |
+| `Screens_3` | up to 3 | $4.99 | 3 |
+| `Screen_1` | 1 | $1.99 | 4 (lowest) |
+
+Apple treats **level 1 as the highest tier**, so more screens must rank nearer
+1. With the order reversed, moving up a tier registers as a downgrade and is
+deferred to the next renewal instead of applying immediately.
 
 The server picks the tier from the user's screen count and returns it as
 `apple_product_id` / `google_product_id` from `/api/subscription/summary`, so
@@ -23,7 +65,7 @@ the app never hardcodes a product. Change the ladder with `MOBILE_IAP_TIERS`
 as JSON, no app release required:
 
 ```
-MOBILE_IAP_TIERS=[{"product_id":"screens_1","screens":1},{"product_id":"screens_3","screens":3}]
+MOBILE_IAP_TIERS=[{"product_id":"Screen_1","screens":1},{"product_id":"Screens_3","screens":3}]
 ```
 
 `_mobile_product_ids()` accepts any configured tier plus the legacy
@@ -58,15 +100,53 @@ reads the real localized price from StoreKit for that reason.
    sandbox automatically. The Paid Applications agreement must be **Active**
    or no products load at all, whatever else is configured.
 
-### Apple status (verified against the App Store Connect API)
+### Apple status as at 2026-08-15 (verified against the App Store Connect API)
 
 - App record: **Everyday Advertise**, id `6800590059`, SKU
-  `everydayadvertise-mobile`.
-- Subscription group: **EverydayAdvertise Screens**, id `22306458`.
-- `screens_1` — created, price set, `en-US` localization set, but still
-  `MISSING_METADATA`: **no review screenshot** and **no free trial** yet.
-- `screens_3`, `screens_5`, `screens_10` — not created yet.
-- Build `1.1.0 (52)` uploaded to App Store Connect.
+  `everydayadvertise-mobile`, bundle `com.everydayadvertise.everydayMobile`.
+- Subscription group: **EverydayAdvertise Screens**, id `22306458`, localized
+  `en-US` as "Everyday Advertise Screens".
+- All four products are **READY_TO_SUBMIT**: price, localization, review
+  screenshot and a 2-week free trial each.
+- Paid Applications agreement: **Active**.
+- `APPLE_IAP_SHARED_SECRET` is set on the server in the systemd drop-in
+  `/etc/systemd/system/everydayadvertise_tv.service.d/apple-iap.conf`. It is
+  **not** in `.env.production`, so a deploy does not overwrite it.
+- TestFlight: build `1.1.0 (57)` is current and in beta testing. Internal group
+  "Testing Group A".
+- Product display names still read e.g. "EverydayAdvertie Screen Subcription"
+  (typos, inconsistent). Customers see these on Apple's purchase sheet; they
+  should be renamed to plain "1 Screen" / "3 Screens" / "5 Screens" /
+  "10 Screens".
+
+### Things that cost hours to find - do not rediscover them
+
+- **StoreKit 1 is pinned deliberately.** `in_app_purchase_storekit` 0.4.x
+  defaults to StoreKit 2, which sets `serverVerificationData` to a JWS
+  transaction. `_verify_apple_mobile_purchase()` posts that to Apple's legacy
+  `verifyReceipt`, which only reads a base64 app receipt, so every purchase
+  failed. `pubspec.yaml` pins `in_app_purchase 3.2.2` +
+  `in_app_purchase_storekit 0.3.22+1`. Do not bump these until the server moves
+  to the App Store Server API. Switching at runtime does not work:
+  `registerPlatform()` builds either the SK1 or SK2 observer at startup and
+  leaves the other uninitialised.
+- **The subscription group needs its own localization**, separate from each
+  product's. Without it iOS cannot render the change-plan sheet and upgrades
+  fail with `ASDServerErrorDomain - An unknown error occurred`, while first
+  purchases still succeed.
+- **Transactions must be finished even when verification fails.** Unfinished
+  transactions are replayed forever and block new purchases. `purchase()` and
+  `drainPendingTransactions()` finish them either way; the receipt keeps them
+  recoverable through restore.
+- **A transaction still mid-flight cannot be finished.** Buying the same
+  product again returns `storekit_duplicate_product_object`. The app now
+  detects this before purchasing and asks the user to wait.
+- **`MISSING_METADATA` products are listed but often not sellable.** Prices can
+  appear in the paywall while the purchase fails at Apple's servers.
+- **The shared secret is on the In-App Purchases page**, even though all
+  products are Subscriptions. It is not the Sign in with Apple `.p8`, and not
+  an In-App Purchase Key under Users and Access - those are for the App Store
+  Server API.
 
 The Sign in with Apple `.p8` key is not the receipt shared secret used by this
 verification endpoint. Keep those credentials separate.
@@ -135,6 +215,36 @@ verification endpoint. Keep those credentials separate.
   internal testing.
 - Store listing basics (description, content rating questionnaire, Data safety
   form, target audience) have not been completed yet.
+
+## Outstanding as at 2026-08-15
+
+1. **Deploy the server.** It still has the old lowercase product ids, so
+   `Screens_3` / `Screens_5` / `Screens_10` are rejected as unknown products. A
+   `Screens_3` subscription was bought successfully in TestFlight and cannot be
+   activated until this lands. After deploying, "Restore purchases" in the app
+   verifies it - no second purchase needed.
+2. Rename the product display names (typos, see above).
+3. Create a **demo account** for App Review and put it in App Review
+   Information. The app is login-gated, so review fails without it.
+4. Android: the Play subscription products for the same tiers do not exist yet.
+   Play still expects a single `screens_monthly`.
+5. Deployment target is iOS 14.0; Apple requires 15.0 from Spring 2027.
+6. The launch image is still Flutter's placeholder.
+
+## How to test a purchase end to end
+
+1. Install the current build from TestFlight. TestFlight uses the sandbox
+   automatically with the tester's real Apple ID - no Sandbox Apple Account
+   needed. A development build side-loaded from Xcode does need one, under
+   Settings > Developer > Sandbox Apple Account, or it fails with "not
+   authorized to make purchases in Sandbox".
+2. Sign in, open Stores & Screens, add a screen to reach the paywall.
+3. The paywall must show real store prices (localized, e.g. AUD 2.99 for a
+   USD 1.99 tier). Server text prices mean the product did not load.
+4. Buy. A first purchase and a plan change are different code paths - test
+   both, since upgrades fail for reasons first purchases do not.
+5. If a purchase succeeds at Apple but the app shows an error, check the server
+   first: the failure is nearly always verification, not the store.
 
 ## Server dependency
 
