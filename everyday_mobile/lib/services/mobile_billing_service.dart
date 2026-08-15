@@ -478,6 +478,22 @@ class MobileBillingService {
         onTimeout: () =>
             throw StateError('Purchase timed out. Please try again.'),
       );
+    } catch (error) {
+      // The store refuses to sell a subscription the account already owns, and
+      // reports it as a generic failure. That happens whenever a purchase went
+      // through but the server never recorded it, so recover by verifying what
+      // the account owns instead of leaving the user stuck on an error.
+      final lower = error.toString().toLowerCase();
+      final looksAlreadyOwned = lower.contains('asdservererror') ||
+          lower.contains('already') ||
+          lower.contains('skerrordomain');
+      if (!looksAlreadyOwned) {
+        rethrow;
+      }
+      final restored = await restore(apiClient: apiClient, productId: wantedId);
+      if (restored == 0) {
+        rethrow;
+      }
     } finally {
       await subscription.cancel();
     }
