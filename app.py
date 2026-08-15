@@ -885,11 +885,14 @@ GOOGLE_PLAY_PRODUCT_ID = os.environ.get('GOOGLE_PLAY_PRODUCT_ID') or 'screens_mo
 #
 # Override with MOBILE_IAP_TIERS as JSON to change tiers without a deploy, e.g.
 # MOBILE_IAP_TIERS=[{"product_id":"screens_1","screens":1}, ...]
+# Product ids are case sensitive and must match App Store Connect and Play
+# Console exactly. Note the first is singular ("Screen_1"), matching what is
+# registered in App Store Connect - a product id cannot be renamed once created.
 _DEFAULT_MOBILE_IAP_TIERS = [
-    {'product_id': 'screens_1', 'screens': 1},
-    {'product_id': 'screens_3', 'screens': 3},
-    {'product_id': 'screens_5', 'screens': 5},
-    {'product_id': 'screens_10', 'screens': 10},
+    {'product_id': 'Screen_1', 'screens': 1},
+    {'product_id': 'Screens_3', 'screens': 3},
+    {'product_id': 'Screens_5', 'screens': 5},
+    {'product_id': 'Screens_10', 'screens': 10},
 ]
 
 
