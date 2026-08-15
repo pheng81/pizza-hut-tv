@@ -204,6 +204,7 @@ scripts.zip
 .env
 .env.local
 .env.*.local
+.env.production
 
 # Secrets and large archives
 # Avoid committing OAuth credentials and large zips
