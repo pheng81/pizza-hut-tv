@@ -52,6 +52,11 @@ class SetupActivity : AppCompatActivity() {
 		val qrCodeImageView = findViewById<ImageView>(R.id.qrCodeImageView)
 		// Store selection moved to StoreSelectActivity
 
+		// Six-digit handle the dashboard pushes link/store codes to. Must match
+		// what we send on join_session or /api/tv_pairing_push can't find us.
+		val tvPairCode = PairCodeHolder.getOrCreateTvPairCode(applicationContext)
+		findViewById<TextView>(R.id.tvPairCodeValue)?.text = tvPairCode.ifBlank { "------" }
+
 		val prefs = getSharedPreferences(PairCodeHolder.PREFS_NAME, MODE_PRIVATE)
 		if (!prefs.contains(PairCodeHolder.KEY_PAIR_CODE)) {
 			val legacyPrefs = getSharedPreferences("phtv", MODE_PRIVATE)
@@ -124,7 +129,7 @@ class SetupActivity : AppCompatActivity() {
 					retryCount = 0
 					android.util.Log.d("SetupActivity", "✅ Socket connected to $host; joining session $sessionId")
 					runOnUiThread { codeStatus.text = "Connected! Scan QR with phone." }
-					val payload = JSONObject().put("session_id", sessionId)
+					val payload = JSONObject().put("session_id", sessionId).put("tv_pair_code", tvPairCode)
 					s.emit("join_session", payload)
 					android.util.Log.d("SetupActivity", "📤 Emitted join_session: $sessionId")
 				}

@@ -23,7 +23,7 @@
             android:layout_gravity="start"
             android:paddingLeft="8dp"
             android:paddingRight="8dp"
-            android:layout_marginBottom="24dp" />
+            android:layout_marginBottom="12dp" />
 
         <!-- Two matched step cards, top-aligned so their headers always
              line up regardless of which column has more content. -->
@@ -32,7 +32,7 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="top"
-            android:layout_marginBottom="24dp">
+            android:layout_marginBottom="14dp">
 
             <!-- Step 1: QR code -->
             <LinearLayout
@@ -77,6 +77,33 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:text="TV / Web Player code"
+                    android:textColor="#9fc1ff"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:gravity="center"
+                    android:layout_marginBottom="6dp" />
+
+                <TextView
+                    android:id="@+id/tvPairCodeValue"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="------"
+                    android:textColor="#FFFFFF"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.14"
+                    android:gravity="center"
+                    android:background="@drawable/tv_pair_code_background"
+                    android:paddingLeft="12dp"
+                    android:paddingRight="12dp"
+                    android:paddingTop="8dp"
+                    android:paddingBottom="8dp"
+                    android:layout_marginBottom="10dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
                     android:text="📱 Scan to enter store code"
                     android:textColor="#9da7b3"
                     android:textSize="11sp"
@@ -84,8 +111,8 @@
 
                 <ImageView
                     android:id="@+id/qrCodeStoreImageView"
-                    android:layout_width="200dp"
-                    android:layout_height="200dp"
+                    android:layout_width="150dp"
+                    android:layout_height="150dp"
                     android:scaleType="fitCenter"
                     android:contentDescription="QR code for store entry" />
 

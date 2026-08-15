@@ -57,6 +57,11 @@ class StoreSelectActivity : AppCompatActivity() {
         val effectiveCode = (pairCode ?: prefs.getString(PairCodeHolder.KEY_PAIR_CODE, null)).orEmpty()
         tvCodeView?.text = "TV code: ${effectiveCode.ifBlank { "—" }}"
 
+        // Six-digit handle the dashboard pushes link/store codes to. Must match
+        // what we send on join_session or /api/tv_pairing_push can't find us.
+        val tvPairCode = PairCodeHolder.getOrCreateTvPairCode(applicationContext)
+        findViewById<TextView>(R.id.tvPairCodeValue)?.text = tvPairCode.ifBlank { "------" }
+
         // Join the same WebSocket session used during pairing so mobile can send the store code
         val sessionId = intent.getStringExtra("sessionId") ?: prefs.getString("sessionId", null) ?: run {
             // Generate new session ID if none exists
@@ -213,7 +218,7 @@ class StoreSelectActivity : AppCompatActivity() {
                 val s = IO.socket(host, opts)
                 s.on(Socket.EVENT_CONNECT) {
                     if (!sessionId.isNullOrBlank()) {
-                        s.emit("join_session", JSONObject().put("session_id", sessionId))
+                        s.emit("join_session", JSONObject().put("session_id", sessionId).put("tv_pair_code", tvPairCode))
                         runOnUiThread { status.text = "Connected. Waiting for store code…" }
                     }
                 }

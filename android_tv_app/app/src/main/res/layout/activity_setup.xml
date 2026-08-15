@@ -83,6 +83,33 @@
 				<TextView
 					android:layout_width="wrap_content"
 					android:layout_height="wrap_content"
+					android:text="TV / Web Player code"
+					android:textColor="#9fc1ff"
+					android:textSize="13sp"
+					android:textStyle="bold"
+					android:gravity="center"
+					android:layout_marginBottom="6dp" />
+
+				<TextView
+					android:id="@+id/tvPairCodeValue"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:text="------"
+					android:textColor="#FFFFFF"
+					android:textSize="18sp"
+					android:textStyle="bold"
+					android:letterSpacing="0.14"
+					android:gravity="center"
+					android:background="@drawable/tv_pair_code_background"
+					android:paddingLeft="12dp"
+					android:paddingRight="12dp"
+					android:paddingTop="8dp"
+					android:paddingBottom="8dp"
+					android:layout_marginBottom="16dp" />
+
+				<TextView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
 					android:text="📱 Scan with your phone to enter code"
 					android:textColor="#9aa4b2"
 					android:textSize="11sp"
