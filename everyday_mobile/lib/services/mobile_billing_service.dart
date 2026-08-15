@@ -66,6 +66,26 @@ class MobileBillingService {
     return {for (final p in response.productDetails) p.id: p};
   }
 
+  /// Spells out a store error, including its code.
+  ///
+  /// StoreKit's message is often just "SKErrorDomain", which says nothing about
+  /// what went wrong, so the code and any details are kept.
+  static String _describeIapError(IAPError error) {
+    final parts = <String>[];
+    final message = error.message.trim();
+    if (message.isNotEmpty) {
+      parts.add(message);
+    }
+    if (error.code.trim().isNotEmpty) {
+      parts.add('code ${error.code.trim()}');
+    }
+    final details = error.details?.toString().trim() ?? '';
+    if (details.isNotEmpty && details != 'null') {
+      parts.add(details.length > 100 ? '${details.substring(0, 100)}...' : details);
+    }
+    return parts.isEmpty ? 'Purchase failed.' : parts.join(' - ');
+  }
+
   /// Turns a store failure into something a user can act on.
   ///
   /// StoreKit surfaces failures as PlatformException with a full stack trace
@@ -331,7 +351,7 @@ class MobileBillingService {
 
     final response = await billing.queryProductDetails({wantedId});
     if (response.error != null) {
-      throw StateError(response.error!.message);
+      throw StateError(_describeIapError(response.error!));
     }
     if (response.productDetails.isEmpty) {
       throw StateError(
@@ -352,8 +372,9 @@ class MobileBillingService {
         return;
       }
       if (purchase.status == PurchaseStatus.error) {
+        final err = purchase.error;
         result.completeError(
-          StateError(purchase.error?.message ?? 'Purchase failed.'),
+          StateError(err == null ? 'Purchase failed.' : _describeIapError(err)),
         );
         return;
       }
