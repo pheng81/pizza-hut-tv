@@ -6275,6 +6275,12 @@ def api_subscription_summary():
                 if mobile_plan_screens and screen_count > mobile_plan_screens:
                     mobile_needs_upgrade = True
 
+        # The same gate Stripe checkout applies, reported so the app can stop a
+        # store purchase before it starts. It cannot be enforced at verify time
+        # the way it is for Stripe: by then Apple has taken the money, and
+        # refusing would leave the user paid up with nothing to show for it.
+        can_subscribe, subscribe_blocked_reason = _check_subscription_eligibility(user_id)
+
         return jsonify({
             'success': True,
             'stripe_enabled': _stripe_enabled(),
@@ -6308,6 +6314,10 @@ def api_subscription_summary():
             # Warn the app before it offers a store purchase to someone Stripe
             # is already billing, so we avoid charging them twice.
             'has_web_subscription': has_web_subscription,
+            # Whether this account is allowed to subscribe at all, and why not.
+            # Checked before the store purchase starts, never after.
+            'can_subscribe': can_subscribe,
+            'subscribe_blocked_reason': subscribe_blocked_reason,
         })
     except Exception as e:
         logging.error('api_subscription_summary failed: %s', e, exc_info=True)

@@ -840,6 +840,13 @@ class _StoresTabState extends State<StoresTab>
     // Buying here while a web subscription is live would bill them twice, so
     // say so rather than offering the purchase.
     final hasWebSubscription = summary['has_web_subscription'] == true;
+    // The account gate the website applies before checkout. It has to be
+    // enforced here, before the store takes payment - once Apple has charged,
+    // refusing the receipt would leave them paid up with nothing. Absent field
+    // means an older server, so allow rather than lock everyone out.
+    final canSubscribe = summary['can_subscribe'] != false;
+    final subscribeBlockedReason =
+        (summary['subscribe_blocked_reason'] ?? '').toString().trim();
 
     // Every store tier, so users can compare plans instead of only seeing
     // the one the server recommends for their current screen count.
@@ -1267,6 +1274,24 @@ class _StoresTabState extends State<StoresTab>
                           'This account already has a subscription billed '
                           'outside the app. Buying here would charge you twice, '
                           'so it has been turned off.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      )
+                    else if (!canSubscribe)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: scheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          subscribeBlockedReason.isNotEmpty
+                              ? subscribeBlockedReason
+                              : 'This account cannot subscribe yet. Finish '
+                                  'setting it up, then try again.',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: scheme.onSurfaceVariant,
                           ),
