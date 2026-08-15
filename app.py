@@ -926,9 +926,33 @@ def _mobile_tier_for_screens(screen_count: int) -> dict:
     return tiers[-1]
 
 
+# Ids the ladder was sold under before it was recreated in App Store Connect.
+#
+# A store product id can never be renamed, so changing the ladder meant new
+# products - but subscriptions bought under the old ids are still live, and
+# still restore carrying the id they were purchased under. Without this map
+# those ids match no tier, _mobile_tier_screen_allowance returns 0, and 0
+# means "unlimited" to callers: an existing subscriber silently loses the cap
+# they paid for. Aliases resolve allowances and pass verification. They are
+# deliberately not part of _mobile_iap_tiers(), so they are never offered for
+# sale - the products no longer exist in App Store Connect to be bought.
+_LEGACY_MOBILE_PRODUCT_ALIASES = {
+    'screens_1': 'Screen_1',
+    'screens_3': 'Screens_3',
+    'screens_5': 'Screens_5',
+    'screens_10': 'Screens_10',
+}
+
+
+def _canonical_mobile_product_id(product_id: str) -> str:
+    """Current id for a product, mapping pre-rename ids onto their tier."""
+    target = (product_id or '').strip()
+    return _LEGACY_MOBILE_PRODUCT_ALIASES.get(target, target)
+
+
 def _mobile_tier_screen_allowance(product_id: str) -> int:
     """How many screens a purchased product covers. 0 means unknown/unlimited."""
-    target = (product_id or '').strip()
+    target = _canonical_mobile_product_id(product_id)
     for tier in _mobile_iap_tiers():
         if tier['product_id'] == target:
             return int(tier['screens'])
@@ -985,6 +1009,55 @@ def _retire_stripe_subscription_for_store_purchase(user_id: int) -> str | None:
         return None
 
 
+def _active_store_subscription(user_id: int) -> tuple[str, str] | None:
+    """(provider, product_id) if an App Store or Play subscription is live.
+
+    The mirror of _retire_stripe_subscription_for_store_purchase, for the other
+    direction. That one can clean up after itself because we hold the Stripe
+    credentials; this one cannot. Only the subscriber can cancel a store
+    subscription, from their device, so a Stripe checkout started on top of one
+    bills them twice with no way for us to undo it. Callers must refuse.
+    """
+    if not user_id:
+        return None
+    try:
+        db = get_db()
+        row = db.execute(
+            'SELECT billing_provider, billing_product_id, status '
+            'FROM subscriptions WHERE user_id = ?',
+            (user_id,),
+        ).fetchone()
+        if not row:
+            return None
+        keys = row.keys()
+        provider = ((row['billing_provider'] if 'billing_provider' in keys else None) or '').lower()
+        if provider not in ('apple', 'google'):
+            return None
+        status = ((row['status'] if 'status' in keys else None) or '').lower()
+        if status not in ('active', 'trialing', 'past_due'):
+            return None
+        product_id = (row['billing_product_id'] if 'billing_product_id' in keys else None) or ''
+        return provider, product_id
+    except Exception as exc:
+        # Fail open: a lookup error must not lock a paying user out of checkout.
+        logging.warning('Failed to read store subscription for %s: %s', user_id, exc)
+        return None
+
+
+def _store_subscription_block_message(provider: str) -> str:
+    where = 'the App Store' if provider == 'apple' else 'Google Play'
+    settings_path = (
+        'your iPhone Settings > your name > Subscriptions'
+        if provider == 'apple'
+        else 'the Play Store > Payments and subscriptions'
+    )
+    return (
+        f'Your subscription is billed through {where}, so subscribing here would '
+        f'charge you twice. Cancel it in {settings_path} first, then subscribe on '
+        'the website.'
+    )
+
+
 def _mobile_plan_allowance(user_id, wanted_screens: int) -> tuple[int, bool, str | None]:
     """Screens the user's store plan covers, whether wanted_screens exceeds it,
     and the product id they are currently on.
@@ -1025,6 +1098,9 @@ def _mobile_upgrade_target(current_product_id: str | None, wanted_screens: int) 
 
 def _mobile_product_ids() -> set[str]:
     ids = {tier['product_id'] for tier in _mobile_iap_tiers()}
+    # Accept the pre-rename ids too, or restoring a subscription bought under
+    # the old ladder fails verification as an unknown product.
+    ids.update(_LEGACY_MOBILE_PRODUCT_ALIASES)
     for legacy in (APPLE_IAP_PRODUCT_ID, GOOGLE_PLAY_PRODUCT_ID):
         if (legacy or '').strip():
             ids.add(legacy.strip())
@@ -6089,6 +6165,16 @@ def billing_checkout():
         flash(eligibility_error or 'You are not eligible to subscribe yet.', 'error')
         return redirect(url_for('account'))
 
+    store_sub = _active_store_subscription(user_id)
+    if store_sub:
+        provider, product_id = store_sub
+        logging.warning(
+            'Blocked Stripe checkout for user %s holding a live %s subscription (%s).',
+            user_id, provider, product_id or 'unknown product',
+        )
+        flash(_store_subscription_block_message(provider), 'error')
+        return redirect(url_for('subscribe'))
+
     pending_store_id = (request.form.get('pending_store_id') or '').strip()
     pending_screen_type = (request.form.get('pending_screen_type') or 'screen').strip().lower()
     if pending_screen_type not in ('screen', 'promo'):
@@ -6249,6 +6335,20 @@ def api_billing_checkout_session():
             'error': eligibility_error or 'You are not eligible to subscribe yet.',
             'requires_verification': True,
         }), 400
+
+    store_sub = _active_store_subscription(user_id)
+    if store_sub:
+        provider, product_id = store_sub
+        logging.warning(
+            'Blocked Stripe checkout for user %s holding a live %s subscription (%s).',
+            user_id, provider, product_id or 'unknown product',
+        )
+        return jsonify({
+            'success': False,
+            'error': _store_subscription_block_message(provider),
+            'has_store_subscription': True,
+            'store_provider': provider,
+        }), 409
 
     try:
         billing_policy = _get_user_billing_policy(user_id)
