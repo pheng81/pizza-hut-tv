@@ -150,6 +150,8 @@ class MobileBillingService {
     }
 
     var restored = 0;
+    String? lastError;
+    final skipped = <String>{};
     final done = Completer<void>();
     late final StreamSubscription<List<PurchaseDetails>> subscription;
 
@@ -159,6 +161,9 @@ class MobileBillingService {
         return;
       }
       if (!wantedIds.contains(purchase.productID)) {
+        // The account owns a product this screen was not asking about. Worth
+        // reporting, since otherwise it looks like nothing was found at all.
+        skipped.add(purchase.productID);
         return;
       }
       try {
@@ -173,8 +178,10 @@ class MobileBillingService {
           purchaseId: purchase.purchaseID,
         );
         restored += 1;
-      } catch (_) {
-        // An expired or already-consumed receipt is not a restore failure.
+      } catch (error) {
+        // Do not hide this. A rejected receipt used to look identical to
+        // "you never bought anything", which sends people to buy twice.
+        lastError = error.toString().replaceFirst('Exception: ', '');
       }
       if (purchase.pendingCompletePurchase) {
         await billing.completePurchase(purchase);
@@ -208,6 +215,17 @@ class MobileBillingService {
       );
     } finally {
       await subscription.cancel();
+    }
+
+    if (restored == 0 && lastError != null) {
+      // The store had a purchase; the server would not accept it.
+      throw StateError(lastError!);
+    }
+    if (restored == 0 && skipped.isNotEmpty) {
+      throw StateError(
+        'This account owns ${skipped.join(', ')}, which this plan does not '
+        'cover. Contact support so it can be moved across.',
+      );
     }
 
     return restored;
