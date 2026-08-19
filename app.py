@@ -19918,11 +19918,36 @@ def delete_store():
             return jsonify({'error': 'Store ID is required'}), 400
             
         config = load_store_config()
-        
-        # Protect master store from deletion
-        master_store_id = config.get('master_store_id')
-        if store_id == master_store_id:
+
+        # Protect the master store from deletion.
+        #
+        # master_store_id is missing from some older configs, and comparing
+        # against None protects nothing - the master store could be deleted,
+        # leaving the account with no stores at all. Fall back to the canonical
+        # first-store id, then to the first store in the list, and never allow
+        # the last remaining store to go.
+        stores = config.get('stores') or []
+        # Coerce: some configs store ids as numbers, and .strip() would raise.
+        master_store_id = str(config.get('master_store_id') or '').strip()
+        if not master_store_id:
+            known_ids = {str(s.get('id')) for s in stores if isinstance(s, dict)}
+            if '1000' in known_ids:
+                master_store_id = '1000'
+            elif stores and isinstance(stores[0], dict):
+                master_store_id = str(stores[0].get('id') or '')
+            if master_store_id:
+                # Repair the config so the next delete does not have to guess.
+                config['master_store_id'] = master_store_id
+                logging.warning(
+                    'Config for this account had no master_store_id; treating %s as master.',
+                    master_store_id,
+                )
+
+        if master_store_id and str(store_id) == str(master_store_id):
             return jsonify({'error': 'Master Store cannot be deleted'}), 403
+
+        if len(stores) <= 1:
+            return jsonify({'error': 'Your last store cannot be deleted'}), 403
         
         # Check if store exists
         store_found = False
