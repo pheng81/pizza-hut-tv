@@ -80,7 +80,38 @@ class ApiClient {
             if (token != null && token.isNotEmpty) {
               options.headers['X-Mobile-Auth'] = token;
             }
+            if (kDebugMode) {
+              debugPrint(
+                'API -> ${options.method} ${options.path} '
+                'token=${token == null || token.isEmpty ? 'NONE' : 'yes'}',
+              );
+            }
             handler.next(options);
+          },
+          onResponse: (response, handler) {
+            if (kDebugMode) {
+              final body = response.data;
+              var summary = '';
+              if (body is Map) {
+                final stores = body['stores'];
+                summary = 'success=${body['success']} '
+                    'error=${body['error'] ?? '-'} '
+                    '${stores is List ? 'stores=${stores.length}' : ''}';
+              }
+              debugPrint(
+                'API <- ${response.statusCode} ${response.requestOptions.path} $summary',
+              );
+            }
+            handler.next(response);
+          },
+          onError: (err, handler) {
+            if (kDebugMode) {
+              debugPrint(
+                'API !! ${err.response?.statusCode} '
+                '${err.requestOptions.path} ${err.response?.data}',
+              );
+            }
+            handler.next(err);
           },
         ),
       );
