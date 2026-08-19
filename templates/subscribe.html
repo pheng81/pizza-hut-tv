@@ -164,13 +164,43 @@
           {% if billing_provider %}
             <p style="margin:8px 0 0; color:#475569;">Billing provider: <strong>{{ billing_provider_label }}</strong></p>
           {% endif %}
+          {% if store_billed %}
+            <p style="margin:10px 0 0; color:#475569;">
+              This subscription is managed in {{ billing_provider_label }}, not on this website.
+              Changing or cancelling it has to be done there.
+              {% if store_manage_url %}
+                <a href="{{ store_manage_url }}" target="_blank" rel="noopener">Manage subscription →</a>
+              {% endif %}
+            </p>
+          {% endif %}
         </div>
         <div class="cta-row">
           <a href="{{ url_for('dashboard') }}">Go to dashboard →</a>
         </div>
       {% else %}
+        {% if store_billed %}
+          <div class="alert alert-error" style="margin-bottom:20px;">
+            <div class="status-pill" style="background:#fee2e2; color:#991b1b;">{{ billing_provider_label }} subscription ended</div>
+            <p style="margin:12px 0 0;">
+              Your subscription was billed through <strong>{{ billing_provider_label }}</strong>{% if next_renewal %} and ended on <strong>{{ next_renewal }}</strong>{% endif %}.
+              Your screens and playlists are safe — they come back as soon as you subscribe again.
+            </p>
+            <p style="margin:12px 0 0;"><strong>You have two ways to continue:</strong></p>
+            <ul style="margin:8px 0 0; padding-left:20px; color:#475569;">
+              <li>
+                <strong>Resubscribe in the app</strong> on your phone — keeps everything on {{ billing_provider_label }}.
+                {% if store_manage_url %}<a href="{{ store_manage_url }}" target="_blank" rel="noopener">Check your subscriptions →</a>{% endif %}
+              </li>
+              <li><strong>Subscribe on this website</strong> using the plan below — billed per screen by card.</li>
+            </ul>
+            <p style="margin:12px 0 0; color:#991b1b;">
+              Choose one, not both. Subscribing in both places charges you twice for the same screens,
+              and we cannot cancel the {{ billing_provider_label }} side for you.
+            </p>
+          </div>
+        {% endif %}
         <div class="plan-box">
-          <p class="price">{{ price_display or '$5 per screen / month' }}</p>
+          <p class="price">{{ price_display }}</p>
           <p style="margin:12px 0 0; color:#475569;">{{ trial_days or 14 }}-day free trial. Cancel anytime.</p>
           {% if free_screens and free_screens > 0 %}
             <p style="margin:8px 0 0; color:#475569;">First {{ free_screens }} screen{{ '' if free_screens == 1 else 's' }} can be used before billing starts.</p>
@@ -186,7 +216,7 @@
           {% if subscription %}
             <div class="alert {{ 'alert-success' if subscription.status in ['active','trialing'] else 'alert-error' }}" style="margin-top:24px;">
               Current status: <strong>{{ subscription.status or 'unknown' }}</strong>
-              {% if next_renewal %} • Next renewal {{ next_renewal }}{% endif %}
+              {% if next_renewal %} • {{ 'Ended' if subscription_ended else 'Next renewal' }} {{ next_renewal }}{% endif %}
             </div>
           {% endif %}
           {% if pending_add_screen %}

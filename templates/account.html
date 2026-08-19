@@ -1399,12 +1399,22 @@
       </div>
 
       <!-- Budget -->
+      {% if store_billed %}
+      <div class="stat-card">
+        <div class="stat-label">Plan covers</div>
+        <div class="stat-value gradient">
+          {{ store_plan_screens if store_plan_screens else '—' }}
+        </div>
+        <div style="color:#6b7280; font-size:12px; margin-top:4px;">screens via {{ store_provider_label }}</div>
+      </div>
+      {% else %}
       <div class="stat-card">
         <div class="stat-label">Monthly Cost</div>
         <div class="stat-value gradient">
           ${{ '%.2f'|format(monthly_cost or 0) }}
         </div>
       </div>
+      {% endif %}
     </div>
 
     <!-- Subscription Details -->
@@ -1415,7 +1425,13 @@
       </h2>
       <div class="info-row">
         <span class="info-label">Plan</span>
-        <span class="info-value">{{ price_display or '$5 per screen / month' }}</span>
+        <span class="info-value">
+          {%- if store_billed -%}
+            {% if store_plan_screens %}{{ store_plan_screens }}-screen plan{% else %}Store plan{% endif %} via {{ store_provider_label }}
+          {%- else -%}
+            {{ price_display }}
+          {%- endif -%}
+        </span>
       </div>
       <div class="info-row">
         <span class="info-label">Current Period</span>
@@ -1597,9 +1613,20 @@
         <span class="title-accent"></span>
         Manage Screen Subscriptions
       </h2>
+      {% if store_billed %}
       <p style="color: #6b7280; font-size: 14px; margin-bottom: 20px;">
-        Each billable screen uses your current plan rate of {{ price_display or '$5 per screen / month' }}. Cancel any screen subscription at any time.
+        Your subscription is billed through <strong>{{ store_provider_label }}</strong>{% if store_plan_screens %},
+        and your plan covers <strong>{{ store_plan_screens }} screens</strong>{% endif %}.
+        There is no separate charge per screen, and these screens cannot be cancelled individually.
+        {% if store_manage_url %}
+          <a href="{{ store_manage_url }}" target="_blank" rel="noopener">Manage your subscription in {{ store_provider_label }} →</a>
+        {% endif %}
       </p>
+      {% else %}
+      <p style="color: #6b7280; font-size: 14px; margin-bottom: 20px;">
+        Each billable screen uses your current plan rate of {{ price_display }}. Cancel any screen subscription at any time.
+      </p>
+      {% endif %}
       
       <div class="screens-list" style="margin-bottom: 20px;">
         {% for sub in screen_subscriptions %}
@@ -1636,8 +1663,13 @@
               </div>
             </div>
             <div style="text-align: right;">
+              {% if store_billed %}
+              <div style="font-weight: 600; color: #6b7280; font-size: 14px;">
+                Included in your {{ store_provider_label }} plan
+              </div>
+              {% else %}
               <div style="font-weight: 600; color: #10b981; font-size: 16px; margin-bottom: 8px;">
-                {{ price_display or '$5 per screen / month' }}
+                {{ price_display }}
               </div>
               {% if sub.status not in ['canceled', 'incomplete_expired'] %}
               <button onclick="cancelScreenSubscription({{ sub.id }}, '{{ sub.screen_name }}')" 
@@ -1650,12 +1682,14 @@
               {% else %}
               <span style="color: #9ca3af; font-size: 13px; font-style: italic;">Cancelled</span>
               {% endif %}
+              {% endif %}
             </div>
           </div>
         </div>
         {% endfor %}
       </div>
       
+      {% if not store_billed %}
       <div style="padding: 16px; background: #fef3c7; border-radius: 8px; border: 1px solid #fde68a; margin-bottom: 16px;">
         <div style="display: flex; align-items: start; gap: 12px;">
           <i class="fas fa-exclamation-triangle" style="color: #d97706; font-size: 18px; margin-top: 2px;"></i>
@@ -1674,6 +1708,7 @@
           </div>
         </div>
       </div>
+      {% endif %}
     </div>
     {% endif %}
 

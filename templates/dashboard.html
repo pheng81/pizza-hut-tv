@@ -10339,7 +10339,93 @@ allowfullscreen></iframe></div>`;
             }catch(e){ console.error(e); }
         }
         
-        function showAddScreenConfirmDialog(screenCount) {
+        // Billing copy differs by who is actually charging the customer. The
+        // website bills per screen through Stripe; the App Store and Play bill a
+        // fixed tier, so an "additional charge per screen" warning would be
+        // simply untrue for a store subscriber whose tier still has room.
+        // "App Store" needs a leading article where "Google Play" does not, so
+        // each name carries the three forms the copy actually uses rather than
+        // producing "your the App Store plan".
+        function storeNames(provider) {
+            const p = (provider || '').toLowerCase();
+            if (p === 'apple') {
+                return { bare: 'App Store', the: 'the App Store', cap: 'The App Store' };
+            }
+            if (p === 'google') {
+                return { bare: 'Google Play', the: 'Google Play', cap: 'Google Play' };
+            }
+            return null;
+        }
+
+        function describeAddScreenBilling(checkData) {
+            const data = checkData || {};
+            const store = storeNames(data.billing_provider);
+            const storeName = store ? store.the : '';
+            if (!storeName) {
+                return {
+                    subtitle: 'This will add one more billable display to your account.',
+                    title: 'Additional Charge',
+                    text: `A new subscription will be created at <span class="price-highlight">${data.price_display || 'the current plan rate'}</span> per screen.`,
+                };
+            }
+            const planScreens = Number(data.mobile_plan_screens || 0);
+            const nextCount = Number(data.screen_count || 0) + 1;
+            if (planScreens > 0) {
+                return {
+                    subtitle: `This uses one more screen from your ${store.bare} plan.`,
+                    title: `Billed through ${store.the}`,
+                    text: `Your plan covers <span class="price-highlight">${planScreens} screens</span> and you are using ${nextCount} after this one. No extra charge — your subscription is managed in ${store.the}.`,
+                };
+            }
+            return {
+                subtitle: 'This will add one more display to your account.',
+                title: `Billed through ${store.the}`,
+                text: `Your subscription is managed in ${store.the}, not on this website.`,
+            };
+        }
+
+        // Shown when a store plan cannot cover another screen. /check_screen_limit
+        // and /add_screen describe this with different field names, so accept both.
+        function showStorePlanLimitMessage(data) {
+            const d = data || {};
+            const provider = (d.billing_provider || '').toLowerCase();
+            const store = storeNames(provider) || storeNames('apple');
+            const manageIn = provider === 'google'
+                ? 'the Play Store > Payments and subscriptions'
+                : 'iPhone Settings > your name > Subscriptions';
+            const planScreens = Number(d.mobile_plan_screens ?? d.plan_screens ?? 0);
+            const limitReached = Boolean(d.mobile_plan_limit_reached ?? d.plan_limit_reached);
+            const upgradeScreens = Number(d.mobile_upgrade_screens ?? d.upgrade_screens ?? 0);
+
+            if (limitReached) {
+                // Above the largest tier there is nothing to upgrade to, so the
+                // website really is the only option. Spell out the order: keep
+                // using what is already paid for, and only then switch - a
+                // straight cancel throws away the rest of the paid month.
+                alert(
+                    `You have ${planScreens} screens, the most your ${store.bare} plan covers.\n\n` +
+                    'To go beyond this you need to move your billing to the website:\n\n' +
+                    `1. Turn off auto-renew in ${manageIn}.\n` +
+                    '2. Keep using your screens until the period you have paid for ends.\n' +
+                    '3. Then subscribe on the website, which bills per screen with no cap.\n\n' +
+                    'Do not cancel immediately — you would lose the rest of the month you have already paid for.'
+                );
+                return;
+            }
+
+            const target = upgradeScreens
+                ? `the ${upgradeScreens}-screen plan`
+                : 'the next plan up';
+            alert(
+                `Your subscription is billed through ${store.the} and covers ${planScreens} screens.\n\n` +
+                `To add another screen, open the app on your phone and upgrade to ${target}.\n\n` +
+                `${store.cap} applies the upgrade immediately and credits the time you have already paid for. ` +
+                'This cannot be done from the website, and you do not need to cancel anything first.'
+            );
+        }
+
+        function showAddScreenConfirmDialog(screenCount, checkData) {
+            const billingCopy = describeAddScreenBilling(checkData);
             return new Promise((resolve) => {
                 // Create modal overlay
                 const overlay = document.createElement('div');
@@ -10464,7 +10550,7 @@ allowfullscreen></iframe></div>`;
                             </div>
                             <div>
                                 <h2 class="dialog-title">Add another screen?</h2>
-                                <p class="dialog-subtitle">This will add one more billable display to your account.</p>
+                                <p class="dialog-subtitle">${billingCopy.subtitle}</p>
                             </div>
                         </div>
                     </div>
@@ -10479,10 +10565,10 @@ allowfullscreen></iframe></div>`;
                                 <svg fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                                     <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
                                 </svg>
-                                Additional Charge
+                                ${billingCopy.title}
                             </div>
                             <div class="warning-box-text">
-                                A new subscription will be created at <span class="price-highlight">$5/month</span> per screen.
+                                ${billingCopy.text}
                             </div>
                         </div>
                         
@@ -10568,10 +10654,18 @@ allowfullscreen></iframe></div>`;
                     headers: { 'Content-Type': 'application/json' }
                 });
                 const checkData = await checkResp.json();
-                
+
+                // A store plan covers a fixed number of screens. If this one goes
+                // past the tier, say so now rather than letting the user confirm
+                // a purchase the website cannot make and then showing an error.
+                if (checkData.mobile_needs_upgrade && !checkData.is_admin) {
+                    showStorePlanLimitMessage(checkData);
+                    return null;
+                }
+
                 // If user has existing screens and subscription, warn about additional charge
                 if (checkData.has_subscription && checkData.screen_count >= 1) {
-                    const confirmed = await showAddScreenConfirmDialog(checkData.screen_count);
+                    const confirmed = await showAddScreenConfirmDialog(checkData.screen_count, checkData);
                     if (!confirmed) {
                         console.log('User cancelled adding additional screen');
                         return null;
@@ -10601,7 +10695,7 @@ allowfullscreen></iframe></div>`;
                 // Check if subscription is required
                 if (resp.status === 403 && data.requires_subscription) {
                     // Show subscription modal/alert
-                    const message = data.message || 'You have reached your free screen limit. Subscribe to add more screens at $5 per screen per month.';
+                    const message = data.message || `You have reached your free screen limit. Subscribe to add more screens at ${data.price_display || checkData.price_display || 'the current plan rate'}.`;
                     const goToSubscribe = confirm(`${message}\\n\\nWould you like to subscribe now?`);
                     if (goToSubscribe) {
                         const params = new URLSearchParams({
@@ -10613,7 +10707,15 @@ allowfullscreen></iframe></div>`;
                     }
                     return null;
                 }
-                
+
+                // The server is authoritative: /check_screen_limit can be stale if
+                // the plan changed in another tab or on the phone. Without this the
+                // user just sees the raw string "Error: Plan upgrade required".
+                if (resp.status === 403 && (data.requires_upgrade || data.plan_limit_reached)) {
+                    showStorePlanLimitMessage(data);
+                    return null;
+                }
+
                 if(!data.success){ alert(`❌ Error: ${data.error}`); return null; }
                 // Inject into in-memory model
                 if(!allStoresData.screens) allStoresData.screens = {};

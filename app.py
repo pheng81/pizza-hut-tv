@@ -428,6 +428,12 @@ def init_db():
         )
         db.execute('CREATE INDEX IF NOT EXISTS idx_mobile_purchases_user ON mobile_store_purchases(user_id)')
         db.execute('CREATE INDEX IF NOT EXISTS idx_mobile_purchases_status ON mobile_store_purchases(status)')
+        # App Store Server Notifications identify a subscription only by its
+        # originalTransactionId, so that lookup has to be indexed.
+        db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_mobile_purchases_original_txn '
+            'ON mobile_store_purchases(provider, original_transaction_id)'
+        )
         
         # Create cancellation_feedback table
         db.execute(
@@ -862,8 +868,14 @@ init_db()
 STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
 STRIPE_PUBLISHABLE_KEY = os.environ.get('STRIPE_PUBLISHABLE_KEY')
 STRIPE_STANDARD_PRICE_ID = os.environ.get('STRIPE_PRICE_ID') or os.environ.get('STRIPE_PRICE_STANDARD')
+# Blank means: follow whatever currency the current Stripe price already uses,
+# so changing the amount never silently changes the currency too.
+STRIPE_CURRENCY = (os.environ.get('STRIPE_CURRENCY') or '').strip().lower()
 STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
-STRIPE_PRICE_DISPLAY = os.environ.get('STRIPE_PRICE_DISPLAY') or '$5 per screen / month'
+# Only an explicit override lives here. Every other price string is derived
+# from the admin Subscription settings via _format_price_display(), so the
+# admin is the single place a price is ever set. Blank means 'not overridden'.
+STRIPE_PRICE_DISPLAY = (os.environ.get('STRIPE_PRICE_DISPLAY') or '').strip()
 # App Store / Play Store subscriptions top out at the largest tier (see
 # _DEFAULT_MOBILE_IAP_TIERS below); beyond that, only the website's flexible
 # per-screen Stripe billing can cover more screens.
@@ -1138,7 +1150,7 @@ def _format_price_display(amount: float) -> str:
     try:
         value = float(amount)
     except Exception:
-        value = 5.0
+        value = _default_price_per_screen()
     if value.is_integer():
         amount_text = str(int(value))
     else:
@@ -1178,7 +1190,7 @@ def _ensure_billing_settings_seeded():
     db = get_db()
     defaults = _normalize_billing_settings({
         'price_per_screen': _default_price_per_screen(),
-        'price_display': STRIPE_PRICE_DISPLAY,
+        'price_display': STRIPE_PRICE_DISPLAY or _format_price_display(_default_price_per_screen()),
         'stripe_price_id': STRIPE_STANDARD_PRICE_ID,
         'trial_days': _default_trial_days(),
         'free_screens': _default_free_screens(),
@@ -2322,6 +2334,103 @@ def _save_logo_intro_svg_source(source: str) -> None:
         fh.write(svg)
 
 
+def _stripe_price_matches(price, amount_cents: int, currency: str) -> bool:
+    """Whether an existing Stripe Price already charges exactly this."""
+    recurring = (price or {}).get('recurring') or {}
+    try:
+        same_amount = int(price.get('unit_amount')) == amount_cents
+    except (TypeError, ValueError):
+        return False
+    return (
+        same_amount
+        and (price.get('currency') or '').lower() == currency
+        and recurring.get('interval') == 'month'
+        and int(recurring.get('interval_count') or 1) == 1
+        and bool(price.get('active'))
+    )
+
+
+def _sync_stripe_price_to_amount(amount: float, existing_price_id: str) -> tuple[str, str]:
+    """Point billing at a Stripe Price that charges `amount` per screen per month.
+
+    The admin's per-screen number is the price customers pay. Stripe Price
+    objects are immutable - the amount cannot be edited - so honouring a changed
+    number means pointing at a different Price: reusing one on the same product
+    that already matches, or creating it.
+
+    Returns (price_id, note). The note is shown to the admin so the outcome is
+    never silent. Existing subscribers are NOT moved here; that stays behind the
+    "apply to existing users" checkbox.
+    """
+    existing_price_id = (existing_price_id or '').strip()
+    if not stripe or not (STRIPE_SECRET_KEY or '').strip():
+        return existing_price_id, 'Stripe is not configured, so the price ID was left as-is.'
+
+    try:
+        amount_cents = int(round(float(amount) * 100))
+    except (TypeError, ValueError):
+        return existing_price_id, 'Price per screen was not a number, so the price ID was left as-is.'
+    if amount_cents < 0:
+        return existing_price_id, 'Price per screen cannot be negative; price ID left as-is.'
+
+    product_id = ''
+    currency = STRIPE_CURRENCY
+
+    if existing_price_id:
+        try:
+            current = stripe.Price.retrieve(existing_price_id)
+            if _stripe_price_matches(current, amount_cents, (currency or current.get('currency') or '').lower()):
+                return existing_price_id, ''
+            product_id = current.get('product') or ''
+            # Stay in whatever currency this account already bills in; silently
+            # switching currency would change what every new customer is charged.
+            currency = currency or (current.get('currency') or '').lower()
+        except Exception as exc:
+            logging.warning('Could not read Stripe price %s: %s', existing_price_id, exc)
+
+    currency = (currency or 'usd').lower()
+
+    # Reuse a matching price on the same product rather than piling up duplicates.
+    if product_id:
+        try:
+            for price in stripe.Price.list(
+                product=product_id, active=True, type='recurring', limit=100
+            ).get('data', []):
+                if _stripe_price_matches(price, amount_cents, currency):
+                    return price['id'], (
+                        f'Now billing {_format_price_display(amount)} using existing '
+                        f'Stripe price {price["id"]}.'
+                    )
+        except Exception as exc:
+            logging.warning('Could not list Stripe prices for %s: %s', product_id, exc)
+
+    try:
+        params = {
+            'unit_amount': amount_cents,
+            'currency': currency,
+            'recurring': {'interval': 'month'},
+        }
+        if product_id:
+            params['product'] = product_id
+        else:
+            params['product_data'] = {'name': 'Screen subscription'}
+        created = stripe.Price.create(**params)
+        logging.info(
+            'Created Stripe price %s for %s %s/month', created['id'], amount_cents / 100, currency,
+        )
+        return created['id'], (
+            f'Created a new Stripe price ({currency.upper()} {amount_cents / 100:.2f}/month) '
+            f'so customers are charged what you set: {created["id"]}.'
+        )
+    except Exception as exc:
+        logging.error('Could not create Stripe price for %s: %s', amount, exc)
+        return existing_price_id, (
+            f'Could not create a Stripe price for {_format_price_display(amount)} ({exc}). '
+            'The old price is still in use - customers are NOT being charged the new amount.'
+        )
+
+
+
 def _apply_billing_policy_to_existing_users(policy: dict, source: str) -> int:
     db = get_db()
     result = db.execute(
@@ -3190,6 +3299,362 @@ def _verify_apple_mobile_purchase(
     }
 
 
+# ---------------------- App Store Server Notifications V2 ----------------------
+#
+# Receipt verification only tells us the subscription state at the moment of
+# purchase. Apple then renews, cancels, refunds and expires on its own, and
+# without these notifications the stored current_period_end silently goes stale
+# - which locks a paying customer out of the website at their first renewal,
+# and leaves a cancelled subscriber permanently blocked from Stripe checkout.
+
+# Apple Root CA - G3, the trust anchor for the notification signing chain.
+# Embedded rather than read from disk because deploy_automated.ps1 only ships
+# app.py, config.py and .env.production; a separate cert file would never
+# reach the server. It is a public certificate, valid until 2039.
+APPLE_ROOT_CA_G3_PEM = b"""-----BEGIN CERTIFICATE-----
+MIICQzCCAcmgAwIBAgIILcX8iNLFS5UwCgYIKoZIzj0EAwMwZzEbMBkGA1UEAwwS
+QXBwbGUgUm9vdCBDQSAtIEczMSYwJAYDVQQLDB1BcHBsZSBDZXJ0aWZpY2F0aW9u
+IEF1dGhvcml0eTETMBEGA1UECgwKQXBwbGUgSW5jLjELMAkGA1UEBhMCVVMwHhcN
+MTQwNDMwMTgxOTA2WhcNMzkwNDMwMTgxOTA2WjBnMRswGQYDVQQDDBJBcHBsZSBS
+b290IENBIC0gRzMxJjAkBgNVBAsMHUFwcGxlIENlcnRpZmljYXRpb24gQXV0aG9y
+aXR5MRMwEQYDVQQKDApBcHBsZSBJbmMuMQswCQYDVQQGEwJVUzB2MBAGByqGSM49
+AgEGBSuBBAAiA2IABJjpLz1AcqTtkyJygRMc3RCV8cWjTnHcFBbZDuWmBSp3ZHtf
+TjjTuxxEtX/1H7YyYl3J6YRbTzBPEVoA/VhYDKX1DyxNB0cTddqXl5dvMVztK517
+IDvYuVTZXpmkOlEKMaNCMEAwHQYDVR0OBBYEFLuw3qFYM4iapIqZ3r6966/ayySr
+MA8GA1UdEwEB/wQFMAMBAf8wDgYDVR0PAQH/BAQDAgEGMAoGCCqGSM49BAMDA2gA
+MGUCMQCD6cHEFl4aXTQY2e3v9GwOAEZLuN+yRhHFD/3meoyhpmvOwgPUnPWTxnS4
+at+qIxUCMG1mihDK1A3UT82NQz60imOlM27jbdoXt2QfyFMm+YhidDkLF1vLUagM
+6BgD56KyKA==
+-----END CERTIFICATE-----
+"""
+
+# Published SHA-256 fingerprint of the certificate above. Checked as well as
+# the bytes so that swapping the constant for another valid self-signed root
+# still fails: the chain must end at *Apple's* root, not merely at some root.
+APPLE_ROOT_CA_G3_SHA256 = '63343abfb89a6a03ebb57e9b3f5fa7be7c4f5c756f3017b3a8c488c3653e9179'
+
+
+def _apple_b64url_decode(segment: str) -> bytes:
+    """Decode a JWS segment, restoring the padding Apple strips."""
+    return base64.urlsafe_b64decode(segment + '=' * (-len(segment) % 4))
+
+
+def _apple_verify_signed_jws(token: str) -> dict:
+    """Return the payload of one of Apple's signed blobs, or raise.
+
+    Apple puts the whole signing chain in the JWS header as x5c
+    ([leaf, intermediate, root]) rather than expecting us to hold a shared
+    secret. Anyone can POST this endpoint, so the chain has to be walked all
+    the way back to Apple's pinned root before a single field is believed -
+    otherwise a stranger could hand us any subscription state they liked.
+    """
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
+
+    parts = (token or '').split('.')
+    if len(parts) != 3:
+        raise ValueError('Apple notification is not a well-formed JWS.')
+    header_b64, payload_b64, signature_b64 = parts
+
+    try:
+        header = json.loads(_apple_b64url_decode(header_b64))
+    except Exception as exc:
+        raise ValueError('Apple notification header could not be decoded.') from exc
+
+    # ES256 is what Apple signs with. Accepting whatever the header asks for
+    # would allow alg=none, or an HMAC keyed on the public certificate.
+    if header.get('alg') != 'ES256':
+        raise ValueError(f'Unexpected Apple notification algorithm: {header.get("alg")}')
+
+    chain_b64 = header.get('x5c') or []
+    if len(chain_b64) < 2:
+        raise ValueError('Apple notification carried no certificate chain.')
+
+    try:
+        chain = [x509.load_der_x509_certificate(base64.b64decode(c)) for c in chain_b64]
+    except Exception as exc:
+        raise ValueError('Apple notification certificate chain could not be parsed.') from exc
+
+    expected_root = x509.load_pem_x509_certificate(APPLE_ROOT_CA_G3_PEM)
+    presented_root = chain[-1]
+    if presented_root.fingerprint(hashes.SHA256()).hex() != APPLE_ROOT_CA_G3_SHA256:
+        raise ValueError('Apple notification did not chain to the Apple root certificate.')
+    if (
+        presented_root.public_bytes(serialization.Encoding.DER)
+        != expected_root.public_bytes(serialization.Encoding.DER)
+    ):
+        raise ValueError('Apple notification root certificate did not match the pinned copy.')
+
+    now = datetime.now(timezone.utc)
+    for cert in chain:
+        if not (cert.not_valid_before_utc <= now <= cert.not_valid_after_utc):
+            raise ValueError('Apple notification used an expired or not-yet-valid certificate.')
+
+    # Each certificate must actually be signed by the next one up.
+    for child, issuer in zip(chain, chain[1:]):
+        try:
+            child.verify_directly_issued_by(issuer)
+        except Exception as exc:
+            raise ValueError('Apple notification certificate chain did not verify.') from exc
+
+    raw_signature = _apple_b64url_decode(signature_b64)
+    if len(raw_signature) != 64:
+        raise ValueError('Apple notification signature was malformed.')
+    r = int.from_bytes(raw_signature[:32], 'big')
+    s = int.from_bytes(raw_signature[32:], 'big')
+
+    leaf_key = chain[0].public_key()
+    if not isinstance(leaf_key, ec.EllipticCurvePublicKey):
+        raise ValueError('Apple notification leaf certificate was not an EC key.')
+    try:
+        leaf_key.verify(
+            encode_dss_signature(r, s),
+            f'{header_b64}.{payload_b64}'.encode('ascii'),
+            ec.ECDSA(hashes.SHA256()),
+        )
+    except Exception as exc:
+        raise ValueError('Apple notification signature did not verify.') from exc
+
+    try:
+        return json.loads(_apple_b64url_decode(payload_b64))
+    except Exception as exc:
+        raise ValueError('Apple notification payload could not be decoded.') from exc
+
+
+# Notification types that end access. REFUND and REVOKE mean Apple already gave
+# the money back, so access stops immediately rather than at period end.
+_APPLE_NOTIFICATIONS_ENDING = {
+    'EXPIRED': 'expired',
+    'GRACE_PERIOD_EXPIRED': 'expired',
+    'REVOKE': 'expired',
+    'REFUND': 'refunded',
+}
+
+# Types that mean the subscription is live and paid up.
+_APPLE_NOTIFICATIONS_ACTIVE = {
+    'SUBSCRIBED',
+    'DID_RENEW',
+    'OFFER_REDEEMED',
+    'RENEWAL_EXTENDED',
+    'PRICE_INCREASE',
+    'DID_CHANGE_RENEWAL_PREF',
+    'DID_CHANGE_RENEWAL_STATUS',
+}
+
+
+def _apple_transaction_is_trial(transaction: dict) -> bool:
+    """Whether this transaction is running on the introductory free trial."""
+    if str(transaction.get('offerDiscountType') or '').upper() == 'FREE_TRIAL':
+        return True
+    # offerType 1 is Apple's introductory offer, which is how the 2-week trial
+    # on every tier is expressed.
+    try:
+        return int(transaction.get('offerType') or 0) == 1
+    except (TypeError, ValueError):
+        return False
+
+
+def _apple_notification_outcome(
+    notification_type: str,
+    subtype: str,
+    transaction: dict,
+    renewal: dict,
+) -> tuple[str, int] | None:
+    """(status, cancel_at_period_end) to record, or None to ignore the event."""
+    if notification_type in _APPLE_NOTIFICATIONS_ENDING:
+        return _APPLE_NOTIFICATIONS_ENDING[notification_type], 0
+
+    if notification_type == 'DID_FAIL_TO_RENEW':
+        # Billing failed. _user_has_active_subscription keeps past_due users in
+        # while current_period_end is still ahead, which is exactly the billing
+        # retry / grace window. EXPIRED follows if it is never recovered.
+        return 'past_due', 0
+
+    if notification_type in _APPLE_NOTIFICATIONS_ACTIVE:
+        status = 'trialing' if _apple_transaction_is_trial(transaction) else 'active'
+        # autoRenewStatus 0 means the customer switched auto-renew off: still
+        # entitled until the period ends, but not renewing after that.
+        try:
+            auto_renew = int(renewal.get('autoRenewStatus', 1))
+        except (TypeError, ValueError):
+            auto_renew = 1
+        return status, 0 if auto_renew else 1
+
+    # CONSUMPTION_REQUEST, REFUND_DECLINED, TEST and anything Apple adds later
+    # carry no entitlement change worth recording.
+    return None
+
+
+def _apply_apple_notification(
+    notification_type: str,
+    subtype: str,
+    transaction: dict,
+    renewal: dict,
+) -> str:
+    """Update stored billing state from a verified notification.
+
+    Returns a short string describing what happened, for the log.
+    """
+    original_transaction_id = str(transaction.get('originalTransactionId') or '').strip()
+    if not original_transaction_id:
+        return 'ignored: notification carried no originalTransactionId'
+
+    outcome = _apple_notification_outcome(notification_type, subtype, transaction, renewal)
+    if outcome is None:
+        return f'ignored: {notification_type} carries no entitlement change'
+    status, cancel_at_period_end = outcome
+
+    product_id = str(transaction.get('productId') or '').strip()
+    try:
+        expires_at = int(int(transaction.get('expiresDate') or 0) / 1000) or None
+    except (TypeError, ValueError):
+        expires_at = None
+
+    db = get_db()
+    purchase = db.execute(
+        'SELECT user_id FROM mobile_store_purchases '
+        'WHERE provider = ? AND original_transaction_id = ? '
+        'ORDER BY id DESC LIMIT 1',
+        ('apple', original_transaction_id),
+    ).fetchone()
+    if not purchase:
+        # A purchase we never verified - bought before this account was linked,
+        # or verification failed at the time. Apple retrying will not fix that;
+        # the app's "Restore purchases" is the recovery path.
+        return (
+            f'no local purchase for originalTransactionId {original_transaction_id}; '
+            'user must restore purchases in the app'
+        )
+    user_id = int(purchase['user_id'])
+
+    existing = db.execute(
+        'SELECT status, current_period_end, billing_provider '
+        'FROM subscriptions WHERE user_id = ?',
+        (user_id,),
+    ).fetchone()
+    if not existing:
+        return f'user {user_id} has no subscription row to update'
+
+    # Never let an Apple notification overwrite a Stripe subscription. A user
+    # who cancelled at Apple and resubscribed on the web would otherwise have
+    # their live Stripe row expired by the trailing Apple EXPIRED event.
+    if ((existing['billing_provider'] or '').lower() != 'apple'):
+        return (
+            f'user {user_id} is now billed by '
+            f'{existing["billing_provider"] or "stripe"}; Apple event not applied'
+        )
+
+    # Apple does not guarantee delivery order. A late-arriving renewal must not
+    # pull the expiry backwards; ending events always apply.
+    is_ending = notification_type in _APPLE_NOTIFICATIONS_ENDING
+    try:
+        stored_period_end = int(existing['current_period_end'] or 0)
+    except (TypeError, ValueError):
+        stored_period_end = 0
+    if not is_ending and expires_at and stored_period_end and expires_at < stored_period_end:
+        return (
+            f'ignored out-of-order {notification_type} for user {user_id} '
+            f'(expiry {expires_at} predates stored {stored_period_end})'
+        )
+
+    now = int(time.time())
+    period_end = expires_at or stored_period_end or None
+    db.execute(
+        'UPDATE subscriptions SET status = ?, current_period_end = ?, '
+        'trial_end = ?, cancel_at_period_end = ?, billing_product_id = ?, updated_at = ? '
+        'WHERE user_id = ? AND billing_provider = ?',
+        (
+            status,
+            period_end,
+            period_end if status == 'trialing' else None,
+            cancel_at_period_end,
+            product_id or None,
+            now,
+            user_id,
+            'apple',
+        ),
+    )
+    db.execute(
+        'UPDATE mobile_store_purchases SET status = ?, expires_at = ?, product_id = ?, '
+        'updated_at = ? WHERE provider = ? AND original_transaction_id = ?',
+        (status, period_end, product_id or None, now, 'apple', original_transaction_id),
+    )
+    db.execute(
+        'UPDATE users SET subscription_status = ?, subscription_plan = ? WHERE id = ?',
+        (status, f'apple:{product_id}' if product_id else None, user_id),
+    )
+    db.commit()
+    return (
+        f'user {user_id} -> {status} (product={product_id or "unchanged"}, '
+        f'expires={period_end}, cancel_at_period_end={cancel_at_period_end})'
+    )
+
+
+@app.route('/api/billing/apple/notifications', methods=['POST'])
+def api_apple_store_notifications():
+    """Receive App Store Server Notifications V2 and keep billing state fresh.
+
+    Registered in App Store Connect for both Production and Sandbox. No login:
+    Apple is not a user, and the JWS signature is what establishes trust.
+    """
+    body = request.get_json(silent=True) or {}
+    signed_payload = str(body.get('signedPayload') or '').strip()
+    if not signed_payload:
+        return jsonify({'success': False, 'error': 'Missing signedPayload'}), 400
+
+    try:
+        payload = _apple_verify_signed_jws(signed_payload)
+    except ValueError as exc:
+        logging.warning('Rejected Apple notification: %s', exc)
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except Exception:
+        logging.exception('Apple notification could not be verified')
+        return jsonify({'success': False, 'error': 'Verification failed'}), 400
+
+    notification_type = str(payload.get('notificationType') or '')
+    subtype = str(payload.get('subtype') or '')
+    data = payload.get('data') or {}
+
+    bundle_id = str(data.get('bundleId') or '').strip()
+    if bundle_id and bundle_id != APPLE_IAP_BUNDLE_ID:
+        logging.warning('Apple notification for another app: %s', bundle_id)
+        return jsonify({'success': False, 'error': 'Notification is for another app'}), 400
+
+    try:
+        transaction = (
+            _apple_verify_signed_jws(data['signedTransactionInfo'])
+            if data.get('signedTransactionInfo') else {}
+        )
+        renewal = (
+            _apple_verify_signed_jws(data['signedRenewalInfo'])
+            if data.get('signedRenewalInfo') else {}
+        )
+    except ValueError as exc:
+        logging.warning('Rejected Apple notification inner payload: %s', exc)
+        return jsonify({'success': False, 'error': str(exc)}), 400
+
+    try:
+        result = _apply_apple_notification(notification_type, subtype, transaction, renewal)
+    except Exception:
+        # A 5xx makes Apple retry, which is what we want for a transient
+        # database problem.
+        logging.exception(
+            'Failed to apply Apple notification %s/%s', notification_type, subtype,
+        )
+        return jsonify({'success': False, 'error': 'Could not apply notification'}), 500
+
+    # Deliberately warning, not info: the server runs at WARNING level, and a
+    # billing event that silently succeeds is indistinguishable from one that
+    # never arrived. These are rare enough not to be noise.
+    logging.warning(
+        'Apple notification %s/%s (%s): %s',
+        notification_type, subtype or '-', data.get('environment') or 'unknown', result,
+    )
+    return jsonify({'success': True})
+
+
 def _google_play_credentials():
     try:
         from google.oauth2 import service_account
@@ -3810,7 +4275,11 @@ def _send_subscription_welcome_email_once(user_id: int, subscription_obj=None) -
             return False
 
         policy = _get_user_billing_policy(user_id)
-        price_display = policy.get('price_display') or STRIPE_PRICE_DISPLAY or '$5 per screen / month'
+        price_display = (
+            policy.get('price_display')
+            or STRIPE_PRICE_DISPLAY
+            or _format_price_display(policy.get('price_per_screen') or _default_price_per_screen())
+        )
         current_period_end = subscription_obj.get('current_period_end') or row['current_period_end']
         trial_end = subscription_obj.get('trial_end') or row['trial_end']
         period_label = _format_billing_timestamp(current_period_end)
@@ -4079,9 +4548,20 @@ def _create_screen_record_for_store(
             screen_name = new_screen_id
             db = get_db()
             sub_row = db.execute(
-                'SELECT status, current_period_end, created_at FROM subscriptions WHERE user_id = ?',
+                'SELECT status, current_period_end, created_at, billing_provider '
+                'FROM subscriptions WHERE user_id = ?',
                 (user_id,)
             ).fetchone()
+
+            # An App Store or Play plan already covers this screen. Opening a
+            # Stripe subscription for it as well bills the same screen twice,
+            # and we cannot refund the store side - only the customer can cancel
+            # there. So the Stripe side must never be created in the first place.
+            store_billed_provider = ''
+            if sub_row is not None and 'billing_provider' in sub_row.keys():
+                store_billed_provider = (sub_row['billing_provider'] or '').lower()
+            if store_billed_provider not in ('apple', 'google'):
+                store_billed_provider = ''
 
             if sub_row:
                 status = sub_row['status']
@@ -4113,7 +4593,13 @@ def _create_screen_record_for_store(
                 db.commit()
                 subscription_created = True
 
-                if _stripe_enabled():
+                if store_billed_provider:
+                    logging.info(
+                        'Skipping Stripe subscription for screen %s: user %s is '
+                        'billed by %s, which already covers it.',
+                        new_screen_id, user_id, store_billed_provider,
+                    )
+                elif _stripe_enabled():
                     sub_result = _create_screen_subscription(
                         user_id,
                         new_screen_id,
@@ -6147,6 +6633,21 @@ def subscribe():
         'pending_store_id': pending_store_id,
         'pending_screen_type': pending_screen_type,
     }
+    # Whoever is billing this account decides what the page may offer. A store
+    # subscriber cannot be sold a Stripe plan here - the website has no way to
+    # cancel their store side, so buying both bills them twice for the same
+    # screens with no way for us to undo it.
+    store_provider = (template_ctx['billing_provider'] or '').lower()
+    template_ctx['store_billed'] = store_provider in ('apple', 'google')
+    template_ctx['store_manage_url'] = {
+        'apple': 'https://apps.apple.com/account/subscriptions',
+        'google': 'https://play.google.com/store/account/subscriptions',
+    }.get(store_provider, '')
+    # "Next renewal" is a lie once the subscription has stopped renewing.
+    template_ctx['subscription_ended'] = (
+        ((subscription_row or {}).get('status') or '').lower()
+        in ('expired', 'canceled', 'cancelled', 'refunded')
+    )
     return render_template('subscribe.html', **template_ctx)
 
 @app.route('/billing/checkout', methods=['POST'])
@@ -12452,6 +12953,27 @@ def superadmin_update_billing_settings():
     stripe_price_id = (request.form.get('stripe_price_id') or '').strip()
     apply_existing = request.form.get('apply_existing_users') == '1'
 
+    # The number in the admin is the price. Stripe holds the amount inside an
+    # immutable Price object, so unless the admin deliberately pasted a
+    # different price ID, repoint it at one charging what they just typed -
+    # otherwise the page advertises one figure and the card is charged another.
+    price_note = ''
+    try:
+        previous_price_id = (
+            (_get_global_billing_settings() or {}).get('stripe_price_id') or ''
+        ).strip()
+    except Exception:
+        previous_price_id = ''
+    if stripe_price_id and stripe_price_id != previous_price_id:
+        price_note = (
+            f'Using the Stripe price ID you entered ({stripe_price_id}). '
+            'The per-screen amount above is only used for display.'
+        )
+    else:
+        stripe_price_id, price_note = _sync_stripe_price_to_amount(
+            price_per_screen, stripe_price_id
+        )
+
     try:
         db = get_db()
         db.execute(
@@ -12480,6 +13002,8 @@ def superadmin_update_billing_settings():
             f'{f" ({applied_count} updated)" if apply_existing else ""}.',
             'success',
         )
+        if price_note:
+            flash(price_note, 'success' if 'Could not' not in price_note else 'error')
     except Exception as e:
         logging.error('Failed to update billing settings: %s', e, exc_info=True)
         flash(f'Failed to update billing settings: {e}', 'error')
@@ -13977,7 +14501,31 @@ def account():
         screens_list = []
         screen_subscriptions = []
     
+    # Who bills this account decides how the screens section reads. A store
+    # subscriber has no per-screen Stripe subscription to price or cancel, so
+    # showing them a per-screen rate and a Cancel button per screen is both
+    # wrong and dangerous - those buttons act on records that should not exist.
+    store_provider = ''
+    store_product_id = ''
+    try:
+        _srow = get_db().execute(
+            'SELECT billing_provider, billing_product_id FROM subscriptions WHERE user_id = ?',
+            (user_id,),
+        ).fetchone()
+        if _srow is not None:
+            store_provider = (_srow['billing_provider'] or '').lower()
+            store_product_id = _srow['billing_product_id'] or ''
+        if store_provider not in ('apple', 'google'):
+            store_provider = ''
+    except Exception as _store_e:
+        logging.warning('Could not read billing provider for account page: %s', _store_e)
+
     return render_template('account.html',
+                         store_billed=bool(store_provider),
+                         store_provider_label={'apple': 'the App Store', 'google': 'Google Play'}.get(store_provider, ''),
+                         store_manage_url={'apple': 'https://apps.apple.com/account/subscriptions',
+                                           'google': 'https://play.google.com/store/account/subscriptions'}.get(store_provider, ''),
+                         store_plan_screens=_mobile_tier_screen_allowance(store_product_id),
                          user_info=user_info,
                          account_created=account_created,
                          phone_number=phone_number,
@@ -19369,6 +19917,11 @@ def check_screen_limit():
             plan_product_id, current_screen_count + 1
         ) if needs_upgrade else None
 
+        # The confirm dialog has to name the real payer. An App Store subscriber
+        # quoted the website's per-screen Stripe price is being told a price that
+        # does not apply to them, for a purchase the website cannot make.
+        store_sub = _active_store_subscription(_current_user_id())
+
         return jsonify({
             'success': True,
             'screen_count': current_screen_count,
@@ -19376,6 +19929,9 @@ def check_screen_limit():
             'is_admin': is_admin_user,
             'free_screens': int(billing_policy.get('free_screens') or 0),
             'price_display': billing_policy['price_display'],
+            'billing_provider': store_sub[0] if store_sub else None,
+            'mobile_plan_product_id': plan_product_id,
+            'mobile_upgrade_screens': int(upgrade_tier['screens']) if upgrade_tier else None,
             # Store plans cover a fixed number of screens, so adding one past
             # the tier needs an upgrade rather than another purchase.
             'mobile_plan_screens': plan_screens,
@@ -19453,6 +20009,10 @@ def add_screen():
                 upgrade_tier = _mobile_upgrade_target(
                     plan_product_id, current_screen_count + 1
                 )
+                # Naming the actual store matters: the message tells the user
+                # where to go, and "the App Store" is wrong advice on Android.
+                store_sub = _active_store_subscription(_current_user_id())
+                store_provider = store_sub[0] if store_sub else None
                 if upgrade_tier is None:
                     # Already on the largest tier, so there is nothing to upgrade
                     # to. Do not tell them to buy the plan they already have.
@@ -19467,6 +20027,7 @@ def add_screen():
                         'plan_limit_reached': True,
                         'current_screens': current_screen_count,
                         'plan_screens': plan_screens,
+                        'billing_provider': store_provider,
                         'upgrade_url': MOBILE_PLAN_UPGRADE_URL,
                     }), 403
                 return jsonify({
@@ -19478,7 +20039,9 @@ def add_screen():
                     'requires_upgrade': True,
                     'current_screens': current_screen_count,
                     'plan_screens': plan_screens,
+                    'billing_provider': store_provider,
                     'upgrade_product_id': upgrade_tier['product_id'],
+                    'upgrade_screens': int(upgrade_tier['screens']),
                 }), 403
         result = _create_screen_record_for_store(store_id, screen_type)
         logging.info(
