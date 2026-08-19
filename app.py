@@ -9448,8 +9448,15 @@ def load_store_config():
     cfg_path = _effective_config_path()
     is_user_scoped = (cfg_path != CONFIG_FILE)
     if not os.path.exists(cfg_path):
-        # For user-scoped configs, start EMPTY (no stores/screens).
-        # For the global/legacy config, keep the legacy single master store.
+        # A user-scoped config used to start EMPTY here, while
+        # load_store_config_for_user_safe_key() started with the master store.
+        # Whichever loader ran first decided whether an account had a store at
+        # all, so the same user could see their master store on the web and no
+        # stores in the app. Both now start from the master store.
+        if is_user_scoped:
+            cfg = _build_first_master_store_config()
+            save_store_config(cfg)
+            return cfg
         cfg = get_default_config(user_scoped=is_user_scoped)
         if cfg.get('stores') and 'master_store_id' not in cfg:
             try:
@@ -9469,9 +9476,11 @@ def load_store_config():
             print(f"Backed up corrupt config to {backup_path}")
         except Exception:
             pass
-        # On corrupt user-scoped config, reset to EMPTY; for global, use legacy default
+        # A corrupt user config previously reset to EMPTY, leaving the account
+        # with no stores and nothing to select. The original file is backed up
+        # above, so rebuild the master store rather than handing back nothing.
         if is_user_scoped:
-            cfg = get_default_config(user_scoped=True)
+            cfg = _build_first_master_store_config()
         else:
             cfg = get_default_config(user_scoped=False)
     # For user-scoped configs, keep them empty until the user creates stores/screens.
