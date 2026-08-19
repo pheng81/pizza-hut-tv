@@ -94,13 +94,23 @@ if (-not $DryRun) {
     scp -i $KeyPath .env.production "ubuntu@${Server}:/tmp/.env.production"
     Write-Host "✓ Uploaded .env.production" -ForegroundColor Green
     
-    # Move files to final location
-    ssh -i $KeyPath "ubuntu@$Server" @"
-        sudo cp /tmp/app.py $RemotePath/app.py && \
-        sudo cp /tmp/config.py $RemotePath/config.py && \
-        sudo cp /tmp/.env.production $RemotePath/.env.production && \
-        sudo chown www-data:www-data $RemotePath/app.py $RemotePath/config.py $RemotePath/.env.production
-"@
+    # Move files to final location.
+    # PowerShell here-strings use CRLF, and a CR survives the `\` line
+    # continuation as a literal command - bash then reports `$'\r': command not
+    # found` and, worse, treats each line as separate so a failed cp does not
+    # stop the ones after it. Send LF-only and let `set -e` do the guarding.
+    $deployCmd = (@"
+set -e
+sudo cp /tmp/app.py $RemotePath/app.py
+sudo cp /tmp/config.py $RemotePath/config.py
+sudo cp /tmp/.env.production $RemotePath/.env.production
+sudo chown www-data:www-data $RemotePath/app.py $RemotePath/config.py $RemotePath/.env.production
+"@) -replace "`r`n", "`n"
+    ssh -i $KeyPath "ubuntu@$Server" $deployCmd
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "✗ Failed to move files into place on the server" -ForegroundColor Red
+        exit 1
+    }
     Write-Host "✓ Files deployed to server" -ForegroundColor Green
 } else {
     Write-Host "✓ [DRY RUN] Would deploy: app.py, config.py, .env.production" -ForegroundColor Cyan
@@ -111,13 +121,15 @@ Write-Host "`nStep 5: Restarting Service" -ForegroundColor Yellow
 Write-Host "--------------------------" -ForegroundColor Yellow
 
 if (-not $DryRun) {
-    ssh -i $KeyPath "ubuntu@$Server" @"
-    sudo systemctl stop everydayadvertise_tv && \
-        sudo fuser -k 5002/tcp || true && \
-        sleep 2 && \
-    sudo systemctl start everydayadvertise_tv && \
-        sleep 3
-"@
+    # LF-only for the same reason as the deploy step above.
+    $restartCmd = (@"
+sudo systemctl stop everydayadvertise_tv
+sudo fuser -k 5002/tcp || true
+sleep 2
+sudo systemctl start everydayadvertise_tv
+sleep 3
+"@) -replace "`r`n", "`n"
+    ssh -i $KeyPath "ubuntu@$Server" $restartCmd
     Write-Host "✓ Service restarted" -ForegroundColor Green
 } else {
     Write-Host "✓ [DRY RUN] Would restart service" -ForegroundColor Cyan
