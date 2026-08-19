@@ -907,6 +907,10 @@ class _AccountPageState extends State<AccountPage> {
         billingProvider == 'apple' || billingProvider == 'google';
     final storePlanScreens =
         int.tryParse('${account?['mobile_plan_screens'] ?? 0}') ?? 0;
+    final rawPriceDisplay = (account?['price_display'] ?? '').toString().trim();
+    final planPriceLabel = rawPriceDisplay.isNotEmpty
+        ? rawPriceDisplay
+        : 'Billed per screen each month';
     final billingHistory = ((account?['billing_history'] as List?) ?? const [])
         .whereType<Map>()
         .map((e) => Map<String, dynamic>.from(e))
@@ -1002,12 +1006,10 @@ class _AccountPageState extends State<AccountPage> {
                           _kvRow(
                             context,
                             'Plan',
-                            (_account?['price_display'] as String?)
-                                    ?.trim()
-                                    .isNotEmpty ==
-                                true
-                                ? _account!['price_display'] as String
-                                : 'Billed per screen each month',
+                            // Read defensively: an "as String" cast here throws
+                            // and takes the whole page down if the server ever
+                            // sends a number for this field.
+                            planPriceLabel,
                           ),
                           const Divider(height: 20),
                           _kvRow(context, 'Current Period', currentPeriod),
