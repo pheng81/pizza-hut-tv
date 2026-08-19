@@ -13573,7 +13573,18 @@ def load_store_config_for_user_safe_key(safe_key: str):
     # Auto-heal any older empty user configs into the default master-store setup.
     stores = cfg.get('stores') if isinstance(cfg.get('stores'), list) else []
     screens = cfg.get('screens') if isinstance(cfg.get('screens'), dict) else {}
-    if not stores and not screens:
+    # Heal on stores alone. Requiring screens to be empty too meant an account
+    # that lost its stores but still held an orphan screens entry - which is
+    # what a deleted master store leaves behind - stayed permanently empty, with
+    # nothing to select and every store lookup returning "store not found".
+    # Screens keyed to stores that no longer exist are unreachable anyway.
+    if not stores:
+        if screens:
+            logging.warning(
+                'Config for %s had no stores but %d orphan screen group(s); '
+                'restoring the default master store.',
+                safe_key, len(screens),
+            )
         cfg = _build_first_master_store_config()
         save_store_config_for_user_safe_key(safe_key, cfg)
         return cfg
