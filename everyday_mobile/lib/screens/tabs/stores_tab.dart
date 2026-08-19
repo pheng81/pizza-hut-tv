@@ -786,8 +786,9 @@ class _StoresTabState extends State<StoresTab>
           return false;
         }
         if (limit['mobile_needs_upgrade'] == true) {
-          await _openSubscriptionPromptFromServer();
-          return false;
+          // Upgrading here means the screen they asked for now fits, so carry
+          // on rather than making them tap add again.
+          return await _openSubscriptionPromptFromServer();
         }
       } catch (_) {
         // Fall through to the subscription check below.
@@ -798,8 +799,7 @@ class _StoresTabState extends State<StoresTab>
       if (!requires) {
         return true;
       }
-      await _showSubscriptionSheet(summary);
-      return false;
+      return await _showSubscriptionSheet(summary);
     } catch (_) {
       // If summary endpoint is unavailable, keep current behavior and let
       // add_screen server-side validation enforce access.
@@ -807,21 +807,24 @@ class _StoresTabState extends State<StoresTab>
     }
   }
 
-  Future<void> _openSubscriptionPromptFromServer() async {
+  Future<bool> _openSubscriptionPromptFromServer() async {
     try {
       final summary = await widget.apiClient.getSubscriptionSummary();
       if (!mounted) {
-        return;
+        return false;
       }
-      await _showSubscriptionSheet(summary);
+      return await _showSubscriptionSheet(summary);
     } catch (_) {
       // Ignore and keep error text in UI.
+      return false;
     }
   }
 
-  Future<void> _showSubscriptionSheet(Map<String, dynamic> summary) async {
+  /// Returns true when the user came away subscribed, so the caller can
+  /// finish the action that triggered the paywall instead of dropping it.
+  Future<bool> _showSubscriptionSheet(Map<String, dynamic> summary) async {
     if (!mounted) {
-      return;
+      return false;
     }
     final priceDisplay =
         (summary['price_display'] ?? r'$5 per screen / month').toString();
@@ -866,13 +869,13 @@ class _StoresTabState extends State<StoresTab>
         tiers.map((t) => t['product_id'] as String).toList(),
       );
       if (!mounted) {
-        return;
+        return false;
       }
     }
 
     var selectedProductId = storeProductId;
 
-    await showModalBottomSheet<void>(
+    final purchased = await showModalBottomSheet<bool>(
       context: context,
       useSafeArea: true,
       isScrollControlled: true,
@@ -907,7 +910,7 @@ class _StoresTabState extends State<StoresTab>
                   return;
                 }
                 if (restored > 0) {
-                  Navigator.of(context).pop();
+                  Navigator.of(context).pop(true);
                   return;
                 }
                 setModalState(() {
@@ -966,7 +969,7 @@ class _StoresTabState extends State<StoresTab>
                   }
                 }
                 if (context.mounted) {
-                  Navigator.of(context).pop();
+                  Navigator.of(context).pop(true);
                 }
               } catch (e) {
                 if (context.mounted) {
@@ -1432,6 +1435,7 @@ class _StoresTabState extends State<StoresTab>
         );
       },
     );
+    return purchased == true;
   }
 
   Future<void> _renameScreen(ScreenItem screen) async {

@@ -14097,7 +14097,18 @@ def load_store_config_for_user_safe_key(safe_key: str):
     # Auto-heal any older empty user configs into the default master-store setup.
     stores = cfg.get('stores') if isinstance(cfg.get('stores'), list) else []
     screens = cfg.get('screens') if isinstance(cfg.get('screens'), dict) else {}
-    if not stores and not screens:
+    # Heal on stores alone. Requiring screens to be empty too meant an account
+    # that lost its stores but still held an orphan screens entry - which is
+    # what a deleted master store leaves behind - stayed permanently empty, with
+    # nothing to select and every store lookup returning "store not found".
+    # Screens keyed to stores that no longer exist are unreachable anyway.
+    if not stores:
+        if screens:
+            logging.warning(
+                'Config for %s had no stores but %d orphan screen group(s); '
+                'restoring the default master store.',
+                safe_key, len(screens),
+            )
         cfg = _build_first_master_store_config()
         save_store_config_for_user_safe_key(safe_key, cfg)
         return cfg
@@ -14749,6 +14760,25 @@ def api_account_overview():
             except Exception:
                 trial_days_left = None
 
+        # Which system billed this account, so the app can show the matching
+        # plan rather than the per-screen Stripe list.
+        store_provider = None
+        store_product_id = None
+        store_plan_screens = 0
+        try:
+            provider_row = db.execute(
+                'SELECT billing_provider, billing_product_id FROM subscriptions WHERE user_id = ?',
+                (user_id,),
+            ).fetchone()
+            if provider_row:
+                candidate = (provider_row['billing_provider'] or '').strip().lower()
+                if candidate in ('apple', 'google'):
+                    store_provider = candidate
+                    store_product_id = provider_row['billing_product_id'] or None
+                    store_plan_screens = _mobile_tier_screen_allowance(store_product_id or '')
+        except Exception as exc:
+            logging.warning('Could not read billing provider for %s: %s', user_id, exc)
+
         return jsonify({
             'success': True,
             'user_info': user_info,
@@ -14770,6 +14800,14 @@ def api_account_overview():
             'price_display': billing_policy['price_display'],
             'trial_days': int(billing_policy['trial_days']),
             'free_screens': free_screens,
+            # How this account actually pays. Per-screen Stripe subscriptions
+            # and a single store tier are different products; showing the
+            # per-screen list and its prices to a store subscriber tells them
+            # they are paying something they are not, and offers Cancel buttons
+            # that cannot cancel a store subscription.
+            'billing_provider': store_provider or 'stripe',
+            'mobile_plan_product_id': store_product_id,
+            'mobile_plan_screens': store_plan_screens,
         })
     except Exception as e:
         logging.error('api_account_overview error: %s', e, exc_info=True)
@@ -20454,11 +20492,36 @@ def delete_store():
             return jsonify({'error': 'Store ID is required'}), 400
             
         config = load_store_config()
-        
-        # Protect master store from deletion
-        master_store_id = config.get('master_store_id')
-        if store_id == master_store_id:
+
+        # Protect the master store from deletion.
+        #
+        # master_store_id is missing from some older configs, and comparing
+        # against None protects nothing - the master store could be deleted,
+        # leaving the account with no stores at all. Fall back to the canonical
+        # first-store id, then to the first store in the list, and never allow
+        # the last remaining store to go.
+        stores = config.get('stores') or []
+        # Coerce: some configs store ids as numbers, and .strip() would raise.
+        master_store_id = str(config.get('master_store_id') or '').strip()
+        if not master_store_id:
+            known_ids = {str(s.get('id')) for s in stores if isinstance(s, dict)}
+            if '1000' in known_ids:
+                master_store_id = '1000'
+            elif stores and isinstance(stores[0], dict):
+                master_store_id = str(stores[0].get('id') or '')
+            if master_store_id:
+                # Repair the config so the next delete does not have to guess.
+                config['master_store_id'] = master_store_id
+                logging.warning(
+                    'Config for this account had no master_store_id; treating %s as master.',
+                    master_store_id,
+                )
+
+        if master_store_id and str(store_id) == str(master_store_id):
             return jsonify({'error': 'Master Store cannot be deleted'}), 403
+
+        if len(stores) <= 1:
+            return jsonify({'error': 'Your last store cannot be deleted'}), 403
         
         # Check if store exists
         store_found = False
