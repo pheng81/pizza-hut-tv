@@ -14201,6 +14201,25 @@ def api_account_overview():
             except Exception:
                 trial_days_left = None
 
+        # Which system billed this account, so the app can show the matching
+        # plan rather than the per-screen Stripe list.
+        store_provider = None
+        store_product_id = None
+        store_plan_screens = 0
+        try:
+            provider_row = db.execute(
+                'SELECT billing_provider, billing_product_id FROM subscriptions WHERE user_id = ?',
+                (user_id,),
+            ).fetchone()
+            if provider_row:
+                candidate = (provider_row['billing_provider'] or '').strip().lower()
+                if candidate in ('apple', 'google'):
+                    store_provider = candidate
+                    store_product_id = provider_row['billing_product_id'] or None
+                    store_plan_screens = _mobile_tier_screen_allowance(store_product_id or '')
+        except Exception as exc:
+            logging.warning('Could not read billing provider for %s: %s', user_id, exc)
+
         return jsonify({
             'success': True,
             'user_info': user_info,
@@ -14222,6 +14241,14 @@ def api_account_overview():
             'price_display': billing_policy['price_display'],
             'trial_days': int(billing_policy['trial_days']),
             'free_screens': free_screens,
+            # How this account actually pays. Per-screen Stripe subscriptions
+            # and a single store tier are different products; showing the
+            # per-screen list and its prices to a store subscriber tells them
+            # they are paying something they are not, and offers Cancel buttons
+            # that cannot cancel a store subscription.
+            'billing_provider': store_provider or 'stripe',
+            'mobile_plan_product_id': store_product_id,
+            'mobile_plan_screens': store_plan_screens,
         })
     except Exception as e:
         logging.error('api_account_overview error: %s', e, exc_info=True)

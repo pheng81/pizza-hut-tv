@@ -898,6 +898,15 @@ class _AccountPageState extends State<AccountPage> {
         .whereType<Map>()
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
+    // Store subscribers pay one tier price, not per screen. Showing them the
+    // per-screen Stripe list quotes a price they are not paying and offers
+    // Cancel buttons that cannot cancel a store subscription.
+    final billingProvider =
+        (account?['billing_provider'] ?? 'stripe').toString().toLowerCase();
+    final isStoreBilled =
+        billingProvider == 'apple' || billingProvider == 'google';
+    final storePlanScreens =
+        int.tryParse('${account?['mobile_plan_screens'] ?? 0}') ?? 0;
     final billingHistory = ((account?['billing_history'] as List?) ?? const [])
         .whereType<Map>()
         .map((e) => Map<String, dynamic>.from(e))
@@ -1341,7 +1350,40 @@ class _AccountPageState extends State<AccountPage> {
                       ),
                     ),
                   ),
-                  if (screenSubs.isNotEmpty) ...[
+                  if (isStoreBilled) ...[
+                    const SizedBox(height: 10),
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Screen Plan',
+                                style: theme.textTheme.titleMedium),
+                            const SizedBox(height: 8),
+                            Text(
+                              storePlanScreens > 0
+                                  ? 'Your ${MobileBillingService.instance.storeName} plan covers '
+                                      '$storePlanScreens ${storePlanScreens == 1 ? 'screen' : 'screens'}. '
+                                      'Adding more screens upgrades the plan.'
+                                  : 'Billed through ${MobileBillingService.instance.storeName}.',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Change or cancel it in your device account settings.',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (!isStoreBilled && screenSubs.isNotEmpty) ...[
                     const SizedBox(height: 10),
                     Card(
                       child: Padding(
@@ -1353,7 +1395,7 @@ class _AccountPageState extends State<AccountPage> {
                                 style: theme.textTheme.titleMedium),
                             const SizedBox(height: 8),
                             Text(
-                              'Each screen has its own subscription billed individually at \$5/month. Cancel any screen subscription at any time.',
+                              'Each screen has its own subscription billed individually. Cancel any screen subscription at any time.',
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: scheme.onSurfaceVariant,
                               ),
