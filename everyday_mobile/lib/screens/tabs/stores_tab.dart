@@ -437,6 +437,34 @@ class _StoresTabState extends State<StoresTab>
         storeId = stores.isNotEmpty ? stores.first.id : null;
       }
 
+      // An empty list is the actual problem when the screen looks broken, but
+      // the user only ever saw a stale "store not found" from a later call.
+      // Say which account the server answered for, so a mismatch between app
+      // and website is visible rather than something to guess at.
+      if (stores.isEmpty) {
+        String who = 'unknown account';
+        try {
+          final me = await widget.apiClient.getMe();
+          if (me.username.trim().isNotEmpty) {
+            who = me.username.trim();
+          }
+        } catch (_) {
+          who = 'not signed in';
+        }
+        if (mounted) {
+          setState(() {
+            _stores = const [];
+            _screens = const [];
+            _loading = false;
+            _error = 'No stores for $who. '
+                'If the website shows a store for this same login, the app and '
+                'website are reading different accounts.';
+          });
+        }
+        widget.onSelectionChanged(null, null);
+        return;
+      }
+
       List<ScreenItem> screens = const [];
       String? screenId = widget.selectedScreenId;
       if (storeId != null) {
