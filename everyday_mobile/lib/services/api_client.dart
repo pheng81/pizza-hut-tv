@@ -448,10 +448,22 @@ class ApiClient {
     if (data['success'] != true) {
       throw Exception((data['error'] ?? 'Unable to load stores').toString());
     }
-    final list = (data['stores'] as List? ?? const [])
-        .map((item) => StoreItem.fromJson(_asMap(item)))
+    final raw = (data['stores'] as List? ?? const []);
+    final list = raw
+        .map((item) => item is String
+            // Some configs list stores as bare ids rather than objects.
+            ? StoreItem(id: item.trim(), name: item.trim())
+            : StoreItem.fromJson(_asMap(item)))
         .where((item) => item.id.isNotEmpty)
         .toList();
+    if (raw.isNotEmpty && list.isEmpty) {
+      // Silently returning nothing here looks identical to having no stores,
+      // which sent us hunting the wrong problem for hours.
+      throw Exception(
+        'The server returned ${raw.length} store(s) the app could not read: '
+        '${raw.first}',
+      );
+    }
     return list;
   }
 

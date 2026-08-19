@@ -43,9 +43,15 @@ class StoreItem {
   final double? longitude;
 
   factory StoreItem.fromJson(Map<String, dynamic> json) {
+    // Older configs and some server paths spell the id differently. Reading
+    // only 'id' meant those stores parsed with an empty id and were then
+    // dropped, so an account could hold a store the app refused to show.
+    final rawId = (json['id'] ?? json['store_id'] ?? json['storeId'] ?? '')
+        .toString()
+        .trim();
     return StoreItem(
-      id: (json['id'] ?? '').toString(),
-      name: (json['name'] ?? json['id'] ?? '').toString(),
+      id: rawId,
+      name: (json['name'] ?? json['store_name'] ?? rawId).toString(),
       address: (json['address'] ?? '').toString().trim(),
       latitude: double.tryParse((json['latitude'] ?? '').toString()),
       longitude: double.tryParse((json['longitude'] ?? '').toString()),
