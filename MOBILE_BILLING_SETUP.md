@@ -38,6 +38,19 @@ touch systemd drop-ins, so secrets stored there survive. `.env.production` is
 gitignored and lives only on the Windows machine - check it before deploying,
 because the deploy overwrites the server's copy with it.
 
+Because it only ships those three files, **anything the server needs must live
+inside them** - a new module or data file added to the repo will not reach
+production. In particular it does **not** ship `templates/`, so a dashboard
+change needs a separate upload (`deploy_safe.ps1`, or scp the single file and
+restart - Jinja caches compiled templates, so a restart is required for the new
+markup to appear).
+
+If a deploy prints `bash: line 1: $'\r': command not found`, the SSH here-string
+has picked up PowerShell's CRLF endings again. That is not cosmetic: the `&&`
+chaining silently stops working, so a failed `cp` no longer halts the deploy and
+the script reports success anyway. Fixed 2026-08-16 by normalising the
+here-strings with `-replace "\`r\`n", "\`n"` and using `set -e`.
+
 ## Product IDs
 
 The stores price a product, not a quantity, so per-screen billing is expressed
@@ -151,6 +164,104 @@ reads the real localized price from StoreKit for that reason.
 The Sign in with Apple `.p8` key is not the receipt shared secret used by this
 verification endpoint. Keep those credentials separate.
 
+### App Store Server Notifications V2 (keeping state fresh after purchase)
+
+Receipt verification only records the subscription as it stood *at the moment of
+purchase*. Apple then renews, cancels, refunds and expires on its own schedule
+and tells nobody. Without notifications the stored `current_period_end` goes
+stale, and two things break:
+
+- **At the first renewal the paying customer is locked out of the website.**
+  `_user_has_active_subscription()` returns False once `current_period_end`
+  passes. This is not an edge case - every subscriber hits it when the 2-week
+  trial converts.
+- **A cancelled subscriber stays blocked from Stripe forever.**
+  `_active_store_subscription()` keeps refusing web checkout, while the error
+  message tells them to cancel at Apple and subscribe on the web - which they
+  did.
+
+`POST /api/billing/apple/notifications` fixes both. Register it in App Store
+Connect for **both** environments:
+
+| Environment | URL |
+| --- | --- |
+| Production | `https://everydayadvertise.com/api/billing/apple/notifications` |
+| Sandbox | `https://everydayadvertise.com/api/billing/apple/notifications` |
+
+App Store Connect → your app → **General → App Information → App Store Server
+Notifications**. Set Version **V2** for both. The same URL serves both; the
+payload carries `environment` and transactions never collide across the two.
+
+**Sandbox is where you test this.** A sandbox "month" renews every 5 minutes, so
+a TestFlight subscription produces `DID_RENEW` events within minutes instead of
+30 days. Sandbox subscriptions auto-renew 6 times then stop.
+
+How trust is established, since anyone can POST that URL: Apple signs the
+notification as a JWS and puts the whole certificate chain in the header
+(`x5c`: leaf, intermediate, root). `_apple_verify_signed_jws()` walks that chain
+back to **Apple Root CA - G3**, which is pinned in `app.py` both as PEM and as a
+SHA-256 fingerprint. No shared secret is involved, and no new App Store Connect
+credential is needed. The root is embedded in `app.py` rather than kept in a
+file because `deploy_automated.ps1` only ships `app.py`, `config.py` and
+`.env.production` - a separate cert file would never reach the server.
+
+Guards worth knowing about, all covered by `test_apple_notifications.py` and
+`test_apple_notification_apply.py`:
+
+- **An Apple event never overwrites a Stripe subscription.** Someone who
+  cancelled at Apple and resubscribed on the web would otherwise have their live
+  Stripe row expired by the trailing `EXPIRED` event.
+- **Apple does not guarantee delivery order.** A late renewal cannot pull
+  `current_period_end` backwards; ending events always apply.
+- **A notification for a purchase we never verified is logged, not applied.** It
+  cannot be mapped to a user. "Restore purchases" in the app is the recovery
+  path - Apple retrying will not help.
+- `REFUND` and `REVOKE` end access immediately; `DID_FAIL_TO_RENEW` sets
+  `past_due`, which keeps the user in for the billing-retry window because
+  `_user_has_active_subscription()` honours `past_due` while the period end is
+  still ahead.
+
+Statuses written here are the same vocabulary the rest of the app already gates
+on (`active`, `trialing`, `past_due` grant access; `expired` and `refunded` do
+not), so no other code needed changing.
+
+## What a store subscriber sees on the website
+
+The web and the app share one server and one `subscriptions` row, so the website
+always knows who is billing the customer - there is no second channel to keep in
+sync. `billing_provider` and `billing_product_id` are written by
+`/api/billing/mobile/verify` and read everywhere else.
+
+Screens work differently on each side, and this is the thing that confuses
+people: **the website bills per screen through Stripe, while the stores sell a
+fixed tier.** So a store subscriber on `Screens_5` who tries to add a 6th screen
+on the website is not hitting a bug - they are past what their tier covers.
+
+The right answer is **upgrade the tier in the app**, not cancel and resubscribe.
+All four products live in one subscription group precisely so a tier change is a
+prorated upgrade that applies immediately. Telling the customer to cancel and
+resubscribe on the web would cost them the rest of the month they already paid
+for and **permanently burn their free trial**, which Apple grants once per group.
+
+Cancel-and-move-to-the-website is only correct **above 10 screens**, the top of
+the ladder, and even then the order matters: turn off auto-renew, keep using the
+screens until the paid period ends, and only then subscribe on the web. That
+path also depends on the notification webhook being registered - without it the
+server never learns the store subscription ended, and
+`_active_store_subscription()` blocks web checkout forever.
+
+`/check_screen_limit` and `/add_screen` both return `billing_provider`,
+`plan_screens` and the upgrade target so the dashboard can say all this. Note
+the two endpoints use **different field names** for the same ideas
+(`mobile_plan_screens` vs `plan_screens`, `mobile_plan_limit_reached` vs
+`plan_limit_reached`); `showStorePlanLimitMessage()` in `dashboard.html` accepts
+either. The dashboard checks the limit *before* showing the confirm dialog, and
+again on the 403, because the pre-flight check can be stale if the plan changed
+on the phone.
+
+A store subscriber must never be shown the website's per-screen Stripe price -
+it is not what they pay, for a purchase the website cannot make.
+
 ## Google Play
 
 1. In Play Console, create a monthly subscription product with ID
@@ -216,20 +327,30 @@ verification endpoint. Keep those credentials separate.
 - Store listing basics (description, content rating questionnaire, Data safety
   form, target audience) have not been completed yet.
 
-## Outstanding as at 2026-08-15
+## Outstanding as at 2026-08-16
 
-1. **Deploy the server.** It still has the old lowercase product ids, so
-   `Screens_3` / `Screens_5` / `Screens_10` are rejected as unknown products. A
-   `Screens_3` subscription was bought successfully in TestFlight and cannot be
-   activated until this lands. After deploying, "Restore purchases" in the app
-   verifies it - no second purchase needed.
-2. Rename the product display names (typos, see above).
-3. Create a **demo account** for App Review and put it in App Review
+1. ~~**Deploy the server.**~~ **Done 2026-08-16.** The server now runs the
+   `Screen_1` / `Screens_3` / `Screens_5` / `Screens_10` ladder. The
+   `Screens_3` subscription bought in TestFlight can be activated with
+   "Restore purchases" in the app - no second purchase needed. **Not yet
+   confirmed done by a human.**
+2. **Register the notification URL in App Store Connect** (Production and
+   Sandbox, V2) - see the section above. The endpoint is deployed and live, but
+   Apple sends nothing until the URL is registered, so subscription state still
+   goes stale until this is done.
+3. Rename the product display names (typos, see above).
+4. Create a **demo account** for App Review and put it in App Review
    Information. The app is login-gated, so review fails without it.
-4. Android: the Play subscription products for the same tiers do not exist yet.
-   Play still expects a single `screens_monthly`.
-5. Deployment target is iOS 14.0; Apple requires 15.0 from Spring 2027.
-6. The launch image is still Flutter's placeholder.
+5. Android: the Play subscription products for the same tiers do not exist yet.
+   Play still expects a single `screens_monthly`. Google Play's equivalent of
+   the notification webhook (Real-time developer notifications via Pub/Sub) is
+   **not** implemented - Play subscription state has the same staleness problem
+   Apple had until now.
+6. Deployment target is iOS 14.0; Apple requires 15.0 from Spring 2027.
+7. The launch image is still Flutter's placeholder.
+8. The mobile app commits "Send every owned purchase to the server during
+   restore" and "Recover when the store says the plan is already owned" are on
+   `main` but **not in a TestFlight build**. Build `1.1.0 (57)` predates them.
 
 ## How to test a purchase end to end
 
