@@ -23448,7 +23448,15 @@ def get_screens_for_store(store_id: str):
         cfg = ensure_playlists_structure(load_store_config_for_user_safe_key(ukey) if ukey else load_store_config())
         screens_all = cfg.get('screens') or {}
         logging.info(f'📊 User {ukey} has {len(screens_all)} stores, store {store_id} has {len(screens_all.get(store_id, {}))} screens')
-        if store_id not in screens_all:
+        # A store with no screens is not a missing store. The screens map only
+        # gains a key once a screen is added, so keying the 404 off it reported
+        # "store not found" for every brand-new store, and for any store whose
+        # screens had all been removed - which stopped the app dead on a store
+        # that plainly exists. Only the store list can answer whether it exists.
+        known_store_ids = {
+            str((store or {}).get('id')) for store in (cfg.get('stores') or [])
+        }
+        if store_id not in screens_all and store_id not in known_store_ids:
             return jsonify({'success': False, 'error': 'store not found'}), 404
         store_map = screens_all.get(store_id) or {}
         # Filter out any screens whose prefixed store segment doesn't match (phantom leakage from other stores / prior sync operations)
