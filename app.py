@@ -6780,7 +6780,9 @@ def api_subscription_summary():
         # store purchase before it starts. It cannot be enforced at verify time
         # the way it is for Stripe: by then Apple has taken the money, and
         # refusing would leave the user paid up with nothing to show for it.
-        can_subscribe, subscribe_blocked_reason = _check_subscription_eligibility(user_id)
+        can_subscribe, subscribe_blocked_reason, subscribe_blocked_action = (
+            _subscription_eligibility(user_id)
+        )
 
         return jsonify({
             'success': True,
@@ -6819,6 +6821,10 @@ def api_subscription_summary():
             # Checked before the store purchase starts, never after.
             'can_subscribe': can_subscribe,
             'subscribe_blocked_reason': subscribe_blocked_reason,
+            # What the customer has to do about it, as a stable code the app can
+            # act on: 'verify_email', 'add_phone', 'verify_phone', 'login'.
+            # Stating the problem without offering the fix is a dead end.
+            'subscribe_blocked_action': subscribe_blocked_action,
         })
     except Exception as e:
         logging.error('api_subscription_summary failed: %s', e, exc_info=True)
@@ -7040,10 +7046,13 @@ def api_billing_mobile_verify():
         }), 500
 
 
-def _check_subscription_eligibility(user_id: int) -> tuple[bool, str|None]:
-    """Validation gate used before opening Stripe checkout.
+def _subscription_eligibility(user_id: int) -> tuple[bool, str | None, str | None]:
+    """(eligible, message, action) - the gate used before checkout.
 
-    Keeps web and mobile behavior consistent.
+    `action` names what the customer has to do, so a client can offer the fix
+    rather than only stating the problem: telling someone to verify their phone
+    and then leaving them to find the screen themselves is a dead end. Codes are
+    stable; the message is not, so never match on the text.
     """
     try:
         db = get_db()
@@ -7052,25 +7061,36 @@ def _check_subscription_eligibility(user_id: int) -> tuple[bool, str|None]:
             (user_id,),
         ).fetchone()
         if not row:
-            return False, 'User account not found. Please login again.'
+            return False, 'User account not found. Please login again.', 'login'
 
         role = (row['role'] or '').strip().lower()
         if role == 'admin':
-            return True, None
+            return True, None, None
 
         email_verified = int(row['email_verified'] or 0) == 1
         if not email_verified:
-            return False, 'Please verify your email address before subscribing.'
+            return False, 'Please verify your email address before subscribing.', 'verify_email'
 
         phone_number = (row['phone_number'] or '').strip()
         phone_verified = int(row['phone_verified'] or 0) == 1
-        if not phone_number or not phone_verified:
-            return False, 'Please verify your phone number before subscribing.'
+        if not phone_number:
+            return False, 'Please add and verify your phone number before subscribing.', 'add_phone'
+        if not phone_verified:
+            return False, 'Please verify your phone number before subscribing.', 'verify_phone'
 
-        return True, None
+        return True, None, None
     except Exception as e:
         logging.warning('Subscription eligibility check failed for user %s: %s', user_id, e)
-        return False, 'Could not validate account eligibility. Please try again.'
+        return False, 'Could not validate account eligibility. Please try again.', None
+
+
+def _check_subscription_eligibility(user_id: int) -> tuple[bool, str|None]:
+    """Validation gate used before opening Stripe checkout.
+
+    Keeps web and mobile behavior consistent.
+    """
+    eligible, message, _action = _subscription_eligibility(user_id)
+    return eligible, message
 
 @app.route('/billing/success')
 @login_required

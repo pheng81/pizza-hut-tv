@@ -156,6 +156,7 @@ class _IosPickerField extends StatelessWidget {
   }
 
   @override
+
   Widget build(BuildContext context) {
     final option = options.cast<_IosPickerOption?>().firstWhere(
           (item) => item?.value == value,
@@ -848,6 +849,53 @@ class _StoresTabState extends State<StoresTab>
     }
   }
 
+  /// Button text for an eligibility block, or null if there is nothing the
+  /// customer can usefully be sent to.
+  String? _blockedActionLabel(String action) {
+    switch (action) {
+      case 'add_phone':
+        return 'Add phone number';
+      case 'verify_phone':
+        return 'Verify phone number';
+      case 'verify_email':
+        return 'Check email verification';
+      default:
+        // Includes 'login' and anything a newer server adds: sending someone
+        // to the wrong screen is worse than showing only the message.
+        return null;
+    }
+  }
+
+  /// Send the customer to the screen that fixes the block.
+  ///
+  /// [sheetContext] is the paywall sheet's own context. The sheet was built
+  /// from a summary fetched before the fix, so it is closed on the way back
+  /// rather than left insisting the account still cannot subscribe - the next
+  /// attempt re-runs the check against fresh state.
+  Future<void> _openBlockedActionScreen(
+    BuildContext sheetContext,
+    String action,
+  ) async {
+    final label = _blockedActionLabel(action);
+    if (label == null || !mounted) {
+      return;
+    }
+    await Navigator.of(sheetContext).push(
+      MaterialPageRoute<void>(
+        builder: (_) => AccountPage(
+          apiClient: widget.apiClient,
+          // Phone work opens the editor directly; the email case only needs the
+          // account page, where the verification state is shown.
+          focusPhone: action == 'add_phone' || action == 'verify_phone',
+        ),
+      ),
+    );
+    if (!mounted || !sheetContext.mounted) {
+      return;
+    }
+    Navigator.of(sheetContext).pop(false);
+  }
+
   /// Returns true when the user came away subscribed, so the caller can
   /// finish the action that triggered the paywall instead of dropping it.
   Future<bool> _showSubscriptionSheet(Map<String, dynamic> summary) async {
@@ -878,6 +926,10 @@ class _StoresTabState extends State<StoresTab>
     final canSubscribe = summary['can_subscribe'] != false;
     final subscribeBlockedReason =
         (summary['subscribe_blocked_reason'] ?? '').toString().trim();
+    // A stable code for what the customer has to do, so we can offer the fix
+    // instead of only naming the problem. Never match on the message text.
+    final subscribeBlockedAction =
+        (summary['subscribe_blocked_action'] ?? '').toString().trim();
 
     // Every store tier, so users can compare plans instead of only seeing
     // the one the server recommends for their current screen count.
@@ -1318,14 +1370,32 @@ class _StoresTabState extends State<StoresTab>
                           color: scheme.surfaceContainerHighest,
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Text(
-                          subscribeBlockedReason.isNotEmpty
-                              ? subscribeBlockedReason
-                              : 'This account cannot subscribe yet. Finish '
-                                  'setting it up, then try again.',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              subscribeBlockedReason.isNotEmpty
+                                  ? subscribeBlockedReason
+                                  : 'This account cannot subscribe yet. Finish '
+                                      'setting it up, then try again.',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                            if (_blockedActionLabel(subscribeBlockedAction) !=
+                                null) ...[
+                              const SizedBox(height: 10),
+                              FilledButton.tonal(
+                                onPressed: () => _openBlockedActionScreen(
+                                  context,
+                                  subscribeBlockedAction,
+                                ),
+                                child: Text(
+                                  _blockedActionLabel(subscribeBlockedAction)!,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       )
                     else if (exceedsLargestTier)

@@ -17,10 +17,18 @@ class AccountPage extends StatefulWidget {
     required this.apiClient,
     this.initialUsername,
     this.onLogout,
+    this.focusPhone = false,
   });
 
   final ApiClient apiClient;
   final String? initialUsername;
+
+  /// Open straight into the phone editor.
+  ///
+  /// Set when the customer was sent here to fix something - being told to
+  /// verify a phone number and then having to hunt for the field is the part
+  /// that made the message a dead end.
+  final bool focusPhone;
 
   /// Returns the app to a signed-out state after the account is deleted.
   final Future<void> Function()? onLogout;
@@ -57,6 +65,7 @@ class _AccountPageState extends State<AccountPage> {
   @override
   void initState() {
     super.initState();
+    _showPhoneEdit = widget.focusPhone;
     _load();
   }
 
