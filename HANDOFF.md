@@ -92,17 +92,9 @@ level, so an info-level log is invisible. Do not "tidy" that back to info.
    locked out of the dashboard *and* blocked from subscribing on the web. Less
    likely now notifications set `expired` properly, but a missed notification
    still traps someone.
-6. **The app's account page needs the Dart half of the price fix.**
-   `/api/account/overview` no longer sends `price_display` or `monthly_cost`
-   for a store account - they were the per-screen Stripe rate and a
-   `screens x rate` total, both false for a flat store tier billed in the
-   customer's own currency. It sends `store_plan_label` (e.g. "3 screens")
-   instead. The app must read the real price from StoreKit/Play, as the
-   paywall already does, rather than rendering those nulls.
-7. **Four hardcoded `$5` strings remain in the Flutter app**
-   (`account_page.dart` x2, `subscribe_page.dart`, `stores_tab.dart`). The
-   first also describes per-screen Stripe billing, which is wrong on a store
-   account.
+6. **Two hardcoded `$5` fallbacks remain in the Flutter app**
+   (`subscribe_page.dart`, `stores_tab.dart`). Both are `price_display`
+   fallbacks. `account_page.dart` is done.
 8. **Google Play** is deliberately parked. `screens_monthly` has no tier
    allowance, so those subscribers are uncapped on screens. Play's real-time
    developer notifications are not implemented - Play state has the same

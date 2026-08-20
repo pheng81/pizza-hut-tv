@@ -46,6 +46,14 @@ class _AccountPageState extends State<AccountPage> {
   Timer? _countdownTimer;
   _PhoneCountry _selectedPhoneCountry = _phoneCountries.first;
 
+  /// Localized price of the store tier this account is on, e.g. "A$7.99".
+  ///
+  /// The server cannot supply this. A store tier is one flat charge in the
+  /// customer's own currency, set in App Store Connect / Play Console, so the
+  /// only source of truth is the store itself - the same lookup the paywall
+  /// uses. Null means "not a store account, or the store has not answered yet".
+  String? _storeTierPrice;
+
   @override
   void initState() {
     super.initState();
@@ -67,6 +75,38 @@ class _AccountPageState extends State<AccountPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(text)),
     );
+  }
+
+  /// Ask the store what this account's tier actually costs.
+  ///
+  /// Deliberately not awaited by _load(): the account page must render even if
+  /// the store is slow or unreachable. Failure leaves _storeTierPrice null and
+  /// the page falls back to describing the plan rather than pricing it - which
+  /// is better than showing a number we made up.
+  Future<void> _loadStoreTierPrice(Map<String, dynamic> account) async {
+    final provider =
+        (account['billing_provider'] ?? '').toString().toLowerCase();
+    if (provider != 'apple' && provider != 'google') {
+      if (mounted && _storeTierPrice != null) {
+        setState(() => _storeTierPrice = null);
+      }
+      return;
+    }
+    final productId =
+        (account['mobile_plan_product_id'] ?? '').toString().trim();
+    if (productId.isEmpty || !MobileBillingService.instance.usesNativeStore) {
+      return;
+    }
+    try {
+      final product =
+          await MobileBillingService.instance.loadProduct(productId: productId);
+      if (!mounted || product == null) {
+        return;
+      }
+      setState(() => _storeTierPrice = product.price);
+    } catch (error) {
+      debugPrint('Could not read store price for $productId: $error');
+    }
   }
 
   Future<void> _load() async {
@@ -133,6 +173,8 @@ class _AccountPageState extends State<AccountPage> {
           _showPhoneCodeEntry = false;
         }
       });
+
+      unawaited(_loadStoreTierPrice(account));
 
       if (resolved.isEmpty && !_autoRecoveryTriggered && mounted) {
         _autoRecoveryTriggered = true;
@@ -883,8 +925,8 @@ class _AccountPageState extends State<AccountPage> {
     final isCanceled = account?['is_canceled'] == true;
     final nextBilling = (account?['next_billing_date'] ?? 'N/A').toString();
     final screenCount = int.tryParse('${account?['screen_count'] ?? 0}') ?? 0;
-    final monthlyCost = double.tryParse('${account?['monthly_cost'] ?? 0}') ??
-        (screenCount * 5).toDouble();
+    final rawMonthlyCost = account?['monthly_cost'];
+    final monthlyCost = double.tryParse('${rawMonthlyCost ?? ''}');
     final phone = (account?['phone_number'] ?? '').toString();
     final phoneVerified = account?['phone_verified'] == true;
     final email = _resolvedAccountEmail();
@@ -908,9 +950,24 @@ class _AccountPageState extends State<AccountPage> {
     final storePlanScreens =
         int.tryParse('${account?['mobile_plan_screens'] ?? 0}') ?? 0;
     final rawPriceDisplay = (account?['price_display'] ?? '').toString().trim();
-    final planPriceLabel = rawPriceDisplay.isNotEmpty
-        ? rawPriceDisplay
-        : 'Billed per screen each month';
+    final storePlanLabel = (account?['store_plan_label'] ?? '').toString().trim();
+    // Apple and Google charge one flat tier price in the customer's currency;
+    // the website charges per screen. Quoting either model to the other's
+    // subscriber states a price they are not paying.
+    final planPriceLabel = isStoreBilled
+        ? (_storeTierPrice != null
+            ? '$_storeTierPrice / month'
+            : (storePlanLabel.isNotEmpty
+                ? '$storePlanLabel via ${MobileBillingService.instance.storeName}'
+                : 'Billed through ${MobileBillingService.instance.storeName}'))
+        : (rawPriceDisplay.isNotEmpty
+            ? rawPriceDisplay
+            : 'Billed per screen each month');
+    final monthlyCostLabel = isStoreBilled
+        ? (_storeTierPrice ?? '--')
+        : (monthlyCost != null
+            ? '\$${monthlyCost.toStringAsFixed(2)}'
+            : '--');
     final billingHistory = ((account?['billing_history'] as List?) ?? const [])
         .whereType<Map>()
         .map((e) => Map<String, dynamic>.from(e))
@@ -984,8 +1041,10 @@ class _AccountPageState extends State<AccountPage> {
                       ),
                       _statBox(
                         context,
-                        label: 'Monthly Cost',
-                        value: '\$${monthlyCost.toStringAsFixed(2)}',
+                        label: isStoreBilled
+                            ? '${MobileBillingService.instance.storeName} plan'
+                            : 'Monthly Cost',
+                        value: monthlyCostLabel,
                       ),
                     ],
                   ),
@@ -1499,9 +1558,14 @@ class _AccountPageState extends State<AccountPage> {
                                           crossAxisAlignment:
                                               CrossAxisAlignment.end,
                                           children: [
-                                            const Text(
-                                              '\$5.00/mo',
-                                              style: TextStyle(
+                                            Text(
+                                              // The admin sets the rate; a
+                                              // hardcoded $5 was wrong for
+                                              // every other configured price.
+                                              rawPriceDisplay.isNotEmpty
+                                                  ? rawPriceDisplay
+                                                  : 'Billed monthly',
+                                              style: const TextStyle(
                                                 color: Color(0xFF10B981),
                                                 fontWeight: FontWeight.w700,
                                               ),
