@@ -14,7 +14,7 @@ version plus what is still outstanding.
 | GitHub `main` | source of truth |
 | Windows clone | deploys from here |
 | Production `54.252.90.27` | in sync with `main` |
-| iPhone (TestFlight) | **build 1.1.0 (57) - behind `1.1.0+62`** |
+| iPhone (TestFlight) | **build 1.1.0 (64)** |
 
 `deploy_automated.ps1` ships **only** `app.py`, `config.py` and
 `.env.production`. It does **not** ship `templates/` and it does **not** build
@@ -98,6 +98,67 @@ looks the real price up from StoreKit, the same way the paywall does. Never
 - `deploy_automated.ps1` here-strings had CRLF endings, so `&&` chaining did
   nothing and a failed step still reported DEPLOYMENT SUCCESSFUL.
 
+## Remote control: why "Scan Wi-Fi" found nothing
+
+Two independent faults, both fixed, neither yet on a device.
+
+**1. The scan could never work on iPhone.** `multicast_dns` opens a raw socket
+and calls `joinMulticast(224.0.0.251)`. iOS blocks raw multicast without the
+`com.apple.developer.networking.multicast` entitlement, which Apple grants only
+on request. `NSBonjourServices` does **not** unlock this - it only applies to
+Apple's native Bonjour APIs - so `Info.plist` looked perfectly correct while the
+scan returned nothing at all, not even the Chromecast and AirPlay devices that
+are usually everywhere.
+
+Discovery now uses **`bonsoir`**, which wraps `NSNetServiceBrowser` on iOS and
+`NsdManager` on Android. It honours the declared `NSBonjourServices` and needs
+no entitlement. `multicast_dns` has been removed. Every service type must still
+be listed in `Info.plist`: iOS refuses to browse a type that is not.
+
+SSDP still uses a raw socket and so remains **dead on iOS**, working on Android
+only. Requesting the multicast entitlement would revive it - worth starting,
+since approval is slow, but nothing depends on it.
+
+**2. Our own TVs advertised nothing.** The Android TV app had no `NsdManager`
+registration, so an EverydayAdvertise screen was invisible even to a working
+scan. It now advertises `_everydayadvertise._tcp` (`TvNsdAdvertiser.kt`, started
+from `TvDisplayActivity`) carrying `device_id`, `store_id`, `screen_id` and
+`pair_code` as TXT records, and the phone reads those to match a discovered TV
+to a registered screen. Matching previously compared the server's stored IP with
+the discovered one, which almost never agreed: the server records the device's
+**public** address (live rows are public IPv6, days stale) while discovery
+returns its LAN address.
+
+### Controlling third-party TVs is not implemented
+
+Worth being blunt, because the UI implies otherwise. Only "Android / Google TV"
+is `ready: true`, and that is our own bridge - phone to server to the TV app
+over socket.io. Samsung, LG, Sony, TCL, Hisense, Vizio, Panasonic and Philips
+are all `ready: false, 'Setup required'` placeholders with no protocol behind
+them. Discovery finding a Samsung will not let you control it.
+
+Rough order of effort if this gets built:
+
+| Brand | Protocol | Pairing |
+| --- | --- | --- |
+| Roku / TCL | ECP, plain HTTP port 8060 | none - easiest by far |
+| Sony Bravia | REST | pre-shared key typed into the TV |
+| Samsung | WebSocket 8001/8002 | on-screen accept, store token |
+| LG webOS | SSAP WebSocket 3000/3001 | on-screen accept, client key |
+| Vizio | HTTPS 7345 | PIN |
+| Android TV (other) | androidtvremote2 | TLS certificate pairing |
+
+Note that **powering a TV on over Wi-Fi generally cannot work** - most sets drop
+their network interface when off. That needs Wake-on-LAN or HDMI-CEC, and is why
+`powerReady` is false on the bridge profile.
+
+### Verified so far
+
+Android APK builds with `bonsoir`; `flutter analyze` clean; the TV app's Kotlin
+compiles. **Not** verified: the iOS build (cannot be done from the Windows
+clone - `bonsoir_darwin` needs iOS 13.0 and the app targets 14.0, so it should
+be fine) and real discovery against actual hardware. Both need a device.
+
 ## Resolved since the last handoff
 
 - **Admin price and Stripe now agree.** Admin `1.99` / "$1.99 per screen /
@@ -112,10 +173,28 @@ looks the real price up from StoreKit, the same way the paywall does. Never
 
 ## Outstanding
 
-1. **Ship a TestFlight build.** The phone is on 1.1.0 (57) and is missing every
-   master-store fix, the debug API logging, and the account-page price fix
-   above. Until then the app shows the old numbers, and the two price fields
-   read blank because the server no longer sends them.
+0. **Two artifacts now need building, not one.** Nothing from the remote-control
+   work has reached a device, and the two halves only work together - the TV has
+   to advertise before the phone can find it:
+   - **Android TV app** (`android_tv_app`) - installs on the TVs, adds the
+     `_everydayadvertise._tcp` announcement.
+   - **iOS app** (`everyday_mobile`) - adds the Bonjour-based scan plus the
+     billing and account-page fixes below.
+
+1. **Ship a TestFlight build, and bump the build number first.**
+   `everyday_mobile/pubspec.yaml` reads `1.1.0+62` but TestFlight is already on
+   **64**, so an upload from the repo as-is is rejected by Apple as a duplicate
+   build number. Set it to **1.1.0+65** or higher before building.
+
+   Two fixes deployed on the server depend on a build newer than the Dart
+   commits of 2026-08-20 (`321f154bf1`, `835e224a0c`):
+   - the account page reading the real StoreKit price - without it the price
+     and monthly-cost fields render blank, because the server deliberately no
+     longer sends them for store accounts;
+   - the button on the paywall's eligibility block.
+
+   Whether build 64 already contains them depends on when it was cut - check
+   before assuming a rebuild is unnecessary.
 2. **Promotion pricing is not covered.** `superadmin_update_billing_promotion`
    has its own price and price ID and was not given the same reconciliation as
    the main settings, so it can still show one price and charge another.

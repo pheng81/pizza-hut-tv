@@ -60,7 +60,7 @@ dependencies:
   # failed verification. Unpin only when the server moves to the App Store
   # Server API.
   in_app_purchase_storekit: 0.3.22+1
-  multicast_dns: ^0.3.2+7
+  bonsoir: ^5.1.11
 
 dev_dependencies:
   flutter_test:
