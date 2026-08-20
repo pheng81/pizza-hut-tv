@@ -949,6 +949,8 @@ class _AccountPageState extends State<AccountPage> {
         billingProvider == 'apple' || billingProvider == 'google';
     final storePlanScreens =
         int.tryParse('${account?['mobile_plan_screens'] ?? 0}') ?? 0;
+    final mobileProductId =
+        (account?['mobile_plan_product_id'] ?? '').toString().trim();
     final rawPriceDisplay = (account?['price_display'] ?? '').toString().trim();
     final storePlanLabel = (account?['store_plan_label'] ?? '').toString().trim();
     // Apple and Google charge one flat tier price in the customer's currency;
@@ -1068,8 +1070,24 @@ class _AccountPageState extends State<AccountPage> {
                             // Read defensively: an "as String" cast here throws
                             // and takes the whole page down if the server ever
                             // sends a number for this field.
-                            planPriceLabel,
+                            planLabel,
                           ),
+                          const Divider(height: 20),
+                          _kvRow(context, 'Billing Provider', providerLabel),
+                          const Divider(height: 20),
+                          _kvRow(
+                            context,
+                            'Price',
+                            isStoreBilled ? planPriceLabel : planPriceLabel,
+                          ),
+                          if (isStoreBilled && storePlanScreens > 0) ...[
+                            const Divider(height: 20),
+                            _kvRow(
+                              context,
+                              'Included Screens',
+                              '$storePlanScreens',
+                            ),
+                          ],
                           const Divider(height: 20),
                           _kvRow(context, 'Current Period', currentPeriod),
                           const Divider(height: 20),
