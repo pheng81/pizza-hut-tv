@@ -68,6 +68,9 @@
 	<string>Everyday Mobile scans your local Wi-Fi network to find compatible TVs and display devices.</string>
 	<key>NSBonjourServices</key>
 	<array>
+		<!-- Our own TVs. iOS only permits mDNS queries for types listed here,
+		     so omitting this makes EverydayAdvertise TVs undiscoverable. -->
+		<string>_everydayadvertise._tcp</string>
 		<string>_airplay._tcp</string>
 		<string>_androidtvremote2._tcp</string>
 		<string>_googlecast._tcp</string>

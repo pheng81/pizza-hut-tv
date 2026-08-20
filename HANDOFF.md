@@ -98,6 +98,39 @@ looks the real price up from StoreKit, the same way the paywall does. Never
 - `deploy_automated.ps1` here-strings had CRLF endings, so `&&` chaining did
   nothing and a failed step still reported DEPLOYMENT SUCCESSFUL.
 
+## Remote control: why "Scan Wi-Fi" found nothing
+
+The phone scanned for eight *vendor* mDNS services - AirPlay, Chromecast,
+Samsung, LG, Roku, Vizio, Sony, Android TV Remote - and the Android TV app
+advertised **none** of them. It had no `NsdManager` registration at all, so an
+EverydayAdvertise TV was invisible on its own network no matter what the phone
+did. iOS permissions were never the problem: `NSLocalNetworkUsageDescription`
+and all eight `NSBonjourServices` were already correct.
+
+The TV app now advertises `_everydayadvertise._tcp` via `NsdManager`
+(`TvNsdAdvertiser.kt`, started from `TvDisplayActivity`), carrying `device_id`,
+`store_id`, `screen_id` and `pair_code` as TXT records. The phone declares that
+type in `Info.plist`, queries it, and reads the TXT - which is how a discovered
+TV is matched to a screen registered on the account.
+
+Matching used to compare the server's stored IP against the discovered one.
+That almost never worked: the server records the device's **public** address
+(the live rows are public IPv6, some days stale) while discovery returns its LAN
+address. It now matches on the advertised `device_id` first, then store/screen,
+and only then falls back to IP.
+
+Two things are still true and are not bugs:
+
+- **SSDP cannot work on iOS.** `Runner.entitlements` has no
+  `com.apple.developer.networking.multicast`, so raw multicast is blocked.
+  Apple grants that entitlement only on request. The SSDP half of the scan is
+  therefore dead on iPhone; mDNS carries the feature.
+- **Third-party TVs still need their own service.** Discovery only sees brands
+  that advertise one of the declared types.
+
+**This needs both a new Android TV release and a new iOS build to have any
+effect** - the TV has to advertise before the phone can find it.
+
 ## Resolved since the last handoff
 
 - **Admin price and Stripe now agree.** Admin `1.99` / "$1.99 per screen /

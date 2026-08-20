@@ -12,6 +12,7 @@ class DiscoveredTv {
     required this.address,
     required this.port,
     required this.serviceType,
+    this.txt = const <String, String>{},
   });
 
   final String id;
@@ -21,6 +22,25 @@ class DiscoveredTv {
   final int port;
   final String serviceType;
 
+  /// mDNS TXT attributes. Our own TVs publish store_id, screen_id, device_id
+  /// and pair_code here, which is how a discovered TV is matched to a screen
+  /// already registered to the account rather than guessed at by name.
+  final Map<String, String> txt;
+
+  /// True for a TV running our own app, as opposed to a third-party set.
+  bool get isOwnApp =>
+      serviceType == TvDiscoveryService.ownServiceType ||
+      txt['app'] == 'everydayadvertise-tv';
+
+  String? get storeId => _clean(txt['store_id']);
+  String? get screenId => _clean(txt['screen_id']);
+  String? get deviceId => _clean(txt['device_id']);
+
+  static String? _clean(String? value) {
+    final trimmed = (value ?? '').trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
   String get protocol => serviceType
       .replaceAll(RegExp(r'\.local\.?$'), '')
       .replaceFirst(RegExp(r'^_'), '')
@@ -29,7 +49,14 @@ class DiscoveredTv {
 }
 
 class TvDiscoveryService {
+  /// Our own TVs first: the Android TV app registers this via NsdManager, and
+  /// it is the only type guaranteed to identify a screen already on the account.
+  /// Must also appear in ios/Runner/Info.plist NSBonjourServices - iOS silently
+  /// refuses to query a type that is not declared there.
+  static const ownServiceType = '_everydayadvertise._tcp.local';
+
   static const _knownServiceTypes = <String>{
+    ownServiceType,
     '_airplay._tcp.local',
     '_androidtvremote2._tcp.local',
     '_googlecast._tcp.local',
@@ -182,6 +209,7 @@ class TvDiscoveryService {
         ),
         const Duration(milliseconds: 700),
       );
+      final txt = await _collectTxt(client, pointer.domainName);
       for (final srv in records) {
         final addresses = await _collect<IPAddressResourceRecord>(
           client.lookup<IPAddressResourceRecord>(
@@ -198,6 +226,7 @@ class TvDiscoveryService {
               address: address.address,
               port: srv.port,
               serviceType: serviceType,
+              txt: txt,
             ),
           );
         }
@@ -224,6 +253,9 @@ class TvDiscoveryService {
   }
 
   static String _brandFor(String serviceType, String name) {
+    if (serviceType == ownServiceType) {
+      return 'EverydayAdvertise TV';
+    }
     final value = '${serviceType}_$name'.toLowerCase();
     if (value.contains('samsung')) return 'Samsung';
     if (value.contains('webos') || value.contains('lg')) return 'LG';
@@ -276,6 +308,38 @@ class TvDiscoveryService {
 
   static Duration _boundedDuration(Duration value, Duration maximum) {
     return value < maximum ? value : maximum;
+  }
+
+  /// TXT attributes for a service instance, as a plain key/value map.
+  ///
+  /// Failure is not fatal: a TV without readable TXT still shows in the list,
+  /// it just cannot be matched to a registered screen automatically.
+  static Future<Map<String, String>> _collectTxt(
+    MDnsClient client,
+    String domainName,
+  ) async {
+    final result = <String, String>{};
+    try {
+      final records = await _collect<TxtResourceRecord>(
+        client.lookup<TxtResourceRecord>(
+          ResourceRecordQuery.text(domainName),
+        ),
+        const Duration(milliseconds: 700),
+      );
+      for (final record in records) {
+        for (final line in record.text.split(RegExp('[\r\n\u0000]+'))) {
+          final index = line.indexOf('=');
+          if (index <= 0) {
+            continue;
+          }
+          result[line.substring(0, index).trim().toLowerCase()] =
+              line.substring(index + 1).trim();
+        }
+      }
+    } catch (_) {
+      // Ignore - see the doc comment.
+    }
+    return result;
   }
 
   static Future<List<T>> _collect<T extends ResourceRecord>(

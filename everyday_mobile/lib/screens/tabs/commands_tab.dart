@@ -343,6 +343,33 @@ class _CommandsTabState extends State<CommandsTab> {
   }
 
   Map<String, dynamic>? _registeredScreenForTv(DiscoveredTv tv) {
+    // Our own TVs broadcast their device id, which is an exact match. Prefer it:
+    // the IP comparison below rarely succeeds, because the address the server
+    // recorded is the device's public address while discovery returns its LAN
+    // one, and the stored value can be days stale.
+    final advertisedDeviceId = tv.deviceId;
+    if (advertisedDeviceId != null) {
+      for (final screen in _screens) {
+        final deviceId = (screen['device_id'] ?? '').toString().trim();
+        if (deviceId.isNotEmpty && deviceId == advertisedDeviceId) {
+          return screen;
+        }
+      }
+    }
+
+    // Failing that, match on the store and screen the TV says it is showing.
+    final advertisedStore = tv.storeId;
+    final advertisedScreen = tv.screenId;
+    if (advertisedStore != null && advertisedScreen != null) {
+      for (final screen in _screens) {
+        final storeId = (screen['store_id'] ?? '').toString().trim();
+        final screenId = (screen['screen_id'] ?? '').toString().trim();
+        if (storeId == advertisedStore && screenId == advertisedScreen) {
+          return screen;
+        }
+      }
+    }
+
     for (final screen in _screens) {
       final deviceId = (screen['device_id'] ?? '').toString().trim();
       final ip = (screen['ip'] ?? '').toString().trim();

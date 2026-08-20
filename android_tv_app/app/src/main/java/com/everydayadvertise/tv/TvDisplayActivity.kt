@@ -1,5 +1,7 @@
 package com.everydayadvertise.tv
 
+import com.everydayadvertise.tv.net.TvNsdAdvertiser
+
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Typeface
@@ -386,6 +388,10 @@ class TvDisplayActivity : AppCompatActivity() {
     startPlaylistLoop(storeId, screenId, imageView, playerView)
     startHeartbeatLoop(storeId, screenId)
     connectRemoteSocket(storeId, screenId)
+    // Announce this TV on the local network so the phone's "Scan Wi-Fi" can
+    // see it. Without this the app advertises no service at all and is
+    // invisible to discovery, whatever the phone does.
+    try { TvNsdAdvertiser.start(applicationContext, storeId, screenId) } catch (_: Exception) {}
     }
 
     private fun launchSetupAndReset() {
@@ -424,6 +430,7 @@ class TvDisplayActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+    try { TvNsdAdvertiser.stop() } catch (_: Exception) {}
     try { heartbeatJob?.cancel() } catch (_: Exception) {}
     heartbeatJob = null
         try { remoteSocket?.off(); remoteSocket?.disconnect() } catch (_: Exception) {}
