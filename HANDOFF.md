@@ -14,7 +14,7 @@ version plus what is still outstanding.
 | GitHub `main` | source of truth |
 | Windows clone | deploys from here |
 | Production `54.252.90.27` | in sync with `main` |
-| iPhone (TestFlight) | **build 1.1.0 (57) - behind `1.1.0+62`** |
+| iPhone (TestFlight) | **build 1.1.0 (64)** |
 
 `deploy_automated.ps1` ships **only** `app.py`, `config.py` and
 `.env.production`. It does **not** ship `templates/` and it does **not** build
@@ -112,10 +112,20 @@ looks the real price up from StoreKit, the same way the paywall does. Never
 
 ## Outstanding
 
-1. **Ship a TestFlight build.** The phone is on 1.1.0 (57) and is missing every
-   master-store fix, the debug API logging, and the account-page price fix
-   above. Until then the app shows the old numbers, and the two price fields
-   read blank because the server no longer sends them.
+1. **Ship a TestFlight build, and bump the build number first.**
+   `everyday_mobile/pubspec.yaml` reads `1.1.0+62` but TestFlight is already on
+   **64**, so an upload from the repo as-is is rejected by Apple as a duplicate
+   build number. Set it to **1.1.0+65** or higher before building.
+
+   Two fixes deployed on the server depend on a build newer than the Dart
+   commits of 2026-08-20 (`321f154bf1`, `835e224a0c`):
+   - the account page reading the real StoreKit price - without it the price
+     and monthly-cost fields render blank, because the server deliberately no
+     longer sends them for store accounts;
+   - the button on the paywall's eligibility block.
+
+   Whether build 64 already contains them depends on when it was cut - check
+   before assuming a rebuild is unnecessary.
 2. **Promotion pricing is not covered.** `superadmin_update_billing_promotion`
    has its own price and price ID and was not given the same reconciliation as
    the main settings, so it can still show one price and charge another.
