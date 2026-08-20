@@ -173,6 +173,14 @@ be fine) and real discovery against actual hardware. Both need a device.
 
 ## Outstanding
 
+0. **Two artifacts now need building, not one.** Nothing from the remote-control
+   work has reached a device, and the two halves only work together - the TV has
+   to advertise before the phone can find it:
+   - **Android TV app** (`android_tv_app`) - installs on the TVs, adds the
+     `_everydayadvertise._tcp` announcement.
+   - **iOS app** (`everyday_mobile`) - adds the Bonjour-based scan plus the
+     billing and account-page fixes below.
+
 1. **Ship a TestFlight build, and bump the build number first.**
    `everyday_mobile/pubspec.yaml` reads `1.1.0+62` but TestFlight is already on
    **64**, so an upload from the repo as-is is rejected by Apple as a duplicate
