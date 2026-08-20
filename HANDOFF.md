@@ -88,6 +88,13 @@ looks the real price up from StoreKit, the same way the paywall does. Never
   exists but has no screens yet, because it keyed off the `screens` map rather
   than the store list. That broke every brand-new store and any store whose
   screens had been deleted. This was the "server problem" seen in the app.
+- The paywall's eligibility block is no longer a dead end. It said "Please
+  verify your phone number before subscribing" and left the customer to find
+  the screen themselves. `/api/subscription/summary` now also returns
+  `subscribe_blocked_action` - a stable code (`verify_email`, `add_phone`,
+  `verify_phone`, `login`) - and the app shows a button that opens the account
+  page with the phone editor already open. Match on the code, never the
+  message text.
 - `deploy_automated.ps1` here-strings had CRLF endings, so `&&` chaining did
   nothing and a failed step still reported DEPLOYMENT SUCCESSFUL.
 
@@ -135,7 +142,7 @@ looks the real price up from StoreKit, the same way the paywall does. Never
 
 `test_*.py` is in `.gitignore`, so the suites written this round live **only on
 the Windows clone** and are not in git (this includes the pre-existing
-`test_app.py` that `deploy_automated.ps1` runs). **167 checks** across eight
+`test_app.py` that `deploy_automated.ps1` runs). **178 checks** across nine
 files:
 
 | File | Checks | Covers |
@@ -148,6 +155,7 @@ files:
 | `test_account_overview_api.py` | 18 | mobile overview payload |
 | `test_price_source.py` | 11 | pricing derives only from admin |
 | `test_screens_endpoint.py` | 10 | `/screens/<store_id>` empty-store fix |
+| `test_eligibility_action.py` | 11 | subscribe eligibility codes |
 
 Ask before relying on them from another machine - they need copying across
 manually, or `.gitignore` line 75 (`test_*.py`) relaxing.
