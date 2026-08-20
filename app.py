@@ -14817,6 +14817,19 @@ def api_account_overview():
             'billing_provider': store_provider or 'stripe',
             'mobile_plan_product_id': store_product_id,
             'mobile_plan_screens': store_plan_screens,
+            # A store tier is one flat charge, in the customer's own currency,
+            # which only StoreKit/Play knows. The per-screen rate and the
+            # screens x rate total below are Stripe maths and are simply false
+            # for a store subscriber - so send nothing rather than a number we
+            # cannot know, and let the app show the real store price.
+            **({
+                'price_display': None,
+                'monthly_cost': None,
+                'store_plan_label': (
+                    f'{store_plan_screens} screens'
+                    if store_plan_screens else 'Store plan'
+                ),
+            } if store_provider else {}),
         })
     except Exception as e:
         logging.error('api_account_overview error: %s', e, exc_info=True)
