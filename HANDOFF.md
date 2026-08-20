@@ -1,4 +1,4 @@
-# Handoff - state as at 2026-08-19
+# Handoff - state as at 2026-08-20
 
 Written from the Windows clone. Everything below is on GitHub `main`
 (`github.com/phengtoeng/everydayadvertise`) **and deployed to production**,
@@ -14,13 +14,15 @@ version plus what is still outstanding.
 | GitHub `main` | source of truth |
 | Windows clone | deploys from here |
 | Production `54.252.90.27` | in sync with `main` |
-| iPhone (TestFlight) | **build 1.1.0 (57) - five builds behind `1.1.0+62`** |
+| iPhone (TestFlight) | **build 1.1.0 (57) - behind `1.1.0+62`** |
 
 `deploy_automated.ps1` ships **only** `app.py`, `config.py` and
 `.env.production`. It does **not** ship `templates/` and it does **not** build
-the app. A Dart change reaches the phone only via a new TestFlight build.
+the app. Template changes need a separate upload plus a service restart (Jinja
+caches compiled templates). A Dart change reaches the phone only via a new
+TestFlight build.
 
-## Apple <-> website: how it actually works
+## Apple and the website: how it actually works
 
 There is no direct link between Apple and the website. Both the app and the
 website read **one row** in `subscriptions`, keyed by user:
@@ -45,20 +47,41 @@ secret involved.
 Notification outcomes log at **warning**, not info - the server runs at WARNING
 level, so an info-level log is invisible. Do not "tidy" that back to info.
 
+## The two pricing models are genuinely different
+
+This causes the most confusion, and it is not a bug:
+
+| | Apple / Google | Website |
+| --- | --- | --- |
+| Model | one flat **tier** | **per screen** |
+| Price set in | App Store Connect / Play Console | admin Subscription settings |
+| Currency | the customer's own, localized | whatever the Stripe price uses |
+| Known to the server? | **no** | yes |
+
+The server cannot know what a store charged, so it must not try. For a store
+account `/api/account/overview` sends neither `price_display` nor
+`monthly_cost`, only `store_plan_label` and `mobile_plan_product_id`; the app
+looks the real price up from StoreKit, the same way the paywall does. Never
+"helpfully" restore a computed figure there.
+
 ## Fixed this round
 
-- Renewals/cancels/expiry now update the record on their own. Previously the
-  website only learned anything when the app was opened, so a subscriber was
-  locked out at their first renewal.
+- Renewals, cancels and expiry now update the record on their own. Previously
+  the website only learned anything when the app was opened, so a subscriber
+  was locked out at their first renewal.
 - Adding a screen no longer opens a Stripe subscription for an account a store
   already bills. That was charging the same screens twice.
-- Subscribe and account pages say who is billing: no Stripe pitch or per-screen
-  price to a store subscriber, and no "cancel all and remove all screens"
-  button, which for a store account deleted the screens without stopping the
-  store billing.
+- Subscribe and account pages (web) say who is billing: no Stripe pitch or
+  per-screen price to a store subscriber, and no "cancel all and remove all
+  screens" button, which for a store account deleted the screens without
+  stopping the store billing.
+- The app's account page reads the store's own price instead of applying the
+  website's per-screen model. It previously showed "$1.99 per screen / month"
+  and "$3.98" on an Apple `Screens_3` plan that Apple had charged A$7.99 for,
+  and fell back to `screenCount * 5` when the server sent nothing.
 - Prices come only from admin Subscription settings. No `$5` literals remain in
-  `app.py` or the templates.
-- Saving admin billing settings now repoints Stripe at a price matching the
+  `app.py`, the templates, or `account_page.dart`.
+- Saving admin billing settings repoints Stripe at a price matching the
   per-screen number (Stripe prices are immutable, so it reuses or creates one).
   Typing a specific price ID by hand still overrides.
 - `/screens/<store_id>` returned **404 "store not found"** for a store that
@@ -68,34 +91,42 @@ level, so an info-level log is invisible. Do not "tidy" that back to info.
 - `deploy_automated.ps1` here-strings had CRLF endings, so `&&` chaining did
   nothing and a failed step still reported DEPLOYMENT SUCCESSFUL.
 
+## Resolved since the last handoff
+
+- **Admin price and Stripe now agree.** Admin `1.99` / "$1.99 per screen /
+  month" points at `price_1U5zfzH80pD9X0Fy8Camw3DJ` = **USD 1.99/month**,
+  verified matching. Note this moved web billing from **AUD to USD**; the old
+  AUD 5.00 price (`price_1STZqBH80pD9X0Fy3WVGJIV7`, product
+  `prod_TQQh4AcbGLeeVM`) is no longer in use.
+- **The 10 duplicate Stripe subscriptions are all cancelled.** Verified against
+  Stripe: every remaining one reads `canceled`. Nothing will be charged on
+  Aug 29 or 30. Their local `screen_subscriptions` rows still carry the dead
+  `stripe_subscription_id` values - harmless, but stale if anyone audits.
+
 ## Outstanding
 
-1. **10 duplicate live Stripe subscriptions** on `toengpheng@gmail.com`
-   (user 44), A$5/month each, first charge **2026-08-29**. Created before the
-   double-billing fix. No card on file so nothing has been collected. Cancel
-   them in the Stripe Dashboard - the fix stops new ones but does not remove
-   these.
-2. **Admin price vs Stripe price disagree.** Admin says `1.0` / "$1 per screen
-   / month"; the Stripe price ID it points at charges **AUD 5.00**. Pressing
-   Save on the admin billing page now reconciles this. A second product
-   `prod_V6C45WJEEZV8bC` ("$1.99 Per Screen", `price_1U5zfzH80pD9X0Fy8Camw3DJ`,
-   **USD 1.99**) also exists and matches the Apple `Screen_1` tier price.
-   Decide which is intended - it is a business call, not a code fix.
-3. **Ship a TestFlight build.** The phone is five builds behind and is missing
-   every master-store fix plus the debug API logging.
-4. **Promotion pricing is not covered.** `superadmin_update_billing_promotion`
-   has its own price and price ID and was not given the same reconciliation, so
-   it can still show one price and charge another.
-5. **`_active_store_subscription()` ignores `current_period_end`.** It treats a
+1. **Ship a TestFlight build.** The phone is on 1.1.0 (57) and is missing every
+   master-store fix, the debug API logging, and the account-page price fix
+   above. Until then the app shows the old numbers, and the two price fields
+   read blank because the server no longer sends them.
+2. **Promotion pricing is not covered.** `superadmin_update_billing_promotion`
+   has its own price and price ID and was not given the same reconciliation as
+   the main settings, so it can still show one price and charge another.
+3. **`_active_store_subscription()` ignores `current_period_end`.** It treats a
    row as blocking while `status` reads active, even if the period has passed,
    while `_user_has_active_subscription()` honours the date. A stale row means
    locked out of the dashboard *and* blocked from subscribing on the web. Less
    likely now notifications set `expired` properly, but a missed notification
    still traps someone.
-6. **Two hardcoded `$5` fallbacks remain in the Flutter app**
+4. **Two hardcoded `$5` fallbacks remain in the Flutter app**
    (`subscribe_page.dart`, `stores_tab.dart`). Both are `price_display`
    fallbacks. `account_page.dart` is done.
-8. **Google Play** is deliberately parked. `screens_monthly` has no tier
+5. **Product display names still read e.g. "EverydayAdvertie Screen
+   Subcription"** in App Store Connect. Customers see these on Apple's purchase
+   sheet.
+6. **No demo account for App Review.** The app is login-gated, so review fails
+   without one in App Review Information.
+7. **Google Play** is deliberately parked. `screens_monthly` has no tier
    allowance, so those subscribers are uncapped on screens. Play's real-time
    developer notifications are not implemented - Play state has the same
    staleness problem Apple had before this round.
@@ -104,7 +135,19 @@ level, so an info-level log is invisible. Do not "tidy" that back to info.
 
 `test_*.py` is in `.gitignore`, so the suites written this round live **only on
 the Windows clone** and are not in git (this includes the pre-existing
-`test_app.py` that `deploy_automated.ps1` runs). 149 checks covering Apple JWS
-verification and notification handling, the subscribe/account page states,
-admin-driven pricing, the Stripe price reconciliation, and the
-`/screens/<store_id>` fix. Ask before relying on them from another machine.
+`test_app.py` that `deploy_automated.ps1` runs). **167 checks** across eight
+files:
+
+| File | Checks | Covers |
+| --- | --- | --- |
+| `test_apple_notifications.py` | 39 | JWS signature and certificate chain pinning |
+| `test_apple_notification_apply.py` | 26 | notification to database outcomes |
+| `test_subscribe_page.py` | 23 | subscribe page in every billing state |
+| `test_account_screens.py` | 17 | account page store vs Stripe rendering |
+| `test_admin_price_sync.py` | 23 | Stripe price reconciliation (fake Stripe) |
+| `test_account_overview_api.py` | 18 | mobile overview payload |
+| `test_price_source.py` | 11 | pricing derives only from admin |
+| `test_screens_endpoint.py` | 10 | `/screens/<store_id>` empty-store fix |
+
+Ask before relying on them from another machine - they need copying across
+manually, or `.gitignore` line 75 (`test_*.py`) relaxing.
