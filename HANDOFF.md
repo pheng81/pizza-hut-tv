@@ -100,36 +100,64 @@ looks the real price up from StoreKit, the same way the paywall does. Never
 
 ## Remote control: why "Scan Wi-Fi" found nothing
 
-The phone scanned for eight *vendor* mDNS services - AirPlay, Chromecast,
-Samsung, LG, Roku, Vizio, Sony, Android TV Remote - and the Android TV app
-advertised **none** of them. It had no `NsdManager` registration at all, so an
-EverydayAdvertise TV was invisible on its own network no matter what the phone
-did. iOS permissions were never the problem: `NSLocalNetworkUsageDescription`
-and all eight `NSBonjourServices` were already correct.
+Two independent faults, both fixed, neither yet on a device.
 
-The TV app now advertises `_everydayadvertise._tcp` via `NsdManager`
-(`TvNsdAdvertiser.kt`, started from `TvDisplayActivity`), carrying `device_id`,
-`store_id`, `screen_id` and `pair_code` as TXT records. The phone declares that
-type in `Info.plist`, queries it, and reads the TXT - which is how a discovered
-TV is matched to a screen registered on the account.
+**1. The scan could never work on iPhone.** `multicast_dns` opens a raw socket
+and calls `joinMulticast(224.0.0.251)`. iOS blocks raw multicast without the
+`com.apple.developer.networking.multicast` entitlement, which Apple grants only
+on request. `NSBonjourServices` does **not** unlock this - it only applies to
+Apple's native Bonjour APIs - so `Info.plist` looked perfectly correct while the
+scan returned nothing at all, not even the Chromecast and AirPlay devices that
+are usually everywhere.
 
-Matching used to compare the server's stored IP against the discovered one.
-That almost never worked: the server records the device's **public** address
-(the live rows are public IPv6, some days stale) while discovery returns its LAN
-address. It now matches on the advertised `device_id` first, then store/screen,
-and only then falls back to IP.
+Discovery now uses **`bonsoir`**, which wraps `NSNetServiceBrowser` on iOS and
+`NsdManager` on Android. It honours the declared `NSBonjourServices` and needs
+no entitlement. `multicast_dns` has been removed. Every service type must still
+be listed in `Info.plist`: iOS refuses to browse a type that is not.
 
-Two things are still true and are not bugs:
+SSDP still uses a raw socket and so remains **dead on iOS**, working on Android
+only. Requesting the multicast entitlement would revive it - worth starting,
+since approval is slow, but nothing depends on it.
 
-- **SSDP cannot work on iOS.** `Runner.entitlements` has no
-  `com.apple.developer.networking.multicast`, so raw multicast is blocked.
-  Apple grants that entitlement only on request. The SSDP half of the scan is
-  therefore dead on iPhone; mDNS carries the feature.
-- **Third-party TVs still need their own service.** Discovery only sees brands
-  that advertise one of the declared types.
+**2. Our own TVs advertised nothing.** The Android TV app had no `NsdManager`
+registration, so an EverydayAdvertise screen was invisible even to a working
+scan. It now advertises `_everydayadvertise._tcp` (`TvNsdAdvertiser.kt`, started
+from `TvDisplayActivity`) carrying `device_id`, `store_id`, `screen_id` and
+`pair_code` as TXT records, and the phone reads those to match a discovered TV
+to a registered screen. Matching previously compared the server's stored IP with
+the discovered one, which almost never agreed: the server records the device's
+**public** address (live rows are public IPv6, days stale) while discovery
+returns its LAN address.
 
-**This needs both a new Android TV release and a new iOS build to have any
-effect** - the TV has to advertise before the phone can find it.
+### Controlling third-party TVs is not implemented
+
+Worth being blunt, because the UI implies otherwise. Only "Android / Google TV"
+is `ready: true`, and that is our own bridge - phone to server to the TV app
+over socket.io. Samsung, LG, Sony, TCL, Hisense, Vizio, Panasonic and Philips
+are all `ready: false, 'Setup required'` placeholders with no protocol behind
+them. Discovery finding a Samsung will not let you control it.
+
+Rough order of effort if this gets built:
+
+| Brand | Protocol | Pairing |
+| --- | --- | --- |
+| Roku / TCL | ECP, plain HTTP port 8060 | none - easiest by far |
+| Sony Bravia | REST | pre-shared key typed into the TV |
+| Samsung | WebSocket 8001/8002 | on-screen accept, store token |
+| LG webOS | SSAP WebSocket 3000/3001 | on-screen accept, client key |
+| Vizio | HTTPS 7345 | PIN |
+| Android TV (other) | androidtvremote2 | TLS certificate pairing |
+
+Note that **powering a TV on over Wi-Fi generally cannot work** - most sets drop
+their network interface when off. That needs Wake-on-LAN or HDMI-CEC, and is why
+`powerReady` is false on the bridge profile.
+
+### Verified so far
+
+Android APK builds with `bonsoir`; `flutter analyze` clean; the TV app's Kotlin
+compiles. **Not** verified: the iOS build (cannot be done from the Windows
+clone - `bonsoir_darwin` needs iOS 13.0 and the app targets 14.0, so it should
+be fine) and real discovery against actual hardware. Both need a device.
 
 ## Resolved since the last handoff
 
