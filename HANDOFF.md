@@ -14,7 +14,9 @@ version plus what is still outstanding.
 | GitHub `main` | source of truth |
 | Windows clone | deploys from here |
 | Production `54.252.90.27` | in sync with `main` |
-| iPhone (TestFlight) | **build 1.1.0 (64)** |
+| iPhone (TestFlight) | build **1.1.0 (64)** |
+| Google Play | version code **53** (name 1.11), released Jun 25 |
+| Repo (`pubspec.yaml`) | **1.2.0+65** - clears both |
 
 `deploy_automated.ps1` ships **only** `app.py`, `config.py` and
 `.env.production`. It does **not** ship `templates/` and it does **not** build
@@ -181,10 +183,12 @@ be fine) and real discovery against actual hardware. Both need a device.
    - **iOS app** (`everyday_mobile`) - adds the Bonjour-based scan plus the
      billing and account-page fixes below.
 
-1. **Ship a TestFlight build, and bump the build number first.**
-   `everyday_mobile/pubspec.yaml` reads `1.1.0+62` but TestFlight is already on
-   **64**, so an upload from the repo as-is is rejected by Apple as a duplicate
-   build number. Set it to **1.1.0+65** or higher before building.
+1. **Ship the builds.** `pubspec.yaml` is now **1.2.0+65**, which is high
+   enough for both stores. One number feeds both: `1.2.0` becomes the version
+   name (Android `versionName`, iOS `CFBundleShortVersionString`) and `65` the
+   build number (`versionCode` / `CFBundleVersion`). It has to clear the
+   **highest already uploaded anywhere** - TestFlight is on 64, so 54 would be
+   rejected by Apple even though Google Play is only on 53.
 
    Two fixes deployed on the server depend on a build newer than the Dart
    commits of 2026-08-20 (`321f154bf1`, `835e224a0c`):
