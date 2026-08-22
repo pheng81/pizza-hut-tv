@@ -1070,6 +1070,38 @@ def _store_subscription_block_message(provider: str) -> str:
     )
 
 
+def _store_plan_ceiling_message(provider: str, plan_screens: int) -> str:
+    """What to tell someone who needs more screens than any store tier covers.
+
+    Saying only "sign up on the website" walks them straight into
+    _store_subscription_block_message, which refuses precisely because their
+    store plan is still live - a loop with no way out. Give the whole sequence
+    instead, in the order that does not cost them the time they have paid for.
+    """
+    # "the App Store" reads correctly after "the most ... sells" but not after
+    # "your", so keep both forms rather than producing "your the App Store plan".
+    where = 'Google Play' if provider == 'google' else 'the App Store'
+    bare = 'Google Play' if provider == 'google' else 'App Store'
+    settings_path = (
+        'the Play Store > Payments and subscriptions'
+        if provider == 'google'
+        else 'iPhone Settings > your name > Subscriptions'
+    )
+    return '\n'.join([
+        f'Your plan covers {plan_screens} screens, the most {where} sells. '
+        'Going beyond that means moving billing to the website, which cannot '
+        f'happen while your {bare} plan is still active - you would be '
+        'charged twice for the same screens.',
+        '',
+        f'1. Turn off auto-renew in {settings_path}.',
+        '2. Keep using your screens until the period you have paid for ends.',
+        '3. Then subscribe on the website, which bills per screen with no cap.',
+        '',
+        'Do not cancel immediately - you would lose the rest of the time you '
+        'have already paid for.',
+    ])
+
+
 def _mobile_plan_allowance(user_id, wanted_screens: int) -> tuple[int, bool, str | None]:
     """Screens the user's store plan covers, whether wanted_screens exceeds it,
     and the product id they are currently on.
@@ -20021,8 +20053,9 @@ def check_screen_limit():
             ),
             'mobile_plan_limit_reached': bool(needs_upgrade and upgrade_tier is None),
             'message': (
-                f'Your plan covers {plan_screens} screens, the most available in '
-                'the app. Sign up on the website for more screens.'
+                _store_plan_ceiling_message(
+                    (store_sub[0] if store_sub else 'apple'), plan_screens
+                )
                 if needs_upgrade and upgrade_tier is None else None
             ),
             'upgrade_url': (
@@ -20098,10 +20131,8 @@ def add_screen():
                     # to. Do not tell them to buy the plan they already have.
                     return jsonify({
                         'error': 'Plan limit reached',
-                        'message': (
-                            f'Your plan covers {plan_screens} screens, the most '
-                            'available in the app. Sign up on the website for '
-                            'more screens.'
+                        'message': _store_plan_ceiling_message(
+                            store_provider or 'apple', plan_screens
                         ),
                         'requires_upgrade': False,
                         'plan_limit_reached': True,
