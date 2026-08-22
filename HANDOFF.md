@@ -161,6 +161,39 @@ compiles. **Not** verified: the iOS build (cannot be done from the Windows
 clone - `bonsoir_darwin` needs iOS 13.0 and the app targets 14.0, so it should
 be fine) and real discovery against actual hardware. Both need a device.
 
+## Stripe webhooks, and the env file that was never read
+
+Stripe emailed about deliveries failing to `https://yoyiyu.com` - a five-year-old
+endpoint from an unrelated project, the only one the account had. **There was no
+endpoint for everydayadvertise.com at all**, so Stripe renewals, cancellations
+and payment failures had never reached the server. New checkouts still worked
+because `/billing/success` syncs on return; everything after that went stale, the
+same fault Apple had.
+
+That endpoint has been repointed at `https://everydayadvertise.com/stripe/webhook`
+with the four events `stripe_webhook()` handles. Note it keeps its 2021 creation
+date and delivery history, so its failure graph shows old `yoyiyu.com` failures.
+
+Fixing it exposed something worse. **The app reads `.env`, not `.env.production`** -
+`load_dotenv()` takes no argument, so it loads `.env` from the working directory.
+`deploy_automated.ps1` only ever uploaded `.env.production`, which nothing reads.
+Every config change deployed that way was silently discarded while the app kept
+using a `.env` last touched in May, and nothing errored. That is why
+`STRIPE_WEBHOOK_SECRET` was still `whsec_PLACEHOLDER_UPDATE_AFTER_WEBHOOK_SETUP`
+and every signed delivery came back 400.
+
+The deploy now writes `.env`. Before changing it, the two files were compared:
+the server's `.env` held four keys the local file did not - `SECRET_KEY`,
+`GOOGLE_MAPS_API_KEY`, `GOOGLE_SERVER_API_KEY`, `VONAGE_FROM_NUMBER` - so a
+straight overwrite would have destroyed them. Losing `SECRET_KEY` alone
+invalidates every signed session. Those four were copied into the local
+`.env.production` first, and the deploy now takes a timestamped `.env.backup_*`
+before each overwrite.
+
+**`.env.production` on the Windows clone is now the source of truth for server
+config.** Anything added on the server must be copied back into it, or the next
+deploy erases it.
+
 ## Resolved since the last handoff
 
 - **Admin price and Stripe now agree.** Admin `1.99` / "$1.99 per screen /
