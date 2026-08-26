@@ -979,6 +979,18 @@ class _AccountPageState extends State<AccountPage> {
         : (monthlyCost != null
             ? '\$${monthlyCost.toStringAsFixed(2)}'
             : '--');
+    final providerLabel = billingProvider == 'apple'
+        ? 'Apple App Store'
+        : billingProvider == 'google'
+            ? 'Google Play'
+            : 'Website / Stripe';
+    final planLabel = isStoreBilled
+        ? (storePlanLabel.isNotEmpty
+            ? storePlanLabel
+            : (mobileProductId.isNotEmpty
+                ? mobileProductId
+                : 'Mobile subscription'))
+        : planPriceLabel;
     final billingHistory = ((account?['billing_history'] as List?) ?? const [])
         .whereType<Map>()
         .map((e) => Map<String, dynamic>.from(e))
