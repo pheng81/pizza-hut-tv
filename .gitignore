@@ -72,7 +72,14 @@ Thumbs.db
 # Temporary scripts (debugging, testing, checking)
 check_*.py
 debug_*.py
-test_*.py
+# NOT test_*.py. That blanket rule kept the whole assertion suite - Apple JWS
+# and certificate-chain pinning included - off GitHub and off every backup,
+# living only on the Windows clone. The scratch scripts it was meant to catch
+# are named individually below.
+test_agent_system.py
+test_screen_count.py
+test_signup_autostore.py
+test_smtp.py
 diagnose_*.py
 analyze_*.py
 verify_*.py

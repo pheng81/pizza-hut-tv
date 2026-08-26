@@ -1021,6 +1021,35 @@ def _retire_stripe_subscription_for_store_purchase(user_id: int) -> str | None:
         return None
 
 
+def _store_period_has_ended(row) -> bool:
+    """True when current_period_end is set and already in the past.
+
+    Status alone goes stale. A late or missed store notification leaves
+    'active'/'trialing' on a row whose paid period ended days ago, and
+    _user_has_active_subscription already honours the date while the store
+    readers below did not. The result was one row read two ways: the activate
+    page said the subscription had ended and offered web checkout, then web
+    checkout refused because the same row still looked live - and the screen
+    cap still pointed the user back at the store to upgrade a plan that was no
+    longer charging them. No way forward from either side.
+
+    An absent date means unknown, not ended, so those rows keep blocking: a
+    wrong "ended" here lets a second subscription bill on top of a store one we
+    have no way to cancel.
+    """
+    try:
+        keys = row.keys()
+    except Exception:
+        return False
+    if 'current_period_end' not in keys:
+        return False
+    try:
+        period_end = int(row['current_period_end'] or 0)
+    except (TypeError, ValueError):
+        return False
+    return bool(period_end) and period_end < int(time.time())
+
+
 def _active_store_subscription(user_id: int) -> tuple[str, str] | None:
     """(provider, product_id) if an App Store or Play subscription is live.
 
@@ -1035,7 +1064,7 @@ def _active_store_subscription(user_id: int) -> tuple[str, str] | None:
     try:
         db = get_db()
         row = db.execute(
-            'SELECT billing_provider, billing_product_id, status '
+            'SELECT billing_provider, billing_product_id, status, current_period_end '
             'FROM subscriptions WHERE user_id = ?',
             (user_id,),
         ).fetchone()
@@ -1047,6 +1076,8 @@ def _active_store_subscription(user_id: int) -> tuple[str, str] | None:
             return None
         status = ((row['status'] if 'status' in keys else None) or '').lower()
         if status not in ('active', 'trialing', 'past_due'):
+            return None
+        if _store_period_has_ended(row):
             return None
         product_id = (row['billing_product_id'] if 'billing_product_id' in keys else None) or ''
         return provider, product_id
@@ -1070,25 +1101,70 @@ def _store_subscription_block_message(provider: str) -> str:
     )
 
 
+def _store_plan_ceiling_message(provider: str, plan_screens: int) -> str:
+    """What to tell someone who needs more screens than any store tier covers.
+
+    Saying only "sign up on the website" walks them straight into
+    _store_subscription_block_message, which refuses precisely because their
+    store plan is still live - a loop with no way out. Give the whole sequence
+    instead, in the order that does not cost them the time they have paid for.
+    """
+    # "the App Store" reads correctly after "the most ... sells" but not after
+    # "your", so keep both forms rather than producing "your the App Store plan".
+    where = 'Google Play' if provider == 'google' else 'the App Store'
+    bare = 'Google Play' if provider == 'google' else 'App Store'
+    settings_path = (
+        'the Play Store > Payments and subscriptions'
+        if provider == 'google'
+        else 'iPhone Settings > your name > Subscriptions'
+    )
+    return '\n'.join([
+        f'Your plan covers {plan_screens} screens, the most {where} sells. '
+        'Going beyond that means moving billing to the website, which cannot '
+        f'happen while your {bare} plan is still active - you would be '
+        'charged twice for the same screens.',
+        '',
+        f'1. Turn off auto-renew in {settings_path}.',
+        '2. Keep using your screens until the period you have paid for ends.',
+        '3. Then subscribe on the website, which bills per screen with no cap.',
+        '',
+        'Do not cancel immediately - you would lose the rest of the time you '
+        'have already paid for.',
+    ])
+
+
 def _mobile_plan_allowance(user_id, wanted_screens: int) -> tuple[int, bool, str | None]:
     """Screens the user's store plan covers, whether wanted_screens exceeds it,
     and the product id they are currently on.
 
     Returns (0, False, None) for Stripe or unsubscribed users, whose screen
-    count is billed by quantity rather than capped by a tier.
+    count is billed by quantity rather than capped by a tier, and for a store
+    plan that has ended.
+
+    The status check is the same one _active_store_subscription applies, and it
+    has to be: without it an expired store row still caps screens and still
+    sends the user to the store to upgrade a subscription they no longer hold,
+    while the activate page correctly tells them it ended.
     """
     if not user_id:
         return 0, False, None
     try:
         db = get_db()
         row = db.execute(
-            'SELECT billing_provider, billing_product_id FROM subscriptions WHERE user_id = ?',
+            'SELECT billing_provider, billing_product_id, status, current_period_end '
+            'FROM subscriptions WHERE user_id = ?',
             (user_id,),
         ).fetchone()
         if not row:
             return 0, False, None
+        keys = row.keys()
         provider = (row['billing_provider'] or '')
         if provider not in ('apple', 'google'):
+            return 0, False, None
+        status = ((row['status'] if 'status' in keys else None) or '').lower()
+        if status not in ('active', 'trialing', 'past_due'):
+            return 0, False, None
+        if _store_period_has_ended(row):
             return 0, False, None
         product_id = row['billing_product_id'] or ''
         allowance = _mobile_tier_screen_allowance(product_id)
@@ -20021,8 +20097,9 @@ def check_screen_limit():
             ),
             'mobile_plan_limit_reached': bool(needs_upgrade and upgrade_tier is None),
             'message': (
-                f'Your plan covers {plan_screens} screens, the most available in '
-                'the app. Sign up on the website for more screens.'
+                _store_plan_ceiling_message(
+                    (store_sub[0] if store_sub else 'apple'), plan_screens
+                )
                 if needs_upgrade and upgrade_tier is None else None
             ),
             'upgrade_url': (
@@ -20098,10 +20175,8 @@ def add_screen():
                     # to. Do not tell them to buy the plan they already have.
                     return jsonify({
                         'error': 'Plan limit reached',
-                        'message': (
-                            f'Your plan covers {plan_screens} screens, the most '
-                            'available in the app. Sign up on the website for '
-                            'more screens.'
+                        'message': _store_plan_ceiling_message(
+                            store_provider or 'apple', plan_screens
                         ),
                         'requires_upgrade': False,
                         'plan_limit_reached': True,

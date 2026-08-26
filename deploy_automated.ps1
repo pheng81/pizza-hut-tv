@@ -99,12 +99,22 @@ if (-not $DryRun) {
     # continuation as a literal command - bash then reports `$'\r': command not
     # found` and, worse, treats each line as separate so a failed cp does not
     # stop the ones after it. Send LF-only and let `set -e` do the guarding.
+    # The app calls load_dotenv() with no argument, which reads ".env" - NOT
+    # ".env.production". Uploading only the latter meant every config change
+    # deployed here was silently ignored while the app kept using the old .env,
+    # with no error to notice. Write the file the app actually reads, keeping a
+    # timestamped copy of the previous one because it holds SECRET_KEY: losing
+    # that invalidates every user session.
     $deployCmd = (@"
 set -e
 sudo cp /tmp/app.py $RemotePath/app.py
 sudo cp /tmp/config.py $RemotePath/config.py
+sudo cp -a $RemotePath/.env $RemotePath/.env.backup_`$(date +%Y%m%d_%H%M%S)
+sudo cp /tmp/.env.production $RemotePath/.env
 sudo cp /tmp/.env.production $RemotePath/.env.production
 sudo chown www-data:www-data $RemotePath/app.py $RemotePath/config.py $RemotePath/.env.production
+sudo chown ubuntu:ubuntu $RemotePath/.env
+sudo chmod 644 $RemotePath/.env
 "@) -replace "`r`n", "`n"
     ssh -i $KeyPath "ubuntu@$Server" $deployCmd
     if ($LASTEXITCODE -ne 0) {
