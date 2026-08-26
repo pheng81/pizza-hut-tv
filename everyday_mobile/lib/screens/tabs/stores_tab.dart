@@ -747,7 +747,10 @@ class _StoresTabState extends State<StoresTab>
       final lower = message.toLowerCase();
       if (lower.contains('subscription required')) {
         await _openSubscriptionPromptFromServer();
-      } else if (lower.contains('sign up on the website')) {
+      } else if (lower.contains('auto-renew')) {
+        // Matches the ceiling message, which no longer says "sign up on the
+        // website" - that wording was removed server-side, leaving this branch
+        // unreachable and the user with a bare error.
         if (mounted) {
           await _showPlanLimitDialog(message: message);
         }
@@ -762,16 +765,31 @@ class _StoresTabState extends State<StoresTab>
     }
   }
 
+  /// Where someone at the plan ceiling actually has to go first.
+  ///
+  /// Deliberately not the website's /subscribe: it refuses web checkout while
+  /// a store plan is live, precisely so nobody is billed twice, so sending
+  /// them there is a refusal with extra steps - which is the loop this dialog
+  /// used to put them in. The server's message tells them to turn off
+  /// auto-renew first, and this is the page that does it.
+  static String _storeSubscriptionsUrl(String? provider, String message) {
+    final named = (provider ?? '').toLowerCase();
+    final isGoogle = named.isNotEmpty
+        ? named == 'google'
+        : message.toLowerCase().contains('google play');
+    return isGoogle
+        ? 'https://play.google.com/store/account/subscriptions'
+        : 'https://apps.apple.com/account/subscriptions';
+  }
+
   Future<void> _showPlanLimitDialog({
     required String message,
-    String? upgradeUrl,
+    String? billingProvider,
   }) async {
     if (!mounted) {
       return;
     }
-    final url = (upgradeUrl ?? '').trim().isNotEmpty
-        ? upgradeUrl!.trim()
-        : 'https://everydayadvertise.com/subscribe';
+    final url = _storeSubscriptionsUrl(billingProvider, message);
     await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
@@ -787,7 +805,7 @@ class _StoresTabState extends State<StoresTab>
               Navigator.of(context).pop();
               launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
             },
-            child: const Text('Sign up on website'),
+            child: const Text('Manage subscription'),
           ),
         ],
       ),
@@ -809,7 +827,7 @@ class _StoresTabState extends State<StoresTab>
                           'the most available in the app. Sign up on the '
                           'website for more screens.')
                   .toString(),
-              upgradeUrl: limit['upgrade_url']?.toString(),
+              billingProvider: limit['billing_provider']?.toString(),
             );
           }
           return false;
@@ -915,7 +933,6 @@ class _StoresTabState extends State<StoresTab>
     // covers - the stores can't sell a purchase that wouldn't be enough.
     final exceedsLargestTier =
         nativeBilling && summary['mobile_plan_exceeds_largest_tier'] == true;
-    final upgradeUrl = (summary['mobile_plan_upgrade_url'] ?? '').toString();
     // Buying here while a web subscription is live would bill them twice, so
     // say so rather than offering the purchase.
     final hasWebSubscription = summary['has_web_subscription'] == true;
@@ -1411,8 +1428,12 @@ class _StoresTabState extends State<StoresTab>
                             ),
                             child: Text(
                               'This account already has more screens than the '
-                              '$billingStore plan covers. Sign up on the '
-                              'website for flexible per-screen billing.',
+                              '$billingStore plan covers. To move to per-screen '
+                              'billing on the website, first turn off auto-renew '
+                              'in $billingStore, keep using the screens you have '
+                              'paid for, and subscribe on the website once that '
+                              'period ends. Subscribing on the website while the '
+                              '$billingStore plan is live would charge you twice.',
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: scheme.onSurfaceVariant,
                               ),
@@ -1423,11 +1444,12 @@ class _StoresTabState extends State<StoresTab>
                             child: FilledButton(
                               onPressed: () {
                                 Navigator.of(context).pop();
+                                // Not /subscribe: it refuses while the store
+                                // plan is live, so it sent the user straight
+                                // back into a refusal.
                                 launchUrl(
                                   Uri.parse(
-                                    upgradeUrl.isNotEmpty
-                                        ? upgradeUrl
-                                        : '${widget.apiClient.baseUrl}/subscribe',
+                                    _storeSubscriptionsUrl(null, billingStore),
                                   ),
                                   mode: LaunchMode.externalApplication,
                                 );
@@ -1438,7 +1460,7 @@ class _StoresTabState extends State<StoresTab>
                                   borderRadius: BorderRadius.circular(14),
                                 ),
                               ),
-                              child: const Text('Sign up on website'),
+                              child: const Text('Manage subscription'),
                             ),
                           ),
                         ],
