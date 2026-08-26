@@ -5,7 +5,7 @@ plugins {
 
 android {
 	namespace 'com.everydayadvertise.tv'
-	compileSdk 35
+	compileSdk 36
 
 	signingConfigs {
 		release {
@@ -19,9 +19,9 @@ android {
 	defaultConfig {
 		applicationId 'com.everydayadvertise.tv'
 		minSdk 21
-		targetSdk 35
-		versionCode = 54
-		versionName "1.12"
+		targetSdk 36
+		versionCode = 55
+		versionName "1.13"
 	// Allow overriding BASE URL at build time (e.g. -PPHTV_BASE_URL="https://everydayadvertise.com/")
 	def suppliedBase = project.findProperty('PHTV_BASE_URL') as String
 	def defaultProd = 'https://everydayadvertise.com/'
