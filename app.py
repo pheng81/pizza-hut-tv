@@ -1087,6 +1087,30 @@ def _active_store_subscription(user_id: int) -> tuple[str, str] | None:
         return None
 
 
+def _client_platform() -> str:
+    """Which client is asking: 'ios', 'android' or 'web'.
+
+    Sent by the mobile app as X-Client-Platform. Absent means the website.
+    """
+    if not has_request_context():
+        # Background jobs and the test suite call the message builders with no
+        # request in flight; treat those as the website.
+        return 'web'
+    value = (request.headers.get('X-Client-Platform') or '').strip().lower()
+    return value if value in ('ios', 'android') else 'web'
+
+
+def _client_forbids_external_purchase() -> bool:
+    """True when the caller may not be shown a way to pay outside the app.
+
+    App Store guideline 3.1.1 forbids an iOS app from carrying links, buttons
+    or written calls to action pointing at a purchase we take elsewhere. The
+    same text is fine on the website and on Android, so it is suppressed by
+    caller rather than deleted.
+    """
+    return _client_platform() == 'ios'
+
+
 def _store_subscription_block_message(provider: str) -> str:
     where = 'the App Store' if provider == 'apple' else 'Google Play'
     settings_path = (
@@ -1118,6 +1142,16 @@ def _store_plan_ceiling_message(provider: str, plan_screens: int) -> str:
         if provider == 'google'
         else 'iPhone Settings > your name > Subscriptions'
     )
+    if _client_forbids_external_purchase():
+        # On iOS the three-step "then subscribe on the website" sequence is a
+        # call to action for a purchase Apple does not process, which is what
+        # guideline 3.1.1 prohibits. Say what the plan covers and hand them to
+        # support, who can arrange the rest off-device.
+        return (
+            f'Your plan covers {plan_screens} screens, the most the App Store '
+            'sells. To run more screens than that, contact us at '
+            'support@everydayadvertise.com and we will set your account up.'
+        )
     return '\n'.join([
         f'Your plan covers {plan_screens} screens, the most {where} sells. '
         'Going beyond that means moving billing to the website, which cannot '
@@ -6856,8 +6890,17 @@ def api_subscription_summary():
         # store purchase before it starts. It cannot be enforced at verify time
         # the way it is for Stripe: by then Apple has taken the money, and
         # refusing would leave the user paid up with nothing to show for it.
+        # Ask about the purchase this client would actually make. A phone is
+        # required for Stripe and not for a store purchase, so reporting the
+        # Stripe answer to the app blocked In-App Purchase for anyone without
+        # one.
         can_subscribe, subscribe_blocked_reason, subscribe_blocked_action = (
-            _subscription_eligibility(user_id)
+            _subscription_eligibility(
+                user_id,
+                provider={'ios': 'apple', 'android': 'google'}.get(
+                    _client_platform()
+                ),
+            )
         )
 
         return jsonify({
@@ -6889,7 +6932,12 @@ def api_subscription_summary():
             # this account already has; the app should point them at the
             # website's flexible per-screen billing instead of a store purchase.
             'mobile_plan_exceeds_largest_tier': screen_count > int(mobile_tier['screens']),
-            'mobile_plan_upgrade_url': MOBILE_PLAN_UPGRADE_URL,
+            # Blank on iOS: an app that hands out a link to a purchase Apple
+            # does not process fails guideline 3.1.1, so the client is given
+            # nothing it could turn into a button.
+            'mobile_plan_upgrade_url': (
+                '' if _client_forbids_external_purchase() else MOBILE_PLAN_UPGRADE_URL
+            ),
             # Warn the app before it offers a store purchase to someone Stripe
             # is already billing, so we avoid charging them twice.
             'has_web_subscription': has_web_subscription,
@@ -7122,13 +7170,24 @@ def api_billing_mobile_verify():
         }), 500
 
 
-def _subscription_eligibility(user_id: int) -> tuple[bool, str | None, str | None]:
+def _subscription_eligibility(
+    user_id: int, provider: str | None = None
+) -> tuple[bool, str | None, str | None]:
     """(eligible, message, action) - the gate used before checkout.
 
     `action` names what the customer has to do, so a client can offer the fix
     rather than only stating the problem: telling someone to verify their phone
     and then leaving them to find the screen themselves is a dead end. Codes are
     stable; the message is not, so never match on the text.
+
+    `provider` is who is about to take the money. The phone requirement exists
+    for Stripe, where we carry the chargeback risk and need to reach the
+    customer. Apple and Google take the payment themselves, vet the payment
+    method and handle refunds, so the phone buys us nothing there - and it cost
+    us an App Store rejection: a reviewer signing in with Apple gets a
+    privaterelay address and no phone number, tapped Subscribe, and was told to
+    verify a phone they could not receive. That left In-App Purchase
+    unreachable, which is exactly what guideline 3.1.1 refuses.
     """
     try:
         db = get_db()
@@ -7146,6 +7205,10 @@ def _subscription_eligibility(user_id: int) -> tuple[bool, str | None, str | Non
         email_verified = int(row['email_verified'] or 0) == 1
         if not email_verified:
             return False, 'Please verify your email address before subscribing.', 'verify_email'
+
+        if (provider or '').strip().lower() in ('apple', 'google'):
+            # The store vouches for the payer; nothing further to check.
+            return True, None, None
 
         phone_number = (row['phone_number'] or '').strip()
         phone_verified = int(row['phone_verified'] or 0) == 1
@@ -14884,6 +14947,25 @@ def api_account_overview():
         except Exception as exc:
             logging.warning('Could not read billing provider for %s: %s', user_id, exc)
 
+        # With nothing subscribed yet, name the system that would actually take
+        # the payment instead of falling back to Stripe. On iOS the app can
+        # only sell through Apple, so reporting "stripe" made the account page
+        # read "Billing Provider: Website / Stripe" above the website's
+        # per-screen price - advertising, inside the app, a purchase the app
+        # does not make. An account genuinely billed by Stripe still reports
+        # Stripe; that multiplatform case is allowed, and honest.
+        prospective_provider = None
+        prospective_product_id = None
+        if not store_provider and not has_active:
+            prospective_provider = {
+                'ios': 'apple',
+                'android': 'google',
+            }.get(_client_platform())
+            if prospective_provider:
+                prospective_product_id = _mobile_tier_for_screens(
+                    screen_count
+                )['product_id']
+
         return jsonify({
             'success': True,
             'user_info': user_info,
@@ -14910,8 +14992,11 @@ def api_account_overview():
             # per-screen list and its prices to a store subscriber tells them
             # they are paying something they are not, and offers Cancel buttons
             # that cannot cancel a store subscription.
-            'billing_provider': store_provider or 'stripe',
+            'billing_provider': store_provider or prospective_provider or 'stripe',
             'mobile_plan_product_id': store_product_id,
+            # The tier this account would buy, so the app can quote the store's
+            # own price rather than the website's per-screen rate.
+            'prospective_store_product_id': prospective_product_id,
             'mobile_plan_screens': store_plan_screens,
             # A store tier is one flat charge, in the customer's own currency,
             # which only StoreKit/Play knows. The per-screen rate and the
@@ -20103,7 +20188,11 @@ def check_screen_limit():
                 if needs_upgrade and upgrade_tier is None else None
             ),
             'upgrade_url': (
-                MOBILE_PLAN_UPGRADE_URL if needs_upgrade and upgrade_tier is None else None
+                MOBILE_PLAN_UPGRADE_URL
+                if needs_upgrade
+                and upgrade_tier is None
+                and not _client_forbids_external_purchase()
+                else None
             ),
         })
     except Exception as e:
@@ -20183,7 +20272,11 @@ def add_screen():
                         'current_screens': current_screen_count,
                         'plan_screens': plan_screens,
                         'billing_provider': store_provider,
-                        'upgrade_url': MOBILE_PLAN_UPGRADE_URL,
+                        'upgrade_url': (
+                            None
+                            if _client_forbids_external_purchase()
+                            else MOBILE_PLAN_UPGRADE_URL
+                        ),
                     }), 403
                 return jsonify({
                     'error': 'Plan upgrade required',
