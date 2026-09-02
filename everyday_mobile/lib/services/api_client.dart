@@ -35,6 +35,20 @@ class ApiClient {
   String? _mobileAuthToken;
   String? _lastLoginUsername;
 
+  /// Which client the server is talking to, for X-Client-Platform.
+  static String get clientPlatform {
+    if (kIsWeb) {
+      return 'web';
+    }
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      return 'ios';
+    }
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return 'android';
+    }
+    return 'web';
+  }
+
   String get baseUrl => _baseUrl;
   String? get mobileAuthToken => _mobileAuthToken;
   String? get lastLoginUsername => _lastLoginUsername;
@@ -80,6 +94,11 @@ class ApiClient {
             if (token != null && token.isNotEmpty) {
               options.headers['X-Mobile-Auth'] = token;
             }
+            // The server withholds every website-purchase link and call to
+            // action from iOS callers, which App Store guideline 3.1.1
+            // forbids an app from carrying. It cannot do that without being
+            // told which client is asking.
+            options.headers['X-Client-Platform'] = clientPlatform;
             if (kDebugMode) {
               debugPrint(
                 'API -> ${options.method} ${options.path} '

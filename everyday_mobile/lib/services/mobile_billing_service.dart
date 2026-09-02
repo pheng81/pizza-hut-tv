@@ -138,6 +138,16 @@ class MobileBillingService {
       (defaultTargetPlatform == TargetPlatform.iOS ||
           defaultTargetPlatform == TargetPlatform.android);
 
+  /// True on iOS, where App Store guideline 3.1.1 forbids the app from showing
+  /// any link, button or written call to action for a purchase made outside
+  /// In-App Purchase. Every website-checkout affordance is gated on this.
+  bool get forbidsExternalPurchase =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
+  /// Where to send someone the store cannot sell to. Named rather than linked:
+  /// a mailto: is not a purchase mechanism, so it stays allowed on iOS.
+  static const supportEmail = 'support@everydayadvertise.com';
+
   String get storeName {
     if (defaultTargetPlatform == TargetPlatform.iOS) {
       return 'Apple App Store';

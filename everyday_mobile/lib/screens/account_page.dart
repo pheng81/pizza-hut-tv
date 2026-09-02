@@ -10,6 +10,7 @@ import '../models/app_models.dart';
 import '../services/api_client.dart';
 import '../services/mobile_billing_service.dart';
 import 'login_screen.dart';
+import 'subscribe_page.dart';
 
 class AccountPage extends StatefulWidget {
   const AccountPage({
@@ -101,8 +102,14 @@ class _AccountPageState extends State<AccountPage> {
       }
       return;
     }
-    final productId =
+    // Falls back to the tier this account would buy. Without it an
+    // unsubscribed iOS user was quoted the website's per-screen Stripe rate,
+    // which is not a price the app can charge.
+    final existingId =
         (account['mobile_plan_product_id'] ?? '').toString().trim();
+    final productId = existingId.isNotEmpty
+        ? existingId
+        : (account['prospective_store_product_id'] ?? '').toString().trim();
     if (productId.isEmpty || !MobileBillingService.instance.usesNativeStore) {
       return;
     }
@@ -292,22 +299,40 @@ class _AccountPageState extends State<AccountPage> {
   }
 
   Future<void> _openBillingPortal() async {
-    // Subscriptions bought through the App Store or Play Store can only be
-    // managed by the store that billed them - the Stripe portal knows nothing
-    // about them.
-    if (MobileBillingService.instance.usesNativeStore) {
+    // Branch on who actually billed them, not on which platform the app is
+    // running on. A store subscription can only be managed by the store that
+    // took the money, and a Stripe one is invisible there - sending an iOS
+    // user with a website subscription to Apple's page showed them an empty
+    // list and no way forward.
+    final provider =
+        (_account?['billing_provider'] ?? 'stripe').toString().toLowerCase();
+    if (provider == 'apple' || provider == 'google') {
       await _runAction(() async {
-        final url = defaultTargetPlatform == TargetPlatform.iOS
+        final url = provider == 'apple'
             ? 'https://apps.apple.com/account/subscriptions'
             : 'https://play.google.com/store/account/subscriptions';
         await _openExternal(url);
         if (mounted) {
           setState(() {
-            _message =
-                '${MobileBillingService.instance.storeName} subscription settings opened.';
+            _message = provider == 'apple'
+                ? 'App Store subscription settings opened.'
+                : 'Google Play subscription settings opened.';
           });
         }
       });
+      return;
+    }
+
+    // The Stripe portal can change plan and payment method, which makes it a
+    // purchase mechanism outside In-App Purchase - App Store guideline 3.1.1
+    // forbids an iOS app from opening one. Name support instead.
+    if (MobileBillingService.instance.forbidsExternalPurchase) {
+      setState(() {
+        _message = 'This subscription is billed outside the app. Email '
+            '${MobileBillingService.supportEmail} to change or cancel it, or '
+            'subscribe through the App Store below to move billing here.';
+      });
+      _showNotice(_message!);
       return;
     }
 
@@ -985,11 +1010,15 @@ class _AccountPageState extends State<AccountPage> {
             ? 'Google Play'
             : 'Website / Stripe';
     final planLabel = isStoreBilled
-        ? (storePlanLabel.isNotEmpty
-            ? storePlanLabel
-            : (mobileProductId.isNotEmpty
-                ? mobileProductId
-                : 'Mobile subscription'))
+        ? (!hasActive
+            // Nothing bought yet, so quote the price rather than naming a
+            // plan this account does not hold.
+            ? planPriceLabel
+            : (storePlanLabel.isNotEmpty
+                ? storePlanLabel
+                : (mobileProductId.isNotEmpty
+                    ? mobileProductId
+                    : 'Mobile subscription')))
         : planPriceLabel;
     final billingHistory = ((account?['billing_history'] as List?) ?? const [])
         .whereType<Map>()
@@ -1139,7 +1168,17 @@ class _AccountPageState extends State<AccountPage> {
                                           _showNotice(msg);
                                           return;
                                         }
-                                        if (phone.isEmpty || !phoneVerified) {
+                                        // The phone requirement is a Stripe
+                                        // one - we carry the chargeback risk
+                                        // there. Apple and Google vet the
+                                        // payer themselves, and applying it to
+                                        // them put a phone screen in front of
+                                        // In-App Purchase for every Sign in
+                                        // with Apple user, which is what App
+                                        // Review rejected under 3.1.1.
+                                        if (!MobileBillingService
+                                                .instance.usesNativeStore &&
+                                            (phone.isEmpty || !phoneVerified)) {
                                           const msg =
                                               'Please verify your phone number before subscribing.';
                                           setState(() {
@@ -1153,6 +1192,37 @@ class _AccountPageState extends State<AccountPage> {
                                 child: const Text('Subscribe Now'),
                               ),
                             ),
+                          // Always present on iOS and Android, including for an
+                          // account already subscribed on the website. App
+                          // Review rejected the build because content bought
+                          // outside the app was reachable with no In-App
+                          // Purchase offered anywhere; this is that offer, and
+                          // it must not be conditional on subscription state.
+                          if (MobileBillingService.instance.usesNativeStore) ...[
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton(
+                                onPressed: _actionBusy
+                                    ? null
+                                    : () async {
+                                        await Navigator.of(context).push(
+                                          MaterialPageRoute<void>(
+                                            builder: (_) => SubscribePage(
+                                              apiClient: widget.apiClient,
+                                            ),
+                                          ),
+                                        );
+                                        if (mounted) {
+                                          await _load();
+                                        }
+                                      },
+                                child: Text(
+                                  'View ${MobileBillingService.instance.storeName} plans',
+                                ),
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 8),
                           if (hasActive && !isCanceled)
                             SizedBox(
