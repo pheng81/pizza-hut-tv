@@ -8,7 +8,7 @@ does not, so the deploy cannot run from there.
 
 | | |
 | --- | --- |
-| Branch | `agent/native-google-signin-ios` |
+| Branch | `main` (merged from `agent/native-google-signin-ios`) |
 | Commit | `4aa32a56c09` "Let an App Store customer actually buy the subscription" |
 | Server file changed | `app.py` only |
 | Production | `54.252.90.27`, `/var/www/everydayadvertise_tv` |
@@ -65,10 +65,13 @@ changes.
 ## Deploy
 
 ```powershell
-git fetch origin
-git merge origin/agent/native-google-signin-ios   # or check the branch out
+git checkout main
+git pull origin main
 .\deploy_automated.ps1
 ```
+
+It is already on `main` — no branch merge needed. `main` is also exactly what
+TestFlight build 1.2.0 (68) was built from.
 
 `deploy_automated.ps1` ships `app.py`, `config.py` and `.env.production`, which
 covers this change. It runs `test_app.py` first and aborts on failure.
