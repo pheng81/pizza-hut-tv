@@ -124,17 +124,29 @@ suspecting the code.
 
 ## Also confirm on the box
 
-**`APPLE_IAP_SHARED_SECRET` must be set in the server's `.env`.** Without it
+**`APPLE_IAP_SHARED_SECRET` must reach the process.** Without it
 `_apple_iap_enabled()` returns false and receipts are refused *after* Apple has
-charged the customer, which is worse than the bug being fixed. Note the known
-trap recorded in HANDOFF.md: the deploy writes `.env`, and `.env.production`
-was historically uploaded to a filename nothing read — so check the live file,
-not the local one.
+charged the customer, which is worse than the bug being fixed.
+
+It is **not** in `.env`, and it is not meant to be. It lives in the systemd
+drop-in `/etc/systemd/system/everydayadvertise_tv.service.d/apple-iap.conf`,
+which is where MOBILE_BILLING_SETUP.md put it precisely so that a deploy cannot
+overwrite it. `load_dotenv()` is called with no `override`, so a variable
+already in the environment wins over the file: systemd supplies it and `.env`
+never touches it.
+
+So do not grep `.env` for it. That returns `0` on a perfectly healthy server and
+reads as a missing secret when nothing is wrong - it has already cost one round
+of false alarm after a good deploy. Ask systemd instead:
 
 ```bash
-ssh -i <key> ubuntu@54.252.90.27 \
-  "grep -c APPLE_IAP_SHARED_SECRET /var/www/everydayadvertise_tv/.env"
+# prints 1 if systemd is supplying it, 0 if not - and never the value itself
+ssh -i <key> ubuntu@54.252.90.27 "sudo systemctl show everydayadvertise_tv -p Environment | grep -c APPLE_IAP_SHARED_SECRET"
 ```
+
+Better still, ask the app rather than the filesystem: `apple_iap_enabled` in
+`/api/subscription/summary` is what the code concludes, and that is what
+actually decides whether a receipt is accepted.
 
 ## Still open, not fixed here
 
