@@ -747,10 +747,13 @@ class _StoresTabState extends State<StoresTab>
       final lower = message.toLowerCase();
       if (lower.contains('subscription required')) {
         await _openSubscriptionPromptFromServer();
-      } else if (lower.contains('auto-renew')) {
-        // Matches the ceiling message, which no longer says "sign up on the
-        // website" - that wording was removed server-side, leaving this branch
-        // unreachable and the user with a bare error.
+      } else if (lower.contains('auto-renew') ||
+          // Two server wordings of one ceiling message, and neither says "sign
+          // up on the website" any more. Off iOS it spells out turning
+          // auto-renew off first; on iOS it may not name a purchase Apple does
+          // not process, so it points at support instead. Matching only one of
+          // them leaves the other platform with a bare error and no dialog.
+          lower.contains('the most the app store sells')) {
         if (mounted) {
           await _showPlanLimitDialog(message: message);
         }
@@ -789,6 +792,13 @@ class _StoresTabState extends State<StoresTab>
     if (!mounted) {
       return;
     }
+    // iOS may not carry a button to a purchase made outside In-App Purchase,
+    // and the message it gets names support rather than a subscription to
+    // manage, so there the dialog only acknowledges it. The server withholds
+    // upgrade_url from iOS callers too: neither side alone should be able to
+    // put an outbound button back.
+    final canManageSubscription =
+        !MobileBillingService.instance.forbidsExternalPurchase;
     final url = _storeSubscriptionsUrl(billingProvider, message);
     await showDialog<void>(
       context: context,
@@ -798,15 +808,16 @@ class _StoresTabState extends State<StoresTab>
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Not now'),
+            child: Text(canManageSubscription ? 'Not now' : 'OK'),
           ),
-          FilledButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-            },
-            child: const Text('Manage subscription'),
-          ),
+          if (canManageSubscription)
+            FilledButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+              },
+              child: const Text('Manage subscription'),
+            ),
         ],
       ),
     );
@@ -823,9 +834,17 @@ class _StoresTabState extends State<StoresTab>
           if (mounted) {
             await _showPlanLimitDialog(
               message: (limit['message'] ??
-                      'Your plan covers ${limit['mobile_plan_screens']} screens, '
-                          'the most available in the app. Sign up on the '
-                          'website for more screens.')
+                      (MobileBillingService.instance.forbidsExternalPurchase
+                          // No website call to action on iOS; see 3.1.1.
+                          ? 'Your plan covers '
+                              '${limit['mobile_plan_screens']} screens, the '
+                              'most available in the app. Email '
+                              '${MobileBillingService.supportEmail} to run '
+                              'more than that.'
+                          : 'Your plan covers '
+                              '${limit['mobile_plan_screens']} screens, the '
+                              'most available in the app. Sign up on the '
+                              'website for more screens.'))
                   .toString(),
               billingProvider: limit['billing_provider']?.toString(),
             );
@@ -928,13 +947,28 @@ class _StoresTabState extends State<StoresTab>
     final storeProductId =
         MobileBillingService.instance.productIdFrom(summary);
     final screenCount = int.tryParse('${summary['screen_count'] ?? 0}') ?? 0;
+    // On iOS no purchase may be offered anywhere but In-App Purchase, so the
+    // website fallbacks below are suppressed rather than shown as buttons.
+    final noExternalPurchase =
+        MobileBillingService.instance.forbidsExternalPurchase;
     // The website's flexible per-screen Stripe billing is the only option
     // once an account already has more screens than the largest store tier
     // covers - the stores can't sell a purchase that wouldn't be enough.
-    final exceedsLargestTier =
-        nativeBilling && summary['mobile_plan_exceeds_largest_tier'] == true;
-    // Buying here while a web subscription is live would bill them twice, so
-    // say so rather than offering the purchase.
+    // On iOS the store tier is still sold and support arranges the overflow;
+    // sending them to the website instead is what guideline 3.1.1 forbids.
+    final exceedsLargestTier = nativeBilling &&
+        !noExternalPurchase &&
+        summary['mobile_plan_exceeds_largest_tier'] == true;
+    // Shown as a caption on iOS, where the purchase still has to be offered.
+    final overLargestTierOnIos = nativeBilling &&
+        noExternalPurchase &&
+        summary['mobile_plan_exceeds_largest_tier'] == true;
+    // A web subscription used to switch the store purchase off entirely, which
+    // left content bought outside the app reachable with no In-App Purchase
+    // for it - exactly what App Review rejected under 3.1.1. The purchase is
+    // now always offered and the double-billing risk is warned about instead;
+    // the server cancels the Stripe side when it verifies the receipt, in
+    // _retire_stripe_subscription_for_store_purchase.
     final hasWebSubscription = summary['has_web_subscription'] == true;
     // The account gate the website applies before checkout. It has to be
     // enforced here, before the store takes payment - once Apple has charged,
@@ -1362,9 +1396,13 @@ class _StoresTabState extends State<StoresTab>
                         ),
                       ),
                     ],
+                    // Advisory only. The purchase below stays available: the
+                    // store subscription replaces the web one when the server
+                    // verifies the receipt, so this warns rather than blocks.
                     if (nativeBilling && hasWebSubscription)
                       Container(
                         width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 12),
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: scheme.surfaceContainerHighest,
@@ -1372,14 +1410,34 @@ class _StoresTabState extends State<StoresTab>
                         ),
                         child: Text(
                           'This account already has a subscription billed '
-                          'outside the app. Buying here would charge you twice, '
-                          'so it has been turned off.',
+                          'elsewhere. Subscribing through $billingStore '
+                          'replaces it - the earlier subscription is stopped '
+                          'so you are never charged twice.',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: scheme.onSurfaceVariant,
                           ),
                         ),
-                      )
-                    else if (!canSubscribe)
+                      ),
+                    if (overLargestTierOnIos)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: scheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          'You have $screenCount screens, more than the '
+                          'largest plan covers. Subscribe to the largest plan '
+                          'and email ${MobileBillingService.supportEmail} - '
+                          'we will cover the rest.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    if (!canSubscribe)
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(12),
