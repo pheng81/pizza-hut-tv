@@ -105,17 +105,51 @@ if (-not $DryRun) {
     # with no error to notice. Write the file the app actually reads, keeping a
     # timestamped copy of the previous one because it holds SECRET_KEY: losing
     # that invalidates every user session.
-    $deployCmd = (@"
+    # Merge rather than replace. Secrets that only ever existed on the box -
+    # APPLE_IAP_SHARED_SECRET and GOOGLE_PLAY_SERVICE_ACCOUNT_JSON - are not in
+    # .env.production, and copying it over .env deleted them. That makes
+    # _apple_iap_enabled() and _google_play_enabled() false, so the server
+    # refuses receipts *after* the store has charged the customer - worse than
+    # whatever the deploy was fixing. Keys the incoming file defines still win,
+    # so config changes take effect; keys only the live file has are carried
+    # across. Line-based, so a value spanning multiple lines is not supported.
+    # The body is a literal here-string so the shell's own $VARs survive
+    # PowerShell; the one value it needs is passed in as $REMOTE.
+    $deployBody = (@'
 set -e
-sudo cp /tmp/app.py $RemotePath/app.py
-sudo cp /tmp/config.py $RemotePath/config.py
-sudo cp -a $RemotePath/.env $RemotePath/.env.backup_`$(date +%Y%m%d_%H%M%S)
-sudo cp /tmp/.env.production $RemotePath/.env
-sudo cp /tmp/.env.production $RemotePath/.env.production
-sudo chown www-data:www-data $RemotePath/app.py $RemotePath/config.py $RemotePath/.env.production
-sudo chown ubuntu:ubuntu $RemotePath/.env
-sudo chmod 644 $RemotePath/.env
-"@) -replace "`r`n", "`n"
+STAMP=$(date +%Y%m%d_%H%M%S)
+sudo cp /tmp/app.py $REMOTE/app.py
+sudo cp /tmp/config.py $REMOTE/config.py
+awk -F= '/^[A-Za-z_][A-Za-z0-9_]*=/ {print $1}' /tmp/.env.production | sort -u > /tmp/.env.newkeys
+if [ -f $REMOTE/.env ]; then
+  sudo cp -a $REMOTE/.env $REMOTE/.env.backup_$STAMP
+  sudo awk -F= 'NR==FNR {k[$1]=1; next} /^[A-Za-z_][A-Za-z0-9_]*=/ && !($1 in k)' /tmp/.env.newkeys $REMOTE/.env > /tmp/.env.keep
+else
+  : > /tmp/.env.keep
+fi
+cp /tmp/.env.production /tmp/.env.merged
+if [ -s /tmp/.env.keep ]; then
+  printf '\n# Preserved from the previous .env on %s - not defined in .env.production\n' "$STAMP" >> /tmp/.env.merged
+  cat /tmp/.env.keep >> /tmp/.env.merged
+  echo "Kept keys that exist only on the server:"
+  cut -d= -f1 /tmp/.env.keep | sed 's/^/  /'
+else
+  echo "No server-only keys to keep."
+fi
+NEWCOUNT=$(grep -cE '^[A-Za-z_][A-Za-z0-9_]*=' /tmp/.env.production)
+MERGEDCOUNT=$(grep -cE '^[A-Za-z_][A-Za-z0-9_]*=' /tmp/.env.merged)
+if [ "$MERGEDCOUNT" -lt "$NEWCOUNT" ]; then
+  echo "Refusing to install a .env with fewer keys ($MERGEDCOUNT) than .env.production ($NEWCOUNT)."
+  exit 1
+fi
+sudo cp /tmp/.env.merged $REMOTE/.env
+sudo cp /tmp/.env.production $REMOTE/.env.production
+sudo chown www-data:www-data $REMOTE/app.py $REMOTE/config.py $REMOTE/.env.production
+sudo chown ubuntu:ubuntu $REMOTE/.env
+sudo chmod 644 $REMOTE/.env
+rm -f /tmp/.env.newkeys /tmp/.env.keep /tmp/.env.merged
+'@) -replace "`r`n", "`n"
+    $deployCmd = "REMOTE='$RemotePath'`n" + $deployBody
     ssh -i $KeyPath "ubuntu@$Server" $deployCmd
     if ($LASTEXITCODE -ne 0) {
         Write-Host "✗ Failed to move files into place on the server" -ForegroundColor Red
