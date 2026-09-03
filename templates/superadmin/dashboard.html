@@ -584,26 +584,6 @@
       box-shadow: none;
     }
 
-    .embedded-frame-empty {
-      min-height: 420px;
-      display: grid;
-      place-items: center;
-      padding: 28px;
-      border: 1px dashed rgba(148, 163, 184, 0.28);
-      background: linear-gradient(180deg, rgba(248, 250, 252, 0.9), rgba(255, 255, 255, 0.76));
-      color: var(--muted);
-      text-align: center;
-      border-radius: 12px;
-    }
-
-    .embedded-frame-empty strong {
-      display: block;
-      margin-bottom: 8px;
-      color: var(--text);
-      font-size: 18px;
-      letter-spacing: -0.02em;
-    }
-
     .embedded-editor-frame {
       width: 100%;
       min-height: 1760px;
@@ -2128,12 +2108,6 @@
               <button class="panel-corner-toggle" type="button" data-panel-toggle aria-expanded="true" aria-label="Collapse user detail panel">-</button>
               <div class="panel-content">
                 <div class="embedded-frame-shell">
-                  <div class="embedded-frame-empty" id="userDetailPlaceholder">
-                    <div>
-                      <strong>Select a user to inspect</strong>
-                      The full account record, billing state, stores, screens, and password reset actions will open here inside the dashboard.
-                    </div>
-                  </div>
                   <iframe class="embedded-editor-frame" id="userDetailFrame" title="User detail" style="display:none;"></iframe>
                 </div>
               </div>
@@ -2264,7 +2238,6 @@
 
     function setUserDetailFrame(src) {
       const frame = document.getElementById('userDetailFrame');
-      const placeholder = document.getElementById('userDetailPlaceholder');
       if (!frame) {
         return;
       }
@@ -2272,9 +2245,6 @@
         window.localStorage.removeItem('superadmin-user-detail-src');
         frame.removeAttribute('src');
         frame.style.display = 'none';
-        if (placeholder) {
-          placeholder.hidden = false;
-        }
         return;
       }
 
@@ -2282,9 +2252,6 @@
         frame.setAttribute('src', src);
       }
       frame.style.display = 'block';
-      if (placeholder) {
-        placeholder.hidden = true;
-      }
       window.localStorage.setItem('superadmin-user-detail-src', src);
     }
 

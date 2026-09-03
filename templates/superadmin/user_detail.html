@@ -245,7 +245,7 @@
 
     .metric-grid {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(5, minmax(0, 1fr));
       gap: 14px;
       margin-top: 28px;
       position: relative;
@@ -273,6 +273,11 @@
       letter-spacing: 0.14em;
       font-size: 11px;
       font-weight: 700;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 13px;
     }
 
     .content-grid {
@@ -660,16 +665,20 @@
           <div class="metric-label">Stores</div>
         </div>
         <div class="metric-card">
-          <div class="metric-value">{{ total_screens.count }}</div>
-          <div class="metric-label">Screens</div>
+          <div class="metric-value">{{ screen_summary.plan_screens }}</div>
+          <div class="metric-label">Subscribed Screens</div>
         </div>
         <div class="metric-card">
-          <div class="metric-value">{{ screen_subs | length }}</div>
-          <div class="metric-label">Screen Subscriptions</div>
+          <div class="metric-value">{{ screen_summary.active_count }}</div>
+          <div class="metric-label">Active Screens</div>
         </div>
         <div class="metric-card">
-          <div class="metric-value">{{ cancellations | length }}</div>
-          <div class="metric-label">Cancellations</div>
+          <div class="metric-value">{{ screen_summary.inactive_count }}</div>
+          <div class="metric-label">Inactive / Retired</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value">{{ screen_summary.history_count }}</div>
+          <div class="metric-label">Deleted History</div>
         </div>
       </div>
     </header>
@@ -837,7 +846,7 @@
           <div>
             <div class="section-kicker">Billing</div>
             <h2 class="section-title">Subscription details</h2>
-            <p class="section-copy">Review the Stripe subscription state, billing period, and cancellation setting before making changes.</p>
+            <p class="section-copy">Review who bills this account, the subscribed screen allowance, billing period, and cancellation setting before making changes.</p>
           </div>
           <div class="panel-badge">Payment State</div>
         </div>
@@ -845,13 +854,17 @@
         {% if subscription %}
           <div class="info-grid">
             <div class="info-item">
+              <div class="info-label">Billing Provider</div>
+              <div class="info-value">{{ screen_summary.provider_label }}</div>
+            </div>
+            <div class="info-item">
               <div class="info-label">Status</div>
               <div class="info-value">
                 {% if subscription.status == 'active' %}
                   <span class="pill pill--good">Active</span>
                 {% elif subscription.status == 'trialing' %}
                   <span class="pill pill--warning">Trial</span>
-                {% elif subscription.status == 'canceled' %}
+                {% elif subscription.status in ['canceled', 'cancelled', 'expired', 'refunded', 'revoked'] %}
                   <span class="pill pill--bad">Canceled</span>
                 {% else %}
                   <span class="pill">{{ subscription.status }}</span>
@@ -859,8 +872,16 @@
               </div>
             </div>
             <div class="info-item">
-              <div class="info-label">Stripe ID</div>
-              <div class="info-value">{{ subscription.stripe_subscription_id or 'N/A' }}</div>
+              <div class="info-label">Plan / Product</div>
+              <div class="info-value">{{ subscription.billing_product_id or subscription.plan_name or 'N/A' }}</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">Subscribed Screens</div>
+              <div class="info-value">{{ screen_summary.plan_screens }}</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">Stripe Subscription ID</div>
+              <div class="info-value">{{ subscription.stripe_subscription_id or 'Not applicable' }}</div>
             </div>
             <div class="info-item">
               <div class="info-label">Current Period Start</div>
@@ -873,6 +894,10 @@
             <div class="info-item">
               <div class="info-label">Cancel At Period End</div>
               <div class="info-value">{{ 'Yes' if subscription.cancel_at_period_end else 'No' }}</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">Current Screens</div>
+              <div class="info-value">{{ screen_summary.configured_count }}</div>
             </div>
           </div>
 
@@ -899,7 +924,7 @@
           <div>
             <div class="table-label">Screen Billing</div>
             <h2 class="section-title">Screen subscriptions</h2>
-            <p class="section-copy">A screen-level view of active, trialing, or canceled subscriptions associated with this account.</p>
+            <p class="section-copy">Live rows are currently attached to the user account. Inactive and deleted rows remain in the ledger so an administrator can review or restore them.</p>
           </div>
           <div class="panel-badge">{{ screen_subs | length }} total</div>
         </div>
@@ -912,9 +937,12 @@
                   <th>Screen ID</th>
                   <th>Screen Name</th>
                   <th>Store ID</th>
+                  <th>Billing ID</th>
                   <th>Status</th>
+                  <th>Account State</th>
                   <th>Created</th>
                   <th>Current Period End</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -923,19 +951,38 @@
                     <td>{{ sub.screen_id }}</td>
                     <td>{{ sub.screen_name or 'N/A' }}</td>
                     <td>{{ sub.store_id }}</td>
+                    <td>{{ sub.stripe_subscription_id or 'Store plan' }}</td>
                     <td>
-                      {% if sub.status == 'active' %}
+                      {% if sub.is_live %}
                         <span class="pill pill--good">Active</span>
                       {% elif sub.status == 'trialing' %}
                         <span class="pill pill--warning">Trial</span>
-                      {% elif sub.status == 'canceled' %}
+                      {% elif sub.status in ['canceled', 'cancelled', 'expired', 'refunded', 'revoked'] %}
                         <span class="pill pill--bad">Canceled</span>
                       {% else %}
                         <span class="pill">{{ sub.status }}</span>
                       {% endif %}
                     </td>
+                    <td>
+                      {% if sub.is_configured and sub.is_live %}
+                        <span class="pill pill--good">Present</span>
+                      {% elif not sub.is_configured %}
+                        <span class="pill pill--bad">Deleted / missing</span>
+                      {% else %}
+                        <span class="pill pill--warning">Inactive</span>
+                      {% endif %}
+                    </td>
                     <td>{{ sub.created_at | format_timestamp if sub.created_at else 'N/A' }}</td>
                     <td>{{ sub.current_period_end | format_timestamp if sub.current_period_end else 'N/A' }}</td>
+                    <td>
+                      {% if not sub.is_configured %}
+                        <form method="post" action="/superadmin/users/{{ user.id }}/restore-screen/{{ sub.id }}" onsubmit="return confirm('Restore this screen for the user?')">
+                          <button class="btn btn--success" type="submit">Restore Screen</button>
+                        </form>
+                      {% else %}
+                        <span class="muted">Present</span>
+                      {% endif %}
+                    </td>
                   </tr>
                 {% endfor %}
               </tbody>

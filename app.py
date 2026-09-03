@@ -4848,12 +4848,19 @@ def _get_or_create_stripe_customer(user_id: int|None = None) -> str|None:
     email = _current_username()
     try:
         db = get_db()
-        row = db.execute('SELECT stripe_customer_id FROM users WHERE id = ?', (user_id,)).fetchone()
+        row = db.execute('SELECT stripe_customer_id, username FROM users WHERE id = ?', (user_id,)).fetchone()
         if row and row['stripe_customer_id']:
             return row['stripe_customer_id']
         if not stripe:
             return None
-        customer = stripe.Customer.create(email=email or None, metadata={'app_user_id': user_id})
+        # Admin restore actions pass the target user id while the current
+        # session belongs to the superadmin. Never create the target's Stripe
+        # customer with the administrator's email address.
+        customer_email = (row['username'] or '').strip() if row else ''
+        customer = stripe.Customer.create(
+            email=customer_email or email or None,
+            metadata={'app_user_id': user_id},
+        )
         db.execute('UPDATE users SET stripe_customer_id = ? WHERE id = ?', (customer.id, user_id))
         db.commit()
         return customer.id
@@ -14120,9 +14127,100 @@ def superadmin_user_detail(user_id):
             logging.error(f"[SUPERADMIN] Config loading failed: {e}")
             cfg = {'stores': [], 'screens': {}}
         
-        # Template expects these variables (tables don't exist yet, so pass empty lists)
+        # Load the complete screen ledger. The configuration is the source of
+        # currently present screens; screen_subscriptions is the billing and
+        # lifecycle ledger, so canceled rows remain available as history.
         screen_subs = []
         cancellations = []
+        try:
+            screen_rows = db.execute(
+                'SELECT id, screen_id, store_id, screen_name, stripe_subscription_id, '
+                'stripe_price_id, status, current_period_start, current_period_end, '
+                'cancel_at_period_end, created_at, updated_at '
+                'FROM screen_subscriptions WHERE user_id = ? ORDER BY updated_at DESC, id DESC',
+                (user_id,),
+            ).fetchall()
+            configured_keys = set()
+            for configured_store_id, configured_screens in (cfg.get('screens') or {}).items():
+                for configured_screen_id in (configured_screens or {}).keys():
+                    configured_keys.add((str(configured_store_id), str(configured_screen_id)))
+
+            live_statuses = {'active', 'trialing', 'past_due'}
+            now = int(time.time())
+            active_count = 0
+            inactive_count = 0
+            for row in screen_rows:
+                item = dict(row)
+                item['is_configured'] = (
+                    str(item.get('store_id') or ''), str(item.get('screen_id') or '')
+                ) in configured_keys
+                status = str(item.get('status') or '').lower()
+                try:
+                    period_end = int(item.get('current_period_end') or 0)
+                except (TypeError, ValueError):
+                    period_end = 0
+                item['is_live'] = status in live_statuses and (not period_end or period_end >= now)
+                item['is_deleted'] = status in {'canceled', 'cancelled', 'expired', 'refunded', 'revoked'} or not item['is_configured']
+                if item['is_live'] and item['is_configured']:
+                    active_count += 1
+                else:
+                    inactive_count += 1
+                screen_subs.append(item)
+
+            screen_subscriptions_total = len(screen_subs)
+            deleted_screen_count = sum(1 for item in screen_subs if item.get('is_deleted'))
+            configured_count = sum(
+                len(screens or {}) for screens in (cfg.get('screens') or {}).values()
+            )
+            provider = str((subscription['billing_provider'] if subscription and 'billing_provider' in subscription.keys() else '') or '').lower()
+            if provider not in {'apple', 'google', 'stripe'}:
+                provider = 'stripe' if (
+                    (subscription and subscription['stripe_subscription_id'])
+                    or any(item.get('stripe_subscription_id') for item in screen_subs)
+                ) else ''
+            product_id = str((subscription['billing_product_id'] if subscription and 'billing_product_id' in subscription.keys() else '') or '')
+            if provider in {'apple', 'google'}:
+                subscribed_screen_count = _mobile_tier_screen_allowance(product_id)
+                subscription_status = str((subscription['status'] if subscription else '') or '').lower()
+                try:
+                    subscription_period_end = int((subscription['current_period_end'] if subscription else 0) or 0)
+                except (TypeError, ValueError):
+                    subscription_period_end = 0
+                mobile_plan_live = bool(
+                    subscription
+                    and subscription_status in live_statuses
+                    and (not subscription_period_end or subscription_period_end >= now)
+                )
+                if mobile_plan_live:
+                    # Store plans cover a fixed tier. Older mobile accounts
+                    # may have screens in config without ledger rows.
+                    active_count = configured_count
+            else:
+                subscribed_screen_count = sum(
+                    1 for item in screen_subs if item.get('is_live') and item.get('stripe_subscription_id')
+                )
+            cancellations = [dict(row) for row in db.execute(
+                'SELECT id, screen_id, screen_name, reason, feedback_text, canceled_at '
+                'FROM cancellation_feedback WHERE user_id = ? ORDER BY canceled_at DESC, id DESC',
+                (user_id,),
+            ).fetchall()]
+            screen_summary = {
+                'provider': provider,
+                'provider_label': {'apple': 'Apple App Store', 'google': 'Google Play', 'stripe': 'Website / Stripe'}.get(provider, 'Not recorded'),
+                'plan_screens': subscribed_screen_count,
+                'configured_count': configured_count,
+                'active_count': active_count,
+                'inactive_count': max(configured_count - active_count, 0),
+                'history_count': max(deleted_screen_count, len(cancellations)),
+                'ledger_count': screen_subscriptions_total,
+            }
+        except Exception as e:
+            logging.error(f"[SUPERADMIN] Screen billing query failed: {e}", exc_info=True)
+            screen_summary = {
+                'provider': '', 'provider_label': 'Unavailable', 'plan_screens': 0,
+                'configured_count': 0, 'active_count': 0, 'inactive_count': 0,
+                'history_count': 0, 'ledger_count': 0,
+            }
         
         logging.info(f"[SUPERADMIN] Rendering template for user {user_id}")
         return render_template('superadmin/user_detail.html', 
@@ -14131,11 +14229,141 @@ def superadmin_user_detail(user_id):
                              config=cfg,
                              screen_subs=screen_subs,
                              cancellations=cancellations,
+                             screen_summary=screen_summary,
                              embedded=embedded)
     except Exception as e:
         logging.error(f"[SUPERADMIN] Fatal error in user_detail for user_id={user_id}: {e}", exc_info=True)
         flash(f'Error loading user details: {str(e)}', 'error')
         return _superadmin_dashboard_redirect('#panel-directory')
+
+@app.route('/superadmin/users/<int:user_id>/restore-screen/<int:screen_subscription_id>', methods=['POST'])
+@superadmin_required
+def superadmin_restore_screen(user_id, screen_subscription_id):
+    """Restore a previously removed screen for a user.
+
+    Store-billed users already pay for a fixed tier, so restoring a screen only
+    recreates the local screen record while that tier is live. Stripe users
+    receive a fresh per-screen subscription before the screen is restored.
+    """
+    try:
+        db = get_db()
+        user = db.execute(
+            'SELECT id, username FROM users WHERE id = ?', (user_id,)
+        ).fetchone()
+        row = db.execute(
+            'SELECT id, screen_id, store_id, screen_name, stripe_subscription_id, status, '
+            'current_period_end '
+            'FROM screen_subscriptions WHERE id = ? AND user_id = ?',
+            (screen_subscription_id, user_id),
+        ).fetchone()
+        if not user or not row:
+            flash('Screen subscription not found.', 'error')
+            return _superadmin_user_detail_redirect(user_id)
+
+        safe = _safe_key_from_username((user['username'] or '').strip().lower())
+        if not safe:
+            flash('Could not resolve the user configuration.', 'error')
+            return _superadmin_user_detail_redirect(user_id)
+        config = load_store_config_for_user_safe_key(safe)
+        screens = config.setdefault('screens', {})
+        store_id = str(row['store_id'] or '').strip()
+        screen_id = str(row['screen_id'] or '').strip()
+        screen_name = str(row['screen_name'] or screen_id).strip() or screen_id
+        if not store_id or not screen_id:
+            flash('The saved screen record is missing its store or screen ID.', 'error')
+            return _superadmin_user_detail_redirect(user_id)
+        store_screens = screens.get(store_id)
+        if not isinstance(store_screens, dict):
+            store_screens = {}
+            screens[store_id] = store_screens
+        if screen_id in store_screens:
+            flash('That screen is already present in the user account.', 'success')
+            return _superadmin_user_detail_redirect(user_id)
+
+        main = db.execute(
+            'SELECT billing_provider, billing_product_id, stripe_subscription_id, status, current_period_end '
+            'FROM subscriptions WHERE user_id = ?', (user_id,)
+        ).fetchone()
+        provider = str((main['billing_provider'] if main else '') or '').lower()
+        if provider not in {'apple', 'google', 'stripe'} and main and main['stripe_subscription_id']:
+            provider = 'stripe'
+        now = int(time.time())
+        try:
+            main_period_end = int((main['current_period_end'] if main else 0) or 0)
+        except (TypeError, ValueError):
+            main_period_end = 0
+        main_live = bool(
+            main and str(main['status'] or '').lower() in {'active', 'trialing', 'past_due'}
+            and (not main_period_end or main_period_end >= now)
+        )
+
+        row_status = str(row['status'] or '').lower()
+        try:
+            row_period_end = int(row['current_period_end'] or 0)
+        except (TypeError, ValueError):
+            row_period_end = 0
+        row_live = row_status in {'active', 'trialing', 'past_due'} and (
+            not row_period_end or row_period_end >= now
+        )
+
+        created_stripe_subscription = None
+        if provider in {'apple', 'google'}:
+            if not main_live:
+                flash('The user no longer has a live App Store or Google Play plan.', 'error')
+                return _superadmin_user_detail_redirect(user_id)
+            db.execute(
+                'UPDATE screen_subscriptions SET status = ?, current_period_start = ?, '
+                'current_period_end = ?, cancel_at_period_end = 0, updated_at = ? WHERE id = ?',
+                (
+                    str(main['status'] or 'active'), now, main_period_end or None,
+                    now, screen_subscription_id,
+                ),
+            )
+        elif not row_live or not row['stripe_subscription_id']:
+            if not _stripe_enabled():
+                flash('Stripe is not configured; the screen cannot be restored safely.', 'error')
+                return _superadmin_user_detail_redirect(user_id)
+            created_stripe_subscription = _create_screen_subscription(
+                user_id, screen_id, store_id, screen_name,
+            )
+            if not created_stripe_subscription:
+                flash('Could not create a new Stripe subscription for this screen.', 'error')
+                return _superadmin_user_detail_redirect(user_id)
+
+        try:
+            store_screens[screen_id] = {
+                'file': None,
+                'vertical': 'promo' in screen_id.lower(),
+                'horizontal': 'promo' not in screen_id.lower(),
+                'rotation': 0,
+                'protected': False,
+                'playlist': [],
+                'fresh': True,
+                'name': screen_name,
+            }
+            save_store_config_for_user_safe_key(safe, config)
+            db.commit()
+        except Exception:
+            # A Stripe subscription is already billable. If saving the local
+            # screen fails, undo that new subscription and leave the ledger
+            # canceled so the restore can be retried safely.
+            if created_stripe_subscription and stripe and _stripe_enabled():
+                try:
+                    stripe.Subscription.delete(created_stripe_subscription['subscription_id'])
+                except Exception as cleanup_error:
+                    logging.error('Could not roll back Stripe restore for user %s: %s', user_id, cleanup_error)
+                db.execute(
+                    'UPDATE screen_subscriptions SET status = ?, cancel_at_period_end = 1, '
+                    'updated_at = ? WHERE user_id = ? AND screen_id = ? AND store_id = ?',
+                    ('canceled', int(time.time()), user_id, screen_id, store_id),
+                )
+                db.commit()
+            raise
+        flash(f'Screen {screen_name} restored for {user["username"]}.', 'success')
+    except Exception as e:
+        logging.error('Superadmin restore screen failed: %s', e, exc_info=True)
+        flash(f'Could not restore screen: {e}', 'error')
+    return _superadmin_user_detail_redirect(user_id)
 
 @app.route('/superadmin/users/<int:user_id>/cancel-subscription', methods=['POST'])
 @superadmin_required
