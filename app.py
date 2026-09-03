@@ -5295,19 +5295,13 @@ def _build_first_master_store_config(store_address: str = '') -> dict:
     return {
         'stores': [store_entry],
         'master_store_id': master_id,
-        'screens': {
-            master_id: {
-                f'{master_id}_screen1': {
-                    'file': None,
-                    'vertical': False,
-                    'horizontal': True,
-                    'rotation': 0,
-                    'protected': False,
-                    'playlist': [],
-                    'fresh': True,
-                }
-            }
-        },
+        # The store starts empty. Seeding a screen here handed every new
+        # account a screen it had not subscribed for: the paywall is attached
+        # to Add Screen, so a screen that appears on its own never passes it.
+        # It also made the account page read "Active Screens: 1" beside "No
+        # Subscription". A store with no screens is a supported state -
+        # test_screens_endpoint.py covers exactly this shape.
+        'screens': {master_id: {}},
     }
 
 
