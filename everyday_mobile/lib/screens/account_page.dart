@@ -915,10 +915,22 @@ class _AccountPageState extends State<AccountPage> {
   ({String label, String value}) _upcomingBillingSummary(
     List<Map<String, dynamic>> screenSubs,
     String fallbackNextBilling,
-    bool isTrial,
-  ) {
+    bool isTrial, {
+    bool isStoreBilled = false,
+  }) {
     if (isTrial) {
       return (label: 'Upcoming Billing', value: 'Trial');
+    }
+
+    // A store subscriber holds one subscription with one renewal date. The
+    // per-screen rows below are Stripe's model, and counting them reported
+    // "2 billing dates" to someone on a single $7.99 App Store plan.
+    if (isStoreBilled) {
+      final next = fallbackNextBilling.trim();
+      return (
+        label: 'Next Renewal',
+        value: next.isEmpty || next == 'N/A' ? 'N/A' : next,
+      );
     }
 
     final dates = screenSubs
@@ -1028,6 +1040,7 @@ class _AccountPageState extends State<AccountPage> {
       screenSubs,
       nextBilling,
       isTrial,
+      isStoreBilled: isStoreBilled,
     );
 
     final currentPeriod = subscriptionInfo.isNotEmpty &&
