@@ -392,6 +392,45 @@
       box-shadow: none;
       background: rgba(255, 255, 255, 0.78);
       border-color: rgba(148, 163, 184, 0.16);
+      padding: 20px;
+    }
+
+    /* Embedded, this page is a card inside the dashboard's own card, so every
+       flourish it draws is the second copy of one: the parent already supplies
+       the accent rule and the surrounding chrome. Repeating that per section,
+       and then wrapping every individual field in its own bordered 18px box,
+       is what made the admin view read as boxes inside boxes inside boxes -
+       and cost roughly 90px of height per row to say "User ID: 53". Standalone
+       the page keeps its fuller treatment; only the embedded view flattens. */
+    body.embedded-mode .panel::before {
+      display: none;
+    }
+
+    body.embedded-mode .panel-header {
+      margin-bottom: 14px;
+    }
+
+    body.embedded-mode .section-title {
+      font-size: 20px;
+      letter-spacing: -0.01em;
+    }
+
+    body.embedded-mode .section-copy {
+      font-size: 13px;
+    }
+
+    body.embedded-mode .info-grid,
+    body.embedded-mode .detail-grid {
+      gap: 0 28px;
+    }
+
+    body.embedded-mode .info-item,
+    body.embedded-mode .detail-item {
+      border: 0;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+      border-radius: 0;
+      background: none;
+      padding: 9px 0;
     }
 
     .panel-wide {

@@ -582,6 +582,12 @@
       overflow: hidden;
       background: transparent;
       box-shadow: none;
+      /* These sections have no panel header, so the iframe would otherwise
+         start at the top of the card - directly under .panel-corner-toggle,
+         which floats at top 18px / right 18px and is 34px tall. The embedded
+         page then renders its own header into that space and the collapse
+         button lands on top of it. Start the frame below the button. */
+      padding-top: 44px;
     }
 
     .embedded-editor-frame {
