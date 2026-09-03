@@ -1459,13 +1459,23 @@
       <!-- Action Buttons -->
       <div class="action-grid">
         {% if has_active %}
-          <form action="{{ url_for('billing_portal') }}" method="POST" style="display: inline;">
-            <button type="submit" class="btn btn-primary" style="width: 100%;">
-              <i class="fas fa-cog"></i> Manage Subscription
-            </button>
-          </form>
+          {% if store_billed and store_manage_url %}
+            <a href="{{ store_manage_url }}" target="_blank" rel="noopener" class="btn btn-primary" style="width: 100%;">
+              <i class="fas fa-external-link-alt"></i> Manage in {{ store_provider_label }}
+            </a>
+          {% else %}
+            <form action="{{ url_for('billing_portal') }}" method="POST" style="display: inline;">
+              <button type="submit" class="btn btn-primary" style="width: 100%;">
+                <i class="fas fa-cog"></i> Manage Subscription
+              </button>
+            </form>
+          {% endif %}
           
-          {% if not is_canceled %}
+          {% if store_billed and store_manage_url %}
+            <a href="{{ store_manage_url }}" target="_blank" rel="noopener" class="btn btn-secondary" style="width: 100%;">
+              <i class="fas fa-times-circle"></i> Cancel in {{ store_provider_label }}
+            </a>
+          {% elif not is_canceled %}
             <form action="{{ url_for('cancel_subscription') }}" method="POST" 
                   onsubmit="return confirm('Are you sure you want to cancel your subscription? It will remain active until the end of your billing period.');"
                   style="display: inline;">
@@ -1726,9 +1736,13 @@
           Download Statement (CSV)
         </a>
         {% if has_active %}
+        {% if store_billed and store_manage_url %}
+        <a href="{{ store_manage_url }}" target="_blank" rel="noopener" class="btn btn-secondary" style="width: 100%;">Manage in {{ store_provider_label }}</a>
+        {% else %}
         <form action="{{ url_for('billing_portal') }}" method="POST">
-          <button type="submit" class="btn btn-secondary" style="width: 100%;">Payment & Billing Portal</button>
+          <button type="submit" class="btn btn-secondary" style="width: 100%;">Payment &amp; Billing Portal</button>
         </form>
+        {% endif %}
         {% endif %}
       </div>
       <div class="info-row" style="padding-top: 0;">

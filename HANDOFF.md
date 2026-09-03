@@ -1,4 +1,12 @@
-# Handoff - state as at 2026-08-20
+# Handoff - state as at 2026-08-23
+
+> Blockchain recovery is tracked separately in
+> [`PoASy3-recovery-work/BLOCKCHAIN_RECOVERY_TASK.md`](PoASy3-recovery-work/BLOCKCHAIN_RECOVERY_TASK.md).
+> Read that file before changing or redeploying validator, Tower, finality,
+> snapshot, sync, or RPC-node code. It records the August 2026 chain freeze,
+> cumulative hardening, node inventory, completed rollout/deployed hashes, and
+> the completed EVM canonical-history correction, build provenance, rolling
+> deployment and post-rollout monitoring evidence.
 
 Written from the Windows clone. Everything below is on GitHub `main`
 (`github.com/phengtoeng/everydayadvertise`) **and deployed to production**,

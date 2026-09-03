@@ -335,6 +335,11 @@ def init_db():
                 db.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_apple_sub ON users(apple_sub)')
             except Exception:
                 pass
+        if 'auth_provider' not in cols:
+            try:
+                db.execute('ALTER TABLE users ADD COLUMN auth_provider TEXT')
+            except Exception:
+                pass
     except Exception:
         pass
     db.commit()
@@ -3230,6 +3235,17 @@ def _enforce_session_csrf_origin():
     if request.method not in ('POST', 'PUT', 'PATCH', 'DELETE'):
         return None
 
+    # Apple Sign-In uses response_mode=form_post, so Apple sends the OAuth
+    # result as a cross-site POST without our site's Origin/Referer header.
+    # This callback validates OAuth state and the Apple nonce below, so the
+    # generic browser-session origin check must not intercept it first.
+    if request.path in {
+        '/auth/apple/callback',
+        '/auth/google/callback',
+        '/auth/microsoft/callback',
+    }:
+        return None
+
     if not _has_authenticated_browser_session():
         return None
 
@@ -3987,13 +4003,15 @@ def _upsert_oauth_user(email: str, full_name: str | None, method: str = 'google'
     row = db.execute('SELECT id, username, role FROM users WHERE username = ?', (uname,)).fetchone()
     if row:
         db.execute(
-            'UPDATE users SET full_name = ?, email_verified = 1 WHERE username = ?',
-            (full_name or uname, uname),
+            "UPDATE users SET full_name = ?, email_verified = 1, "
+            "auth_provider = CASE WHEN NULLIF(auth_provider, '') IS NULL THEN ? ELSE auth_provider END "
+            "WHERE username = ?",
+            (full_name or uname, method, uname),
         )
     else:
         db.execute(
-            'INSERT INTO users (username, full_name, email_verified) VALUES (?, ?, 1)',
-            (uname, full_name or uname),
+            'INSERT INTO users (username, full_name, email_verified, auth_provider) VALUES (?, ?, 1, ?)',
+            (uname, full_name or uname, method),
         )
     db.commit()
 
@@ -4117,7 +4135,12 @@ def _link_apple_sub_to_user(user_id: int, apple_sub: str) -> None:
             holder_username, user_id,
         )
 
-    db.execute('UPDATE users SET apple_sub = ? WHERE id = ?', (subject, int(user_id)))
+    db.execute(
+        "UPDATE users SET apple_sub = ?, auth_provider = CASE "
+        "WHEN NULLIF(auth_provider, '') IS NULL THEN 'apple' ELSE auth_provider END "
+        "WHERE id = ?",
+        (subject, int(user_id)),
+    )
     db.commit()
 
 
@@ -4140,8 +4163,8 @@ def _upsert_apple_oauth_user(apple_sub: str, email: str, full_name: str | None) 
         if not resolved_username:
             raise RuntimeError('Apple account exists without username/email')
         db.execute(
-            'UPDATE users SET full_name = COALESCE(?, full_name), email_verified = 1 WHERE id = ?',
-            (full_name, row['id']),
+            'UPDATE users SET full_name = COALESCE(?, full_name), email_verified = 1, auth_provider = ? WHERE id = ?',
+            (full_name, 'apple', row['id']),
         )
     else:
         if not uname:
@@ -4152,14 +4175,14 @@ def _upsert_apple_oauth_user(apple_sub: str, email: str, full_name: str | None) 
         ).fetchone()
         if existing_by_email:
             db.execute(
-                'UPDATE users SET full_name = ?, email_verified = 1, apple_sub = ? WHERE id = ?',
-                (full_name or uname, subject, existing_by_email['id']),
+                'UPDATE users SET full_name = ?, email_verified = 1, apple_sub = ?, auth_provider = ? WHERE id = ?',
+                (full_name or uname, subject, 'apple', existing_by_email['id']),
             )
             resolved_username = uname
         else:
             db.execute(
-                'INSERT INTO users (username, full_name, email_verified, apple_sub) VALUES (?, ?, 1, ?)',
-                (uname, full_name or uname, subject),
+                'INSERT INTO users (username, full_name, email_verified, apple_sub, auth_provider) VALUES (?, ?, 1, ?, ?)',
+                (uname, full_name or uname, subject, 'apple'),
             )
             resolved_username = uname
 
@@ -4970,6 +4993,7 @@ if OAuth is not None:
                 client_id=apple_client_id,
                 client_secret=apple_client_secret,
                 server_metadata_url='https://appleid.apple.com/.well-known/openid-configuration',
+                token_endpoint_auth_method='client_secret_post',
                 client_kwargs={'scope': 'openid email name'},
             )
             try:
@@ -5293,8 +5317,8 @@ def _create_local_signup_account(username: str, password: str, full_name: str = 
     try:
         try:
             db.execute(
-                'INSERT INTO users (username, password_hash, full_name) VALUES (?, ?, ?)',
-                (username, generate_password_hash(password), full_name),
+                'INSERT INTO users (username, password_hash, full_name, auth_provider) VALUES (?, ?, ?, ?)',
+                (username, generate_password_hash(password), full_name, 'local'),
             )
         except sqlite3.OperationalError:
             db.execute(
@@ -7873,15 +7897,17 @@ def auth_google_callback():
                         # User exists - update full_name and email_verified
                         logging.info(f'OAuth: User {uname} exists, updating info')
                         db.execute(
-                            'UPDATE users SET full_name = ?, email_verified = 1 WHERE username = ?',
+                            "UPDATE users SET full_name = ?, email_verified = 1, "
+                            "auth_provider = CASE WHEN NULLIF(auth_provider, '') IS NULL THEN 'google' ELSE auth_provider END "
+                            "WHERE username = ?",
                             (userinfo.get('name') or uname, uname)
                         )
                     else:
                         # New user - insert
                         logging.info(f'OAuth: Creating new user {uname}')
                         db.execute(
-                            'INSERT INTO users (username, full_name, email_verified) VALUES (?, ?, 1)',
-                            (uname, userinfo.get('name') or uname)
+                            'INSERT INTO users (username, full_name, email_verified, auth_provider) VALUES (?, ?, 1, ?)',
+                            (uname, userinfo.get('name') or uname, 'google')
                         )
                     
                     db.commit()
@@ -7967,6 +7993,7 @@ def auth_apple():
                             client_id=aid,
                             client_secret=asecret,
                             server_metadata_url='https://appleid.apple.com/.well-known/openid-configuration',
+                            token_endpoint_auth_method='client_secret_post',
                             client_kwargs={'scope': 'openid email name'},
                         )
                         logging.info('OAuth: Apple provider lazily registered in route')
@@ -8021,6 +8048,7 @@ def auth_apple_callback():
                         client_id=aid,
                         client_secret=asecret,
                         server_metadata_url='https://appleid.apple.com/.well-known/openid-configuration',
+                        token_endpoint_auth_method='client_secret_post',
                         client_kwargs={'scope': 'openid email name'},
                     )
                     logging.info('OAuth: Apple provider lazily registered in callback')
@@ -12364,7 +12392,13 @@ def _collect_user_metrics():
         "SELECT id, username, full_name, link_code, role, phone_number, "
         "COALESCE(is_blocked,0) AS is_blocked, COALESCE(email_verified,0) AS email_verified, "
         "COALESCE(phone_verified,0) AS phone_verified, "
-        "CASE WHEN password_hash IS NULL OR password_hash = '' THEN 0 ELSE 1 END AS has_password "
+        "CASE WHEN password_hash IS NULL OR password_hash = '' THEN 0 ELSE 1 END AS has_password, "
+        "CASE "
+        "WHEN apple_sub IS NOT NULL AND apple_sub <> '' THEN 'apple' "
+        "WHEN NULLIF(auth_provider, '') IS NOT NULL THEN LOWER(auth_provider) "
+        "WHEN (password_hash IS NULL OR password_hash = '') "
+        "AND oauth_avatar_url IS NOT NULL AND oauth_avatar_url <> '' THEN 'google' "
+        "ELSE 'local' END AS auth_provider "
         "FROM users ORDER BY username"
     )
     users = []
@@ -12396,6 +12430,7 @@ def _collect_user_metrics():
             'email_verified': int(row['email_verified'] or 0) == 1,
             'phone_number': (row['phone_number'] or '').strip(),
             'phone_verified': int(row['phone_verified'] or 0) == 1,
+            'auth_provider': (row['auth_provider'] or 'local').strip().lower(),
             'stores_count': len(stores),
             'screens_count': screens_count,
             'online_screens': online,
@@ -13746,8 +13781,8 @@ def superadmin_create_user():
         return redirect(url_for('superadmin_dashboard'))
     try:
         db = get_db()
-        db.execute('INSERT INTO users (username, password_hash, full_name, is_blocked, role) VALUES (?, ?, ?, 0, ?)', (
-            email, generate_password_hash(pwd), full_name, role
+        db.execute('INSERT INTO users (username, password_hash, full_name, is_blocked, role, auth_provider) VALUES (?, ?, ?, 0, ?, ?)', (
+            email, generate_password_hash(pwd), full_name, role, 'local'
         ))
         db.commit()
         try:
