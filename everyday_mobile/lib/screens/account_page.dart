@@ -1224,13 +1224,25 @@ class _AccountPageState extends State<AccountPage> {
                             ),
                           ],
                           const SizedBox(height: 8),
+                          // A store subscription can only be cancelled by the
+                          // store that billed it, so send them there rather
+                          // than offering a Cancel the server cannot honour -
+                          // it answered "No active subscription found" on an
+                          // account whose status read active.
                           if (hasActive && !isCanceled)
                             SizedBox(
                               width: double.infinity,
                               child: OutlinedButton(
-                                onPressed:
-                                    _actionBusy ? null : _cancelSubscription,
-                                child: const Text('Cancel Subscription'),
+                                onPressed: _actionBusy
+                                    ? null
+                                    : (isStoreBilled
+                                        ? _openBillingPortal
+                                        : _cancelSubscription),
+                                child: Text(
+                                  isStoreBilled
+                                      ? 'Cancel in ${MobileBillingService.instance.storeName}'
+                                      : 'Cancel Subscription',
+                                ),
                               ),
                             ),
                           if (hasActive && isCanceled)

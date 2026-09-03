@@ -15183,12 +15183,42 @@ def api_billing_portal_session():
 @app.route('/api/billing/cancel', methods=['POST'])
 @login_required
 def api_billing_cancel():
-    if not _stripe_enabled():
-        return jsonify({'success': False, 'error': 'Stripe is not configured'}), 400
     try:
         user_id = _current_user_id()
         if not user_id:
             return jsonify({'success': False, 'error': 'auth required'}), 403
+
+        # Checked before the Stripe guard below: a store subscriber's answer
+        # does not depend on Stripe being configured, and telling them Stripe
+        # is missing would be a non-sequitur about a payment Apple took.
+        # An App Store or Play subscription cannot be cancelled from here - only
+        # the store that took the payment can cancel it, and Apple requires we
+        # send the customer to their own subscription settings. Answering the
+        # Stripe query for them reported "No active subscription found" on an
+        # account whose status plainly read active, because the row exists and
+        # only stripe_subscription_id is null.
+        store_sub = _active_store_subscription(user_id)
+        if store_sub:
+            provider = store_sub[0]
+            where = 'the App Store' if provider == 'apple' else 'Google Play'
+            settings_path = (
+                'Settings > your name > Subscriptions'
+                if provider == 'apple'
+                else 'the Play Store > Payments and subscriptions'
+            )
+            return jsonify({
+                'success': False,
+                'billing_provider': provider,
+                'store_managed': True,
+                'error': (
+                    f'This subscription is billed by {where}, so it has to be '
+                    f'cancelled there. Open {settings_path} to cancel it. Your '
+                    'screens keep working until the period you have paid for ends.'
+                ),
+            }), 409
+
+        if not _stripe_enabled():
+            return jsonify({'success': False, 'error': 'Stripe is not configured'}), 400
 
         db = get_db()
         sub_row = db.execute(
