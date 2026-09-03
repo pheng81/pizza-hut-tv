@@ -280,6 +280,78 @@
       font-size: 13px;
     }
 
+    .payment-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .payment-stat {
+      padding: 16px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid var(--line);
+    }
+
+    .payment-stat-label {
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-size: 10px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .payment-stat-value {
+      font-size: 22px;
+      font-weight: 700;
+    }
+
+    .payment-note {
+      padding: 14px 16px;
+      margin-bottom: 22px;
+      border-radius: 16px;
+      color: var(--muted);
+      background: rgba(23, 125, 95, 0.08);
+      border: 1px solid rgba(23, 125, 95, 0.16);
+      font-size: 13px;
+    }
+
+    .payment-note--warning {
+      background: var(--warning-soft);
+      border-color: rgba(193, 124, 31, 0.2);
+    }
+
+    .payment-subsection {
+      margin-top: 26px;
+      padding-top: 24px;
+      border-top: 1px solid rgba(28, 36, 46, 0.1);
+    }
+
+    .payment-subsection-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 14px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+
+    .payment-subsection-title {
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .nowrap {
+      white-space: nowrap;
+    }
+
+    .btn--small {
+      padding: 9px 13px;
+      font-size: 12px;
+    }
+
     .content-grid {
       display: grid;
       grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -622,8 +694,18 @@
         grid-template-columns: 1fr;
       }
 
+      .payment-summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
       .hero-copy h1 {
         font-size: 38px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .payment-summary-grid {
+        grid-template-columns: 1fr;
       }
     }
   </style>
@@ -917,6 +999,154 @@
             </form>
           </div>
         {% endif %}
+      </section>
+
+      <section class="panel panel-wide panel-payments">
+        <div class="panel-header">
+          <div>
+            <div class="table-label">Payments</div>
+            <h2 class="section-title">Payment and billing history</h2>
+            <p class="section-copy">Review paid invoices, payment totals, refunds, and the billing system responsible for this account.</p>
+          </div>
+          <div class="panel-badge">{{ payment_snapshot.provider_label }}</div>
+        </div>
+
+        <div class="payment-summary-grid">
+          <div class="payment-stat">
+            <div class="payment-stat-label">Billing records</div>
+            <div class="payment-stat-value">{{ payment_snapshot.record_count }}</div>
+          </div>
+          <div class="payment-stat">
+            <div class="payment-stat-label">Paid records</div>
+            <div class="payment-stat-value">{{ payment_snapshot.paid_count }}</div>
+          </div>
+          <div class="payment-stat">
+            <div class="payment-stat-label">Paid total</div>
+            <div class="payment-stat-value">{{ payment_snapshot.paid_total_label }}</div>
+          </div>
+          <div class="payment-stat">
+            <div class="payment-stat-label">Refunded total</div>
+            <div class="payment-stat-value">{{ payment_snapshot.refunded_total_label }}</div>
+          </div>
+        </div>
+
+        {% if payment_snapshot.notice %}
+          <div class="payment-note {% if payment_snapshot.provider in ['apple', 'google'] %}payment-note--warning{% endif %}">
+            {{ payment_snapshot.notice }}
+          </div>
+        {% endif %}
+        {% if payment_snapshot.error %}
+          <div class="payment-note payment-note--warning">{{ payment_snapshot.error }}</div>
+        {% endif %}
+
+        <div class="payment-subsection" style="margin-top: 0; padding-top: 0; border-top: 0;">
+          <div class="payment-subsection-header">
+            <h3 class="payment-subsection-title">Paid and billing records</h3>
+            <span class="muted">{{ payment_snapshot.record_count }} record{{ '' if payment_snapshot.record_count == 1 else 's' }}</span>
+          </div>
+          {% if payment_snapshot.history %}
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Record</th>
+                    <th>Reference</th>
+                    <th>Description</th>
+                    <th>Status</th>
+                    <th>Amount</th>
+                    <th>Receipt</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for record in payment_snapshot.history %}
+                    <tr>
+                      <td class="nowrap">{{ record.date | format_timestamp if record.date else 'N/A' }}</td>
+                      <td>{{ record.record_type }}</td>
+                      <td>{{ record.reference }}</td>
+                      <td>{{ record.description }}</td>
+                      <td>
+                        {% if record.status in ['paid', 'active', 'trialing', 'past_due'] %}
+                          <span class="pill pill--good">{{ record.status }}</span>
+                        {% elif record.status in ['refunded', 'revoked', 'expired', 'canceled', 'cancelled'] %}
+                          <span class="pill pill--bad">{{ record.status }}</span>
+                        {% else %}
+                          <span class="pill pill--warning">{{ record.status }}</span>
+                        {% endif %}
+                      </td>
+                      <td class="nowrap">{{ record.amount_label }}</td>
+                      <td>
+                        {% if record.hosted_invoice_url %}
+                          <a class="btn btn--warning btn--small" href="{{ record.hosted_invoice_url }}" target="_blank" rel="noopener">Open invoice</a>
+                        {% elif record.invoice_pdf %}
+                          <a class="btn btn--warning btn--small" href="{{ record.invoice_pdf }}" target="_blank" rel="noopener">View PDF</a>
+                        {% else %}
+                          <span class="muted">Store receipt</span>
+                        {% endif %}
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div class="empty-state">No payment records are available for this account.</div>
+          {% endif %}
+        </div>
+
+        <div class="payment-subsection">
+          <div class="payment-subsection-header">
+            <div>
+              <h3 class="payment-subsection-title">Refunds</h3>
+              <p class="section-copy">Stripe refunds apply to the remaining balance of a completed charge. Store purchases must be refunded through Apple or Google.</p>
+            </div>
+            {% if payment_snapshot.provider == 'stripe' %}
+              <span class="muted">Refundable: {{ payment_snapshot.refundable_total_label }}</span>
+            {% endif %}
+          </div>
+
+          {% if payment_snapshot.provider in ['apple', 'google'] %}
+            <div class="payment-note payment-note--warning">Refunds cannot be issued from this website for {{ payment_snapshot.provider_label }} purchases. Open the customer’s store account to manage the refund.</div>
+          {% elif payment_snapshot.refunds %}
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Charge</th>
+                    <th>Original</th>
+                    <th>Refunded</th>
+                    <th>Remaining</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for charge in payment_snapshot.refunds %}
+                    <tr>
+                      <td class="nowrap">{{ charge.date | format_timestamp if charge.date else 'N/A' }}</td>
+                      <td>{{ charge.charge_id }}</td>
+                      <td>{{ charge.amount_label }}</td>
+                      <td>{{ charge.refunded_label }}</td>
+                      <td>{{ charge.remaining_label }}</td>
+                      <td>
+                        {% if charge.refundable %}
+                          <form method="post" action="/superadmin/users/{{ user.id }}/refund-payment" onsubmit="return confirm('Issue a full refund of the remaining balance for this charge?')">
+                            <input type="hidden" name="charge_id" value="{{ charge.charge_id }}">
+                            <button class="btn btn--danger btn--small" type="submit">Refund remaining</button>
+                          </form>
+                        {% else %}
+                          <span class="pill">No balance</span>
+                        {% endif %}
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div class="empty-state">No Stripe charges are available to refund.</div>
+          {% endif %}
+        </div>
       </section>
 
       <section class="panel panel-wide">

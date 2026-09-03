@@ -14091,6 +14091,145 @@ def superadmin_rename_user(user_id):
         flash(f'Update failed: {e}', 'error')
     return _superadmin_user_post_action_redirect(user_id)
 
+def _superadmin_money_label(amount_minor, currency='aud') -> str:
+    """Format a Stripe minor-unit amount for the superadmin billing view."""
+    try:
+        amount = float(amount_minor or 0) / 100
+    except (TypeError, ValueError):
+        return 'N/A'
+    code = str(currency or 'aud').upper()
+    symbol = {'AUD': 'A$', 'USD': '$', 'GBP': '£', 'EUR': '€'}.get(code, f'{code} ')
+    return f'{symbol}{amount:,.2f}'
+
+def _superadmin_payment_snapshot(user, subscription, provider: str) -> dict:
+    """Build payment history without creating billing objects as a side effect."""
+    snapshot = {
+        'provider': provider,
+        'provider_label': {
+            'apple': 'Apple App Store',
+            'google': 'Google Play',
+            'stripe': 'Website / Stripe',
+        }.get(provider, 'Not recorded'),
+        'history': [],
+        'refunds': [],
+        'record_count': 0,
+        'paid_count': 0,
+        'paid_total_label': 'N/A',
+        'refunded_total_label': 'N/A',
+        'refundable_total_label': 'N/A',
+        'notice': '',
+        'error': '',
+    }
+    db = get_db()
+
+    if provider in {'apple', 'google'}:
+        rows = db.execute(
+            'SELECT provider, product_id, purchase_id, original_transaction_id, status, '
+            'environment, expires_at, created_at, updated_at '
+            'FROM mobile_store_purchases WHERE user_id = ? ORDER BY created_at DESC, id DESC',
+            (user['id'],),
+        ).fetchall()
+        for row in rows:
+            item = dict(row)
+            item['record_type'] = 'Verified store purchase'
+            item['date'] = item.get('created_at')
+            item['description'] = item.get('product_id') or 'Store subscription'
+            item['amount_label'] = 'Paid through store'
+            item['reference'] = item.get('purchase_id') or item.get('original_transaction_id') or 'Not recorded'
+            snapshot['history'].append(item)
+        snapshot['record_count'] = len(snapshot['history'])
+        # A store record represents a purchase that was verified at the time
+        # it was received. An expired or refunded entitlement was still a
+        # purchase, so it belongs in the paid-history count.
+        snapshot['paid_count'] = len(snapshot['history'])
+        store_name = 'Apple' if provider == 'apple' else 'Google Play'
+        snapshot['notice'] = (
+            f'Payment amounts, invoices, and refunds are managed by {store_name}. '
+            f'Use the {store_name} subscription console for receipts or refunds.'
+        )
+        snapshot['paid_total_label'] = 'Store-managed'
+        snapshot['refunded_total_label'] = 'Store-managed'
+        snapshot['refundable_total_label'] = 'Store-managed'
+        return snapshot
+
+    if provider != 'stripe' or not _stripe_enabled():
+        snapshot['notice'] = 'No connected payment ledger is available for this account.'
+        return snapshot
+
+    try:
+        customer_id = (user['stripe_customer_id'] or '').strip() if 'stripe_customer_id' in user.keys() else ''
+        stripe_subscription_id = (
+            (subscription['stripe_subscription_id'] or '').strip()
+            if subscription and 'stripe_subscription_id' in subscription.keys() else ''
+        )
+        # A legacy account may have a subscription id but no saved customer id.
+        # Retrieve the subscription to discover the customer, without creating
+        # a new Stripe customer merely by opening an admin page.
+        if not customer_id and stripe_subscription_id:
+            remote_subscription = stripe.Subscription.retrieve(stripe_subscription_id)
+            customer_id = str(getattr(remote_subscription, 'customer', '') or '').strip()
+        if not customer_id:
+            snapshot['notice'] = 'Stripe is enabled, but this account has no Stripe customer record.'
+            return snapshot
+
+        invoices = stripe.Invoice.list(customer=customer_id, limit=50)
+        paid_total = 0
+        currency = 'aud'
+        for invoice in invoices.data:
+            amount_paid = getattr(invoice, 'amount_paid', 0) or 0
+            invoice_currency = getattr(invoice, 'currency', None) or currency
+            currency = invoice_currency
+            status = str(getattr(invoice, 'status', None) or 'unknown').lower()
+            paid = status == 'paid' or bool(getattr(invoice, 'paid', False))
+            if paid:
+                status = 'paid'
+            if paid:
+                paid_total += int(amount_paid or 0)
+            snapshot['history'].append({
+                'record_type': 'Invoice',
+                'reference': getattr(invoice, 'number', None) or getattr(invoice, 'id', None) or 'Not recorded',
+                'date': getattr(invoice, 'created', None),
+                'description': getattr(invoice, 'description', None) or 'EverydayAdvertise subscription',
+                'status': status,
+                'amount_label': _superadmin_money_label(amount_paid or getattr(invoice, 'total', 0), invoice_currency),
+                'invoice_pdf': getattr(invoice, 'invoice_pdf', None),
+                'hosted_invoice_url': getattr(invoice, 'hosted_invoice_url', None),
+            })
+
+        refunded_total = 0
+        refundable_total = 0
+        charges = stripe.Charge.list(customer=customer_id, limit=50)
+        for charge in charges.data:
+            amount = int(getattr(charge, 'amount', 0) or 0)
+            amount_refunded = int(getattr(charge, 'amount_refunded', 0) or 0)
+            charge_currency = getattr(charge, 'currency', None) or currency
+            refunded_total += amount_refunded
+            remaining = max(0, amount - amount_refunded)
+            if remaining and (getattr(charge, 'paid', False) or getattr(charge, 'status', '') == 'succeeded'):
+                refundable_total += remaining
+            snapshot['refunds'].append({
+                'charge_id': getattr(charge, 'id', None),
+                'date': getattr(charge, 'created', None),
+                'status': str(getattr(charge, 'status', None) or ('paid' if getattr(charge, 'paid', False) else 'unknown')).lower(),
+                'amount_label': _superadmin_money_label(amount, charge_currency),
+                'refunded_label': _superadmin_money_label(amount_refunded, charge_currency),
+                'remaining_label': _superadmin_money_label(remaining, charge_currency),
+                'receipt_url': getattr(charge, 'receipt_url', None),
+                'refundable': bool(remaining and (getattr(charge, 'paid', False) or getattr(charge, 'status', '') == 'succeeded')),
+            })
+
+        snapshot['record_count'] = len(snapshot['history'])
+        snapshot['paid_count'] = sum(1 for item in snapshot['history'] if item.get('status') == 'paid')
+        snapshot['paid_total_label'] = _superadmin_money_label(paid_total, currency)
+        snapshot['refunded_total_label'] = _superadmin_money_label(refunded_total, currency)
+        snapshot['refundable_total_label'] = _superadmin_money_label(refundable_total, currency)
+        snapshot['notice'] = 'Invoice and charge history is read from Stripe. Refunds below apply to the remaining charge balance.'
+    except Exception as error:
+        logging.warning('Failed to load Stripe payment history for user %s: %s', user['id'], error)
+        snapshot['error'] = 'Stripe payment history could not be loaded right now.'
+        snapshot['notice'] = 'Check the Stripe customer record and server billing connection.'
+    return snapshot
+
 @app.route('/superadmin/users/<int:user_id>')
 @superadmin_required
 def superadmin_user_detail(user_id):
@@ -14176,6 +14315,7 @@ def superadmin_user_detail(user_id):
             if provider not in {'apple', 'google', 'stripe'}:
                 provider = 'stripe' if (
                     (subscription and subscription['stripe_subscription_id'])
+                    or (user['stripe_customer_id'] if 'stripe_customer_id' in user.keys() else None)
                     or any(item.get('stripe_subscription_id') for item in screen_subs)
                 ) else ''
             product_id = str((subscription['billing_product_id'] if subscription and 'billing_product_id' in subscription.keys() else '') or '')
@@ -14221,6 +14361,10 @@ def superadmin_user_detail(user_id):
                 'configured_count': 0, 'active_count': 0, 'inactive_count': 0,
                 'history_count': 0, 'ledger_count': 0,
             }
+
+        payment_snapshot = _superadmin_payment_snapshot(
+            user, subscription, screen_summary.get('provider', ''),
+        )
         
         logging.info(f"[SUPERADMIN] Rendering template for user {user_id}")
         return render_template('superadmin/user_detail.html', 
@@ -14230,6 +14374,7 @@ def superadmin_user_detail(user_id):
                              screen_subs=screen_subs,
                              cancellations=cancellations,
                              screen_summary=screen_summary,
+                             payment_snapshot=payment_snapshot,
                              embedded=embedded)
     except Exception as e:
         logging.error(f"[SUPERADMIN] Fatal error in user_detail for user_id={user_id}: {e}", exc_info=True)
@@ -14363,6 +14508,74 @@ def superadmin_restore_screen(user_id, screen_subscription_id):
     except Exception as e:
         logging.error('Superadmin restore screen failed: %s', e, exc_info=True)
         flash(f'Could not restore screen: {e}', 'error')
+    return _superadmin_user_detail_redirect(user_id)
+
+@app.route('/superadmin/users/<int:user_id>/refund-payment', methods=['POST'])
+@superadmin_required
+def superadmin_refund_payment(user_id):
+    """Issue a full remaining refund for a verified Stripe charge."""
+    charge_id = (request.form.get('charge_id') or '').strip()
+    if not charge_id or not charge_id.startswith('ch_'):
+        flash('A valid Stripe charge was not supplied.', 'error')
+        return _superadmin_user_detail_redirect(user_id)
+    if not _stripe_enabled():
+        flash('Stripe is not configured; no refund was issued.', 'error')
+        return _superadmin_user_detail_redirect(user_id)
+
+    try:
+        db = get_db()
+        user = db.execute(
+            'SELECT id, stripe_customer_id FROM users WHERE id = ?', (user_id,)
+        ).fetchone()
+        subscription = db.execute(
+            'SELECT stripe_subscription_id FROM subscriptions WHERE user_id = ?',
+            (user_id,),
+        ).fetchone()
+        if not user:
+            flash('User not found; no refund was issued.', 'error')
+            return _superadmin_user_detail_redirect(user_id)
+
+        customer_id = (user['stripe_customer_id'] or '').strip()
+        if not customer_id and subscription and subscription['stripe_subscription_id']:
+            remote_subscription = stripe.Subscription.retrieve(subscription['stripe_subscription_id'])
+            customer_id = str(getattr(remote_subscription, 'customer', '') or '').strip()
+        if not customer_id:
+            flash('This account has no verified Stripe customer record.', 'error')
+            return _superadmin_user_detail_redirect(user_id)
+
+        charge = stripe.Charge.retrieve(charge_id)
+        charge_customer = str(getattr(charge, 'customer', '') or '').strip()
+        if charge_customer != customer_id:
+            logging.warning(
+                'Rejected admin refund for charge %s: customer mismatch for user %s',
+                charge_id, user_id,
+            )
+            flash('That charge does not belong to this user.', 'error')
+            return _superadmin_user_detail_redirect(user_id)
+
+        amount = int(getattr(charge, 'amount', 0) or 0)
+        amount_refunded = int(getattr(charge, 'amount_refunded', 0) or 0)
+        remaining = amount - amount_refunded
+        paid = bool(getattr(charge, 'paid', False)) or getattr(charge, 'status', '') == 'succeeded'
+        if not paid or remaining <= 0:
+            flash('That charge has no refundable balance.', 'error')
+            return _superadmin_user_detail_redirect(user_id)
+
+        refund = stripe.Refund.create(
+            charge=charge_id,
+            amount=remaining,
+            metadata={'app_user_id': str(user_id), 'admin_refund': 'true'},
+            idempotency_key=f'admin_refund_{charge_id}_{remaining}',
+        )
+        refund_id = str(getattr(refund, 'id', '') or 'created')
+        currency = getattr(charge, 'currency', None) or 'aud'
+        flash(
+            f'Refund {refund_id} issued for {_superadmin_money_label(remaining, currency)}.',
+            'success',
+        )
+    except Exception as error:
+        logging.error('Superadmin refund failed for user %s and charge %s: %s', user_id, charge_id, error, exc_info=True)
+        flash('The refund could not be issued. Check Stripe and try again.', 'error')
     return _superadmin_user_detail_redirect(user_id)
 
 @app.route('/superadmin/users/<int:user_id>/cancel-subscription', methods=['POST'])
