@@ -1156,7 +1156,13 @@ class _AccountPageState extends State<AccountPage> {
                           const Divider(height: 20),
                           _kvRow(context, 'Auto-renew', autoRenew),
                           const SizedBox(height: 14),
-                          if (hasActive)
+                          // No Manage button for a store subscription: Cancel
+                          // below already opens Apple's subscription settings,
+                          // which is where managing and cancelling both happen,
+                          // so a second button to the same page said nothing
+                          // new. Stripe accounts keep it - their portal is a
+                          // different destination from Cancel.
+                          if (hasActive && !isStoreBilled)
                             SizedBox(
                               width: double.infinity,
                               child: FilledButton(
@@ -1165,7 +1171,7 @@ class _AccountPageState extends State<AccountPage> {
                                 child: const Text('Manage Subscription'),
                               ),
                             )
-                          else
+                          else if (!hasActive)
                             SizedBox(
                               width: double.infinity,
                               child: FilledButton(
@@ -1258,14 +1264,21 @@ class _AccountPageState extends State<AccountPage> {
                                 ),
                               ),
                             ),
+                          // Auto-renew can only be switched back on at the
+                          // store that billed it, so send them there rather
+                          // than to an endpoint that cannot do it.
                           if (hasActive && isCanceled)
                             SizedBox(
                               width: double.infinity,
                               child: OutlinedButton(
                                 onPressed: _actionBusy
                                     ? null
-                                    : _reactivateSubscription,
-                                child: const Text('Reactivate Subscription'),
+                                    : (isStoreBilled
+                                        ? _openBillingPortal
+                                        : _reactivateSubscription),
+                                child: Text(isStoreBilled
+                                    ? 'Reactivate in ${MobileBillingService.instance.storeName}'
+                                    : 'Reactivate Subscription'),
                               ),
                             ),
                         ],
@@ -1800,7 +1813,11 @@ class _AccountPageState extends State<AccountPage> {
                             icon: const Icon(Icons.download_outlined),
                             label: const Text('Download Statement'),
                           ),
-                          if (hasActive) ...[
+                          // "Billing Portal" is a Stripe destination. A store
+                          // subscriber has no portal - Apple holds the payment
+                          // method - so it pointed at Apple's page and named it
+                          // something that does not exist for them.
+                          if (hasActive && !isStoreBilled) ...[
                             const SizedBox(height: 8),
                             OutlinedButton.icon(
                               onPressed:
