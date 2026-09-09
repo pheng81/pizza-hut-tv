@@ -6,7 +6,17 @@
     [string]$LegacyPath = "/var/www/pizza-hut-tv",
     [string]$ServiceName = "everydayadvertise_tv",
     [string]$LegacyServiceName = "pizza-hut-tv",
-    [switch]$PreserveConfig
+    [switch]$PreserveConfig,
+    # The tracked everydayadvertise_tv.service has its Environment= secrets
+    # replaced with the literal word REDACTED so the file can live in git.
+    # Copying it over the live unit and running daemon-reload - which this
+    # script does - would hand production those placeholders and take out
+    # Google sign-in. Deploying the unit is now the deliberate exception, and
+    # whoever passes this has to put the real values back first.
+    [switch]$IncludeServiceUnit,
+    # Read-Host has no stdin under CI or an agent: it fails or returns nothing,
+    # and the deploy stalls on a question no one is there to answer.
+    [switch]$NoPrompt
 )
 
 Write-Host "== EverydayAdvertise TV Server Deploy ==" -ForegroundColor Cyan
@@ -23,7 +33,10 @@ if (Test-Path "database.db") {
     
     if ($localDbAge.TotalDays -gt 1) {
         Write-Host "  âš  Local database is over 1 day old" -ForegroundColor Yellow
-        $syncFirst = Read-Host "Sync from server first? (yes/no)"
+        $syncFirst = "no"
+        if (-not $NoPrompt -and [Environment]::UserInteractive) {
+            $syncFirst = Read-Host "Sync from server first? (yes/no)"
+        }
         if ($syncFirst -eq "yes") {
             Write-Host "Running sync..." -ForegroundColor Yellow
             & "$PSScriptRoot\sync_from_server.ps1" -AutoSync
@@ -87,7 +100,10 @@ foreach($file in $coreFiles) {
     }
 }
 
-if (Test-Path $serviceUnitFile) {
+if (-not $IncludeServiceUnit) {
+    Write-Host "Skipping service unit - the tracked copy has REDACTED secrets." -ForegroundColor Yellow
+    Write-Host "  Pass -IncludeServiceUnit only after restoring the real values." -ForegroundColor DarkGray
+} elseif (Test-Path $serviceUnitFile) {
     Write-Host "Uploading service unit..." -ForegroundColor Yellow
     & scp -i $KeyPath $serviceUnitFile "ubuntu@${Server}:~/${TempPath}/"
     if($LASTEXITCODE -ne 0) {
