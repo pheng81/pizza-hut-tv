@@ -1000,6 +1000,17 @@
           </div>
         </form>
 
+        <form class="override-row" method="post" action="/superadmin/users/{{ user.id }}/set-free-screens">
+          <div class="override-field">
+            <div class="info-label">Free screens</div>
+            <input class="override-input" type="number" name="free_screens" min="0" step="1" value="{{ free_screens or 0 }}">
+            <p class="override-note">Screens this account may run before it is asked to subscribe. Currently {{ free_screens or 0 }}. Set 0 to put it back on normal billing. Scoped and reversible, which is why it is the better tool than admin for comping an account.</p>
+          </div>
+          <div class="override-actions">
+            <button class="btn btn--success" type="submit">Save</button>
+          </div>
+        </form>
+
         <div class="override-row">
           <div class="override-field">
             <div class="info-label">Role</div>

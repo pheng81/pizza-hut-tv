@@ -2627,6 +2627,30 @@ def _ensure_user_billing_policy(user_id: int, source: str = 'default') -> dict:
     return settings
 
 
+def _set_user_free_screens(user_id: int, free_screens: int, source: str) -> int:
+    """Let one account run this many screens without ever being asked to pay.
+
+    api_subscription_summary computes the gate as
+        (not has_active) and (not is_bypass) and (screen_count >= free_screens)
+    so raising free_screens for a single user is the supported way to comp an
+    account. It stays an ordinary user - real billing row, real subscription
+    page, real limits above the line - which is why this is preferable to
+    granting admin. Admin bypasses every check in the app, cannot be scoped to
+    a screen count, and cannot be told apart later from a real staff account.
+    """
+    free_screens = max(0, int(free_screens or 0))
+    _ensure_user_billing_policy(user_id, source=source)
+    db = get_db()
+    db.execute(
+        'UPDATE user_billing_policy SET free_screens = ?, updated_at = ?, source = ? '
+        'WHERE user_id = ?',
+        (free_screens, int(time.time()), source, user_id),
+    )
+    db.commit()
+    logging.info('superadmin set free_screens=%s on user %s', free_screens, user_id)
+    return free_screens
+
+
 def _seed_missing_user_billing_policies(source: str = 'seeded'):
     db = get_db()
     settings = _get_global_billing_settings()
@@ -13777,26 +13801,63 @@ def superadmin_create_user():
     pwd = data.get('password') or ''
     is_admin = data.get('is_admin') == '1'
     role = 'admin' if is_admin else None
+    # Provisioning an account by hand means the usual proofs never happen: no
+    # verification mail is sent and no SMS code is issued, so without these the
+    # account is created already blocked from subscribing by its own checks.
+    verified = data.get('verified') == '1'
+    phone = (data.get('phone_number') or '').strip()
+    try:
+        free_screens = max(0, int(data.get('free_screens') or 0))
+    except (TypeError, ValueError):
+        free_screens = 0
     if not email or not pwd:
         flash('Username and password required', 'error')
         return redirect(url_for('superadmin_dashboard'))
     try:
         db = get_db()
-        db.execute('INSERT INTO users (username, password_hash, full_name, is_blocked, role, auth_provider) VALUES (?, ?, ?, 0, ?, ?)', (
-            email, generate_password_hash(pwd), full_name, role, 'local'
-        ))
+        db.execute(
+            'INSERT INTO users '
+            '(username, password_hash, full_name, is_blocked, role, auth_provider, '
+            'email_verified, phone_number, phone_verified) '
+            'VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?)',
+            (
+                email,
+                generate_password_hash(pwd),
+                full_name,
+                role,
+                'local',
+                1 if verified else 0,
+                phone or None,
+                # Only claim the phone is verified when there is one to verify.
+                1 if (verified and phone) else 0,
+            ),
+        )
         db.commit()
         try:
             row = db.execute('SELECT id FROM users WHERE username = ?', (email,)).fetchone()
             if row:
                 _ensure_user_billing_policy(int(row['id']), source='superadmin_create')
+                if free_screens:
+                    _set_user_free_screens(
+                        int(row['id']), free_screens, source='superadmin_create'
+                    )
         except Exception as _billing_e:
             logging.warning('Failed to ensure billing policy for created user %s: %s', email, _billing_e)
         try:
             _ensure_user_link_code(email)
         except Exception:
             pass
-        flash(f'User created{" as admin" if is_admin else ""}', 'success')
+        granted = []
+        if is_admin:
+            granted.append('admin')
+        if verified:
+            granted.append('verified')
+        if free_screens:
+            granted.append(f'{free_screens} free screen{"" if free_screens == 1 else "s"}')
+        flash(
+            'User created' + (f' ({", ".join(granted)})' if granted else ''),
+            'success',
+        )
     except sqlite3.IntegrityError:
         flash('Username already exists', 'error')
     except Exception as e:
@@ -13971,6 +14032,28 @@ def superadmin_set_phone(user_id):
     db.commit()
     logging.info('superadmin set phone_verified=%s on user %s', verified, user_id)
     flash('Phone marked verified' if verified else 'Phone updated', 'success')
+    return _superadmin_user_post_action_redirect(user_id)
+
+
+@app.route('/superadmin/users/<int:user_id>/set-free-screens', methods=['POST'])
+@superadmin_required
+def superadmin_set_free_screens(user_id):
+    """Comp an existing account a number of screens.
+
+    See _set_user_free_screens: this is the scoped alternative to making
+    someone an admin. 0 puts them back on normal billing.
+    """
+    try:
+        wanted = max(0, int((request.form.get('free_screens') or '0').strip() or 0))
+    except (TypeError, ValueError):
+        flash('Free screens must be a whole number', 'error')
+        return _superadmin_user_post_action_redirect(user_id)
+    granted = _set_user_free_screens(user_id, wanted, source='superadmin_override')
+    flash(
+        f'Account may run {granted} screen{"" if granted == 1 else "s"} free'
+        if granted else 'Account returned to normal billing',
+        'success',
+    )
     return _superadmin_user_post_action_redirect(user_id)
 
 
@@ -14475,6 +14558,7 @@ def superadmin_user_detail(user_id):
                              cancellations=cancellations,
                              screen_summary=screen_summary,
                              payment_snapshot=payment_snapshot,
+                             free_screens=_get_user_billing_policy(user_id).get('free_screens') or 0,
                              embedded=embedded)
     except Exception as e:
         logging.error(f"[SUPERADMIN] Fatal error in user_detail for user_id={user_id}: {e}", exc_info=True)

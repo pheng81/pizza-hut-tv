@@ -851,6 +851,13 @@
       line-height: 1.6;
     }
 
+    .field-hint {
+      display: block;
+      margin-top: 6px;
+      font-size: 12px;
+      color: #64748b;
+    }
+
     .checkbox-wrapper {
       display: flex;
       align-items: flex-start;
@@ -1926,9 +1933,22 @@
                       <label class="field-label" for="create_password">Temporary Password</label>
                       <input id="create_password" type="password" name="password" placeholder="Minimum 6 characters" required minlength="6">
                     </div>
+                    <div class="field-group full">
+                      <label class="field-label" for="create_phone">Phone Number</label>
+                      <input id="create_phone" type="tel" name="phone_number" placeholder="Optional, e.g. +61 400 000 000">
+                    </div>
+                    <div class="field-group full">
+                      <label class="field-label" for="create_free_screens">Free Screens</label>
+                      <input id="create_free_screens" type="number" name="free_screens" min="0" step="1" value="0" placeholder="0">
+                      <small class="field-hint">Screens this account may run before it is asked to subscribe. Leave at 0 for normal billing.</small>
+                    </div>
+                    <div class="checkbox-wrapper full">
+                      <input type="checkbox" name="verified" id="create_verified" value="1">
+                      <label for="create_verified">Mark email and phone verified immediately (no email or SMS is sent)</label>
+                    </div>
                     <div class="checkbox-wrapper full">
                       <input type="checkbox" name="is_admin" id="is_admin" value="1">
-                      <label for="is_admin">Grant admin privileges on creation</label>
+                      <label for="is_admin">Grant admin privileges on creation - bypasses billing entirely</label>
                     </div>
                     <button class="btn btn--primary full" type="submit">Create User</button>
                   </div>
