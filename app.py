@@ -15784,12 +15784,36 @@ def api_billing_cancel():
 @app.route('/api/billing/reactivate', methods=['POST'])
 @login_required
 def api_billing_reactivate():
-    if not _stripe_enabled():
-        return jsonify({'success': False, 'error': 'Stripe is not configured'}), 400
     try:
         user_id = _current_user_id()
         if not user_id:
             return jsonify({'success': False, 'error': 'auth required'}), 403
+
+        # Same shape as cancel: only the store that took the payment can turn
+        # auto-renew back on. Falling through to the Stripe query told a store
+        # subscriber they had no cancelled subscription, which is not true.
+        store_sub = _active_store_subscription(user_id)
+        if store_sub:
+            provider = store_sub[0]
+            where = 'the App Store' if provider == 'apple' else 'Google Play'
+            settings_path = (
+                'Settings > your name > Subscriptions'
+                if provider == 'apple'
+                else 'the Play Store > Payments and subscriptions'
+            )
+            return jsonify({
+                'success': False,
+                'billing_provider': provider,
+                'store_managed': True,
+                'error': (
+                    f'This subscription is billed by {where}, so auto-renew has '
+                    f'to be turned back on there. Open {settings_path} and '
+                    'resubscribe to this plan.'
+                ),
+            }), 409
+
+        if not _stripe_enabled():
+            return jsonify({'success': False, 'error': 'Stripe is not configured'}), 400
 
         db = get_db()
         sub_row = db.execute(
