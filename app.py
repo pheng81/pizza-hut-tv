@@ -13904,6 +13904,106 @@ def superadmin_unblock_user(user_id):
     flash('User unblocked', 'success')
     return _superadmin_user_post_action_redirect(user_id)
 
+
+def _superadmin_toggle_value(field: str) -> int:
+    """A form toggle read as 1 or 0, defaulting to off.
+
+    Anything but an explicit "1" is off, so a malformed post clears a flag
+    rather than silently granting one.
+    """
+    return 1 if (request.form.get(field) or '').strip() == '1' else 0
+
+
+@app.route('/superadmin/users/<int:user_id>/set-email-verified', methods=['POST'])
+@superadmin_required
+def superadmin_set_email_verified(user_id):
+    """Mark an address verified by hand.
+
+    Sign in with Apple issues a privaterelay alias that forwards, but can be
+    turned off or filtered by the customer, and an address we cannot reach
+    leaves the account unable to subscribe with no way for them to fix it.
+    Verifying clears verify_token too: an unused link sitting in an inbox is a
+    second, unaudited way to set this flag.
+    """
+    verified = _superadmin_toggle_value('value')
+    db = get_db()
+    if verified:
+        db.execute(
+            'UPDATE users SET email_verified = 1, verify_token = NULL WHERE id = ?',
+            (user_id,),
+        )
+    else:
+        db.execute('UPDATE users SET email_verified = 0 WHERE id = ?', (user_id,))
+    db.commit()
+    logging.info('superadmin set email_verified=%s on user %s', verified, user_id)
+    flash('Email marked verified' if verified else 'Email marked unverified', 'success')
+    return _superadmin_user_post_action_redirect(user_id)
+
+
+@app.route('/superadmin/users/<int:user_id>/set-phone', methods=['POST'])
+@superadmin_required
+def superadmin_set_phone(user_id):
+    """Set, clear, or hand-verify a phone number.
+
+    The number is editable here because most accounts that need this have none
+    at all, and marking a missing number "verified" would be meaningless - so
+    that combination is refused rather than written. Any pending SMS challenge
+    is dropped either way: a live request id left behind means a code can land
+    later and overwrite what was just set by hand.
+    """
+    verified = _superadmin_toggle_value('value')
+    submitted = (request.form.get('phone_number') or '').strip()
+    db = get_db()
+    row = db.execute('SELECT phone_number FROM users WHERE id = ?', (user_id,)).fetchone()
+    if not row:
+        flash('User not found', 'error')
+        return _superadmin_user_post_action_redirect(user_id)
+    number = submitted or (row['phone_number'] or '').strip()
+    if verified and not number:
+        flash('Add a phone number before marking it verified', 'error')
+        return _superadmin_user_post_action_redirect(user_id)
+    db.execute(
+        'UPDATE users SET phone_number = ?, phone_verified = ?, '
+        'phone_verification_code = NULL, phone_verification_request_id = NULL, '
+        'phone_code_sent_at = NULL WHERE id = ?',
+        (number or None, verified, user_id),
+    )
+    db.commit()
+    logging.info('superadmin set phone_verified=%s on user %s', verified, user_id)
+    flash('Phone marked verified' if verified else 'Phone updated', 'success')
+    return _superadmin_user_post_action_redirect(user_id)
+
+
+@app.route('/superadmin/users/<int:user_id>/set-role', methods=['POST'])
+@superadmin_required
+def superadmin_set_role(user_id):
+    """Promote an account to admin, or return it to a standard user.
+
+    Admin is not a job title here. _subscription_eligibility returns early for
+    it, so an admin account skips the subscription gate entirely and runs as
+    many screens as it likes without ever being billed. Grant it the way you
+    would grant a free account, because that is what it is.
+
+    Stored as NULL rather than 'user' for a standard account, matching what
+    superadmin_create_user writes and what every role check reads.
+    """
+    wanted = (request.form.get('role') or '').strip().lower()
+    if wanted not in ('admin', 'user'):
+        flash('Unknown role', 'error')
+        return _superadmin_user_post_action_redirect(user_id)
+    role = 'admin' if wanted == 'admin' else None
+    db = get_db()
+    db.execute('UPDATE users SET role = ? WHERE id = ?', (role, user_id))
+    db.commit()
+    logging.info('superadmin set role=%s on user %s', role or 'user', user_id)
+    flash(
+        'Account promoted to admin - it now bypasses billing'
+        if role else 'Account returned to standard user',
+        'success',
+    )
+    return _superadmin_user_post_action_redirect(user_id)
+
+
 def _delete_user_local_artifacts(username: str | None) -> None:
     safe_key = _safe_key_from_username(username)
     if not safe_key:

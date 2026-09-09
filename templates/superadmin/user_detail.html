@@ -379,6 +379,7 @@
 
     .panel-account,
     .panel-password,
+    .panel-overrides,
     .panel-subscription {
       grid-column: span 6;
     }
@@ -595,6 +596,47 @@
       border-color: rgba(193, 124, 31, 0.2);
     }
 
+    .override-row {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+    }
+
+    .override-row:last-child {
+      border-bottom: 0;
+    }
+
+    .override-field {
+      flex: 1 1 220px;
+      min-width: 0;
+    }
+
+    .override-input {
+      width: 100%;
+      margin-top: 6px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+    }
+
+    .override-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .override-note {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 6px;
+    }
+
     .action-buttons {
       display: flex;
       gap: 12px;
@@ -707,6 +749,7 @@
     @media (max-width: 1180px) {
       .panel-account,
       .panel-password,
+      .panel-overrides,
       .panel-subscription {
         grid-column: 1 / -1;
       }
@@ -918,6 +961,54 @@
               data-screen-subscriptions="{{ screen_subs | length }}"
               data-subscription="{{ subscription.status if subscription else 'No subscription' }}"
             >Delete User</button>
+          </form>
+        </div>
+      </section>
+
+      {% set is_admin_user = user.role and user.role.lower() == 'admin' %}
+      <section class="panel panel-overrides">
+        <div class="panel-header">
+          <div>
+            <div class="section-kicker">Overrides</div>
+            <h2 class="section-title">Manual overrides</h2>
+            <p class="section-copy">For accounts the automatic checks cannot clear by themselves: a Sign in with Apple relay address that will not receive our mail, or a customer with no phone they can verify. Changes are written straight to the account and recorded in the server log.</p>
+          </div>
+          <div class="panel-badge">Superadmin only</div>
+        </div>
+
+        <div class="override-row">
+          <div class="override-field">
+            <div class="info-label">Email verification</div>
+            <div class="info-value">{{ 'Verified' if user.email_verified else 'Not verified' }}</div>
+            <p class="override-note">{{ user.username }}</p>
+          </div>
+          <form method="post" action="/superadmin/users/{{ user.id }}/set-email-verified">
+            <input type="hidden" name="value" value="{{ '0' if user.email_verified else '1' }}">
+            <button class="btn {{ 'btn--ghost' if user.email_verified else 'btn--success' }}" type="submit">{{ 'Mark unverified' if user.email_verified else 'Mark verified' }}</button>
+          </form>
+        </div>
+
+        <form class="override-row" method="post" action="/superadmin/users/{{ user.id }}/set-phone">
+          <div class="override-field">
+            <div class="info-label">Phone number</div>
+            <input class="override-input" type="tel" name="phone_number" value="{{ user.phone_number or '' }}" placeholder="No phone number on file" autocomplete="off">
+            <p class="override-note">{{ 'Currently verified' if user.phone_verified else 'Currently unverified' }}. Saving replaces any code already sent by SMS.</p>
+          </div>
+          <div class="override-actions">
+            <button class="btn btn--success" type="submit" name="value" value="1">Save and verify</button>
+            <button class="btn btn--ghost" type="submit" name="value" value="0">Save unverified</button>
+          </div>
+        </form>
+
+        <div class="override-row">
+          <div class="override-field">
+            <div class="info-label">Role</div>
+            <div class="info-value">{{ 'Admin' if is_admin_user else 'Standard user' }}</div>
+            <p class="override-note">Admin is not only a dashboard flag. An admin account skips the subscription check entirely, so it runs as many screens as it likes and is never billed.</p>
+          </div>
+          <form method="post" action="/superadmin/users/{{ user.id }}/set-role">
+            <input type="hidden" name="role" value="{{ 'user' if is_admin_user else 'admin' }}">
+            <button class="btn {{ 'btn--warning' if is_admin_user else 'btn--dark' }}" type="submit">{{ 'Remove admin' if is_admin_user else 'Make admin' }}</button>
           </form>
         </div>
       </section>
