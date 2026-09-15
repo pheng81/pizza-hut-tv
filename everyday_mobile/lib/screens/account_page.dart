@@ -1817,7 +1817,15 @@ class _AccountPageState extends State<AccountPage> {
                           // subscriber has no portal - Apple holds the payment
                           // method - so it pointed at Apple's page and named it
                           // something that does not exist for them.
-                          if (hasActive && !isStoreBilled) ...[
+                          // On iOS the button is hidden outright: the portal can
+                          // change plan and payment method, so a visible button
+                          // for it is a call to action for a purchase outside
+                          // In-App Purchase, which guideline 3.1.1 forbids even
+                          // when tapping it is already blocked below.
+                          if (hasActive &&
+                              !isStoreBilled &&
+                              !MobileBillingService
+                                  .instance.forbidsExternalPurchase) ...[
                             const SizedBox(height: 8),
                             OutlinedButton.icon(
                               onPressed:
