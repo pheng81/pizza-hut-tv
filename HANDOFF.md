@@ -9,7 +9,7 @@
 > deployment and post-rollout monitoring evidence.
 
 Written from the Windows clone. Everything below is on GitHub `main`
-(`github.com/phengtoeng/everydayadvertise`) **and deployed to production**,
+(`github.com/WcahtDenvion/everydayadvertise`) **and deployed to production**,
 unless a line says otherwise.
 
 Billing detail lives in `MOBILE_BILLING_SETUP.md`; this file is the short

@@ -225,3 +225,7 @@ all_files/Data_sever_key/*.pem
 # Apple Sign in with Apple private keys - never commit these
 *.p8
 AuthKey_*.p8
+
+# Timestamped .env backups - these carry live Stripe/Vonage secrets
+.env*.bak*
+.env.*.bak_*
