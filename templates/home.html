@@ -6,8 +6,8 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>Everyday Advertise | Digital Menu Board Software</title>
-  <meta name="description" content="Everyday Advertise is digital menu board software for restaurants, cafes, bubble tea shops, burger shops and takeaway stores.">
+  <title data-i18n="pageTitle">Everyday Advertise | Digital Menu Board Software</title>
+  <meta name="description" data-i18n-content="pageDescription" content="Everyday Advertise is digital menu board software for restaurants, cafes, bubble tea shops, burger shops and takeaway stores.">
   <meta name="robots" content="index,follow">
   <link rel="canonical" href="https://everydayadvertise.com/">
   <meta property="og:url" content="https://everydayadvertise.com/">
@@ -34,6 +34,42 @@
       overflow-x: hidden;
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
+    }
+
+    html[lang="km"] body {
+      font-family: 'Noto Sans Khmer', 'Khmer OS System', 'Khmer OS', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+    }
+
+    html[lang="zh"] body {
+      font-family: 'Noto Sans SC', 'Microsoft YaHei', 'PingFang SC', sans-serif;
+    }
+
+    html[lang="th"] body {
+      font-family: 'Noto Sans Thai', 'Leelawadee UI', Tahoma, sans-serif;
+    }
+
+    html[lang="hi"] body {
+      font-family: 'Noto Sans Devanagari', 'Nirmala UI', Mangal, sans-serif;
+    }
+
+    html[lang="ko"] body {
+      font-family: 'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+    }
+
+    html[lang="ja"] body {
+      font-family: 'Noto Sans JP', 'Yu Gothic UI', Meiryo, sans-serif;
+    }
+
+    .visually-hidden {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      padding: 0 !important;
+      margin: -1px !important;
+      overflow: hidden !important;
+      clip: rect(0, 0, 0, 0) !important;
+      white-space: nowrap !important;
+      border: 0 !important;
     }
     
     /* Header/Navigation - Apple Style */
@@ -91,6 +127,49 @@
       display: flex;
       align-items: center;
       gap: 10px;
+    }
+
+    .language-selector {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 38px;
+      padding: 0 10px;
+      border: 1px solid rgba(29, 29, 31, 0.12);
+      border-radius: 980px;
+      background: rgba(255, 255, 255, 0.78);
+      color: #1d1d1f;
+      transition: border-color 0.25s ease, background 0.25s ease;
+    }
+
+    .language-selector:focus-within,
+    .language-selector:hover {
+      border-color: rgba(0, 113, 227, 0.35);
+      background: rgba(0, 113, 227, 0.06);
+    }
+
+    .language-selector__icon {
+      font-size: 15px;
+      line-height: 1;
+    }
+
+    .language-selector select {
+      max-width: 92px;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    html:not([lang="en"]) .hero h1,
+    html:not([lang="en"]) .section-title,
+    html:not([lang="en"]) .pricing-header h2,
+    html:not([lang="en"]) .cta-section h2 {
+      letter-spacing: 0;
+      line-height: 1.35;
     }
     
     .nav-links a {
@@ -880,13 +959,13 @@
       flex-wrap: wrap;
     }
     
-    .micro-proof span {
+    .micro-proof > span {
       display: inline-flex;
       align-items: center;
       gap: 6px;
     }
     
-    .micro-proof span::before {
+    .micro-proof > span::before {
       content: '✓';
       color: #34c759;
       font-weight: 600;
@@ -1569,7 +1648,10 @@
         touch-action: pan-y;
       }
 
-      .brand img { height: 56px; }
+      .brand img {
+        width: min(180px, 37vw);
+        height: auto;
+      }
       .hero h1 {
         font-size: 35px;
       }
@@ -1626,7 +1708,21 @@
       
       .nav-links {
         display: flex !important;
-        gap: 10px;
+        gap: 7px;
+      }
+
+      .language-selector {
+        min-height: 34px;
+        padding: 0 7px;
+      }
+
+      .language-selector__icon {
+        display: none;
+      }
+
+      .language-selector select {
+        max-width: 64px;
+        font-size: 13px;
       }
 
       .nav-contact-links {
@@ -1649,7 +1745,7 @@
       
       .btn-login {
         display: inline-block;
-        padding: 8px 20px;
+        padding: 8px 14px;
         font-size: 14px;
       }
       
@@ -2064,6 +2160,58 @@
         border-radius: 22px;
       }
     }
+
+    @media (max-width: 480px) {
+      nav {
+        padding: 0 12px;
+      }
+
+      .brand img {
+        width: min(148px, 38vw);
+      }
+
+      .nav-links {
+        gap: 4px;
+      }
+
+      .nav-contact-links {
+        display: none;
+      }
+
+      .language-selector {
+        min-height: 32px;
+        padding: 0 5px;
+      }
+
+      .language-selector select {
+        max-width: 53px;
+        font-size: 12px;
+      }
+
+      .btn-login {
+        padding: 7px 10px;
+        font-size: 13px;
+      }
+
+      .hero-content {
+        width: 100%;
+        min-width: 0;
+      }
+
+      .hero-cta {
+        width: 100%;
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .hero-cta .btn-primary,
+      .hero-cta .btn-secondary {
+        width: 100%;
+        padding: 11px 16px;
+        font-size: 18px;
+        text-align: center;
+      }
+    }
   </style>
   
   <!-- AI Assistant Styles -->
@@ -2084,20 +2232,20 @@
         <img src="{{ url_for('static', filename='ea-logo.svg') }}?v={{ asset_bust or 0 }}" alt="EverydayAdvertise">
       </a>
       <div class="nav-links">
-        <a href="#features">Features</a>
-        <a href="#platforms">Platforms</a>
-        <a href="{{ url_for('superadmin_login') }}">Super Admin</a>
+        <a href="#features" data-i18n="navFeatures">Features</a>
+        <a href="#platforms" data-i18n="navPlatforms">Platforms</a>
+        <a href="{{ url_for('superadmin_login') }}" data-i18n="navSuperAdmin">Super Admin</a>
         {% if home_content.telegram_contact_url or home_content.whatsapp_contact_url %}
-        <div class="nav-contact-links" aria-label="Contact links">
+        <div class="nav-contact-links" aria-label="Contact links" data-i18n-aria-label="contactLinksLabel">
           {% if home_content.telegram_contact_url %}
-          <a href="{{ home_content.telegram_contact_url }}" class="nav-contact-link" target="_blank" rel="noreferrer" aria-label="Contact on Telegram" title="Telegram">
+          <a href="{{ home_content.telegram_contact_url }}" class="nav-contact-link" target="_blank" rel="noreferrer" aria-label="Contact on Telegram" data-i18n-aria-label="contactTelegramLabel" title="Telegram">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M21.4 4.6a1 1 0 0 0-1.05-.14L3.6 11.93a1 1 0 0 0 .08 1.87l4.62 1.67 1.67 4.84a1 1 0 0 0 1.81.2l9.54-14.87a1 1 0 0 0 .08-1.04ZM9.52 14.48l7.61-6.47-6.01 7.94-.98-2.86a1 1 0 0 0-.62-.61Z" />
             </svg>
           </a>
           {% endif %}
           {% if home_content.whatsapp_contact_url %}
-          <a href="{{ home_content.whatsapp_contact_url }}" class="nav-contact-link" target="_blank" rel="noreferrer" aria-label="Contact on WhatsApp" title="WhatsApp">
+          <a href="{{ home_content.whatsapp_contact_url }}" class="nav-contact-link" target="_blank" rel="noreferrer" aria-label="Contact on WhatsApp" data-i18n-aria-label="contactWhatsAppLabel" title="WhatsApp">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M19.05 4.94A9.9 9.9 0 0 0 12 2a9.96 9.96 0 0 0-8.62 14.95L2 22l5.2-1.36A9.96 9.96 0 1 0 19.05 4.94Zm-7.05 14.98a8.01 8.01 0 0 1-4.08-1.12l-.29-.17-3.09.81.82-3.01-.19-.31A7.96 7.96 0 1 1 12 19.92Zm4.37-6.02c-.24-.12-1.4-.69-1.61-.76-.22-.08-.38-.12-.54.12-.16.24-.62.76-.77.92-.14.16-.28.18-.52.06-.24-.12-1.03-.38-1.95-1.21-.72-.64-1.2-1.42-1.34-1.66-.14-.24-.01-.37.11-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.79-.19-.46-.39-.4-.54-.41l-.46-.01c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.69 2.58 4.1 3.61.57.24 1.02.38 1.37.49.58.18 1.11.15 1.53.09.47-.07 1.4-.57 1.6-1.11.2-.55.2-1.02.14-1.11-.06-.08-.22-.14-.46-.26Z" />
             </svg>
@@ -2105,7 +2253,20 @@
           {% endif %}
         </div>
         {% endif %}
-        <a href="{{ url_for('login') }}" class="btn-login">Login</a>
+        <div class="language-selector">
+          <label class="visually-hidden" for="siteLanguage" data-i18n="languageLabel">Language</label>
+          <span class="language-selector__icon" aria-hidden="true">🌐</span>
+          <select id="siteLanguage" aria-label="Language" data-i18n-aria-label="languageLabel">
+            <option value="en">English</option>
+            <option value="km">ខ្មែរ</option>
+            <option value="zh">中文</option>
+            <option value="th">ไทย</option>
+            <option value="hi">हिन्दी</option>
+            <option value="ko">한국어</option>
+            <option value="ja">日本語</option>
+          </select>
+        </div>
+        <a href="{{ url_for('login') }}" class="btn-login" data-i18n="navLogin">Login</a>
       </div>
     </nav>
   </header>
@@ -2129,16 +2290,18 @@
     <div class="hero-content">
       
       
-      <h1>{{ home_content.hero_title_line1 or 'The Most Advanced' }}<br><span class="nowrap">{{ home_content.hero_title_line2 or 'Digital Menu System' }}</span></h1>
-      <p class="subtitle">{{ home_content.hero_subtitle or 'User-friendly. Powerful. Perfectly synchronized.' }}</p>
+      <h1><span data-i18n="heroTitleLine1">{{ home_content.hero_title_line1 or 'The Most Advanced' }}</span><br><span class="nowrap" data-i18n="heroTitleLine2">{{ home_content.hero_title_line2 or 'Digital Menu System' }}</span></h1>
+      <p class="subtitle" data-i18n="heroSubtitle">{{ home_content.hero_subtitle or 'User-friendly. Powerful. Perfectly synchronized.' }}</p>
       
       <div class="hero-cta">
-        <a href="{{ home_content.hero_primary_cta_url or url_for('login') }}" class="btn-primary">{{ home_content.hero_primary_cta_text or 'Get Started Free' }}</a>
-        <a href="{{ home_content.hero_secondary_cta_url or '#features' }}" class="btn-secondary">{{ home_content.hero_secondary_cta_text or 'See Features' }}</a>
+        <a href="{{ home_content.hero_primary_cta_url or url_for('login') }}" class="btn-primary" data-i18n="heroPrimaryCta">{{ home_content.hero_primary_cta_text or 'Get Started Free' }}</a>
+        <a href="{{ home_content.hero_secondary_cta_url or '#features' }}" class="btn-secondary" data-i18n="heroSecondaryCta">{{ home_content.hero_secondary_cta_text or 'See Features' }}</a>
       </div>
       
       <p class="micro-proof">
-        ✓ {{ home_pricing_feature or 'Free trial period' }}  &nbsp; ✓ {{ home_content.hero_proof_secondary or 'Setup in 5 minutes' }}  &nbsp; ✓ {{ home_content.hero_proof_tertiary or '24/7 Support' }}
+        <span><span data-i18n="pricingFeature">{{ home_pricing_feature or 'Free trial period' }}</span></span>
+        <span><span data-i18n="heroProofSecondary">{{ home_content.hero_proof_secondary or 'Setup in 5 minutes' }}</span></span>
+        <span><span data-i18n="heroProofTertiary">{{ home_content.hero_proof_tertiary or '24/7 Support' }}</span></span>
       </p>
     </div>
     
@@ -2148,7 +2311,7 @@
       data-hero-rotate-on-refresh="{{ 1 if home_content.hero_rotate_on_refresh else 0 }}"
       data-hero-rotation-pool='{{ hero_rotation_images|tojson }}'
     >
-      <img id="heroPrimaryImage" src="{{ hero_primary_image }}" alt="EverydayAdvertise dashboard preview">
+      <img id="heroPrimaryImage" src="{{ hero_primary_image }}" alt="EverydayAdvertise dashboard preview" data-i18n-alt="heroImageAlt">
     </div>
   </section>
 
@@ -2178,7 +2341,7 @@
                   <source src="{{ url_for('static', filename=media_item.media_path) }}?v={{ asset_bust or 0 }}">
                 </video>
                 {% else %}
-                <img src="{{ url_for('static', filename=media_item.media_path) }}?v={{ asset_bust or 0 }}" alt="Website carousel media {{ loop.index }}">
+                <img src="{{ url_for('static', filename=media_item.media_path) }}?v={{ asset_bust or 0 }}" alt="Website carousel media {{ loop.index }}" data-i18n-alt="carouselImageAlt">
                 {% endif %}
                 {% if media_item.caption %}
                 <div class="homepage-carousel-caption">{{ media_item.caption }}</div>
@@ -2188,8 +2351,8 @@
             </div>
             {% if block['items']|length > 1 %}
             <div class="homepage-carousel-controls">
-              <button class="homepage-carousel-arrow" type="button" data-carousel-prev aria-label="Previous slide">&#8249;</button>
-              <button class="homepage-carousel-arrow" type="button" data-carousel-next aria-label="Next slide">&#8250;</button>
+              <button class="homepage-carousel-arrow" type="button" data-carousel-prev aria-label="Previous slide" data-i18n-aria-label="previousSlideLabel">&#8249;</button>
+              <button class="homepage-carousel-arrow" type="button" data-carousel-next aria-label="Next slide" data-i18n-aria-label="nextSlideLabel">&#8250;</button>
             </div>
             <div class="homepage-carousel-dots">
               {% for media_item in block['items'] %}
@@ -2208,7 +2371,7 @@
               <source src="{{ url_for('static', filename=media_item.media_path) }}?v={{ asset_bust or 0 }}">
             </video>
             {% else %}
-            <img src="{{ url_for('static', filename=media_item.media_path) }}?v={{ asset_bust or 0 }}" alt="Website body media">
+            <img src="{{ url_for('static', filename=media_item.media_path) }}?v={{ asset_bust or 0 }}" alt="Website body media" data-i18n-alt="bodyMediaAlt">
             {% endif %}
             {% if media_item.caption %}
             <div class="homepage-body-media-caption">{{ media_item.caption }}</div>
@@ -2226,8 +2389,8 @@
   <section class="pricing-section">
     <div class="pricing-container">
       <div class="pricing-header">
-        <h2>{{ home_content.pricing_title or 'Simple, Transparent Pricing' }}</h2>
-        <p>{{ home_content.pricing_subtitle or 'No hidden fees. No long-term contracts. Cancel anytime.' }}</p>
+        <h2 data-i18n="pricingTitle">{{ home_content.pricing_title or 'Simple, Transparent Pricing' }}</h2>
+        <p data-i18n="pricingSubtitle">{{ home_content.pricing_subtitle or 'No hidden fees. No long-term contracts. Cancel anytime.' }}</p>
       </div>
       
       <div class="pricing-cards-grid">
@@ -2236,48 +2399,48 @@
           <div class="price-amount">
             <span class="currency">$</span>{{ home_price_amount or '5' }}
           </div>
-          <div class="price-period">{{ home_price_period or 'per screen / month' }}</div>
+          <div class="price-period" data-i18n="pricePeriod">{{ home_price_period or 'per screen / month' }}</div>
           
           <ul class="pricing-features">
-            <li>Unlimited content updates</li>
-            <li>Perfect screen synchronization</li>
-            <li>Cloud-based management</li>
-            <li>24/7 technical support</li>
-            <li>No setup fees</li>
-            <li>{{ home_pricing_feature or 'Free trial period' }}</li>
+            <li data-i18n="standardFeatureUpdates">Unlimited content updates</li>
+            <li data-i18n="standardFeatureSync">Perfect screen synchronization</li>
+            <li data-i18n="standardFeatureCloud">Cloud-based management</li>
+            <li data-i18n="standardFeatureSupport">24/7 technical support</li>
+            <li data-i18n="standardFeatureNoFees">No setup fees</li>
+            <li data-i18n="pricingFeature">{{ home_pricing_feature or 'Free trial period' }}</li>
           </ul>
           
           <div class="pricing-cta">
-            <a href="{{ url_for('login') }}" class="btn-primary">Start Free Trial</a>
+            <a href="{{ url_for('login') }}" class="btn-primary" data-i18n="startFreeTrial">Start Free Trial</a>
           </div>
           
-          <p class="pricing-note">
+          <p class="pricing-note" data-i18n="pricingNote">
             {{ home_pricing_note or 'Try it free for 14 days. No credit card required.' }}
           </p>
         </div>
         
         <!-- Enterprise Pricing Card -->
         <div class="pricing-card enterprise">
-          <div class="enterprise-badge">Enterprise</div>
-          <div class="price-amount">
+          <div class="enterprise-badge" data-i18n="enterpriseBadge">Enterprise</div>
+          <div class="price-amount" data-i18n="customPrice">
             Custom
           </div>
           <div class="price-period" style="visibility: hidden;">placeholder</div>
           
           <ul class="pricing-features">
-            <li>Full white-label software</li>
-            <li>Your own branding</li>
-            <li>Complete source code access</li>
-            <li>Self-hosted or cloud options</li>
-            <li>Dedicated support team</li>
-            <li>Custom feature development</li>
+            <li data-i18n="enterpriseFeatureWhiteLabel">Full white-label software</li>
+            <li data-i18n="enterpriseFeatureBranding">Your own branding</li>
+            <li data-i18n="enterpriseFeatureSource">Complete source code access</li>
+            <li data-i18n="enterpriseFeatureHosting">Self-hosted or cloud options</li>
+            <li data-i18n="enterpriseFeatureSupport">Dedicated support team</li>
+            <li data-i18n="enterpriseFeatureDevelopment">Custom feature development</li>
           </ul>
           
           <div class="pricing-cta">
-            <a href="mailto:sales@everydayadvertise.com" class="btn-primary">Contact Us</a>
+            <a href="mailto:sales@everydayadvertise.com" class="btn-primary" data-i18n="contactUs">Contact Us</a>
           </div>
           
-          <p class="pricing-note">
+          <p class="pricing-note" data-i18n="enterpriseNote">
             Perfect for businesses wanting their own branded solution.
           </p>
         </div>
@@ -2287,7 +2450,7 @@
 
   <!-- Features Section -->
   <section class="features {% if home_content.features_style == 'cards' %}features-cards{% else %}features-flat{% endif %}" id="features" style="--features-bg-color: {{ home_content.features_bg_color or '#ffffff' }}; --features-min-height: {{ home_content.features_min_height or 0 }}px;">
-    <h2 class="section-title">{{ home_content.features_title }}</h2>
+    <h2 class="section-title" data-i18n="featuresTitle">{{ home_content.features_title }}</h2>
     
       <div class="feature-grid">
       {% for feature_item in home_features %}
@@ -2298,20 +2461,20 @@
           {% set feature_icon_ext = feature_icon_lower.rsplit('.', 1)[-1] if '.' in feature_icon_lower else '' %}
           {% if feature_item.icon_kind == 'image' and feature_icon_value %}
             {% if feature_icon_ext in ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv', 'm4v'] %}
-          <video class="feature-icon-media" autoplay muted loop playsinline preload="metadata" aria-label="{{ feature_item.title }}">
+          <video class="feature-icon-media" autoplay muted loop playsinline preload="metadata" aria-label="{{ feature_item.title }}" data-i18n-aria-label="feature{{ loop.index }}Title">
             <source src="{{ url_for('static', filename=feature_icon_value) }}?v={{ asset_bust or 0 }}">
           </video>
             {% elif feature_icon_ext == 'svg' %}
-          <img class="feature-icon-media" src="{{ url_for('static', filename=feature_icon_value) }}?v={{ asset_bust or 0 }}" alt="{{ feature_item.title }}">
+          <img class="feature-icon-media" src="{{ url_for('static', filename=feature_icon_value) }}?v={{ asset_bust or 0 }}" alt="{{ feature_item.title }}" data-i18n-alt="feature{{ loop.index }}Title">
             {% else %}
-          <img class="feature-icon-media" src="{{ url_for('static', filename=feature_icon_value) }}?v={{ asset_bust or 0 }}" alt="{{ feature_item.title }}">
+          <img class="feature-icon-media" src="{{ url_for('static', filename=feature_icon_value) }}?v={{ asset_bust or 0 }}" alt="{{ feature_item.title }}" data-i18n-alt="feature{{ loop.index }}Title">
             {% endif %}
           {% else %}
           {{ feature_item.icon_value }}
           {% endif %}
         </div>
-        <h3>{{ feature_item.title }}</h3>
-        <p>{{ feature_item.description }}</p>
+        <h3 data-i18n="feature{{ loop.index }}Title">{{ feature_item.title }}</h3>
+        <p data-i18n="feature{{ loop.index }}Description">{{ feature_item.description }}</p>
       </div>
       {% endfor %}
     </div>
@@ -2319,7 +2482,7 @@
 
   <!-- Brand Logo Marquee Section -->
   <section class="brand-marquee-section">
-    <h2 class="brand-marquee-title">🌟 Trusted by Leading TV Brands Worldwide</h2>
+    <h2 class="brand-marquee-title" data-i18n="trustedBrandsTitle">🌟 Trusted by Leading TV Brands Worldwide</h2>
     <div class="brand-marquee">
       <div class="brand-track">
         <!-- First set of logos -->
@@ -2355,8 +2518,8 @@
 
   <!-- Platform Support Section -->
   <section id="platforms" class="platforms">
-    <h2 class="section-title">Works On Every Platform</h2>
-    <p style="text-align: center; color: var(--text-gray); font-size: 18px; margin-bottom: 60px; max-width: 700px; margin-left: auto; margin-right: auto;">
+    <h2 class="section-title" data-i18n="platformsTitle">Works On Every Platform</h2>
+    <p data-i18n="platformsSubtitle" style="text-align: center; color: var(--text-gray); font-size: 18px; margin-bottom: 60px; max-width: 700px; margin-left: auto; margin-right: auto;">
       From budget-friendly Raspberry Pi to premium Android TV boxes. Your content, your choice.
     </p>
     
@@ -2364,63 +2527,63 @@
       <div class="platform-item">
         <div class="icon"><img src="{{ url_for('static', filename='pi_raspberry.png') }}?v={{ asset_bust or 0 }}" alt="Raspberry Pi" style="width: 104px; height: 104px; object-fit: contain;"></div>
         <h4>Raspberry Pi</h4>
-        <p>Most affordable option. Full features for under $100</p>
+        <p data-i18n="raspberryPiDescription">Most affordable option. Full features for under $100</p>
       </div>
       
       <div class="platform-item">
         <div class="icon"><img src="{{ url_for('static', filename='android_tv.webp') }}?v={{ asset_bust or 0 }}" alt="Android TV" style="width: 104px; height: 104px; object-fit: contain;" onerror="this.style.display='none'; this.parentElement.innerHTML='📺';"></div>
         <h4>Android TV</h4>
-        <p>Premium performance with Android TV boxes</p>
+        <p data-i18n="androidTvDescription">Premium performance with Android TV boxes</p>
       </div>
       
       <div class="platform-item">
         <div class="icon"><img src="{{ url_for('static', filename='fire_tv.webp') }}?v={{ asset_bust or 0 }}" alt="Fire TV Stick" style="width: 104px; height: 104px; object-fit: contain;"></div>
         <h4>Fire TV Stick</h4>
-        <p>Easy setup with Amazon Fire devices</p>
+        <p data-i18n="fireTvDescription">Easy setup with Amazon Fire devices</p>
       </div>
       
       <div class="platform-item">
         <div class="icon">🌐</div>
-        <h4>Web Browser</h4>
-        <p>Works in Chrome, Safari, Edge, Firefox</p>
+        <h4 data-i18n="webBrowserTitle">Web Browser</h4>
+        <p data-i18n="webBrowserDescription">Works in Chrome, Safari, Edge, Firefox</p>
       </div>
       
       <div class="platform-item">
         <div class="icon">📱</div>
-        <h4>Android App</h4>
-        <p>Native app for Android tablets & phones</p>
+        <h4 data-i18n="androidAppTitle">Android App</h4>
+        <p data-i18n="androidAppDescription">Native app for Android tablets & phones</p>
       </div>
       
       <div class="platform-item">
         <div class="icon">💻</div>
-        <h4>Smart TVs</h4>
-        <p>Direct support for modern smart TVs</p>
+        <h4 data-i18n="smartTvTitle">Smart TVs</h4>
+        <p data-i18n="smartTvDescription">Direct support for modern smart TVs</p>
       </div>
     </div>
   </section>
 
   <!-- CTA Section -->
   <section class="cta-section" style="margin-left: 40px; margin-right: 40px;">
-    <h2>Ready to Transform Your Menu?</h2>
-    <p>Join hundreds of restaurants using the world's most advanced digital menu system</p>
-    <a href="{{ url_for('login') }}" class="btn-white">Start Free Trial</a>
+    <h2 data-i18n="ctaTitle">Ready to Transform Your Menu?</h2>
+    <p data-i18n="ctaSubtitle">Join hundreds of restaurants using the world's most advanced digital menu system</p>
+    <a href="{{ url_for('login') }}" class="btn-white" data-i18n="startFreeTrial">Start Free Trial</a>
   </section>
 
   <!-- Footer -->
   <footer>
     <div class="footer-content">
       <div class="footer-links">
-        <a href="{{ url_for('login') }}">Dashboard</a>
-        <a href="{{ url_for('superadmin_login') }}">Super Admin</a>
-        <a href="/healthz">System Status</a>
-        <a href="#features">Features</a>
-        <a href="#platforms">Platforms</a>
-        <a href="{{ url_for('terms_of_service') }}">Terms of Service</a>
-        <a href="{{ url_for('privacy_policy') }}">Privacy Policy</a>
+        <a href="{{ url_for('login') }}" data-i18n="footerDashboard">Dashboard</a>
+        <a href="{{ url_for('superadmin_login') }}" data-i18n="navSuperAdmin">Super Admin</a>
+        <a href="/healthz" data-i18n="footerSystemStatus">System Status</a>
+        <a href="#features" data-i18n="navFeatures">Features</a>
+        <a href="#platforms" data-i18n="navPlatforms">Platforms</a>
+        <a href="{{ url_for('terms_of_service') }}" data-i18n="footerTerms">Terms of Service</a>
+        <a href="{{ url_for('privacy_policy') }}" data-i18n="footerPrivacy">Privacy Policy</a>
       </div>
       <div class="footer-bottom">
-        © 2025 EverydayAdvertise. Built with ❤️ for restaurants worldwide.<br>
-        Build {{ build_stamp or '' }}{% if git_commit %} • {{ git_commit }}{% endif %}
+        <span data-i18n="footerCopyright">© 2025 EverydayAdvertise. Built with ❤️ for restaurants worldwide.</span><br>
+        <span data-i18n="footerBuild">Build</span> {{ build_stamp or '' }}{% if git_commit %} • {{ git_commit }}{% endif %}
       </div>
     </div>
   </footer>
@@ -2660,5 +2823,14 @@
   </script>
 
   {% include '_cookie_consent.html' %}
+
+  <script>
+    window.EA_HOME_I18N_CONFIG = {
+      trialDays: {{ (home_billing.get('trial_days') or 0)|int|tojson }},
+      freeScreens: {{ (home_billing.get('free_screens') or 0)|int|tojson }}
+    };
+  </script>
+  <script src="{{ url_for('static', filename='home-i18n-locales.js') }}?v={{ asset_bust or 0 }}" defer></script>
+  <script src="{{ url_for('static', filename='home-i18n.js') }}?v={{ asset_bust or 0 }}" defer></script>
 </body>
 </html>
